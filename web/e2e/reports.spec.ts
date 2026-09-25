@@ -10,6 +10,8 @@ import {
   mockCoverageByLeader,
   mockDccEvents,
   mockDccReport,
+  mockDccTwelve,
+  TWELVE,
 } from './mock-attendance';
 import {
   CONQUEST_COUNTS,
@@ -72,6 +74,7 @@ async function mockEveryReport(page: Page) {
   await mockCellTwelve(page, { today: '2026-06-20' });
   await mockDccEvents(page);
   await mockDccReport(page);
+  await mockDccTwelve(page, { today: '2026-06-20' });
   await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockTraining(page);
@@ -103,11 +106,11 @@ test.describe('the Reports tabs (decision 0292)', () => {
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
 
     const periods: string[] = [];
     page.on('request', (request) => {
-      if (request.url().includes('/reports/dcc/monthly')) {
+      if (request.url().includes('/reports/dcc/twelve')) {
         periods.push(new URL(request.url()).searchParams.get('period') ?? '');
       }
     });
@@ -158,11 +161,11 @@ test.describe('the Reports tabs (decision 0292)', () => {
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
 
     const periods: string[] = [];
     page.on('request', (request) => {
-      if (request.url().includes('/reports/dcc/monthly')) {
+      if (request.url().includes('/reports/dcc/twelve')) {
         periods.push(new URL(request.url()).searchParams.get('period') ?? '');
       }
     });
@@ -179,46 +182,54 @@ test.describe('the Reports tabs (decision 0292)', () => {
 });
 
 test.describe('the browser Back button', () => {
-  test('steps back through the month, the period and the Network, and a reload keeps them', async ({
+  test('steps back through the month, the Network and the period, and a reload keeps them', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
     await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc');
 
     await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Show May 2026' }).click();
-    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Show April 2026' }).click();
-    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+    const label = (text: string) => page.locator('main').getByText(text, { exact: true });
+    const before = page.getByRole('button', { name: 'The period before' });
+
+    await before.click();
+    await expect(label('May 2026')).toBeVisible();
+    await before.click();
+    await expect(label('April 2026')).toBeVisible();
 
     // The month is in the address, so a reload opens the same figures.
     await page.reload();
-    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+    await expect(label('April 2026')).toBeVisible();
 
-    await page.getByLabel('Figures for').selectOption('MENS');
-    await expect(page).toHaveURL(/network=MENS/);
+    // A whole-church reader's Figures for offers the Networks, each a root's 12 (decision 0294).
+    await page.getByLabel('Figures for').selectOption({ label: "Men's Network" });
+    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.bonifacio.id}`));
 
-    await page.getByRole('radiogroup', { name: 'Report period' }).getByText('Year').click();
+    await page
+      .getByRole('group', { name: 'Report period' })
+      .getByRole('button', { name: 'Year' })
+      .click();
     await expect(page).toHaveURL(/period=year/);
 
     // Back through each change, in the order they were made.
     await page.goBack();
     await expect(page).not.toHaveURL(/period=year/);
-    await expect(page).toHaveURL(/network=MENS/);
+    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.bonifacio.id}`));
 
     await page.goBack();
-    await expect(page).not.toHaveURL(/network=MENS/);
-    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+    await expect(page).not.toHaveURL(/leader=/);
+    await expect(label('April 2026')).toBeVisible();
 
     await page.goBack();
-    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+    await expect(label('May 2026')).toBeVisible();
 
     await page.goBack();
-    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+    await expect(label('June 2026')).toBeVisible();
   });
 
   test('steps back through the leader chosen in Figures for on Cell Groups (decision 0293)', async ({
@@ -239,19 +250,23 @@ test.describe('the browser Back button', () => {
 });
 
 test.describe('the report figures', () => {
-  test('each list closes with a Total that is the sum of its rows', async ({ page }) => {
+  test('each list closes with a Total, and both DCC views count the same people', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc');
 
-    // The fixture: classification 1 + 2 + 1 + 1 + 2, buckets 2 + 3 + 2, seven people each.
-    const journey = page.getByRole('region', { name: 'Where people are in their journey' });
-    await expect(journey.getByRole('term').last()).toHaveText('Total');
-    await expect(journey.getByRole('definition').last()).toHaveText('7');
+    // The fixture: My 12's Total is 3 + 2 + 1 + 1 + 3 = 10 people, and the buckets are
+    // 4 + 4 + 2 = 10 (section 20: the two views sum to the same people).
+    const total = page
+      .getByRole('table')
+      .filter({ has: page.getByRole('columnheader', { name: 'Leader' }) })
+      .getByRole('row', { name: /^Total/ });
+    await expect(total.getByRole('cell')).toHaveText(['Total', '3', '2', '1', '1', '3', '10']);
 
     const often = page.getByRole('region', { name: 'How often people came' });
     await expect(often.getByRole('term').last()).toHaveText('Total');
-    await expect(often.getByRole('definition').last()).toHaveText('7');
+    await expect(often.getByRole('definition').last()).toHaveText('10');
     await expect(often.getByRole('term').filter({ hasText: '3 times — all of them' })).toBeVisible();
   });
 });
@@ -263,6 +278,7 @@ test.describe('how these are counted', () => {
     await mockCellReport(page);
     await mockDccEvents(page);
     await mockDccReport(page);
+    await mockDccTwelve(page);
 
     await page.goto('/reports/cells');
     await page.getByRole('button', { name: 'How these are counted' }).click();
@@ -277,6 +293,10 @@ test.describe('how these are counted', () => {
     const dcc = page.getByRole('dialog', { name: 'How these are counted' });
     await expect(dcc.getByText(/^Records filed, out of records owed/)).toBeVisible();
     await expect(dcc.getByText(/Cell’s schedule/)).toHaveCount(0);
+    // Decision 0294: DCC describes My 12, and its buckets as a month's alone.
+    await expect(dcc.getByText('My 12', { exact: true })).toBeVisible();
+    await expect(dcc.getByText(/^Monthly only\./)).toBeVisible();
+    await expect(dcc.getByText('People who attended', { exact: true })).toHaveCount(0);
   });
 });
 
@@ -454,33 +474,41 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
     );
   });
 
-  test('DCC opens on recording coverage, with no row-by-row table of its own', async ({ page }) => {
+  test('DCC opens on recording coverage as one line, with no row-by-row table of its own', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc?month=2026-05-01');
 
     await expect(
-      page.getByText('What the people you oversee recorded for this month’s Sundays.'),
+      page.getByText('Who came to DCC, and where they are in their journey.'),
     ).toBeVisible();
-    await expect(page.locator('main h2').filter({ visible: true }).first()).toHaveText('Recording coverage');
-    await expect(page.getByText('12 of 18 records filed')).toBeVisible();
+    // Coverage is the first figure, and decision 0294 makes it one line above My 12.
+    const coverage = page.getByText('12 of 18 records filed in the month');
+    await expect(coverage).toBeVisible();
+    const twelve = page.getByRole('heading', { name: /^My 12 · / });
+    await expect(twelve).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above My 12').toBeLessThan(heading!.y);
 
+    await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
 
-    await expect(
-      page.getByRole('link', { name: 'By Sunday and by leader, row by row, under Filed reports' }),
-    ).toHaveAttribute('href', '/reports/filed?month=2026-05-01&kind=dcc');
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      '/reports/filed?month=2026-05-01&kind=dcc',
+    );
   });
 
   test('a leader opened from By leader carries into Filed reports, By leader', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockCellTwelve(page, { today: '2026-06-20' });
-    await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await mockCoverageByLeader(page);
 
     await page.goto(`/reports/cells?month=2026-06-01&leader=${LEADER}`);
@@ -490,9 +518,10 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
     );
 
     await page.goto(`/reports/dcc?month=2026-06-01&leader=${LEADER}`);
-    await expect(
-      page.getByRole('link', { name: 'By Sunday and by leader, row by row, under Filed reports' }),
-    ).toHaveAttribute('href', `/reports/filed?month=2026-06-01&kind=dcc&leader=${LEADER}&by=leader`);
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      `/reports/filed?month=2026-06-01&kind=dcc&leader=${LEADER}&by=leader`,
+    );
   });
 });
 
@@ -699,7 +728,13 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     );
   });
 
-  test('a Network chosen on DCC stays chosen, and only By leader is offered', async ({ page }) => {
+  /**
+   * **DCC no longer offers a Network scope** (decision 0294: a whole-church reader's rows are
+   * the two Networks, each opening that root's 12), so a Network on Filed reports is reached
+   * by its address alone, as one Cell is above. What the DCC page carries instead is the
+   * root, as a leader.
+   */
+  test('a Network in the address stays chosen, and only By leader is offered', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
@@ -707,17 +742,18 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await mockCellReport(page);
     await mockDccEvents(page);
     await mockDccReport(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await mockCoverageByLeader(page);
     const scopes = recordScopes(page);
 
     await page.goto('/reports/dcc');
-    await page.getByLabel('Figures for').selectOption('MENS');
-    const link = page.getByRole('link', {
-      name: 'By Sunday and by leader, row by row, under Filed reports',
-    });
-    await expect(link).toHaveAttribute('href', '/reports/filed?month=2026-06-01&kind=dcc&network=MENS');
-    await link.click();
+    await page.getByLabel('Figures for').selectOption({ label: "Men's Network" });
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      `/reports/filed?month=2026-06-01&kind=dcc&leader=${TWELVE.bonifacio.id}&by=leader`,
+    );
 
+    await page.goto('/reports/filed?month=2026-06-01&kind=dcc&network=MENS');
     await expect(page).toHaveURL(/\/reports\/filed\?/);
     await expect(page.getByText('Figures for the Men’s Network.')).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
@@ -1022,11 +1058,15 @@ test.describe('the year view (decision 0257)', () => {
           });
     });
 
+    // The year's My 12 renders above the month-by-month table (decision 0294).
+    await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc?period=year');
 
     await expect(page.getByRole('heading', { name: 'Month by month, January to June 2026' })).toBeVisible();
 
-    const table = page.getByRole('table');
+    const table = page
+      .getByRole('table')
+      .filter({ has: page.getByRole('row', { name: /^Year so far/ }) });
     const rows = table.getByRole('row');
     // A header, six months and the year row: July has not begun and is not shown.
     await expect(rows).toHaveCount(8);

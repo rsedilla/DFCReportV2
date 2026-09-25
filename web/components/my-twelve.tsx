@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { networkLabel } from '@/lib/people';
-import type { CellTwelve, Classification } from '@/lib/reports';
+import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
 import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
 import { cn } from '@/lib/utils';
 
@@ -122,12 +122,14 @@ export function RangeNavigator({
 }
 
 /**
- * My 12 (SKILL.md sections 12, 13, 17 and 20; decision 0293).
+ * My 12 (SKILL.md sections 9, 12, 13, 17 and 20; decisions 0293 and 0294).
  *
- * **The subject's direct disciples, then their own Cell groups, then the total**, each a
- * count of different people who came to a Cell in the period, once each, split by the stage
- * each had reached by its last day. Rows are in the API's order (surname, or Network for a whole-church reader), never
- * numbered, never sorted by a figure, never coloured (section 13). Each name opens that
+ * **The subject's direct disciples, then their own row, then the total**, each a count of
+ * different people who came in the period, once each, split by the stage each had reached by
+ * its last day. The own row is the subject's own Cell groups for Cell Groups, and the subject
+ * alone for DCC, whose attendance nobody records for themselves. Rows are in the API's order
+ * (surname, or Network for a whole-church reader), never numbered, never sorted by a figure,
+ * never coloured (section 13). Each name opens that
  * leader's report, which shows their 12. A whole-church reader's rows are the Network roots,
  * labelled by their Network, since that reader disciples neither.
  *
@@ -140,9 +142,15 @@ export function TwelveTable({
   kind,
   subjectName,
   openHref,
+  where = 'a Cell',
 }: {
-  twelve: CellTwelve;
+  /** `own.cells` is present for Cell Groups; DCC's own row is the subject alone. */
+  twelve: Omit<CellTwelve, 'own' | 'coverage'> & {
+    own: (TwelveFigure & { cells?: number }) | null;
+  };
   kind: RangeKind;
+  /** What people came to: "a Cell" or "DCC". */
+  where?: string;
   /** Null for the reader's own view; the leader's name when one was opened. */
   subjectName: string | null;
   openHref: (leaderId: string) => string;
@@ -155,7 +163,9 @@ export function TwelveTable({
   const ownLabel =
     own === null
       ? null
-      : `${subjectName === null ? 'You' : subjectName} · ${
+      : own.cells === undefined
+        ? (subjectName ?? 'You')
+        : `${subjectName === null ? 'You' : subjectName} · ${
           own.cells === 0
             ? `no Cell of ${subjectName === null ? 'your' : 'their'} own`
             : own.cells === 1
@@ -169,7 +179,7 @@ export function TwelveTable({
         {title} · where people are in their journey
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        Different people who came to a Cell {WHAT[kind]}, once each, at the stage they had
+        Different people who came to {where} {WHAT[kind]}, once each, at the stage they had
         reached by {BY[kind]}{twelve.open ? ', or so far while it is open' : ''}. Open a name
         to see their 12.
       </p>

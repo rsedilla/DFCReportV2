@@ -264,8 +264,7 @@
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly",
-      "reason": "The DCC figures a leader reads (§9, §12, §20). Dashboard is the screen in that block which shows them, and it does not exist yet; the route lands first so the dated authorization walk it needs is reviewed once rather than alongside eight screens. Network Summary would be the drill-down and is deliberately not named here — the roadmap defers it past the pilot, outside this block.",
-      "screen": "web/app/reports/dcc/page.tsx"
+      "screen": "web/app/reports/filed/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/cells/monthly",
@@ -275,6 +274,10 @@
     {
       "route": "GET /api/v1/reports/cells/twelve",
       "screen": "web/app/reports/cells/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/reports/dcc/twelve",
+      "screen": "web/app/reports/dcc/page.tsx"
     },
     {
       "route": "GET /api/v1/conquest/counts",

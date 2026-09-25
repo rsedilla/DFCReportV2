@@ -245,6 +245,32 @@ export interface CellTwelve {
 export type CellTwelveSubject = { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
 
 /**
+ * A DCC My 12 table over one period (decision 0294): the Cell table's shape, attributed by
+ * the person rather than by the meeting (section 20).
+ *
+ * `own` is the subject alone, 0 or 1 person, because nobody's DCC attendance is recorded by
+ * themselves; `n` and `removed_events` are the period's services and removed Sundays;
+ * `buckets` is carried for a month only, because section 9 defines them over a month's N.
+ */
+export interface DccTwelve {
+  open: boolean;
+  from: string;
+  to: string;
+  /** The instant the rows were read at, as for the Cell table. */
+  at: Date;
+  /** Obligations met over owed, over the period's Sundays that have come (decision 0224). */
+  coverage: Coverage;
+  n: number;
+  removed_events: string[];
+  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null })[];
+  own: TwelveFigure | null;
+  overlap: number;
+  elsewhere: number;
+  total: TwelveFigure;
+  buckets: AttendanceBucket[] | null;
+}
+
+/**
  * A Cell monthly report, shaped so that section 12's one hard structural rule cannot be
  * broken by a caller: **bucket views exist at Cell scope only**.
  *
@@ -497,28 +523,7 @@ export class ReportingService {
     const to = reportRangeEnd(kind, from);
 
     return this.overPeriod(guardMonth, async (trx) => {
-      // **The period has begun, and the guard resolved it at the month this derives**, both
-      // against the database's clock (decision 0216). A client names the month for the guard
-      // because the guard reads one; any other month than this one is refused, so a client
-      // cannot choose the instant its own authorization is decided at.
-      const today = manilaDayOf(await databaseNow(trx));
-      if (from > today) {
-        throw new ValidationFailedError(
-          'A report covers a period that has begun. This one has not started yet.',
-          {
-            field: 'start',
-            value: from,
-          },
-        );
-      }
-      const expected = reportRangeGuardMonth(kind, from, today);
-      if (guardMonth !== expected) {
-        throw new ValidationFailedError(`This period is read as of ${expected}.`, {
-          field: 'period',
-          value: guardMonth,
-          expected,
-        });
-      }
+      const today = await assertRangeReadable(trx, kind, from, guardMonth);
 
       const start = startOfManilaDay(from);
       const end = endOfManilaDay(to);
@@ -629,6 +634,113 @@ export class ReportingService {
         overlap: counted - union.size,
         elsewhere,
         total: figureOf(totalPeople),
+      };
+    });
+  }
+
+  /**
+   * DCC's My 12 over a week, a month, a quarter or a year (SKILL.md sections 9, 13 and 20;
+   * decision 0294).
+   *
+   * **The Cell table's rule, attributed by the person** (section 20). Rows are the subject's
+   * direct disciples at the period's end, or the Network roots for a whole-church reader,
+   * each counting the placement subtree the DCC monthly report counts for that leader. That
+   * subtree includes the subject, so the subject's own row is the subject alone.
+   *
+   * **Coverage sums decision 0224's obligations over the period's Sundays**, placed at each
+   * event date as the month's line is; a Sunday that has not come owes nothing.
+   */
+  async dccTwelve(
+    subject: CellTwelveSubject,
+    kind: ReportRangeKind,
+    from: string,
+    guardMonth: string,
+  ): Promise<DccTwelve> {
+    assertReportRangeStart(kind, from);
+    const to = reportRangeEnd(kind, from);
+
+    return this.overPeriod(guardMonth, async (trx) => {
+      const today = await assertRangeReadable(trx, kind, from, guardMonth);
+
+      const start = startOfManilaDay(from);
+      const end = endOfManilaDay(to);
+
+      const figuresOf = (personIds: readonly string[] | undefined) =>
+        this.dccFigures.rangeFigures(trx, from, to, personIds);
+      const figureOf = (people: readonly { lifetimeThroughMonth: number }[]): TwelveFigure => ({
+        unique_people: people.length,
+        classification: classify(people),
+      });
+
+      const rowIds: { personId: string; network: NetworkName | null }[] =
+        subject.kind === 'LEADER'
+          ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
+              (personId) => ({ personId, network: null }),
+            )
+          : await this.hierarchy.rootSeatsAsOf(trx, end);
+
+      // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
+      const rows: (TwelveFigure & {
+        leader_id: string;
+        network: NetworkName | null;
+        people: Set<string>;
+      })[] = [];
+      for (const { personId: leaderId, network } of rowIds) {
+        const { people } = await figuresOf(
+          await this.hierarchy.reportingSubtree(trx, leaderId, start, end),
+        );
+        rows.push({
+          leader_id: leaderId,
+          network,
+          ...figureOf(people),
+          people: new Set(people.map((p) => canonicalId(p.personId))),
+        });
+      }
+
+      const ownPeople =
+        subject.kind === 'LEADER' ? (await figuresOf([subject.person_id])).people : null;
+      const total = await figuresOf(
+        subject.kind === 'LEADER'
+          ? await this.hierarchy.reportingSubtree(trx, subject.person_id, start, end)
+          : undefined,
+      );
+
+      const union = new Set<string>();
+      let counted = 0;
+      for (const set of [
+        ...rows.map((row) => row.people),
+        new Set((ownPeople ?? []).map((p) => canonicalId(p.personId))),
+      ]) {
+        counted += set.size;
+        set.forEach((id) => union.add(id));
+      }
+
+      return {
+        open: await isMonthOpen(trx, `${to.slice(0, 7)}-01`),
+        from,
+        to,
+        at: endOfManilaDay(to < today ? to : today),
+        coverage: await this.dccCoverage.rangeCoverage(
+          from,
+          to,
+          subject.kind === 'LEADER'
+            ? { kind: 'LEADER', personId: subject.person_id }
+            : { kind: 'WHOLE_CHURCH' },
+          { executor: trx },
+        ),
+        n: total.n,
+        removed_events: total.removed,
+        rows: rows.map((row) => ({
+          leader_id: row.leader_id,
+          network: row.network,
+          unique_people: row.unique_people,
+          classification: row.classification,
+        })),
+        own: ownPeople === null ? null : figureOf(ownPeople),
+        overlap: counted - union.size,
+        elsewhere: total.people.filter((p) => !union.has(canonicalId(p.personId))).length,
+        total: figureOf(total.people),
+        buckets: kind === 'MONTH' ? bucket(total.people, total.n) : null,
       };
     });
   }
@@ -893,6 +1005,40 @@ function coverageScopeOf(scope: DccReportScope): DccCoverageScope {
       return unreached;
     }
   }
+}
+
+/**
+ * **The period has begun, and the guard resolved it at the month this derives**, both against
+ * the database's clock (decision 0216). A client names the month for the guard because the
+ * guard reads one; any other month than this one is refused, so a client cannot choose the
+ * instant its own authorization is decided at. Returns today, as a Manila date.
+ */
+async function assertRangeReadable(
+  trx: Transaction<Database>,
+  kind: ReportRangeKind,
+  from: string,
+  guardMonth: string,
+): Promise<string> {
+  const today = manilaDayOf(await databaseNow(trx));
+  if (from > today) {
+    throw new ValidationFailedError(
+      'A report covers a period that has begun. This one has not started yet.',
+      {
+        field: 'start',
+        value: from,
+      },
+    );
+  }
+  const expected = reportRangeGuardMonth(kind, from, today);
+  if (guardMonth !== expected) {
+    throw new ValidationFailedError(`This period is read as of ${expected}.`, {
+      field: 'period',
+      value: guardMonth,
+      expected,
+    });
+  }
+
+  return today;
 }
 
 /** The last day of the month holding `day`, a calendar date. */

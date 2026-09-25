@@ -362,14 +362,50 @@ export class DccCoverageService {
   ): Promise<Map<string, Coverage>> {
     assertReportingMonth(reportingMonth);
 
+    return this.coverageByLeaderBetween(reportingMonth, nextMonth(reportingMonth), scope, options);
+  }
+
+  /**
+   * Coverage over the Sundays between two calendar dates, both included (decision 0294): the
+   * month's rule on another length, summed over the range's events exactly as a month sums
+   * over its own. A range that is exactly a month answers what {@link monthCoverage} answers.
+   */
+  async rangeCoverage(
+    from: string,
+    to: string,
+    scope: DccCoverageScope,
+    options: { executor?: Db } = {},
+  ): Promise<Coverage> {
+    const next = new Date(`${to}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+
+    let met = 0;
+    let owed = 0;
+    for (const line of (
+      await this.coverageByLeaderBetween(from, next.toISOString().slice(0, 10), scope, options)
+    ).values()) {
+      met += line.met;
+      owed += line.owed;
+    }
+
+    return { met, owed };
+  }
+
+  /** Coverage by leader over events dated from `from` up to, not including, `before`. */
+  private async coverageByLeaderBetween(
+    from: string,
+    before: string,
+    scope: DccCoverageScope,
+    options: { executor?: Db },
+  ): Promise<Map<string, Coverage>> {
     const executor = options.executor ?? this.db;
     const now = await databaseNow(executor);
 
     const rows = await executor
       .selectFrom('dcc_events')
       .select(['id', 'event_date', 'removed_at', 'removal_reason'])
-      .where('event_date', '>=', reportingMonth)
-      .where('event_date', '<', nextMonth(reportingMonth))
+      .where('event_date', '>=', from)
+      .where('event_date', '<', before)
       .orderBy('event_date')
       .execute();
 

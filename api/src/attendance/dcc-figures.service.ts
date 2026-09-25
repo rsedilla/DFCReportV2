@@ -213,4 +213,98 @@ export class DccFiguresService {
         })),
     };
   }
+
+  /**
+   * Who attended DCC between two calendar dates, and the stage each had reached by the last
+   * of them (decision 0294, SKILL.md sections 9 and 20).
+   *
+   * **`monthFigures`' rule on another length, in one statement for the reason it gives.** The
+   * population is the people present at a service dated in the range; the stage is their
+   * lifetime DCC attendance through its last day; `n` and `removed` are the range's services
+   * and removed Sundays. A range that is exactly a month answers what `monthFigures` answers,
+   * less the per-person count within it, which only a month's buckets use.
+   *
+   * `personIds` narrows the population exactly as it does there, and `undefined` is Whole
+   * Church.
+   */
+  async rangeFigures(
+    executor: Db,
+    from: string,
+    to: string,
+    personIds: readonly string[] | undefined,
+  ): Promise<{ n: number; removed: string[]; people: DccPersonFigures[] }> {
+    const population = personIds === undefined ? null : [...personIds];
+
+    const rows = await sql<{
+      n: string;
+      removed: string[] | null;
+      person_id: string | null;
+      times_in_range: string | null;
+      lifetime: string | null;
+    }>`
+      WITH calendar AS (
+        SELECT event_date, removed_at
+          FROM dcc_events
+         WHERE event_date BETWEEN ${from}::date AND ${to}::date
+      ),
+      live AS (
+        SELECT a.person_id, e.event_date
+          FROM dcc_attendance a
+          JOIN dcc_events e ON e.id = a.dcc_event_id
+         WHERE a.present = true
+           AND a.superseded_at IS NULL
+           AND e.removed_at IS NULL
+           AND e.event_date <= ${to}::date
+      ),
+      attended AS (
+        SELECT DISTINCT person_id
+          FROM live
+         WHERE event_date >= ${from}::date
+           AND (
+             ${population}::uuid[] IS NULL
+             OR person_id = ANY (${population}::uuid[])
+           )
+      ),
+      figures AS (
+        SELECT m.person_id,
+               count(*) FILTER (WHERE l.event_date >= ${from}::date) AS times_in_range,
+               count(*) AS lifetime
+          FROM attended m
+          JOIN live l ON l.person_id = m.person_id
+         GROUP BY m.person_id
+      ),
+      range_meta AS (
+        SELECT count(*) FILTER (WHERE removed_at IS NULL)::text AS n,
+               array_remove(
+                 array_agg(to_char(event_date, 'YYYY-MM-DD')
+                   ORDER BY event_date) FILTER (WHERE removed_at IS NOT NULL),
+                 NULL
+               ) AS removed
+          FROM calendar
+      )
+      SELECT range_meta.n,
+             range_meta.removed,
+             figures.person_id,
+             figures.times_in_range::text AS times_in_range,
+             figures.lifetime::text AS lifetime
+        FROM range_meta
+        LEFT JOIN figures ON true
+    `.execute(executor);
+
+    // `range_meta` aggregates without `GROUP BY`, so it is exactly one row, as in
+    // `monthFigures`.
+    const first = rows.rows[0];
+
+    return {
+      n: Number(first?.n ?? '0'),
+      removed: first?.removed ?? [],
+      people: rows.rows
+        .filter((row) => row.person_id !== null)
+        .map((row) => ({
+          personId: row.person_id as string,
+          timesInMonth: Number(row.times_in_range),
+          lifetimeThroughMonth: Number(row.lifetime),
+        })),
+    };
+  }
 }

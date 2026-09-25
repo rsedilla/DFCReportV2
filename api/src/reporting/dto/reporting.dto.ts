@@ -191,3 +191,16 @@ export class CellTwelveDto extends CellMonthlyReportDto {
   @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
   start!: string;
 }
+
+/**
+ * `GET /reports/dcc/twelve`: DCC's My 12 over a week, a month, a quarter or a year (decision
+ * 0294), with the same `kind`, `start` and `period` as the Cell table. `NETWORK` is refused in
+ * the controller: a whole-church reader's rows are the Networks, each a root's 12.
+ */
+export class DccTwelveDto extends DccMonthlyReportDto {
+  @IsIn(REPORT_RANGE_KINDS)
+  kind!: ReportRangeKind;
+
+  @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
+  start!: string;
+}

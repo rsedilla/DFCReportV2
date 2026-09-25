@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-25, the trigger being decision 0293: of 292 files, 291 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0293 each moved the first two and
+2026-09-26, the trigger being decision 0294: of 293 files, 292 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0294 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-25 and triggered by 0293, and was left stale by 0294 the next day. The one before that was dated
 2026-09-25 and triggered by 0292, and was left stale by 0293 the same day. The one before that was dated
 2026-09-25 and triggered by 0291, and was left stale by 0292 the same day. The one before that was dated
 2026-09-25 and triggered by 0290, and was left stale by 0291 the same day. The one before that was dated
@@ -627,6 +628,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-25 — [DCC is the Doulos Cell Celebration](docs/decisions/0291-dcc-is-the-doulos-cell-celebration.md)
 - 2026-09-25 — [Reports has six tabs](docs/decisions/0292-reports-has-six-tabs.md)
 - 2026-09-25 — [My 12, by week, month, quarter and year](docs/decisions/0293-my-12-by-week-month-quarter-and-year.md)
+- 2026-09-26 — [DCC's My 12, by week, month, quarter and year](docs/decisions/0294-dcc-my-12-by-week-month-quarter-and-year.md)
 
 ### Open — awaiting a ruling
 
