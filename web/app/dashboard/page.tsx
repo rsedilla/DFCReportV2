@@ -1,30 +1,26 @@
 'use client';
 
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { CoverageFigure } from '@/components/coverage-figure';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, FRAME, ROW } from '@/components/ui/frame';
+import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
-import { Tag } from '@/components/ui/tag';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   categoryLabel,
   behindOf,
   closedOnLabel,
-  dayOfWeekLabel,
-  timeLabel,
   listCells,
   listMeetingsAwaiting,
   type CellCategory,
   peopleWithoutACell,
   type AwaitingMeetings,
-  type CellSummary,
 } from '@/lib/cells';
 import { getDccRoster, listDccEvents, type DccEvent, type DccRoster } from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -41,23 +37,13 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * How many people needing a leader the dashboard tile shows before deferring to the
- * full list (section 19).
- *
- * A dashboard entry is a prompt to act, not the list itself: section 15 forbids
- * ranking, so a longer tile would be a longer arbitrary slice rather than a more
- * useful one. The screen behind it pages honestly.
- */
-const UNPLACED_TILE = 5;
-
-/**
  * Where a signed-in leader lands (SKILL.md section 19).
  *
  * **Outstanding work comes above the numbers, and that is the whole design.**
  * Section 19 is blunt about it: "A dashboard of counts tells a leader nothing to
- * act on." So the first thing on this screen is what awaits a record, each entry
- * carrying the button that resolves it, and the second is the Cells whose coverage
- * line shows something missing. The figures follow.
+ * act on." So the screen opens on four lists of outstanding work, one at a time, each
+ * with its count (decision 0290): what awaits a record, the Cells behind, the people
+ * needing a new leader and the people not in a Cell. The figures are at the foot.
  *
  * **The queue shows the leader's own work by default, and their branch's on request**
  * (decision 0258, reversing the owner's choice of 2026-09-15).
@@ -81,8 +67,8 @@ const UNPLACED_TILE = 5;
  * people; nothing on this screen sums attendances.
  *
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The queue is
- * in date order, oldest first, and says so; the attention list is filtered rather
- * than sorted, in the order the API returns.
+ * in date order, oldest first, and says so; the other lists are filtered rather than
+ * sorted, in the order the API returns.
  */
 export default function DashboardPage() {
   return (
@@ -92,7 +78,7 @@ export default function DashboardPage() {
   );
 }
 
-type QueueFilter = 'ALL' | 'CELLS' | 'DCC';
+type QueueFilter = 'CELLS' | 'DCC';
 
 /** Whose outstanding work the queue shows (decision 0258). */
 type Whose = 'mine' | 'branch';
@@ -191,29 +177,47 @@ function Dashboard() {
   // server's `open` flag and each Sunday's `recordable` decide what is shown.
   const inCloseWeek = Number(today.slice(8, 10)) <= 7;
 
-  const [filter, setFilter] = useState<QueueFilter>('ALL');
+  const [filter, setFilter] = useState<QueueFilter>('CELLS');
   // The reader's own work is the default (decision 0258).
   const [whose, setWhose] = useState<Whose>('mine');
+  const [tab, setTab] = useState<RecordTab>('awaiting');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // Section 20's attention list (decision 0232). It takes no month: the list asks
   // about now, so it is deliberately not keyed on the period the figures below use.
   //
-  // One more than the tile shows, so "is there more than this" is answered by the
-  // read rather than by a second request — the same trick the collection endpoints
-  // use one layer down, and section 22 returns no total to ask instead.
-  const unplaced = useQuery({
+  // The whole list, fifty at a time, with Show more in place of a link to another
+  // screen (decision 0290).
+  const unplacedPages = useInfiniteQuery({
     queryKey: ['awaiting-reassignment', 'dashboard'],
-    queryFn: ({ signal }) => awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      awaitingReassignment({ limit: 50, cursor: pageParam }, signal),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
+  const unplaced = {
+    isPending: unplacedPages.isPending,
+    isError: unplacedPages.isError,
+    error: unplacedPages.error,
+    data: unplacedPages.data?.pages.flatMap((page) => page.data),
+  };
 
   // Section 15's other attention list (decision 0233), and undated for the same
   // reason: it asks who is not in a Cell now.
-  const withoutACell = useQuery({
+  const withoutACellPages = useInfiniteQuery({
     queryKey: ['people-without-a-cell', 'dashboard'],
-    queryFn: ({ signal }) => peopleWithoutACell({ limit: UNPLACED_TILE + 1 }, signal),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      peopleWithoutACell({ limit: 50, cursor: pageParam }, signal),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
+  const withoutACell = {
+    isPending: withoutACellPages.isPending,
+    isError: withoutACellPages.isError,
+    error: withoutACellPages.error,
+    data: withoutACellPages.data?.pages.flatMap((page) => page.data),
+  };
 
   // **One request per open month**, replacing two index calls and one per Cell. The
   // key is the month and whose view is shown (decision 0258).
@@ -347,12 +351,7 @@ function Dashboard() {
     ...dccEntries(recordablePrevious, checklistsPrevious, previousMonth),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
-  const shown = queue.filter(
-    (item) =>
-      filter === 'ALL' ||
-      (filter === 'CELLS' && item.kind === 'cell') ||
-      (filter === 'DCC' && item.kind === 'dcc'),
-  );
+  const shown = queue.filter((item) => (filter === 'CELLS') === (item.kind === 'cell'));
 
   // **Pending until every read the queue is built from has answered**, including the
   // per-Cell meetings and per-Sunday checklists, which only start once the two indexes
@@ -420,347 +419,379 @@ function Dashboard() {
                         ? describeFailure(me.error)
                         : null;
 
+  // The tab counts. A list read fifty at a time says "50+" rather than a figure it has
+  // not read; section 22 returns no total to ask for instead.
+  const behindMore = scoped.data?.next_cursor != null || scopedClosed.data?.next_cursor != null;
+  const tabs: readonly { key: RecordTab; label: string; count: string | null }[] = [
+    {
+      key: 'awaiting',
+      label: 'Awaiting a record',
+      count: queuePending || queueFailed ? null : String(queue.length),
+    },
+    {
+      key: 'behind',
+      label: 'Cells behind',
+      count:
+        scoped.data && scopedClosed.data
+          ? `${needingAttention.length}${behindMore ? '+' : ''}`
+          : null,
+    },
+    {
+      key: 'leader',
+      label: 'Needs a new leader',
+      count: unplaced.data ? `${unplaced.data.length}${unplacedPages.hasNextPage ? '+' : ''}` : null,
+    },
+    {
+      key: 'nocell',
+      label: 'Not in a Cell',
+      count: withoutACell.data
+        ? `${withoutACell.data.length}${withoutACellPages.hasNextPage ? '+' : ''}`
+        : null,
+    },
+  ];
+
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">
         Record · {monthLabel(month)}
       </p>
-      <h1 className="mt-1 text-2xl font-bold tracking-tight">
-        {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
-      </h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What needs doing comes first, with this month&rsquo;s figures beside it.
-      </p>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">
+          {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
+        </h1>
+        <p className="text-muted text-sm">
+          What needs doing first, and this month&rsquo;s figures at the foot.
+        </p>
+      </div>
 
-      <div className="mt-8">
+      <div className="mt-6">
         <FailureNotice failure={failure} />
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <section aria-labelledby="awaiting-heading" className={`min-w-0 ${FRAME}`}>
-          <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
-            Awaiting a record
-          </h2>
-          <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-            {whose === 'mine'
-              ? 'Your own Cells’ meetings and your own DCC checklist'
-              : 'Your own work and your branch’s, each naming the leader who records it'}
-            , this month
-            {inCloseWeek ? ', and last month’s while it is still open' : ''}. Oldest first. Nothing
-            here is scored or ranked.
-          </p>
+      <TabBar
+        label="Outstanding work"
+        className="mt-6 grid-cols-2 lg:grid-cols-4"
+        tabs={tabs}
+        current={tab}
+        onChoose={setTab}
+      />
 
-          <div className={`mt-4 ${CONTROL_BAR}`}>
-            <RadioGroup
-              legend="Whose"
-              name="queue-whose"
-              value={whose}
-              onChange={setWhose}
-              options={[
-                { value: 'branch', label: 'People I oversee' },
-                { value: 'mine', label: 'My own Cells' },
-              ]}
-            />
-            <RadioGroup
-              legend="Show"
-              name="queue-filter"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: 'ALL', label: 'All' },
-                { value: 'CELLS', label: 'Cells' },
-                { value: 'DCC', label: 'DCC' },
-              ]}
-            />
-          </div>
+      <div className="mt-6">
+        {tab === 'awaiting' ? (
+          <section aria-labelledby="awaiting-heading" className={`min-w-0 ${FRAME}`}>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
+                Awaiting a record
+              </h2>
+              <p className="text-muted text-sm">
+                Still to record this month
+                {inCloseWeek ? ', and last month while it is open' : ''}, oldest first.
+              </p>
+            </div>
 
-          {queueFailed ? null : queuePending ? (
-            <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
-          ) : shown.length === 0 ? (
-            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              {filter === 'CELLS'
-                ? whose === 'mine'
-                  ? 'No Cell meeting of yours is awaiting a record.'
-                  : 'No Cell meeting in your branch is awaiting a record.'
-                : filter === 'DCC'
+            <TabBar
+              label="Awaiting a record"
+              className="mt-4 grid-cols-2 sm:max-w-xl"
+              tabs={[
+                {
+                  key: 'CELLS',
+                  label: 'Cell Group',
+                  count:
+                    queuePending || queueFailed
+                      ? null
+                      : String(queue.filter((item) => item.kind === 'cell').length),
+                },
+                {
+                  key: 'DCC',
+                  label: 'Doulos Cell Celebration',
+                  count:
+                    queuePending || queueFailed
+                      ? null
+                      : String(queue.filter((item) => item.kind === 'dcc').length),
+                },
+              ]}
+              current={filter}
+              onChoose={setFilter}
+            />
+
+            <div className={`mt-4 ${CONTROL_BAR}`}>
+              <RadioGroup
+                legend="Whose"
+                name="queue-whose"
+                value={whose}
+                onChange={setWhose}
+                options={[
+                  { value: 'branch', label: 'People I oversee' },
+                  { value: 'mine', label: 'My own Cells' },
+                ]}
+              />
+            </div>
+
+            {queueFailed ? null : queuePending ? (
+              <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+            ) : shown.length === 0 ? (
+              <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+                {filter === 'CELLS'
                   ? whose === 'mine'
-                    ? 'Nobody on your DCC checklist is awaiting a record.'
-                    : 'No DCC record is owed in your branch.'
+                    ? 'No Cell meeting of yours is awaiting a record.'
+                    : 'No Cell meeting in your branch is awaiting a record.'
                   : whose === 'mine'
-                    ? 'Nothing is awaiting a record from you.'
-                    : 'Nothing is awaiting a record in your branch.'}
-            </p>
-          ) : (
-            <ul className="border-line mt-4 border-t">
-              {shown.map((item) => (
-                <QueueRow
-                  key={`${item.month}-${item.kind}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`}
-                  item={item}
-                  currentMonth={month}
-                  today={today}
-                />
-              ))}
-            </ul>
-          )}
-
-          {filter === 'DCC' && whose === 'mine' ? (
-            <DccChecklistGrid events={recordableEvents} checklists={checklists} month={month} />
-          ) : null}
-
-          {/*
-            **Record is where DCC attendance is recorded from** (section 19, ruling of
-            2026-09-14). The queue lists the Sundays with something outstanding; the
-            calendar is the way to every Sunday of the month, including one already
-            complete that a leader needs to look at again.
-          */}
-          <p className="mt-4">
-            <Link
-              href="/dcc"
-              className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              See the whole month
-            </Link>
-          </p>
-        </section>
-
-        {/*
-          This month so far, beside the queue as the owner's design places it (decision
-          0258's screen, owner's choice of 2026-09-19). Each figure carries last month's,
-          named by its month; no bars, because coverage is two figures and never a fraction
-          (decision 0224).
-        */}
-        <aside aria-labelledby="period-heading" className="min-w-0">
-          <h2 id="period-heading" className="text-lg font-bold tracking-tight">
-            {monthLabel(month).split(' ')[0]} so far
-          </h2>
-          <p className="text-muted mt-1 text-sm">
-            {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}
-          </p>
-          <div className="mt-4 flex flex-col gap-3">
-            <MonthCard
-              label="Cell meetings recorded"
-              value={
-                cellFigures.data
-                  ? `${cellFigures.data.coverage.recorded} of ${cellFigures.data.coverage.scheduled}`
-                  : '—'
-              }
-              previous={
-                cellFiguresPrevious.data
-                  ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.coverage.recorded} of ${cellFiguresPrevious.data.coverage.scheduled}`
-                  : null
-              }
-              href="/reports/cells"
-            />
-            <MonthCard
-              label="DCC records filed"
-              value={
-                dccFigures.data
-                  ? `${dccFigures.data.coverage.met} of ${dccFigures.data.coverage.owed}`
-                  : '—'
-              }
-              previous={
-                dccFiguresPrevious.data
-                  ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.coverage.met} of ${dccFiguresPrevious.data.coverage.owed}`
-                  : null
-              }
-              href="/reports/dcc"
-            />
-            <MonthCard
-              label="People at a Cell"
-              value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
-              previous={
-                cellFiguresPrevious.data
-                  ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.unique_people}`
-                  : null
-              }
-              href="/reports/cells"
-            />
-            <MonthCard
-              label="People at DCC"
-              value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
-              previous={
-                dccFiguresPrevious.data
-                  ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.unique_people}`
-                  : null
-              }
-              href="/reports/dcc"
-            />
-          </div>
-        </aside>
-      </div>
-
-      {/* The reader's own requests, beside their own work (decision 0269). */}
-      <SentRequests />
-
-      {/* The three attention lists side by side from `lg`, one frame each. */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-      <section className={FRAME} aria-labelledby="attention-heading">
-        <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
-          Cells with meetings still to record
-        </h2>
-        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Within your scope, in no particular order. This is a filter, not a ranking.
-        </p>
-        {scoped.isPending || scopedClosed.isPending ? (
-          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : scoped.isError || scopedClosed.isError ? null : needingAttention.length === 0 ? (
-          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            {/* Only the first page of each view is read; say so where there is more. */}
-            {scoped.data?.next_cursor == null && scopedClosed.data?.next_cursor == null ? (
-              'No Cell in your scope is behind this month. Closed Cells count while the month is open.'
-            ) : (
-              <>
-                None of the first 50 Cells in your scope is behind this month.{' '}
-                <Link
-                  href={`/reports/cells?${new URLSearchParams({ month, behind: '1' }).toString()}`}
-                  className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  See every Cell behind in Reports
-                </Link>
-              </>
-            )}
-          </p>
-        ) : (
-          <ul className="mt-3">
-            {needingAttention.map((cell) => (
-              <AttentionRow key={cell.id} cell={cell} month={month} />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/*
-        Section 19's fifth outstanding-work entry, and section 20 requires the list
-        behind it (decision 0232). It sits with the other outstanding work rather than
-        with the figures because it is something to do, not something to read.
-
-        **Undated, so it is above the period heading rather than under it.** The list
-        asks about now: somebody reassigned last week needs no action today, whatever a
-        past month's chain looked like. Putting it below would attach it to the month
-        selector and make it look like a figure for a period, which is exactly the line
-        section 3 draws and section 19 says a dashboard is where it is most easily lost.
-      */}
-      <section className={FRAME} aria-labelledby="unplaced-heading">
-        <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
-          People needing a leader
-        </h2>
-        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Their own pastoral leader no longer holds an assignment. Listed by name, never by how long
-          they have waited.
-        </p>
-        {unplaced.isPending ? (
-          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : unplaced.data ? (
-          <>
-            {unplaced.data.data.length === 0 ? (
-              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Nobody in your scope is waiting for a leader. Somebody whose own leader
-                holds no assignment can fall outside your branch as they go, so a reader
-                with a wider scope may see them.
+                    ? 'Nobody on your DCC checklist is awaiting a record.'
+                    : 'No DCC record is owed in your branch.'}
               </p>
             ) : (
-              <ul className="mt-3">
-                {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
-                  <li key={person.id} className={ROW}>
-                    {/*
-                      The action that resolves it (section 19) is the reassignment, which
-                      lives on the person's place in the tree.
-                    */}
-                    <Link
-                      href={`/people/${person.id}/network`}
-                      className="focus-visible:outline-accent inline-flex min-h-6 items-center text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {person.full_name}
-                    </Link>
-                    <p className="text-muted mt-1 text-sm">
-                      Was under {person.former_leader.full_name}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <Table caption="Awaiting a record" className="mt-4 hidden lg:block">
+                  <thead>
+                    <tr>
+                      <HeaderCell>Date</HeaderCell>
+                      <HeaderCell>What</HeaderCell>
+                      <HeaderCell>Leader</HeaderCell>
+                      <HeaderCell>Waiting</HeaderCell>
+                      <HeaderCell>
+                        <span className="sr-only">Record</span>
+                      </HeaderCell>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((item) => (
+                      <QueueTableRow
+                        key={queueKey(item)}
+                        item={item}
+                        currentMonth={month}
+                        today={today}
+                      />
+                    ))}
+                  </tbody>
+                </Table>
+                <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+                  {shown.map((item) => (
+                    <QueueCard key={queueKey(item)} item={item} currentMonth={month} today={today} />
+                  ))}
+                </ul>
+              </>
             )}
-            {/*
-              **Unconditional, and two versions of it were not.** The link was first
-              shown only when the tile overflowed, so with one to five people waiting
-              the screen had no route into it from anywhere in the application. Moving
-              it out of that condition left it inside the *non-empty* branch, so on a
-              church where nobody is waiting — the ordinary case, and the state the
-              demo database is in — the screen was still unreachable, under a comment
-              claiming it was unconditional. It is now outside both branches.
 
-              The coverage ledger cannot catch either version: it asks whether every
-              route has a screen and never whether a screen can be reached, which is
-              decision 0213's own blind spot one direction over.
+            {filter === 'DCC' && whose === 'mine' ? (
+              <DccChecklistGrid events={recordableEvents} checklists={checklists} month={month} />
+            ) : null}
+
+            {/*
+              **Record is where DCC attendance is recorded from** (section 19, ruling of
+              2026-09-14). The queue lists the Sundays with something outstanding; the
+              calendar is the way to every Sunday of the month, including one already
+              complete that a leader needs to look at again.
             */}
             <p className="mt-4">
               <Link
-                href="/people/awaiting-reassignment"
-                className="focus-visible:outline-accent inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                href="/dcc"
+                className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
-                {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
-                  ? 'See everyone needing a leader'
-                  : 'Open the full list'}
+                See the whole month
               </Link>
             </p>
-          </>
+          </section>
         ) : null}
-      </section>
 
-      {/*
-        Section 19's third outstanding-work entry, which section 15 requires and
-        section 10's closure flow fills (decision 0233). Undated, so it sits above the
-        period heading with the other current-state work.
-      */}
-      <section className={FRAME} aria-labelledby="without-cell-heading">
-        <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
-          People without a Cell
-        </h2>
-        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          In your scope and not in a Cell. Somebody who leads one is not listed.
-        </p>
-        {withoutACell.isPending ? (
-          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : withoutACell.data ? (
-          <>
-            {withoutACell.data.data.length === 0 ? (
-              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Nobody in your scope is without a Cell. Somebody whose own leader holds
-                no assignment can fall outside your branch, so a reader with a wider scope
-                may see them.
-              </p>
-            ) : (
-              <ul className="mt-3">
-                {withoutACell.data.data.slice(0, UNPLACED_TILE).map((person) => (
-                  <li key={person.id} className={ROW}>
+        {tab === 'behind' ? (
+          <section className={FRAME} aria-labelledby="attention-heading">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
+                Cells behind
+              </h2>
+              <p className="text-muted text-sm">In your scope, in no particular order.</p>
+            </div>
+            {scoped.isPending || scopedClosed.isPending ? (
+              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+            ) : scoped.isError || scopedClosed.isError ? null : (
+              <>
+                <ListTable
+                  caption="Cells behind"
+                  columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
+                  empty={
+                    behindMore
+                      ? 'None of the first 50 Cells in your scope is behind this month.'
+                      : 'No Cell in your scope is behind this month.'
+                  }
+                  rows={needingAttention.map((cell) => ({
+                    key: cell.id,
+                    cells: [
+                      <Link
+                        key="cell"
+                        href={`/cells/${cell.id}/meetings?month=${month}`}
+                        className={NAME_LINK}
+                      >
+                        {cell.cell_id}
+                      </Link>,
+                      cell.leader.full_name,
+                      <span key="recorded" className="tabular-nums">
+                        {cell.coverage.recorded} of {cell.coverage.scheduled}
+                      </span>,
+                      cell.state === 'CLOSED' && cell.closed_on
+                        ? `Closed ${closedOnLabel(cell.closed_on)}`
+                        : 'Open',
+                    ],
+                  }))}
+                />
+                {/* Only the first page of each view is read; say so where there is more. */}
+                {behindMore ? (
+                  <p className="mt-4">
                     <Link
-                      href={`/people/${person.id}`}
-                      className="focus-visible:outline-accent inline-flex min-h-6 items-center text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      href={`/reports/cells?${new URLSearchParams({ month, behind: '1' }).toString()}`}
+                      className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
-                      {person.full_name}
+                      See every Cell behind in Reports
                     </Link>
-                    <p className="text-muted mt-1 text-sm">{person.member_id}</p>
-                  </li>
-                ))}
-              </ul>
+                  </p>
+                ) : null}
+              </>
             )}
-            {/* Unconditional, for the reason the section above records. */}
-            <p className="mt-4">
-              <Link
-                href="/cells/people-without-a-cell"
-                className="focus-visible:outline-accent inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                {withoutACell.data.data.length > UNPLACED_TILE ||
-                withoutACell.data.next_cursor !== null
-                  ? 'See everyone without a Cell'
-                  : 'Open the full list'}
-              </Link>
-            </p>
-          </>
+          </section>
         ) : null}
-      </section>
+
+        {/*
+          Section 19's fifth outstanding-work entry, and section 20 requires the list
+          behind it (decision 0232). Undated: it asks about now.
+        */}
+        {tab === 'leader' ? (
+          <section className={FRAME} aria-labelledby="unplaced-heading">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
+                Needs a new leader
+              </h2>
+              <p className="text-muted text-sm">
+                In your scope, and their pastoral leader holds no assignment.
+              </p>
+            </div>
+            {unplaced.isPending ? (
+              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+            ) : unplaced.data ? (
+              <>
+                {/* The action that resolves an entry is the reassignment (section 19). */}
+                <ListTable
+                  caption="Needs a new leader"
+                  columns={['Name', 'Member ID', 'Was under']}
+                  empty="Nobody in your scope is waiting for a new leader."
+                  rows={unplaced.data.map((person) => ({
+                    key: person.id,
+                    cells: [
+                      <Link key="name" href={`/people/${person.id}/network`} className={NAME_LINK}>
+                        {person.full_name}
+                      </Link>,
+                      person.member_id,
+                      person.former_leader.full_name,
+                    ],
+                  }))}
+                />
+                <ShowMore pages={unplacedPages} />
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/*
+          Section 19's third outstanding-work entry, which section 15 requires and
+          section 10's closure flow fills (decision 0233). Undated: it asks about now.
+        */}
+        {tab === 'nocell' ? (
+          <section className={FRAME} aria-labelledby="without-cell-heading">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
+                Not in a Cell
+              </h2>
+              <p className="text-muted text-sm">In your scope, and not in a Cell or leading one.</p>
+            </div>
+            {withoutACell.isPending ? (
+              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+            ) : withoutACell.data ? (
+              <>
+                <ListTable
+                  caption="Not in a Cell"
+                  columns={['Name', 'Member ID']}
+                  empty="Everybody in your scope is in a Cell."
+                  rows={withoutACell.data.map((person) => ({
+                    key: person.id,
+                    cells: [
+                      <Link key="name" href={`/people/${person.id}`} className={NAME_LINK}>
+                        {person.full_name}
+                      </Link>,
+                      person.member_id,
+                    ],
+                  }))}
+                />
+                <ShowMore pages={withoutACellPages} />
+              </>
+            ) : null}
+          </section>
+        ) : null}
       </div>
 
-      {/* The two "as of today" Cell totals moved to the Cells page (decision 0289). */}
+      {/* The reader's own requests, below their own work (decision 0269). */}
+      <SentRequests />
+
+      {/*
+        This month so far, as a row at the foot (decision 0290). Each figure carries last
+        month's, named by its month; no bars, because coverage is two figures and never a
+        fraction (decision 0224).
+      */}
+      <aside aria-labelledby="period-heading" className="border-line mt-10 border-t pt-6">
+        <h2 id="period-heading" className="text-lg font-bold tracking-tight">
+          {monthLabel(month).split(' ')[0]} so far
+        </h2>
+        <p className="text-muted mt-1 text-sm">
+          {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MonthCard
+            label="Cell meetings recorded"
+            value={
+              cellFigures.data
+                ? `${cellFigures.data.coverage.recorded} of ${cellFigures.data.coverage.scheduled}`
+                : '—'
+            }
+            previous={
+              cellFiguresPrevious.data
+                ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.coverage.recorded} of ${cellFiguresPrevious.data.coverage.scheduled}`
+                : null
+            }
+            href="/reports/cells"
+          />
+          <MonthCard
+            label="DCC records filed"
+            value={
+              dccFigures.data
+                ? `${dccFigures.data.coverage.met} of ${dccFigures.data.coverage.owed}`
+                : '—'
+            }
+            previous={
+              dccFiguresPrevious.data
+                ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.coverage.met} of ${dccFiguresPrevious.data.coverage.owed}`
+                : null
+            }
+            href="/reports/dcc"
+          />
+          <MonthCard
+            label="People at a Cell"
+            value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
+            previous={
+              cellFiguresPrevious.data
+                ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.unique_people}`
+                : null
+            }
+            href="/reports/cells"
+          />
+          <MonthCard
+            label="People at DCC"
+            value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
+            previous={
+              dccFiguresPrevious.data
+                ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.unique_people}`
+                : null
+            }
+            href="/reports/dcc"
+          />
+        </div>
+      </aside>
     </main>
   );
 }
@@ -772,16 +803,6 @@ function periodLabel(month: string, open: boolean | undefined): string {
   }
 
   return open ? `${monthLabel(month)} · still open` : `${monthLabel(month)} · closed`;
-}
-
-/** The day of the month and a short weekday, for the date block at the start of a row. */
-function dateParts(date: string): { day: number; weekday: string } {
-  const at = new Date(`${date}T00:00:00Z`);
-
-  return {
-    day: at.getUTCDate(),
-    weekday: at.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
-  };
 }
 
 /**
@@ -804,21 +825,174 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
   return `${name} · open until 7 ${closes}`;
 }
 
+/** Which of Record's four lists is open (decision 0290). */
+type RecordTab = 'awaiting' | 'behind' | 'leader' | 'nocell';
+
+/** A name that opens its record: 24px tall at least, which 2.5.8 measures. */
+const NAME_LINK =
+  'focus-visible:outline-accent inline-flex min-h-6 items-center font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+
+function queueKey(item: QueueItem): string {
+  return `${item.month}-${item.kind}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`;
+}
+
 /**
- * One entry in the queue: when, what, what is outstanding, and the button that
- * resolves it (section 19, "each entry carries the action that resolves it").
- *
- * **The tag is an outlined word, never a colour** (`docs/DESIGN_RECONCILIATION.md`):
- * a record awaiting entry is exactly what sections 13, 17 and 19 forbid encoding in
- * colour, so the word carries it and the red is left for the button.
- *
- * **The date block is hidden from assistive technology** because the line beneath the
- * title says the same date in full; announcing "6 Sat" and then "Saturday 6
- * September" would say it twice. Every button reads "Record" on screen and carries
- * the entry it records in its accessible name, so a list of them is not a list of
- * identical links.
+ * Equal-width buttons that choose which list is shown, each with its count in a box
+ * (owner's choices of 2026-09-25). Buttons pressed and unpressed rather than ARIA tabs:
+ * the lists are sections of one page, and a screen reader meets each by its heading.
+ * The count box is the same on every button whatever the number, because colour never
+ * marks a figure as behind (sections 13 and 19).
  */
-function QueueRow({
+function TabBar<Key extends string>({
+  label,
+  className,
+  tabs,
+  current,
+  onChoose,
+}: {
+  label: string;
+  className: string;
+  tabs: readonly { key: Key; label: string; count: string | null }[];
+  current: Key;
+  onChoose: (key: Key) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className={cn('border-line grid border-b', className)}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          aria-pressed={tab.key === current}
+          onClick={() => onChoose(tab.key)}
+          className={cn(
+            'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 border border-b-0 px-3 py-2 text-center sm:px-4',
+            'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
+            tab.key === current
+              ? 'bg-accent text-surface border-accent'
+              : 'border-line text-ink hover:bg-raised',
+          )}
+        >
+          {tab.label}
+          {tab.count === null ? null : (
+            <span className="inline-block min-w-5 border border-current px-1 text-center leading-4 tabular-nums">
+              {tab.count}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A list as a table from `lg` and as cards below it, the shape the Cells page uses. An
+ * empty list keeps its table and says so in one row (owner's choice of 2026-09-25).
+ */
+function ListTable({
+  caption,
+  columns,
+  empty,
+  rows,
+}: {
+  caption: string;
+  columns: readonly string[];
+  empty: string;
+  rows: readonly { key: string; cells: readonly ReactNode[] }[];
+}) {
+  return (
+    <>
+      <Table caption={caption} className="mt-3 hidden lg:block">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <HeaderCell key={column}>{column}</HeaderCell>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} className="text-muted px-3 py-3">
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.key} className={rowClasses}>
+                {row.cells.map((cell, index) => (
+                  <td
+                    key={columns[index]}
+                    className={cn('px-3 py-3 align-top', index > 0 && 'text-muted')}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </Table>
+
+      <ul className="mt-3 flex flex-col gap-3 lg:hidden">
+        {rows.length === 0 ? (
+          <li className="border-line text-muted border p-4 text-sm">{empty}</li>
+        ) : (
+          rows.map((row) => (
+            <li key={row.key} className="border-line border p-4">
+              <p className="text-base">{row.cells[0]}</p>
+              <dl className="text-muted mt-2 grid gap-y-1 text-sm">
+                {row.cells.slice(1).map((cell, index) => (
+                  <div key={columns[index + 1]} className="flex flex-wrap gap-x-2">
+                    <dt>{columns[index + 1]}</dt>
+                    <dd className="text-ink">{cell}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))
+        )}
+      </ul>
+    </>
+  );
+}
+
+/** The next fifty, in place, so nobody on a list is out of reach (decision 0290). */
+function ShowMore({
+  pages,
+}: {
+  pages: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
+}) {
+  return pages.hasNextPage ? (
+    <p className="mt-4">
+      <button
+        type="button"
+        onClick={() => void pages.fetchNextPage()}
+        disabled={pages.isFetchingNextPage}
+        className={buttonClasses('secondary')}
+      >
+        {pages.isFetchingNextPage ? 'Loading…' : 'Show more'}
+      </button>
+    </p>
+  ) : null;
+}
+
+/** What an awaiting entry is, who records it and how long it has waited, in words. */
+function describeQueueItem(item: QueueItem, currentMonth: string, today: string) {
+  const isCell = item.kind === 'cell';
+  const what = isCell
+    ? `${item.category ? `${categoryLabel(item.category)} · ` : ''}${item.cellCode}${
+        item.closedOn === null ? '' : ` · Cell closed ${dayLabel(item.closedOn)}`
+      }`
+    : `DCC · ${item.marked} of ${item.total} marked`;
+  const leader = isCell ? (item.isActor ? 'You' : (item.leaderName ?? 'Its leader')) : 'You';
+  const waiting = daysAgoLabel(item.date, today);
+  const open = item.month === currentMonth ? null : openUntilLabel(item.month, currentMonth);
+  const href = isCell ? `/cells/${item.cellId}/meetings/${item.date}` : `/dcc/${item.eventId}`;
+
+  return { what, leader, waiting, open, href };
+}
+
+function QueueTableRow({
   item,
   currentMonth,
   today,
@@ -827,63 +1001,57 @@ function QueueRow({
   currentMonth: string;
   today: string;
 }) {
-  const { day, weekday } = dateParts(item.date);
-  const when = daysAgoLabel(item.date, today);
-
-  let title: string;
-  let detail: string;
-  let tag: string;
-  let href: string;
-
-  if (item.kind === 'cell') {
-    // The owner's row (choice of 2026-09-19): the Cell's category and meeting time, then
-    // whose it is, its size and its ID. Words and no colour (sections 13 and 19).
-    const category = item.category ? `${categoryLabel(item.category)} · ` : '';
-    title = `${category}${dayOfWeekLabel(item.dayOfWeek)}s ${timeLabel(item.time)}`;
-    const leader = item.isActor ? 'You' : (item.leaderName ?? 'Its leader');
-    detail = [
-      leader,
-      `${item.memberCount} ${item.memberCount === 1 ? 'member' : 'members'}`,
-      item.cellCode,
-      ...(item.closedOn === null ? [] : [`Cell closed ${dayLabel(item.closedOn)}`]),
-    ].join(' · ');
-    tag = `Awaiting a record · ${when}`;
-    href = `/cells/${item.cellId}/meetings/${item.date}`;
-  } else {
-    title = 'DCC';
-    const people = `${item.total} ${item.total === 1 ? 'person' : 'people'}`;
-    detail = `${people} you are responsible for · ${item.marked} marked`;
-    tag = `${item.total - item.marked} awaiting · ${when}`;
-    href = `/dcc/${item.eventId}`;
-  }
+  const { what, leader, waiting, open, href } = describeQueueItem(item, currentMonth, today);
 
   return (
-    <li className="border-line grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b py-4 sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
-      <p aria-hidden="true" className="text-center leading-none">
-        <span className="text-accent block text-2xl font-bold">{day}</span>
-        <span className="text-muted mt-1 block text-xs font-bold tracking-[0.08em] uppercase">
-          {weekday}
-        </span>
-      </p>
+    <tr className={rowClasses}>
+      <td className="px-3 py-3 align-top whitespace-nowrap">{dayLabel(item.date)}</td>
+      <td className="px-3 py-3 align-top">{what}</td>
+      <td className="px-3 py-3 align-top">{leader}</td>
+      <td className="px-3 py-3 align-top">
+        {waiting}
+        {open === null ? null : <span className="text-muted block text-xs">{open}</span>}
+      </td>
+      <td className="px-3 py-3 text-right align-top">
+        <Link href={href} className={buttonClasses('primary')}>
+          Record
+          <span className="sr-only">
+            {' '}
+            {what}, {dayLabel(item.date)}
+          </span>
+        </Link>
+      </td>
+    </tr>
+  );
+}
+
+/** The same entry as a card below `lg`, with Record always in view. */
+function QueueCard({
+  item,
+  currentMonth,
+  today,
+}: {
+  item: QueueItem;
+  currentMonth: string;
+  today: string;
+}) {
+  const { what, leader, waiting, open, href } = describeQueueItem(item, currentMonth, today);
+
+  return (
+    <li className="border-line flex flex-wrap items-center justify-between gap-3 border p-4">
       <div className="min-w-0">
-        <p className="text-base font-medium">{title}</p>
+        <p className="text-base font-medium">{dayLabel(item.date)}</p>
+        <p className="text-sm">{what}</p>
         <p className="text-muted text-sm">
-          {dayLabel(item.date)} · {detail}
-        </p>
-        <p className="mt-2 flex flex-wrap gap-1.5">
-          <Tag appearance="outline" className="whitespace-normal">
-            {tag}
-          </Tag>
-          {item.month === currentMonth ? null : (
-            <Tag className="whitespace-normal">{openUntilLabel(item.month, currentMonth)}</Tag>
-          )}
+          {leader} · {waiting}
+          {open === null ? '' : ` · ${open}`}
         </p>
       </div>
-      <Link href={href} className={cn(buttonClasses('primary'), 'col-span-2 sm:col-span-1')}>
+      <Link href={href} className={buttonClasses('primary')}>
         Record
         <span className="sr-only">
           {' '}
-          {item.kind === 'cell' ? `${item.cellCode}, ${title}` : title}, {dayLabel(item.date)}
+          {what}, {dayLabel(item.date)}
         </span>
       </Link>
     </li>
@@ -1020,29 +1188,3 @@ function shortDayLabel(date: string): string {
   );
 }
 
-function AttentionRow({ cell, month }: { cell: CellSummary; month: string }) {
-  return (
-    <li className={ROW}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-base font-medium">
-          <Link
-            href={`/cells/${cell.id}/meetings?month=${month}`}
-            className="focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            {cell.cell_id}
-          </Link>
-        </h3>
-        <CoverageFigure
-          recorded={cell.coverage.recorded}
-          scheduled={cell.coverage.scheduled}
-          unit="meetings recorded"
-        />
-      </div>
-      <p className="text-muted mt-2 text-sm">
-        {cell.state === 'CLOSED' && cell.closed_on
-          ? `Led by ${cell.leader.full_name} · closed ${closedOnLabel(cell.closed_on)}`
-          : `Led by ${cell.leader.full_name}`}
-      </p>
-    </li>
-  );
-}

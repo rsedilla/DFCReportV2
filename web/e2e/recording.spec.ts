@@ -13,6 +13,7 @@ import {
   CELL_WITH_MEETINGS,
   awaitingClosedRow,
   awaitingRow,
+  closedAsked,
   mockCellMeetings,
   mockCellReport,
   mockCells,
@@ -414,8 +415,11 @@ test.describe('the Record queue', () => {
     await mockRecordScreen(page, {});
 
     await page.goto('/dashboard');
+    await chooseDcc(page);
 
-    await expect(page.getByText('September · open until 7 Oct').first()).toBeVisible();
+    await expect(
+      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 
   test('lists nothing from last month once the 7th has passed', async ({ page }) => {
@@ -424,9 +428,10 @@ test.describe('the Record queue', () => {
     await mockRecordScreen(page, {});
 
     await page.goto('/dashboard');
+    await chooseDcc(page);
 
     // This month's rows have arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -442,10 +447,11 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
-    await expect(page.getByText('September · open until 7 Oct').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(
+      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 
   // A month past its 7th answers shut and empty rather than refusing, so the screen has
@@ -458,10 +464,9 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     // October's row has arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -472,6 +477,9 @@ test.describe('the Record queue', () => {
    * record for, and the Cells index is `ACTIVE`-only — so before this route the row
    * could not be rendered at all. The Cell's code comes from the queue rather than
    * from the index, which is why a closed Cell can be named here and nowhere else.
+   *
+   * The closure is said in words, in the row's What column and on the card alike, and so
+   * in the Record button's accessible name, which carries the What text.
    */
   test('names a closed Cell’s meeting, says in words that the Cell closed, and links to it', async ({
     page,
@@ -484,25 +492,34 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    // Exact, because the Record button's accessible name names the Cell too.
-    await expect(page.getByText('Youth · Saturdays 7:00 pm', { exact: true })).toBeVisible();
+    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000014' });
+    await expect(row.getByRole('cell')).toHaveText([
+      'Saturday 3 October',
+      'Youth · CELL-000014 · Cell closed Sunday 20 September',
+      'You',
+      'today',
+      /^Record/,
+    ]);
     await expect(
-      page.getByText('Saturday 3 October · You · 4 members · CELL-000014 · Cell closed Sunday 20 September'),
+      page.getByRole('link', {
+        name: /^Record Youth · CELL-000014 · Cell closed Sunday 20 September, Saturday 3 October$/,
+      }),
+    ).toHaveAttribute('href', `/cells/${CLOSED_CELL}/meetings/2026-10-03`);
+
+    // The card below lg says the same.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page
+        .getByRole('listitem')
+        .filter({ hasText: 'CELL-000014' })
+        .getByText('Youth · CELL-000014 · Cell closed Sunday 20 September', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Record CELL-000014,/ })).toHaveAttribute(
-      'href',
-      `/cells/${CLOSED_CELL}/meetings/2026-10-03`,
-    );
   });
 
   // Sections 13, 17 and 19 refuse to encode a record's state in colour, and a closed
-  // Cell is a state. The words carry it, so the row is neither tagged nor tinted
-  // differently from the Cell beside it that is still open.
-  test('marks a closed Cell no differently from an open one but for the words', async ({
-    page,
-  }) => {
+  // Cell is a state. The two rows are dressed identically.
+  test('marks a closed Cell no differently from an open one', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
     await mockRecordScreen(page, {
       '2026-10-01': {
@@ -514,31 +531,46 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record CELL-/ }) });
+    const rows = awaitingTable(page)
+      .getByRole('row')
+      .filter({ has: page.getByRole('link', { name: /^Record / }) });
     await expect(rows).toHaveCount(2);
 
-    // The only tag either row carries is the one both carry.
-    for (const row of await rows.all()) {
-      await expect(row.getByText('Awaiting a record')).toBeVisible();
-    }
-    await expect(page.getByText('Cell closed')).toHaveCount(1);
+    const [open, closed] = await rows.all();
+    expect(await closed.getAttribute('class')).toBe(await open.getAttribute('class'));
+    expect(await closed.getByRole('link').getAttribute('class')).toBe(
+      await open.getByRole('link').getAttribute('class'),
+    );
   });
 
-  // An open Cell's row says the time and stops there: the closure sentence is not a
-  // label every row wears with an empty value.
-  test('says only the time for a Cell that is still open', async ({ page }) => {
+  // The queue's columns, read off a row: when, what, whose, and how long in words.
+  test('lays a meeting out as its date, what it is, whose it is and how long it has waited', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
     await mockRecordScreen(page, {
       '2026-10-01': { meetings: [awaitingRow('2026-10-03', '2026-10-01')] },
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByText('Saturday 3 October · You · 5 members · CELL-000007')).toBeVisible();
-    await expect(page.getByText('Cell closed')).toHaveCount(0);
+    const table = awaitingTable(page);
+    await expect(table.getByRole('columnheader')).toHaveText([
+      'Date',
+      'What',
+      'Leader',
+      'Waiting',
+      'Record',
+    ]);
+    const row = table.getByRole('row').filter({ hasText: 'CELL-000007' });
+    await expect(row.getByRole('cell')).toHaveText([
+      'Saturday 3 October',
+      'Young Pro · CELL-000007',
+      'You',
+      'today',
+      /^Record/,
+    ]);
   });
 
   // The queue is empty when the route says it is, and says so in a sentence rather
@@ -550,9 +582,11 @@ test.describe('the Record queue', () => {
     await mockRecordScreen(page, { '2026-10-01': { meetings: [] } });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toBeVisible();
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: /^Cell Group\s*0$/ }),
+    ).toBeVisible();
   });
 
   /**
@@ -579,8 +613,17 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText('Nothing is awaiting a record from you.')).toHaveCount(0);
     await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toHaveCount(0);
+
+    // Nor does a count: a queue that was not read is not a queue of 0, and the Sundays
+    // alone are not the whole of it. Each button's whole name is its label.
+    await expect(recordLists(page).getByRole('button', { name: 'Awaiting a record', exact: true })).toBeVisible();
+    await expect(awaitingHalves(page).getByRole('button', { name: 'Cell Group', exact: true })).toBeVisible();
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: 'Doulos Cell Celebration', exact: true }),
+    ).toBeVisible();
+    // The lists whose reads succeeded still count, so the absence above is the failure's.
+    await expect(recordLists(page).getByRole('button', { name: /^Not in a Cell\s*2$/ })).toBeVisible();
   });
 
   /**
@@ -626,7 +669,7 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('link', { name: /^Record CELL-000007,/ }).click();
+    await page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
     await expect.poll(() => asked).toBe(1);
@@ -653,8 +696,8 @@ test.describe('the Record queue', () => {
 
   // Decision 0289: the two "as of today" Cell totals left Record for the Cells page, so
   // Record carries neither tile, nor the section that held them, nor the read behind
-  // "Cells you lead". Waited on the last section to load, so an absence below is not a
-  // page still loading.
+  // "Cells you lead". Waited on the last list's count to arrive, so an absence below is
+  // not a page still loading.
   test('carries no Cell totals, and never asks for the Cells the reader leads', async ({
     page,
   }) => {
@@ -668,7 +711,8 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Not in a Cell\s*2$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind\s*1$/ })).toBeVisible();
     await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
 
     await expect(page.getByRole('heading', { name: 'As things stand today' })).toHaveCount(0);
@@ -677,9 +721,9 @@ test.describe('the Record queue', () => {
     expect(ledByMe).toEqual([]);
   });
 
-  // The Cells index no longer feeds the queue, and still feeds the attention list — so
-  // its failure must still reach the notice rather than leaving that list silent with no
-  // reason given.
+  // The Cells index no longer feeds the queue, and still feeds Cells behind — so its
+  // failure must still reach the notice, and Cells behind must neither count nor claim
+  // that nothing is behind.
   test('reports a failed Cells read although the queue no longer depends on it', async ({
     page,
   }) => {
@@ -697,12 +741,15 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText('is behind this month')).toHaveCount(0);
+    // No count box: the button's whole name is its label.
+    await recordLists(page).getByRole('button', { name: 'Cells behind', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Cells behind' })).toBeVisible();
+    await expect(page.getByText('No Cell in your scope is behind this month.')).toHaveCount(0);
   });
 
-  // Decision 0267: the attention list names a Cell a meeting that came is missing from,
-  // by the server's `behind`. CELL-000001 has recorded two of the month's four and is not
-  // behind — its other two have not come — so a list keyed on the whole month would name it.
+  // Decision 0267: the list names a Cell a meeting that came is missing from, by the
+  // server's `behind`. CELL-000001 has recorded two of the month's four and is not behind —
+  // its other two have not come — so a list keyed on the whole month would name it.
   test('lists the Cells behind, and not a Cell whose unrecorded meetings have not come', async ({
     page,
   }) => {
@@ -710,8 +757,10 @@ test.describe('the Record queue', () => {
     await mockCellsAtScale(page);
 
     await page.goto('/dashboard');
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind\s*2$/ })).toBeVisible();
+    await chooseList(page, /^Cells behind/);
 
-    const attention = page.getByRole('region', { name: 'Cells with meetings still to record' });
+    const attention = page.getByRole('region', { name: 'Cells behind' });
     await expect(attention.getByRole('link', { name: /^CELL-/ })).toHaveText([
       'CELL-000010',
       'CELL-000011',
@@ -791,9 +840,16 @@ test.describe('the Record queue', () => {
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
   });
 
-  // The walkthrough of 2026-09-21: "this page of your scope" was our word. The sentence
-  // claims the whole scope only when every Cell was read, and names the limit otherwise.
-  test('says no Cell is behind in plain words, and names the limit when there is more', async ({
+  /**
+   * A list read a page at a time counts what it has read and says there is more
+   * (section 19, decision 0290). With every Cell read and none behind, the count is 0 and
+   * nothing points elsewhere; with a further page unread, the count is "0+" and Reports
+   * is where the rest are.
+   *
+   * The empty row claims the whole scope only when every Cell was read, and names the
+   * limit otherwise (walkthrough of 2026-09-21): "this page of your scope" was our word.
+   */
+  test('counts the Cells behind that it read, and says there is more when there is', async ({
     page,
   }) => {
     await mockRecordScreen(page, {});
@@ -801,25 +857,47 @@ test.describe('the Record queue', () => {
       JSON.stringify({
         reporting_month: '2026-06-01',
         open: true,
-        data: new URL(url).searchParams.get('state') === 'CLOSED' ? [] : [
-          { ...CELL_WITH_MEETINGS, coverage: { recorded: 4, scheduled: 4, behind: 0 } },
-        ],
+        data:
+          new URL(url).searchParams.get('state') === 'CLOSED'
+            ? []
+            : [{ ...CELL_WITH_MEETINGS, coverage: { recorded: 4, scheduled: 4, behind: 0 } }],
         next_cursor: nextCursor,
       });
 
     await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: notBehind(route.request().url(), null) }),
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: notBehind(route.request().url(), null),
+      }),
     );
     await page.goto('/dashboard');
-    const attention = page.getByRole('region', { name: 'Cells with meetings still to record' });
-    await expect(attention.getByText('No Cell in your scope is behind this month.', { exact: false })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind\s*0$/ })).toBeVisible();
+    await chooseList(page, /^Cells behind/);
+    const attention = page.getByRole('region', { name: 'Cells behind' });
+    await expect(
+      attention.getByRole('cell', { name: 'No Cell in your scope is behind this month.' }),
+    ).toBeVisible();
+    await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveCount(0);
+    await expect(attention.getByText(/None of the first 50/)).toHaveCount(0);
 
     await page.unroute('**/api/v1/cells?*');
     await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: notBehind(route.request().url(), 'more') }),
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: notBehind(route.request().url(), 'more'),
+      }),
     );
     await page.reload();
-    await expect(attention.getByText('None of the first 50 Cells in your scope is behind this month.', { exact: false })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind\s*0\+$/ })).toBeVisible();
+    await chooseList(page, /^Cells behind/);
+    await expect(
+      attention.getByRole('cell', {
+        name: 'None of the first 50 Cells in your scope is behind this month.',
+      }),
+    ).toBeVisible();
+    await expect(attention.getByText('No Cell in your scope is behind this month.')).toHaveCount(0);
     await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveAttribute(
       'href',
       /\/reports\/cells\?month=\d{4}-\d{2}-01&behind=1$/,
@@ -882,39 +960,71 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await page.goto('/dashboard');
 
     await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
-    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
 
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
     await expect.poll(() => whoseAsked).toContain('branch');
     // A downline leader's meeting the reader may record names that leader and offers Record.
-    await expect(page.getByRole('link', { name: /^Record CELL-000021,/ })).toBeVisible();
-    await expect(page.getByText(/Ana Lim · 5 members · CELL-000021/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000021,/ })).toBeVisible();
+    await expect(
+      awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000021' }).getByRole('cell').nth(2),
+    ).toHaveText('Ana Lim');
     // DCC stays the reader's own checklist; the branch view adds no Sunday rows (decision 0258).
     await expect(page.getByText(/beneath you still owe/)).toHaveCount(0);
   });
 
-  test('rows say how long a meeting has waited, in words and without colour', async ({ page }) => {
+  test('rows say how long a meeting has waited, in words', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockQueue(page);
 
     await page.goto('/dashboard');
 
-    await expect(page.getByText('Young Pro · Saturdays 7:00 pm', { exact: true })).toBeVisible();
-    await expect(page.getByText('Awaiting a record · 7 days ago')).toBeVisible();
+    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000007' });
+    await expect(row.getByRole('cell').nth(1)).toHaveText('Young Pro · CELL-000007');
+    await expect(row.getByRole('cell').nth(3)).toHaveText('7 days ago');
   });
 
-  test('the filter says DCC, not Sundays', async ({ page }) => {
+  // Decision 0290: Awaiting a record is split into Cell Group and Doulos Cell Celebration,
+  // Cell Group first, each carrying its count. The All/Cells/DCC choice is gone.
+  test('splits Awaiting a record into Cell Group and Doulos Cell Celebration, Cell Group first', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockQueue(page);
 
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('radio', { name: 'DCC' })).toBeVisible();
+    const halves = awaitingHalves(page);
+    const cellGroup = halves.getByRole('button', { name: /^Cell Group/ });
+    const dcc = halves.getByRole('button', { name: /^Doulos Cell Celebration/ });
+    await expect(halves.getByRole('button')).toHaveCount(2);
+    await expect(cellGroup).toHaveAttribute('aria-pressed', 'true');
+    await expect(dcc).toHaveAttribute('aria-pressed', 'false');
+    // One meeting of the reader's own, and the two Sundays with somebody still unmarked.
+    await expect(halves.getByRole('button', { name: /^Cell Group\s*1$/ })).toBeVisible();
+    await expect(halves.getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Awaiting a record\s*3$/ })).toBeVisible();
+
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record DCC · / })).toHaveCount(0);
+
+    await dcc.click();
+    await expect(dcc).toHaveAttribute('aria-pressed', 'true');
+    await expect(cellGroup).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('link', { name: /^Record DCC · 1 of 2 marked,/ })).toHaveCount(2);
+    await expect(page.getByRole('link', { name: /^Record Young Pro · / })).toHaveCount(0);
+
+    await cellGroup.click();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+
+    // The old Show choice and its words are gone.
+    await expect(page.getByRole('group', { name: 'Show', exact: true })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Sundays' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'All', exact: true })).toHaveCount(0);
   });
 
-  test('the month’s cards sit beside the queue, each with last month’s figure', async ({
+  test('the month’s cards are a row at the foot, each with last month’s figure', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -925,16 +1035,21 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     const cards = page.getByRole('complementary', { name: 'June so far' });
     await expect(cards.getByRole('link', { name: /Cell meetings recorded\s*6 of 8\s*May: 6 of 8/ })).toBeVisible();
     await expect(cards.getByRole('link', { name: /DCC records filed\s*12 of 18\s*May: 12 of 18/ })).toBeVisible();
+
+    // Below the work, not beside it (decision 0290).
+    const queue = await page.getByRole('region', { name: 'Awaiting a record' }).boundingBox();
+    const foot = await cards.boundingBox();
+    expect(foot!.y).toBeGreaterThan(queue!.y + queue!.height);
   });
 
-  test('DCC with My own Cells shows the reader’s own checklist across the month', async ({
+  test('Doulos Cell Celebration with My own Cells shows the reader’s own checklist across the month', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockQueue(page);
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'DCC' }).check();
+    await chooseDcc(page);
 
     const grid = page.getByRole('table', { name: /Your DCC checklist by Sunday/ });
     await expect(grid.getByRole('row', { name: /Rosalinda Ocampo/ })).toContainText('Present');
@@ -946,6 +1061,412 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toHaveCount(0);
   });
 });
+
+/**
+ * Record opens on four lists, one at a time (SKILL.md section 19, decision 0290).
+ *
+ * Four equal buttons choose the list, each carrying its count; a list read a page at a
+ * time counts what it has read and says there is more. Each list is a table from `lg`
+ * and a card per row below it, and the two lists of people show everybody, fifty at a
+ * time, with Show more.
+ */
+test.describe('Record’s four lists (decision 0290)', () => {
+  /** 10:00 on 20 June 2026 in Manila. */
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
+
+  async function mockRecord(page: Page) {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page);
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+  }
+
+  const person = (n: number, name: string) => ({
+    id: `3f1b7c6e-0000-4000-8000-0000000009${String(n).padStart(2, '0')}`,
+    member_id: `M-0019${String(n).padStart(2, '0')}`,
+    full_name: name,
+  });
+  const FORMER = {
+    person_id: '3f1b7c6e-0000-4000-8000-000000000903',
+    member_id: 'M-001003',
+    full_name: 'Rogelio Mendoza',
+  };
+
+  /**
+   * One of the two people lists over two pages: the first carries a cursor, the second
+   * does not. Every cursor asked for is kept, so a case can say a second page was read.
+   */
+  async function mockTwoPages(
+    page: Page,
+    pattern: string,
+    first: unknown[],
+    second: unknown[],
+  ): Promise<(string | null)[]> {
+    const cursors: (string | null)[] = [];
+    await page.route(pattern, (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor');
+      cursors.push(cursor);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          cursor === 'page-two'
+            ? { data: second, next_cursor: null }
+            : { data: first, next_cursor: 'page-two' },
+        ),
+      });
+    });
+    return cursors;
+  }
+
+  async function mockEmpty(page: Page, pattern: string) {
+    await page.route(pattern, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], next_cursor: null }),
+      }),
+    );
+  }
+
+  test('opens on four equal buttons, each with its count, Awaiting a record chosen', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard');
+
+    const lists = recordLists(page);
+    await expect(lists.getByRole('button')).toHaveCount(4);
+    // Two meetings of the reader's own and two Sundays; one Cell behind; two people on each
+    // of the people lists.
+    for (const name of [
+      /^Awaiting a record\s*4$/,
+      /^Cells behind\s*1$/,
+      /^Needs a new leader\s*2$/,
+      /^Not in a Cell\s*2$/,
+    ]) {
+      await expect(lists.getByRole('button', { name })).toBeVisible();
+    }
+    await expect(lists.getByRole('button', { name: /^Awaiting a record/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    for (const name of [/^Cells behind/, /^Needs a new leader/, /^Not in a Cell/]) {
+      await expect(lists.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
+    }
+
+    // Equal: one row of four at lg, each the same width.
+    const widths = await lists
+      .getByRole('button')
+      .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().width)));
+    expect(new Set(widths).size).toBe(1);
+
+    // Only the chosen list is on the page.
+    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    for (const name of ['Cells behind', 'Needs a new leader', 'Not in a Cell']) {
+      await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(0);
+    }
+  });
+
+  test('a list with a further page unread counts what it read and says there is more', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await mockTwoPages(
+      page,
+      '**/api/v1/people/awaiting-reassignment*',
+      [
+        { ...person(1, 'Amihan Bacani'), former_leader: FORMER },
+        { ...person(2, 'Teodoro Cruz'), former_leader: FORMER },
+      ],
+      [{ ...person(3, 'Zenaida Flores'), former_leader: FORMER }],
+    );
+    await mockTwoPages(
+      page,
+      '**/api/v1/cells/people-without-a-cell*',
+      [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
+      [person(13, 'Soledad Aquino')],
+    );
+    await page.route('**/api/v1/cells?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: '2026-06-01',
+          open: false,
+          data: closedAsked(route.request().url()) ? [] : [CELL_WITH_MEETINGS],
+          next_cursor: closedAsked(route.request().url()) ? null : 'more-cells',
+        }),
+      }),
+    );
+
+    await page.goto('/dashboard');
+
+    const lists = recordLists(page);
+    await expect(lists.getByRole('button', { name: /^Cells behind\s*1\+$/ })).toBeVisible();
+    await expect(lists.getByRole('button', { name: /^Needs a new leader\s*2\+$/ })).toBeVisible();
+    await expect(lists.getByRole('button', { name: /^Not in a Cell\s*2\+$/ })).toBeVisible();
+    // The queue is read whole, so its count carries no "+".
+    await expect(lists.getByRole('button', { name: /^Awaiting a record\s*4$/ })).toBeVisible();
+  });
+
+  test('switches between the lists, showing one at a time', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard');
+
+    await chooseList(page, /^Cells behind/);
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(recordLists(page).getByRole('button', { name: /^Awaiting a record/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toHaveCount(0);
+    const behind = page.getByRole('table', { name: 'Cells behind' });
+    await expect(behind.getByRole('columnheader')).toHaveText([
+      'Cell',
+      'Leader',
+      'Meetings recorded',
+      'Status',
+    ]);
+    await expect(behind.getByRole('row').filter({ hasText: 'CELL-000007' }).getByRole('cell')).toHaveText([
+      'CELL-000007',
+      'Teofilo Ramos',
+      '3 of 4',
+      'Open',
+    ]);
+    await expect(behind.getByRole('link', { name: 'CELL-000007' })).toHaveAttribute(
+      'href',
+      /^\/cells\/3f1b7c6e-0000-4000-8000-000000000101\/meetings\?month=\d{4}-\d{2}-01$/,
+    );
+
+    await chooseList(page, /^Needs a new leader/);
+    await expect(page.getByRole('heading', { name: 'Cells behind' })).toHaveCount(0);
+    const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Member ID', 'Was under']);
+    await expect(
+      unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
+    ).toHaveText(['Amihan Bacani', 'M-001001', 'Rogelio Mendoza']);
+    // The action that resolves an entry is the reassignment (section 19).
+    await expect(unplaced.getByRole('link', { name: 'Amihan Bacani' })).toHaveAttribute(
+      'href',
+      '/people/3f1b7c6e-0000-4000-8000-000000000901/network',
+    );
+
+    await chooseList(page, /^Not in a Cell/);
+    await expect(page.getByRole('heading', { name: 'Needs a new leader' })).toHaveCount(0);
+    const withoutACell = page.getByRole('table', { name: 'Not in a Cell' });
+    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name', 'Member ID']);
+    await expect(withoutACell.getByRole('link', { name: 'Bituin Carreon' })).toHaveAttribute(
+      'href',
+      '/people/3f1b7c6e-0000-4000-8000-000000000921',
+    );
+    // The retired screen is linked from nowhere on Record.
+    await expect(page.locator('a[href="/people/awaiting-reassignment"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Open the full list|See everyone/ })).toHaveCount(0);
+
+    await chooseList(page, /^Awaiting a record/);
+    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Not in a Cell' })).toHaveCount(0);
+  });
+
+  for (const list of [
+    {
+      button: /^Needs a new leader/,
+      pattern: '**/api/v1/people/awaiting-reassignment*',
+      first: [
+        { ...person(1, 'Amihan Bacani'), former_leader: FORMER },
+        { ...person(2, 'Teodoro Cruz'), former_leader: FORMER },
+      ],
+      second: [{ ...person(3, 'Zenaida Flores'), former_leader: FORMER }],
+      table: 'Needs a new leader',
+      added: 'Zenaida Flores',
+    },
+    {
+      button: /^Not in a Cell/,
+      pattern: '**/api/v1/cells/people-without-a-cell*',
+      first: [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
+      second: [person(13, 'Soledad Aquino')],
+      table: 'Not in a Cell',
+      added: 'Soledad Aquino',
+    },
+  ]) {
+    test(`${list.table}: Show more reads the next page in place, and stops at the last`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(JUNE_20);
+      await mockRecord(page);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const cursors = await mockTwoPages(page, list.pattern, list.first, list.second);
+
+      await page.goto('/dashboard');
+      await chooseList(page, list.button);
+
+      const table = page.getByRole('table', { name: list.table });
+      await expect(table.getByRole('link')).toHaveCount(2);
+      await expect(table.getByRole('link', { name: list.added })).toHaveCount(0);
+
+      await page.getByRole('button', { name: 'Show more' }).click();
+
+      await expect(table.getByRole('link', { name: list.added })).toBeVisible();
+      await expect(table.getByRole('link')).toHaveCount(3);
+      expect(cursors).toContain('page-two');
+      // The last page carries no cursor, so there is nothing more to show and the count
+      // is now a figure rather than "N+".
+      await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+      await expect(
+        recordLists(page).getByRole('button', { name: new RegExp(`${list.button.source}\\s*3$`) }),
+      ).toBeVisible();
+      // Every page the list reads is fifty.
+      expect(cursors.length).toBeGreaterThanOrEqual(2);
+    });
+  }
+
+  test('an empty people list keeps its table and says so in one row', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await mockEmpty(page, '**/api/v1/people/awaiting-reassignment*');
+    await mockEmpty(page, '**/api/v1/cells/people-without-a-cell*');
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard');
+    await expect(recordLists(page).getByRole('button', { name: /^Needs a new leader\s*0$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Not in a Cell\s*0$/ })).toBeVisible();
+
+    await chooseList(page, /^Needs a new leader/);
+    const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Member ID', 'Was under']);
+    // The header row and the one row saying so.
+    await expect(unplaced.getByRole('row')).toHaveCount(2);
+    await expect(unplaced.getByRole('cell')).toHaveText(['Nobody in your scope is waiting for a new leader.']);
+    await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+
+    await chooseList(page, /^Not in a Cell/);
+    const withoutACell = page.getByRole('table', { name: 'Not in a Cell' });
+    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name', 'Member ID']);
+    await expect(withoutACell.getByRole('row')).toHaveCount(2);
+    await expect(withoutACell.getByRole('cell')).toHaveText(['Everybody in your scope is in a Cell.']);
+
+    // Below lg the same sentence stands in for the cards.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(withoutACell).toBeHidden();
+    await expect(page.getByRole('listitem').filter({ hasText: 'Everybody in your scope is in a Cell.' })).toBeVisible();
+  });
+
+  /**
+   * Cards on a phone and an iPad, a table from `lg` (decision 0290). The point of the
+   * cards is that Record is on screen without scrolling sideways, so that is what is
+   * measured: the Record button's box inside the viewport, and the page no wider than it.
+   */
+  for (const viewport of [
+    { name: 'a 375px phone', width: 375, height: 812 },
+    { name: 'a 768px iPad', width: 768, height: 1024 },
+  ]) {
+    test(`on ${viewport.name} each list is cards, with Record in view and nothing sideways`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(JUNE_20);
+      await mockRecord(page);
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+      await page.goto('/dashboard');
+
+      const record = page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ });
+      await expect(record).toBeVisible();
+      await expect(awaitingTable(page)).toBeHidden();
+      // The visible Record button is the card's.
+      await expect(record.locator('xpath=ancestor::li')).toHaveCount(1);
+
+      const box = await record.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+
+      // The other three lists are cards too.
+      await chooseList(page, /^Cells behind/);
+      await expect(page.getByRole('table', { name: 'Cells behind' })).toBeHidden();
+      await expect(
+        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'CELL-000007' }) }),
+      ).toBeVisible();
+
+      await chooseList(page, /^Needs a new leader/);
+      await expect(page.getByRole('table', { name: 'Needs a new leader' })).toBeHidden();
+      await expect(
+        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Amihan Bacani' }) }),
+      ).toContainText(/Was under\s*Rogelio Mendoza/);
+
+      await chooseList(page, /^Not in a Cell/);
+      await expect(page.getByRole('table', { name: 'Not in a Cell' })).toBeHidden();
+      await expect(
+        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Bituin Carreon' }) }),
+      ).toContainText(/Member ID\s*M-001101/);
+    });
+  }
+
+  test('from lg each list is a table, and the cards are not shown', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard');
+
+    const record = page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ });
+    await expect(record).toBeVisible();
+    await expect(awaitingTable(page)).toBeVisible();
+    // The one visible Record button for that meeting is the table's.
+    await expect(record.locator('xpath=ancestor::table')).toHaveCount(1);
+
+    for (const name of ['Cells behind', 'Needs a new leader', 'Not in a Cell']) {
+      await chooseList(page, new RegExp(`^${name}`));
+      const table = page.getByRole('table', { name });
+      await expect(table).toBeVisible();
+      await expect(table.getByRole('link').first()).toBeVisible();
+      await expect(page.locator('main ul.lg\\:hidden')).toBeHidden();
+    }
+  });
+});
+
+/** Record's four list buttons (decision 0290). */
+function recordLists(page: Page) {
+  return page.getByRole('group', { name: 'Outstanding work', exact: true });
+}
+
+async function chooseList(page: Page, name: RegExp) {
+  await recordLists(page).getByRole('button', { name }).click();
+}
+
+/** Awaiting a record's two halves, Cell Group and Doulos Cell Celebration (decision 0290). */
+function awaitingHalves(page: Page) {
+  return page.getByRole('group', { name: 'Awaiting a record', exact: true });
+}
+
+async function chooseDcc(page: Page) {
+  await awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration/ }).click();
+}
+
+/** The queue as a table, which is what is shown from `lg`. */
+function awaitingTable(page: Page) {
+  return page.getByRole('table', { name: 'Awaiting a record', exact: true });
+}
 
 test.describe('your month, from the queue (owner’s design, 2026-09-19)', () => {
   /** 10:00 on 20 June 2026 in Manila. */

@@ -216,13 +216,14 @@ function SuynlTab() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Growth</h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        As of now, for the people in your care.
-        {counts.data
-          ? ` ${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'}.`
-          : ''}
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Growth</h1>
+        <p className="text-muted text-sm">
+          {counts.data
+            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} in your care, as of today.`
+            : 'The people in your care, as of today.'}
+        </p>
+      </div>
 
       <GrowthTabs current="/growth/suynl" />
 

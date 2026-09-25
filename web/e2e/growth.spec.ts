@@ -85,7 +85,7 @@ test.describe('the SUYNL tab', () => {
   test('shows the three counts, and a card narrows the list and the address', async ({ page }) => {
     const traffic = await openSuynl(page);
 
-    await expect(page.getByText('4 people.', { exact: false })).toBeVisible();
+    await expect(page.getByText('4 people in your care, as of today.')).toBeVisible();
     const notStarted = page.getByRole('button', { name: /^Not started/ });
     const inProgress = page.getByRole('button', { name: /^In progress/ });
     const graduated = page.getByRole('button', { name: /^Graduated/ });
@@ -275,6 +275,20 @@ test.describe('the SUYNL tab', () => {
 });
 
 test.describe('the Training tab', () => {
+  // The line beside the heading is the same on all three tabs, and the graduation-date
+  // sentence that followed it on this one is gone.
+  test('says how many people are in the reader’s care, and that a period count takes only dated graduations', async ({
+    page,
+  }) => {
+    await openTraining(page);
+
+    await expect(page.getByText('4 people in your care, as of today.')).toBeVisible();
+    // Section 28 requires the screen to say this.
+    await expect(
+      page.getByText('A count of graduations in a period counts only the dated ones.'),
+    ).toBeVisible();
+  });
+
   test('shows done as "2 of 5" and "All five", and no box on a row the reader may not file for', async ({
     page,
   }) => {

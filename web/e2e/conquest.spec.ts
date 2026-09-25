@@ -69,7 +69,7 @@ test.describe('the Conquest tab', () => {
   test('shows the four counts, and a card narrows the list and the address', async ({ page }) => {
     const traffic = await openConquest(page);
 
-    await expect(page.getByText('3 people.', { exact: false })).toBeVisible();
+    await expect(page.getByText('3 people in your care, as of today.')).toBeVisible();
     const win3 = page.getByRole('button', { name: /^Win 3/ });
     const openACell = page.getByRole('button', { name: /^Open a cell/ });
     const completion = page.getByRole('button', { name: /^Completion of 12/ });

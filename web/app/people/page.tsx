@@ -125,12 +125,10 @@ function PeopleList() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Everyone within your pastoral scope, you included. Adding a person, or a member to a
-        Cell, still searches the whole church, so you can find an existing record rather than
-        create a second one.
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+        <p className="text-muted text-sm">Everyone in your care, you included.</p>
+      </div>
 
       <PeopleTabs current="/people" />
 

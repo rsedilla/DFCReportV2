@@ -58,7 +58,8 @@ test.describe('the Cells list', () => {
       'href',
       '/cells/people-without-a-cell',
     );
-    await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toBeVisible();
+    await expect(page.getByText('Your Cells and this month’s meetings.')).toBeVisible();
+    await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toHaveCount(0);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
@@ -248,7 +249,7 @@ test.describe('the Cells totals (decision 0289)', () => {
     await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the header puts People without a Cell beside New Cell, over the new line', async ({
+  test('the header puts People without a Cell beside New Cell, and the line beside the heading', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -267,7 +268,9 @@ test.describe('the Cells totals (decision 0289)', () => {
       'href',
       '/cells/new',
     );
-    await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toBeVisible();
+    // Beside the heading rather than under the header row (decision 0290's pass over the
+    // screens' heading lines).
+    await expect(header.getByText('Your Cells and this month’s meetings.')).toBeVisible();
   });
 });
 

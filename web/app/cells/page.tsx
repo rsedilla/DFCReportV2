@@ -139,7 +139,10 @@ function CellsIndex() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
+          <p className="text-muted text-sm">Your Cells and this month&rsquo;s meetings.</p>
+        </div>
         {/* Section 15 puts the people-without-a-Cell list in this module (owner's choice of
             2026-09-25: a button beside New Cell). */}
         <div className="flex flex-wrap gap-3">
@@ -153,9 +156,6 @@ function CellsIndex() {
           ) : null}
         </div>
       </div>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Your Cells, and this month&rsquo;s meetings recorded.
-      </p>
 
       <CellTotals
         current={!closed && submitted === '' && month === reportingMonthOf()}
