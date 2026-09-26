@@ -221,6 +221,8 @@ export type AuditAction =
   | 'suynl_lesson.corrected'
   | 'training_graduation.confirmed'
   | 'training_graduation.corrected'
+  | 'encounter_season.created'
+  | 'encounter_season.changed'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -705,6 +707,23 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
   reached_on: DateOnly;
 }
 
+/**
+ * One Encounter season (section 28, decision 0296): the Men's and Women's weekends and the
+ * LC Party before each, recorded by an administrator. Each party is at least five weeks
+ * before its own weekend, a constraint in migration 0019.
+ */
+export interface EncounterSeasonsTable {
+  id: Generated<string>;
+  mens_lc_party_on: DateOnly;
+  mens_encounter_on: DateOnly;
+  womens_lc_party_on: DateOnly;
+  womens_encounter_on: DateOnly;
+  created_by: string;
+  created_at: ServerTimestamp;
+  updated_by: string | null;
+  updated_at: Date | null;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -732,4 +751,5 @@ export interface Database {
   suynl_lessons: SuynlLessonsTable;
   training_graduations: TrainingGraduationsTable;
   conquest_confirmations: ConquestConfirmationsTable;
+  encounter_seasons: EncounterSeasonsTable;
 }

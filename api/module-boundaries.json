@@ -52,6 +52,7 @@
     "settings": "admin",
     "suynl_lessons": "suynl",
     "training_graduations": "training",
+    "encounter_seasons": "training",
     "conquest_confirmations": "conquest"
   },
   "infrastructure": ["database"],
