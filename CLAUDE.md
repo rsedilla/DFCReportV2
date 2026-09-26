@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-26, the trigger being decision 0297: of 296 files, 295 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0297 each moved the first two and
+2026-09-27, the trigger being decision 0298: of 297 files, 296 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0298 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-26 and triggered by 0297, and was left stale by 0298 the next day. The one before that was dated
 2026-09-26 and triggered by 0296, and was left stale by 0297 the same day. The one before that was dated
 2026-09-26 and triggered by 0295, and was left stale by 0296 the same day. The one before that was dated
 2026-09-26 and triggered by 0294, and was left stale by 0295 the same day. The one before that was dated
@@ -635,6 +636,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-26 — [The Encounter is Life Class lesson 5](docs/decisions/0295-the-encounter-is-life-class-lesson-5.md)
 - 2026-09-26 — [Encounter seasons are set by an administrator](docs/decisions/0296-encounter-seasons-are-set-by-an-administrator.md)
 - 2026-09-26 — [Reports counts who is getting ready for the Encounter](docs/decisions/0297-suynl-readiness-for-the-encounter.md)
+- 2026-09-27 — [Still to record links to Filed reports](docs/decisions/0298-still-to-record-links-to-filed-reports.md)
 
 ### Open — awaiting a ruling
 

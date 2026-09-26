@@ -726,17 +726,24 @@ const SCANS = [
   {
     // The branch as a leader opens it (decision 0252): the focus block, four cards, rows
     // by name with both figures, Move and Open on each, and `Show 20 more` because the
-    // first page carries a cursor.
+    // first page carries a cursor. The reader reads reports, so the two Still to record
+    // figures are links to Filed reports (decision 0298); one generation down keeps them plain.
     name: 'network',
     route: '/network',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockPastoralPathAtRoot(page);
       await mockNetworkTree(page);
-      await mockNetworkReader(page);
+      await mockNetworkReader(page, { reports: 'OWN_SUBTREE' });
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: '4 DCC still to record: see Filed reports' }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: '1 Cell still to record: see Filed reports' }),
+      ).toBeVisible();
       await expect(page.getByRole('button', { name: 'Move Efren Dimaculangan' }).first()).toBeVisible();
       await expect(page.getByRole('button', { name: 'Show 20 more' })).toBeVisible();
     },
