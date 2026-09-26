@@ -312,6 +312,16 @@
       "screen": "web/app/growth/suynl/page.tsx"
     },
     {
+      "route": "GET /api/v1/suynl/readiness",
+      "reason": "The readiness table on Reports, SUYNL (decision 0297).",
+      "screen": "web/app/reports/suynl/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/suynl/readiness/:id",
+      "reason": "The same table for a leader the reader opened (decision 0297).",
+      "screen": "web/app/reports/suynl/page.tsx"
+    },
+    {
       "route": "POST /api/v1/suynl/submit",
       "reason": "The SUYNL tab’s save bar (section 28; decision 0282).",
       "screen": "web/app/growth/suynl/page.tsx"

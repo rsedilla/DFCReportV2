@@ -23,9 +23,10 @@ import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 import { composeName } from '../people/people.shared';
+import { TrainingService } from '../training/training.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { Database } from '../database/schema';
+import type { Database, NetworkName } from '../database/schema';
 import type { SuynlListDto, SuynlStep } from './dto/suynl.dto';
 
 /** One change as the DTO delivers it. */
@@ -75,6 +76,7 @@ export class SuynlService {
     private readonly authorization: AuthorizationService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly training: TrainingService,
   ) {}
 
   /** What the shared Growth helpers read through, each the module owning its table. */
@@ -157,6 +159,131 @@ export class SuynlService {
         };
       }),
       next_cursor: nextCursor,
+    };
+  }
+
+  /**
+   * `GET /api/v1/suynl/readiness` and `/readiness/{id}`: who is getting ready for the LC
+   * Party, row by row (decision 0297), as things stand now.
+   *
+   * **A person is counted** when they are current, hold at least one current lesson, and
+   * hold no current Encounter or Life Class graduation; then by lessons, ten, seven to
+   * nine, or one to six. **Rows are the subject's direct disciples**, each counting their
+   * branch now, themselves included; the subject's own row is the subject alone. A
+   * whole-church reader asking for nobody gets the two roots' branches instead, and a
+   * line for anybody counted in neither. The rows, that row and that line are disjoint, so
+   * they add up to the total, which is everyone the reader's grant reaches in them.
+   */
+  async readiness(actor: Actor, subjectId: string | null): Promise<Record<string, unknown>> {
+    const now = await databaseNow(this.db);
+    const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
+    const churchWide = subjectId === null && population === null;
+
+    const rows: { leaderId: string; network: NetworkName | null; members: string[] }[] = [];
+    let own: string[] | null = null;
+
+    if (churchWide) {
+      for (const seat of await this.hierarchy.rootSeatsAsOf(this.db, now)) {
+        rows.push({
+          leaderId: seat.personId,
+          network: seat.network,
+          members: branchesOf(seat.personId, await this.hierarchy.subtreeEdgesOf(seat.personId))
+            .all,
+        });
+      }
+    } else {
+      const subject = subjectId ?? actor.personId;
+      const branches = branchesOf(subject, await this.hierarchy.subtreeEdgesOf(subject));
+      for (const [childId, members] of branches.byChild) {
+        rows.push({ leaderId: childId, network: null, members });
+      }
+      own = [subject];
+    }
+
+    const reached = (ids: readonly string[]) =>
+      ids.filter((id) => population === null || population.has(canonicalId(id)));
+    const everyone = unique([...rows.flatMap((row) => row.members), ...(own ?? [])]);
+
+    // The whole church is never enumerated, so its progress is read unrestricted.
+    const progress = await this.currentProgress(churchWide ? null : new Set(reached(everyone)));
+    const past = await this.training.pastTheLcPartyOf([...progress.keys()]);
+    const counted = new Map([...progress].filter(([id]) => !past.has(id)));
+
+    const inRows = new Set(everyone.map(canonicalId));
+    const elsewhere = churchWide ? [...counted.keys()].filter((id) => !inRows.has(id)) : null;
+
+    const identities = await this.people.forDecisions(
+      unique([...rows.map((row) => row.leaderId), ...(own ?? []), ...counted.keys()]),
+    );
+
+    const figures = (ids: readonly string[]) => {
+      const people = unique(reached(ids))
+        .flatMap((id) => {
+          const entry = counted.get(canonicalId(id));
+          const identity = identities.get(id) ?? identities.get(canonicalId(id));
+          return entry === undefined || identity === undefined
+            ? []
+            : [{ identity, lessons: entry.count }];
+        })
+        .sort((left, right) => compareNames(left.identity, right.identity));
+
+      return {
+        completed: people.filter((person) => person.lessons >= 10).length,
+        seven_to_nine: people.filter((person) => person.lessons >= 7 && person.lessons < 10).length,
+        one_to_six: people.filter((person) => person.lessons < 7).length,
+        people: people.length,
+        members: people.map((person) => ({
+          person_id: person.identity.id,
+          full_name: person.identity.fullName,
+          lessons: person.lessons,
+        })),
+      };
+    };
+
+    const leadAnyone = await this.hierarchy.whichLeadAnyone(rows.map((row) => row.leaderId));
+    const leading = new Set([...leadAnyone].map(canonicalId));
+
+    const all = figures([
+      ...rows.flatMap((row) => row.members),
+      ...(own ?? []),
+      ...(elsewhere ?? []),
+    ]);
+
+    const subject = own === null ? undefined : identities.get(own[0]);
+
+    return {
+      subject: subject === undefined ? null : { id: subject.id, full_name: subject.fullName },
+      rows: rows
+        .map((row) => ({
+          row,
+          identity: identities.get(row.leaderId) ?? identities.get(canonicalId(row.leaderId)),
+        }))
+        // A whole-church reader's rows are in Network order, a leader's in surname order,
+        // and never by a figure (sections 13 and 17, decision 0293).
+        .sort((left, right) =>
+          left.row.network !== null && right.row.network !== null
+            ? left.row.network.localeCompare(right.row.network)
+            : left.identity === undefined || right.identity === undefined
+              ? Number(left.identity === undefined) - Number(right.identity === undefined)
+              : compareNames(left.identity, right.identity),
+        )
+        .map(({ row, identity }) => ({
+          leader:
+            identity === undefined
+              ? null
+              : { id: row.leaderId, member_id: identity.memberId, full_name: identity.fullName },
+          network: row.network,
+          leads_anyone: leading.has(canonicalId(row.leaderId)),
+          ...figures(row.members),
+        })),
+      own: own === null ? null : figures(own),
+      elsewhere: elsewhere === null ? null : figures(elsewhere),
+      total: {
+        completed: all.completed,
+        seven_to_nine: all.seven_to_nine,
+        one_to_six: all.one_to_six,
+        people: all.people,
+      },
     };
   }
 
@@ -580,6 +707,48 @@ function keyed(lessons: readonly Lesson[]): Map<string, Lesson> {
 
 function unique(ids: readonly string[]): string[] {
   return [...new Map(ids.map((id) => [canonicalId(id), id])).values()];
+}
+
+/** A branch as it stands now: everyone in it, and each direct disciple's own, themselves included. */
+function branchesOf(
+  rootId: string,
+  edges: readonly { personId: string; leaderId: string }[],
+): { all: string[]; byChild: Map<string, string[]> } {
+  const childrenOf = new Map<string, string[]>();
+  for (const edge of edges) {
+    const key = canonicalId(edge.leaderId);
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), edge.personId]);
+  }
+
+  const collect = (id: string): string[] => {
+    const out: string[] = [];
+    const stack = [id];
+    while (stack.length > 0) {
+      const next = stack.pop() as string;
+      out.push(next);
+      stack.push(...(childrenOf.get(canonicalId(next)) ?? []));
+    }
+    return out;
+  };
+
+  return {
+    all: collect(rootId),
+    byChild: new Map(
+      (childrenOf.get(canonicalId(rootId)) ?? []).map((childId) => [childId, collect(childId)]),
+    ),
+  };
+}
+
+/** The roster order: last name, first name, Member ID (decision 0293). */
+function compareNames(
+  left: { lastName: string; firstName: string; memberId: string },
+  right: { lastName: string; firstName: string; memberId: string },
+): number {
+  return (
+    left.lastName.localeCompare(right.lastName) ||
+    left.firstName.localeCompare(right.firstName) ||
+    left.memberId.localeCompare(right.memberId)
+  );
 }
 
 function latest(lessons: readonly Lesson[]): Date {

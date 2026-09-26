@@ -38,6 +38,28 @@ const list = (page: Page) => page.getByRole('region', { name: 'Encounter seasons
 /** The SUYNL report's Next Encounter card. */
 const card = (page: Page) => page.getByRole('region', { name: /^Next Encounter/ });
 
+/** The card's own heading; a card showing both Networks also carries one per Network. */
+const cardHeading = (page: Page) => card(page).getByRole('heading', { level: 2 });
+
+/**
+ * The December season's four steps to each Network's weekend (decision 0297): ten weeks before
+ * the weekend, the LC Party, Life Class lessons 1 to 4 from the week after it, and the weekend.
+ * September is written "Sep" or "Sept" depending on the browser's ICU, so both are admitted.
+ */
+const MEN_STEPS = [
+  /^From 25 Sept?\s+Ten weeks out: get people ready$/,
+  /^LC Party\s+30 Oct$/,
+  /^Life Class lessons 1–4\s+from 6 Nov$/,
+  /^Encounter = lesson 5\s+4 Dec – 6 Dec 2026$/,
+];
+
+const WOMEN_STEPS = [
+  /^From 2 Oct\s+Ten weeks out: get people ready$/,
+  /^LC Party\s+6 Nov$/,
+  /^Life Class lessons 1–4\s+from 13 Nov$/,
+  /^Encounter = lesson 5\s+11 Dec – 13 Dec 2026$/,
+];
+
 test.describe('the Encounter seasons page', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(at('2026-09-26'));
@@ -302,7 +324,7 @@ test.describe('the SUYNL report’s Next Encounter', () => {
     await mockSuynl(page);
   });
 
-  test('shows the next season with both LC Parties and weekends to an administrator', async ({
+  test('shows the next season as four steps per Network to an administrator shown both', async ({
     page,
   }) => {
     await page.clock.setFixedTime(at('2026-09-26'));
@@ -311,45 +333,47 @@ test.describe('the SUYNL report’s Next Encounter', () => {
     await page.goto('/reports/suynl');
 
     const next = card(page);
-    await expect(next.getByRole('heading')).toHaveText('Next Encounter · December 2026');
-    await expect(next.getByRole('term')).toHaveText(['Men', 'Women']);
-    await expect(next.getByRole('definition')).toHaveText([
-      'LC Party 30 Oct 2026',
-      'Encounter 4 Dec – 6 Dec 2026',
-      'LC Party 6 Nov 2026',
-      'Encounter 11 Dec – 13 Dec 2026',
+    await expect(cardHeading(page)).toHaveText('Next Encounter · December 2026');
+    // Two Networks shown, so each block is named (decision 0297).
+    await expect(next.getByRole('heading', { level: 3 })).toHaveText([
+      'Men’s Network',
+      'Women’s Network',
     ]);
+    await expect(next.getByRole('list')).toHaveCount(2);
+    await expect(next.getByRole('list').nth(0).getByRole('listitem')).toHaveText(MEN_STEPS, {
+      useInnerText: true,
+    });
+    await expect(next.getByRole('list').nth(1).getByRole('listitem')).toHaveText(WOMEN_STEPS, {
+      useInnerText: true,
+    });
     await expect(next.getByRole('link')).toHaveText('Encounter seasons: add or change dates');
     await expect(next.getByRole('link')).toHaveAttribute('href', '/growth/training/encounters');
   });
 
-  test("shows a Men's Network reader the Men's half alone, and the plain link", async ({ page }) => {
+  test("shows a Men's Network reader the Men's steps alone, unnamed, and the plain link", async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(at('2026-09-26'));
     await mockEncounterSeasons(page, { shows: 'MENS' });
     await page.goto('/reports/suynl');
 
     const next = card(page);
-    await expect(next.getByRole('heading')).toHaveText('Next Encounter · December 2026');
-    await expect(next.getByRole('term')).toHaveText(['Men']);
-    await expect(next.getByRole('definition')).toHaveText([
-      'LC Party 30 Oct 2026',
-      'Encounter 4 Dec – 6 Dec 2026',
-    ]);
+    await expect(cardHeading(page)).toHaveText('Next Encounter · December 2026');
+    // One Network shown, so no block heading.
+    await expect(next.getByRole('heading', { level: 3 })).toHaveCount(0);
+    await expect(next.getByRole('listitem')).toHaveText(MEN_STEPS, { useInnerText: true });
     await expect(next.getByRole('link')).toHaveText('Every Encounter season');
     await expect(next.getByRole('link')).toHaveAttribute('href', '/growth/training/encounters');
   });
 
-  test("shows a Women's Network reader the Women's half alone", async ({ page }) => {
+  test("shows a Women's Network reader the Women's steps alone", async ({ page }) => {
     await page.clock.setFixedTime(at('2026-09-26'));
     await mockEncounterSeasons(page, { shows: 'WOMENS' });
     await page.goto('/reports/suynl');
 
     const next = card(page);
-    await expect(next.getByRole('term')).toHaveText(['Women']);
-    await expect(next.getByRole('definition')).toHaveText([
-      'LC Party 6 Nov 2026',
-      'Encounter 11 Dec – 13 Dec 2026',
-    ]);
+    await expect(next.getByRole('heading', { level: 3 })).toHaveCount(0);
+    await expect(next.getByRole('listitem')).toHaveText(WOMEN_STEPS, { useInnerText: true });
   });
 
   test('tells a reader in no Network that no weekend is shown', async ({ page }) => {
@@ -358,11 +382,11 @@ test.describe('the SUYNL report’s Next Encounter', () => {
     await page.goto('/reports/suynl');
 
     const next = card(page);
-    await expect(next.getByRole('heading')).toHaveText('Next Encounter');
+    await expect(cardHeading(page)).toHaveText('Next Encounter');
     await expect(
       next.getByText('You are in no Network, so no Encounter weekend is shown.'),
     ).toBeVisible();
-    await expect(next.getByRole('term')).toHaveCount(0);
+    await expect(next.getByRole('listitem')).toHaveCount(0);
   });
 
   test('says so when no season has been set, to an administrator and to anyone else', async ({
@@ -404,7 +428,7 @@ test.describe('the SUYNL report’s Next Encounter', () => {
       await mockEncounterSeasons(page, { shows });
       await page.goto('/reports/suynl');
 
-      await expect(card(page).getByRole('heading')).toHaveText(`Next Encounter · ${expected}`);
+      await expect(cardHeading(page)).toHaveText(`Next Encounter · ${expected}`);
     });
   }
 
@@ -414,8 +438,9 @@ test.describe('the SUYNL report’s Next Encounter', () => {
     const traffic = await mockEncounterSeasons(page);
     await page.goto('/reports/suynl');
 
-    await expect(card(page).getByRole('heading')).toHaveText('Next Encounter · December 2026');
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+    await expect(cardHeading(page)).toHaveText('Next Encounter · December 2026');
+    // The readiness table's names are disclosure buttons; the card itself holds none.
+    await expect(card(page).getByRole('button')).toHaveCount(0);
     await expect(page.locator('main input')).toHaveCount(0);
     expect(traffic.writes).toHaveLength(0);
   });

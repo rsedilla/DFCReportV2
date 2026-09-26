@@ -79,6 +79,47 @@ export function listSuynlPeople(query: GrowthListQuery, signal?: AbortSignal): P
   return authenticatedRequest<SuynlPage>(`/api/v1/suynl/people?${listQuery(query)}`, { signal });
 }
 
+/** One row's counts, and the people behind them (decision 0297). */
+export interface ReadinessFigures {
+  completed: number;
+  seven_to_nine: number;
+  one_to_six: number;
+  people: number;
+  members: { person_id: string; full_name: string; lessons: number }[];
+}
+
+export interface ReadinessRow extends ReadinessFigures {
+  /** Null only where the leader cannot be named; the row still counts. */
+  leader: { id: string; member_id: string; full_name: string } | null;
+  /** A whole-church reader's two rows name the root's Network. */
+  network: 'MENS' | 'WOMENS' | null;
+  leads_anyone: boolean;
+}
+
+/**
+ * Who is getting ready for the LC Party (decision 0297): the rows, the reader's own row, a
+ * whole-church reader's line for anybody in neither root's branch, and the total they add to.
+ */
+export interface SuynlReadiness {
+  subject: { id: string; full_name: string } | null;
+  rows: ReadinessRow[];
+  own: ReadinessFigures | null;
+  elsewhere: ReadinessFigures | null;
+  total: Omit<ReadinessFigures, 'members'>;
+}
+
+export function getSuynlReadiness(
+  leader: string | null,
+  signal?: AbortSignal,
+): Promise<SuynlReadiness> {
+  return authenticatedRequest<SuynlReadiness>(
+    leader === null
+      ? '/api/v1/suynl/readiness'
+      : `/api/v1/suynl/readiness/${encodeURIComponent(leader)}`,
+    { signal },
+  );
+}
+
 export function submitSuynl(changes: SuynlChange[], idempotencyKey: string): Promise<unknown> {
   return authenticatedRequest<unknown>('/api/v1/suynl/submit', {
     method: 'POST',

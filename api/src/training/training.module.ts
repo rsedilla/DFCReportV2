@@ -28,5 +28,7 @@ import { TrainingService } from './training.service';
   ],
   controllers: [TrainingController, EncounterSeasonsController],
   providers: [TrainingService, EncounterSeasonsService],
+  // `suynl` reads who is past the LC Party through it (decision 0297); nothing here imports `suynl`.
+  exports: [TrainingService],
 })
 export class TrainingModule {}
