@@ -896,8 +896,15 @@ export async function mockNetworkTree(page: Page): Promise<void> {
 /**
  * The signed-in leader as the Network screen needs them: reading DCC and Cell figures and
  * holding the reassignment capability, so the figures and the Move controls render.
+ *
+ * **`reports` adds `reports.view_subtree` at the scope named**, which is what turns each Still
+ * to record figure above zero into a link to Filed reports (decision 0298). Left out, the
+ * reader holds no reporting grant and the figures stay plain, as they were before that ruling.
  */
-export async function mockNetworkReader(page: Page): Promise<void> {
+export async function mockNetworkReader(
+  page: Page,
+  { reports }: { reports?: 'OWN_SUBTREE' | 'NETWORK' | 'WHOLE_CHURCH' } = {},
+): Promise<void> {
   const grant = (capability: string) => ({
     capability,
     scope_type: 'OWN_SUBTREE',
@@ -905,6 +912,18 @@ export async function mockNetworkReader(page: Page): Promise<void> {
     read_only: false,
     source: 'ROLE',
   });
+  const reporting =
+    reports === undefined
+      ? []
+      : [
+          {
+            capability: 'reports.view_subtree',
+            scope_type: reports,
+            scope_network: reports === 'NETWORK' ? 'WOMENS' : null,
+            read_only: reports === 'NETWORK',
+            source: reports === 'NETWORK' ? 'GRANT' : 'ROLE',
+          },
+        ];
 
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill(
@@ -919,6 +938,7 @@ export async function mockNetworkReader(page: Page): Promise<void> {
           grant('dcc.view_subtree'),
           grant('cell.view_subtree'),
           grant('people.manage_pastoral_assignment'),
+          ...reporting,
         ],
       }),
     ),

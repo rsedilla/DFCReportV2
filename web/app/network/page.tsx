@@ -165,6 +165,8 @@ function NetworkScreen() {
   const month = dcc.data?.reporting_month ?? cells.data?.reporting_month ?? null;
   const open = dcc.data?.open ?? cells.data?.open ?? true;
   const mayMove = holds(me.data, 'people.manage_pastoral_assignment');
+  // Filed reports is read under its own capability, so a reader without it keeps plain figures.
+  const readsReports = holds(me.data, 'reports.view_subtree');
   const isMe = person !== undefined && person.id === me.data?.person_id;
 
   const failure = me.isError
@@ -240,11 +242,17 @@ function NetworkScreen() {
               label="Still to record"
               value={
                 <>
-                  {dcc.data === undefined ? '—' : dcc.data.branch_behind}
-                  <span className="text-muted ml-1 text-sm font-normal">DCC</span>
+                  <FiledLink
+                    count={dcc.data?.branch_behind}
+                    href={readsReports ? filedHref('dcc', person.id, month) : null}
+                    unit="DCC"
+                  />
                   <span className="text-muted mx-2 text-sm font-normal">·</span>
-                  {cells.data === undefined ? '—' : cells.data.branch_meetings_behind}
-                  <span className="text-muted ml-1 text-sm font-normal">Cell</span>
+                  <FiledLink
+                    count={cells.data?.branch_meetings_behind}
+                    href={readsReports ? filedHref('cells', person.id, month) : null}
+                    unit="Cell"
+                  />
                 </>
               }
             />
@@ -528,6 +536,44 @@ function focusHref(personId: string): string {
 
 function figure(value: number | null): string {
   return value === null ? '—' : String(value);
+}
+
+/**
+ * Filed reports By leader for this person's branch and month (decision 0298): the rows behind a
+ * Still to record figure. Always scoped to the person, the reader included, so a whole-church
+ * reader looking at their own branch does not land on the whole church.
+ */
+function filedHref(kind: 'dcc' | 'cells', personId: string, month: string | null): string {
+  return `/reports/filed?${new URLSearchParams({
+    ...(kind === 'dcc' ? { kind } : {}),
+    leader: personId,
+    ...(month === null ? {} : { month }),
+  }).toString()}`;
+}
+
+/** One Still to record figure: a link where there is something to open, plain text otherwise. */
+function FiledLink({
+  count,
+  href,
+  unit,
+}: {
+  count: number | undefined;
+  href: string | null;
+  unit: string;
+}) {
+  const text = (
+    <>
+      {count === undefined ? '—' : count}
+      <span className="text-muted ml-1 text-sm font-normal">{unit}</span>
+    </>
+  );
+  return count === undefined || count === 0 || href === null ? (
+    <span>{text}</span>
+  ) : (
+    <Link href={href} className={LINK} aria-label={`${count} ${unit} still to record: see Filed reports`}>
+      {text}
+    </Link>
+  );
 }
 
 function Card({ label, value, note }: { label: string; value: ReactNode; note?: string }) {
