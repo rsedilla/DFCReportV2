@@ -39,7 +39,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  * The Training tab of Growth (SKILL.md section 28; decisions 0278 to 0282, and the owner's
  * choice of 2026-09-24).
  *
- * **Five schools, the Encounter first, and the order shown and never required.** A
+ * **Five graduations, the Encounter first, and the order shown and never required.** A
  * row reads "2 of 5" rather than naming a next school, and a person with all five
  * reads "All five" in plain text: a tag coloured for them would colour a person by a
  * figure (sections 17 and 19).

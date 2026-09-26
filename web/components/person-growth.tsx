@@ -145,7 +145,7 @@ function Training({ row, href }: { row: TrainingPerson; href: string }) {
       <dt className="text-sm font-medium">Training</dt>
       <dd className="mt-1 text-sm">
         {graduated.length === 0 ? (
-          <span className="text-muted">No schools yet</span>
+          <span className="text-muted">No graduations yet</span>
         ) : (
           <>
             {graduated.length} of 5

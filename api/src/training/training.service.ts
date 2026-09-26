@@ -542,7 +542,7 @@ function assertWellFormed(changes: readonly TrainingChange[]): void {
 
     if (seen.has(key)) {
       throw new InvariantViolationError(
-        'This save names the same school for the same person twice. Send one change per school.',
+        'This save names the same graduation for the same person twice. Send one change per graduation.',
         details,
       );
     }
@@ -604,7 +604,7 @@ function narrowingFor(
   };
 }
 
-/** The people holding all five schools (decision 0287). */
+/** The people holding all five graduations (decision 0287). */
 function allFive(held: Map<string, Set<TrainingProgram>>): Set<string> {
   return new Set(
     [...held]

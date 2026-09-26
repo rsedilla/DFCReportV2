@@ -20,7 +20,7 @@ import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date'
 
 import type { TrainingProgram } from '../../database/schema';
 
-/** The five schools, the Encounter first (SKILL.md section 28). */
+/** The five graduations, the Encounter first (SKILL.md section 28). */
 export const TRAINING_PROGRAMS: readonly TrainingProgram[] = [
   'ENCOUNTER',
   'LIFE_CLASS',
