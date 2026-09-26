@@ -14,11 +14,16 @@ import {
 } from './mock-attendance';
 import {
   CONQUEST_COUNTS,
+  READINESS_ARTURO_ID,
+  READINESS_LEADER,
+  READINESS_MENS_ROOT_ID,
+  READINESS_WOMENS_ROOT_ID,
   SUYNL_COUNTS,
   TRAINING_COUNTS,
   mockConquest,
   mockEncounterSeasons,
   mockSuynl,
+  mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
 
@@ -828,6 +833,8 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     }) => {
       await mockSignedIn(page);
       await mockEncounterSeasons(page);
+      // SUYNL's readiness table answers, so the one failure shown is the counts' own.
+      await mockSuynlReadiness(page);
       await page.route(report.counts, (route) =>
         route.fulfill({
           status: 403,
@@ -857,14 +864,23 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     await page.goto('/reports/suynl');
 
     await expect(
-      page.getByText(`SUYNL for the ${SUYNL_COUNTS.people} people in your care, as of today.`),
+      page.getByText('Who is getting ready for the next Encounter God Weekend, as of today.'),
     ).toBeVisible();
     await expectCards(page, [
       ['Not started', SUYNL_COUNTS.not_started],
       ['In progress', SUYNL_COUNTS.in_progress],
       ['Graduated', SUYNL_COUNTS.graduated],
     ]);
-    await expectReadOnly(page);
+    // The readiness table's names open the people behind a row (decision 0297), so they
+    // are the one kind of button here, and none of them files anything.
+    const main = page.locator('main');
+    await expect(main.getByRole('button')).toHaveCount(READINESS_LEADER.rows.length);
+    for (const button of await main.getByRole('button').all()) {
+      await expect(button).toHaveAttribute('aria-expanded', 'false');
+    }
+    await expect(main.getByRole('checkbox')).toHaveCount(0);
+    await expect(main.locator('input, select, textarea')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Tick lessons in Growth' })).toHaveAttribute(
       'href',
       '/growth/suynl',
@@ -949,10 +965,16 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     }
 
     // Counts only: the same count routes as Growth, never its lists and never a submission.
+    // SUYNL also reads its readiness table (decision 0297), as of now, so with no month.
     expect(asked.length).toBeGreaterThan(0);
-    expect(asked.filter((line) => !/^GET \/api\/v1\/(suynl|training|conquest)\/counts$/.test(line))).toEqual(
-      [],
-    );
+    expect(asked).toContain('GET /api/v1/suynl/readiness');
+    expect(
+      asked.filter(
+        (line) =>
+          !/^GET \/api\/v1\/(suynl|training|conquest)\/counts$/.test(line) &&
+          line !== 'GET /api/v1/suynl/readiness',
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -1090,5 +1112,205 @@ test.describe('the year view (decision 0257)', () => {
     await expect(cells.nth(3)).toHaveText('');
     // Section 17: the year row includes a month still open, and says which.
     await expect(cells.nth(4)).toHaveText('Includes June, still open');
+  });
+});
+
+/**
+ * The SUYNL readiness table (decision 0297): who is getting ready for the LC Party, row by
+ * row. The API decides every figure and every row; these pin that the screen shows the rows
+ * it answers, in its order, adding up to its total, and that the names open the people behind
+ * them.
+ */
+test.describe('the SUYNL readiness table (decision 0297)', () => {
+  const COLUMNS = ['Leader', 'Completed (10 of 10)', '7–9 lessons', '1–6 lessons', 'People'];
+
+  const table = (page: Page, title: string) =>
+    page.getByRole('table', { name: `${title} · SUYNL readiness` });
+
+  /** Every body row, cell by cell, in order. */
+  async function expectRows(page: Page, title: string, rows: string[][]) {
+    const body = table(page, title).locator('tbody > tr');
+    await expect(body).toHaveCount(rows.length);
+    for (const [index, cells] of rows.entries()) {
+      await expect(body.nth(index).getByRole('cell')).toHaveText(cells);
+    }
+  }
+
+  /**
+   * The Total row is the sum of the rows above it, column by column: the screen drops no row
+   * the API counted (SKILL.md section 20's reconciliation, as it reaches a screen).
+   */
+  async function expectTotalAddsUp(page: Page, title: string) {
+    const rows = table(page, title).locator('tbody > tr');
+    const texts: string[][] = [];
+    for (const row of await rows.all()) {
+      texts.push(await row.getByRole('cell').allInnerTexts());
+    }
+    const total = texts.find((cells) => cells[0] === 'Total');
+    expect(total).toBeDefined();
+    const parts = texts.filter((cells) => cells.length === 5 && cells[0] !== 'Total');
+    for (let column = 1; column <= 4; column += 1) {
+      const sum = parts.reduce((acc, cells) => acc + Number(cells[column]), 0);
+      expect(sum, `${COLUMNS[column]} adds up`).toBe(Number(total![column]));
+    }
+    // And each row's People is its three buckets.
+    for (const cells of [...parts, total!]) {
+      expect(Number(cells[4])).toBe(Number(cells[1]) + Number(cells[2]) + Number(cells[3]));
+    }
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockSuynl(page);
+    await mockEncounterSeasons(page);
+  });
+
+  test("a leader's table: their 12, then themselves as You, then the Total", async ({ page }) => {
+    const traffic = await mockSuynlReadiness(page);
+    await page.goto('/reports/suynl');
+
+    await expect(
+      page.getByRole('heading', { name: 'My 12 · SUYNL, getting ready for the Encounter' }),
+    ).toBeVisible();
+    await expect(table(page, 'My 12').getByRole('columnheader')).toHaveText(COLUMNS);
+    // In the API's order, which is surname order and never a figure's.
+    await expectRows(page, 'My 12', [
+      ['Arturo Buenaventura their 12', '1', '1', '2', '4'],
+      ['Florante Mendoza', '0', '0', '1', '1'],
+      ['Gregoria Navarro their 12', '0', '0', '0', '0'],
+      ['You', '0', '1', '0', '1'],
+      ['Total', '1', '2', '3', '6'],
+    ]);
+    await expectTotalAddsUp(page, 'My 12');
+
+    // "their 12" only for a leader who leads anybody, opening that leader's own table.
+    const links = table(page, 'My 12').getByRole('link', { name: 'their 12' });
+    await expect(links).toHaveCount(2);
+    await expect(links.nth(0)).toHaveAttribute('href', `/reports/suynl?leader=${READINESS_ARTURO_ID}`);
+
+    await expect(page.getByText('In neither pastor’s branch')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveCount(0);
+    expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness']);
+  });
+
+  test('a name opens the people behind the row, grouped by column with their lessons', async ({
+    page,
+  }) => {
+    await page.goto('/reports/suynl');
+
+    const arturo = page.getByRole('button', { name: 'Arturo Buenaventura', exact: true });
+    await expect(arturo).toHaveAttribute('aria-expanded', 'false');
+    await arturo.click();
+    await expect(arturo).toHaveAttribute('aria-expanded', 'true');
+
+    const opened = table(page, 'My 12').locator('tbody > tr').nth(1);
+    await expect(opened.locator('p')).toHaveText([
+      'Completed: Carmelita Aquino (10)',
+      '7–9 lessons: Arturo Buenaventura (8)',
+      '1–6 lessons: Diosdado Cruz (3) · Epifania Reyes (1)',
+    ]);
+
+    // Pressed again, it closes.
+    await arturo.click();
+    await expect(arturo).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toHaveCount(0);
+
+    // A group with nobody in it is left out rather than shown empty.
+    await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
+    await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
+      '1–6 lessons: Florante Mendoza (5)',
+    ]);
+  });
+
+  test('a row counting nobody says so when opened', async ({ page }) => {
+    await page.goto('/reports/suynl');
+
+    await page.getByRole('button', { name: 'Gregoria Navarro', exact: true }).click();
+    await expect(page.getByText('Nobody in this branch is counted.')).toBeVisible();
+  });
+
+  test("the whole church: the two pastors' branches, no You row, and the line for neither", async ({
+    page,
+  }) => {
+    await mockWholeChurchReader(page);
+    await mockSuynlReadiness(page, { view: 'church', elsewhere: true });
+    await page.goto('/reports/suynl');
+
+    await expect(
+      page.getByRole('heading', { name: 'The whole church · SUYNL, getting ready for the Encounter' }),
+    ).toBeVisible();
+    await expectRows(page, 'The whole church', [
+      ['Honorio Villanueva · Men’s their 12', '1', '2', '0', '3'],
+      ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
+      ['In neither pastor’s branch', '0', '0', '1', '1'],
+      ['Total', '1', '2', '2', '5'],
+    ]);
+    await expectTotalAddsUp(page, 'The whole church');
+    await expect(page.getByRole('cell', { name: 'You', exact: true })).toHaveCount(0);
+
+    const links = table(page, 'The whole church').getByRole('link', { name: 'their 12' });
+    await expect(links.nth(0)).toHaveAttribute('href', `/reports/suynl?leader=${READINESS_MENS_ROOT_ID}`);
+    await expect(links.nth(1)).toHaveAttribute(
+      'href',
+      `/reports/suynl?leader=${READINESS_WOMENS_ROOT_ID}`,
+    );
+  });
+
+  test('the whole church shows no line for neither when nobody is in it', async ({ page }) => {
+    await mockWholeChurchReader(page);
+    await mockSuynlReadiness(page, { view: 'church', elsewhere: false });
+    await page.goto('/reports/suynl');
+
+    await expectRows(page, 'The whole church', [
+      ['Honorio Villanueva · Men’s their 12', '1', '2', '0', '3'],
+      ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
+      ['Total', '1', '2', '1', '4'],
+    ]);
+    await expect(page.getByText('In neither pastor’s branch')).toHaveCount(0);
+  });
+
+  test("a leader opened: their 12, their own row by name, and the way back", async ({ page }) => {
+    const traffic = await mockSuynlReadiness(page);
+    await page.goto(`/reports/suynl?leader=${READINESS_ARTURO_ID}`);
+
+    await expect(
+      page.getByRole('heading', {
+        name: 'Arturo Buenaventura’s 12 · SUYNL, getting ready for the Encounter',
+      }),
+    ).toBeVisible();
+    await expectRows(page, 'Arturo Buenaventura’s 12', [
+      ['Carmelita Aquino their 12', '1', '0', '2', '3'],
+      ['Arturo Buenaventura', '0', '1', '0', '1'],
+      ['Total', '1', '1', '2', '4'],
+    ]);
+    await expectTotalAddsUp(page, 'Arturo Buenaventura’s 12');
+    await expect(page.getByRole('cell', { name: 'You', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveAttribute(
+      'href',
+      '/reports/suynl',
+    );
+    expect([...new Set(traffic.asked)]).toEqual([`/api/v1/suynl/readiness/${READINESS_ARTURO_ID}`]);
+  });
+
+  test("following 'their 12' opens that leader's table, and Back returns", async ({ page }) => {
+    await page.goto('/reports/suynl');
+
+    await table(page, 'My 12').getByRole('link', { name: 'their 12' }).first().click();
+    await expect(page).toHaveURL(new RegExp(`/reports/suynl\\?leader=${READINESS_ARTURO_ID}$`));
+    await expect(table(page, 'Arturo Buenaventura’s 12')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to your report' }).click();
+    await expect(page).toHaveURL(/\/reports\/suynl$/);
+    await expect(table(page, 'My 12')).toBeVisible();
+  });
+
+  test('a leader the API refuses shows its refusal and no table', async ({ page }) => {
+    await page.goto('/reports/suynl?leader=7f000000-0000-4000-8000-000000000099');
+
+    await expect(page.locator('main').getByRole('alert')).toContainText(
+      'That person is outside your scope.',
+    );
+    await expect(page.getByRole('table', { name: /SUYNL readiness$/ })).toHaveCount(0);
   });
 });

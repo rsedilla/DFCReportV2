@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import { PERSON_IN_SCOPE } from './mock-api';
+import { PERSON_IN_SCOPE, SIGNED_IN_PERSON_ID } from './mock-api';
 
 /**
  * The Growth tabs, SUYNL, Training and Conquest (SKILL.md sections 27 and 28; decisions
@@ -231,18 +231,189 @@ async function mockTab(
   return traffic;
 }
 
-export function mockSuynl(
+export async function mockSuynl(
   page: Page,
   outcome: 'accepted' | 'conflict' = 'accepted',
   fixture: { counts?: unknown; rows?: unknown[] } = {},
 ): Promise<GrowthTraffic> {
-  return mockTab(
+  const traffic = await mockTab(
     page,
     'suynl',
     fixture.counts ?? SUYNL_COUNTS,
     fixture.rows ?? [SUYNL_IN_PROGRESS, SUYNL_NOT_STARTED, SUYNL_GRADUATED, SUYNL_NOT_MINE],
     outcome,
   );
+  // Reports → SUYNL reads its readiness table too (decision 0297); a case wanting another
+  // view installs `mockSuynlReadiness` after this, which Playwright then asks first.
+  await mockSuynlReadiness(page);
+  return traffic;
+}
+
+/**
+ * The SUYNL readiness table (decision 0297), in the shape `readiness()` in
+ * `api/src/suynl/suynl.service.ts` builds. Every figure below adds up as the API's do: each
+ * row's buckets sum to its people, and the rows, the reader's own row and the elsewhere line
+ * sum to the total.
+ *
+ * **The leader's view** (`GET /suynl/readiness`): three direct disciples in surname order.
+ * Arturo leads people and carries four, one in each bucket at least; Florante leads nobody
+ * and carries himself; Gregoria leads people none of whom is counted. The reader alone is on
+ * the own row.
+ */
+export const READINESS_ARTURO_ID = '7f000000-0000-4000-8000-000000000001';
+export const READINESS_FLORANTE_ID = '7f000000-0000-4000-8000-000000000002';
+export const READINESS_GREGORIA_ID = '7f000000-0000-4000-8000-000000000003';
+export const READINESS_MENS_ROOT_ID = '7f000000-0000-4000-8000-000000000011';
+export const READINESS_WOMENS_ROOT_ID = '7f000000-0000-4000-8000-000000000012';
+
+const member = (suffix: string, full_name: string, lessons: number) => ({
+  person_id: `7f000000-0000-4000-8000-0000000001${suffix}`,
+  full_name,
+  lessons,
+});
+
+const CARMELITA = member('01', 'Carmelita Aquino', 10);
+const ARTURO = member('02', 'Arturo Buenaventura', 8);
+const DIOSDADO = member('03', 'Diosdado Cruz', 3);
+const EPIFANIA = member('04', 'Epifania Reyes', 1);
+const FLORANTE = member('05', 'Florante Mendoza', 5);
+const READER = { person_id: SIGNED_IN_PERSON_ID, full_name: 'Marilou Santiago', lessons: 9 };
+const HERMINIO = member('07', 'Herminio Lacson', 7);
+const ISIDRA = member('08', 'Isidra Manalo', 2);
+const JOVITA = member('09', 'Jovita Ramos', 4);
+
+type Member = ReturnType<typeof member>;
+
+function figures(members: Member[]) {
+  const completed = members.filter((each) => each.lessons >= 10).length;
+  const sevenToNine = members.filter((each) => each.lessons >= 7 && each.lessons < 10).length;
+  const oneToSix = members.filter((each) => each.lessons < 7).length;
+  return {
+    completed,
+    seven_to_nine: sevenToNine,
+    one_to_six: oneToSix,
+    people: members.length,
+    members,
+  };
+}
+
+function row(
+  id: string,
+  memberId: string,
+  fullName: string,
+  network: 'MENS' | 'WOMENS' | null,
+  leadsAnyone: boolean,
+  members: Member[],
+) {
+  return {
+    leader: { id, member_id: memberId, full_name: fullName },
+    network,
+    leads_anyone: leadsAnyone,
+    ...figures(members),
+  };
+}
+
+function total(members: Member[]) {
+  const { completed, seven_to_nine, one_to_six, people } = figures(members);
+  return { completed, seven_to_nine, one_to_six, people };
+}
+
+export const READINESS_LEADER = {
+  subject: { id: SIGNED_IN_PERSON_ID, full_name: READER.full_name },
+  rows: [
+    row(READINESS_ARTURO_ID, 'M-004201', 'Arturo Buenaventura', null, true, [
+      CARMELITA,
+      ARTURO,
+      DIOSDADO,
+      EPIFANIA,
+    ]),
+    row(READINESS_FLORANTE_ID, 'M-004202', 'Florante Mendoza', null, false, [FLORANTE]),
+    row(READINESS_GREGORIA_ID, 'M-004203', 'Gregoria Navarro', null, true, []),
+  ],
+  own: figures([READER]),
+  elsewhere: null,
+  total: total([CARMELITA, ARTURO, DIOSDADO, EPIFANIA, FLORANTE, READER]),
+};
+
+/**
+ * **The whole church** (`GET /suynl/readiness` for a Whole Church reader): the two roots,
+ * Men's first, no own row, and the elsewhere line, which carries somebody only when `elsewhere`
+ * is asked for.
+ */
+export function readinessChurch(options: { elsewhere: boolean }) {
+  const elsewhere = options.elsewhere ? [JOVITA] : [];
+  const men = [CARMELITA, ARTURO, HERMINIO];
+  const women = [ISIDRA];
+  return {
+    subject: null,
+    rows: [
+      row(READINESS_MENS_ROOT_ID, 'M-004211', 'Honorio Villanueva', 'MENS', true, men),
+      row(READINESS_WOMENS_ROOT_ID, 'M-004212', 'Imelda Quizon', 'WOMENS', true, women),
+    ],
+    own: null,
+    elsewhere: figures(elsewhere),
+    total: total([...men, ...women, ...elsewhere]),
+  };
+}
+
+/** **Arturo's table** (`GET /suynl/readiness/{Arturo}`): his one disciple, then himself. */
+export const READINESS_ARTURO = {
+  subject: { id: READINESS_ARTURO_ID, full_name: 'Arturo Buenaventura' },
+  rows: [
+    row('7f000000-0000-4000-8000-000000000004', 'M-004204', 'Carmelita Aquino', null, true, [
+      CARMELITA,
+      DIOSDADO,
+      EPIFANIA,
+    ]),
+  ],
+  own: figures([ARTURO]),
+  elsewhere: null,
+  total: total([CARMELITA, DIOSDADO, EPIFANIA, ARTURO]),
+};
+
+/**
+ * Both readiness routes. `/readiness` answers the leader's view or, with `view: 'church'`,
+ * the whole church's; `/readiness/{id}` answers Arturo's table for Arturo and a
+ * `SCOPE_DENIED` for anybody else. Returns every path asked, with its query string.
+ */
+export async function mockSuynlReadiness(
+  page: Page,
+  options: { view?: 'leader' | 'church'; elsewhere?: boolean } = {},
+): Promise<{ asked: string[] }> {
+  const traffic = { asked: [] as string[] };
+
+  await page.route('**/api/v1/suynl/readiness**', (route) => {
+    const url = new URL(route.request().url());
+    traffic.asked.push(`${url.pathname}${url.search}`);
+    const id = url.pathname.split('/readiness/')[1];
+
+    if (id === undefined) {
+      return route.fulfill(
+        json(
+          options.view === 'church'
+            ? readinessChurch({ elsewhere: options.elsewhere ?? true })
+            : READINESS_LEADER,
+        ),
+      );
+    }
+    if (id === READINESS_ARTURO_ID) {
+      return route.fulfill(json(READINESS_ARTURO));
+    }
+    return route.fulfill(
+      json(
+        {
+          error: {
+            code: 'SCOPE_DENIED',
+            message: 'That person is outside your scope.',
+            details: {},
+          },
+        },
+        403,
+      ),
+    );
+  });
+
+  return traffic;
 }
 
 export function mockTraining(
