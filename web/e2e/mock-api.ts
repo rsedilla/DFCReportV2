@@ -105,6 +105,31 @@ export async function mockWithoutEditBasic(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
+/**
+ * The same account as an administrator: `settings.manage` and `suynl.view_subtree` at Whole
+ * Church, as section 7 gives the Admin role, overriding `/auth/me` alone as above. The
+ * Encounter seasons screens offer their controls to that grant and to nothing narrower
+ * (decision 0296).
+ */
+export async function mockAdministrator(page: Page): Promise<void> {
+  const wholeChurch = (capability: string) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES,
+    wholeChurch('settings.manage'),
+    wholeChurch('suynl.view_subtree'),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
 /** The shared account's person, for a case about viewing your own record. */
 export const SIGNED_IN_PERSON_ID = ME.person_id;
 

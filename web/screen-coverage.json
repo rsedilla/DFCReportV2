@@ -280,6 +280,18 @@
       "screen": "web/app/reports/dcc/page.tsx"
     },
     {
+      "route": "GET /api/v1/encounter-seasons",
+      "screen": "web/app/growth/training/encounters/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/encounter-seasons",
+      "screen": "web/app/growth/training/encounters/page.tsx"
+    },
+    {
+      "route": "PATCH /api/v1/encounter-seasons/:id",
+      "screen": "web/app/growth/training/encounters/page.tsx"
+    },
+    {
       "route": "GET /api/v1/conquest/counts",
       "reason": "The Conquest tab’s four count cards (section 27).",
       "screen": "web/app/growth/conquest/page.tsx"

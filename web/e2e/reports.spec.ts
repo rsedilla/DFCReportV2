@@ -17,6 +17,7 @@ import {
   SUYNL_COUNTS,
   TRAINING_COUNTS,
   mockConquest,
+  mockEncounterSeasons,
   mockSuynl,
   mockTraining,
 } from './mock-growth';
@@ -36,9 +37,13 @@ const NOW = new Date('2026-06-20T02:00:00Z');
 /** A leader opened from the By leader table: Consuelo Bautista in `mockCoverageByLeader`. */
 const LEADER = '3f1b7c6e-0000-4000-8000-000000000701';
 
-/** A Growth report's cards, in order, each with its figure. */
+/**
+ * A Growth report's cards, in order, each with its figure. **The cards are `main`'s own
+ * list**, because the SUYNL report carries a second one inside its Next Encounter card
+ * (decision 0296), and `main dl` would match both.
+ */
 async function expectCards(page: Page, cards: [string, number][]) {
-  const list = page.locator('main dl');
+  const list = page.locator('main > dl');
   await expect(list.getByRole('term')).toHaveText(cards.map(([label]) => label));
   await expect(list.getByRole('definition')).toHaveText(cards.map(([, count]) => String(count)));
 }
@@ -76,6 +81,7 @@ async function mockEveryReport(page: Page) {
   await mockDccTwelve(page, { today: '2026-06-20' });
   await mockCoverageByLeader(page);
   await mockSuynl(page);
+  await mockEncounterSeasons(page);
   await mockTraining(page);
   await mockConquest(page);
 }
@@ -821,6 +827,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       page,
     }) => {
       await mockSignedIn(page);
+      await mockEncounterSeasons(page);
       await page.route(report.counts, (route) =>
         route.fulfill({
           status: 403,
@@ -834,7 +841,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
       await expect(page.locator('main').getByRole('alert')).toContainText('You cannot view these counts.');
       // No figure is invented in its place.
-      const figures = page.locator('main dl').getByRole('definition');
+      const figures = page.locator('main > dl').getByRole('definition');
       await expect(figures.first()).toBeVisible();
       for (const text of await figures.allTextContents()) {
         expect(text).toBe('–');
@@ -846,6 +853,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
   test('SUYNL shows its three counts, read only, and sends ticking to Growth', async ({ page }) => {
     await mockSignedIn(page);
     await mockSuynl(page);
+    await mockEncounterSeasons(page);
     await page.goto('/reports/suynl');
 
     await expect(
@@ -920,6 +928,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
   }) => {
     await mockSignedIn(page);
     await mockSuynl(page);
+    await mockEncounterSeasons(page);
     await mockTraining(page);
     await mockConquest(page);
 
@@ -933,7 +942,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
     for (const path of ['/reports/suynl', '/reports/training', '/reports/conquest']) {
       await page.goto(`${path}?month=2026-05-01`);
-      await expect(page.locator('main dl').getByRole('definition').first()).not.toHaveText('–');
+      await expect(page.locator('main > dl').getByRole('definition').first()).not.toHaveText('–');
       // As of now: no month is offered, because these are never counted by period.
       await expect(page.getByRole('button', { name: /^Show / })).toHaveCount(0);
       await expect(page.getByText('May 2026')).toHaveCount(0);

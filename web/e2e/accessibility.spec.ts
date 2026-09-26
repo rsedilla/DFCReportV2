@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import {
   PERSON_IN_SCOPE,
   mockAccepted,
+  mockAdministrator,
   mockAwaitingReassignment,
   mockCellApprover,
   mockCellChoices,
@@ -45,7 +46,13 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
 } from './mock-attendance';
-import { mockConquest, mockPersonGrowth, mockSuynl, mockTraining } from './mock-growth';
+import {
+  mockConquest,
+  mockEncounterSeasons,
+  mockPersonGrowth,
+  mockSuynl,
+  mockTraining,
+} from './mock-growth';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -1007,16 +1014,99 @@ const SCANS = [
     },
   },
   {
-    // SUYNL under Reports (decision 0292): three read-only cards and a link to Growth.
+    // SUYNL under Reports (decisions 0292 and 0296): the Next Encounter card with both
+    // halves and its link to the seasons, three read-only cards, and a link to Growth.
     name: 'suynl report',
+    route: '/reports/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockSuynl(page);
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText(/^SUYNL for the 4 people/)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Next Encounter · December 2026' })).toBeVisible();
+      await expect(page.getByText('Encounter 11 Dec – 13 Dec 2026')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Every Encounter season' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Tick lessons in Growth' })).toBeVisible();
+    },
+  },
+  {
+    // The card with no weekend to show: the sentence a reader in no Network is given.
+    name: 'suynl report, no network',
     route: '/reports/suynl',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockSuynl(page);
+      await mockEncounterSeasons(page, { shows: 'NEITHER' });
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^SUYNL for the 4 people/)).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Tick lessons in Growth' })).toBeVisible();
+      await expect(page.getByText('You are in no Network, so no Encounter weekend is shown.')).toBeVisible();
+    },
+  },
+  {
+    // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
+    // half, and the sentence saying who may change it.
+    name: 'encounter seasons',
+    route: '/growth/training/encounters',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockEncounterSeasons(page, { shows: 'MENS' });
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('table', { name: 'Encounter seasons' })).toBeVisible();
+      await expect(page.getByText('Only an administrator may add or change these dates.')).toBeVisible();
+    },
+  },
+  {
+    // An administrator's view: every column, an Edit per season, and Add.
+    name: 'encounter seasons, administrator',
+    route: '/growth/training/encounters',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAdministrator(page);
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Edit December 2026' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Add an Encounter season' })).toBeVisible();
+    },
+  },
+  {
+    // Adding a season: the Men and Women fieldsets, four date fields and their hints.
+    name: 'encounter seasons, adding a season',
+    route: '/growth/training/encounters',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAdministrator(page);
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Add an Encounter season' }).click();
+      await page.getByLabel('Men’s Encounter starts', { exact: true }).fill('2027-04-02');
+      await expect(page.getByRole('group', { name: 'Women' })).toBeVisible();
+      await expect(page.getByText(/exactly 5 \(26 Feb 2027\)/)).toBeVisible();
+    },
+  },
+  {
+    // A save the API refused: its message in the form, and the form kept.
+    name: 'encounter seasons, refused',
+    route: '/growth/training/encounters',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAdministrator(page);
+      await mockEncounterSeasons(page, { outcome: 'refused' });
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Edit December 2026' }).click();
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(
+        page
+          .getByRole('region', { name: 'Encounter seasons' })
+          .getByRole('alert')
+          .filter({ hasText: /\S/ }),
+      ).toContainText('five weeks before');
     },
   },
   {
@@ -1554,12 +1644,22 @@ const TARGET_SWEEP = [
     minimum: 13,
   },
   {
-    // The six report tabs and the link to Growth. The cards are figures, not controls.
+    // The six report tabs, the Next Encounter card's link to the seasons and the link to
+    // Growth (decision 0296): **eight**. The cards are figures, not controls.
     name: 'suynl report',
     route: '/reports/suynl',
     settleRole: 'link' as const,
     settle: 'Tick lessons in Growth',
-    minimum: 7,
+    minimum: 8,
+  },
+  {
+    // The three Growth tabs and Back to Training, the sweep's account being no
+    // administrator: **four**. The table holds no control for it.
+    name: 'encounter seasons',
+    route: '/growth/training/encounters',
+    settleRole: 'link' as const,
+    settle: 'Back to Training',
+    minimum: 4,
   },
   {
     name: 'training report',
@@ -1598,16 +1698,16 @@ const TARGET_SWEEP = [
     minimum: 36,
   },
   {
-    // The two tabs, six cards, the search, Search and the filter, the line's Show only
-    // those still to finish, four name links, fifteen boxes, a date button per saved dated
-    // or undated graduation on the three rows the reader may file for (seven), and the two
-    // pager buttons. Everyone, because the opening view leaves out the row holding all five
-    // (decision 0287).
+    // The two tabs, the link to the Encounter seasons (decision 0296), six cards, the search,
+    // Search and the filter, the line's Show only those still to finish, four name links,
+    // fifteen boxes, a date button per saved dated or undated graduation on the three rows
+    // the reader may file for (seven), and the two pager buttons. Everyone, because the
+    // opening view leaves out the row holding all five (decision 0287).
     name: 'growth training',
     route: '/growth/training?all=1',
     settleRole: 'link' as const,
     settle: 'Lualhati Dizon',
-    minimum: 40,
+    minimum: 41,
   },
   {
     // The three tabs, four cards, the search, Search and the filter, a name link per person
@@ -1630,6 +1730,30 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'suynl report, no network',
+    why:
+      'The measured "suynl report" with the Next Encounter dates replaced by one sentence, ' +
+      'which holds no control. Its targets are the same eight links.',
+  },
+  {
+    name: 'encounter seasons, administrator',
+    why:
+      'The sweep signs in one account, which is no administrator. The Edit buttons and Add, ' +
+      'offered only to a settings.manage holder, are measured in encounters.spec.ts.',
+  },
+  {
+    name: 'encounter seasons, adding a season',
+    why:
+      'Reached by pressing Add as an administrator, which this sweep cannot do. The four date ' +
+      'inputs, Save and Cancel are measured in encounters.spec.ts.',
+  },
+  {
+    name: 'encounter seasons, refused',
+    why:
+      'Reached by a refused save as an administrator, which this sweep cannot do. It adds a ' +
+      'failure notice, which holds no control, to the form measured in encounters.spec.ts.',
+  },
   {
     name: 'dashboard, people I oversee',
     why:
@@ -1916,6 +2040,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockPeopleWithoutACell(page);
   await mockCoverageByLeader(page);
   await mockSuynl(page);
+  await mockEncounterSeasons(page, { shows: 'MENS' });
   await mockTraining(page);
   await mockConquest(page);
   // The person page's Growth frame, which asks the same two lists by Member ID and falls

@@ -426,3 +426,116 @@ export async function mockPersonGrowth(
 
   return traffic;
 }
+
+/**
+ * The Encounter seasons (SKILL.md section 28, decision 0296): the shape
+ * `api/src/training/encounter-seasons.service.ts` builds. Three seasons in the order the API
+ * lists them, by the earlier weekend, each LC Party the default five weeks before its own
+ * weekend. **The August season's Women's weekend is later than its Men's by a week**, so a
+ * day between the two ends tells the halves apart.
+ */
+export const ENCOUNTER_APRIL = {
+  id: '7e000000-0000-4000-8000-000000000001',
+  mens_lc_party_on: '2026-02-27',
+  mens_encounter_on: '2026-04-03',
+  womens_lc_party_on: '2026-03-06',
+  womens_encounter_on: '2026-04-10',
+};
+
+export const ENCOUNTER_AUGUST = {
+  id: '7e000000-0000-4000-8000-000000000002',
+  mens_lc_party_on: '2026-07-03',
+  mens_encounter_on: '2026-08-07',
+  womens_lc_party_on: '2026-07-10',
+  womens_encounter_on: '2026-08-14',
+};
+
+export const ENCOUNTER_DECEMBER = {
+  id: '7e000000-0000-4000-8000-000000000003',
+  mens_lc_party_on: '2026-10-30',
+  mens_encounter_on: '2026-12-04',
+  womens_lc_party_on: '2026-11-06',
+  womens_encounter_on: '2026-12-11',
+};
+
+export const ENCOUNTER_SEASONS = [ENCOUNTER_APRIL, ENCOUNTER_AUGUST, ENCOUNTER_DECEMBER];
+
+export type SeasonsShown = 'BOTH' | 'MENS' | 'WOMENS' | 'NEITHER';
+
+type Season = (typeof ENCOUNTER_SEASONS)[number];
+
+/** A season as the list answers a reader shown `shows`: the other half's dates null. */
+export function seasonAsShown(season: Season, shows: SeasonsShown) {
+  const men = shows === 'BOTH' || shows === 'MENS';
+  const women = shows === 'BOTH' || shows === 'WOMENS';
+  return {
+    id: season.id,
+    mens_lc_party_on: men ? season.mens_lc_party_on : null,
+    mens_encounter_on: men ? season.mens_encounter_on : null,
+    womens_lc_party_on: women ? season.womens_lc_party_on : null,
+    womens_encounter_on: women ? season.womens_encounter_on : null,
+  };
+}
+
+export interface EncounterTraffic {
+  /** Every write: its method, path, body and `Idempotency-Key`. */
+  writes: { method: string; path: string; body: Record<string, unknown>; key: string | undefined }[];
+  /** How many times the list was read. */
+  reads: number;
+}
+
+/** The message the service writes when a Men's LC Party is later than five weeks before. */
+export const PARTY_TOO_LATE =
+  "The Men's LC Party must be on or before 2027-02-26, five weeks before the Men's Encounter.";
+
+/**
+ * `GET`, `POST` and `PATCH /encounter-seasons`. The list answers `shows` and the seasons as
+ * that reader is shown them. A write is `accepted` (201 or 200, the whole season, as the API
+ * answers an administrator) or `refused` as the service refuses an LC Party too close to its
+ * weekend (422 `VALIDATION_FAILED`, naming the field).
+ */
+export async function mockEncounterSeasons(
+  page: Page,
+  options: { shows?: SeasonsShown; seasons?: Season[]; outcome?: 'accepted' | 'refused' } = {},
+): Promise<EncounterTraffic> {
+  const shows = options.shows ?? 'BOTH';
+  const seasons = options.seasons ?? ENCOUNTER_SEASONS;
+  const traffic: EncounterTraffic = { writes: [], reads: 0 };
+
+  await page.route('**/api/v1/encounter-seasons**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+
+    if (request.method() === 'GET') {
+      traffic.reads += 1;
+      return route.fulfill(
+        json({ shows, data: seasons.map((season) => seasonAsShown(season, shows)) }),
+      );
+    }
+
+    const body = request.postDataJSON() as Record<string, unknown>;
+    const key = (await request.headerValue('idempotency-key')) ?? undefined;
+    traffic.writes.push({ method: request.method(), path, body, key });
+
+    if (options.outcome === 'refused') {
+      return route.fulfill(
+        json(
+          {
+            error: {
+              code: 'VALIDATION_FAILED',
+              message: PARTY_TOO_LATE,
+              details: { field: 'mens_lc_party_on', value: '2027-03-01', latest: '2027-02-26' },
+            },
+          },
+          422,
+        ),
+      );
+    }
+
+    const id =
+      request.method() === 'PATCH' ? path.split('/').pop()! : '7e000000-0000-4000-8000-000000000009';
+    return route.fulfill(json({ id, ...body }, request.method() === 'POST' ? 201 : 200));
+  });
+
+  return traffic;
+}

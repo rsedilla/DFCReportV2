@@ -137,7 +137,7 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `admin` | Settings, the initial-encoding phase, administrative operations |
 | `conquest` | The four G12 goals: what a leader confirms about them, and their corrections (Section 27) |
 | `suynl` | SUYNL lessons and their corrections (Section 28) |
-| `training` | Graduation from the Encounter, Life Class and SOL 1 to 3, and their corrections (Section 28) |
+| `training` | Graduation from the Encounter, Life Class and SOL 1 to 3, and their corrections; the Encounter seasons (Section 28) |
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
@@ -1759,6 +1759,8 @@ Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole C
 The settings it governs today are the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), and the first Sunday the DCC calendar covers (Section 9). Each alters behaviour for the entire church from a single control, which is why none is per leader and why all carry an audit trail: a threshold change silently re-populates every leader's attention list, closing the encoding phase permanently removes Admin's direct-create path for Cells, and moving the calendar's first Sunday changes which months the generation command will fill.
 
 **One setting is also written by a system action, and this is the whole of the exception** (ruling of 2026-09-11). The first Sunday the DCC calendar covers is set once by the scheduled generation command on the run that finds it unset (Sections 9 and 13, and the rulings of 2026-08-31), which holds no capability and has no interactive actor — Section 6 permits that null actor for exactly this case. It is audit logged as `setting.changed` like every other change, with its previous and new values, so the audit rule above is not weakened by it. **Nothing else is covered**: every other change to every setting, this one included, is an Admin action under `settings.manage`.
+
+It also guards the Encounter seasons (Section 28, decision 0296), whose routes are the first to carry it. A season is a row of its own table in `training` rather than a keyed setting, so it is audited as `encounter_season.created` or `encounter_season.changed`, not `setting.changed`.
 
 A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
@@ -4050,7 +4052,7 @@ Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 
 **`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar short, a seventh item being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
 
-**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Cell Groups carries Weekly, Monthly, Quarterly and Year, each opening on My 12, with coverage as one line above it (decision 0293), and DCC carries the same, with the Sundays counted under its coverage line, "How often people came" on Monthly only, and the Men's and Women's Networks kept in Figures for, each showing its own total (decision 0294). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
+**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Cell Groups carries Weekly, Monthly, Quarterly and Year, each opening on My 12, with coverage as one line above it (decision 0293), and DCC carries the same, with the Sundays counted under its coverage line, "How often people came" on Monthly only, and the Men's and Women's Networks kept in Figures for, each showing its own total (decision 0294). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now, and SUYNL the next Encounter season (decision 0296). Nothing under `Reports` files or changes a record.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
@@ -4442,6 +4444,7 @@ Audit important actions, including:
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
 - System setting changed, with previous and new values
+- Encounter season recorded, or its dates changed, with previous and new values (Section 28)
 - SUYNL lesson confirmed, and a confirmation corrected with its reason; school graduation confirmed, and a confirmation corrected with its reason — each naming the Person the record is about (Section 28), and each carrying the confirming leader beside the actor where it was filed for a downline leader, on the terms the entry below states
 - Conquest goal confirmed, and a confirmation corrected with its reason, each naming the Person the goal is about (Section 27). **A confirmation filed for a downline leader is one entry that says so**, carrying the confirming leader as well as the actor — the same treatment this list gives an attendance correction made for somebody else, and for the same reason: two entries would double-count one act, and recording only the confirmation loses every one an upline filed from the list that exists to find them
 
@@ -4506,6 +4509,7 @@ Recommended REST areas:
 /api/v1/conquest                          Section 27
 /api/v1/suynl                             Section 28
 /api/v1/training                          Section 28
+/api/v1/encounter-seasons                 Section 28 (decision 0296)
 ```
 
 Examples:
@@ -5245,6 +5249,7 @@ Shapes are given in the section that owns each rule; this is the index.
 | `conquest_confirmations` | `conquest` | Section 27 |
 | `suynl_lessons` | `suynl` | Section 28 |
 | `training_graduations` | `training` | Section 28 |
+| `encounter_seasons` | `training` | Section 28, decision 0296 |
 
 Eight of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`, `conquest_confirmations`, `suynl_lessons`, `training_graduations` — the last three because Sections 27 and 28 supersede a record rather than deleting it, and a column per goal, lesson and school on `persons` would satisfy every sentence of those sections while losing every correction. A column satisfies every sentence about them and cannot answer a question about a past period.
 
@@ -5403,6 +5408,14 @@ The cost is that a lesson done long before it was recorded carries the later day
 **Graduation is ten of ten, and is not itself recorded.** A person has graduated SUYNL when ten current lesson rows exist for them, and the day they graduated is the day the tenth was filed. **Only current rows ever count, at every instant** — a lesson corrected away never counted, which is what a correction says, so a graduation and a Win 3 date both move when one is withdrawn. A graduation tick beside the ten lessons would be free to contradict them, which is the argument Section 9 makes for classification and decision 0249 applied to a goal.
 
 **A person who has graduated collapses to one line** on the screen, carrying the date and a `Correct` action, rather than ten boxes nobody will tick again.
+
+### Encounter seasons
+
+**The Encounter's dates are recorded, not derived** (ruling of 2026-09-26, decision 0296). An administrator keeps a list of seasons, three a year. Each has a **Men's Encounter**, for men only, and a **Women's Encounter**, for women only, usually a week apart, each recorded as the day its weekend starts; and an **LC Party** before each, one for men and one for women.
+
+**Each LC Party is at least five weeks before its own weekend** — the party, then Life Class lessons 1 to 4 a week apart, then the Encounter as lesson 5. One left empty is exactly five weeks before, and nothing limits how early a party may be. The rule is a constraint on `encounter_seasons` as well as a refusal naming the field.
+
+**Only a Whole Church `settings.manage` holder adds or changes a season**, every change audited with its previous and new values (Sections 7 and 21), and anyone who reads SUYNL reads them — **each reader their own Network's weekend and LC Party, and a Whole Church reader both**, the API sending only that half, and a reader in no Network neither. Nothing deletes a season, and two may not hold the same weekend. The list and its editor are under `Growth`, on the Training tab, where records are filed; the SUYNL tab under `Reports` only shows the next season and links there (owner's choice after `architecture-guardian` found the editor first placed under `Reports`, which §19 forbids).
 
 ### Training
 

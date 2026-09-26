@@ -246,6 +246,16 @@ function TrainingTab() {
 
       <GrowthTabs current="/growth/training" />
 
+      {/* The Encounter seasons are kept here (decision 0296); Reports only reads the next. */}
+      <p className="mt-4 text-sm">
+        <Link
+          href="/growth/training/encounters"
+          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Encounter seasons
+        </Link>
+      </p>
+
       <GrowthCards
         cards={cards}
         selected={step}
