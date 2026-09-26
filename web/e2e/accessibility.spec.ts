@@ -47,10 +47,12 @@ import {
   mockRecordedMeetingRoster,
 } from './mock-attendance';
 import {
+  READINESS_ARTURO_ID,
   mockConquest,
   mockEncounterSeasons,
   mockPersonGrowth,
   mockSuynl,
+  mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
 
@@ -1025,11 +1027,67 @@ const SCANS = [
       await mockEncounterSeasons(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^SUYNL for the 4 people/)).toBeVisible();
+      await expect(page.getByText(/^Who is getting ready for the next Encounter/)).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Next Encounter · December 2026' })).toBeVisible();
-      await expect(page.getByText('Encounter 11 Dec – 13 Dec 2026')).toBeVisible();
+      await expect(page.getByText('11 Dec – 13 Dec 2026')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Every Encounter season' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Tick lessons in Growth' })).toBeVisible();
+      // The readiness table (decision 0297), a leader's: their 12, You and the Total.
+      await expect(page.getByRole('table', { name: 'My 12 · SUYNL readiness' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'You', exact: true })).toBeVisible();
+    },
+  },
+  {
+    // A readiness row opened: the people behind it, grouped by column (decision 0297).
+    name: 'suynl report, a row opened',
+    route: '/reports/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockSuynl(page);
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      const name = page.getByRole('button', { name: 'Arturo Buenaventura', exact: true });
+      await name.click();
+      await expect(name).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByText('1–6 lessons: Diosdado Cruz (3) · Epifania Reyes (1)')).toBeVisible();
+    },
+  },
+  {
+    // The whole church's readiness table: the two pastors' rows by Network, no You row, and
+    // the line for anybody in neither branch (decision 0297).
+    name: 'suynl report, whole church',
+    route: '/reports/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockSuynl(page);
+      await mockSuynlReadiness(page, { view: 'church', elsewhere: true });
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Honorio Villanueva · Men’s' })).toBeVisible();
+      await expect(page.getByText('In neither pastor’s branch')).toBeVisible();
+    },
+  },
+  {
+    // A leader opened from the readiness table: their 12, their own row by name, and the way
+    // back (decision 0297).
+    name: 'suynl report, one leader',
+    route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockSuynl(page);
+      await mockEncounterSeasons(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('table', { name: 'Arturo Buenaventura’s 12 · SUYNL readiness' }),
+      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
     },
   },
   {
@@ -1645,12 +1703,24 @@ const TARGET_SWEEP = [
   },
   {
     // The six report tabs, the Next Encounter card's link to the seasons and the link to
-    // Growth (decision 0296): **eight**. The cards are figures, not controls.
+    // Growth (decision 0296), then the readiness table's three name buttons and the two
+    // "their 12" links, one per row whose leader leads anybody (decision 0297): **thirteen**.
+    // The cards are figures, not controls.
     name: 'suynl report',
     route: '/reports/suynl',
     settleRole: 'link' as const,
     settle: 'Tick lessons in Growth',
-    minimum: 8,
+    minimum: 13,
+  },
+  {
+    // The six report tabs, the card's link, Back to your report, the one row's name button
+    // and its "their 12" link, and the link to Growth: **eleven**. Settled on the table's own
+    // way back, which renders from the address, and then on every section loading.
+    name: 'suynl report, one leader',
+    route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
+    settleRole: 'link' as const,
+    settle: 'Back to your report',
+    minimum: 11,
   },
   {
     // The three Growth tabs and Back to Training, the sweep's account being no
@@ -1731,10 +1801,23 @@ const TARGET_SWEEP = [
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
+    name: 'suynl report, a row opened',
+    why:
+      'The measured "suynl report" with one row opened, which adds the people behind it as ' +
+      'text and no control; the name button pressed is the one measured there.',
+  },
+  {
+    name: 'suynl report, whole church',
+    why:
+      'The sweep installs one readiness answer for every route, the leader\'s. The whole ' +
+      "church's rows are the same name button and \"their 12\" link measured on \"suynl report\", " +
+      'with a Network after the name and a line of text for anybody in neither branch.',
+  },
+  {
     name: 'suynl report, no network',
     why:
       'The measured "suynl report" with the Next Encounter dates replaced by one sentence, ' +
-      'which holds no control. Its targets are the same eight links.',
+      'which holds no control. Its targets are the same ones.',
   },
   {
     name: 'encounter seasons, administrator',

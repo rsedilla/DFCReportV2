@@ -352,6 +352,28 @@ export class TrainingService {
     }
   }
 
+  /**
+   * Which of these people hold a current Encounter or Life Class graduation, for the SUYNL
+   * readiness table, which leaves them out (decision 0297). Only current rows count
+   * (section 28); lifecycle is the caller's, which reads it already.
+   */
+  async pastTheLcPartyOf(personIds: readonly string[]): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.db
+      .selectFrom('training_graduations')
+      .select('person_id')
+      .distinct()
+      .where('person_id', 'in', [...personIds])
+      .where('program', 'in', ['ENCOUNTER', 'LIFE_CLASS'])
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => canonicalId(row.person_id)));
+  }
+
   /** The programs each current person holds a current graduation for. */
   private async currentPrograms(
     population: ReadonlySet<string> | null,
