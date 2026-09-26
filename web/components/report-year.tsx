@@ -1,15 +1,12 @@
 'use client';
 
 import { useQueries } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { buttonClasses } from '@/components/ui/button';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { getCellMonthlyReport, getDccMonthlyReport, type ReportScope } from '@/lib/reports';
-import { hasNotBegun, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
+import { hasNotBegun, monthLabel } from '@/lib/reporting-month';
 import { describeFailure } from '@/lib/messages';
-import { cn } from '@/lib/utils';
 
 /** The months of `year` that have begun, January first, as `YYYY-MM-01`. */
 export function monthsBegunIn(year: number): string[] {
@@ -17,79 +14,6 @@ export function monthsBegunIn(year: number): string[] {
     { length: 12 },
     (_, index) => `${String(year).padStart(4, '0')}-${String(index + 1).padStart(2, '0')}-01`,
   ).filter((month) => !hasNotBegun(month));
-}
-
-/** The Manila year of the current month. */
-export function currentYear(): number {
-  return Number(reportingMonthOf().slice(0, 4));
-}
-
-/**
- * The design's "month | year" switch over a report. A radio group, as the coverage switch
- * beside it is, so a screen reader hears one choice of two.
- */
-export function PeriodSwitch({
-  value,
-  onChange,
-}: {
-  value: 'month' | 'year';
-  onChange: (value: 'month' | 'year') => void;
-}) {
-  const option = (key: 'month' | 'year', label: string) => (
-    <label
-      className={`focus-within:outline-accent flex min-h-11 cursor-pointer items-center gap-2 border px-3 text-sm focus-within:outline-2 focus-within:outline-offset-2 ${
-        value === key ? 'border-ink bg-ink text-surface' : 'border-line'
-      }`}
-    >
-      <input
-        type="radio"
-        name="report-period"
-        className="sr-only"
-        checked={value === key}
-        onChange={() => onChange(key)}
-      />
-      {label}
-    </label>
-  );
-
-  return (
-    <div role="radiogroup" aria-label="Report period" className="mt-6 inline-flex">
-      {option('month', 'Month')}
-      {option('year', 'Year')}
-    </div>
-  );
-}
-
-/** The year being shown and how to move between years; forward stops at the current one. */
-export function YearPicker({ year, onChange }: { year: number; onChange: (year: number) => void }) {
-  const nextIsRefused = year + 1 > currentYear();
-
-  return (
-    <div className="mt-6 flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(year - 1)}
-          aria-label={`Show ${year - 1}`}
-          className={cn(buttonClasses('secondary'), 'px-3')}
-        >
-          <ChevronLeft aria-hidden="true" className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(year + 1)}
-          disabled={nextIsRefused}
-          aria-label={`Show ${year + 1}`}
-          className={cn(buttonClasses('secondary'), 'px-3')}
-        >
-          <ChevronRight aria-hidden="true" className="size-4" />
-        </button>
-      </div>
-      <p aria-live="polite" className="text-accent text-sm font-bold">
-        {year}
-      </p>
-    </div>
-  );
 }
 
 interface MonthRow {

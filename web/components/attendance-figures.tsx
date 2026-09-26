@@ -1,5 +1,5 @@
 import { FRAME } from '@/components/ui/frame';
-import { CLASSIFICATION_LABELS, type AttendanceBucket, type Classification } from '@/lib/reports';
+import { type AttendanceBucket } from '@/lib/reports';
 
 /**
  * One row of a figures list: a name and its count.
@@ -65,41 +65,6 @@ function TotalRow({ value }: { value: number }) {
       <dt className="text-accent text-xs font-bold tracking-[0.08em] uppercase">Total</dt>
       <dd className="text-base font-bold tabular-nums">{value}</dd>
     </div>
-  );
-}
-
-/**
- * Section 9's classification, as five counts that sum to the population.
- *
- * **Nothing here is ordered by size or coloured by value.** These are stages of a
- * journey, not a ranking: a Cell of five VIPs is a Cell doing the thing the
- * ministry exists for, and one of five Regulars is a different thing rather than a
- * better one. Sections 13, 17 and 19 forbid grading either in colour.
- */
-export function ClassificationFigures({ classification }: { classification: Classification }) {
-  const total = CLASSIFICATION_LABELS.reduce((sum, { key }) => sum + classification[key], 0);
-
-  return (
-    <section aria-labelledby="classification-heading" className={FRAME}>
-      <h2 id="classification-heading" className="field-label">
-        Where people are in their journey
-      </h2>
-      <p className="text-muted mt-1 text-sm leading-relaxed">
-        From everything each person has attended, at the end of the month.
-      </p>
-
-      <dl className="mt-3">
-        {CLASSIFICATION_LABELS.map(({ key, label }) => (
-          <FigureRow
-            key={key}
-            label={label}
-            value={classification[key]}
-            share={total === 0 ? 0 : classification[key] / total}
-          />
-        ))}
-        <TotalRow value={total} />
-      </dl>
-    </section>
   );
 }
 

@@ -30,8 +30,6 @@ function listQuery(query: GrowthListQuery): string {
 // SUYNL
 // ---------------------------------------------------------------------------
 
-export type SuynlStep = 'NOT_STARTED' | 'IN_PROGRESS' | 'GRADUATED';
-
 /** The three cards, which add up to everyone listed (decision 0281). */
 export interface SuynlCounts {
   people: number;
