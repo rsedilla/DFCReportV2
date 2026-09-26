@@ -977,36 +977,14 @@ export class HierarchyService {
   }
 
   /**
-   * The assignment row in force for a person at an instant, or null where they had
-   * none.
+   * The assignment row in force for each person at an instant, as a map missing the
+   * ones who had none.
    *
-   * **The three states section 9 insists are different.** `null` is a Person with
-   * no assignment row at that instant, whose DCC attendance cannot be recorded
-   * because there is no responsible leader to record it against. A row with
-   * `leaderId: null` is a Network root, which is the intended state rather than
-   * missing data. Anything else is an ordinary edge. Returning `string | null`
-   * would collapse the first two, which is the mistake `OpenAssignment` above
-   * exists to prevent on the write side.
-   */
-  async assignmentAsOf(
-    executor: Db,
-    personId: string,
-    at: Date,
-  ): Promise<{ leaderId: string | null } | null> {
-    const row = await executor
-      .selectFrom('pastoral_assignments')
-      .select('leader_id')
-      .where('person_id', '=', personId)
-      .where('started_at', '<=', at)
-      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
-      .executeTakeFirst();
-
-    return row === undefined ? null : { leaderId: row.leader_id };
-  }
-
-  /**
-   * The same read for many people at once, as a map missing the ones who had no
-   * row.
+   * **The three states section 9 insists are different.** A missing entry is a Person
+   * with no assignment row at that instant, whose DCC attendance cannot be recorded
+   * because there is no responsible leader to record it against. `leaderId: null` is a
+   * Network root, which is the intended state rather than missing data. Anything else
+   * is an ordinary edge.
    *
    * A roster resolves a responsible leader per person, and a submission carries
    * many people at once (section 14), so the per-person form would issue one query

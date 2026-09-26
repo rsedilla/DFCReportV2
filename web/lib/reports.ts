@@ -145,21 +145,6 @@ export async function getDccMonthlyReport(
   );
 }
 
-/** Whether a report carries buckets — true only at Cell scope (section 12). */
-export function hasBuckets(
-  report: CellMonthlyReport,
-): report is Extract<CellMonthlyReport, { n: number }> {
-  return 'buckets' in report;
-}
-
-export const CLASSIFICATION_LABELS: { key: keyof Classification; label: string }[] = [
-  { key: 'vip', label: 'VIP' },
-  { key: 'second_timer', label: '2nd Timer' },
-  { key: 'third_timer', label: '3rd Timer' },
-  { key: 'fourth_timer', label: '4th Timer' },
-  { key: 'regular', label: 'Regular' },
-];
-
 /** One named row of a report's coverage by leader (decision 0254). */
 export interface ByLeaderRow {
   leader: { id: string; member_id: string; full_name: string };
