@@ -95,7 +95,7 @@ export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
-  options: { churchWide?: boolean; limit?: number } = {},
+  options: { churchWide?: boolean; limit?: number; network?: Network | null } = {},
 ): Promise<PersonPage> {
   // An empty term lists the searcher's own scope (decision 0259).
   const params = new URLSearchParams(q === '' ? {} : { q });
@@ -108,8 +108,17 @@ export async function searchPeople(
   if (options.churchWide) {
     params.set('church_wide', 'true');
   }
+  // Only this Network's people, filtered by the API (decision 0299).
+  if (options.network) {
+    params.set('network', options.network);
+  }
 
   return authenticatedRequest<PersonPage>(`/api/v1/people?${params.toString()}`, { signal });
+}
+
+/** A person's Network as a read returns it: named on an identity row, from sex on a full one. */
+export function networkOfPerson(person: Person): Network | null {
+  return person.scope === 'IDENTITY_ONLY' ? person.network : networkOfSex(person.sex);
 }
 
 export async function getPerson(id: string, signal?: AbortSignal): Promise<PersonFull> {

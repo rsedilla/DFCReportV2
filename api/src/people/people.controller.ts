@@ -424,8 +424,18 @@ export class PeopleController {
     const membership = query.church_wide
       ? null
       : await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
-    const restrictTo =
+    const scoped =
       membership === null || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+    // A Network narrows the rows in the query rather than the page (decision 0299), so a page
+    // is never short of people who match.
+    const inNetwork =
+      query.network === undefined ? null : await this.read.whoseNetworkIsNow(query.network);
+    const restrictTo =
+      inNetwork === null
+        ? scoped
+        : scoped === null
+          ? inNetwork
+          : new Set([...scoped].filter((id) => inNetwork.has(id)));
 
     const { rows, nextCursor } = await this.read.searchByName(
       query.q ?? null,

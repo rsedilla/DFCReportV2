@@ -8,7 +8,8 @@ import { NetworksService } from '../networks/networks.service';
 import { type RosterCursor } from '../common/roster-cursor';
 import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
-import type { Database } from '../database/schema';
+import { databaseNow } from '../common/time/submission-window';
+import type { Database, NetworkName } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
 import {
@@ -497,6 +498,15 @@ export class PeopleReadService {
           ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
           : null,
     };
+  }
+
+  /**
+   * Everyone whose Network is this one now (decision 0299), read through `networks`, which
+   * owns the table, with the resolution the same-Network rule compares against.
+   */
+  async whoseNetworkIsNow(network: NetworkName): Promise<Set<string>> {
+    const now = await databaseNow(this.db);
+    return new Set(await this.networks.peopleWhoseNetworkIs(this.db, network, now));
   }
 
   /**

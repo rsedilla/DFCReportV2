@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { mockPeople, mockSignedIn } from './mock-api';
+import { PERSON_IN_SCOPE, mockGrants, mockPeople, mockSignedIn } from './mock-api';
+import {
+  CELL_WITH_MEETINGS,
+  mockCellMeetings,
+  mockCellMembers,
+  mockMeetingRoster,
+  mockPastoralPath,
+} from './mock-attendance';
 
 /**
  * Which search each surface asks for (SKILL.md section 8, decision 0244).
@@ -8,7 +15,10 @@ import { mockPeople, mockSignedIn } from './mock-api';
  * The People screen shows the people a leader pastors. The three person pickers —
  * Add a Person, Add a member to a Cell, and naming a new pastoral leader on a
  * reassignment — keep the church-wide directory, because each names one specific
- * person for one operation rather than offering a place to look around.
+ * person for one operation rather than offering a place to look around. Two of them
+ * are then narrowed to one Network (decision 0299): adding a Cell member searches the
+ * Cell's leader's Network, and naming a new pastoral leader the moved person's. Adding
+ * a Person and naming who ran a Cell meeting are not narrowed.
  *
  * **This asserts the request rather than the rendered rows, and that is the point.**
  * The narrowing is enforced by the API: the rows a leader may see are decided there,
@@ -98,6 +108,187 @@ test.describe('which search each surface asks for', () => {
       searches.some((url) => url.includes('church_wide=true')),
       'the picker narrowed itself to the actor scope, which would make a person in another branch unreachable',
     ).toBe(true);
+    // Decision 0299 narrows two pickers and not this one: the new person has no Network
+    // until their sex is chosen.
+    for (const url of searches) {
+      expect(url, 'Add a Person narrowed its search to one Network').not.toContain('network=');
+    }
+  });
+});
+
+/**
+ * The two pickers that search one Network (decision 0299), and the one of the other two
+ * not covered above.
+ *
+ * As above, the request is what is asserted: the API does the filtering, so a mocked
+ * answer looks the same whichever Network was asked for.
+ */
+test.describe('which Network a picker searches (decision 0299)', () => {
+  const MEMBERS = `/cells/${CELL_WITH_MEETINGS.id}/members`;
+  const LEADER_ID = CELL_WITH_MEETINGS.leader.person_id;
+
+  /** The Cell's leader as `GET /people/:id` answers for somebody in scope: a man. */
+  const CELL_LEADER_FULL = {
+    scope: 'FULL',
+    id: LEADER_ID,
+    member_id: CELL_WITH_MEETINGS.leader.member_id,
+    title: null,
+    first_name: 'Teofilo',
+    middle_name: null,
+    last_name: 'Ramos',
+    full_name: CELL_WITH_MEETINGS.leader.full_name,
+    birth_date: null,
+    sex: 'MALE',
+    civil_status: 'MARRIED',
+    mobile_number: null,
+  };
+
+  test('adding a Cell member searches the Men’s Network for a Men’s Cell, and says why', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+    await page.route(`**/api/v1/people/${LEADER_ID}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(CELL_LEADER_FULL),
+      }),
+    );
+    const searches = await recordSearches(page);
+
+    await page.goto(MEMBERS);
+    await page.getByRole('button', { name: 'Add a member' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
+    // The note is what says the leader has been read, so the search below is made with
+    // the Network known rather than racing it.
+    await expect(
+      dialog.getByText(
+        'Showing the Men’s Network only, because this Cell is in the Men’s Network.',
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("Search by name. They must be in the same Network as this Cell's leader."),
+    ).toBeVisible();
+
+    await dialog.getByLabel('Search for a person by name').fill('Marilou');
+    await dialog.getByRole('button', { name: 'Find' }).click();
+
+    await expect
+      .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'Marilou').length, {
+        message: 'the picker never searched',
+      })
+      .toBeGreaterThan(0);
+    // Every search the picker made, whatever else the page may ask the same route.
+    for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'Marilou')) {
+      const params = new URL(url).searchParams;
+      expect(params.get('network')).toBe('MENS');
+      expect(params.get('church_wide')).toBe('true');
+    }
+  });
+
+  test('adding a Cell member stays church-wide, with no note, when the leader cannot be read', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+    await page.route(`**/api/v1/people/${LEADER_ID}`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'No such person.', details: {} },
+        }),
+      }),
+    );
+    const searches = await recordSearches(page);
+    const leaderRead = page.waitForResponse((response) =>
+      response.url().endsWith(`/api/v1/people/${LEADER_ID}`),
+    );
+
+    await page.goto(MEMBERS);
+    // Answered, and refused, before the search is made, so the case measures the fallback
+    // rather than a search sent before the read came back.
+    await leaderRead;
+    await page.getByRole('button', { name: 'Add a member' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
+    await dialog.getByLabel('Search for a person by name').fill('Marilou');
+    await dialog.getByRole('button', { name: 'Find' }).click();
+
+    await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
+    expect(searches.length).toBeGreaterThan(0);
+    for (const url of searches) {
+      expect(url, 'a search was narrowed with no Network read').not.toContain('network=');
+      expect(url).toContain('church_wide=true');
+    }
+    await expect(dialog.getByText(/Network only, because/)).toHaveCount(0);
+  });
+
+  test('naming a new pastoral leader searches the moved person’s Network, and says why', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await mockPastoralPath(page);
+    const searches = await recordSearches(page);
+
+    // `PERSON_IN_SCOPE` is a woman, read in full, so her Network comes from her sex.
+    await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
+    await page.getByRole('button', { name: 'Move to another leader' }).click();
+
+    const dialog = page.getByRole('dialog', {
+      name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
+    });
+    await expect(
+      dialog.getByText(
+        `Showing the Women’s Network only, because ${PERSON_IN_SCOPE.full_name} is in the Women’s Network.`,
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        'Search by name. Whether you may make this move is decided when you confirm it.',
+      ),
+    ).toBeVisible();
+
+    await dialog.getByLabel('Search for a leader by name').fill('an');
+    await dialog.getByRole('button', { name: 'Find' }).click();
+
+    await expect
+      .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'an').length, {
+        message: 'the picker never searched',
+      })
+      .toBeGreaterThan(0);
+    for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'an')) {
+      expect(new URL(url).searchParams.get('network')).toBe('WOMENS');
+    }
+  });
+
+  test('naming who ran a Cell meeting searches the whole church, in both Networks', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockMeetingRoster(page);
+    const searches = await recordSearches(page);
+
+    await page.goto(`/cells/${CELL_WITH_MEETINGS.id}/meetings/2026-06-27`);
+    await page.getByRole('radio', { name: 'Someone else' }).check();
+    await page.getByLabel('Search for a person by name').fill('Marilou');
+    await page.getByRole('button', { name: 'Find' }).click();
+
+    await expect(page.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
+    expect(searches.length).toBeGreaterThan(0);
+    for (const url of searches) {
+      expect(url, 'who ran the meeting was narrowed to one Network').not.toContain('network=');
+    }
+    await expect(page.getByText(/Network only, because/)).toHaveCount(0);
   });
 });
 
