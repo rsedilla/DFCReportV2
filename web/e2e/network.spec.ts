@@ -93,7 +93,7 @@ test.describe('the Network screen’s figures', () => {
       .filter({ has: page.getByRole('term').filter({ hasText: 'Still to record' }) });
     await expect(cards.getByRole('term')).toHaveText([
       'Direct disciples',
-      'People beneath',
+      'Everyone under you',
       'Cell Leaders beneath',
       'Still to record',
     ]);
@@ -104,10 +104,17 @@ test.describe('the Network screen’s figures', () => {
       /^4\s*DCC\s*·\s*1\s*Cell$/,
     ]);
 
-    for (const old of ['Direct reports', 'Whole branch', 'Cell leaders in branch']) {
+    for (const old of ['Direct reports', 'Whole branch', 'Cell leaders in branch', 'People beneath']) {
       await expect(page.getByRole('term').filter({ hasText: old })).toHaveCount(0);
     }
     await expect(page.getByText('DCC records · Cell meetings')).toHaveCount(0);
+  });
+
+  test('names the person it is looking at, on somebody else’s branch', async ({ page }) => {
+    await signedInReader(page);
+    await page.goto('/network?focus=3f1b7c6e-0000-4000-8000-000000000701');
+
+    await expect(page.getByRole('term').filter({ hasText: 'Everyone under Consuelo Bautista' })).toBeVisible();
   });
 });
 
