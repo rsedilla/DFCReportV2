@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { AccountsRepository } from '../auth/accounts.repository';
 import {
   AuthorizationService,
   type Actor,
@@ -106,6 +107,7 @@ export class DccCoverageService {
     private readonly people: PeopleReadService,
     private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
+    private readonly accounts: AccountsRepository,
   ) {}
 
   /**
@@ -531,7 +533,7 @@ export class DccCoverageService {
       (id) => covered === null || covered.has(canonicalId(id)),
     );
 
-    const owed: { event: EventRow; leaderId: string }[] = [];
+    const owed: { event: EventRow; leaderId: string; byActor: boolean }[] = [];
 
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
@@ -543,9 +545,10 @@ export class DccCoverageService {
       }
 
       const { owing } = await this.obligations(this.db, event, branch);
+      const byActor = await this.submittedByActor(event, [...owing], actor.personId);
 
       for (const leaderId of owing) {
-        owed.push({ event, leaderId });
+        owed.push({ event, leaderId, byActor: byActor.has(canonicalId(leaderId)) });
       }
     }
 
@@ -554,12 +557,13 @@ export class DccCoverageService {
     ]);
     const me = canonicalId(actor.personId);
 
-    const lines = owed.map(({ event, leaderId }) => {
+    const lines = owed.map(({ event, leaderId, byActor }) => {
       const identity = identities.get(leaderId);
 
       return {
         event,
         leaderId,
+        byActor,
         memberId: identity?.memberId ?? '',
         fullName: identity?.fullName ?? '',
         lastName: identity?.lastName ?? '',
@@ -588,9 +592,79 @@ export class DccCoverageService {
           member_id: line.memberId,
           full_name: line.fullName,
           is_actor: canonicalId(line.leaderId) === me,
+          // The reader files this leader's records themselves (section 9): the leader holds
+          // no account and the reader is the nearest upline who does, so the leader's
+          // people are on the reader's own checklist for the Sunday.
+          recorded_by_you: line.byActor,
         },
       })),
     };
+  }
+
+  /**
+   * Which of these leaders' records the actor files at this event (section 9): the actor
+   * themself, and a leader holding no account whose nearest upline holding one is the
+   * actor. The walk up is one statement per level, and stops at the first account holder.
+   */
+  private async submittedByActor(
+    event: EventRow,
+    leaderIds: readonly string[],
+    actorPersonId: string,
+  ): Promise<Set<string>> {
+    const me = canonicalId(actorPersonId);
+    const result = new Set<string>();
+    const holders = new Set(
+      [...(await this.accounts.personsHoldingAccounts(this.db, leaderIds))].map((id) =>
+        canonicalId(id),
+      ),
+    );
+
+    // Each leader still being walked, and the person whose leader is asked next.
+    let pending = new Map<string, string>();
+    for (const leaderId of leaderIds) {
+      const key = canonicalId(leaderId);
+      if (key === me) {
+        result.add(key);
+      } else if (!holders.has(key)) {
+        pending.set(key, key);
+      }
+    }
+
+    // Bounded, as every walk here is, so a cycle in the data cannot hang the request.
+    for (let depth = 0; pending.size > 0 && depth < 64; depth += 1) {
+      const nodes = [...new Set(pending.values())];
+      const assignments = await this.hierarchy.assignmentsAsOf(this.db, nodes, event.at);
+      const parentOf = new Map(
+        [...assignments].map(([personId, row]) => [
+          canonicalId(personId),
+          row.leaderId === null ? null : canonicalId(row.leaderId),
+        ]),
+      );
+      const parents = [
+        ...new Set([...parentOf.values()].filter((id): id is string => id !== null)),
+      ];
+      const parentHolders = new Set(
+        [...(await this.accounts.personsHoldingAccounts(this.db, parents))].map((id) =>
+          canonicalId(id),
+        ),
+      );
+
+      const next = new Map<string, string>();
+      for (const [leader, node] of pending) {
+        const parent = parentOf.get(node) ?? null;
+        if (parent === null) {
+          continue;
+        }
+        if (parent === me) {
+          result.add(leader);
+        } else if (!parentHolders.has(parent)) {
+          next.set(leader, parent);
+        }
+      }
+      pending = next;
+    }
+
+    return result;
   }
 
   /**
@@ -598,9 +672,12 @@ export class DccCoverageService {
    * month, read only (decision 0301).
    *
    * **The people whose record this leader owes**: their direct disciples at each Sunday's
-   * instant, which is what an entry of {@link owedInBranch} counts. Not the leader's
-   * recording roster, which also carries people rolled up from leaders without an account;
-   * those belong to their own leader's obligation and appear on that leader's checklist.
+   * instant. Not the leader's recording roster, which also carries people rolled up from
+   * leaders without an account; those appear on their own leader's checklist.
+   *
+   * **Only people the reader may see now** (`dcc.view_subtree`, sections 7 and 8). A
+   * disciple since moved out of the reader's scope is left off, as their own record page
+   * would refuse the reader; whether a past month may show them is recorded as open.
    *
    * **Archived and merged people are left off**, as the roster leaves them off, because
    * nobody is asked to mark them.
@@ -608,7 +685,11 @@ export class DccCoverageService {
    * **Each mark is the person's live record for that Sunday, whoever filed it**, the same
    * fact the roster and the person page already show (decisions 0194 and 0247).
    */
-  async leaderChecklist(leaderId: string, month: string): Promise<Record<string, unknown>> {
+  async leaderChecklist(
+    actor: Actor,
+    leaderId: string,
+    month: string,
+  ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(month);
     assertReportingMonth(reportingMonth);
 
@@ -643,9 +724,19 @@ export class DccCoverageService {
 
     const everyone = [...new Set([...disciplesByEvent.values()].flat())];
     const identities = await this.people.forDecisionsWithin(this.db, everyone);
+    const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    const visible =
+      membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : new Set([...membership.personIds].map((id) => canonicalId(id)));
     const listed = everyone.filter((personId) => {
       const identity = identities.get(personId);
-      return identity !== undefined && !identity.isArchived && identity.mergedIntoId === null;
+      return (
+        identity !== undefined &&
+        !identity.isArchived &&
+        identity.mergedIntoId === null &&
+        (visible === null || visible.has(canonicalId(personId)))
+      );
     });
 
     const records =

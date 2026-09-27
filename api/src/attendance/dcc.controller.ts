@@ -212,7 +212,8 @@ export class DccController {
   async leaderChecklist(
     @Param('id') leaderId: string,
     @Query() query: DccEventsQueryDto,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.coverage.leaderChecklist(leaderId, query.month);
+    return this.coverage.leaderChecklist(actor, leaderId, query.month);
   }
 }

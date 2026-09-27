@@ -18,13 +18,15 @@ through their checklist is not listed.
 the leaders `dcc.view_subtree` covers, as for Cell meetings (decision 0258). A Whole Church
 grant does not make it the whole church.
 
-**3. The reader's own row carries Record. Another leader's row carries See checklist**,
-which opens that leader's checklist for the month below the list, read only
+**3. The reader's own row carries Record**, and so does the row of a leader holding no
+account whose records fall to the reader (section 9), since that leader's people are on the
+reader's own checklist. **Any other leader's row carries See checklist**, which opens that
+leader's checklist for the month below the list, read only
 (`GET /api/v1/dcc/leaders/{id}/checklist?month=`, `dcc.view_subtree` against the leader):
-the people whose record they owe, and each Sunday's mark. **Such a row does not resolve
-itself from here**, which is the one exception to section 19's "each entry carries the
-action that resolves it"; recording on another leader's behalf is the next step, and until
-it is built the row shows who owes and what is missing.
+the people whose record they owe that the reader may see now, and each Sunday's mark.
+**Such a row does not resolve itself from here**, an exception to section 19's "each entry
+carries the action that resolves it"; recording on another leader's behalf is the next
+step.
 
 **4. The DCC count on the Record page follows Whose**, as the Cell count does. The reader's
 own checklist grid stays under the list until a leader's checklist is opened.

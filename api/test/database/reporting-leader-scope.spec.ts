@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { AccountsRepository } from '../../src/auth/accounts.repository';
 import { sql } from 'kysely';
 
 import { AppConfigModule } from '../../src/config/config.module';
@@ -82,6 +83,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
         CellFiguresService,
         DccFiguresService,
         DccCoverageService,
+        AccountsRepository,
         CellsReadService,
         AuthorizationService,
         PeopleReadService,

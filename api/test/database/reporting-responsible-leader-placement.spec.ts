@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { AccountsRepository } from '../../src/auth/accounts.repository';
 import { sql } from 'kysely';
 
 import { AppConfigModule } from '../../src/config/config.module';
@@ -110,6 +111,7 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
         CellFiguresService,
         DccFiguresService,
         DccCoverageService,
+        AccountsRepository,
         CellsReadService,
         AuthorizationService,
         PeopleReadService,

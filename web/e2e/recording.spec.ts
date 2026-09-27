@@ -972,8 +972,6 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(
       awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000021' }).getByRole('cell').nth(2),
     ).toHaveText('Ana Lim');
-    // DCC stays the reader's own checklist; the branch view adds no Sunday rows (decision 0258).
-    await expect(page.getByText(/beneath you still owe/)).toHaveCount(0);
   });
 
   test('rows say how long a meeting has waited, in words', async ({ page }) => {
@@ -1071,6 +1069,8 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard');
     await chooseDcc(page);
+    // Two choices in quick succession can race in the address (a checklist row records it).
+    await expect(page).toHaveURL(/kind=dcc/);
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
     const list = page.getByRole('table', { name: 'DCC records still owed in your branch' });

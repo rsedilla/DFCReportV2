@@ -507,6 +507,7 @@ export async function mockDccOwed(page: Page): Promise<void> {
               member_id: 'M-000711',
               full_name: 'Carlo Reyes',
               is_actor: false,
+              recorded_by_you: false,
             },
           },
           {
@@ -517,6 +518,7 @@ export async function mockDccOwed(page: Page): Promise<void> {
               member_id: 'M-000700',
               full_name: 'The reader',
               is_actor: true,
+              recorded_by_you: true,
             },
           },
         ],

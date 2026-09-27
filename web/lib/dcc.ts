@@ -199,7 +199,14 @@ export async function getCoverageGaps(
 export interface DccOwed {
   event_id: string;
   event_date: string;
-  leader: { person_id: string; member_id: string; full_name: string; is_actor: boolean };
+  leader: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+    is_actor: boolean;
+    /** The reader files this leader's records: the leader has no account (section 9). */
+    recorded_by_you: boolean;
+  };
 }
 
 /** The Record page's People I oversee view for DCC: one request for the month. */

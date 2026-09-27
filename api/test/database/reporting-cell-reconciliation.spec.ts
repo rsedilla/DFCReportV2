@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AccountsRepository } from '../../src/auth/accounts.repository';
 
 import { Test } from '@nestjs/testing';
 import { sql } from 'kysely';
@@ -137,6 +138,7 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
         CellFiguresService,
         DccFiguresService,
         DccCoverageService,
+        AccountsRepository,
         CellsReadService,
         AuthorizationService,
         PeopleReadService,

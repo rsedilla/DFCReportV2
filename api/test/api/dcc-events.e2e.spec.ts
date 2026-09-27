@@ -675,6 +675,51 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     ]);
   });
 
+  it('marks a leader without an account whose records fall to the actor as recorded by them', async () => {
+    // Nathan holds no account, so his disciples' records fall to Manuel, the nearest upline
+    // who does (section 9). Mark holds one, so his are his own.
+    const olive = await createPerson(db, { firstName: 'Olive', network: 'MENS' });
+    await assignTo(db, olive.id, nathan.id);
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await owed(manuelAccount, monthOf(sunday));
+
+    const rows = (
+      response.body.data as {
+        event_id: string;
+        leader: { person_id: string; recorded_by_you: boolean };
+      }[]
+    ).filter((row) => row.event_id === eventId);
+    const byLeader = new Map(rows.map((row) => [row.leader.person_id, row.leader.recorded_by_you]));
+    expect(byLeader.get(nathan.id)).toBe(true);
+    expect(byLeader.get(mark.id)).toBe(false);
+    expect(byLeader.get(manuel.id)).toBe(true);
+  });
+
+  it('leaves off a disciple who has since left the actor’s scope', async () => {
+    const sunday = await recentSunday();
+    await createEvent(sunday);
+
+    // Timothy was Mark's on that Sunday and is Raymond's now, above Manuel.
+    const moved = new Date();
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: moved })
+      .where('person_id', '=', timothy.id)
+      .where('ended_at', 'is', null)
+      .execute();
+    await db
+      .insertInto('pastoral_assignments')
+      .values({ person_id: timothy.id, leader_id: raymond.id, started_at: moved })
+      .execute();
+
+    const response = await checklist(manuelAccount, mark.id, monthOf(sunday));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
   it('refuses a leader outside the actor’s scope, and an actor with no capability', async () => {
     const sunday = await recentSunday();
     await createEvent(sunday);

@@ -1308,7 +1308,7 @@ function DccBranchQueue({
   });
 
   const action = (row: OwedRow) =>
-    row.leader.is_actor ? (
+    row.leader.is_actor || row.leader.recorded_by_you ? (
       <Link href={`/dcc/${row.event_id}`} className={buttonClasses('primary')}>
         Record
         <span className="sr-only"> DCC, {dayLabel(row.event_date)}</span>
