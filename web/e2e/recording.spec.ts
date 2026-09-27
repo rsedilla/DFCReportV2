@@ -1609,3 +1609,67 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     );
   });
 });
+
+/**
+ * A DCC checklist longer than one page (fifty people). The Record page counted the first
+ * page alone, so a checklist whose first fifty were marked read as done while somebody
+ * past the fiftieth was not.
+ */
+test.describe('a DCC checklist longer than one page', () => {
+  test('counts every page, so somebody past the fiftieth still makes the Sunday outstanding', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, {});
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+
+    const line = (n: number, marked: boolean) => ({
+      person_id: `3f1b7c6e-0000-4000-8000-0000000071${String(n).padStart(2, '0')}`,
+      member_id: `M-0071${String(n).padStart(2, '0')}`,
+      full_name: `Person ${String(n).padStart(2, '0')}`,
+      responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
+      record: marked ? { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' } : null,
+    });
+    const event = {
+      id: '3f1b7c6e-0000-4000-8000-000000000501',
+      event_date: '2026-06-07',
+      recordable: true,
+      not_recordable_reason: null,
+      removed: false,
+      removal_reason: null,
+      coverage: null,
+    };
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) => {
+      const second = new URL(route.request().url()).searchParams.get('cursor') === 'page-two';
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          second
+            ? { event, data: [line(51, false)], next_cursor: null }
+            : {
+                event,
+                data: Array.from({ length: 50 }, (_, index) => line(index + 1, true)),
+                next_cursor: 'page-two',
+              },
+        ),
+      });
+    });
+
+    await page.goto('/dashboard');
+    await chooseDcc(page);
+
+    // Both recordable Sundays share the mocked checklist: fifty marked and one not.
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ }),
+    ).toBeVisible();
+    await expect(page.getByText('DCC · 50 of 51 marked').first()).toBeVisible();
+  });
+});
