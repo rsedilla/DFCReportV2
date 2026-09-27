@@ -37,10 +37,9 @@ export function Providers({ children }: { children: ReactNode }) {
                 return false;
               }
               // A halted session is a decision, not a transient failure. It is
-              // raised without a network call and retrying cannot change it —
-              // only `resumeSession`, wired to a control the person presses,
-              // can. Retrying here would also make the halt look transient in
-              // the interface, which is the opposite of what it is.
+              // raised without a network call and retrying cannot change it: only
+              // signing in again ends it. Retrying here would also make the halt
+              // look transient in the interface, which is the opposite of what it is.
               if (error instanceof SessionHaltedError) {
                 return false;
               }

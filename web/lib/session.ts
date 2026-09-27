@@ -128,22 +128,13 @@ let inFlight: Promise<string> | null = null;
  * — so presenting it again is the section 6 reuse signal, and the account is
  * revoked on every device.
  *
- * So a transport failure does not discard the credential (section 23 makes an
- * unreliable connection the expected case, and discarding a live token because a
- * train went into a tunnel signs a leader out of a session the server never
- * ended) and it does not re-present it either. The client stops, and says so.
- * Only a deliberate act by the person — `resumeSession`, wired to a *Try again*
- * control — presents it a second time, which makes the risk theirs to take
- * knowingly rather than one this client runs on their behalf three times a page
- * load.
- *
- * **What ought to happen instead is not settled.** Section 6 defines rotation,
- * the reuse signal, and the simultaneous exemption, and says nothing about a
- * presentation whose outcome is unknown. The two available answers — discard a
- * possibly-live credential, or keep it and risk a sequential replay — have
- * opposite costs, one bounded at one device and one at the whole account. This
- * is the conservative interim stance recorded in `CLAUDE.md` under *Open —
- * awaiting a ruling*, not an answer to that question.
+ * So a transport failure does not discard the credential at once (section 23 makes
+ * an unreliable connection the expected case). Section 6 serves one re-presentation
+ * of a rotated token whose replacement was never used, inside a window (decision
+ * 0128), so `refreshWithinLock` presents it once more when the connection is back.
+ * If that also has no conclusive answer the client stops here and never presents the
+ * token again: a second re-presentation is the reuse signal, which ends every session
+ * on the account. The person signs in afresh, which ends nothing on another device.
  */
 let haltedInMemory: string | null = null;
 
@@ -154,9 +145,8 @@ let haltedInMemory: string | null = null;
  * the lock existed. It is a narrower guarantee and is not silently equivalent:
  * where `navigator.locks` is missing, two tabs can still race, and section 6
  * requires serialization across them. Nothing this promise chain does closes
- * that; what closes it is the server-side grace window proposed under *Open —
- * awaiting a ruling* in `CLAUDE.md`, after which a cross-tab race carries the
- * lost-response signature rather than the theft one.
+ * that; what closes it is section 6's retry window (decision 0128), under which a
+ * cross-tab race carries the lost-response signature rather than the theft one.
  */
 let fallbackChain: Promise<unknown> = Promise.resolve();
 
@@ -284,9 +274,7 @@ function writeHaltedToken(token: string | null): void {
     }
   } catch {
     // The in-memory copy above is then the whole of the guard, which is the
-    // behaviour this replaced. It is weaker and it is not silently so: a store
-    // that refuses this write also refused the token's, so the session does not
-    // survive a reload either and there is nothing left to guard.
+    // behaviour this replaced, and it does not survive a reload.
   }
 }
 
@@ -313,16 +301,11 @@ export function isHalted(): boolean {
   return halted !== null && halted === currentRefreshToken();
 }
 
-/** Permit one further presentation of a token whose outcome is unknown. */
-export function resumeSession(): void {
-  writeHaltedToken(null);
-  announce();
-}
-
 function adopt(tokens: SessionTokens): string {
   accessToken = tokens.access_token;
   writeStoredRefreshToken(tokens.refresh_token);
   writeHaltedToken(null);
+  writeSent(null);
   announce();
   return tokens.access_token;
 }
@@ -332,8 +315,61 @@ export function forgetSession(): void {
   accessToken = null;
   inFlight = null;
   writeHaltedToken(null);
+  writeSent(null);
   writeStoredRefreshToken(null);
   announce();
+}
+
+/**
+ * How many times the stored token has been sent without a known outcome, and when
+ * the first of them began. Stored beside the token for the reason `HALT_STORAGE_KEY`
+ * is: a count held in memory is lost with the page, while the token it counts is not.
+ */
+interface Sent {
+  token: string;
+  since: number;
+  count: number;
+}
+
+const SENT_STORAGE_KEY = 'dfc.sent_token';
+
+let sentInMemory: Sent | null = null;
+
+function readSent(): Sent | null {
+  if (typeof window === 'undefined') {
+    return sentInMemory;
+  }
+  try {
+    const raw = window.localStorage.getItem(SENT_STORAGE_KEY);
+    if (raw === null) {
+      return sentInMemory;
+    }
+    const parsed = JSON.parse(raw) as Partial<Sent>;
+    return typeof parsed.token === 'string' &&
+      typeof parsed.since === 'number' &&
+      typeof parsed.count === 'number'
+      ? { token: parsed.token, since: parsed.since, count: parsed.count }
+      : sentInMemory;
+  } catch {
+    return sentInMemory;
+  }
+}
+
+function writeSent(value: Sent | null): void {
+  sentInMemory = value;
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (value === null) {
+      window.localStorage.removeItem(SENT_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(SENT_STORAGE_KEY, JSON.stringify(value));
+    }
+  } catch {
+    // Held in memory only, and it does not survive a reload.
+  }
 }
 
 export async function signIn(
@@ -352,7 +388,7 @@ export async function signIn(
 /** Raised locally, without a network call, where the halt blocks one. */
 export class SessionHaltedError extends Error {
   constructor() {
-    super('The last attempt did not complete, so this session is not being retried on its own.');
+    super('Your connection dropped while keeping you signed in. Sign in again to carry on.');
     this.name = 'SessionHaltedError';
   }
 }
@@ -374,13 +410,28 @@ async function refreshWithinLock(): Promise<string> {
     throw new SessionHaltedError();
   }
 
+  // **A page that ended mid-attempt has already sent this token.** A reload, a
+  // closed tab or a browser discarding the page leaves no memory of it, so every
+  // presentation is recorded before it is sent. Found in one it goes straight to the
+  // one retry section 6 serves, and past that, or too late for it, it stops.
+  const sent = readSent();
+  if (sent !== null && sent.token === stored) {
+    if (sent.count >= 2 || Date.now() >= sent.since + RETRY_START_LIMIT_MS) {
+      return halt(stored, new SessionHaltedError());
+    }
+    // A page reopened offline waits for the connection rather than spending its one
+    // retry on a certain failure; online it retries at once.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await waitForSignal(sent.since + RETRY_START_LIMIT_MS);
+    }
+    return retry(stored, sent.since);
+  }
+
+  const firstAttemptAt = Date.now();
+  writeSent({ token: stored, since: firstAttemptAt, count: 1 });
+
   try {
-    const tokens = await apiRequest<SessionTokens>('/api/v1/auth/refresh', {
-      method: 'POST',
-      body: { refresh_token: stored },
-      signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
-    });
-    return adopt(tokens);
+    return adopt(await presentRefreshToken(stored));
   } catch (cause) {
     if (cause instanceof ApiRequestError) {
       // The server answered, so the outcome is known either way.
@@ -398,17 +449,105 @@ async function refreshWithinLock(): Promise<string> {
       // spending the token, so it is kept.
       if (cause.status === 401 || cause.code === 'VALIDATION_FAILED') {
         forgetSession();
+      } else {
+        // Answered and not spent, so nothing about this presentation is owed.
+        writeSent(null);
       }
       throw cause;
     }
 
-    // No answer: a transport failure, or the ten-second bound above. The token
-    // may or may not have been spent, so it is neither discarded nor presented
-    // again without a deliberate act. See `HALT_STORAGE_KEY`.
-    writeHaltedToken(stored);
-    announce();
-    throw cause;
+    // No answer: a transport failure, or the ten-second bound above. The token may
+    // or may not have been spent. Section 6 serves **one** re-presentation of a
+    // rotated token whose replacement was never used, inside a window measured from
+    // the rotation (decision 0128), so it is presented exactly once more, once the
+    // connection is back, and never again after that: if the retry was processed
+    // and its answer lost too, the replacement it rotated is used, and a further
+    // presentation is the reuse signal that ends every session on the account.
+    await waitForSignal(firstAttemptAt + RETRY_START_LIMIT_MS);
+    return retry(stored, firstAttemptAt);
   }
+}
+
+/** The one re-presentation section 6 serves, recorded before it is sent. */
+async function retry(stored: string, firstAttemptAt: number): Promise<string> {
+  // Checked here rather than only before the wait: a timer or an `online` event fires
+  // late when a phone suspends the page, and a retry past the window is reuse.
+  if (Date.now() >= firstAttemptAt + RETRY_START_LIMIT_MS) {
+    return halt(stored, new SessionHaltedError());
+  }
+  // Read again, because a browser without Web Locks lets another tab reach this
+  // point during the pause. Not atomic across tabs, which is what the lock is for.
+  const sent = readSent();
+  if (sent !== null && sent.token === stored && sent.count >= 2) {
+    return halt(stored, new SessionHaltedError());
+  }
+  writeSent({ token: stored, since: firstAttemptAt, count: 2 });
+
+  try {
+    return adopt(await presentRefreshToken(stored));
+  } catch (cause) {
+    if (
+      cause instanceof ApiRequestError &&
+      (cause.status === 401 || cause.code === 'VALIDATION_FAILED')
+    ) {
+      forgetSession();
+      throw cause;
+    }
+
+    // Anything else leaves the token's fate unknown, and it is not presented again:
+    // the person signs in afresh, which ends nothing on another device.
+    return halt(stored, cause);
+  }
+}
+
+function halt(stored: string, cause: unknown): never {
+  writeHaltedToken(stored);
+  announce();
+  throw cause;
+}
+
+function presentRefreshToken(token: string): Promise<SessionTokens> {
+  return apiRequest<SessionTokens>('/api/v1/auth/refresh', {
+    method: 'POST',
+    body: { refresh_token: token },
+    signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
+  });
+}
+
+/**
+ * The latest the one retry may start, measured from the first attempt.
+ *
+ * Section 6's window is sixty seconds from the **rotation** (decision 0128), and the
+ * rotation cannot precede the first attempt, so a retry starting by forty seconds
+ * leaves a margin for it to reach the server inside the window.
+ */
+const RETRY_START_LIMIT_MS = 40_000;
+
+/** A short pause before the retry when the device reports it is online. */
+const RETRY_PAUSE_MS = 3_000;
+
+/**
+ * Wait until the device reports a connection again, or until `deadline`, whichever
+ * is first. Online already, it waits `RETRY_PAUSE_MS`, bounded by the deadline too.
+ */
+function waitForSignal(deadline: number): Promise<void> {
+  const remaining = Math.max(0, deadline - Date.now());
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, online ? Math.min(RETRY_PAUSE_MS, remaining) : remaining);
+    if (!online && typeof window !== 'undefined') {
+      window.addEventListener('online', done);
+    }
+
+    function done(): void {
+      clearTimeout(timer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', done);
+      }
+      resolve();
+    }
+  });
 }
 
 /**
@@ -489,19 +628,6 @@ export async function signOut(): Promise<void> {
         return;
       }
 
-      // **A halt does not block signing out, and that is a decision rather than
-      // an oversight.** Elsewhere the halt exists because re-presenting a token
-      // whose outcome is unknown risks the reuse signal, which ends every session
-      // on the account. Here the person has just asked to end their session, so
-      // the worst case of the risk is a larger version of what they requested —
-      // and the alternative is a *Sign out* control that silently revokes
-      // nothing and abandons a live thirty-day token on the device.
-      //
-      // `POST /auth/logout` cannot raise the signal itself: `revokeRefreshToken`
-      // carries `revoked_at is null` and never inspects `replaced_by_id`. The
-      // rotation below can, and that is the risk being accepted.
-      writeHaltedToken(null);
-
       // Settled inside the lock, so nothing rotates underneath what is read
       // next. `currentRefreshToken()` falls back to the in-memory mirror for a
       // token storage refused, so the token a rotation just issued is nameable
@@ -550,8 +676,9 @@ function postLogout(token: string, accessTokenForCall: string): Promise<void> {
  * This one presents no refresh token of its own: the server resolves the account
  * from the access token and revokes all of them, so there is no stale-token
  * hazard of the kind `signOut` has. It still needs *an* access token, which on a
- * page that has not yet obtained one means a rotation — so, like `signOut`, it
- * clears a halt first rather than being a control that cannot do what it says.
+ * page that has not yet obtained one means a rotation — so it clears a halt and the
+ * record of what was sent first, rather than being a control that cannot do what it
+ * says.
  *
  * The risk that clearing accepts is account-wide revocation, which is what this
  * function does on purpose.
@@ -559,6 +686,7 @@ function postLogout(token: string, accessTokenForCall: string): Promise<void> {
 export async function signOutEverywhere(): Promise<void> {
   try {
     writeHaltedToken(null);
+    writeSent(null);
     await authenticatedRequest<void>('/api/v1/auth/logout-all', {
       method: 'POST',
       idempotencyKey: crypto.randomUUID(),
