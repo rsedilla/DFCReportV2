@@ -148,6 +148,9 @@ function DccChecklist() {
       setCorrectionReason('');
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster', params.id] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-events'] });
+      // The Record page's branch view and a leader's checklist read these records too.
+      await queryClient.invalidateQueries({ queryKey: ['dcc-owed'] });
+      await queryClient.invalidateQueries({ queryKey: ['dcc-leader-checklist'] });
     },
   });
 

@@ -20,6 +20,7 @@ import {
   mockCellsAtScale,
   mockClosedDccRoster,
   mockDccEvents,
+  mockDccOwed,
   mockDccReport,
   mockDccRoster,
   mockMeetingRoster,
@@ -1058,8 +1059,41 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
       'Not recorded yet',
     );
 
+  });
+
+  // Decision 0301 reverses decision 0258's point 4: People I oversee lists DCC too.
+  test('People I oversee lists who still owes DCC, and opens a leader’s checklist', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    await mockDccOwed(page);
+
+    await page.goto('/dashboard');
+    await chooseDcc(page);
     await page.getByRole('radio', { name: 'People I oversee' }).check();
+
+    const list = page.getByRole('table', { name: 'DCC records still owed in your branch' });
+    await expect(list.getByRole('row', { name: /Carlo Reyes/ })).toContainText('See checklist');
+    await expect(list.getByRole('row', { name: /You/ }).getByRole('link', { name: /^Record/ })).toHaveAttribute(
+      'href',
+      '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    );
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ }),
+    ).toBeVisible();
+
+    // The reader's own grid stays until a leader is chosen.
+    await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
+
+    await list.getByRole('button', { name: /See checklist/ }).click();
+    const theirs = page.getByRole('table', { name: /Carlo Reyes’s DCC checklist by Sunday/ });
+    await expect(theirs.getByRole('row', { name: /Benito Lagman/ })).toContainText('Not recorded yet');
+    await expect(theirs.getByRole('row', { name: /Danilo Suarez/ })).toContainText('Present');
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Back to your checklist' }).click();
+    await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
   });
 });
 
@@ -1086,6 +1120,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockDccOwed(page);
   }
 
   test('keeps the list, the half and whose in the address, so Back returns to each', async ({
@@ -1114,7 +1149,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeChecked();
 
     await page.goBack();
-    await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'My own checklist' })).toBeChecked();
     await page.goBack();
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Cell Group/ }),

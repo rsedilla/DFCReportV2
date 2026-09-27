@@ -186,4 +186,33 @@ export class DccController {
   ): Promise<Record<string, unknown>> {
     return this.personRecords.forPerson(personId, { limit: query.limit, cursor: query.cursor });
   }
+
+  /**
+   * `GET /api/v1/dcc/owed?month=YYYY-MM-01` — the DCC records still owed in the actor's
+   * branch, per Sunday and leader (decision 0301). Under `dcc.view_subtree` against the
+   * actor, as the coverage gaps it is built from; the service keeps it to the branch.
+   */
+  @Get('owed')
+  @RequiresCapability(Capability.DccViewSubtree, { kind: 'actor' })
+  async owed(
+    @Query() query: DccEventsQueryDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.coverage.owedInBranch(actor, query.month);
+  }
+
+  /**
+   * `GET /api/v1/dcc/leaders/{id}/checklist?month=YYYY-MM-01` — one leader's DCC checklist
+   * for the month, read only (decision 0301). `dcc.view_subtree` against the leader, so the
+   * guard refuses a leader outside the actor's scope before a row is read; everybody on the
+   * checklist is beneath that leader.
+   */
+  @Get('leaders/:id/checklist')
+  @RequiresCapability(Capability.DccViewSubtree, { kind: 'person', from: 'params.id' })
+  async leaderChecklist(
+    @Param('id') leaderId: string,
+    @Query() query: DccEventsQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.coverage.leaderChecklist(leaderId, query.month);
+  }
 }

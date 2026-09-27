@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-28, the trigger being decision 0300: of 299 files, 298 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0300 each moved the first two and
+2026-09-28, the trigger being decision 0301: of 300 files, 299 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0301 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-28 and triggered by 0300, and was left stale by 0301 the same day. The one before that was dated
 2026-09-27 and triggered by 0299, and was left stale by 0300 the next day. The one before that was dated
 2026-09-27 and triggered by 0298, and was left stale by 0299 the same day. The one before that was dated
 2026-09-26 and triggered by 0297, and was left stale by 0298 the next day. The one before that was dated
@@ -641,6 +642,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-27 — [Still to record links to Filed reports](docs/decisions/0298-still-to-record-links-to-filed-reports.md)
 - 2026-09-27 — [Two pickers search one Network](docs/decisions/0299-two-pickers-search-one-network.md)
 - 2026-09-28 — [An account's address is corrected before it is activated](docs/decisions/0300-an-address-is-corrected-before-activation.md)
+- 2026-09-28 — [The branch view lists DCC too](docs/decisions/0301-the-branch-view-lists-dcc-too.md)
 
 ### Open — awaiting a ruling
 

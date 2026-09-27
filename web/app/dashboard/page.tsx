@@ -23,7 +23,15 @@ import {
   peopleWithoutACell,
   type AwaitingMeetings,
 } from '@/lib/cells';
-import { getDccRoster, listDccEvents, type DccEvent, type DccRoster } from '@/lib/dcc';
+import {
+  getDccOwed,
+  getDccRoster,
+  getLeaderChecklist,
+  listDccEvents,
+  type DccEvent,
+  type DccOwed,
+  type DccRoster,
+} from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
@@ -195,6 +203,16 @@ function Dashboard() {
     setLastWhose(whoseInAddress);
     setWhose(whoseInAddress);
   }
+  const branchView = whose === 'branch';
+
+  // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
+  // when the list or the view changes, so a list switched away from does not come back open.
+  const [chosenLeader, setChosenLeader] = useState<ChosenLeader | null>(null);
+  const [chosenFor, setChosenFor] = useState(`${filter}|${whose}`);
+  if (chosenFor !== `${filter}|${whose}`) {
+    setChosenFor(`${filter}|${whose}`);
+    setChosenLeader(null);
+  }
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -305,6 +323,29 @@ function Dashboard() {
       queryFn: ({ signal }: { signal: AbortSignal }) => getDccRoster(event.id, signal),
     })),
   });
+
+  // **The branch's DCC records still owed** (decision 0301): one request per open month,
+  // read only while People I oversee is chosen. A closed month owes nothing and answers
+  // empty, so last month is asked for in the close week alone.
+  const owedNow = useQuery({
+    queryKey: ['dcc-owed', month],
+    queryFn: ({ signal }) => getDccOwed(month, signal),
+    enabled: branchView,
+  });
+  const owedPrevious = useQuery({
+    queryKey: ['dcc-owed', previousMonth],
+    queryFn: ({ signal }) => getDccOwed(previousMonth, signal),
+    enabled: branchView && inCloseWeek,
+  });
+  const owedRows: OwedRow[] = [
+    ...(owedPrevious.data?.data ?? []).map((row) => ({ ...row, month: previousMonth })),
+    ...(owedNow.data?.data ?? []).map((row) => ({ ...row, month })),
+  ];
+  const owedPending =
+    branchView && (owedNow.isPending || (inCloseWeek && owedPrevious.isPending));
+  const owedFailure = branchView
+    ? [owedNow, owedPrevious].find((query) => query.isError)
+    : undefined;
 
   /**
    * The scope the figures are read at, and why it is not always the actor.
@@ -417,6 +458,8 @@ function Dashboard() {
         ? describeFailure(checklistFailed.error)
         : previousFailed
           ? describeFailure(previousFailed.error)
+          : owedFailure
+            ? describeFailure(owedFailure.error)
           : scoped.isError
               ? describeFailure(scoped.error)
               : scopedClosed.isError
@@ -436,11 +479,19 @@ function Dashboard() {
   // The tab counts. A list read fifty at a time says "50+" rather than a figure it has
   // not read; section 22 returns no total to ask for instead.
   const behindMore = scoped.data?.next_cursor != null || scopedClosed.data?.next_cursor != null;
+  // The DCC count follows Whose, as the Cell count does: the branch's owed records, or the
+  // reader's own Sundays with somebody unmarked.
+  const dccCount = branchView
+    ? owedRows.length
+    : queue.filter((item) => item.kind === 'dcc').length;
   const tabs: readonly { key: RecordTab; label: string; count: string | null }[] = [
     {
       key: 'awaiting',
       label: 'Awaiting a record',
-      count: queuePending || queueFailed ? null : String(queue.length),
+      count:
+        queuePending || queueFailed || owedPending || owedFailure
+          ? null
+          : String(queue.filter((item) => item.kind === 'cell').length + dccCount),
     },
     {
       key: 'behind',
@@ -519,9 +570,9 @@ function Dashboard() {
                   key: 'DCC',
                   label: 'Doulos Cell Celebration',
                   count:
-                    queuePending || queueFailed
+                    queuePending || queueFailed || owedPending || owedFailure
                       ? null
-                      : String(queue.filter((item) => item.kind === 'dcc').length),
+                      : String(dccCount),
                 },
               ]}
               current={filter}
@@ -539,12 +590,24 @@ function Dashboard() {
                 }}
                 options={[
                   { value: 'branch', label: 'People I oversee' },
-                  { value: 'mine', label: 'My own Cells' },
+                  { value: 'mine', label: filter === 'CELLS' ? 'My own Cells' : 'My own checklist' },
                 ]}
               />
             </div>
 
-            {queueFailed ? null : queuePending ? (
+            {filter === 'DCC' && branchView ? (
+              owedFailure ? null : owedPending ? (
+                <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+              ) : (
+                <DccBranchQueue
+                  rows={owedRows}
+                  currentMonth={month}
+                  today={today}
+                  chosenId={chosenLeader?.id ?? null}
+                  onChoose={setChosenLeader}
+                />
+              )
+            ) : queueFailed ? null : queuePending ? (
               <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
@@ -589,8 +652,12 @@ function Dashboard() {
               </>
             )}
 
-            {filter === 'DCC' && whose === 'mine' ? (
-              <DccChecklistGrid events={recordableEvents} checklists={checklists} month={month} />
+            {filter === 'DCC' ? (
+              branchView && chosenLeader !== null ? (
+                <LeaderChecklistGrid leader={chosenLeader} onBack={() => setChosenLeader(null)} />
+              ) : (
+                <DccChecklistGrid events={recordableEvents} checklists={checklists} month={month} />
+              )
             ) : null}
 
             {/*
@@ -1194,6 +1261,218 @@ function DccChecklistGrid({
           })}
         </tbody>
       </Table>
+    </section>
+  );
+}
+
+/** The leader whose checklist the branch view opened, and the month the row was in. */
+interface ChosenLeader {
+  id: string;
+  name: string;
+  month: string;
+}
+
+type OwedRow = DccOwed & { month: string };
+
+/**
+ * The DCC half of People I oversee (decision 0301): one row per Sunday and leader in the
+ * reader's branch with no DCC record yet, oldest first and by name, never by how far behind.
+ * The reader's own row records; another leader's opens their checklist below, read only,
+ * because nothing here records on their behalf yet.
+ */
+function DccBranchQueue({
+  rows,
+  currentMonth,
+  today,
+  chosenId,
+  onChoose,
+}: {
+  rows: readonly OwedRow[];
+  currentMonth: string;
+  today: string;
+  chosenId: string | null;
+  onChoose: (leader: ChosenLeader) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+        No DCC record is owed in your branch.
+      </p>
+    );
+  }
+
+  const describe = (row: OwedRow) => ({
+    leader: row.leader.is_actor ? 'You' : row.leader.full_name,
+    waiting: daysAgoLabel(row.event_date, today),
+    open: row.month === currentMonth ? null : openUntilLabel(row.month, currentMonth),
+  });
+
+  const action = (row: OwedRow) =>
+    row.leader.is_actor ? (
+      <Link href={`/dcc/${row.event_id}`} className={buttonClasses('primary')}>
+        Record
+        <span className="sr-only"> DCC, {dayLabel(row.event_date)}</span>
+      </Link>
+    ) : (
+      <button
+        type="button"
+        aria-pressed={chosenId === row.leader.person_id}
+        onClick={() =>
+          onChoose({ id: row.leader.person_id, name: row.leader.full_name, month: row.month })
+        }
+        className={buttonClasses('secondary')}
+      >
+        See checklist
+        <span className="sr-only"> of {row.leader.full_name}</span>
+      </button>
+    );
+
+  const key = (row: OwedRow) => `${row.event_id}-${row.leader.person_id}`;
+
+  return (
+    <>
+      <Table caption="DCC records still owed in your branch" className="mt-4 hidden lg:block">
+        <thead>
+          <tr>
+            <HeaderCell>Date</HeaderCell>
+            <HeaderCell>What</HeaderCell>
+            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell>Waiting</HeaderCell>
+            <HeaderCell>
+              <span className="sr-only">Action</span>
+            </HeaderCell>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const { leader, waiting, open } = describe(row);
+
+            return (
+              <tr key={key(row)} className={rowClasses}>
+                <td className="px-3 py-3 align-top whitespace-nowrap">{dayLabel(row.event_date)}</td>
+                <td className="px-3 py-3 align-top">DCC · still to record</td>
+                <td className="px-3 py-3 align-top">{leader}</td>
+                <td className="px-3 py-3 align-top">
+                  {waiting}
+                  {open === null ? null : <span className="text-muted block text-xs">{open}</span>}
+                </td>
+                <td className="px-3 py-3 text-right align-top">{action(row)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+      <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+        {rows.map((row) => {
+          const { leader, waiting, open } = describe(row);
+
+          return (
+            <li
+              key={key(row)}
+              className="border-line flex flex-wrap items-center justify-between gap-3 border p-4"
+            >
+              <div className="min-w-0">
+                <p className="text-base font-medium">{dayLabel(row.event_date)}</p>
+                <p className="text-sm">DCC · still to record</p>
+                <p className="text-muted text-sm">
+                  {leader} · {waiting}
+                  {open === null ? '' : ` · ${open}`}
+                </p>
+              </div>
+              {action(row)}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * Another leader's DCC checklist for the month, read only (decision 0301): the people whose
+ * record they owe, one column per Sunday. Words rather than ticks or colour, as on the
+ * reader's own grid; a dash is a Sunday the person was not on the list.
+ */
+function LeaderChecklistGrid({
+  leader,
+  onBack,
+}: {
+  leader: ChosenLeader;
+  onBack: () => void;
+}) {
+  const sheet = useQuery({
+    queryKey: ['dcc-leader-checklist', leader.id, leader.month],
+    queryFn: ({ signal }) => getLeaderChecklist(leader.id, leader.month, signal),
+  });
+  const title = `${leader.name}’s DCC checklist`;
+
+  return (
+    <section aria-labelledby="leader-grid-heading" className="mt-8">
+      <p className="mb-4 text-sm">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Back to your checklist
+        </button>
+      </p>
+      <h3 id="leader-grid-heading" className="text-base font-bold">
+        {title}, {monthLabel(leader.month)}
+      </h3>
+      {sheet.isError ? (
+        <div className="mt-3">
+          <FailureNotice failure={describeFailure(sheet.error)} />
+        </div>
+      ) : sheet.isPending ? (
+        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+      ) : sheet.data.data.length === 0 ? (
+        <p className="text-muted mt-3 text-sm">Nobody is on {leader.name}’s DCC checklist this month.</p>
+      ) : (
+        <Table caption={`${title} by Sunday, ${monthLabel(leader.month)}`}>
+          <thead>
+            <tr>
+              <HeaderCell>Person</HeaderCell>
+              {sheet.data.events.map((event) => (
+                <HeaderCell key={event.id}>{shortDayLabel(event.event_date)}</HeaderCell>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sheet.data.data.map((person) => (
+              <tr key={person.person_id} className={rowClasses}>
+                <td className="px-3 py-3">
+                  {person.full_name}
+                  <div className="text-muted text-xs">{person.member_id}</div>
+                </td>
+                {sheet.data.events.map((event) => {
+                  const mark = person.marks[event.id];
+
+                  return (
+                    <td key={event.id} className="px-3 py-3">
+                      {mark === undefined ? (
+                        <>
+                          <span aria-hidden="true">–</span>
+                          <span className="sr-only">Not on the list that Sunday</span>
+                        </>
+                      ) : mark === null ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="sr-only">Not recorded yet</span>
+                        </>
+                      ) : mark ? (
+                        'Present'
+                      ) : (
+                        'Absent'
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
     </section>
   );
 }
