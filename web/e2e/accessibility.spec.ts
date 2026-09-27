@@ -371,10 +371,10 @@ const SCANS = [
     },
   },
   {
-    // The halt: a failure notice, a warning paragraph, and a control that says
-    // something different from the one on any other screen. It renders new
-    // content, so it is its own entry — which is the rule this list already
-    // states and which the commit that added the state did not follow.
+    // The halt: a failure notice and a control that says something different from
+    // the one on any other screen. It renders new content, so it is its own entry
+    // — which is the rule this list already states and which the commit that added
+    // the state did not follow.
     name: 'session, halted',
     route: '/session',
     async before(page: import('@playwright/test').Page) {
@@ -384,7 +384,27 @@ const SCANS = [
       await page.route('**/api/v1/auth/refresh', (route) => route.abort('failed'));
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+      // After the one retry section 6 serves (decision 0128), a few seconds in.
+      await expect(page.getByRole('button', { name: 'Sign in again' })).toBeVisible({
+        timeout: 15_000,
+      });
+    },
+  },
+  {
+    // The same halt on any other screen: a banner above the page, carrying the one
+    // way on. It is new content on every screen inside the shell, so it is scanned,
+    // and at every width, because it sits above content sized for the page.
+    name: 'people, halted',
+    route: '/people',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await page.route('**/api/v1/auth/refresh', (route) => route.abort('failed'));
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('alert').getByRole('button', { name: 'Sign in again' }),
+      ).toBeVisible({ timeout: 15_000 });
     },
   },
   {
@@ -1960,9 +1980,15 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     name: 'session, halted',
     why:
       'Its three controls are the same Button primitive measured on /session and /sign-in — the ' +
-      'two sign-out buttons are literally the /session entry\'s, and "Try again anyway" differs ' +
+      'two sign-out buttons are literally the /session entry\'s, and "Sign in again" differs ' +
       'from "Try again" only in its label. The state is still axe-scanned, which is what the ' +
-      'extra paragraph and the changed control name are worth checking for.',
+      'failure notice and the changed control name are worth checking for.',
+  },
+  {
+    name: 'people, halted',
+    why:
+      'Adds one control to the measured "people, before searching" state: the banner\'s "Sign in ' +
+      'again", the same Button primitive measured on every screen.',
   },
   {
     name: 'activate, link missing its token',

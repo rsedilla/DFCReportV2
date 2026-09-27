@@ -15,6 +15,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { RequireSession } from '@/components/require-session';
+import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { RECORD_PATH, REPORTS_PATH } from '@/lib/landing';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
@@ -315,6 +316,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           of it rather than sitting underneath (2.4.11).
         */}
         <div className="min-w-0 pb-[calc(3.5625rem+env(safe-area-inset-bottom))] lg:flex-1 lg:pb-0">
+          {/* The Account page says the same beside its own button, so it is not repeated there. */}
+          {accountActive ? null : <SessionHaltBanner />}
           {children}
         </div>
       </div>
