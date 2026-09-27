@@ -1490,6 +1490,15 @@ the account is `PENDING_ACTIVATION` — an active holder who has forgotten their
 password uses the reset flow, and a disabled one is not invited back in through an
 activation link, since reactivation is a separate authorized decision.
 
+**An address entered wrongly is corrected before activation** (ruling of 2026-09-28).
+While an account is `PENDING_ACTIVATION`, an administrator holding `accounts.manage` may
+replace its email address. The new address, a fresh activation token and the audit entry
+are one transaction, and every outstanding token of the account is superseded, a reset
+link included, so no link sent to the old address works and the new link goes to the new
+one. An address another account holds, or the one already on the account, is refused, and
+so is an account in any other status. Changing where an account in use receives its reset
+link is a separate decision, not made here.
+
 **A delivery failure never fails the request that caused it.** This holds for
 provisioning and for a re-send alike: each records its outcome before the message is
 attempted, so raising afterwards would hand the client a failure while the store
@@ -4413,6 +4422,7 @@ Audit important actions, including:
 - Backdated effective date on any historical relationship, with reason
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
+- Correcting an account's email address before activation
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections

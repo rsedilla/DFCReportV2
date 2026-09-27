@@ -448,6 +448,120 @@ export class AccountProvisioningService {
     await this.sendOrLog(outcome, accountId);
   }
 
+  /**
+   * Replaces the address of an account nobody has activated, and sends the activation email
+   * there (SKILL.md section 6, decision 0300).
+   *
+   * **Every outstanding token is superseded first, then the account row is locked**: the
+   * order setting a password takes the two tables in, so the two paths never deadlock. An
+   * activation already under way finishes first, and this then finds the account active and
+   * refuses; one that comes later finds its link used.
+   *
+   * Superseding covers a reset link as well as an activation one, because forgot-password
+   * answers a `PENDING_ACTIVATION` account too (section 6). Whoever holds the old address
+   * can set no password afterwards.
+   */
+  async correctEmail(
+    accountId: string,
+    email: string,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const outcome = await this.db.transaction().execute(async (trx) => {
+      await this.tokens.supersedeAllWithin(trx, accountId);
+
+      const account = await trx
+        .selectFrom('accounts')
+        .select(['id', 'person_id', 'email', 'email_normalized', 'status'])
+        .where('id', '=', accountId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!account) {
+        throw new NotFoundError('No such account.');
+      }
+
+      if (account.status !== 'PENDING_ACTIVATION') {
+        throw new InvariantViolationError(
+          'That account is not awaiting activation, so its address is not corrected here.',
+          { account_id: accountId, status: account.status },
+        );
+      }
+
+      const normalized = normalizeEmail(email);
+
+      if (normalized === account.email_normalized) {
+        throw new InvariantViolationError('That is already the address on this account.', {
+          field: 'email',
+        });
+      }
+
+      // Checked so an administrator is told, as at provisioning. Under a race the unique
+      // constraint still decides, and the loser gets a 500 that a retry turns into this.
+      const taken = await trx
+        .selectFrom('accounts')
+        .select('id')
+        .where('email_normalized', '=', normalized)
+        .executeTakeFirst();
+
+      if (taken) {
+        throw new InvariantViolationError('That email address already has an account.', {
+          field: 'email',
+        });
+      }
+
+      const person = await this.people.forDecisionWithin(trx, account.person_id);
+
+      if (!person) {
+        // Unreachable: `accounts.person_id` is a foreign key.
+        throw new NotFoundError('No such person.');
+      }
+
+      const updated = await trx
+        .updateTable('accounts')
+        .set({ email: email.trim(), email_normalized: normalized })
+        .where('id', '=', accountId)
+        .returning(['id', 'email', 'status'])
+        .executeTakeFirstOrThrow();
+
+      const token = await this.tokens.mintWithin(
+        trx,
+        accountId,
+        'ACTIVATION',
+        ACTIVATION_LIFETIME_MS,
+      );
+
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'account.email_corrected',
+        targetType: 'account',
+        targetId: accountId,
+        before: { email: account.email },
+        after: { email: updated.email },
+      });
+
+      const body = { id: updated.id, email: updated.email, status: updated.status };
+
+      // Last statement (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body });
+
+      return {
+        body,
+        message: {
+          kind: 'ACTIVATION' as const,
+          to: { email: updated.email, name: person.fullName },
+          token: token.token,
+          expiresAt: token.expiresAt,
+        },
+      };
+    });
+
+    // After the commit and never fatal, as for provisioning and a resend.
+    await this.sendOrLog(outcome.message, accountId);
+
+    return outcome.body;
+  }
+
   /** Sends, and turns a failure into a log line rather than a thrown error. */
   private async sendOrLog(message: OutboundEmail, accountId: string): Promise<void> {
     try {
