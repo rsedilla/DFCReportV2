@@ -59,6 +59,25 @@ function baseUrl(): string {
   return url.replace(/\/$/, '');
 }
 
+/**
+ * How long any request may take before it is abandoned. A stalled phone connection
+ * otherwise leaves a screen on "Loading…" for as long as the browser keeps the socket.
+ * A write abandoned here is safe to send again with the same idempotency key: it
+ * does not write twice (SKILL.md section 22).
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** The caller's signal, if any, bounded by the timeout above. */
+function withTimeout(signal: AbortSignal | undefined): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  if (signal === undefined) {
+    return timeout;
+  }
+  // `AbortSignal.any` is recent; where a browser lacks it the caller's own signal is
+  // used as before.
+  return typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeout]) : signal;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -77,7 +96,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     method,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: options.signal,
+    signal: withTimeout(options.signal),
   });
 
   if (response.status === 204) {

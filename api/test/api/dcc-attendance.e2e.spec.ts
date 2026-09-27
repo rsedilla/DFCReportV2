@@ -274,6 +274,37 @@ describe('DCC recording (sections 9 and 14)', () => {
       ]);
     });
 
+    it('walks a generation of several account-less leaders at once, stopping at each account holder', async () => {
+      // The fixture above never puts more than one account-less leader in a
+      // generation, so the walk's frontier is always one person wide. This widens it:
+      // Oscar, also account-less, sits beside Nathan, so the second generation's
+      // frontier is [Nathan, Oscar] and the third is [Paul, Peter]. Silas holds an
+      // account inside that generation, so he is on the list and his child is his
+      // own (section 9: "the obligation is the nearer leader's").
+      const oscar = await createPerson(db, { firstName: 'Oscar', network: 'MENS' });
+      await assignTo(db, oscar.id, manuel.id);
+      const peter = await createPerson(db, { firstName: 'Peter', network: 'MENS' });
+      await assignTo(db, peter.id, oscar.id);
+      const uriel = await createPerson(db, { firstName: 'Uriel', network: 'MENS' });
+      await assignTo(db, uriel.id, peter.id);
+      const silas = await createPerson(db, { firstName: 'Silas', network: 'MENS' });
+      await assignTo(db, silas.id, oscar.id);
+      const titus = await createPerson(db, { firstName: 'Titus', network: 'MENS' });
+      await assignTo(db, titus.id, silas.id);
+      await createAccount(app, db, { person: silas, roles: ['LEADER'] });
+
+      const eventId = await createEvent(await recentSunday());
+      const response = await roster(manuelAccount, eventId).expect(200);
+      const ids = (response.body.data as { person_id: string }[]).map((line) => line.person_id);
+
+      expect(ids).toHaveLength(new Set(ids).size);
+      expect(new Set(ids)).toEqual(
+        new Set([mark.id, nathan.id, oscar.id, paul.id, peter.id, silas.id, quentin.id, uriel.id]),
+      );
+      expect(ids).not.toContain(timothy.id);
+      expect(ids).not.toContain(titus.id);
+    });
+
     it('drops the covered branch the moment its leader is given an account', async () => {
       // The rule above run as a mutation, in the direction the domain actually moves.
       // Section 9: "The arrangement is intended to be temporary. When that leader
