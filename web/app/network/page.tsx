@@ -245,7 +245,11 @@ function NetworkScreen() {
 
           <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Card label="Direct disciples" value={String(person.direct_reports)} />
-            <Card label="People beneath" value={String(person.beneath)} />
+            {/* Every Cell Leader and Cell member under them is already in it (owner, 2026-09-28). */}
+            <Card
+              label={isMe ? 'Everyone under you' : `Everyone under ${person.full_name}`}
+              value={String(person.beneath)}
+            />
             <Card
               label="Cell Leaders beneath"
               value={cells.data === undefined ? '—' : String(cells.data.cell_leaders_beneath)}
