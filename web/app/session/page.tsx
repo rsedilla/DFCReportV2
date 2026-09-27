@@ -11,8 +11,8 @@ import { HeaderCell, rowClasses, Table } from '@/components/ui/table';
 import { getMe, roleLabel } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
+  forgetSession,
   isHalted,
-  resumeSession,
   signOut,
   signOutEverywhere,
   subscribe,
@@ -113,37 +113,25 @@ function SessionDetail() {
           <FailureNotice failure={describeFailure(session.error)} />
 
           {/*
-            **A halt is told apart from an ordinary failure, because pressing the
-            button means something different in each.**
-
-            After an ordinary failure, retrying costs a request. After a halt it
-            re-presents a token whose fate is unknown — and if the earlier attempt
-            did reach the server, that is section 6's reuse signal, which ends
-            every session on every device. The justification for halting at all is
-            that it makes the risk the person's to take knowingly, and a risk taken
-            knowingly has to be stated rather than hidden behind the same three
-            words.
-
-            Section 1, principle 7: say what will happen, in the words a leader
-            would use.
+            **A halt is told apart from an ordinary failure, because retrying means
+            something different in each.** After an ordinary failure it costs a
+            request. After a halt the client has already made the one re-presentation
+            section 6 serves, and another would end every session on every device, so
+            the only way on is signing in again on this device.
           */}
-          {halted ? (
-            <p className="text-muted mt-3 text-sm leading-relaxed">
-              Trying again may sign you out on every device, including your phone. That happens
-              only if the earlier attempt reached the server after all, and you would need to
-              sign in again everywhere.
-            </p>
-          ) : null}
-
           <Button
             className="mt-4"
             variant="secondary"
             onClick={() => {
-              resumeSession();
-              void session.refetch();
+              if (halted) {
+                forgetSession();
+                router.replace('/sign-in');
+              } else {
+                void session.refetch();
+              }
             }}
           >
-            {halted ? 'Try again anyway' : 'Try again'}
+            {halted ? 'Sign in again' : 'Try again'}
           </Button>
         </div>
       ) : (
