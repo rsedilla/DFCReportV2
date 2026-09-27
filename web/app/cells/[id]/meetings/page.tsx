@@ -24,6 +24,7 @@ import {
 } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
+import { useScreenAddress } from '@/lib/screen-address';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -64,7 +65,9 @@ export default function CellMeetingsPage() {
 function CellMeetings() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
-  const [month, setMonth] = useState(() => search.get('month') ?? reportingMonthOf());
+  // In the address, so Back from a meeting returns to the month it was opened from.
+  const go = useScreenAddress();
+  const month = search.get('month') ?? reportingMonthOf();
   const [changing, setChanging] = useState(false);
   const [savedFrom, setSavedFrom] = useState<string | null>(null);
 
@@ -114,7 +117,7 @@ function CellMeetings() {
           Cells index and on the reports, and claiming it from a clock this screen
           does not own would be a second answer to a question the API settles.
         */}
-        <MonthPicker month={month} onChange={setMonth} />
+        <MonthPicker month={month} onChange={(next) => go({ month: next })} />
       </div>
 
       {savedFrom ? (

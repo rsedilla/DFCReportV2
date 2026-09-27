@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -34,6 +35,7 @@ import {
   shiftMonth,
   todayInManila,
 } from '@/lib/reporting-month';
+import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
 
 /**
@@ -177,10 +179,22 @@ function Dashboard() {
   // server's `open` flag and each Sunday's `recordable` decide what is shown.
   const inCloseWeek = Number(today.slice(8, 10)) <= 7;
 
-  const [filter, setFilter] = useState<QueueFilter>('CELLS');
-  // The reader's own work is the default (decision 0258).
-  const [whose, setWhose] = useState<Whose>('mine');
-  const [tab, setTab] = useState<RecordTab>('awaiting');
+  // Which list, which kind and whose are in the address, so Back from a meeting or a
+  // checklist returns to the list it was opened from. The defaults drop out of it.
+  const search = useSearchParams();
+  const go = useScreenAddress();
+  const tab: RecordTab = RECORD_TABS.find((key) => key === search.get('list')) ?? 'awaiting';
+  const filter: QueueFilter = search.get('kind') === 'dcc' ? 'DCC' : 'CELLS';
+  // The reader's own work is the default (decision 0258). The radio follows the click at
+  // once and the address a moment later, as on the Cells list; the address still decides,
+  // so Back moves it.
+  const whoseInAddress: Whose = search.get('whose') === 'branch' ? 'branch' : 'mine';
+  const [whose, setWhose] = useState(whoseInAddress);
+  const [lastWhose, setLastWhose] = useState(whoseInAddress);
+  if (lastWhose !== whoseInAddress) {
+    setLastWhose(whoseInAddress);
+    setWhose(whoseInAddress);
+  }
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -473,7 +487,7 @@ function Dashboard() {
         className="mt-6 grid-cols-2 lg:grid-cols-4"
         tabs={tabs}
         current={tab}
-        onChoose={setTab}
+        onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
       />
 
       <div className="mt-6">
@@ -511,7 +525,7 @@ function Dashboard() {
                 },
               ]}
               current={filter}
-              onChoose={setFilter}
+              onChoose={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
             />
 
             <div className={`mt-4 ${CONTROL_BAR}`}>
@@ -519,7 +533,10 @@ function Dashboard() {
                 legend="Whose"
                 name="queue-whose"
                 value={whose}
-                onChange={setWhose}
+                onChange={(next) => {
+                  setWhose(next);
+                  go({ whose: next === 'branch' ? 'branch' : null });
+                }}
                 options={[
                   { value: 'branch', label: 'People I oversee' },
                   { value: 'mine', label: 'My own Cells' },
@@ -826,7 +843,9 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
 }
 
 /** Which of Record's four lists is open (decision 0290). */
-type RecordTab = 'awaiting' | 'behind' | 'leader' | 'nocell';
+const RECORD_TABS = ['awaiting', 'behind', 'leader', 'nocell'] as const;
+
+type RecordTab = (typeof RECORD_TABS)[number];
 
 /** A name that opens its record: 24px tall at least, which 2.5.8 measures. */
 const NAME_LINK =

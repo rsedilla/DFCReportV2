@@ -1088,6 +1088,44 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await mockPeopleWithoutACell(page);
   }
 
+  test('keeps the list, the half and whose in the address, so Back returns to each', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await page.goto('/dashboard');
+
+    await chooseList(page, /^Needs a new leader/);
+    await expect(page).toHaveURL(/list=leader/);
+
+    await chooseList(page, /^Awaiting a record/);
+    await expect(page).not.toHaveURL(/list=/);
+    await chooseDcc(page);
+    await expect(page).toHaveURL(/kind=dcc/);
+    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await expect(page).toHaveURL(/whose=branch/);
+
+    // Leaving the screen and coming back, which is what losing it looked like.
+    await page.goto('/cells');
+    await page.goBack();
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration/ }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeChecked();
+
+    await page.goBack();
+    await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
+    await page.goBack();
+    await expect(
+      awaitingHalves(page).getByRole('button', { name: /^Cell Group/ }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.goBack();
+    await expect(recordLists(page).getByRole('button', { name: /^Needs a new leader/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   const person = (n: number, name: string) => ({
     id: `3f1b7c6e-0000-4000-8000-0000000009${String(n).padStart(2, '0')}`,
     member_id: `M-0019${String(n).padStart(2, '0')}`,

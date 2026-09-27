@@ -84,6 +84,7 @@ function FiledReports() {
   // at the reader's own scope, exactly as they were on the two reports.
   const firstOffered = !leader && cellId === '' && network === '';
   const by: 'first' | 'leader' = firstOffered && search.get('by') !== 'leader' ? 'first' : 'leader';
+  const behindOnly = search.get('behind') === '1';
 
   // The same keys as the two reports, so moving between them reads each figure once.
   const cells = useQuery({
@@ -193,7 +194,11 @@ function FiledReports() {
           />
           {by === 'first' ? (
             kind === 'cells' ? (
-              <CoverageByCell month={month} behindOnlyAtFirst={search.get('behind') === '1'} />
+              <CoverageByCell
+                month={month}
+                behindOnly={behindOnly}
+                onBehindOnlyChange={(on) => go({ behind: on ? '1' : null })}
+              />
             ) : (
               <CoverageBySunday month={month} />
             )

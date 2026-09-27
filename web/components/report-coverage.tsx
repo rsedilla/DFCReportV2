@@ -45,11 +45,13 @@ const PAGE_SIZE = 10;
  */
 export function CoverageByCell({
   month,
-  behindOnlyAtFirst = false,
+  behindOnly,
+  onBehindOnlyChange,
 }: {
   month: string;
-  /** `?behind=1`: opened from the Record page, filtered to the Cells behind. */
-  behindOnlyAtFirst?: boolean;
+  /** `?behind=1`, which the Record page's link sets and Back restores. */
+  behindOnly: boolean;
+  onBehindOnlyChange: (on: boolean) => void;
 }) {
   // The same query as the report's Cell picker, so the two share one request.
   const cells = useQuery({
@@ -58,7 +60,13 @@ export function CoverageByCell({
   });
 
   const [page, setPage] = useState(0);
-  const [behindOnly, setBehindOnly] = useState(behindOnlyAtFirst);
+  // Switching the filter starts the rows at their first page. Adjusted while rendering
+  // rather than by remounting, which would take keyboard focus off the button.
+  const [pageFor, setPageFor] = useState(behindOnly);
+  if (pageFor !== behindOnly) {
+    setPageFor(behindOnly);
+    setPage(0);
+  }
 
   // **Behind is the meetings that have come and have no record** (decision 0267) — never
   // the whole month's schedule, which counts meetings that have not happened (decision
@@ -88,8 +96,7 @@ export function CoverageByCell({
           className="mt-4"
           aria-pressed={behindOnly}
           onClick={() => {
-            setBehindOnly((on) => !on);
-            setPage(0);
+            onBehindOnlyChange(!behindOnly);
           }}
         >
           {/* A fixed label with `aria-pressed`, so a screen reader hears one state, once. */}
