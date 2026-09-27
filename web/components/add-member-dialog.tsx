@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
@@ -9,13 +9,15 @@ import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { addCellMember, membershipFailure } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getPerson, networkOfPerson } from '@/lib/people';
 
 /**
  * Adding somebody to one Cell (SKILL.md sections 7 and 10).
  *
- * **The search is church-wide and the server decides** (decision 0244). Section 10's
- * same-Network rule and section 7's authority over the Cell are the API's to refuse, and
- * the same-Network refusal is said in plain words by `membershipFailure`.
+ * **The search is narrowed to the Cell's Network** (decision 0299), which section 10 makes
+ * its leader's. Where the leader cannot be read it stays church-wide. Either way section
+ * 10's same-Network rule and section 7's authority over the Cell are the API's to refuse,
+ * and the same-Network refusal is said in plain words by `membershipFailure`.
  *
  * **Somebody already in another Cell moves here.** A move is an add: the route ends the
  * current membership and opens this one, so the dialog sends one request.
@@ -26,6 +28,7 @@ export function AddMemberDialog({
   onAdded,
   cellId,
   cellHandle,
+  leaderId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,9 +36,18 @@ export function AddMemberDialog({
   onAdded: (name: string) => void;
   cellId: string;
   cellHandle: string | null;
+  /** The Cell's leader, whose Network is the Cell's (section 10); null while unknown. */
+  leaderId: string | null;
 }) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<{ id: string; full_name: string } | null>(null);
+  const leader = useQuery({
+    queryKey: ['person', leaderId],
+    queryFn: ({ signal }) => getPerson(leaderId!, signal),
+    enabled: leaderId !== null,
+    retry: false,
+  });
+  const network = leader.data ? networkOfPerson(leader.data) : null;
 
   const add = useMutation({
     mutationFn: (person: { id: string; full_name: string }) =>
@@ -74,7 +86,13 @@ export function AddMemberDialog({
       >
         <PersonPicker
           legend="Who to add"
-          description="Search everyone in the church by name. They must be in the same Network as this Cell's leader."
+          description="Search by name. They must be in the same Network as this Cell's leader."
+          network={network}
+          networkReason={
+            network === null
+              ? null
+              : `this Cell is in the ${network === 'MENS' ? 'Men’s' : 'Women’s'} Network`
+          }
           searchLabel="Search for a person by name"
           selectedId={chosen?.id ?? null}
           selectedName={chosen?.full_name ?? null}

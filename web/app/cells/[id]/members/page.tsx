@@ -163,6 +163,7 @@ function CellMembers() {
         onAdded={setAdded}
         cellId={params.id}
         cellHandle={handle}
+        leaderId={cell.data?.leader?.id ?? null}
       />
 
       {added ? (

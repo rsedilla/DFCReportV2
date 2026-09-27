@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
@@ -10,6 +10,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { reassignPastoralLeader } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
+import { getPerson, networkOfPerson } from '@/lib/people';
 
 /**
  * Moving a person to another pastoral leader, from their profile (SKILL.md section 5;
@@ -47,6 +48,15 @@ export function MoveLeaderDialog({
 
   const [chosen, setChosen] = useState<{ id: string; full_name: string } | null>(null);
   const [reason, setReason] = useState('');
+  // The new leader must be in the moved person's Network (section 5), so only it is
+  // searched (decision 0299). Unread, the search stays church-wide and the API refuses.
+  const moved = useQuery({
+    queryKey: ['person', personId],
+    queryFn: ({ signal }) => getPerson(personId, signal),
+    enabled: open,
+    retry: false,
+  });
+  const network = moved.data ? networkOfPerson(moved.data) : null;
 
   const move = useMutation({
     mutationFn: () => {
@@ -90,7 +100,13 @@ export function MoveLeaderDialog({
       <div className="mt-4">
         <PersonPicker
           legend="New pastoral leader"
-          description="Search everyone in the church. Whether you may make this move is decided when you confirm it."
+          description="Search by name. Whether you may make this move is decided when you confirm it."
+          network={network}
+          networkReason={
+            network === null
+              ? null
+              : `${personName} is in the ${network === 'MENS' ? 'Men’s' : 'Women’s'} Network`
+          }
           searchLabel="Search for a leader by name"
           selectedId={chosen?.id ?? null}
           selectedName={chosen?.full_name ?? null}

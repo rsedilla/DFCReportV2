@@ -17,7 +17,7 @@ import {
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
-import type { CivilStatus, Sex } from '../../database/schema';
+import type { CivilStatus, NetworkName, Sex } from '../../database/schema';
 import { IsStorableText } from '../../common/text/is-storable-text';
 
 /**
@@ -442,4 +442,14 @@ export class SearchPeopleDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   church_wide?: boolean;
+
+  /**
+   * Only people whose Network is this one now (decision 0299). The two pickers whose
+   * operation the same-Network rule governs send it — adding a Cell member and naming a
+   * new pastoral leader — keyed on the Cell or the person acted on, never on the
+   * searcher. It narrows the rows and widens nothing.
+   */
+  @IsOptional()
+  @IsIn(['MENS', 'WOMENS'])
+  network?: NetworkName;
 }

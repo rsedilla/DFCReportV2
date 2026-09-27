@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { describeFailure } from '@/lib/messages';
-import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
+import { MINIMUM_SEARCH_LENGTH, searchPeople, type Network, type Person } from '@/lib/people';
 
 /**
  * Choosing the pastoral leader a new Person is placed under (SKILL.md sections 5
@@ -26,7 +26,12 @@ import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
  * there — and each of those is settled by the API on submission rather than by
  * this component.
  *
- * **The search is church-wide, and the refusal comes from the server.** This
+ * **Two pickers are narrowed to one Network** (decision 0299): adding a Cell member and
+ * naming a new pastoral leader, where section 10 and section 5 refuse any other. The
+ * caller names the Network of the Cell or person acted on and the API filters by it; the
+ * picker says so above the results.
+ *
+ * **Otherwise the search is church-wide, and the refusal comes from the server.** This
  * picker does not filter the list to people the viewer may place under, because
  * that would be the client deciding an authorization question section 7 reserves
  * to the API (section 1, principle 4). Choosing somebody out of scope is answered
@@ -44,7 +49,16 @@ export function PersonPicker({
   selectedName,
   onSelect,
   churchWide = true,
+  network = null,
+  networkReason = null,
 }: {
+  /**
+   * Only this Network's people (decision 0299), where the operation's same-Network rule
+   * refuses any other. Keyed on the Cell or person acted on, never on the searcher.
+   */
+  network?: Network | null;
+  /** Why only that Network, said after "because": "this Cell is in the Men's Network". */
+  networkReason?: string | null;
   /**
    * What this person is being chosen *as*, and why.
    *
@@ -70,15 +84,16 @@ export function PersonPicker({
   const [submitted, setSubmitted] = useState('');
 
   const results = useQuery({
-    queryKey: ['leader-search', submitted, churchWide],
+    queryKey: ['leader-search', submitted, churchWide, network],
     // **The pickers keep the church, and the People screen does not** (SKILL.md
     // section 8, decision 0244). Each of the four surfaces using this component —
     // Add a Person, Add a Cell member, naming a new pastoral leader on a
     // reassignment, and who ran a Cell meeting — names one specific person for one operation rather than
     // offering a place to look around. Section 10 makes Cell membership independent of pastoral assignment,
     // so a Cell legitimately holds members its leader does not pastor: narrowing
-    // here would make exactly those people unaddable.
-    queryFn: ({ signal }) => searchPeople(submitted, null, signal, { churchWide }),
+    // here would make exactly those people unaddable. A Network narrows two of them
+    // (decision 0299), because their operation refuses any other Network anyway.
+    queryFn: ({ signal }) => searchPeople(submitted, null, signal, { churchWide, network }),
     enabled: submitted.trim().length > 0,
   });
 
@@ -100,6 +115,12 @@ export function PersonPicker({
       <p className="text-muted mt-1 text-sm leading-relaxed">
         {description}
       </p>
+      {network !== null && networkReason !== null ? (
+        <p className="mt-2 text-sm">
+          Showing the {network === 'MENS' ? 'Men’s' : 'Women’s'} Network only, because{' '}
+          {networkReason}.
+        </p>
+      ) : null}
 
       {/* Stacked on a phone, inline from `sm` up — as on the people search. */}
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
