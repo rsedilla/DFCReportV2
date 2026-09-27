@@ -57,6 +57,12 @@ export type Db = Kysely<Database>;
               connectionString: config.databaseUrl,
               // Least-privilege credentials and a bounded pool (SKILL.md section 24).
               max: 10,
+              // **Every wait is bounded** (section 24: an unbounded wait holds a
+              // connection, and ten of them hold the pool). A statement that runs past
+              // 30 s fails rather than holding one, and a request that cannot get a
+              // connection within 5 s is refused rather than queued without limit.
+              statement_timeout: 30_000,
+              connectionTimeoutMillis: 5_000,
               // **`DateStyle` is pinned per connection rather than inherited**
               // (`date-style.ts`). Under a non-ISO style the driver parses every
               // timestamp as null rather than failing, so an inherited value is a

@@ -76,7 +76,7 @@ export class AccessTokenGuard implements CanActivate {
   }
 }
 
-function bearerToken(header: string | undefined): string | null {
+export function bearerToken(header: string | undefined): string | null {
   if (!header) {
     return null;
   }

@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 import { SettingsModule } from './admin/settings/settings.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { AccountThrottlerGuard } from './auth/authorization/account-throttler.guard';
 import { AccessTokenGuard } from './auth/authorization/access-token.guard';
 import { AuthorizationModule } from './auth/authorization/authorization.module';
 import { CapabilityGuard } from './auth/authorization/capability.guard';
@@ -92,7 +93,7 @@ import { TrainingModule } from './training/training.module';
     { provide: CELL_SCOPE_PORT, useExisting: CellsReadService },
     { provide: CELL_MEETING_SCOPE_PORT, useExisting: CellMeetingsScopeService },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AccountThrottlerGuard },
     { provide: APP_GUARD, useClass: AccessTokenGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
     // Listed after both guards for readability. **The ordering here is not what makes

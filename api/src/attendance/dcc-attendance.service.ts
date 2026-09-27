@@ -572,15 +572,9 @@ export class DccAttendanceService {
    * because the stopping condition reads `accounts`, which `auth` owns and
    * `hierarchy` may not join to (section 2).
    *
-   * **The cost is one round trip per account-less person in the covered branch**, not
-   * per level: the loop awaits `directChildrenAsOf` once for each leader in the
-   * frontier, sequentially. An earlier version of this sentence said "per level of
-   * account-less chain, normally one", which discounts the width — and section 9 says
-   * in the same breath that a checklist is unbounded and that the covering arrangement
-   * can persist, so the width is exactly the thing not to discount. It is acceptable
-   * because the frontier is only the people below this actor who hold no account, and
-   * section 9 treats that set as temporary; it is not acceptable to describe it as
-   * cheaper than it is.
+   * **The cost is two statements per level of the covered branch**: one for the whole
+   * generation's children and one for which of them hold accounts. The width of a level
+   * costs bind parameters rather than round trips.
    *
    * The visited set below is not optional: section 5 requires every walk to detect a
    * cycle rather than trust the data, and an undetected one here is a request that
@@ -602,10 +596,9 @@ export class DccAttendanceService {
     let frontier = [actor.personId];
 
     while (frontier.length > 0) {
-      const children: string[] = [];
-      for (const leaderId of frontier) {
-        children.push(...(await this.hierarchy.directChildrenAsOf(executor, leaderId, event.at)));
-      }
+      // One statement per generation rather than one per leader: early in a pilot few
+      // people hold accounts, so the walk below a root reaches most of a Network.
+      const children = await this.hierarchy.directChildrenOfManyAsOf(executor, frontier, event.at);
 
       const fresh: string[] = [];
       for (const childId of children) {

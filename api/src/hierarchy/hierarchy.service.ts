@@ -977,6 +977,33 @@ export class HierarchyService {
   }
 
   /**
+   * {@link directChildrenAsOf} for a whole generation in one statement, so a walk down
+   * the tree costs one query per level rather than one per person. A person with two
+   * rows in force under leaders in the set appears twice, as two calls would have
+   * returned them, so a caller detecting a repeat still sees it.
+   */
+  async directChildrenOfManyAsOf(
+    executor: Db,
+    leaderIds: readonly string[],
+    at: Date,
+  ): Promise<string[]> {
+    if (leaderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .where('leader_id', 'in', [...leaderIds])
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .orderBy('person_id')
+      .execute();
+
+    return rows.map((row) => row.person_id);
+  }
+
+  /**
    * The assignment row in force for each person at an instant, as a map missing the
    * ones who had none.
    *
