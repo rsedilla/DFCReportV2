@@ -25,12 +25,12 @@ import {
 } from '@/lib/cells';
 import {
   getDccOwed,
-  getDccRoster,
   getLeaderChecklist,
+  getWholeDccRoster,
   listDccEvents,
   type DccEvent,
   type DccOwed,
-  type DccRoster,
+  type DccRosterLine,
 } from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -148,11 +148,11 @@ function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
  */
 function dccEntries(
   events: readonly DccEvent[],
-  checklists: readonly { data?: DccRoster }[],
+  checklists: readonly { data?: DccRosterLine[] }[],
   month: string,
 ): QueueItem[] {
   return events.flatMap((event, index) => {
-    const lines = checklists[index]?.data?.data;
+    const lines = checklists[index]?.data;
 
     if (lines === undefined || lines.length === 0) {
       return [];
@@ -291,10 +291,13 @@ function Dashboard() {
 
   const recordableEvents = (dccEvents.data?.data ?? []).filter((event) => event.recordable);
 
+  // **The whole checklist, every page of it**, as the DCC calendar reads it. The first
+  // page alone is fifty people, so a longer checklist counted as done while people past
+  // the fiftieth were unmarked. The calendar's key, so the two share one read.
   const checklists = useQueries({
     queries: recordableEvents.map((event) => ({
-      queryKey: ['dcc-roster', event.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getDccRoster(event.id, signal),
+      queryKey: ['dcc-roster-whole', event.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getWholeDccRoster(event.id, signal),
     })),
   });
 
@@ -319,8 +322,8 @@ function Dashboard() {
 
   const checklistsPrevious = useQueries({
     queries: recordablePrevious.map((event) => ({
-      queryKey: ['dcc-roster', event.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getDccRoster(event.id, signal),
+      queryKey: ['dcc-roster-whole', event.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getWholeDccRoster(event.id, signal),
     })),
   });
 
@@ -1191,14 +1194,14 @@ function DccChecklistGrid({
   month,
 }: {
   events: readonly DccEvent[];
-  checklists: readonly { data?: DccRoster }[];
+  checklists: readonly { data?: DccRosterLine[] }[];
   month: string;
 }) {
   const people = new Map<string, { name: string; memberId: string }>();
   const marks = new Map<string, Map<string, boolean>>();
 
   events.forEach((event, index) => {
-    for (const line of checklists[index]?.data?.data ?? []) {
+    for (const line of checklists[index]?.data ?? []) {
       people.set(line.person_id, { name: line.full_name, memberId: line.member_id });
       if (line.record !== null) {
         const byEvent = marks.get(line.person_id) ?? new Map<string, boolean>();
