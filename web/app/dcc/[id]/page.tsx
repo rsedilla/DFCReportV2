@@ -147,6 +147,8 @@ function DccChecklist() {
       setEditing(false);
       setCorrectionReason('');
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster', params.id] });
+      // The whole checklist the Record page and the DCC calendar count from.
+      await queryClient.invalidateQueries({ queryKey: ['dcc-roster-whole', params.id] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-events'] });
     },
   });
