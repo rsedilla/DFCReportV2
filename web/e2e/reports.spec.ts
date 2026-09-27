@@ -431,6 +431,28 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     ]);
   });
 
+  test('keeps the behind filter in the address, so Back returns to it', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsAtScale(page);
+    await mockCellReport(page);
+    await page.goto('/reports/filed');
+
+    const table = page.getByRole('region', { name: 'Coverage by Cell' });
+    await table.getByRole('button', { name: 'Show only Cells behind' }).click();
+    await expect(page).toHaveURL(/behind=1/);
+
+    await page.goto('/cells');
+    await page.goBack();
+    const behind = page
+      .getByRole('region', { name: 'Coverage by Cell' })
+      .getByRole('button', { name: 'Show only Cells behind' });
+    await expect(behind).toHaveAttribute('aria-pressed', 'true');
+
+    await page.goBack();
+    await expect(behind).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('Coverage by Sunday keeps a removed Sunday in its place', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
