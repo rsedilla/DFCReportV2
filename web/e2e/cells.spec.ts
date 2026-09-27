@@ -405,6 +405,23 @@ test.describe('a Cell’s meetings', () => {
     await expect(page.getByText('Saved. It takes effect on 1 July 2026.')).toBeVisible();
   });
 
+  test('keeps the month in the address, so Back from elsewhere returns to it', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await page.goto(MEETINGS);
+
+    await page.getByRole('button', { name: 'Show May 2026' }).click();
+    await expect(page).toHaveURL(/month=2026-05-01/);
+
+    await page.goto('/cells');
+    await page.goBack();
+    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+  });
+
   test('a closed Cell is offered no schedule change', async ({ page }) => {
     await mockSignedIn(page);
     await mockClosedCellMeetings(page);

@@ -109,6 +109,27 @@ test.describe('the Network screen’s figures', () => {
     }
     await expect(page.getByText('DCC records · Cell meetings')).toHaveCount(0);
   });
+
+  test('keeps Owes records in the address, and carries it into the next branch', async ({
+    page,
+  }) => {
+    await signedInReader(page);
+    await page.goto('/network');
+
+    await page.getByRole('checkbox', { name: 'Owes records' }).check();
+    await expect(page).toHaveURL(/owes=1/);
+    await expect(page.getByRole('link', { name: /^Open / }).first()).toHaveAttribute(
+      'href',
+      /owes=1/,
+    );
+
+    await page.goto('/cells');
+    await page.goBack();
+    await expect(page.getByRole('checkbox', { name: 'Owes records' })).toBeChecked();
+
+    await page.goBack();
+    await expect(page.getByRole('checkbox', { name: 'Owes records' })).not.toBeChecked();
+  });
 });
 
 /**

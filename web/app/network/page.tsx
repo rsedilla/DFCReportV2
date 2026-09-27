@@ -33,6 +33,7 @@ import {
 } from '@/lib/network';
 import { MINIMUM_SEARCH_LENGTH, searchPeople } from '@/lib/people';
 import { monthLabel } from '@/lib/reporting-month';
+import { useScreenAddress } from '@/lib/screen-address';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -122,7 +123,18 @@ function NetworkScreen() {
     retry: false,
   });
 
-  const [owesOnly, setOwesOnly] = useState(false);
+  // In the address, so Back and a return from a person's page keep it (decision 0252's
+  // filter; the rule is the address, as `lib/screen-address.ts` says).
+  const go = useScreenAddress();
+  const focusHref = useFocusHref();
+  // The box follows the click at once and the address a moment later, as on the Cells list.
+  const owesInAddress = search.get('owes') === '1';
+  const [owesOnly, setOwesOnly] = useState(owesInAddress);
+  const [lastOwes, setLastOwes] = useState(owesInAddress);
+  if (lastOwes !== owesInAddress) {
+    setLastOwes(owesInAddress);
+    setOwesOnly(owesInAddress);
+  }
   const [moving, setMoving] = useState<{
     id: string;
     name: string;
@@ -268,7 +280,10 @@ function NetworkScreen() {
                 <input
                   type="checkbox"
                   checked={owesOnly}
-                  onChange={(event) => setOwesOnly(event.target.checked)}
+                  onChange={(event) => {
+                    setOwesOnly(event.target.checked);
+                    go({ owes: event.target.checked ? '1' : null });
+                  }}
                   className="size-5"
                 />
                 Owes records
@@ -444,6 +459,7 @@ function RootsView({
   readsDcc: boolean;
   readsCells: boolean;
 }) {
+  const focusHref = useFocusHref();
   const dcc = useQueries({
     queries: roots.map((root) => ({
       queryKey: ['network-dcc', root.id],
@@ -530,8 +546,22 @@ function holds(me: SessionDescription | undefined, capability: string): boolean 
   return (me?.capabilities ?? []).some((grant) => grant.capability === capability);
 }
 
-function focusHref(personId: string): string {
-  return `/network?${new URLSearchParams({ focus: personId }).toString()}`;
+/**
+ * The address of a person's branch, or of the reader's own for `null`. It carries the
+ * Owes records filter along, so moving between leaders keeps it, as it did while the
+ * filter was component state.
+ */
+function useFocusHref(): (personId: string | null) => string {
+  const owes = useSearchParams().get('owes') === '1';
+
+  return (personId) => {
+    const query = new URLSearchParams({
+      ...(personId === null ? {} : { focus: personId }),
+      ...(owes ? { owes: '1' } : {}),
+    }).toString();
+
+    return query === '' ? '/network' : `/network?${query}`;
+  };
 }
 
 function figure(value: number | null): string {
@@ -595,6 +625,8 @@ function RowActions({
   mayMove: boolean;
   onMove: () => void;
 }) {
+  const focusHref = useFocusHref();
+
   return (
     <span className="inline-flex gap-2">
       {mayMove ? (
@@ -624,6 +656,8 @@ function Breadcrumb({
   entries: readonly PathEntry[];
   meId: string | undefined;
 }) {
+  const focusHref = useFocusHref();
+
   if (entries.length === 0) {
     return null;
   }
@@ -645,7 +679,7 @@ function Breadcrumb({
                 </span>
               ) : index >= firstLink ? (
                 <Link
-                  href={entry.id === meId ? '/network' : focusHref(entry.id)}
+                  href={focusHref(entry.id === meId ? null : entry.id)}
                   className={`${LINK} text-accent min-w-6 justify-center`}
                 >
                   {entry.full_name}
@@ -707,6 +741,7 @@ function UpOneLevel({
   meId: string | undefined;
   isMe: boolean;
 }) {
+  const focusHref = useFocusHref();
   const parent = entries.length >= 2 ? entries[entries.length - 2] : null;
   const meIndex = entries.findIndex((entry) => entry.id === meId);
   // Up is offered only where the level above is one the reader may open: never from the
@@ -715,7 +750,7 @@ function UpOneLevel({
 
   return canGoUp && parent !== null ? (
     <Link
-      href={parent.id === meId ? '/network' : focusHref(parent.id)}
+      href={focusHref(parent.id === meId ? null : parent.id)}
       className={buttonClasses('secondary')}
     >
       Up one level
@@ -732,6 +767,7 @@ function UpOneLevel({
  * limits — ten at a time. Choosing a result focuses them.
  */
 function Search() {
+  const focusHref = useFocusHref();
   const [term, setTerm] = useState('');
   const [asked, setAsked] = useState<string | null>(null);
   const [visible, setVisible] = useState(SEARCH_STEP);
