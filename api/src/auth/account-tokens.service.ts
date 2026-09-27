@@ -29,6 +29,19 @@ export class AccountTokensService {
    */
 
   /**
+   * Marks every outstanding token of the account used, whatever its purpose (decision
+   * 0300): a link mailed to an address the account no longer has must not set its password.
+   */
+  async supersedeAllWithin(trx: Transaction<Database>, accountId: string): Promise<void> {
+    await trx
+      .updateTable('account_tokens')
+      .set({ used_at: new Date() })
+      .where('account_id', '=', accountId)
+      .where('used_at', 'is', null)
+      .execute();
+  }
+
+  /**
    * Mints a token, invalidating any outstanding one of the same purpose.
    *
    * Returns the plaintext **once**, to its caller. It is never stored and never in

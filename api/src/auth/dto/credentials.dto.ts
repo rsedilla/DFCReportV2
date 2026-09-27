@@ -36,6 +36,13 @@ export class ProvisionAccountDto {
   role!: AccountRole;
 }
 
+/** The address an account awaiting activation should have had (decision 0300). */
+export class CorrectAccountEmailDto {
+  @IsEmailAddress()
+  @MaxLength(320)
+  email!: string;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)

@@ -42,6 +42,19 @@ export async function resendActivation(accountId: string, idempotencyKey: string
   });
 }
 
+/** Corrects an unactivated account's address and sends the email there (decision 0300). */
+export async function correctAccountEmail(
+  accountId: string,
+  email: string,
+  idempotencyKey: string,
+): Promise<{ id: string; email: string; status: PersonAccount['status'] }> {
+  return authenticatedRequest(`/api/v1/accounts/${accountId}/email`, {
+    method: 'POST',
+    body: { email },
+    idempotencyKey,
+  });
+}
+
 export function roleLabel(role: AccountRole): string {
   return role === 'ADMIN' ? 'Admin' : role === 'SENIOR_PASTOR' ? 'Senior Pastor' : 'Leader';
 }

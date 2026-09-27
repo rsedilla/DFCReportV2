@@ -176,6 +176,7 @@ export type AuditAction =
   | 'account.created'
   | 'account.activated'
   | 'account.activation_resent'
+  | 'account.email_corrected'
   // `password.reset`, not `account.password_reset`: section 21's convention is
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.

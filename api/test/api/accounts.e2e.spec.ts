@@ -665,6 +665,196 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
     });
   });
 
+  /** Correcting a mistyped address before activation (decision 0300). */
+  describe('correcting the email of an account awaiting activation', () => {
+    function correct(
+      accountId: string,
+      email: string,
+      account: TestAccount = admin,
+      key: string = randomUUID(),
+    ): request.Test {
+      return request(app.getHttpServer())
+        .post(`/api/v1/accounts/${accountId}/email`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .set('Idempotency-Key', key)
+        .send({ email });
+    }
+
+    async function provisionWrong(): Promise<{ id: string; token: string }> {
+      const created = await provision({
+        person_id: ester.id,
+        email: 'wrong@example.test',
+        role: 'ADMIN',
+      });
+      const token = outbox(app).last('ACTIVATION')?.token;
+      if (!token) {
+        throw new Error('No activation email was captured.');
+      }
+      return { id: created.body.id, token };
+    }
+
+    it('moves the account to the new address, kills the old link and sends a new one', async () => {
+      const { id, token: old } = await provisionWrong();
+
+      const response = await correct(id, 'Right@Example.test');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id,
+        email: 'Right@Example.test',
+        status: 'PENDING_ACTIVATION',
+      });
+
+      const sent = outbox(app).last('ACTIVATION');
+      expect(sent?.to.email).toBe('Right@Example.test');
+
+      expect(
+        (
+          await request(app.getHttpServer())
+            .post('/api/v1/auth/activate')
+            .send({ token: old, password: PASSWORD })
+        ).status,
+      ).toBe(422);
+      expect(
+        (
+          await request(app.getHttpServer())
+            .post('/api/v1/auth/activate')
+            .send({ token: sent?.token, password: PASSWORD })
+        ).status,
+      ).toBe(204);
+
+      const signIn = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: 'right@example.test', password: PASSWORD });
+      expect(signIn.status).toBe(200);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'actor_id', 'target_type', 'target_id', 'before', 'after'])
+        .where('action', '=', 'account.email_corrected')
+        .execute();
+      expect(entries).toEqual([
+        {
+          action: 'account.email_corrected',
+          actor_id: admin.id,
+          target_type: 'account',
+          target_id: id,
+          before: { email: 'wrong@example.test' },
+          after: { email: 'Right@Example.test' },
+        },
+      ]);
+    });
+
+    it('refuses once the account has been activated, and changes nothing', async () => {
+      const { id, token } = await provisionWrong();
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token, password: PASSWORD });
+
+      const response = await correct(id, 'right@example.test');
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      const stored = await db
+        .selectFrom('accounts')
+        .select('email')
+        .where('id', '=', id)
+        .executeTakeFirst();
+      expect(stored?.email).toBe('wrong@example.test');
+    });
+
+    it('also kills a reset link mailed to the old address before the correction', async () => {
+      // Forgot-password answers an account awaiting activation too (section 6).
+      const { id } = await provisionWrong();
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: 'wrong@example.test' });
+      const reset = outbox(app).last('PASSWORD_RESET')?.token;
+      expect(reset).toBeDefined();
+
+      expect((await correct(id, 'right@example.test')).status).toBe(200);
+
+      const redeemed = await request(app.getHttpServer())
+        .post('/api/v1/auth/reset-password')
+        .send({ token: reset, password: PASSWORD });
+      expect(redeemed.status).toBe(422);
+      const stored = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('id', '=', id)
+        .executeTakeFirst();
+      expect(stored?.status).toBe('PENDING_ACTIVATION');
+    });
+
+    it('refuses a disabled account', async () => {
+      const { id } = await provisionWrong();
+      await db.updateTable('accounts').set({ status: 'DISABLED' }).where('id', '=', id).execute();
+
+      const response = await correct(id, 'right@example.test');
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses the address it already has, and one another account holds', async () => {
+      const { id } = await provisionWrong();
+
+      const same = await correct(id, 'WRONG@example.test');
+      expect(same.status).toBe(409);
+      expect(same.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      const taken = await correct(id, admin.email);
+      expect(taken.status).toBe(409);
+      expect(taken.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses an actor without accounts.manage', async () => {
+      const { id } = await provisionWrong();
+      const leader = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Rico', network: 'MENS' }),
+        roles: ['LEADER'],
+      });
+
+      const response = await correct(id, 'right@example.test', leader);
+
+      expect(response.status).toBe(403);
+      const stored = await db
+        .selectFrom('accounts')
+        .select('email')
+        .where('id', '=', id)
+        .executeTakeFirst();
+      expect(stored?.email).toBe('wrong@example.test');
+    });
+
+    it('still answers 200 when the email cannot be delivered, and the address stands', async () => {
+      const { id } = await provisionWrong();
+      outbox(app).failNext = true;
+
+      const response = await correct(id, 'right@example.test');
+
+      expect(response.status).toBe(200);
+      const stored = await db
+        .selectFrom('accounts')
+        .select('email')
+        .where('id', '=', id)
+        .executeTakeFirst();
+      expect(stored?.email).toBe('right@example.test');
+    });
+
+    it('replays a retry rather than minting a second link', async () => {
+      const { id } = await provisionWrong();
+      const key = randomUUID();
+
+      const first = await correct(id, 'right@example.test', admin, key);
+      const sentBefore = outbox(app).sent.length;
+      const retry = await correct(id, 'right@example.test', admin, key);
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(first.body);
+      expect(outbox(app).sent.length).toBe(sentBefore);
+    });
+  });
+
   /**
    * The identity half of section 7's `SENIOR_PASTOR` rule, where it is asked the
    * second time.

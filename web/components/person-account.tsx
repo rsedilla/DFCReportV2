@@ -11,6 +11,7 @@ import { RadioGroup } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
 import {
   accountStatusLabel,
+  correctAccountEmail,
   getAccountForPerson,
   provisionAccount,
   resendActivation,
@@ -26,8 +27,9 @@ import { describeFailure, fieldErrorFor } from '@/lib/messages';
  * capabilities show that item is open. The page renders this only for a reader holding
  * `accounts.manage`; the API checks it on every request.
  *
- * Giving an account and resending its activation email are the two things the pilot's
- * setup needs. Changing a role or a grant is not offered: no route exists for either.
+ * Giving an account, resending its activation email and correcting a mistyped address
+ * before activation (decision 0300) are what the pilot's setup needs. Changing a role or a
+ * grant is not offered: no route exists for either.
  */
 export function PersonAccount({ personId, firstName }: { personId: string; firstName: string }) {
   const headingId = useId();
@@ -39,6 +41,11 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
   // is a new request.
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [resendKey, setResendKey] = useState(() => crypto.randomUUID());
+  const [correcting, setCorrecting] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [correctKey, setCorrectKey] = useState(() => crypto.randomUUID());
+  // Where the link went and which address it replaced, for the line after saving.
+  const [corrected, setCorrected] = useState<{ from: string; to: string } | null>(null);
 
   const account = useQuery({
     queryKey: ['person-account', personId],
@@ -59,6 +66,17 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
     onSuccess: () => setResendKey(crypto.randomUUID()),
   });
 
+  const correct = useMutation({
+    mutationFn: (input: { accountId: string; from: string }) =>
+      correctAccountEmail(input.accountId, newEmail.trim(), correctKey),
+    onSuccess: async (saved, input) => {
+      setCorrecting(false);
+      setCorrected({ from: input.from, to: saved.email });
+      resend.reset();
+      await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
+    },
+  });
+
   const current = account.data?.account ?? null;
 
   return (
@@ -75,7 +93,9 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
               ? describeFailure(account.error)
               : resend.isError
                 ? describeFailure(resend.error)
-                : give.isError && !fieldErrorFor(give.error, 'email')
+                : correct.isError && !fieldErrorFor(correct.error, 'email')
+                  ? describeFailure(correct.error)
+                  : give.isError && !fieldErrorFor(give.error, 'email')
                   ? describeFailure(give.error)
                   : null
           }
@@ -99,17 +119,74 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
           </p>
           {current.status === 'PENDING_ACTIVATION' ? (
             <div className="mt-3">
-              <Button
-                variant="secondary"
-                onClick={() => resend.mutate(current.id)}
-                disabled={resend.isPending}
-              >
-                {resend.isPending ? 'Sending…' : 'Resend the activation email'}
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setCorrected(null);
+                    resend.mutate(current.id);
+                  }}
+                  disabled={resend.isPending || correcting}
+                >
+                  {resend.isPending ? 'Sending…' : 'Resend the activation email'}
+                </Button>
+                {correcting ? null : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      // A new key each time the form opens, as for giving an account.
+                      setCorrectKey(crypto.randomUUID());
+                      setNewEmail('');
+                      correct.reset();
+                      resend.reset();
+                      setCorrected(null);
+                      setCorrecting(true);
+                    }}
+                  >
+                    Correct the email
+                  </Button>
+                )}
+              </div>
               {resend.isSuccess ? (
                 <p aria-live="polite" className="mt-2 text-sm font-medium">
                   Sent to {current.email}.
                 </p>
+              ) : null}
+              {corrected ? (
+                <p aria-live="polite" className="mt-2 text-sm font-medium">
+                  Sent to {corrected.to}. The link sent to {corrected.from} no longer works.
+                </p>
+              ) : null}
+              {correcting ? (
+                <form
+                  className="mt-4 flex max-w-md flex-col gap-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    correct.mutate({ accountId: current.id, from: current.email });
+                  }}
+                >
+                  <Field
+                    label="Correct email address"
+                    type="email"
+                    name="corrected-email"
+                    autoComplete="off"
+                    required
+                    value={newEmail}
+                    error={fieldErrorFor(correct.error, 'email')}
+                    onChange={(event) => {
+                      setNewEmail(event.target.value);
+                      setCorrectKey(crypto.randomUUID());
+                    }}
+                  />
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="submit" disabled={newEmail.trim() === '' || correct.isPending}>
+                      {correct.isPending ? 'Saving…' : 'Save and send to the new address'}
+                    </Button>
+                    <Button variant="quiet" type="button" onClick={() => setCorrecting(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
               ) : null}
             </div>
           ) : null}

@@ -8,7 +8,7 @@ import {
 } from '../common/idempotency/current-idempotency.decorator';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { CurrentActor } from './current-actor.decorator';
-import { ProvisionAccountDto } from './dto/credentials.dto';
+import { CorrectAccountEmailDto, ProvisionAccountDto } from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
 
@@ -76,5 +76,21 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
     await this.provisioning.resendActivation(id, actor, claim);
+  }
+
+  /**
+   * Corrects the address of an account nobody has activated, and sends the activation
+   * email there (section 6, decision 0300). Guarded like the re-send, against the Account.
+   */
+  @Post(':id/email')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
+  async correctEmail(
+    @Param('id') id: string,
+    @Body() body: CorrectAccountEmailDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.provisioning.correctEmail(id, body.email, actor, claim);
   }
 }

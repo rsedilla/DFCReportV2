@@ -634,6 +634,77 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await expect(page.getByText('Sent to marilou@example.test.')).toBeVisible();
     expect(resent).toEqual([`/api/v1/accounts/${accountId}/activation-email`]);
   });
+
+  test('corrects a mistyped address while the account waits (decision 0300)', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const accountId = '3f1b7c6e-0000-4000-8000-000000000901';
+    let email = 'wrong@example.test';
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: accountId,
+            email,
+            status: 'PENDING_ACTIVATION',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+          },
+        }),
+      }),
+    );
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/accounts/*/email', async (route) => {
+      sent.push(route.request().postDataJSON());
+      email = 'right@example.test';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: accountId, email, status: 'PENDING_ACTIVATION' }),
+      });
+    });
+
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Correct the email' }).click();
+    await page.getByLabel('Correct email address').fill('right@example.test');
+    await page.getByRole('button', { name: 'Save and send to the new address' }).click();
+
+    await expect(
+      page.getByText(
+        'Sent to right@example.test. The link sent to wrong@example.test no longer works.',
+      ),
+    ).toBeVisible();
+    expect(sent).toEqual([{ email: 'right@example.test' }]);
+    await expect(page.getByText(/^right@example\.test · Leader/)).toBeVisible();
+  });
+
+  test('offers no correction once the account is active', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: '3f1b7c6e-0000-4000-8000-000000000901',
+            email: 'marilou@example.test',
+            status: 'ACTIVE',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+          },
+        }),
+      }),
+    );
+
+    await page.goto(PROFILE);
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Correct the email' })).toHaveCount(0);
+  });
 });
 
 test.describe('typing a name', () => {
