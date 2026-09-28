@@ -365,6 +365,14 @@ export class AwaitingReassignmentDto {
 /** The fewest characters a people search runs on, counted once the term is normalized. */
 export const SEARCH_MINIMUM = 2;
 
+/**
+ * The bounds on a church-wide search (SKILL.md section 8, decision 0303): a longer term,
+ * a smaller page, and a per-account rate, so one leader's login cannot page the church.
+ */
+export const CHURCH_WIDE_SEARCH_MINIMUM = 3;
+export const CHURCH_WIDE_PAGE_LIMIT = 20;
+export const CHURCH_WIDE_SEARCHES_PER_MINUTE = 30;
+
 export class SearchPeopleDto {
   @IsString()
   // The upper bound is the name bound rather than a coincidence that matches it: this
@@ -403,7 +411,11 @@ export class SearchPeopleDto {
   @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 
-  /** Section 22: defaults to 50, maximum 200. */
+  /**
+   * Section 22: defaults to 50, maximum 200. Church-wide it defaults to 20 and allows no
+   * more, which the controller checks because the bound depends on `church_wide`
+   * (section 8, decision 0303).
+   */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

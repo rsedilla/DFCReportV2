@@ -2092,7 +2092,9 @@ Leaders may search the Person directory by name. **Its default is the searcher's
 
 **Where that directory is offered is a separate question from what it returns, and the two are answered separately** (ruling of 2026-09-13, decision 0244). The **People screen lists only people within the searching leader's pastoral scope**, so a leader opening it is shown the people under their care rather than the whole church. The church-wide directory stays reachable wherever a task requires naming a specific person — adding a Person, adding a member to a Cell, naming a new pastoral leader on a reassignment, naming who ran a Cell meeting (decision 0274) — because those are pickers inside an operation rather than a place to look around. **Two of them search one Network** (ruling of 2026-09-27, decision 0299): adding a member to a Cell searches the Cell's Network, and naming a new pastoral leader the Network of the person moved, because Sections 10 and 5 refuse any other. The narrowing follows the Cell or person acted on and never the searcher, is applied by the API, narrows rows and widens nothing; where that Network cannot be read the search stays church-wide. For an actor whose scope is the whole church the screen is unchanged, since their scope *is* the church.
 
-**The screen opens on that list rather than on an empty search** (ruling of 2026-09-19, decision 0259). With no term the route lists the actor's own scope, A to Z by surname, and each row the actor may read in full names the person's pastoral leader. Church-wide mode never lists without a term, and a term is at least two characters once normalized, in either mode. In the actor's own scope a term also matches a Member ID by prefix; never church-wide, where a prefix would page the directory.
+**The screen opens on that list rather than on an empty search** (ruling of 2026-09-19, decision 0259). With no term the route lists the actor's own scope, A to Z by surname, and each row the actor may read in full names the person's pastoral leader. Church-wide mode never lists without a term. A term is at least two characters once normalized in the actor's own scope, and at least three church-wide (decision 0303). In the actor's own scope a term also matches a Member ID by prefix; never church-wide, where a prefix would page the directory.
+
+**A church-wide search is bounded and recorded** (ruling of 2026-09-28, decision 0303). It returns at most 20 people per request, and a `limit` above 20 is refused rather than cut. An account may make at most 30 a minute. Each one is written to the audit log with the term as searched and how many people it returned, and a refused search writes nothing (Section 21). This binds every request for the church-wide directory, whoever sends it, a Whole Church scope included. It makes reaching the directory outside a picker slow, small and recorded, and does not forbid it.
 
 **The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and never by this screen. **The pickers may not be narrowed with the screen.** Section 10 makes Cell membership independent of pastoral assignment, so a Cell legitimately holds members its leader does not pastor, and narrowing the shared search rather than the screen would make exactly those people unaddable.
 
@@ -4480,6 +4482,7 @@ Audit important actions, including:
 - Person merge
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
+- Church-wide people search, with the term as searched and how many people it returned, targeting the searching account (Section 8)
 - System setting changed, with previous and new values
 - Encounter season recorded, or its dates changed, with previous and new values (Section 28)
 - SUYNL lesson confirmed, and a confirmation corrected with its reason; school graduation confirmed, and a confirmation corrected with its reason — each naming the Person the record is about (Section 28), and each carrying the confirming leader beside the actor where it was filed for a downline leader, on the terms the entry below states
@@ -4787,7 +4790,7 @@ GET /api/v1/people?q=dela+cruz&limit=50
 }
 ```
 
-- `limit` defaults to 50, maximum 200.
+- `limit` defaults to 50, maximum 200. A church-wide people search defaults to 20 and allows no more (Section 8).
 - The cursor is opaque. Clients pass it back unmodified and never construct one.
 - `next_cursor` is absent or null on the last page.
 - **A cursor the server cannot resolve is refused** with `VALIDATION_FAILED`, carrying `field: "cursor"` in `details`. Unparseable, forged, or structurally wrong, all the same answer. An absent cursor is still absent and starts at the first page; this is about one that was sent.

@@ -311,7 +311,7 @@ const SCANS = [
       await page.getByLabel('Last name').fill('Santos');
       await page.getByRole('radio', { name: 'Female' }).check();
       await page.getByRole('radio', { name: 'Married' }).check();
-      await page.getByLabel('Search for a leader by name').fill('an');
+      await page.getByLabel('Search for a leader by name').fill('ann');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('combobox', { name: 'Cell' }).selectOption({ index: 2 });
@@ -402,7 +402,7 @@ const SCANS = [
       await page.getByLabel('Last name').fill('Santos');
       await page.getByRole('radio', { name: 'Female' }).check();
       await page.getByRole('radio', { name: 'Married' }).check();
-      await page.getByLabel('Search for a leader by name').fill('an');
+      await page.getByLabel('Search for a leader by name').fill('ann');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('button', { name: 'Add this person' }).click();

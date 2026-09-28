@@ -216,6 +216,9 @@ export type AuditAction =
   | 'second_step.set_up'
   | 'second_step.reset'
   | 'second_step.recovery_code_used'
+  // Section 21 lists a church-wide people search (decision 0303). It targets the
+  // searching account; the noun is the directory the search reached.
+  | 'directory.searched'
   // `password.reset`, not `account.password_reset`: section 21's convention is
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.

@@ -1,13 +1,20 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { describeFailure } from '@/lib/messages';
-import { MINIMUM_SEARCH_LENGTH, searchPeople, type Network, type Person } from '@/lib/people';
+import {
+  MINIMUM_CHURCH_WIDE_SEARCH_LENGTH,
+  MINIMUM_SEARCH_LENGTH,
+  searchPeople,
+  type Network,
+  type Person,
+  type PersonPage,
+} from '@/lib/people';
 
 /**
  * Choosing the pastoral leader a new Person is placed under (SKILL.md sections 5
@@ -83,8 +90,12 @@ export function PersonPicker({
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
 
-  const results = useQuery({
+  // Church-wide, the API returns 20 at a time and takes three letters (decision 0303), so
+  // the rest of a long list is reached with Show more rather than a bigger page.
+  const pages = useInfiniteQuery<PersonPage>({
     queryKey: ['leader-search', submitted, churchWide, network],
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor ?? null,
     // **The pickers keep the church, and the People screen does not** (SKILL.md
     // section 8, decision 0244). Each of the four surfaces using this component —
     // Add a Person, Add a Cell member, naming a new pastoral leader on a
@@ -93,9 +104,30 @@ export function PersonPicker({
     // so a Cell legitimately holds members its leader does not pastor: narrowing
     // here would make exactly those people unaddable. A Network narrows two of them
     // (decision 0299), because their operation refuses any other Network anyway.
-    queryFn: ({ signal }) => searchPeople(submitted, null, signal, { churchWide, network }),
+    queryFn: ({ pageParam, signal }) =>
+      searchPeople(submitted, pageParam as string | null, signal, { churchWide, network }),
     enabled: submitted.trim().length > 0,
   });
+  const results = {
+    isPending: pages.isPending,
+    // A failed Show more keeps the people already shown; only a failed first page
+    // replaces the list with the notice.
+    isError: pages.isError && !pages.isFetchNextPageError,
+    data: pages.data?.pages.flatMap((page) => page.data) ?? [],
+  };
+  const minimum = churchWide ? MINIMUM_CHURCH_WIDE_SEARCH_LENGTH : MINIMUM_SEARCH_LENGTH;
+
+  // Show more disappears on the last page while it holds focus, so focus moves to the
+  // first person it loaded rather than falling to the top of the page (section 23).
+  const list = useRef<HTMLUListElement>(null);
+  const focusFrom = useRef<number | null>(null);
+  useEffect(() => {
+    const from = focusFrom.current;
+    if (from !== null && results.data.length > from) {
+      focusFrom.current = null;
+      list.current?.querySelectorAll<HTMLButtonElement>('button')[from]?.focus();
+    }
+  }, [results.data.length]);
 
   if (selectedId && selectedName) {
     return (
@@ -135,7 +167,7 @@ export function PersonPicker({
         />
         <Button
           variant="secondary"
-          disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}
+          disabled={term.trim().length < minimum}
           onClick={() => setSubmitted(term)}
         >
           Find
@@ -150,30 +182,48 @@ export function PersonPicker({
         person who most needs it, and neither a screenshot nor axe can see that.
       */}
       <div className="mt-3">
-        <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+        <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
 
       {submitted.trim().length === 0 ? null : results.isPending ? (
         <p className="text-muted mt-3 text-sm">Searching…</p>
-      ) : results.isError ? null : results.data.data.length === 0 ? (
+      ) : results.isError ? null : results.data.length === 0 ? (
         <p className="text-muted mt-3 text-sm">Nobody matches “{submitted}”.</p>
       ) : (
-        <ul className="divide-line mt-3 divide-y">
-          {results.data.data.map((person: Person) => (
-            <li key={person.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <span className="text-sm">
-                {person.full_name}{' '}
-                <span className="text-muted font-mono">{person.member_id}</span>
-              </span>
-              <Button
-                variant="secondary"
-                onClick={() => onSelect({ id: person.id, full_name: person.full_name })}
+        <>
+          <ul ref={list} className="divide-line mt-3 divide-y">
+            {results.data.map((person: Person) => (
+              <li
+                key={person.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
-                Choose
-              </Button>
-            </li>
-          ))}
-        </ul>
+                <span className="text-sm">
+                  {person.full_name}{' '}
+                  <span className="text-muted font-mono">{person.member_id}</span>
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={() => onSelect({ id: person.id, full_name: person.full_name })}
+                >
+                  Choose
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {pages.hasNextPage ? (
+            <Button
+              variant="secondary"
+              className="mt-3"
+              disabled={pages.isFetchingNextPage}
+              onClick={() => {
+                focusFrom.current = results.data.length;
+                void pages.fetchNextPage();
+              }}
+            >
+              {pages.isFetchingNextPage ? 'Loading…' : 'Show more'}
+            </Button>
+          ) : null}
+        </>
       )}
     </div>
   );

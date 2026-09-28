@@ -81,6 +81,9 @@ export interface PersonPage {
  */
 export const MINIMUM_SEARCH_LENGTH = 2;
 
+/** The shortest church-wide search the API accepts, counted the same way (decision 0303). */
+export const MINIMUM_CHURCH_WIDE_SEARCH_LENGTH = 3;
+
 /**
  * Search by name.
  *
