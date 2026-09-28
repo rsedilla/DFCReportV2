@@ -85,7 +85,7 @@ shape to copy.
 
 ### Accessibility
 
-`SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**. A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
+`SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**, with one stated exception: the second sign-in step of `ADMIN` and `SENIOR_PASTOR` accounts (3.3.8, ruling of 2026-09-28). A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
 
 - **The palette is checked on every build.** `web/scripts/check-contrast.mjs` computes 1.4.3 and 1.4.11 against the tokens in both themes and fails `npm run lint`. Contrast is decided by the palette, so a defect there is a defect on every screen at once, and no browser is needed to find it.
 - **From the first real screen, axe-core runs in CI** over every route, and a violation fails the build. That arrives with Stage 2, because a browser harness for a placeholder page checks nothing. Automated rules catch only part of AA — treat a green axe run as the floor, not the ceiling.
@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-28, the trigger being decision 0301: of 300 files, 299 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0301 each moved the first two and
+2026-09-28, the trigger being decision 0302: of 301 files, 300 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0302 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-28 and triggered by 0301, and was left stale by 0302 the same day. The one before that was dated
 2026-09-28 and triggered by 0300, and was left stale by 0301 the same day. The one before that was dated
 2026-09-27 and triggered by 0299, and was left stale by 0300 the next day. The one before that was dated
 2026-09-27 and triggered by 0298, and was left stale by 0299 the same day. The one before that was dated
@@ -643,6 +644,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-27 — [Two pickers search one Network](docs/decisions/0299-two-pickers-search-one-network.md)
 - 2026-09-28 — [An account's address is corrected before it is activated](docs/decisions/0300-an-address-is-corrected-before-activation.md)
 - 2026-09-28 — [The branch view lists DCC too](docs/decisions/0301-the-branch-view-lists-dcc-too.md)
+- 2026-09-28 — [Administrators and Senior Pastors sign in with a second step](docs/decisions/0302-administrators-and-senior-pastors-sign-in-with-a-second-step.md)
 
 ### Open — awaiting a ruling
 
