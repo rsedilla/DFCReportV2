@@ -488,6 +488,8 @@ All three parts apply wherever candidates are returned, including the refusal th
 
 **Each of the three was found only after the one before it had been closed**, and every time by the same mistake: reasoning about what the response *contained* rather than what the response was a *function of*. The fields were redacted and the tier still answered; the tier was withheld and membership still answered; membership was scoped and the filter and the ordering still answered. Treat any new decision this list is subjected to — a narrowing, a sort, a page boundary, a count — as a disclosure until it is shown to be a function of what the viewer may already know.
 
+**A lookup that shows somebody outside the viewer's scope is written to the audit log** (ruling of 2026-09-29, decision 0304): the account that looked, the first and last name as typed, and the Persons outside the scope it showed, but not the birthday or mobile number typed. One entry per request, targeting the searching account as a church-wide search's does (Section 8). A lookup that shows nobody outside the scope writes nothing, so a viewer whose scope is the whole church never writes one. It adds no limit: the lookup runs as a name is typed, and a limit reached while encoding would silence the warning it exists to give. The entry changes nothing in the response.
+
 **Only a candidate the viewer can be shown in full may gate creation**, which means one inside their pastoral scope. Two reasons, and the second is the one that is easy to miss.
 
 An out-of-scope Tier 1 candidate cannot be shown with its tier or reasons, so refusing on one would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all — a worse failure than the duplicate, and what this section means by never blocking creation.
@@ -4483,6 +4485,7 @@ Audit important actions, including:
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
 - Church-wide people search, with the term as searched and how many people it returned, targeting the searching account (Section 8)
+- Duplicate check that shows a Person outside the searcher's scope, with the names typed and the Persons shown, targeting the searching account (Section 3)
 - System setting changed, with previous and new values
 - Encounter season recorded, or its dates changed, with previous and new values (Section 28)
 - SUYNL lesson confirmed, and a confirmation corrected with its reason; school graduation confirmed, and a confirmation corrected with its reason — each naming the Person the record is about (Section 28), and each carrying the confirming leader beside the actor where it was filed for a downline leader, on the terms the entry below states

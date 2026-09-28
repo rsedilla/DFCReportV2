@@ -189,7 +189,22 @@ export class PeopleController {
       (personId) => this.read.isWithinViewScope(actor, personId),
     );
 
-    return { data: visible.slice(0, limit), next_cursor: null };
+    const data = visible.slice(0, limit);
+
+    // **A lookup that shows somebody outside the scope is recorded** (section 3,
+    // decision 0304): the names typed and the people shown, never the birthday or the
+    // mobile number. Only an out-of-scope candidate carries `possible_match`.
+    const outside = data.filter((row) => row.possible_match === true).map((row) => row.id);
+    if (outside.length > 0) {
+      await this.people.recordDuplicateCheck(
+        actor.accountId,
+        query.first_name,
+        query.last_name,
+        outside as string[],
+      );
+    }
+
+    return { data, next_cursor: null };
   }
 
   /**
