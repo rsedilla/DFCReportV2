@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import request from 'supertest';
 
+import { codeForStep, stepAt } from '../../src/auth/second-step.crypto';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   createAccount,
@@ -99,6 +100,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         status: 'PENDING_ACTIVATION',
         roles: ['ADMIN'],
         created_at: expect.any(String),
+        // An administrator, with the second step still to set up (decision 0302).
+        second_step: { required: true, set_up_at: null },
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);
@@ -1069,8 +1072,10 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .post('/api/v1/auth/login')
         .send({ email: 'ester@example.test', password: PASSWORD });
 
+      // An administrator: the password step answers with the second step to set up rather
+      // than a session, and activation does not pass it (decision 0302).
       expect(signIn.status).toBe(200);
-      expect(signIn.body.access_token).toBeTruthy();
+      expect(signIn.body.second_step).toBe('SETUP');
     });
 
     it('is single-use, so a replayed link cannot set a second password', async () => {
@@ -1216,9 +1221,19 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       // makes this account-wide revocation rather than only a credential change.
       await activeEster();
 
-      const before = await request(app.getHttpServer())
+      // An administrator, so a session is reached through the second step (decision 0302).
+      const ticket = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({ email: 'ester@example.test', password: PASSWORD });
+      const setup = await request(app.getHttpServer())
+        .post('/api/v1/auth/second-step/setup')
+        .send({ challenge: ticket.body.challenge });
+      const before = await request(app.getHttpServer())
+        .post('/api/v1/auth/second-step/setup/confirm')
+        .send({
+          challenge: ticket.body.challenge,
+          code: codeForStep(setup.body.key, stepAt(new Date())),
+        });
 
       expect(before.status).toBe(200);
 

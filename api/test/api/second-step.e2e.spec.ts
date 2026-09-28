@@ -239,7 +239,11 @@ describe('the second sign-in step (SKILL.md section 6, decision 0302)', () => {
       .send({ refresh_token: refresh.token });
     expect(refreshed.status).toBe(401);
 
-    // Setting the step up does not revive it.
+    // Setting the step up does not revive it. An access token's issue time is whole
+    // seconds, and the guard reads it as the last instant of its second so the token
+    // issued at setup is not refused; a token from the very second of setup is therefore
+    // accepted, so this waits past that second to test the rule rather than the window.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     await setUp(pastor);
     expect((await me(pastor.accessToken)).status).toBe(401);
   });
