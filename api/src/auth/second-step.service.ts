@@ -183,7 +183,7 @@ export class SecondStepService {
           .values(
             codes.map((recovery) => ({
               second_step_id: created.id,
-              code_hash: hashRecoveryCode(recovery),
+              code_hash: hashRecoveryCode(recovery, this.config.secondStepKey),
             })),
           )
           .execute();
@@ -328,16 +328,16 @@ export class SecondStepService {
     accountId: string,
     actorId: string | null,
   ): Promise<void> {
-    // The account row first, as every revocation takes it (section 6).
+    // The account row first, as every revocation takes it (section 6). It also closes
+    // every sign-in paused between the password and the code.
     await this.tokens.revokeAllSessionsWithin(trx, accountId);
 
-    const now = new Date();
     const revoked = await trx
       .updateTable('second_steps')
-      .set({ revoked_at: now })
+      .set({ revoked_at: new Date() })
       .where('account_id', '=', accountId)
       .where('revoked_at', 'is', null)
-      .returning('id')
+      .returning(['id', 'set_up_at'])
       .executeTakeFirst();
 
     if (!revoked) {
@@ -349,18 +349,12 @@ export class SecondStepService {
       );
     }
 
-    await trx
-      .updateTable('second_step_challenges')
-      .set({ used_at: now })
-      .where('account_id', '=', accountId)
-      .where('used_at', 'is', null)
-      .execute();
-
     await this.audit.writeWithin(trx, {
       actorId,
       action: 'second_step.reset',
       targetType: 'account',
       targetId: accountId,
+      before: { set_up_at: revoked.set_up_at.toISOString() },
     });
   }
 
@@ -444,7 +438,7 @@ export class SecondStepService {
       .updateTable('second_step_recovery_codes')
       .set({ used_at: new Date() })
       .where('second_step_id', '=', stepId)
-      .where('code_hash', '=', hashRecoveryCode(code))
+      .where('code_hash', '=', hashRecoveryCode(code, this.config.secondStepKey))
       .where('used_at', 'is', null)
       .returning('id')
       .executeTakeFirst();

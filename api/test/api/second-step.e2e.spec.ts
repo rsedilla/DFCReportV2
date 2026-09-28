@@ -217,6 +217,53 @@ describe('the second sign-in step (SKILL.md section 6, decision 0302)', () => {
     expect(entry.after).toEqual({ recovery_codes_left: 9 });
   });
 
+  it('ends a sign-in paused at the code when the account is revoked', async () => {
+    // A password reset exists to stop whoever held the old password; a ticket issued
+    // to them before it must not finish their sign-in afterwards.
+    const { challenge } = (await login(admin)).body;
+
+    await app.get(TokensService).revokeAllSessions(admin.id);
+
+    const after = await answer(challenge, { code: codeNow() });
+    expect(after.status).toBe(401);
+    expect(after.body.error.details).toEqual({ reason: 'SIGN_IN_AGAIN' });
+  });
+
+  it('refuses both a code and a recovery code, or neither', async () => {
+    const { challenge } = (await login(admin)).body;
+
+    const both = await answer(challenge, { code: codeNow(), recovery_code: 'abcd-efgh' });
+    expect(both.status).toBe(422);
+
+    const neither = await http().post('/api/v1/auth/second-step').send({ challenge });
+    expect(neither.status).toBe(422);
+
+    // A value of the wrong type is refused at the edge rather than answering 500.
+    const typed = await http()
+      .post('/api/v1/auth/second-step')
+      .send({ challenge, recovery_code: 12345 });
+    expect(typed.status).toBe(422);
+  });
+
+  it('holds the limit of five under wrong codes sent at once', async () => {
+    const { challenge } = (await login(admin)).body;
+    const wrong = codeNow() === '000000' ? '111111' : '000000';
+
+    const responses = await Promise.all(
+      Array.from({ length: 9 }, () => answer(challenge, { code: wrong })),
+    );
+    const reasons = responses.map((response) => response.body.error.details.reason as string);
+
+    expect(reasons.filter((reason) => reason === 'CODE_INCORRECT')).toHaveLength(4);
+    expect(reasons.filter((reason) => reason === 'SIGN_IN_AGAIN')).toHaveLength(5);
+
+    const row = await db
+      .selectFrom('second_step_challenges')
+      .select('failed_attempts')
+      .executeTakeFirstOrThrow();
+    expect(row.failed_attempts).toBe(5);
+  });
+
   it('never asks at refresh', async () => {
     const signedIn = await answer((await login(admin)).body.challenge, { code: codeNow() });
 
@@ -267,6 +314,8 @@ describe('the second sign-in step (SKILL.md section 6, decision 0302)', () => {
 
       const [entry] = await auditOf('second_step.reset');
       expect(entry).toMatchObject({ actor_id: admin.id, target_id: pastor.id });
+      // The step it ended, by when it was set up (section 21's before value).
+      expect(entry.before).toEqual({ set_up_at: expect.any(String) });
     });
 
     it("refuses an administrator's step, which is reset on the server", async () => {

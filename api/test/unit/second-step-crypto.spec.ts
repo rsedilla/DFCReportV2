@@ -68,12 +68,17 @@ describe('second sign-in step arithmetic', () => {
 
   it('issues ten distinct recovery codes, compared without case, spaces or the dash', () => {
     const codes = generateRecoveryCodes();
+    const key = randomBytes(32);
 
     expect(codes).toHaveLength(10);
     expect(new Set(codes).size).toBe(10);
     for (const code of codes) {
       expect(code).toMatch(/^[a-z2-9]{4}-[a-z2-9]{4}$/);
-      expect(hashRecoveryCode(code.toUpperCase().replace('-', ' '))).toBe(hashRecoveryCode(code));
+      expect(hashRecoveryCode(code.toUpperCase().replace('-', ' '), key)).toBe(
+        hashRecoveryCode(code, key),
+      );
+      // Keyed: without the key, the stored value cannot be matched by hashing guesses.
+      expect(hashRecoveryCode(code, randomBytes(32))).not.toBe(hashRecoveryCode(code, key));
     }
   });
 

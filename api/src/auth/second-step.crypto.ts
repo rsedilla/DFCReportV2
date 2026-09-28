@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 
 /**
  * The arithmetic of the second sign-in step (SKILL.md section 6, decision 0302), kept
@@ -114,7 +114,6 @@ export function decryptSecret(stored: string, key: Buffer): string {
 
 /**
  * Letters and digits a person can read back without confusing them: no 0/o, 1/l/i.
- * Eight of them carry 40 bits, which the sign-in rate limits make unguessable.
  */
 const RECOVERY_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const RECOVERY_CODE_COUNT = 10;
@@ -131,10 +130,14 @@ export function generateRecoveryCodes(): string[] {
 /**
  * What a recovery code is stored and compared as. Case, spaces and the dash are
  * forgiven, since the code is read off paper and typed on a phone.
+ *
+ * **An HMAC under `SECOND_STEP_KEY`, not a bare hash.** Eight characters are few enough
+ * that a plain SHA-256 is reversed from a copy of the database in minutes, which would
+ * hand a backup the second factor the secret is encrypted to keep out of it.
  */
-export function hashRecoveryCode(code: string): string {
+export function hashRecoveryCode(code: string, key: Buffer): string {
   const normalized = code.toLowerCase().replace(/[\s-]/g, '');
-  return createHash('sha256').update(normalized).digest('hex');
+  return createHmac('sha256', key).update(normalized).digest('hex');
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

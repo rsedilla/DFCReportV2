@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsEmailAddress } from '../../common/text/is-email-address';
 
@@ -57,15 +57,15 @@ export class SecondStepConfirmDto extends SecondStepSetupDto {
   device_label?: string;
 }
 
-/** A code from the app, or one recovery code: exactly one of the two. */
+/** A code from the app, or one recovery code. The controller refuses both or neither. */
 export class SecondStepDto extends SecondStepSetupDto {
-  @ValidateIf((body: SecondStepDto) => body.recovery_code === undefined)
+  @IsOptional()
   @IsString()
   @MinLength(1, { message: 'Enter the code from your app.' })
   @MaxLength(32)
   code?: string;
 
-  @ValidateIf((body: SecondStepDto) => body.code === undefined)
+  @IsOptional()
   @IsString()
   @MinLength(1, { message: 'Enter a recovery code.' })
   @MaxLength(32)

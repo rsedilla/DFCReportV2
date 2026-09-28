@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { ValidationFailedError } from '../common/errors/api-error';
+
 import { AuthService, type SessionTokens } from './auth.service';
 import { AuthenticatedOnly, Public } from './authorization/authorization.decorators';
 import { CredentialsService } from './credentials.service';
@@ -94,6 +96,9 @@ export class AuthController {
   @Public('Part of sign-in; the ticket from the password step is the credential.')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async secondStep(@Body() body: SecondStepDto): Promise<SessionTokens> {
+    if ((body.code === undefined) === (body.recovery_code === undefined)) {
+      throw new ValidationFailedError('Send either a code or a recovery code.');
+    }
     return this.secondSteps.verify(
       body.challenge,
       { code: body.code, recoveryCode: body.recovery_code },
