@@ -18,8 +18,7 @@ Section 22 refuses a cursor it cannot resolve. The pickers page on with Show mor
 own scope included.
 
 **3. An account may make at most 30 church-wide searches a minute.** Past it the search is
-refused as a rate limit (Section 24) until the minute has passed. It is counted per account,
-beside the API's general limit rather than in place of it.
+refused as a rate limit (Section 24) until the minute has passed. It is counted per account.
 
 **4. Every church-wide search is written to the audit log:** the account that searched, the
 term as searched, and how many people that request returned. The entry targets the searching account, as
@@ -40,9 +39,7 @@ does not confine it.
 ## Why
 
 A scraper needs many searches, short terms and large pages. Each limit takes one of those
-away, and the audit entry turns what remains into something an administrator can find. A
-real picker search sends one request for a name somebody typed, so none of the four limits
-reaches it.
+away, and the audit entry turns what remains into something an administrator can find.
 
 ---
 
