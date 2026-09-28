@@ -3,7 +3,7 @@
 Section 6 said "Do not require 2-step verification/MFA in V1." An `ADMIN` or
 `SENIOR_PASTOR` account reads the whole church, minors' records included, so one leaked or
 phished password opened every record. The owner reversed that line on 2026-09-28, choosing
-an authenticator-app code over an emailed one, and approved the five points below.
+an authenticator-app code over an emailed one, and approved the points below.
 
 ## The ruling
 
@@ -27,13 +27,27 @@ the account's sessions, and the next sign-in sets the step up again.
 
 **5. A code is accepted once, and guessing is bounded.** A code already used is refused, a
 sign-in that has passed the password allows five wrong codes before it must start again, and
-the sign-in rate limits apply to both steps.
+Section 24's authentication rate limiting applies to both steps.
+
+**6. It binds every client.** The step is part of sign-in at the API, so the Android and iOS
+apps meet it as the web does; setup there offers the key as text beside the QR code.
+
+**7. The authenticator secret is stored encrypted** (AES-256-GCM), under a key held in the
+environment and never in the database or the repository. The server must read it back, so
+it cannot be hashed; a copy of the database or a backup yields no usable secret. The API
+refuses to start without the key.
+
+**8. The step is a stated exception to criterion 3.3.8.** The code field accepts paste and
+autofill, so an authenticator on the same device fills it. Typed from another device it is a
+transcription task, which Section 6 otherwise forbids at sign-in. `architecture-guardian`
+found the conflict, and the owner accepted it for these accounts alone rather than add a
+passkey or drop the step.
 
 ## Why
 
-A second factor that is not the mailbox is the only one of the three options that still
+A second factor that is not the mailbox is the only option considered that still
 protects when the password and the inbox are both taken, and the password reset already runs
-through the inbox. It is confined to the three accounts that see the whole church, so no
+through the inbox. It is confined to the accounts that see the whole church, so no
 leader's sign-in changes.
 
 ---

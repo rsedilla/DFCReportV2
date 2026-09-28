@@ -1265,17 +1265,18 @@ alone. *This section said "Do not require 2-step verification/MFA in V1" until t
   step; the next sign-in asks for the code.
 - **An account that owes the step and has none is walked through setup at sign-in** — a QR
   code, then one code to confirm it — and receives no session until it is done. When the
-  ruling took effect, every existing session of those accounts was ended.
+  ruling takes effect, every existing session of those accounts is ended.
 - **Recovery.** Setup issues ten single-use recovery codes, each accepted once in place of a
   code and stored only as a hash. An administrator holding `accounts.manage` may reset a
   Senior Pastor's step. An administrator's step is reset only by a server command, never
   through the product, so no administrator can remove another's. A reset ends the account's
   sessions.
+- **It binds every client.** The step is part of sign-in at the API, so the Android and iOS apps (Section 2) meet it exactly as the web does, and setup there offers the key as text beside the QR code.
+- **The authenticator secret is stored encrypted**, under a key held in the environment rather than the database (Section 24). It is the one secret the server must read back, so it cannot be hashed; a copy of the database or a backup yields no usable secret. The API refuses to start without the key.
 - **A code is accepted once, and guessing is bounded.** A used code is refused; a sign-in
-  that has passed the password allows five wrong codes before it must start again; the
-  sign-in rate limits cover both steps.
-- **The code field accepts paste and autofill**, for the reason the password field does
-  (Section 23, criterion 3.3.8).
+  that has passed the password allows five wrong codes before it must start again; Section 24's
+  authentication rate limiting covers both steps.
+- **The code field accepts paste and autofill.** Typing it from another device is the one accepted exception to 3.3.8 (below).
 
 **Signing in supports a password manager** (WCAG 2.2, criterion 3.3.8; Section 23). Paste into the password field is never blocked, autofill is never obstructed, and the field is marked up so a manager can fill it.
 
@@ -1285,6 +1286,8 @@ That is what makes a password permissible. A password *is* a cognitive function 
 
 - a puzzle or a transcription challenge is a cognitive function test that neither object-recognition nor personal-content covers, so 3.3.8 forbids it outright unless an alternative or a mechanism is provided. A distorted-text CAPTCHA on its own is a conformance failure, not a matter of taste
 - **image selection is permitted by 3.3.8** under object recognition. Refusing it here goes beyond Level AA and matches 3.3.9 at AAA, and it is a choice about the people using this system, most of whom sign in on a phone
+
+**The second sign-in step is the one exception, and it is narrow** (ruling of 2026-09-28). An authenticator code on the same device as the sign-in is filled by paste or autofill, which is a mechanism. Read from a phone and typed into another device, it is a transcription task, and 3.3.8 is not met there. That is accepted for ADMIN and SENIOR_PASTOR accounts alone, whose holders chose the protection; every other sign-in conforms.
 
 ### Tokens, not browser sessions
 
@@ -1403,9 +1406,9 @@ The two are not equivalent in general: a foreign key makes a non-empty `accounts
 
 It takes a lock before it looks, so that two runs cannot both find an empty table.
 
-**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-08-31 — one of three permitted to write `audit_log.actor_id` null.
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-09-28 — one of three permitted to write `audit_log.actor_id` null.
 
-The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. The third is the command that resets an administrator's second sign-in step (ruling of 2026-09-28), run by an operator on the server with no account to act as. Neither touches the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a third is an amendment here.
+The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. The third is the command that resets an administrator's second sign-in step (ruling of 2026-09-28), run by an operator on the server with no account to act as. Neither touches the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a fourth is an amendment here.
 
 The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
 
@@ -5017,7 +5020,7 @@ Six criteria are called out, in four groups, because this system's own rules bea
 
 **2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
 
-**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it.
+**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it, and the one stated exception: the second sign-in step of ADMIN and SENIOR_PASTOR accounts, where a code typed from another device does not meet 3.3.8.
 
 **2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
 
@@ -5071,6 +5074,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Passwords hashed with a modern password hashing algorithm such as Argon2id or bcrypt
 - Short-lived access tokens with a secure refresh strategy, sized for several concurrent devices per account (Section 6)
 - Refresh tokens stored hashed, revocable individually and account-wide
+- Authenticator secrets for the second sign-in step stored encrypted (AES-256-GCM) under a key held in the environment and never in the database or the repository; the only secret the server must read back, so the only one not hashed (Section 6)
 - Server-side authorization
 - Database not publicly exposed
 - Input validation
