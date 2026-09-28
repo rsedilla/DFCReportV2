@@ -85,7 +85,7 @@ shape to copy.
 
 ### Accessibility
 
-`SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**. A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
+`SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**, with one stated exception: the second sign-in step of `ADMIN` and `SENIOR_PASTOR` accounts (3.3.8, ruling of 2026-09-28). A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
 
 - **The palette is checked on every build.** `web/scripts/check-contrast.mjs` computes 1.4.3 and 1.4.11 against the tokens in both themes and fails `npm run lint`. Contrast is decided by the palette, so a defect there is a defect on every screen at once, and no browser is needed to find it.
 - **From the first real screen, axe-core runs in CI** over every route, and a violation fails the build. That arrives with Stage 2, because a browser harness for a placeholder page checks nothing. Automated rules catch only part of AA — treat a green axe run as the floor, not the ceiling.

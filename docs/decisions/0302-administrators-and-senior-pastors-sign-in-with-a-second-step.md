@@ -47,8 +47,8 @@ passkey or drop the step.
 
 A second factor that is not the mailbox is the only option considered that still
 protects when the password and the inbox are both taken, and the password reset already runs
-through the inbox. It is confined to the accounts that see the whole church, so no
-leader's sign-in changes.
+through the inbox. It is tied to the `ADMIN` and `SENIOR_PASTOR` roles, so no `LEADER`
+account's sign-in changes.
 
 ---
 

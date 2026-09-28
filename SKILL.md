@@ -84,7 +84,7 @@ What is forbidden is precise, and is worth stating precisely here so that nobody
 
 The collision is that those frameworks make the prohibited use the *easy* one. `severity="error"` on a Cell that reported `NOT_HELD` is a five-second change that reads as idiomatic in review. `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and if declaring it paints their row red, leaders will record `HELD` instead — ranking the measure destroys the measure (Section 13). A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely, so it is not adopted.
 
-Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. The web application conforms to **WCAG 2.2 Level AA** (Section 23, Accessibility), so the primitives are chosen for whether they meet it rather than for how they look.
+Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. The web application conforms to **WCAG 2.2 Level AA**, with one stated exception (Section 23, Accessibility), so the primitives are chosen for whether they meet it rather than for how they look.
 
 ### The frontend is a client, like the phones
 
@@ -1272,7 +1272,7 @@ alone. *This section said "Do not require 2-step verification/MFA in V1" until t
   through the product, so no administrator can remove another's. A reset ends the account's
   sessions.
 - **It binds every client.** The step is part of sign-in at the API, so the Android and iOS apps (Section 2) meet it exactly as the web does, and setup there offers the key as text beside the QR code.
-- **The authenticator secret is stored encrypted**, under a key held in the environment rather than the database (Section 24). It is the one secret the server must read back, so it cannot be hashed; a copy of the database or a backup yields no usable secret. The API refuses to start without the key.
+- **The authenticator secret is stored encrypted**, under a key held in the environment rather than the database (Section 24). It is the one credential stored in the database that the server must read back, so it cannot be hashed; a copy of the database or a backup yields no usable secret. The API refuses to start without the key.
 - **A code is accepted once, and guessing is bounded.** A used code is refused; a sign-in
   that has passed the password allows five wrong codes before it must start again; Section 24's
   authentication rate limiting covers both steps.
@@ -1282,12 +1282,12 @@ alone. *This section said "Do not require 2-step verification/MFA in V1" until t
 
 That is what makes a password permissible. A password *is* a cognitive function test under 3.3.8 — it is remembered — and the criterion permits one where any of four conditions holds: an alternative not relying on such a test, a mechanism that assists in completing it, object recognition, or personal content. Two are live for a password, and **this system relies on the mechanism**: support for password managers. Blocking paste therefore does not merely inconvenience, it removes the thing conformance rests on. It is usually done in the name of security and produces the opposite, by pushing people toward passwords short enough to type from memory.
 
-**No sign-in step is a puzzle, an image-selection challenge, or a transcription task.** Two of those three are already required, and only one is a house rule, which is worth keeping straight:
+**No sign-in step is a puzzle, an image-selection challenge, or a transcription task**, with one exception below. Two of those three are already required, and only one is a house rule, which is worth keeping straight:
 
 - a puzzle or a transcription challenge is a cognitive function test that neither object-recognition nor personal-content covers, so 3.3.8 forbids it outright unless an alternative or a mechanism is provided. A distorted-text CAPTCHA on its own is a conformance failure, not a matter of taste
 - **image selection is permitted by 3.3.8** under object recognition. Refusing it here goes beyond Level AA and matches 3.3.9 at AAA, and it is a choice about the people using this system, most of whom sign in on a phone
 
-**The second sign-in step is the one exception, and it is narrow** (ruling of 2026-09-28). An authenticator code on the same device as the sign-in is filled by paste or autofill, which is a mechanism. Read from a phone and typed into another device, it is a transcription task, and 3.3.8 is not met there. That is accepted for ADMIN and SENIOR_PASTOR accounts alone, whose holders chose the protection; every other sign-in conforms.
+**The second sign-in step is the one exception, and it is narrow** (ruling of 2026-09-28). An authenticator code on the same device as the sign-in is filled by paste or autofill, which is a mechanism. Read from a phone and typed into another device, it is a transcription task, and 3.3.8 is not met there. The owner accepted that for `ADMIN` and `SENIOR_PASTOR` accounts alone; every other web sign-in conforms.
 
 ### Tokens, not browser sessions
 
@@ -5010,7 +5010,7 @@ Web UI must be responsive from the beginning. Leaders will use the web applicati
 
 ### Accessibility
 
-**The web application conforms to WCAG 2.2 Level AA.** This is a requirement, not an aspiration, and the things that make it checkable are in `CLAUDE.md` under Definition of Done.
+**The web application conforms to WCAG 2.2 Level AA**, with one stated exception, the second sign-in step under 3.3.8 below. This is a requirement, not an aspiration, and the things that make it checkable are in `CLAUDE.md` under Definition of Done.
 
 Level AA rather than A, because Level A omits colour contrast, and contrast is the criterion that decides whether a leader can read an attendance figure on their own phone, in a hall, at fifty. Not AAA: it asks for 7:1 contrast and a reading level this material cannot always meet, and a standard nobody meets is one everybody ignores.
 
@@ -5020,7 +5020,7 @@ Six criteria are called out, in four groups, because this system's own rules bea
 
 **2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
 
-**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it, and the one stated exception: the second sign-in step of ADMIN and SENIOR_PASTOR accounts, where a code typed from another device does not meet 3.3.8.
+**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it, and the one stated exception: the second sign-in step of `ADMIN` and `SENIOR_PASTOR` accounts, where a code typed from another device does not meet 3.3.8.
 
 **2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
 
@@ -5074,7 +5074,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Passwords hashed with a modern password hashing algorithm such as Argon2id or bcrypt
 - Short-lived access tokens with a secure refresh strategy, sized for several concurrent devices per account (Section 6)
 - Refresh tokens stored hashed, revocable individually and account-wide
-- Authenticator secrets for the second sign-in step stored encrypted (AES-256-GCM) under a key held in the environment and never in the database or the repository; the only secret the server must read back, so the only one not hashed (Section 6)
+- Authenticator secrets for the second sign-in step stored encrypted (AES-256-GCM) under a key held in the environment and never in the database or the repository; the only credential stored in the database that is not hashed (Section 6)
 - Server-side authorization
 - Database not publicly exposed
 - Input validation
