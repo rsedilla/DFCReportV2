@@ -1,3 +1,4 @@
+import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -157,6 +158,42 @@ describe('church-wide search is bounded and recorded (decision 0303)', () => {
       );
 
       expect((await search(mark, { q: 'Testfixture', church_wide: true })).status).toBe(200);
+    });
+  });
+
+  describe('the count', () => {
+    it('spends nothing on a cursor it refuses', async () => {
+      for (let n = 0; n < 31; n += 1) {
+        const refused = await search(mark, {
+          q: 'Testfixture',
+          church_wide: true,
+          cursor: 'not-a-cursor',
+        });
+        expect(refused.status).toBe(422);
+      }
+
+      expect((await search(mark, { q: 'Testfixture', church_wide: true })).status).toBe(200);
+    });
+
+    it('keeps each account on expiry timers of its own', async () => {
+      // The stock storage cancels every expiry timer under a throttler name when any key
+      // under it leaves its block. Under one shared name, one account waiting out its
+      // block froze every other account's count, which a minute-long block keeps a test
+      // from reaching, so the names are asserted instead.
+      await search(mark, { q: 'Testfixture', church_wide: true }).expect(200);
+      await search(manuel, { q: 'Testfixture', church_wide: true }).expect(200);
+
+      const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
+      const names = [
+        ...(storage as unknown as { timeoutIds: Map<string, unknown> }).timeoutIds.keys(),
+      ];
+      expect(names).toEqual(
+        expect.arrayContaining([
+          `church-wide-search:${mark.id}`,
+          `church-wide-search:${manuel.id}`,
+        ]),
+      );
+      expect(names).not.toContain('church-wide-search');
     });
   });
 

@@ -437,15 +437,19 @@ export class PeopleController {
         { field: 'limit' },
       );
     }
+    const cursor = decodeCursor(query.cursor);
     if (query.church_wide) {
-      // Counted after the checks above, so a refused request spends nothing, and under
-      // a throttler name of its own so it sits beside the route's general limit.
+      // Counted after the checks above and the cursor, so a refused request spends nothing.
+      // **The throttler name is per account, not shared.** The stock storage keeps its
+      // expiry timers per name and cancels every one under a name when any key's block
+      // ends, so a shared name let one account's block freeze everybody else's count.
+      const key = `church-wide-search:${actor.accountId}`;
       const spent = await this.throttle.increment(
-        `church-wide-search:${actor.accountId}`,
+        key,
         60_000,
         CHURCH_WIDE_SEARCHES_PER_MINUTE,
         60_000,
-        'church-wide-search',
+        key,
       );
       if (spent.isBlocked) {
         throw new ThrottlerException();
@@ -473,7 +477,7 @@ export class PeopleController {
     const { rows, nextCursor } = await this.read.searchByName(
       query.q ?? null,
       query.limit ?? (query.church_wide ? CHURCH_WIDE_PAGE_LIMIT : 50),
-      decodeCursor(query.cursor),
+      cursor,
       restrictTo,
       // A Member ID matches only inside the searcher's own scope: church-wide, a prefix
       // such as `M-00` would page the directory the minimum exists to protect.

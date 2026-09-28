@@ -408,10 +408,52 @@ test.describe('a church-wide picker is bounded (decision 0303)', () => {
     await page.getByRole('button', { name: 'Show more' }).click();
     await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(23);
     await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+    // Show more left with the last page, so focus moved to the first person it loaded.
+    await expect(page.getByRole('button', { name: 'Choose' }).nth(20)).toBeFocused();
 
     expect(searches.some((url) => url.includes('cursor=next-page'))).toBe(true);
     for (const url of searches) {
       expect(url, 'the picker asked for more than the API allows').not.toContain('limit=');
     }
+  });
+
+  test('keeps the people already shown when Show more is refused', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.route('**/api/v1/people?*', (route) => {
+      if (new URL(route.request().url()).searchParams.get('cursor') !== null) {
+        return route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'Too many requests. Try again shortly.',
+              details: {},
+            },
+          }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: Array.from({ length: 20 }, (_, n) => ({
+            ...PERSON_IN_SCOPE,
+            id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+            full_name: `Crowd ${n} Testfixture`,
+          })),
+          next_cursor: 'next-page',
+        }),
+      });
+    });
+
+    await page.goto('/people/new');
+    await page.getByLabel('Search for a leader by name').fill('Cro');
+    await page.getByRole('button', { name: 'Find' }).click();
+    await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(20);
+
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await expect(page.getByText('Too many attempts. Wait a minute and try again.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(20);
   });
 });

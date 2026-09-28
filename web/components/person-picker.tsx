@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -110,11 +110,24 @@ export function PersonPicker({
   });
   const results = {
     isPending: pages.isPending,
-    isError: pages.isError,
-    error: pages.error,
+    // A failed Show more keeps the people already shown; only a failed first page
+    // replaces the list with the notice.
+    isError: pages.isError && !pages.isFetchNextPageError,
     data: pages.data?.pages.flatMap((page) => page.data) ?? [],
   };
   const minimum = churchWide ? MINIMUM_CHURCH_WIDE_SEARCH_LENGTH : MINIMUM_SEARCH_LENGTH;
+
+  // Show more disappears on the last page while it holds focus, so focus moves to the
+  // first person it loaded rather than falling to the top of the page (section 23).
+  const list = useRef<HTMLUListElement>(null);
+  const focusFrom = useRef<number | null>(null);
+  useEffect(() => {
+    const from = focusFrom.current;
+    if (from !== null && results.data.length > from) {
+      focusFrom.current = null;
+      list.current?.querySelectorAll<HTMLButtonElement>('button')[from]?.focus();
+    }
+  }, [results.data.length]);
 
   if (selectedId && selectedName) {
     return (
@@ -169,7 +182,7 @@ export function PersonPicker({
         person who most needs it, and neither a screenshot nor axe can see that.
       */}
       <div className="mt-3">
-        <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+        <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
 
       {submitted.trim().length === 0 ? null : results.isPending ? (
@@ -178,7 +191,7 @@ export function PersonPicker({
         <p className="text-muted mt-3 text-sm">Nobody matches “{submitted}”.</p>
       ) : (
         <>
-          <ul className="divide-line mt-3 divide-y">
+          <ul ref={list} className="divide-line mt-3 divide-y">
             {results.data.map((person: Person) => (
               <li
                 key={person.id}
@@ -202,7 +215,10 @@ export function PersonPicker({
               variant="secondary"
               className="mt-3"
               disabled={pages.isFetchingNextPage}
-              onClick={() => void pages.fetchNextPage()}
+              onClick={() => {
+                focusFrom.current = results.data.length;
+                void pages.fetchNextPage();
+              }}
             >
               {pages.isFetchingNextPage ? 'Loading…' : 'Show more'}
             </Button>
