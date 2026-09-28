@@ -75,6 +75,28 @@ export class PeopleService {
   }
 
   /**
+   * Records one duplicate check that showed somebody outside the searcher's scope
+   * (SKILL.md sections 3 and 21, decision 0304): the names typed and the people shown,
+   * never the birthday or the mobile number, which describe the person being added.
+   */
+  async recordDuplicateCheck(
+    accountId: string,
+    firstName: string,
+    lastName: string,
+    shown: string[],
+  ): Promise<void> {
+    await this.db.transaction().execute((trx) =>
+      this.audit.writeWithin(trx, {
+        actorId: accountId,
+        action: 'directory.matched',
+        targetType: 'account',
+        targetId: accountId,
+        after: { first_name: firstName, last_name: lastName, shown },
+      }),
+    );
+  }
+
+  /**
    * Creates a Person, and everything the specification says comes with one.
    *
    * All of it in one transaction: the Person, their Network (assigned from sex,
