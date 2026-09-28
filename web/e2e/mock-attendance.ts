@@ -485,6 +485,71 @@ export async function mockDccRoster(page: Page): Promise<void> {
   );
 }
 
+/** A downline leader in the DCC branch view (decision 0301). Invented name. */
+export const OWED_LEADER_ID = '3f1b7c6e-0000-4000-8000-000000000611';
+
+/**
+ * The DCC branch view's two routes (decision 0301): 7 June owed by the reader and by a
+ * downline leader, and that leader's checklist of two with one mark.
+ */
+export async function mockDccOwed(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/owed?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        open: true,
+        data: [
+          {
+            event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            leader: {
+              person_id: OWED_LEADER_ID,
+              member_id: 'M-000711',
+              full_name: 'Carlo Reyes',
+              is_actor: false,
+              recorded_by_you: false,
+            },
+          },
+          {
+            event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            leader: {
+              person_id: LEADER_ID,
+              member_id: 'M-000700',
+              full_name: 'The reader',
+              is_actor: true,
+              recorded_by_you: true,
+            },
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route('**/api/v1/dcc/leaders/*/checklist?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        leader: { person_id: OWED_LEADER_ID, full_name: 'Carlo Reyes' },
+        events: [{ id: '3f1b7c6e-0000-4000-8000-000000000501', event_date: '2026-06-07' }],
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000612',
+            member_id: 'M-000712',
+            full_name: 'Benito Lagman',
+            marks: { '3f1b7c6e-0000-4000-8000-000000000501': null },
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000613',
+            member_id: 'M-000713',
+            full_name: 'Danilo Suarez',
+            marks: { '3f1b7c6e-0000-4000-8000-000000000501': true },
+          },
+        ],
+      }),
+    ),
+  );
+}
+
 /**
  * A meeting already recorded, held or not held: the correction screen's locked states.
  *

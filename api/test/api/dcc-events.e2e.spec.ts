@@ -563,4 +563,174 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
   });
+
+  // ---------------------------------------------------------------------------
+  // The branch view and a leader's checklist (decision 0301)
+  // ---------------------------------------------------------------------------
+
+  const owed = async (as: TestAccount, month: string): Promise<request.Response> =>
+    request(app.getHttpServer())
+      .get('/api/v1/dcc/owed')
+      .query({ month })
+      .set('Authorization', `Bearer ${as.accessToken}`);
+
+  const checklist = async (
+    as: TestAccount,
+    leaderId: string,
+    month: string,
+  ): Promise<request.Response> =>
+    request(app.getHttpServer())
+      .get(`/api/v1/dcc/leaders/${leaderId}/checklist`)
+      .query({ month })
+      .set('Authorization', `Bearer ${as.accessToken}`);
+
+  interface OwedRow {
+    event_id: string;
+    leader: { person_id: string; is_actor: boolean };
+  }
+
+  it('lists each leader in the branch who owes a record, the actor included, by name', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await owed(manuelAccount, monthOf(sunday));
+
+    expect(response.status).toBe(200);
+    const rows = (response.body.data as OwedRow[]).filter((row) => row.event_id === eventId);
+    expect(rows.map((row) => [row.leader.person_id, row.leader.is_actor])).toEqual([
+      [mark.id, false],
+      [manuel.id, true],
+    ]);
+  });
+
+  it('drops a leader from the branch view once they have a record', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+    await record(eventId, timothy.id, mark.id, markAccount);
+
+    const response = await owed(manuelAccount, monthOf(sunday));
+
+    const rows = (response.body.data as OwedRow[]).filter((row) => row.event_id === eventId);
+    expect(rows.map((row) => row.leader.person_id)).toEqual([manuel.id]);
+  });
+
+  it('never lists anybody above the actor', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await owed(markAccount, monthOf(sunday));
+
+    const rows = (response.body.data as OwedRow[]).filter((row) => row.event_id === eventId);
+    expect(rows.map((row) => row.leader.person_id)).toEqual([mark.id]);
+  });
+
+  it('keeps a whole-church grant to its holder’s own branch, not the church', async () => {
+    // The administrator holds the grant church-wide and leads nobody, so their branch owes
+    // nothing: the grant decides what may be seen, the tree decides whose work this is.
+    const sunday = await recentSunday();
+    await createEvent(sunday);
+
+    const response = await owed(admin, monthOf(sunday));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('lists nobody for a removed Sunday', async () => {
+    const sunday = await recentSunday();
+    await createEvent(sunday, { reason: 'Typhoon', by: admin });
+
+    const response = await owed(manuelAccount, monthOf(sunday));
+
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('shows a leader’s checklist: their disciples and each Sunday’s mark', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const before = await checklist(manuelAccount, mark.id, monthOf(sunday));
+    expect(before.status).toBe(200);
+    expect(before.body.leader.person_id).toBe(mark.id);
+    expect(before.body.data).toEqual([
+      expect.objectContaining({ person_id: timothy.id, marks: { [eventId]: null } }),
+    ]);
+
+    await record(eventId, timothy.id, mark.id, markAccount);
+
+    const after = await checklist(manuelAccount, mark.id, monthOf(sunday));
+    expect(after.body.data[0].marks).toEqual({ [eventId]: true });
+  });
+
+  it('shows only the leader’s own disciples, not people rolled up to them', async () => {
+    // Manuel's checklist is Mark and Nathan; Timothy is Mark's, whatever Mark's account.
+    const sunday = await recentSunday();
+    await createEvent(sunday);
+
+    const response = await checklist(manuelAccount, manuel.id, monthOf(sunday));
+
+    expect((response.body.data as { person_id: string }[]).map((row) => row.person_id)).toEqual([
+      mark.id,
+      nathan.id,
+    ]);
+  });
+
+  it('marks a leader without an account whose records fall to the actor as recorded by them', async () => {
+    // Nathan holds no account, so his disciples' records fall to Manuel, the nearest upline
+    // who does (section 9). Mark holds one, so his are his own.
+    const olive = await createPerson(db, { firstName: 'Olive', network: 'MENS' });
+    await assignTo(db, olive.id, nathan.id);
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await owed(manuelAccount, monthOf(sunday));
+
+    const rows = (
+      response.body.data as {
+        event_id: string;
+        leader: { person_id: string; recorded_by_you: boolean };
+      }[]
+    ).filter((row) => row.event_id === eventId);
+    const byLeader = new Map(rows.map((row) => [row.leader.person_id, row.leader.recorded_by_you]));
+    expect(byLeader.get(nathan.id)).toBe(true);
+    expect(byLeader.get(mark.id)).toBe(false);
+    expect(byLeader.get(manuel.id)).toBe(true);
+  });
+
+  it('leaves off a disciple who has since left the actor’s scope', async () => {
+    const sunday = await recentSunday();
+    await createEvent(sunday);
+
+    // Timothy was Mark's on that Sunday and is Raymond's now, above Manuel.
+    const moved = new Date();
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: moved })
+      .where('person_id', '=', timothy.id)
+      .where('ended_at', 'is', null)
+      .execute();
+    await db
+      .insertInto('pastoral_assignments')
+      .values({ person_id: timothy.id, leader_id: raymond.id, started_at: moved })
+      .execute();
+
+    const response = await checklist(manuelAccount, mark.id, monthOf(sunday));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('refuses a leader outside the actor’s scope, and an actor with no capability', async () => {
+    const sunday = await recentSunday();
+    await createEvent(sunday);
+
+    expect((await checklist(markAccount, manuel.id, monthOf(sunday))).status).toBe(403);
+
+    const outsider = await createPerson(db, { firstName: 'Rex', network: 'MENS' });
+    await assignTo(db, outsider.id, raymond.id);
+    const account = await createAccount(app, db, { person: outsider, roles: [] });
+
+    expect((await owed(account, monthOf(sunday))).status).toBe(403);
+    expect((await checklist(account, outsider.id, monthOf(sunday))).status).toBe(403);
+  });
 });

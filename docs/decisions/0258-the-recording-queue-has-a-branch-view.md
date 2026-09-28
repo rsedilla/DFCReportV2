@@ -20,7 +20,7 @@ record on the filing leader's behalf under `cell.take_attendance` and `cell.subm
 measured against that leader
 (decision 0192). The API decides this per row, and every row carries Record, because every queue entry carries the action that resolves it (Sections 15 and 19). A meeting the actor may see but not record stays on the attention list below the queue (owner's choice of 2026-09-19).
 
-**4. The branch view lists Cell meetings only.** DCC stays the actor's own checklist in both
+**4. The branch view lists Cell meetings only.** *Reversed by decision 0301, which lists DCC too.* DCC stays the actor's own checklist in both
 views, because a DCC checklist is always its leader's own and no screen yet records on another
 leader's behalf; a Sunday row would have offered no act (owner's choice of 2026-09-19). Who
 still owes a DCC record stays on each Sunday's coverage gaps (decision 0228), reached from the

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { AccountsRepository } from '../auth/accounts.repository';
 import {
   AuthorizationService,
   type Actor,
@@ -106,6 +107,7 @@ export class DccCoverageService {
     private readonly people: PeopleReadService,
     private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
+    private readonly accounts: AccountsRepository,
   ) {}
 
   /**
@@ -489,6 +491,315 @@ export class DccCoverageService {
     }
 
     return counts;
+  }
+
+  /**
+   * `GET /api/v1/dcc/owed?month=` — the Record page's *People I oversee* view for DCC
+   * (decision 0301): each Sunday of the month that takes a record now, and each leader in
+   * the actor's branch who still owes one for it, the actor included.
+   *
+   * **The branch is the pastoral tree beneath the actor as it stands now**, as for Cell
+   * meetings (decision 0258), narrowed to the leaders `dcc.view_subtree` covers. A Whole
+   * Church grant does not widen it to the church.
+   *
+   * **"Owes" is coverage's unit** (decision 0224): a leader with no live record naming them
+   * for that Sunday. The same unit as the Network screen's DCC figure, so a leader partly
+   * through their checklist is not listed here while their own checklist still shows who is
+   * unmarked.
+   *
+   * **One request for the month, walking the branch once.** Not paginated, on the argument
+   * the Cell queue's branch view makes: a month holds four or five Sundays, and the leaders
+   * are bounded by the G12 shape rather than by arithmetic.
+   */
+  async owedInBranch(actor: Actor, month: string): Promise<Record<string, unknown>> {
+    const reportingMonth = reportingMonthOf(month);
+    assertReportingMonth(reportingMonth);
+
+    const now = await databaseNow(this.db);
+    const rows = await this.db
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', reportingMonth)
+      .where('event_date', '<', nextMonth(reportingMonth))
+      .orderBy('event_date')
+      .execute();
+
+    const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    const covered =
+      membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : new Set([...membership.personIds].map((id) => canonicalId(id)));
+    const branch = (await this.hierarchy.subtreeOf(this.db, actor.personId)).filter(
+      (id) => covered === null || covered.has(canonicalId(id)),
+    );
+
+    const owed: { event: EventRow; leaderId: string; byActor: boolean }[] = [];
+
+    for (const row of rows) {
+      const event = this.describe(String(row.event_date), row, now);
+
+      // Only a Sunday that takes a record now: the view is a queue of work that can still
+      // be done, and a closed or removed Sunday or one not yet held owes nothing today.
+      if (event.notRecordable !== null) {
+        continue;
+      }
+
+      const { owing } = await this.obligations(this.db, event, branch);
+      const byActor = await this.submittedByActor(event, [...owing], actor.personId);
+
+      for (const leaderId of owing) {
+        owed.push({ event, leaderId, byActor: byActor.has(canonicalId(leaderId)) });
+      }
+    }
+
+    const identities = await this.people.forDecisionsWithin(this.db, [
+      ...new Set(owed.map((entry) => entry.leaderId)),
+    ]);
+    const me = canonicalId(actor.personId);
+
+    const lines = owed.map(({ event, leaderId, byActor }) => {
+      const identity = identities.get(leaderId);
+
+      return {
+        event,
+        leaderId,
+        byActor,
+        memberId: identity?.memberId ?? '',
+        fullName: identity?.fullName ?? '',
+        lastName: identity?.lastName ?? '',
+        firstName: identity?.firstName ?? '',
+      };
+    });
+
+    // Date first, then section 8's directory order: never by how far behind anybody is.
+    lines.sort(
+      (left, right) =>
+        left.event.eventDate.localeCompare(right.event.eventDate) ||
+        compareKeys(
+          { lastName: left.lastName, firstName: left.firstName, memberId: left.memberId },
+          { lastName: right.lastName, firstName: right.firstName, memberId: right.memberId },
+        ),
+    );
+
+    return {
+      reporting_month: reportingMonth,
+      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      data: lines.map((line) => ({
+        event_id: line.event.id,
+        event_date: line.event.eventDate,
+        leader: {
+          person_id: line.leaderId,
+          member_id: line.memberId,
+          full_name: line.fullName,
+          is_actor: canonicalId(line.leaderId) === me,
+          // The reader files this leader's records themselves (section 9): the leader holds
+          // no account and the reader is the nearest upline who does, so the leader's
+          // people are on the reader's own checklist for the Sunday.
+          recorded_by_you: line.byActor,
+        },
+      })),
+    };
+  }
+
+  /**
+   * Which of these leaders' records the actor files at this event (section 9): the actor
+   * themself, and a leader holding no account whose nearest upline holding one is the
+   * actor. The walk up is one statement per level, and stops at the first account holder.
+   */
+  private async submittedByActor(
+    event: EventRow,
+    leaderIds: readonly string[],
+    actorPersonId: string,
+  ): Promise<Set<string>> {
+    const me = canonicalId(actorPersonId);
+    const result = new Set<string>();
+    const holders = new Set(
+      [...(await this.accounts.personsHoldingAccounts(this.db, leaderIds))].map((id) =>
+        canonicalId(id),
+      ),
+    );
+
+    // Each leader still being walked, and the person whose leader is asked next.
+    let pending = new Map<string, string>();
+    for (const leaderId of leaderIds) {
+      const key = canonicalId(leaderId);
+      if (key === me) {
+        result.add(key);
+      } else if (!holders.has(key)) {
+        pending.set(key, key);
+      }
+    }
+
+    // Bounded, as every walk here is, so a cycle in the data cannot hang the request.
+    for (let depth = 0; pending.size > 0 && depth < 64; depth += 1) {
+      const nodes = [...new Set(pending.values())];
+      const assignments = await this.hierarchy.assignmentsAsOf(this.db, nodes, event.at);
+      const parentOf = new Map(
+        [...assignments].map(([personId, row]) => [
+          canonicalId(personId),
+          row.leaderId === null ? null : canonicalId(row.leaderId),
+        ]),
+      );
+      const parents = [
+        ...new Set([...parentOf.values()].filter((id): id is string => id !== null)),
+      ];
+      const parentHolders = new Set(
+        [...(await this.accounts.personsHoldingAccounts(this.db, parents))].map((id) =>
+          canonicalId(id),
+        ),
+      );
+
+      const next = new Map<string, string>();
+      for (const [leader, node] of pending) {
+        const parent = parentOf.get(node) ?? null;
+        if (parent === null) {
+          continue;
+        }
+        if (parent === me) {
+          result.add(leader);
+        } else if (!parentHolders.has(parent)) {
+          next.set(leader, parent);
+        }
+      }
+      pending = next;
+    }
+
+    return result;
+  }
+
+  /**
+   * `GET /api/v1/dcc/leaders/{id}/checklist?month=` — one leader's DCC checklist across a
+   * month, read only (decision 0301).
+   *
+   * **The people whose record this leader owes**: their direct disciples at each Sunday's
+   * instant. Not the leader's recording roster, which also carries people rolled up from
+   * leaders without an account; those appear on their own leader's checklist.
+   *
+   * **Only people the reader may see now** (`dcc.view_subtree`, sections 7 and 8). A
+   * disciple since moved out of the reader's scope is left off, as their own record page
+   * would refuse the reader; whether a past month may show them is recorded as open.
+   *
+   * **Archived and merged people are left off**, as the roster leaves them off, because
+   * nobody is asked to mark them.
+   *
+   * **Each mark is the person's live record for that Sunday, whoever filed it**, the same
+   * fact the roster and the person page already show (decisions 0194 and 0247).
+   */
+  async leaderChecklist(
+    actor: Actor,
+    leaderId: string,
+    month: string,
+  ): Promise<Record<string, unknown>> {
+    const reportingMonth = reportingMonthOf(month);
+    assertReportingMonth(reportingMonth);
+
+    const leader = await this.people.forDecision(leaderId);
+
+    if (!leader) {
+      throw new NotFoundError('No such person.');
+    }
+
+    const now = await databaseNow(this.db);
+    const rows = await this.db
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', reportingMonth)
+      .where('event_date', '<', nextMonth(reportingMonth))
+      .orderBy('event_date')
+      .execute();
+
+    // A removed Sunday and one not yet held have nobody on anybody's checklist.
+    const events = rows
+      .map((row) => this.describe(String(row.event_date), row, now))
+      .filter((event) => coverable(event));
+
+    const disciplesByEvent = new Map<string, string[]>();
+
+    for (const event of events) {
+      disciplesByEvent.set(
+        event.id,
+        await this.hierarchy.directChildrenOfManyAsOf(this.db, [leaderId], event.at),
+      );
+    }
+
+    const everyone = [...new Set([...disciplesByEvent.values()].flat())];
+    const identities = await this.people.forDecisionsWithin(this.db, everyone);
+    const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    const visible =
+      membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : new Set([...membership.personIds].map((id) => canonicalId(id)));
+    const listed = everyone.filter((personId) => {
+      const identity = identities.get(personId);
+      return (
+        identity !== undefined &&
+        !identity.isArchived &&
+        identity.mergedIntoId === null &&
+        (visible === null || visible.has(canonicalId(personId)))
+      );
+    });
+
+    const records =
+      listed.length === 0 || events.length === 0
+        ? []
+        : await this.db
+            .selectFrom('dcc_attendance')
+            .select(['dcc_event_id', 'person_id', 'present'])
+            .where(
+              'dcc_event_id',
+              'in',
+              events.map((event) => event.id),
+            )
+            .where('person_id', 'in', listed)
+            .where('superseded_at', 'is', null)
+            .execute();
+
+    const present = new Map(
+      records.map((record) => [
+        `${record.dcc_event_id}|${canonicalId(record.person_id)}`,
+        record.present,
+      ]),
+    );
+
+    const lines = listed
+      .map((personId) => {
+        const identity = identities.get(personId);
+        const marks: Record<string, boolean | null> = {};
+
+        for (const event of events) {
+          const onList = (disciplesByEvent.get(event.id) ?? []).some(
+            (id) => canonicalId(id) === canonicalId(personId),
+          );
+
+          if (onList) {
+            marks[event.id] = present.get(`${event.id}|${canonicalId(personId)}`) ?? null;
+          }
+        }
+
+        return {
+          personId,
+          memberId: identity?.memberId ?? '',
+          fullName: identity?.fullName ?? '',
+          lastName: identity?.lastName ?? '',
+          firstName: identity?.firstName ?? '',
+          marks,
+        };
+      })
+      .sort((left, right) => compareKeys(keyOf(left), keyOf(right)));
+
+    return {
+      reporting_month: reportingMonth,
+      leader: { person_id: leader.id, full_name: leader.fullName },
+      events: events.map((event) => ({ id: event.id, event_date: event.eventDate })),
+      // `marks` holds a Sunday only where the person was on the list that Sunday: `true`
+      // present, `false` absent, `null` not recorded yet.
+      data: lines.map((line) => ({
+        person_id: line.personId,
+        member_id: line.memberId,
+        full_name: line.fullName,
+        marks: line.marks,
+      })),
+    };
   }
 
   /**

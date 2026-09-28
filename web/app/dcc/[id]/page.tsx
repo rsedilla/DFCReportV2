@@ -150,6 +150,9 @@ function DccChecklist() {
       // The whole checklist the Record page and the DCC calendar count from.
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster-whole', params.id] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-events'] });
+      // The Record page's branch view and a leader's checklist read these records too.
+      await queryClient.invalidateQueries({ queryKey: ['dcc-owed'] });
+      await queryClient.invalidateQueries({ queryKey: ['dcc-leader-checklist'] });
     },
   });
 

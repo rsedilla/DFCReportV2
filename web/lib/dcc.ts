@@ -195,6 +195,55 @@ export async function getCoverageGaps(
   );
 }
 
+/** One DCC record still owed in the reader's branch: a Sunday and its leader (decision 0301). */
+export interface DccOwed {
+  event_id: string;
+  event_date: string;
+  leader: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+    is_actor: boolean;
+    /** The reader files this leader's records: the leader has no account (section 9). */
+    recorded_by_you: boolean;
+  };
+}
+
+/** The Record page's People I oversee view for DCC: one request for the month. */
+export async function getDccOwed(
+  month: string,
+  signal?: AbortSignal,
+): Promise<{ reporting_month: string; open: boolean; data: DccOwed[] }> {
+  return authenticatedRequest(`/api/v1/dcc/owed?${new URLSearchParams({ month }).toString()}`, {
+    signal,
+  });
+}
+
+/** A leader's DCC checklist across a month, read only (decision 0301). */
+export interface LeaderChecklist {
+  reporting_month: string;
+  leader: { person_id: string; full_name: string };
+  events: { id: string; event_date: string }[];
+  /** A Sunday is in `marks` only where the person was on the list that Sunday. */
+  data: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+    marks: Record<string, boolean | null>;
+  }[];
+}
+
+export async function getLeaderChecklist(
+  leaderId: string,
+  month: string,
+  signal?: AbortSignal,
+): Promise<LeaderChecklist> {
+  return authenticatedRequest(
+    `/api/v1/dcc/leaders/${leaderId}/checklist?${new URLSearchParams({ month }).toString()}`,
+    { signal },
+  );
+}
+
 /** Section 9's classification, as the API names it. */
 export type DccClassification = 'VIP' | '2ND_TIMER' | '3RD_TIMER' | '4TH_TIMER' | 'REGULAR';
 
