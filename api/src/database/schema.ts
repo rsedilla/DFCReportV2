@@ -144,6 +144,40 @@ export interface RefreshTokensTable {
   revoked_at: Date | null;
 }
 
+/**
+ * The second sign-in step of an `ADMIN` or `SENIOR_PASTOR` account (SKILL.md section 6,
+ * decision 0302). The secret is AES-256-GCM ciphertext under `SECOND_STEP_KEY`, never
+ * the secret itself.
+ */
+export interface SecondStepsTable {
+  id: Generated<string>;
+  account_id: string;
+  secret_ciphertext: string;
+  /** Kysely reads `bigint` as a string; see `SecondStepService`. */
+  last_used_step: ColumnType<string | null, number | null, number | null>;
+  /** Stamped by the application, like every instant compared against a token. */
+  set_up_at: ColumnType<Date, Date, Date>;
+  revoked_at: Date | null;
+}
+
+export interface SecondStepRecoveryCodesTable {
+  id: Generated<string>;
+  second_step_id: string;
+  code_hash: string;
+  used_at: Date | null;
+}
+
+export interface SecondStepChallengesTable {
+  id: Generated<string>;
+  account_id: string;
+  token_hash: string;
+  pending_secret_ciphertext: string | null;
+  failed_attempts: Generated<number>;
+  expires_at: ColumnType<Date, Date, Date>;
+  used_at: Date | null;
+  created_at: ServerTimestamp;
+}
+
 export interface AccountTokensTable {
   id: Generated<string>;
   account_id: string;
@@ -177,6 +211,11 @@ export type AuditAction =
   | 'account.activated'
   | 'account.activation_resent'
   | 'account.email_corrected'
+  // Section 21 lists "Second sign-in step set up or reset, and a recovery code used".
+  // Each targets the account.
+  | 'second_step.set_up'
+  | 'second_step.reset'
+  | 'second_step.recovery_code_used'
   // `password.reset`, not `account.password_reset`: section 21's convention is
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.
@@ -735,6 +774,9 @@ export interface Database {
   capability_grants: CapabilityGrantsTable;
   refresh_tokens: RefreshTokensTable;
   account_tokens: AccountTokensTable;
+  second_steps: SecondStepsTable;
+  second_step_recovery_codes: SecondStepRecoveryCodesTable;
+  second_step_challenges: SecondStepChallengesTable;
   cells: CellsTable;
   cell_categories: CellCategoriesTable;
   cell_schedules: CellSchedulesTable;

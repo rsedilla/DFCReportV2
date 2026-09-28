@@ -372,17 +372,80 @@ function writeSent(value: Sent | null): void {
   }
 }
 
+/**
+ * What sign-in answers an `ADMIN` or `SENIOR_PASTOR` account in place of a session
+ * (SKILL.md section 6, decision 0302): a ticket for the second step.
+ */
+export interface SecondStepChallenge {
+  second_step: 'CODE' | 'SETUP';
+  challenge: string;
+  expires_in: number;
+}
+
+/**
+ * Signs in, or returns the ticket for the second step where the account owes one. The
+ * session is adopted only once there is one.
+ */
 export async function signIn(
   email: string,
   password: string,
   deviceLabel: string | null,
-): Promise<void> {
-  const tokens = await apiRequest<SessionTokens>('/api/v1/auth/login', {
+): Promise<SecondStepChallenge | null> {
+  const answer = await apiRequest<SessionTokens | SecondStepChallenge>('/api/v1/auth/login', {
     method: 'POST',
     body: { email, password, device_label: deviceLabel ?? undefined },
   });
 
+  if ('second_step' in answer) {
+    return answer;
+  }
+
+  adopt(answer);
+  return null;
+}
+
+/** The second step: a code from the app, or one recovery code (decision 0302). */
+export async function completeSecondStep(
+  challenge: string,
+  answer: { code: string } | { recovery_code: string },
+  deviceLabel: string | null,
+): Promise<void> {
+  const tokens = await apiRequest<SessionTokens>('/api/v1/auth/second-step', {
+    method: 'POST',
+    body: { challenge, ...answer, device_label: deviceLabel ?? undefined },
+  });
+
   adopt(tokens);
+}
+
+/** Setup, first half: the secret to add to an authenticator app. */
+export async function startSecondStepSetup(
+  challenge: string,
+): Promise<{ key: string; otpauth_uri: string }> {
+  return apiRequest('/api/v1/auth/second-step/setup', {
+    method: 'POST',
+    body: { challenge },
+  });
+}
+
+/**
+ * Setup, second half. The session is adopted and the ten recovery codes are returned,
+ * which the API shows once and never again.
+ */
+export async function confirmSecondStepSetup(
+  challenge: string,
+  code: string,
+  deviceLabel: string | null,
+): Promise<string[]> {
+  const { recovery_codes: codes, ...tokens } = await apiRequest<
+    SessionTokens & { recovery_codes: string[] }
+  >('/api/v1/auth/second-step/setup/confirm', {
+    method: 'POST',
+    body: { challenge, code, device_label: deviceLabel ?? undefined },
+  });
+
+  adopt(tokens);
+  return codes;
 }
 
 /** Raised locally, without a network call, where the halt blocks one. */

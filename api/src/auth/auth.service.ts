@@ -3,10 +3,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ApiError, ApiErrorCode } from '../common/errors/api-error';
 import { PeopleReadService } from '../people/people.read.service';
 
-import { AccountsRepository } from './accounts.repository';
+import { AccountsRepository, sessionPredatesSecondStep } from './accounts.repository';
 import { AuthorizationService, type Actor } from './authorization/authorization.service';
 import { grantCoversNothing } from './authorization/single-scope';
 import { PasswordService } from './password.service';
+import { SecondStepService, type SecondStepChallenge } from './second-step.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokensService } from './tokens.service';
 
 export interface SessionTokens {
@@ -38,9 +39,18 @@ export class AuthService {
     private readonly tokens: TokensService,
     private readonly authorization: AuthorizationService,
     private readonly people: PeopleReadService,
+    private readonly secondSteps: SecondStepService,
   ) {}
 
-  async login(email: string, password: string, deviceLabel: string | null): Promise<SessionTokens> {
+  /**
+   * An account that owes the second step is answered with a ticket for it rather than
+   * with a session (section 6, decision 0302); every other account, as before.
+   */
+  async login(
+    email: string,
+    password: string,
+    deviceLabel: string | null,
+  ): Promise<SessionTokens | SecondStepChallenge> {
     const account = await this.accounts.findByEmail(email);
     const correct = await this.passwords.verify(account?.password_hash ?? null, password);
 
@@ -48,6 +58,10 @@ export class AuthService {
     // awaiting activation, and a disabled one are indistinguishable from outside.
     if (!account || !correct || account.status !== 'ACTIVE') {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Email or password is incorrect.');
+    }
+
+    if (account.owes_second_step) {
+      return this.secondSteps.begin(account);
     }
 
     await this.accounts.recordLogin(account.id);
@@ -189,6 +203,12 @@ export class AuthService {
     // marker is dead whatever its own row says; one issued after it is a new
     // session and is untouched, which is the boundary section 6 draws.
     if (account.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
+    // A session from before the second step the account owes is refused, never
+    // renewed (decision 0302). A refresh itself never asks for a code.
+    if (sessionPredatesSecondStep(account, row.issued_at)) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 

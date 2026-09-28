@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
+import { SecondStep } from '@/components/second-step';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { resolveLanding } from '@/lib/landing';
 import { describeFailure, type Failure } from '@/lib/messages';
-import { signIn } from '@/lib/session';
+import { signIn, type SecondStepChallenge } from '@/lib/session';
 
 /**
  * Sign-in, and the accessibility criterion this screen exists to satisfy.
@@ -37,6 +38,13 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // An administrator or Senior Pastor is asked for a second step after the password
+  // (SKILL.md section 6, decision 0302).
+  const [challenge, setChallenge] = useState<SecondStepChallenge | null>(null);
+
+  async function arrive() {
+    router.replace(await resolveLanding());
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,12 +52,17 @@ export default function SignInPage() {
     setSubmitting(true);
 
     try {
-      await signIn(email, password, 'Web browser');
+      const second = await signIn(email, password, 'Web browser');
+      if (second !== null) {
+        setPassword('');
+        setChallenge(second);
+        return;
+      }
       // Section 19 decides where a person lands (ruling of 2026-09-14): Record for
       // a leader, Reports for a whole-church reader. This is one of the two places a
       // signed-in person arrives from, and the home page is the other, so both ask
       // `resolveLanding` rather than each naming a route.
-      router.replace(await resolveLanding());
+      await arrive();
     } catch (cause) {
       // The one caller that passes `credentialRefusal`: this form is the only
       // place where `UNAUTHENTICATED` means "what you typed was refused" rather
@@ -61,6 +74,20 @@ export default function SignInPage() {
       );
       setSubmitting(false);
     }
+  }
+
+  if (challenge !== null) {
+    return (
+      <SecondStep
+        start={challenge}
+        onDone={() => void arrive()}
+        onSignInAgain={(message) => {
+          setChallenge(null);
+          setSubmitting(false);
+          setFailure(message === '' ? null : { message, aboutInput: false });
+        }}
+      />
+    );
   }
 
   return (

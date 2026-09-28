@@ -8,6 +8,7 @@ import {
 } from '../common/idempotency/current-idempotency.decorator';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { CurrentActor } from './current-actor.decorator';
+import { SecondStepService } from './second-step.service';
 import { CorrectAccountEmailDto, ProvisionAccountDto } from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
@@ -23,7 +24,10 @@ import type { Actor } from './authorization/authorization.service';
  */
 @Controller('accounts')
 export class AccountsController {
-  constructor(private readonly provisioning: AccountProvisioningService) {}
+  constructor(
+    private readonly provisioning: AccountProvisioningService,
+    private readonly secondSteps: SecondStepService,
+  ) {}
 
   /**
    * Creates an account, grants the role that qualifies it, and sends the
@@ -92,5 +96,21 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.provisioning.correctEmail(id, body.email, actor, claim);
+  }
+
+  /**
+   * Resets a Senior Pastor's second sign-in step, ending their sessions; they set it up
+   * again at their next sign-in (section 6, decision 0302). An administrator's is refused
+   * here and reset only on the server.
+   */
+  @Post(':id/second-step/reset')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
+  async resetSecondStep(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<void> {
+    await this.secondSteps.resetByAdministrator(id, actor, claim);
   }
 }

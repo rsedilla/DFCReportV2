@@ -18,6 +18,7 @@ import { CredentialsService } from './credentials.service';
 import { AuthService } from './auth.service';
 import { AccessTokenGuard } from './authorization/access-token.guard';
 import { PasswordService } from './password.service';
+import { SecondStepService } from './second-step.service';
 import { TokensService } from './tokens.service';
 
 /**
@@ -54,12 +55,13 @@ import { TokensService } from './tokens.service';
     AuthService,
     CredentialsService,
     PasswordService,
+    SecondStepService,
     TokensService,
     AccessTokenGuard,
   ],
   // AccessTokenGuard and CapabilityGuard are registered as global guards in
   // AppModule, so their dependencies must be resolvable from there. Nest resolves
   // a provider's dependencies in the context of the module that registers it.
-  exports: [AccountsRepository, AccessTokenGuard, TokensService],
+  exports: [AccountsRepository, AccessTokenGuard, SecondStepService, TokensService],
 })
 export class AuthModule {}

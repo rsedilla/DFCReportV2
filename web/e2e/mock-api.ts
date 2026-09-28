@@ -619,6 +619,70 @@ export async function mockDuplicateRefusal(page: Page): Promise<void> {
   });
 }
 
+/** The code the fake authenticator shows, for `mockSecondStep`. */
+export const SECOND_STEP_CODE = '123456';
+
+/** Ten invented recovery codes, as setup returns them. */
+export const RECOVERY_CODES = [
+  'a7kq-3m9x',
+  'p2vt-8hwe',
+  'n4rz-6cb1',
+  'x9dj-2kfu',
+  'm3sy-7qla',
+  'w6ge-2tpo',
+  'c8hn-5vzr',
+  't3bu-4xmd',
+  'k5wf-9jse',
+  'r7pq-8ynh',
+];
+
+/**
+ * An administrator's or Senior Pastor's sign-in (decision 0302): the password step answers
+ * with a ticket, and the second step accepts `SECOND_STEP_CODE` and refuses anything else
+ * with four tries left. `SETUP` walks through setup first. `/auth/me` answers for the
+ * signed-in session, so the landing redirect has somewhere to go.
+ */
+export async function mockSecondStep(page: Page, mode: 'CODE' | 'SETUP'): Promise<void> {
+  await page.route('**/api/v1/auth/login', (route) =>
+    route.fulfill(json({ second_step: mode, challenge: 'test-challenge', expires_in: 300 })),
+  );
+
+  const refuseOr = (ok: unknown) => (route: import('@playwright/test').Route) => {
+    const body = route.request().postDataJSON() as { code?: string; recovery_code?: string };
+    const right = body.code === SECOND_STEP_CODE || RECOVERY_CODES.includes(body.recovery_code ?? '');
+    return route.fulfill(
+      right
+        ? json(ok)
+        : json(
+            {
+              error: {
+                code: 'UNAUTHENTICATED',
+                message: 'That code did not work. 4 tries left, then you sign in again from the start.',
+                details: { reason: 'CODE_INCORRECT', attempts_left: 4 },
+              },
+            },
+            401,
+          ),
+    );
+  };
+
+  await page.route('**/api/v1/auth/second-step', refuseOr(SESSION_TOKENS));
+  await page.route('**/api/v1/auth/second-step/setup', (route) =>
+    route.fulfill(
+      json({
+        key: 'JBSWY3DPEHPK3PXP',
+        otpauth_uri:
+          'otpauth://totp/DFC%20Report%3Aadmin%40example.invalid?secret=JBSWY3DPEHPK3PXP&issuer=DFC+Report',
+      }),
+    ),
+  );
+  await page.route(
+    '**/api/v1/auth/second-step/setup/confirm',
+    refuseOr({ ...SESSION_TOKENS, recovery_codes: RECOVERY_CODES }),
+  );
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json(ME)));
+}
+
 /** A sign-in that is refused, for scanning the form-level error state. */
 export async function mockSignInRefused(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/login', (route) =>

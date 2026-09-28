@@ -11,6 +11,11 @@ export interface AppConfig {
   port: number;
   databaseUrl: string;
   jwtSecret: string;
+  /**
+   * The AES-256-GCM key the second sign-in step's secrets are encrypted under (SKILL.md
+   * sections 6 and 24, decision 0302). Thirty-two bytes, from `SECOND_STEP_KEY` in base64.
+   */
+  secondStepKey: Buffer;
   corsAllowedOrigins: string[];
   /**
    * The Person identifiers of the two Senior Pastors (SKILL.md section 7). Empty
@@ -163,11 +168,22 @@ export function loadConfig(): AppConfig {
 
   const { emailTransport, emailOutboxDir, smtp } = emailDelivery(nodeEnv);
 
+  // **Required, and the process refuses to start without it** (decision 0302). Without the
+  // key no administrator or Senior Pastor could sign in, and a default would be a key
+  // committed to a public repository.
+  const secondStepKey = Buffer.from(required('SECOND_STEP_KEY').trim(), 'base64');
+  if (secondStepKey.length !== 32) {
+    throw new Error(
+      'SECOND_STEP_KEY must be 32 random bytes in base64, e.g. the output of `openssl rand -base64 32`',
+    );
+  }
+
   return {
     nodeEnv,
     port,
     databaseUrl: required('DATABASE_URL'),
     jwtSecret,
+    secondStepKey,
     corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ?? '')
       .split(',')
       .map((origin) => origin.trim())

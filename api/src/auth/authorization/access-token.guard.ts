@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 
 import { UnauthenticatedError } from '../../common/errors/api-error';
-import { AccountsRepository } from '../accounts.repository';
+import { AccountsRepository, sessionPredatesSecondStep } from '../accounts.repository';
 import { TokensService } from '../tokens.service';
 
 import { PUBLIC_METADATA } from './authorization.decorators';
@@ -68,6 +68,13 @@ export class AccessTokenGuard implements CanActivate {
     }
 
     if (isRevoked(account.sessions_revoked_at, claims.iat)) {
+      throw new UnauthenticatedError('Your session has ended. Sign in again.');
+    }
+
+    // `iat` is whole seconds, so it is read as the last instant of its second: the
+    // token issued by the sign-in that set the step up lands in the same second as
+    // `set_up_at`, and must not be refused for it (decision 0302).
+    if (sessionPredatesSecondStep(account, new Date(claims.iat * 1000 + 999))) {
       throw new UnauthenticatedError('Your session has ended. Sign in again.');
     }
 
