@@ -22,6 +22,8 @@ describe('a duplicate check showing somebody outside the branch is recorded (dec
 
   // Men's: Oriel -> Mark -> Pedro, and a sibling branch Oriel -> Manuel -> Juan that
   // Mark does not oversee.
+  let markPerson: TestPerson;
+  let manuel: TestPerson;
   let pedro: TestPerson;
   let juan: TestPerson;
   let mark: TestAccount;
@@ -36,8 +38,8 @@ describe('a duplicate check showing somebody outside the branch is recorded (dec
     await truncateAll(db);
 
     const oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
-    const markPerson = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
-    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    markPerson = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+    manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     pedro = await createPerson(db, { firstName: 'Pedro', lastName: 'Dizon', network: 'MENS' });
     juan = await createPerson(db, { firstName: 'Juan', lastName: 'Dizon', network: 'MENS' });
 
@@ -102,6 +104,50 @@ describe('a duplicate check showing somebody outside the branch is recorded (dec
     await check(mark, { first_name: 'Juan', last_name: 'Dizon' }).expect(200);
 
     expect(await entries()).toHaveLength(2);
+  });
+
+  it('records everybody outside the branch it showed in one entry, and nobody inside it', async () => {
+    // A second Juan Dizon outside the branch, and one inside it.
+    const juanElsewhere = await createPerson(db, {
+      firstName: 'Juan',
+      lastName: 'Dizon',
+      network: 'MENS',
+      birthDate: '1972-11-03',
+    });
+    await assignTo(db, juanElsewhere.id, manuel.id);
+    const juanInside = await createPerson(db, {
+      firstName: 'Juan',
+      lastName: 'Dizon',
+      network: 'MENS',
+      birthDate: '2001-04-21',
+    });
+    await assignTo(db, juanInside.id, markPerson.id);
+
+    const response = await check(mark, { first_name: 'Juan', last_name: 'Dizon' });
+    expect((response.body.data as { id: string }[]).map((row) => row.id).sort()).toEqual(
+      [juan.id, juanElsewhere.id, juanInside.id].sort(),
+    );
+
+    const written = await entries();
+    expect(written).toHaveLength(1);
+    expect((written[0].after as { shown: string[] }).shown.sort()).toEqual(
+      [juan.id, juanElsewhere.id].sort(),
+    );
+  });
+
+  it('records only the people the page showed', async () => {
+    // Somebody inside the branch comes first, so a page of one shows only them.
+    const juanInside = await createPerson(db, {
+      firstName: 'Juan',
+      lastName: 'Dizon',
+      network: 'MENS',
+      birthDate: '2001-04-21',
+    });
+    await assignTo(db, juanInside.id, markPerson.id);
+
+    const response = await check(mark, { first_name: 'Juan', last_name: 'Dizon', limit: '1' });
+    expect((response.body.data as { id: string }[]).map((row) => row.id)).toEqual([juanInside.id]);
+    expect(await entries()).toEqual([]);
   });
 
   it('writes nothing when the check shows only people inside the branch', async () => {

@@ -1,8 +1,7 @@
 # 2026-09-29 — A duplicate check that shows someone outside the branch is recorded
 
-The scraping probe (decision 0303's test) found that Add a Person's duplicate check
-confirms guessed whole names across the church: 141 people outside the leader's branch
-from 81 requests, limited only by the general 120 a minute and written nowhere. It
+The scraping probe found that Add a Person's duplicate check confirms guessed whole
+names across the church, limited only by the general 120 a minute and written nowhere. It
 cannot find a name the searcher does not already have, and Section 3 already keeps
 birthdays and mobile numbers out of what it reveals. The owner chose on 2026-09-29 to
 record it rather than limit it.
