@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-28, the trigger being decision 0301: of 300 files, 299 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0301 each moved the first two and
+2026-09-28, the trigger being decision 0302: of 301 files, 300 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0302 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-28 and triggered by 0301, and was left stale by 0302 the same day. The one before that was dated
 2026-09-28 and triggered by 0300, and was left stale by 0301 the same day. The one before that was dated
 2026-09-27 and triggered by 0299, and was left stale by 0300 the next day. The one before that was dated
 2026-09-27 and triggered by 0298, and was left stale by 0299 the same day. The one before that was dated
@@ -643,6 +644,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-27 — [Two pickers search one Network](docs/decisions/0299-two-pickers-search-one-network.md)
 - 2026-09-28 — [An account's address is corrected before it is activated](docs/decisions/0300-an-address-is-corrected-before-activation.md)
 - 2026-09-28 — [The branch view lists DCC too](docs/decisions/0301-the-branch-view-lists-dcc-too.md)
+- 2026-09-28 — [Administrators and Senior Pastors sign in with a second step](docs/decisions/0302-administrators-and-senior-pastors-sign-in-with-a-second-step.md)
 
 ### Open — awaiting a ruling
 

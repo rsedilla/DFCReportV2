@@ -1251,8 +1251,31 @@ Include:
 - Account Activation / Set Password via email
 - Change Password
 - Secure token handling
+- A second sign-in step for `ADMIN` and `SENIOR_PASTOR` accounts (below)
 
-Do not require 2-step verification/MFA in V1.
+### The second sign-in step
+
+**An account holding `ADMIN` or `SENIOR_PASTOR` passes a second step to sign in** (ruling of
+2026-09-28): a six-digit authenticator-app code (TOTP, RFC 6238). These are the accounts that
+read the whole church, minors' records included. `LEADER` accounts sign in with a password
+alone. *This section said "Do not require 2-step verification/MFA in V1" until that ruling.*
+
+- **It is asked at password sign-in and nowhere else.** A refresh asks for nothing, so a
+  signed-in device keeps its 30 days. A password reset or an activation does not pass the
+  step; the next sign-in asks for the code.
+- **An account that owes the step and has none is walked through setup at sign-in** — a QR
+  code, then one code to confirm it — and receives no session until it is done. When the
+  ruling took effect, every existing session of those accounts was ended.
+- **Recovery.** Setup issues ten single-use recovery codes, each accepted once in place of a
+  code and stored only as a hash. An administrator holding `accounts.manage` may reset a
+  Senior Pastor's step. An administrator's step is reset only by a server command, never
+  through the product, so no administrator can remove another's. A reset ends the account's
+  sessions.
+- **A code is accepted once, and guessing is bounded.** A used code is refused; a sign-in
+  that has passed the password allows five wrong codes before it must start again; the
+  sign-in rate limits cover both steps.
+- **The code field accepts paste and autofill**, for the reason the password field does
+  (Section 23, criterion 3.3.8).
 
 **Signing in supports a password manager** (WCAG 2.2, criterion 3.3.8; Section 23). Paste into the password field is never blocked, autofill is never obstructed, and the field is marked up so a manager can fill it.
 
@@ -1380,9 +1403,9 @@ The two are not equivalent in general: a foreign key makes a non-empty `accounts
 
 It takes a lock before it looks, so that two runs cannot both find an empty table.
 
-**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-08-31 — one of two permitted to write `audit_log.actor_id` null.
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-08-31 — one of three permitted to write `audit_log.actor_id` null.
 
-The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. It touches none of the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a third is an amendment here.
+The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. The third is the command that resets an administrator's second sign-in step (ruling of 2026-09-28), run by an operator on the server with no account to act as. Neither touches the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a third is an amendment here.
 
 The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
 
@@ -1886,7 +1909,7 @@ Where the configuration is what is wrong rather than the row, this means a real 
 
 **A succession is an amendment to Section 4 and a configuration change together.** Section 4 names the two Senior Pastors, so who holds the role is recorded in this specification and approved as any other change to it is. Revoking the role row frees the seat; the configuration follows the section. Neither alone moves a seat.
 
-`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. Section 21 makes the same allowance for `audit_log.actor_id`, which since 2026-08-31 has two permitted writers rather than one — the first Admin account and the DCC calendar command (Sections 6 and 9). `granted_by` still has one, and the two allowances are no longer parallel. Every other role grant has an actor.
+`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. Section 21 makes the same allowance for `audit_log.actor_id`, which has three permitted writers — the first Admin account, the DCC calendar command, and since 2026-09-28 the command resetting an administrator's second sign-in step (Sections 6 and 9). `granted_by` still has one, and the two allowances are no longer parallel. Every other role grant has an actor.
 
 ```text
 capability_grants
@@ -1910,7 +1933,7 @@ capability_grants
 
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
-- an endpoint reachable **without authentication**, which is a closed list: sign-in, token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
+- an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
 - an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions. **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
 
 Beyond those requests, which carry what their sender asked and the decision on it, neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
@@ -4423,6 +4446,7 @@ Audit important actions, including:
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
+- Second sign-in step set up or reset, and a recovery code used
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
