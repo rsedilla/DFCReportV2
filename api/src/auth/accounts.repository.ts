@@ -12,6 +12,25 @@ export interface AccountRecord {
   password_hash: string | null;
   status: AccountStatus;
   sessions_revoked_at: Date | null;
+  /** Holds `ADMIN` or `SENIOR_PASTOR`, so signs in with a second step (decision 0302). */
+  owes_second_step: boolean;
+  /** When the live second step was set up, or null where there is none. */
+  second_step_set_up_at: Date | null;
+}
+
+/**
+ * Whether a session issued at this instant predates the second step its account owes
+ * (SKILL.md section 6, decision 0302), and so is refused.
+ *
+ * An account that owes the step and has none holds no session at all, which is what
+ * ended the sessions that existed when the ruling took effect, and ends them after a
+ * reset. Once the step is set up, a session issued before it is still refused.
+ */
+export function sessionPredatesSecondStep(account: AccountRecord, issuedAt: Date): boolean {
+  if (!account.owes_second_step) {
+    return false;
+  }
+  return account.second_step_set_up_at === null || issuedAt < account.second_step_set_up_at;
 }
 
 /** The `auth` module owns `accounts`, `account_tokens` and `refresh_tokens`. */
@@ -20,23 +39,63 @@ export class AccountsRepository {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
 
   async findById(id: string): Promise<AccountRecord | null> {
-    const row = await this.db
-      .selectFrom('accounts')
-      .select(['id', 'person_id', 'email', 'password_hash', 'status', 'sessions_revoked_at'])
-      .where('id', '=', id)
-      .executeTakeFirst();
+    const row = await this.selectAccount().where('accounts.id', '=', id).executeTakeFirst();
+
+    return row ?? null;
+  }
+
+  /**
+   * {@link findById} on the caller's executor, for a transaction that must not ask the
+   * bounded pool for a second connection while holding one (section 24).
+   */
+  async findByIdWithin(
+    executor: Db | Transaction<Database>,
+    id: string,
+  ): Promise<AccountRecord | null> {
+    const row = await this.selectAccount(executor).where('accounts.id', '=', id).executeTakeFirst();
 
     return row ?? null;
   }
 
   async findByEmail(email: string): Promise<AccountRecord | null> {
-    const row = await this.db
-      .selectFrom('accounts')
-      .select(['id', 'person_id', 'email', 'password_hash', 'status', 'sessions_revoked_at'])
-      .where('email_normalized', '=', normalizeEmail(email))
+    const row = await this.selectAccount()
+      .where('accounts.email_normalized', '=', normalizeEmail(email))
       .executeTakeFirst();
 
     return row ?? null;
+  }
+
+  /**
+   * One statement, because the access-token guard runs it on every request: the
+   * account, whether it owes the second step, and when its live step was set up.
+   */
+  private selectAccount(executor: Db | Transaction<Database> = this.db) {
+    return executor.selectFrom('accounts').select((eb) => [
+      'accounts.id',
+      'accounts.person_id',
+      'accounts.email',
+      'accounts.password_hash',
+      'accounts.status',
+      'accounts.sessions_revoked_at',
+      eb
+        .exists(
+          eb
+            .selectFrom('account_roles')
+            .select('account_roles.id')
+            .whereRef('account_roles.account_id', '=', 'accounts.id')
+            .where('account_roles.role', 'in', ['ADMIN', 'SENIOR_PASTOR'])
+            .where('account_roles.revoked_at', 'is', null),
+        )
+        .$castTo<boolean>()
+        .as('owes_second_step'),
+      eb
+        .selectFrom('second_steps')
+        .select('second_steps.set_up_at')
+        .whereRef('second_steps.account_id', '=', 'accounts.id')
+        .where('second_steps.revoked_at', 'is', null)
+        .$castTo<Date | null>()
+        .as('second_step_set_up_at'),
+    ]);
   }
 
   /**

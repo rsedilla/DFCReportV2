@@ -617,6 +617,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
             status: 'PENDING_ACTIVATION',
             roles: ['LEADER'],
             created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
           },
         }),
       }),
@@ -652,6 +653,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
             status: 'PENDING_ACTIVATION',
             roles: ['LEADER'],
             created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
           },
         }),
       }),
@@ -696,6 +698,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
             status: 'ACTIVE',
             roles: ['LEADER'],
             created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
           },
         }),
       }),
@@ -704,6 +707,61 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await page.goto(PROFILE);
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Correct the email' })).toHaveCount(0);
+  });
+
+  /** An active account holding `role`, with its second step set up (decision 0302). */
+  async function accountWithSecondStep(page: Page, role: 'SENIOR_PASTOR' | 'ADMIN') {
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: '3f1b7c6e-0000-4000-8000-000000000901',
+            email: 'marilou@example.test',
+            status: 'ACTIVE',
+            roles: [role],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: true, set_up_at: '2026-09-28T02:00:00.000Z' },
+          },
+        }),
+      }),
+    );
+  }
+
+  test("resets a Senior Pastor's second step after asking (decision 0302)", async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    await accountWithSecondStep(page, 'SENIOR_PASTOR');
+    const reset: string[] = [];
+    await page.route('**/api/v1/accounts/*/second-step/reset', async (route) => {
+      reset.push(new URL(route.request().url()).pathname);
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto(PROFILE);
+    await expect(page.getByText(/^Second step set up (28 Sep|Sep 28)\./)).toBeVisible();
+    await page.getByRole('button', { name: 'Reset the second step' }).click();
+    await expect(page.getByText(/signed out on every device/)).toBeVisible();
+    expect(reset).toEqual([]);
+
+    await page.getByRole('button', { name: 'Reset', exact: true }).click();
+    await expect(page.getByText(/^Reset\. Marilou is signed out everywhere/)).toBeVisible();
+    expect(reset).toEqual(['/api/v1/accounts/3f1b7c6e-0000-4000-8000-000000000901/second-step/reset']);
+  });
+
+  test("offers no reset of an administrator's second step, which is reset on the server", async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    await accountWithSecondStep(page, 'ADMIN');
+
+    await page.goto(PROFILE);
+    await expect(page.getByText('An administrator’s second step is reset on the server.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reset the second step' })).toHaveCount(0);
   });
 });
 

@@ -43,6 +43,18 @@
       "screen": "web/app/sign-in/page.tsx"
     },
     {
+      "route": "POST /api/v1/auth/second-step",
+      "screen": "web/components/second-step.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/second-step/setup",
+      "screen": "web/components/second-step.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/second-step/setup/confirm",
+      "screen": "web/components/second-step.tsx"
+    },
+    {
       "route": "POST /api/v1/auth/refresh",
       "screen": "web/lib/session.ts",
       "note": "Called from every authenticated screen rather than from one."
@@ -147,6 +159,10 @@
     },
     {
       "route": "POST /api/v1/accounts/:id/email",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
+      "route": "POST /api/v1/accounts/:id/second-step/reset",
       "screen": "web/components/person-account.tsx"
     },
     {

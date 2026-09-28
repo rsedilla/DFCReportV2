@@ -1,11 +1,25 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { ValidationFailedError } from '../common/errors/api-error';
+
 import { AuthService, type SessionTokens } from './auth.service';
 import { AuthenticatedOnly, Public } from './authorization/authorization.decorators';
 import { CredentialsService } from './credentials.service';
 import { CurrentActor } from './current-actor.decorator';
-import { LoginDto, LogoutDto, RefreshDto } from './dto/auth.dto';
+import {
+  LoginDto,
+  LogoutDto,
+  RefreshDto,
+  SecondStepConfirmDto,
+  SecondStepDto,
+  SecondStepSetupDto,
+} from './dto/auth.dto';
+import {
+  SecondStepService,
+  type SecondStepChallenge,
+  type SecondStepSetup,
+} from './second-step.service';
 import { ForgotPasswordDto, SetPasswordDto } from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
@@ -15,6 +29,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly credentials: CredentialsService,
+    private readonly secondSteps: SecondStepService,
   ) {}
 
   /**
@@ -66,8 +81,52 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Public('Sign-in is how a session begins; there is no token to present yet.')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async login(@Body() body: LoginDto): Promise<SessionTokens> {
+  async login(@Body() body: LoginDto): Promise<SessionTokens | SecondStepChallenge> {
     return this.auth.login(body.email, body.password, body.device_label ?? null);
+  }
+
+  /**
+   * The second sign-in step of an `ADMIN` or `SENIOR_PASTOR` account (section 6,
+   * decision 0302). Part of sign-in on section 7's unauthenticated list: the ticket
+   * sign-in issued is the credential. Limited as tightly as sign-in, on top of the five
+   * wrong codes a ticket allows.
+   */
+  @Post('second-step')
+  @HttpCode(HttpStatus.OK)
+  @Public('Part of sign-in; the ticket from the password step is the credential.')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async secondStep(@Body() body: SecondStepDto): Promise<SessionTokens> {
+    if ((body.code === undefined) === (body.recovery_code === undefined)) {
+      throw new ValidationFailedError('Send either a code or a recovery code.');
+    }
+    return this.secondSteps.verify(
+      body.challenge,
+      { code: body.code, recoveryCode: body.recovery_code },
+      body.device_label ?? null,
+    );
+  }
+
+  /** Setup, first half: the secret to add to an authenticator app (section 6). */
+  @Post('second-step/setup')
+  @HttpCode(HttpStatus.OK)
+  @Public('Part of sign-in; the ticket from the password step is the credential.')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async startSetup(@Body() body: SecondStepSetupDto): Promise<SecondStepSetup> {
+    return this.secondSteps.startSetup(body.challenge);
+  }
+
+  /**
+   * Setup, second half: one code proves the app holds the secret, and the session and
+   * the ten recovery codes are returned. The codes are shown once and never again.
+   */
+  @Post('second-step/setup/confirm')
+  @HttpCode(HttpStatus.OK)
+  @Public('Part of sign-in; the ticket from the password step is the credential.')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async confirmSetup(
+    @Body() body: SecondStepConfirmDto,
+  ): Promise<SessionTokens & { recovery_codes: string[] }> {
+    return this.secondSteps.confirmSetup(body.challenge, body.code, body.device_label ?? null);
   }
 
   @Post('refresh')

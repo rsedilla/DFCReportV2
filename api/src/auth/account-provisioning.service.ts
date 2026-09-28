@@ -16,6 +16,7 @@ import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
 import { isNamedSeniorPastor } from './authorization/senior-pastors';
+import { SecondStepService } from './second-step.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { AccountRole, Database } from '../database/schema';
@@ -83,6 +84,7 @@ export class AccountProvisioningService {
     private readonly cells: CellsReadService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly secondSteps: SecondStepService,
   ) {}
 
   /**
@@ -97,6 +99,8 @@ export class AccountProvisioningService {
       status: string;
       roles: AccountRole[];
       created_at: string;
+      /** Whether it signs in with a second step, and since when (decision 0302). */
+      second_step: { required: boolean; set_up_at: string | null };
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -130,6 +134,7 @@ export class AccountProvisioningService {
         status: account.status,
         roles: roles.map((row) => row.role),
         created_at: new Date(account.created_at).toISOString(),
+        second_step: await this.secondSteps.describeFor(account.id),
       },
     };
   }

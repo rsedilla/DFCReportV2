@@ -36,6 +36,48 @@ export class RefreshDto {
   device_label?: string;
 }
 
+/** The ticket sign-in issued once the password was right (section 6, decision 0302). */
+export class SecondStepSetupDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  challenge!: string;
+}
+
+export class SecondStepConfirmDto extends SecondStepSetupDto {
+  @IsString()
+  @MinLength(1, { message: 'Enter the code from your app.' })
+  @MaxLength(32)
+  code!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  @IsStorableText()
+  device_label?: string;
+}
+
+/** A code from the app, or one recovery code. The controller refuses both or neither. */
+export class SecondStepDto extends SecondStepSetupDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Enter the code from your app.' })
+  @MaxLength(32)
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Enter a recovery code.' })
+  @MaxLength(32)
+  recovery_code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  @IsStorableText()
+  device_label?: string;
+}
+
 export class LogoutDto {
   @IsString()
   @MinLength(1)

@@ -15,6 +15,7 @@ import {
   getAccountForPerson,
   provisionAccount,
   resendActivation,
+  resetSecondStep,
   roleLabel,
   type AccountRole,
 } from '@/lib/accounts';
@@ -190,6 +191,15 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
               ) : null}
             </div>
           ) : null}
+          {current.second_step.required ? (
+            <SecondStepRow
+              accountId={current.id}
+              personId={personId}
+              firstName={firstName}
+              administrator={current.roles.includes('ADMIN')}
+              setUpAt={current.second_step.set_up_at}
+            />
+          ) : null}
         </div>
       ) : giving ? (
         <form
@@ -254,5 +264,89 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Whether an administrator's or Senior Pastor's account has its second sign-in step set
+ * up, and the reset (SKILL.md section 6, decision 0302). Only a Senior Pastor's is reset
+ * here; an administrator's is reset on the server, so no administrator can remove
+ * another's, and the API refuses it anyway.
+ */
+function SecondStepRow({
+  accountId,
+  personId,
+  firstName,
+  administrator,
+  setUpAt,
+}: {
+  accountId: string;
+  personId: string;
+  firstName: string;
+  administrator: boolean;
+  setUpAt: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [resetKey, setResetKey] = useState(() => crypto.randomUUID());
+
+  const reset = useMutation({
+    mutationFn: () => resetSecondStep(accountId, resetKey),
+    onSuccess: async () => {
+      setConfirming(false);
+      setResetKey(crypto.randomUUID());
+      await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
+    },
+  });
+
+  return (
+    <div className="mt-3">
+      <FailureNotice failure={reset.isError ? describeFailure(reset.error) : null} />
+      <p className="text-muted text-sm">
+        {setUpAt === null
+          ? `Second step not set up yet. ${firstName} sets it up at their next sign-in.`
+          : `Second step set up ${new Date(setUpAt).toLocaleDateString('en-PH', {
+              day: 'numeric',
+              month: 'short',
+              timeZone: 'Asia/Manila',
+            })}.`}
+      </p>
+      {reset.isSuccess ? (
+        <p aria-live="polite" className="mt-2 text-sm font-medium">
+          Reset. {firstName} is signed out everywhere and sets it up again at their next sign-in.
+        </p>
+      ) : null}
+      {administrator ? (
+        <p className="text-muted mt-2 text-sm">
+          An administrator’s second step is reset on the server.
+        </p>
+      ) : setUpAt === null ? null : confirming ? (
+        <div className="mt-3">
+          <p className="text-sm">
+            Reset {firstName}’s second step? They are signed out on every device and set it up
+            again at their next sign-in.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button disabled={reset.isPending} onClick={() => reset.mutate()}>
+              {reset.isPending ? 'Resetting…' : 'Reset'}
+            </Button>
+            <Button variant="quiet" type="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          className="mt-3"
+          variant="secondary"
+          onClick={() => {
+            reset.reset();
+            setConfirming(true);
+          }}
+        >
+          Reset the second step
+        </Button>
+      )}
+    </div>
   );
 }

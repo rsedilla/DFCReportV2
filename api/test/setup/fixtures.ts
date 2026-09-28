@@ -6,6 +6,7 @@ import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttle
 import { sql, type Kysely } from 'kysely';
 
 import { AppModule } from '../../src/app.module';
+import { encryptSecret } from '../../src/auth/second-step.crypto';
 import { TokensService } from '../../src/auth/tokens.service';
 import { configureApp } from '../../src/bootstrap';
 import { APP_CONFIG, type AppConfig } from '../../src/config/configuration';
@@ -37,6 +38,13 @@ export interface TestAccount {
   email: string;
   accessToken: string;
 }
+
+/**
+ * The authenticator secret every fixture `ADMIN` and `SENIOR_PASTOR` account is set up
+ * with, so a suite can compute a valid code (`codeForStep`). Invented, like all fixture
+ * data, and meaningless outside a test database.
+ */
+export const TEST_SECOND_STEP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 
 /** Well before anything a test does, so every assignment has a Network in force. */
 export const EPOCH = new Date('2020-01-01T00:00:00+08:00');
@@ -201,6 +209,13 @@ export async function createAccount(
      * granting SENIOR_PASTOR and meaningless otherwise (SKILL.md section 7).
      */
     seniorPastorSlot?: 1 | 2;
+    /**
+     * Whether an `ADMIN` or `SENIOR_PASTOR` account has its second sign-in step set up
+     * (decision 0302). True by default, set up at `EPOCH` with
+     * `TEST_SECOND_STEP_SECRET`, because an account owing the step with none holds no
+     * session and every suite minting such an account's token would be refused.
+     */
+    secondStep?: boolean;
   },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
@@ -227,6 +242,21 @@ export async function createAccount(
         role,
         granted_by: options.grantedBy ?? null,
         senior_pastor_slot: role === 'SENIOR_PASTOR' ? (options.seniorPastorSlot ?? 1) : null,
+      })
+      .execute();
+  }
+
+  const owesSecondStep = options.roles.some((role) => role === 'ADMIN' || role === 'SENIOR_PASTOR');
+  if (owesSecondStep && options.secondStep !== false) {
+    await db
+      .insertInto('second_steps')
+      .values({
+        account_id: account.id,
+        secret_ciphertext: encryptSecret(
+          TEST_SECOND_STEP_SECRET,
+          app.get<AppConfig>(APP_CONFIG).secondStepKey,
+        ),
+        set_up_at: EPOCH,
       })
       .execute();
   }

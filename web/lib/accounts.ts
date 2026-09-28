@@ -14,6 +14,8 @@ export interface PersonAccount {
   status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
   roles: AccountRole[];
   created_at: string;
+  /** Whether it signs in with a second step, and since when (decision 0302). */
+  second_step: { required: boolean; set_up_at: string | null };
 }
 
 export async function getAccountForPerson(
@@ -51,6 +53,17 @@ export async function correctAccountEmail(
   return authenticatedRequest(`/api/v1/accounts/${accountId}/email`, {
     method: 'POST',
     body: { email },
+    idempotencyKey,
+  });
+}
+
+/**
+ * Resets a Senior Pastor's second sign-in step, ending their sessions (decision 0302).
+ * The API refuses an administrator's, which is reset on the server.
+ */
+export async function resetSecondStep(accountId: string, idempotencyKey: string): Promise<void> {
+  return authenticatedRequest(`/api/v1/accounts/${accountId}/second-step/reset`, {
+    method: 'POST',
     idempotencyKey,
   });
 }

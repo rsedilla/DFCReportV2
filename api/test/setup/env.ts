@@ -35,6 +35,8 @@ import 'dotenv/config';
  */
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET ??= randomBytes(32).toString('hex');
+// Per run, like the signing secret, and for the same reason.
+process.env.SECOND_STEP_KEY ??= randomBytes(32).toString('base64');
 
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;

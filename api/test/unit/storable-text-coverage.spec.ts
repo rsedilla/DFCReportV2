@@ -99,6 +99,15 @@ describe('storable text is refused at the edge, on every field that takes text',
     'LoginDto.password',
     'SetPasswordDto.password',
     'SetPasswordDto.token',
+    // The second sign-in step (decision 0302): the ticket and a recovery code are compared
+    // as sha256 hashes computed in the application, and a code is compared in memory
+    // against one the application computes, so none reaches a statement as sent.
+    'SecondStepSetupDto.challenge',
+    'SecondStepConfirmDto.challenge',
+    'SecondStepConfirmDto.code',
+    'SecondStepDto.challenge',
+    'SecondStepDto.code',
+    'SecondStepDto.recovery_code',
   ]);
 
   const HARMLESS = 'harmless';

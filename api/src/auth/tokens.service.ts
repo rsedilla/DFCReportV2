@@ -310,6 +310,16 @@ export class TokensService {
         .where('revoked_at', 'is', null)
         .execute();
 
+      // A sign-in paused between the password and the second step's code ends too
+      // (decision 0302): a password reset exists to stop whoever held the old one, and
+      // a ticket they were issued would otherwise finish their sign-in afterwards.
+      await trx
+        .updateTable('second_step_challenges')
+        .set({ used_at: new Date() })
+        .where('account_id', '=', accountId)
+        .where('used_at', 'is', null)
+        .execute();
+
       // Stamped *after* the tokens are revoked, deliberately, and read here
       // rather than earlier: a timestamp computed before a statement that then
       // waits on a lock carries a pre-wait reading, which is how the marker once

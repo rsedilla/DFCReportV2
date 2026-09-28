@@ -19,6 +19,8 @@ import {
   mockPersonCreated,
   mockPossibleMatches,
   mockSignInRefused,
+  mockSecondStep,
+  SECOND_STEP_CODE,
   mockSignedIn,
   mockWholeChurchReader,
 } from './mock-api';
@@ -127,6 +129,45 @@ const SCANS = [
       // `role="alert"` live region on every page, so an unscoped lookup matches
       // two things.
       await expect(page.locator('form').getByRole('alert')).toContainText('do not match');
+    },
+  },
+  // The second sign-in step (decision 0302): the code, setup, and the recovery codes.
+  {
+    name: 'sign-in, second step',
+    route: '/sign-in',
+    async arrange(page: import('@playwright/test').Page) {
+      await mockSecondStep(page, 'CODE');
+      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.getByLabel('Code').fill('000000');
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expect(page.getByText('That code did not work.')).toBeVisible();
+    },
+  },
+  {
+    name: 'sign-in, second step setup',
+    route: '/sign-in',
+    async arrange(page: import('@playwright/test').Page) {
+      await mockSecondStep(page, 'SETUP');
+      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
+    },
+  },
+  {
+    name: 'sign-in, recovery codes',
+    route: '/sign-in',
+    async arrange(page: import('@playwright/test').Page) {
+      await mockSecondStep(page, 'SETUP');
+      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByLabel('Code').fill(SECOND_STEP_CODE);
+      await page.getByRole('button', { name: 'Confirm' }).click();
+      await expect(page.getByRole('heading', { name: 'Save your recovery codes' })).toBeVisible();
     },
   },
   { name: 'forgot-password', route: '/forgot-password' },
@@ -1975,6 +2016,18 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'sign-in, refused',
     why: 'Same targets as /sign-in, which is measured; the refusal adds text, not controls.',
+  },
+  {
+    name: 'sign-in, second step',
+    why: 'Reached only after a password, which this sweep cannot arrange; its controls are measured in e2e/second-step.spec.ts.',
+  },
+  {
+    name: 'sign-in, second step setup',
+    why: 'Reached only after a password, which this sweep cannot arrange; its controls are measured in e2e/second-step.spec.ts.',
+  },
+  {
+    name: 'sign-in, recovery codes',
+    why: 'Reached only after a password, which this sweep cannot arrange; its controls are measured in e2e/second-step.spec.ts.',
   },
   {
     name: 'session, halted',
