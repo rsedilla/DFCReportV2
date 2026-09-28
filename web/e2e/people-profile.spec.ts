@@ -359,7 +359,7 @@ test.describe('who pastors a person', () => {
     });
     await expect(dialog.getByText(`Pastored now by ${PATH_LEADER.full_name}.`)).toBeVisible();
 
-    await dialog.getByLabel('Search for a leader by name').fill('an');
+    await dialog.getByLabel('Search for a leader by name').fill('ann');
     await dialog.getByRole('button', { name: 'Find' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
     await dialog.getByLabel('Why is this changing? (optional)').fill('Moved to a nearer leader');
@@ -813,7 +813,7 @@ test.describe('adding a person with a Cell', () => {
     await page.getByLabel('Last name').fill('Santos');
     await page.getByRole('radio', { name: 'Female' }).check();
     await page.getByRole('radio', { name: 'Married' }).check();
-    await page.getByLabel('Search for a leader by name').fill('an');
+    await page.getByLabel('Search for a leader by name').fill('ann');
     await page.getByRole('button', { name: 'Find' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
   }

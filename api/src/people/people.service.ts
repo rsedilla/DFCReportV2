@@ -57,6 +57,24 @@ export class PeopleService {
   ) {}
 
   /**
+   * Records one church-wide search (SKILL.md sections 8 and 21, decision 0303): who
+   * searched, the term, and how many people that request returned. It targets the
+   * searching account, as the second sign-in step's entries do. A search writes nothing
+   * else, so the transaction holds this entry alone.
+   */
+  async recordDirectorySearch(accountId: string, term: string, returned: number): Promise<void> {
+    await this.db.transaction().execute((trx) =>
+      this.audit.writeWithin(trx, {
+        actorId: accountId,
+        action: 'directory.searched',
+        targetType: 'account',
+        targetId: accountId,
+        after: { term, returned },
+      }),
+    );
+  }
+
+  /**
    * Creates a Person, and everything the specification says comes with one.
    *
    * All of it in one transaction: the Person, their Network (assigned from sex,

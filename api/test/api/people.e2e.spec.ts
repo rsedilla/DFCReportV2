@@ -1287,28 +1287,35 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
     });
 
-    it('refuses a term that normalizes to fewer than two characters, naming the field', async () => {
+    it('refuses a church-wide term that normalizes to fewer than three characters, naming the field', async () => {
       // The two-character bound on the DTO reads the term as typed. `normalizeName` turns
       // a hyphen or an apostrophe into a separator and drops suffix tokens, so `a-`, `a'`
       // and ` a` passed it and searched the church for one letter, and `Jr` built an empty
       // term -- which the service answered with nothing rather than `%%`. The route now
-      // counts the term as it is searched, church-wide mode included.
-      for (const q of ['a-', "a'", ' a', 'Jr', 'II', '  ']) {
+      // counts the term as it is searched, church-wide mode included. Church-wide it
+      // takes three (decision 0303), so a two-letter term is refused there too.
+      for (const q of ['a-', "a'", ' a', 'Jr', 'II', '  ', 'Ma', 'Ma-']) {
         const response = await search(raymondAccount, q, { churchWide: true });
 
         expect(response.status).toBe(422);
         expect(response.body.error.code).toBe('VALIDATION_FAILED');
         expect(response.body.error.details.field).toBe('q');
-        expect(response.body.error.message).toBe('Enter at least two letters of a name.');
+        expect(response.body.error.message).toBe('Enter at least three letters of a name.');
       }
     });
 
-    it('still searches a two-letter term, and names written with a hyphen or apostrophe', async () => {
-      for (const q of ['Ma', "O'Ma", 'Dela-Cruz']) {
+    it('still searches a three-letter term church-wide, and names written with a hyphen or apostrophe', async () => {
+      for (const q of ['Mar', "O'Ma", 'Dela-Cruz']) {
         const response = await search(raymondAccount, q, { churchWide: true });
 
         expect(response.status).toBe(200);
       }
+    });
+
+    it('still searches a two-letter term in the searcher own scope', async () => {
+      const response = await search(raymondAccount, 'Ma');
+
+      expect(response.status).toBe(200);
     });
 
     it('pages with an opaque cursor and no total', async () => {

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { ThrottlerException, ThrottlerStorage } from '@nestjs/throttler';
 
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
@@ -18,6 +19,9 @@ import {
 
 import {
   AwaitingReassignmentDto,
+  CHURCH_WIDE_PAGE_LIMIT,
+  CHURCH_WIDE_SEARCH_MINIMUM,
+  CHURCH_WIDE_SEARCHES_PER_MINUTE,
   CorrectSexDto,
   ReassignPastoralLeaderDto,
   CreatePersonDto,
@@ -77,6 +81,9 @@ export class PeopleController {
     // is the authorization module's to compute rather than this controller's to
     // re-derive (section 2, and the seam decision 0106 made its own module).
     private readonly authorization: AuthorizationService,
+    // The throttler's own store, so the church-wide count is cleared and bounded exactly
+    // as the global limit is (decision 0303).
+    @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
   ) {}
 
   /**
@@ -409,14 +416,40 @@ export class PeopleController {
     // **No term lists the searcher's own scope** (decision 0259): section 8
     // makes the People screen that list. The church-wide directory is never listed whole,
     // so it still needs a term.
+    // **Church-wide takes three characters, a page of at most 20, and 30 searches a minute
+    // per account, and each one is audited** (section 8, decision 0303), whoever sends it.
+    const tooShort = query.church_wide
+      ? 'Enter at least three letters of a name.'
+      : 'Enter at least two letters of a name.';
     if (query.q === undefined && query.church_wide) {
-      throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
+      throw new ValidationFailedError(tooShort, { field: 'q' });
     }
     if (
       query.q !== undefined &&
-      normalizeName(query.q).replace(/\s+/g, '').length < SEARCH_MINIMUM
+      normalizeName(query.q).replace(/\s+/g, '').length <
+        (query.church_wide ? CHURCH_WIDE_SEARCH_MINIMUM : SEARCH_MINIMUM)
     ) {
-      throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
+      throw new ValidationFailedError(tooShort, { field: 'q' });
+    }
+    if (query.church_wide && query.limit !== undefined && query.limit > CHURCH_WIDE_PAGE_LIMIT) {
+      throw new ValidationFailedError(
+        `A church-wide search returns at most ${CHURCH_WIDE_PAGE_LIMIT} people at a time.`,
+        { field: 'limit' },
+      );
+    }
+    if (query.church_wide) {
+      // Counted after the checks above, so a refused request spends nothing, and under
+      // a throttler name of its own so it sits beside the route's general limit.
+      const spent = await this.throttle.increment(
+        `church-wide-search:${actor.accountId}`,
+        60_000,
+        CHURCH_WIDE_SEARCHES_PER_MINUTE,
+        60_000,
+        'church-wide-search',
+      );
+      if (spent.isBlocked) {
+        throw new ThrottlerException();
+      }
     }
 
     // Whole Church needs no restriction: the set would be every row, and asking
@@ -439,11 +472,11 @@ export class PeopleController {
 
     const { rows, nextCursor } = await this.read.searchByName(
       query.q ?? null,
-      query.limit ?? 50,
+      query.limit ?? (query.church_wide ? CHURCH_WIDE_PAGE_LIMIT : 50),
       decodeCursor(query.cursor),
       restrictTo,
       // A Member ID matches only inside the searcher's own scope: church-wide, a prefix
-      // such as `M-00` would page the directory the two-letter minimum exists to protect.
+      // such as `M-00` would page the directory the minimum exists to protect.
       { memberId: !query.church_wide },
     );
 
@@ -461,6 +494,10 @@ export class PeopleController {
         return this.read.minimalIdentity(person);
       }),
     );
+
+    if (query.church_wide) {
+      await this.people.recordDirectorySearch(actor.accountId, query.q ?? '', rows.length);
+    }
 
     return { data, next_cursor: encodeCursor(nextCursor) };
   }

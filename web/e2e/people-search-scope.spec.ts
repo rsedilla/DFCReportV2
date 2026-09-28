@@ -257,15 +257,15 @@ test.describe('which Network a picker searches (decision 0299)', () => {
       ),
     ).toBeVisible();
 
-    await dialog.getByLabel('Search for a leader by name').fill('an');
+    await dialog.getByLabel('Search for a leader by name').fill('ann');
     await dialog.getByRole('button', { name: 'Find' }).click();
 
     await expect
-      .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'an').length, {
+      .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'ann').length, {
         message: 'the picker never searched',
       })
       .toBeGreaterThan(0);
-    for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'an')) {
+    for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'ann')) {
       expect(new URL(url).searchParams.get('network')).toBe('WOMENS');
     }
   });
@@ -364,5 +364,54 @@ test.describe('what the People screen says when a term is too short once tidied'
     const main = page.locator('main');
     await expect(main).toContainText('Enter at least two letters of a name.');
     await expect(main).not.toContainText('Some fields need correcting');
+  });
+});
+
+/**
+ * A church-wide picker takes three letters and pages 20 at a time with Show more
+ * (SKILL.md section 8, decision 0303). The API enforces both; the picker owes not
+ * offering Find for a term the API refuses, and reaching past the first page.
+ */
+test.describe('a church-wide picker is bounded (decision 0303)', () => {
+  test('asks for three letters, and reads the next page with Show more', async ({ page }) => {
+    await mockSignedIn(page);
+    const person = (n: number) => ({
+      ...PERSON_IN_SCOPE,
+      id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+      full_name: `Crowd ${n} Testfixture`,
+    });
+    const searches = await recordSearches(page);
+    await page.route('**/api/v1/people?*', (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor');
+      const first = cursor === null;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: Array.from({ length: first ? 20 : 3 }, (_, n) => person(first ? n : 20 + n)),
+          next_cursor: first ? 'next-page' : null,
+        }),
+      });
+    });
+
+    await page.goto('/people/new');
+    const box = page.getByLabel('Search for a leader by name');
+    const find = page.getByRole('button', { name: 'Find' });
+
+    await box.fill('Cr');
+    await expect(find).toBeDisabled();
+    await box.fill('Cro');
+    await expect(find).toBeEnabled();
+    await find.click();
+
+    await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(20);
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(23);
+    await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+
+    expect(searches.some((url) => url.includes('cursor=next-page'))).toBe(true);
+    for (const url of searches) {
+      expect(url, 'the picker asked for more than the API allows').not.toContain('limit=');
+    }
   });
 });
