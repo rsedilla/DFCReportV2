@@ -381,6 +381,7 @@ function PersonMark({
         value={mark ?? ''}
         onChange={onChange}
         disabled={disabled}
+        layout="row"
         options={[
           { value: 'present', label: 'Present' },
           { value: 'absent', label: 'Absent' },
