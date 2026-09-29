@@ -9,6 +9,7 @@ import {
   mockPeople,
   mockPeopleWithoutACell,
   mockSignedIn,
+  searchCells,
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
@@ -539,7 +540,8 @@ test.describe('people without a Cell', () => {
     await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
 
     const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-    await dialog.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_WITH_NO_SCHEDULE.id);
+    await searchCells(dialog, CELL_WITH_NO_SCHEDULE.cell_id);
+    await dialog.getByRole('button', { name: `Choose ${CELL_WITH_NO_SCHEDULE.cell_id}` }).click();
     await dialog.getByRole('button', { name: 'Add', exact: true }).click();
 
     await expect(dialog).toBeHidden();
@@ -631,8 +633,8 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
   });
 });
 
-test.describe('the Cell picker (owner’s choice, 2026-09-21)', () => {
-  test('lifts the person’s pastoral leader’s Cell to the top, and leaves the rest in order', async ({
+test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', () => {
+  test('lists the person’s pastoral leader’s Cell first, and finds the rest by search', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -673,13 +675,16 @@ test.describe('the Cell picker (owner’s choice, 2026-09-21)', () => {
     await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
 
     const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-    const groups = dialog.locator('optgroup');
-    await expect(groups).toHaveCount(2);
-    await expect(groups.nth(0)).toHaveAttribute('label', 'Their pastoral leader’s Cell');
-    await expect(groups.nth(0).locator('option')).toHaveText([/CELL-000011/]);
-    await expect(groups.nth(1)).toHaveAttribute('label', 'Other Cells you oversee');
-    await expect(groups.nth(1).locator('option')).toHaveText([/CELL-000007/]);
+    await expect(dialog.getByText('Their pastoral leader’s Cell', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toBeVisible();
     // Nothing is chosen for them: the leader still picks.
-    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toHaveValue('');
+    await expect(dialog.getByRole('button', { name: 'Choose another Cell' })).toHaveCount(0);
+
+    // A search finds the rest, and does not list the leader's Cell twice.
+    await searchCells(dialog, 'CELL');
+    await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(2);
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000007' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toHaveCount(1);
   });
 });

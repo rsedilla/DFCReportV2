@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CellPicker } from '@/components/cell-picker';
 import { NameFields } from '@/components/name-fields';
 import { PersonPicker } from '@/components/person-picker';
 import { PossibleMatches } from '@/components/possible-matches';
@@ -13,17 +14,9 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
-import { SelectField } from '@/components/ui/select-field';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
-import {
-  addCellMember,
-  cellShortName,
-  listAllCells,
-  pickerGroups,
-  type CellSummary,
-  membershipFailure,
-} from '@/lib/cells';
+import { addCellMember, type CellSummary, membershipFailure } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
 import { getMe } from '@/lib/me';
 import { idempotencyKeyFor } from '@/lib/idempotency';
@@ -41,7 +34,6 @@ import {
   type PersonFull,
   type Sex,
 } from '@/lib/people';
-import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * Adding a person (SKILL.md sections 3 and 9).
@@ -138,22 +130,18 @@ function NewPersonForm() {
    * under `cell.manage_membership`. If that refusal comes, the person is still created,
    * and `cellRefused` says so rather than leaving the Cell silently unset.
    */
-  const [pickedCellId, setCellId] = useState('');
+  const [pickedCell, setCell] = useState<CellSummary | null>(null);
   const [cellRefused, setCellRefused] = useState<{ person: PersonFull; failure: Failure } | null>(
     null,
   );
-  const month = reportingMonthOf();
-  const cells = useQuery({
-    queryKey: ['cells-all', month],
-    queryFn: ({ signal }) => listAllCells(month, signal),
-  });
   // Their Network follows the sex chosen above (section 4), so the Cells narrow to it; with no
-  // sex chosen yet the list is whole. A Cell chosen and then narrowed away is no longer chosen.
+  // sex chosen yet nothing is narrowed. A Cell chosen and then narrowed away is no longer chosen.
   const network = networkOfSex(sex);
-  const cellGroups = pickerGroups(cells.data ?? [], chosenLeaderId, network);
-  const cellId = [...cellGroups.leaders, ...cellGroups.others].some((cell) => cell.id === pickedCellId)
-    ? pickedCellId
-    : '';
+  const cell = pickedCell !== null && (network === null || pickedCell.network === network)
+    ? pickedCell
+    : null;
+  // The leader's name as the search reads it: never the "(you)" the field shows.
+  const chosenLeaderSearchName = leaderTouched ? leaderName : (self?.full_name ?? null);
 
   /**
    * **Accumulated, never replaced.** Each refusal carries only the Tier 1
@@ -228,17 +216,13 @@ function NewPersonForm() {
         key,
       ),
     onSuccess: async (person) => {
-      if (cellId) {
+      if (cell) {
         try {
-          await addCellMember(cellId, person.id, idempotencyKeyFor('add', cellId, person.id));
+          await addCellMember(cell.id, person.id, idempotencyKeyFor('add', cell.id, person.id));
         } catch (error) {
           setCellRefused({
             person,
-            failure: membershipFailure(
-              error,
-              person.full_name,
-              cells.data?.find((cell) => cell.id === cellId)?.cell_id ?? 'The Cell you chose',
-            ),
+            failure: membershipFailure(error, person.full_name, cell.cell_id),
           });
           return;
         }
@@ -464,47 +448,20 @@ function NewPersonForm() {
           }}
         />
 
-        <SelectField
+        {/* It follows the leader field above, so changing the leader changes whose Cells come first. */}
+        <CellPicker
           label="Cell"
-          name="cell"
-          value={cellId}
-          disabled={cells.isPending || cells.isError}
-          onChange={(event) => setCellId(event.target.value)}
           description={
-            cells.isError
-              ? 'The Cells could not be loaded, so none can be chosen here. You can add them to a Cell from their record.'
-              : network === null
-                ? 'Optional. The Cells in your scope. They can also be added to a Cell later, from their record.'
-                : `Optional. The ${networkLabel(network)} Cells in your scope, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
+            network === null
+              ? 'Optional. A Cell in your scope. They can also be added to a Cell later, from their record.'
+              : `Optional. A ${networkLabel(network)} Cell in your scope, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
           }
-        >
-          <option value="">No Cell for now</option>
-          {/*
-            The chosen pastoral leader's Cell first, under a heading that says why, and
-            everything else in the API's order (owner's choice, 2026-09-21). It follows the
-            leader field above, so changing the leader moves which Cell is lifted out.
-          */}
-          {cellGroups.leaders.length === 0 ? (
-            cellGroups.others.map(cellOption)
-          ) : (
-            <>
-              <optgroup
-                label={
-                  cellGroups.leaders.length === 1
-                    ? 'Their pastoral leader’s Cell'
-                    : 'Their pastoral leader’s Cells'
-                }
-              >
-                {cellGroups.leaders.map(cellOption)}
-              </optgroup>
-              {cellGroups.others.length > 0 ? (
-                <optgroup label="Other Cells you oversee">
-                  {cellGroups.others.map(cellOption)}
-                </optgroup>
-              ) : null}
-            </>
-          )}
-        </SelectField>
+          leaderId={chosenLeaderId}
+          leaderName={chosenLeaderSearchName}
+          network={network}
+          selected={cell}
+          onSelect={setCell}
+        />
 
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
         <div className="flex flex-col gap-1.5">
@@ -519,14 +476,5 @@ function NewPersonForm() {
         </div>
       </form>
     </main>
-  );
-}
-
-function cellOption(cell: CellSummary) {
-  return (
-    <option key={cell.id} value={cell.id}>
-      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })} · led by{' '}
-      {cell.leader.full_name} ({cell.cell_id})
-    </option>
   );
 }

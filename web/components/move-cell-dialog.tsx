@@ -3,24 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { CellPicker } from '@/components/cell-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { SelectField } from '@/components/ui/select-field';
-import {
-  addCellMember,
-  categoryLabel,
-  listAllCells,
-  membershipFailure,
-  pickerGroups,
-  type CellSummary,
-  type PersonCells,
-} from '@/lib/cells';
+import { addCellMember, membershipFailure, type CellSummary, type PersonCells } from '@/lib/cells';
 import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
-import { describeFailure } from '@/lib/messages';
 import { getPerson, networkLabel, networkOfSex } from '@/lib/people';
-import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * Moving a person to another Cell, or placing them in one (SKILL.md section 10).
@@ -33,10 +23,10 @@ import { reportingMonthOf } from '@/lib/reporting-month';
  * effective date. Past months keep counting the person in the Cell they leave, because
  * section 12 reads a month against the membership window.
  *
- * **The list is the Cells of the actor's scope, and the server still decides.** It is
- * read from the Cells index. Section 10's same-Network rule and section 7's authority
- * over the Cell being left are the API's to refuse, and a refusal arrives in its own
- * words.
+ * **The choices are the Cells of the actor's scope, and the server still decides.** They
+ * are found through the Cells index (`CellPicker`). Section 10's same-Network rule and
+ * section 7's authority over the Cell being left are the API's to refuse, and a refusal
+ * arrives in its own words.
  */
 export function MoveCellDialog({
   open,
@@ -52,14 +42,7 @@ export function MoveCellDialog({
   current: PersonCells['membership'];
 }) {
   const queryClient = useQueryClient();
-  const [chosen, setChosen] = useState('');
-  const month = reportingMonthOf();
-
-  const cells = useQuery({
-    queryKey: ['cells-all', month],
-    queryFn: ({ signal }) => listAllCells(month, signal),
-    enabled: open,
-  });
+  const [chosen, setChosen] = useState<CellSummary | null>(null);
 
   // Whose Cell to lift to the top (owner's choice, 2026-09-21). Read under the key the
   // Network screen uses. A path that cannot be read leaves the list as it was rather than
@@ -69,10 +52,10 @@ export function MoveCellDialog({
     queryFn: ({ signal }) => getPastoralPath(personId, signal),
     enabled: open && personId !== '',
   });
-  const leaderId = directLeaderOf(path.data?.data ?? [])?.id ?? null;
+  const leader = directLeaderOf(path.data?.data ?? []);
 
-  // Their Network, which follows their sex (section 4), narrows the list to the Cells section
-  // 10 lets them join. Unread, the list stays whole and the add route refuses as before.
+  // Their Network, which follows their sex (section 4), narrows the choices to the Cells
+  // section 10 lets them join. Unread, nothing is narrowed and the add route refuses as before.
   const person = useQuery({
     queryKey: ['person', personId],
     queryFn: ({ signal }) => getPerson(personId, signal),
@@ -82,8 +65,8 @@ export function MoveCellDialog({
   const network = person.data ? networkOfSex(person.data.sex) : null;
 
   const move = useMutation({
-    mutationFn: (cellId: string) =>
-      addCellMember(cellId, personId, idempotencyKeyFor('add', cellId, personId)),
+    mutationFn: (cell: CellSummary) =>
+      addCellMember(cell.id, personId, idempotencyKeyFor('add', cell.id, personId)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['person-cells', personId] });
       // The people-without-a-Cell list opens this dialog too, and a placed person leaves it.
@@ -94,13 +77,9 @@ export function MoveCellDialog({
 
   function close() {
     move.reset();
-    setChosen('');
+    setChosen(null);
     onClose();
   }
-
-  const choices = (cells.data ?? []).filter((cell) => cell.id !== current?.id);
-  const groups = pickerGroups(choices, leaderId, network);
-  const listed = groups.leaders.length + groups.others.length;
 
   return (
     <Dialog
@@ -126,55 +105,27 @@ export function MoveCellDialog({
         ) : null}
 
         {/*
-          Nothing while closed: the list is only fetched once the dialog opens, and a
-          closed dialog saying "Loading…" is a loading marker that never clears.
+          Nothing while closed, and nothing until their Network is known, so the choices
+          are never offered wider than section 10 lets them join.
         */}
-        {!open ? null : cells.isPending || person.isLoading ? (
+        {!open ? null : person.isLoading ? (
           <p className="text-muted text-sm">Loading&hellip;</p>
-        ) : cells.isError ? (
-          <FailureNotice failure={describeFailure(cells.error)} />
-        ) : listed === 0 ? (
-          <p className="text-muted text-sm leading-relaxed">
-            {network === null
-              ? 'There is no other Cell in your scope to choose.'
-              : `There is no other ${networkLabel(network)} Cell in your scope to choose.`}
-          </p>
         ) : (
-          <SelectField
+          <CellPicker
             label="Cell"
-            name="cell"
-            required
-            value={chosen}
-            onChange={(event) => setChosen(event.target.value)}
-          >
-            <option value="">Choose a Cell</option>
-            {groups.leaders.length === 0 ? (
-              groups.others.map(cellOption)
-            ) : (
-              <>
-                <optgroup
-                  label={
-                    groups.leaders.length === 1
-                      ? 'Their pastoral leader’s Cell'
-                      : 'Their pastoral leader’s Cells'
-                  }
-                >
-                  {groups.leaders.map(cellOption)}
-                </optgroup>
-                {groups.others.length > 0 ? (
-                  <optgroup label="Other Cells you oversee">{groups.others.map(cellOption)}</optgroup>
-                ) : null}
-              </>
-            )}
-          </SelectField>
+            description={
+              network === null
+                ? 'The Cells in your scope.'
+                : `Only ${networkLabel(network)} Cells are listed: a member and their Cell’s leader share one Network.`
+            }
+            leaderId={leader?.id ?? null}
+            leaderName={leader?.full_name ?? null}
+            network={network}
+            excludeId={current?.id ?? null}
+            selected={chosen}
+            onSelect={setChosen}
+          />
         )}
-
-        {open && network !== null ? (
-          <p className="text-muted text-sm leading-relaxed">
-            Only {networkLabel(network)} Cells are listed: a member and their Cell&rsquo;s
-            leader share one Network.
-          </p>
-        ) : null}
 
         <p className="text-muted text-sm leading-relaxed">
           {current
@@ -185,11 +136,7 @@ export function MoveCellDialog({
         <FailureNotice
           failure={
             move.isError
-              ? membershipFailure(
-                  move.error,
-                  personName,
-                  choices.find((cell) => cell.id === chosen)?.cell_id ?? 'That Cell',
-                )
+              ? membershipFailure(move.error, personName, chosen?.cell_id ?? 'That Cell')
               : null
           }
         />
@@ -205,13 +152,5 @@ export function MoveCellDialog({
         </div>
       </form>
     </Dialog>
-  );
-}
-
-function cellOption(cell: CellSummary) {
-  return (
-    <option key={cell.id} value={cell.id}>
-      {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
-    </option>
   );
 }
