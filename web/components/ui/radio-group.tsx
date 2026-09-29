@@ -40,6 +40,7 @@ export function RadioGroup<T extends string>({
   required,
   error,
   disabled = false,
+  layout = 'stacked',
 }: {
   legend: string;
   description?: string;
@@ -55,8 +56,17 @@ export function RadioGroup<T extends string>({
    * cannot reach them either, rather than only a pointer being refused.
    */
   disabled?: boolean;
+  /**
+   * `row` puts the choices beside the legend, one line per group, for a roster that
+   * asks the same question of many people (the DCC checklist and a Cell meeting). The
+   * dot is hidden to fit a 320px phone; the native radio still carries the state,
+   * and a thicker border and bold label mark the choice without relying on colour.
+   */
+  layout?: 'stacked' | 'row';
 }) {
   const id = useId();
+  const row = layout === 'row';
+  const legendId = `${id}-legend`;
   const descriptionId = `${id}-description`;
   const errorId = `${id}-error`;
 
@@ -64,26 +74,29 @@ export function RadioGroup<T extends string>({
     [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(' ') ||
     undefined;
 
-  // `aria-describedby` belongs on the `<fieldset>`, which carries an implicit
-  // `group` role. It was on the inner `<div>` — a plain container with no role
-  // and nothing focusable — so neither the description nor the error was
-  // announced when focus reached an option. axe cannot see this: the ids
-  // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
-  return (
-    <fieldset
-      className="flex flex-col gap-1.5"
-      aria-describedby={describedBy}
-      disabled={disabled}
-    >
-      <legend className="field-label">{legend}</legend>
-
+  const body = (
+    <>
       {description ? (
-        <p id={descriptionId} className="text-muted text-sm leading-relaxed">
+        <p
+          id={descriptionId}
+          // On a phone the line runs under the choices too, rather than wrapping into
+          // a column a word wide beside them.
+          className={cn(
+            'text-muted text-sm leading-relaxed',
+            row && 'col-span-2 sm:col-span-1 sm:col-start-1',
+          )}
+        >
           {description}
         </p>
       ) : null}
 
-      <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div
+        className={
+          row
+            ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
+            : 'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
+        }
+      >
         {options.map((option) => {
           const checked = value === option.value;
 
@@ -91,11 +104,15 @@ export function RadioGroup<T extends string>({
             <label
               key={option.value}
               className={cn(
-                'flex min-h-11 flex-1 cursor-pointer items-center gap-2.5 rounded-md border px-3',
-                'text-sm transition-colors sm:flex-none sm:min-w-32',
+                'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
+                row
+                  ? 'relative w-[4.25rem] justify-center px-1 sm:w-24'
+                  : 'flex-1 gap-2.5 px-3 sm:flex-none sm:min-w-32',
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
-                checked ? 'border-accent bg-raised font-medium' : 'border-edge',
+                checked
+                  ? cn('border-accent bg-raised font-medium', row && 'border-2')
+                  : 'border-edge',
                 // **Disabled looks disabled.** The pointer and the hover wash said "tap me"
                 // on a group that cannot change, so both follow the input's own state.
                 'has-[:enabled]:hover:bg-raised has-[:disabled]:cursor-not-allowed',
@@ -108,8 +125,17 @@ export function RadioGroup<T extends string>({
                 value={option.value}
                 checked={checked}
                 required={required}
+                // A fieldset disables its radios natively; the row layout has no
+                // fieldset, so each is disabled itself.
+                disabled={row ? disabled : undefined}
                 onChange={() => onChange(option.value)}
-                className="size-4 shrink-0"
+                // Invisible and covering the whole button, so a tap lands on the radio
+                // itself; `sr-only` left it a pixel wide under the label.
+                className={
+                  row
+                    ? 'absolute inset-0 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed'
+                    : 'size-4 shrink-0'
+                }
               />
               {option.label}
             </label>
@@ -117,7 +143,49 @@ export function RadioGroup<T extends string>({
         })}
       </div>
 
-      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
+      {error ? (
+        <div className={cn(row && 'col-span-2')}>
+          <FieldError id={errorId}>{error}</FieldError>
+        </div>
+      ) : null}
+    </>
+  );
+
+  // **The row layout is a `div` with the group role, not a fieldset.** A legend
+  // cannot share a grid row with anything in WebKit, so the name would sit above its
+  // choices on every iPhone; a labelled group is what a fieldset and legend expose.
+  if (row) {
+    return (
+      <div
+        role="group"
+        aria-labelledby={legendId}
+        aria-describedby={describedBy}
+        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 sm:gap-x-3"
+      >
+        {/* A name one word too long for the column breaks rather than running under
+            the choices, which at 320px inside the DCC card it otherwise does. */}
+        <div
+          id={legendId}
+          // A person's name, so written as it is spelled rather than in the field
+          // label's capitals (owner, 2026-09-30).
+          className="text-accent col-start-1 text-sm font-bold [overflow-wrap:anywhere]"
+        >
+          {legend}
+        </div>
+        {body}
+      </div>
+    );
+  }
+
+  // `aria-describedby` belongs on the `<fieldset>`, which carries an implicit
+  // `group` role. It was on the inner `<div>` — a plain container with no role
+  // and nothing focusable — so neither the description nor the error was
+  // announced when focus reached an option. axe cannot see this: the ids
+  // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
+  return (
+    <fieldset className="flex flex-col gap-1.5" aria-describedby={describedBy} disabled={disabled}>
+      <legend className="field-label">{legend}</legend>
+      {body}
     </fieldset>
   );
 }
