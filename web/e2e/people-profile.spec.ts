@@ -16,6 +16,7 @@ import {
   mockPersonDccRefused,
   mockSignedIn,
   mockWithoutEditBasic,
+  searchCells,
 } from './mock-api';
 import { mockPastoralPath } from './mock-attendance';
 
@@ -215,10 +216,14 @@ test.describe('a person’s Cell', () => {
     });
     await expect(dialog.getByText('Leaving CELL-000007, led by Corazon Batac.')).toBeVisible();
 
-    const choice = dialog.getByRole('combobox', { name: 'Cell' });
-    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
+    await searchCells(dialog, 'CELL');
+    await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveText([
+      'Choose',
+      'Choose',
+    ]);
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000007' })).toHaveCount(0);
 
-    await choice.selectOption(CELL_CHOICES[1].id);
+    await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
     await dialog.getByRole('button', { name: 'Move', exact: true }).click();
 
     await expect(dialog).toBeHidden();
@@ -240,10 +245,12 @@ test.describe('a person’s Cell', () => {
 
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
     const dialog = page.getByRole('dialog');
-    const choice = dialog.getByRole('combobox', { name: 'Cell' });
+    await searchCells(dialog, 'CELL');
 
     // Marilou is FEMALE, so the Men's Network Cell is not offered; section 10 would refuse it.
-    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000014' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Choose CELL-000019' })).toHaveCount(0);
     await expect(
       dialog.getByText('Only Women\'s Network Cells are listed: a member and their Cell’s leader share one Network.'),
     ).toBeVisible();
@@ -257,7 +264,8 @@ test.describe('a person’s Cell', () => {
 
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
+    await searchCells(dialog, '000011');
+    await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
     await dialog.getByRole('button', { name: 'Move', exact: true }).click();
 
     await expect(
@@ -444,7 +452,7 @@ test.describe('dialogs', () => {
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
     const sheet = await dialog.boundingBox();
     expect(sheet).not.toBeNull();
     expect(sheet!.y + sheet!.height).toBeGreaterThanOrEqual(843);
@@ -455,7 +463,7 @@ test.describe('dialogs', () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
-    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
     const centred = await dialog.boundingBox();
     expect(centred).not.toBeNull();
     expect(centred!.y + centred!.height).toBeLessThan(790);
@@ -909,7 +917,8 @@ test.describe('adding a person with a Cell', () => {
     const sent = await mockMembershipAdd(page, 'accepted');
 
     await fillTheForm(page);
-    await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
+    await searchCells(page, '000011');
+    await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
     await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
@@ -926,14 +935,17 @@ test.describe('adding a person with a Cell', () => {
     await mockCellChoices(page, [MENS_CELL_CHOICE]);
 
     await fillTheForm(page);
-    const cell = page.getByRole('combobox', { name: 'Cell' });
-    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(0);
+    await searchCells(page, 'CELL');
+    await expect(page.getByRole('button', { name: 'Choose CELL-000011' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Choose CELL-000019' })).toHaveCount(0);
 
     // A Cell chosen and then narrowed away is no longer chosen.
-    await cell.selectOption(CELL_CHOICES[1].id);
+    await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
+    await expect(page.getByRole('button', { name: 'Choose another Cell' })).toBeVisible();
     await page.getByRole('radio', { name: 'Male', exact: true }).check();
-    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(1);
-    await expect(cell).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Choose another Cell' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Choose CELL-000019' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Choose CELL-000011' })).toHaveCount(0);
   });
 
   test('adds nobody to a Cell when none is chosen', async ({ page }) => {
@@ -956,7 +968,8 @@ test.describe('adding a person with a Cell', () => {
     await mockMembershipAdd(page, 'other-network');
 
     await fillTheForm(page);
-    await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
+    await searchCells(page, '000011');
+    await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
     await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(

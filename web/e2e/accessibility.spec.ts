@@ -10,6 +10,7 @@ import {
   mockAwaitingReassignment,
   mockCellApprover,
   mockCellChoices,
+  searchCells,
   mockCellCorrector,
   mockDuplicateRefusal,
   mockGrants,
@@ -271,7 +272,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Move to another Cell' }).click();
-      await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Cell' })).toBeVisible();
+      await expect(page.getByRole('dialog').getByLabel('Find a Cell')).toBeVisible();
     },
   },
   {
@@ -314,7 +315,8 @@ const SCANS = [
       await page.getByLabel('Search for a leader by name').fill('ann');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
-      await page.getByRole('combobox', { name: 'Cell' }).selectOption({ index: 2 });
+      await searchCells(page, 'CELL');
+      await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
       await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Marilou Reyes Santos was added' }),
@@ -753,7 +755,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-      await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+      await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
     },
   },
   {
@@ -1955,9 +1957,9 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'person profile, moving to another cell',
     why:
-      'Opens the Move dialog over the measured "person profile". Its controls are a SelectField ' +
-      'and two Buttons: the select is the one measured under "add a person", where the sweep ' +
-      'counts its Cell select, and the Buttons are the primitive measured on every screen.',
+      'Opens the Move dialog over the measured "person profile". Its controls are the Cell ' +
+      "picker's search field and Search button, measured under \"add a person\", which counts " +
+      'that same picker, and two Buttons, the primitive measured on every screen.',
   },
   {
     name: 'person profile, moving to another leader',
@@ -2080,7 +2082,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     name: 'people without a cell, adding to a cell',
     why:
       'Opens the dialog already exempted under "person profile, moving to another cell" over ' +
-      'the measured "people without a cell": a SelectField and two Buttons.',
+      'the measured "people without a cell": the Cell picker and two Buttons.',
   },
   {
     name: 'cell attendance report, week',
