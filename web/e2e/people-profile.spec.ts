@@ -485,6 +485,90 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page.getByText('Rosalinda Ocampo (you)')).toHaveCount(0);
   });
 
+  // Decision 0305: Sex starts on the adder's own where they hold an assignment under a leader,
+  // decided by the tree and never by the account's role.
+  async function adderIs(page: Page, sex: 'MALE' | 'FEMALE') {
+    await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
+      route.fulfill({ json: { ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID, sex } }),
+    );
+  }
+  const onePath = (page: Page, networkRoot: boolean) =>
+    page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+      route.fulfill({
+        json: {
+          data: [
+            {
+              id: SIGNED_IN_PERSON_ID,
+              member_id: 'M-000001',
+              full_name: 'Rosalinda Ocampo',
+              network_root: networkRoot,
+            },
+          ],
+          next_cursor: null,
+        },
+      }),
+    );
+
+  test('start Sex on the adder’s own for a leader under a leader, and send it', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await adderIs(page, 'FEMALE');
+    const bodies: Record<string, unknown>[] = [];
+    await page.route('**/api/v1/people', (route) => {
+      if (route.request().method() !== 'POST') {
+        return route.fallback();
+      }
+      bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({ status: 201, json: PERSON_IN_SCOPE });
+    });
+    await page.goto('/people/new');
+
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Female' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Male', exact: true })).not.toBeChecked();
+
+    await page.getByLabel('First name').fill('Marilou');
+    await page.getByLabel('Last name').fill('Santos');
+    await page.getByRole('radio', { name: 'Married' }).check();
+    await page.getByRole('button', { name: 'Add this person' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].sex).toBe('FEMALE');
+  });
+
+  test('keep the encoder’s own choice of Sex over the default', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await adderIs(page, 'FEMALE');
+    await page.goto('/people/new');
+
+    await expect(page.getByRole('radio', { name: 'Female' })).toBeChecked();
+    await page.getByRole('radio', { name: 'Male', exact: true }).check();
+    await expect(page.getByRole('radio', { name: 'Male', exact: true })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Female' })).not.toBeChecked();
+  });
+
+  for (const [who, root] of [
+    ['a Network root', true],
+    ['somebody holding no pastoral assignment', false],
+  ] as const) {
+    test(`choose no Sex for ${who}`, async ({ page }) => {
+      await signedInWithPeople(page);
+      await onePath(page, root);
+      await adderIs(page, 'MALE');
+      await page.goto('/people/new');
+
+      // The page has settled once the adder's record is read.
+      await expect(page.getByRole('radio', { name: 'Male', exact: true })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByRole('radio', { name: 'Male', exact: true })).not.toBeChecked();
+      await expect(page.getByRole('radio', { name: 'Female' })).not.toBeChecked();
+    });
+  }
+
   test('shows the journey stage on the edit form without offering to change it', async ({
     page,
   }) => {

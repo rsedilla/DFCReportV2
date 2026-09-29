@@ -606,6 +606,8 @@ It is assigned rather than proposed for confirmation. Under the homogeneous-netw
 
 A sex recorded in error is corrected through the audited Network-change path (Correcting a person's sex, below), which is the proper remedy and leaves a trail that a silent confirmation click would not.
 
+**Add a Person starts the Sex choice on the adder's own sex when the adder holds a pastoral assignment under a leader** (ruling of 2026-09-29, decision 0305). A leader leads only within their own Network (Section 5), so that is the only sex the form's default Pastoral leader, the adder, can accept. It stays a choice the encoder can change, with the Network shown beside it. A Network root and anybody holding no pastoral assignment get nothing pre-selected, and the rule reads the adder's place in the tree, never their account's role.
+
 ### Network assignment history
 
 ```text

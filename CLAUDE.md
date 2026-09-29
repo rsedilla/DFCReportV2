@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-29, the trigger being decision 0304: of 303 files, 302 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0304 each moved the first two and
+2026-09-29, the trigger being decision 0305: of 304 files, 303 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0305 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-29 and triggered by 0304, and was left stale by 0305 the same day. The one before that was dated
 2026-09-28 and triggered by 0303, and was left stale by 0304 the next day. The one before that was dated
 2026-09-28 and triggered by 0302, and was left stale by 0303 the same day. The one before that was dated
 2026-09-28 and triggered by 0301, and was left stale by 0302 the same day. The one before that was dated
@@ -649,6 +650,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-28 — [Administrators and Senior Pastors sign in with a second step](docs/decisions/0302-administrators-and-senior-pastors-sign-in-with-a-second-step.md)
 - 2026-09-28 — [Church-wide search is bounded and recorded](docs/decisions/0303-church-wide-search-is-bounded-and-recorded.md)
 - 2026-09-29 — [A duplicate check that shows someone outside the branch is recorded](docs/decisions/0304-a-duplicate-check-showing-someone-outside-the-branch-is-recorded.md)
+- 2026-09-29 — [Add a Person pre-selects the adder's sex](docs/decisions/0305-add-a-person-pre-selects-the-adders-sex.md)
 
 ### Open — awaiting a ruling
 

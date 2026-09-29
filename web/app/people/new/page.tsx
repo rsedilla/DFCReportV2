@@ -112,10 +112,16 @@ function NewPersonForm() {
     retry: false,
   });
   const myEntries = myPath.data?.data ?? [];
+  // **Sex starts on the adder's own** (section 4, decision 0305) when they hold an assignment
+  // under a leader, so a path of two or more: their default leader is them, and a leader leads
+  // only within their own Network. A Network root and anybody outside the tree add people to
+  // both Networks, so nothing is chosen for them. Decided by the tree, never by the role.
+  const defaultSex: Sex | '' = myEntries.length >= 2 && mine.data !== undefined ? mine.data.sex : '';
+  const sex: Sex | '' = values.sex !== '' ? values.sex : defaultSex;
   const self =
     (myEntries.length >= 2 || myEntries[0]?.network_root) &&
     mine.data !== undefined &&
-    (values.sex === '' || values.sex === mine.data.sex)
+    (sex === '' || sex === mine.data.sex)
       ? myEntries[myEntries.length - 1]
       : null;
   const chosenLeaderId = leaderTouched ? leaderId : (self?.id ?? null);
@@ -143,7 +149,7 @@ function NewPersonForm() {
   });
   // Their Network follows the sex chosen above (section 4), so the Cells narrow to it; with no
   // sex chosen yet the list is whole. A Cell chosen and then narrowed away is no longer chosen.
-  const network = networkOfSex(values.sex);
+  const network = networkOfSex(sex);
   const cellGroups = pickerGroups(cells.data ?? [], chosenLeaderId, network);
   const cellId = [...cellGroups.leaders, ...cellGroups.others].some((cell) => cell.id === pickedCellId)
     ? pickedCellId
@@ -192,6 +198,14 @@ function NewPersonForm() {
     beginNewWrite();
   }
 
+  // The pre-selected sex arrives after the page loads and changes the body, so it takes a new
+  // key like any other change (see `writeKey`), adjusted during render rather than in an effect.
+  const [keyedDefaultSex, setKeyedDefaultSex] = useState(defaultSex);
+  if (keyedDefaultSex !== defaultSex) {
+    setKeyedDefaultSex(defaultSex);
+    beginNewWrite();
+  }
+
   const create = useMutation({
     // The key travels with the attempt rather than being read from state.
     // `setWriteKey` does not apply until the next render, so a mutation started
@@ -204,7 +218,7 @@ function NewPersonForm() {
           first_name: values.first_name.trim(),
           middle_name: values.middle_name.trim() || null,
           last_name: values.last_name.trim(),
-          sex: values.sex as Sex,
+          sex: sex as Sex,
           civil_status: values.civil_status as CivilStatus,
           birth_date: values.birth_date || null,
           mobile_number: values.mobile_number.trim() || null,
@@ -382,7 +396,7 @@ function NewPersonForm() {
           required
           description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
           options={SEX_OPTIONS}
-          value={values.sex}
+          value={sex}
           onChange={(next) => set('sex', next)}
         />
 
