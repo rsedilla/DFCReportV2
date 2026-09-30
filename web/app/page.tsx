@@ -44,7 +44,7 @@ export default function HomePage() {
 
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5">
-      <h1 className="text-2xl font-semibold tracking-tight">G12 Church Management</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">DFC Reporting Management System</h1>
       <p className="text-muted mt-2 text-sm leading-relaxed" role="status">
         Taking you to the right place…
       </p>
