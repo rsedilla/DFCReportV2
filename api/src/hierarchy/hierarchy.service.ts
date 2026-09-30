@@ -276,6 +276,110 @@ export class HierarchyService {
   }
 
   /**
+   * `subtreeAsOf` at each of several instants, from one read.
+   *
+   * **For a figure that walks the tree once per date**, as Cell coverage does (section 20
+   * places a Cell meeting's leader on the meeting's own date). One query per date cost a
+   * large upline leader's year view about 7.5 s of 234 walks (measured 2026-09-30 on
+   * `seed:perf`'s church). The rows in force at any of the instants are read once, and each
+   * instant's walk runs on the rows in force at that instant.
+   *
+   * **The same answer as `subtreeAsOf` at each instant**: the same `[started_at, ended_at)`
+   * test, the person themselves included, and the same refusal where a walk meets somebody
+   * already on its own path. Each result is a set, lower-cased, since no caller needs an
+   * order or a person twice. Instants in one stretch share one set, so a caller reads it and
+   * never changes it.
+   */
+  async subtreesAsOf(
+    executor: Db,
+    personId: string,
+    instants: readonly Date[],
+  ): Promise<Set<string>[]> {
+    if (instants.length === 0) {
+      return [];
+    }
+
+    const times = instants.map((at) => at.getTime());
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['person_id', 'leader_id', 'started_at', 'ended_at'])
+      .where('leader_id', 'is not', null)
+      .where('started_at', '<=', new Date(Math.max(...times)))
+      .where((eb) =>
+        eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', new Date(Math.min(...times)))]),
+      )
+      .execute();
+    const edges = rows.map((row) => ({
+      personId: canonicalId(row.person_id),
+      leaderId: canonicalId(row.leader_id as string),
+      from: new Date(row.started_at).getTime(),
+      to: row.ended_at === null ? Infinity : new Date(row.ended_at).getTime(),
+    }));
+
+    // The rows in force change only where a row starts or ends, so instants between the same
+    // two such changes share one walk: a year with no reassignment is one walk, not 365.
+    const changes = [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))];
+    const walks = new Map<number, Set<string>>();
+
+    return times.map((at) => {
+      const stretch = changes.filter((change) => change <= at).length;
+      const known = walks.get(stretch);
+      if (known) {
+        return known;
+      }
+
+      const disciplesOf = new Map<string, string[]>();
+      for (const edge of edges) {
+        if (edge.from <= at && edge.to > at) {
+          disciplesOf.set(edge.leaderId, [
+            ...(disciplesOf.get(edge.leaderId) ?? []),
+            edge.personId,
+          ]);
+        }
+      }
+      const walked = this.walkRefusingCycles(canonicalId(personId), disciplesOf, personId);
+      walks.set(stretch, walked);
+      return walked;
+    });
+  }
+
+  /**
+   * Everybody below `seed`, refusing as `rejectCycle` does where a walk meets somebody on
+   * its own path. A person reached a second way is not walked again: whatever lies below
+   * them was already walked, and a cycle through them was already met.
+   */
+  private walkRefusingCycles(
+    seed: string,
+    disciplesOf: ReadonlyMap<string, readonly string[]>,
+    personId: string,
+  ): Set<string> {
+    const reached = new Set([seed]);
+    const onPath = new Set([seed]);
+    const stack: { person: string; next: number }[] = [{ person: seed, next: 0 }];
+
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      const child = (disciplesOf.get(top.person) ?? [])[top.next];
+      if (child === undefined) {
+        onPath.delete(top.person);
+        stack.pop();
+        continue;
+      }
+      top.next += 1;
+      if (onPath.has(child)) {
+        this.rejectCycle([{ is_cycle: true }], personId);
+      }
+      if (!reached.has(child)) {
+        reached.add(child);
+        onPath.add(child);
+        stack.push({ person: child, next: 0 });
+      }
+    }
+
+    return reached;
+  }
+
+  /**
    * The people a leader's report covers, placed on section 20's reporting graph.
    *
    * **Not the tree, and not `subtreeAsOf` either** (decision 0206). Section 20 places a
