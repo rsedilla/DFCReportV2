@@ -770,34 +770,34 @@ function networkWord(network: 'MENS' | 'WOMENS'): string {
 }
 
 /**
- * A Cell picker's options, with the person's pastoral leader's Cell lifted out (owner's
- * choice, 2026-09-21).
+ * The Cells one leader leads, within the actor's scope, for a Cell picker's first group
+ * (owner's choice, 2026-09-21).
  *
- * **A grouping, not a ranking** (decision 0009). One group is lifted out under a heading
- * that says why — the Cell a disciple usually joins in G12 is their own leader's — and
- * every other Cell keeps the order the API gave, which is `cell_id` and meaningless by
- * design (section 10). Nothing is preselected: the leader still chooses.
- *
- * With no leader known, or none of theirs among the choices, there is one group and no
- * heading, which is the list exactly as it was.
- *
- * **Only the person's own Network's Cells, where their Network is known** (owner's choice,
- * 2026-09-21). Section 10 refuses the other Network's, so offering them offered a choice
- * that always failed. The add route still decides.
+ * **Found through the index's name search, then kept by identifier.** The index filters by
+ * no leader, and its search matches a leader's surname on its own, so the surname is
+ * searched and every row led by somebody else is dropped. A composed name carries a title
+ * and a middle name the search would not match, which is why it is not searched whole.
  */
-export function pickerGroups(
-  all: readonly CellSummary[],
-  leaderId: string | null,
-  network: 'MENS' | 'WOMENS' | null = null,
-): { leaders: CellSummary[]; others: CellSummary[] } {
-  const cells = network === null ? all : all.filter((cell) => cell.network === network);
-
-  if (leaderId === null) {
-    return { leaders: [], others: [...cells] };
+export async function leaderCells(
+  month: string,
+  leaderId: string,
+  leaderName: string,
+  signal?: AbortSignal,
+): Promise<CellSummary[]> {
+  const term = surnameTerm(leaderName);
+  if (term === null) {
+    return [];
   }
 
-  const leaders = cells.filter((cell) => cell.leader.person_id === leaderId);
-  const others = cells.filter((cell) => cell.leader.person_id !== leaderId);
+  const page = await listCells({ month, q: term, limit: 200 }, signal);
+  return page.data.filter((cell) => cell.leader.person_id === leaderId);
+}
 
-  return { leaders, others };
+const SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv']);
+
+/** The last word of a name that is not a generational suffix, or null if none is searchable. */
+function surnameTerm(fullName: string): string | null {
+  const words = fullName.trim().split(/\s+/);
+  const word = [...words].reverse().find((candidate) => !SUFFIXES.has(candidate.toLowerCase()));
+  return word !== undefined && word.length >= 2 ? word : null;
 }

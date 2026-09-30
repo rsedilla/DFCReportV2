@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /**
  * The API, as far as the accessibility sweep is concerned.
@@ -351,21 +351,43 @@ export const MENS_CELL_CHOICE = {
   coverage: { recorded: 0, scheduled: 4, behind: 0 },
 };
 
-/** The Cells index, for the Cell pickers; `extra` adds rows after the three. */
+/**
+ * The Cells index, for the Cell pickers; `extra` adds rows after the three. A `q` narrows
+ * to a leader's name or Cell ID containing it, as the index's search does (decision 0261).
+ */
 export async function mockCellChoices(
   page: Page,
-  extra: readonly unknown[] = [],
+  extra: readonly { cell_id: string; leader: { full_name: string } }[] = [],
 ): Promise<void> {
-  await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(
+  await page.route('**/api/v1/cells?*', (route) => {
+    const q = new URL(route.request().url()).searchParams.get('q')?.toLowerCase() ?? null;
+    const all: readonly { cell_id: string; leader: { full_name: string } }[] = [
+      ...CELL_CHOICES,
+      ...extra,
+    ];
+
+    return route.fulfill(
       json({
         reporting_month: '2026-09-01',
         open: true,
-        data: [...CELL_CHOICES, ...extra],
+        data:
+          q === null
+            ? all
+            : all.filter(
+                (cell) =>
+                  cell.leader.full_name.toLowerCase().includes(q) ||
+                  cell.cell_id.toLowerCase().includes(q),
+              ),
         next_cursor: null,
       }),
-    ),
-  );
+    );
+  });
+}
+
+/** Searches a Cell picker (owner's choice, 2026-09-30) within `scope`. */
+export async function searchCells(scope: Page | Locator, term: string): Promise<void> {
+  await scope.getByLabel('Find a Cell').fill(term);
+  await scope.getByRole('button', { name: 'Search', exact: true }).click();
 }
 
 /**
