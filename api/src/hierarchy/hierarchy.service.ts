@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 
 import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
-import { NIL_UUID, sameId } from '../common/identifiers';
+import { NIL_UUID, canonicalId, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -300,7 +300,7 @@ export class HierarchyService {
    * functional a cycle in it is a *closed component*, so a walk seeded at a leader above
    * never enters it and section 20's refusal never fires. `grounded` replaces it: it is
    * everything with at least one chain terminating at a root or at somebody holding no edge,
-   * and `has_cycle` asks whether any person holding an edge has **no** terminating chain.
+   * and `hasCycle` asks whether any person holding an edge has **no** terminating chain.
    *
    * **That argument holds only while the graph is functional, so functionality is checked
    * rather than assumed** (decision 0212). One out-edge per person is a premise, not a
@@ -309,7 +309,7 @@ export class HierarchyService {
    * open **Stop Condition** in `CLAUDE.md`, whose remedy is a constraint at the write. No
    * write path reaches it today. Until that constraint exists this method refuses instead,
    * which closes both ways an overlap defeats cycle detection: a cycle member holding a
-   * second, grounded edge grounds the whole cycle so `has_cycle` is false, and a person
+   * second, grounded edge grounds the whole cycle so `hasCycle` is false, and a person
    * reached by two distinct paths is returned twice, which is not a cycle in either sense.
    *
    * **What it does not reach is an overlap that opens and closes inside the period.** The
@@ -317,15 +317,6 @@ export class HierarchyService {
    * refuses — while the row selected is the later-*starting* one, which need not be the
    * leader the person was under for most of the period. Recorded as open in `CLAUDE.md`; the
    * same constraint closes it.
-   *
-   * **The walk's own `CYCLE` clause is retained for termination, and its flag is no longer
-   * read.** Removing the clause does not merely lose a detector — a recursive walk seeded
-   * inside a cycle does not terminate without it, and the refusals below cannot fire on a
-   * query that never returns. What the clause cannot do is detect: it marks a person repeated
-   * on that row's **own path**, so two distinct paths to one person repeat nothing, and a
-   * cycle it does catch is one `has_cycle` already catches now that the graph is known
-   * functional. A flag no fixture can make fire alone is a branch nothing pins, so it is
-   * gone and the clause behind it is documented rather than removed.
    *
    * **A person whose leader held no in-period assignment is not lost** (decision 0209): the
    * `departed` tier continues the chain from that leader's last assignment, whenever it was.
@@ -360,12 +351,28 @@ export class HierarchyService {
     periodStart: Date,
     periodEnd: Date,
   ): Promise<string[]> {
-    const result = await sql<{
-      person_id: string | null;
-      depth: number;
-      not_functional: boolean;
-      has_cycle: boolean;
-    }>`
+    return (await this.reportingGraph(executor, periodStart, periodEnd)).subtree(leaderId);
+  }
+
+  /**
+   * Section 20's placement graph for one period, read once, answering any leader's
+   * `reportingSubtree` (above, which states every rule this follows).
+   *
+   * **One read per report rather than one per leader.** My 12 asks for a subtree per row,
+   * and each ask re-read the whole church's edges and re-ran both whole-graph refusals, whose
+   * answers do not change within a report: a leader's My 12 took about 17 s at section 2's
+   * scale, 13 reads of 1.2 s (measured 2026-09-30 on `seed:perf`'s church). The walk and the
+   * two refusals now run on the edges in memory; the database computes the edges alone.
+   *
+   * **The refusals fire where they did**: at the first `subtree` call, naming that leader,
+   * never at the read. A report that asks for no subtree refuses nothing, as before.
+   */
+  async reportingGraph(
+    executor: Db,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<{ subtree: (leaderId: string) => string[] }> {
+    const result = await sql<{ person_id: string; leader_id: string | null }>`
       WITH RECURSIVE in_force AS (
         SELECT person_id, leader_id
           FROM pastoral_assignments
@@ -411,44 +418,54 @@ export class HierarchyService {
         SELECT person_id, leader_id FROM primary_edges
         UNION ALL
         SELECT person_id, leader_id FROM departed
-      ),
-      terminals AS (
-        SELECT person_id FROM edges WHERE leader_id IS NULL
-        UNION
-        SELECT e.leader_id AS person_id
-          FROM edges e
-         WHERE e.leader_id IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM edges x WHERE x.person_id = e.leader_id)
-      ),
-      grounded AS (
-        SELECT person_id FROM terminals
-        UNION
-        SELECT e.person_id
-          FROM edges e
-          JOIN grounded g ON e.leader_id = g.person_id
-      ),
-      subtree AS (
-        SELECT ${leaderId}::uuid AS person_id, 0 AS depth
-        UNION ALL
-        SELECT e.person_id, s.depth + 1
-          FROM edges e
-          JOIN subtree s ON e.leader_id = s.person_id
-      ) CYCLE person_id SET walked_a_cycle USING path
-      SELECT subtree.person_id,
-             subtree.depth,
-             EXISTS (
-               SELECT 1 FROM edges GROUP BY person_id HAVING count(*) > 1
-             ) AS not_functional,
-             EXISTS (
-               SELECT 1 FROM edges e
-                WHERE NOT EXISTS (
-                  SELECT 1 FROM grounded g WHERE g.person_id = e.person_id
-                )
-             ) AS has_cycle
-        FROM subtree
-       ORDER BY depth
+      )
+      SELECT person_id, leader_id FROM edges
     `.execute(executor);
 
+    const edges = result.rows.map((row) => ({
+      personId: canonicalId(row.person_id),
+      leaderId: row.leader_id === null ? null : canonicalId(row.leader_id),
+    }));
+    const disciplesOf = new Map<string, string[]>();
+    const holdsEdge = new Set<string>();
+    let notFunctional = false;
+    for (const edge of edges) {
+      if (holdsEdge.has(edge.personId)) notFunctional = true;
+      holdsEdge.add(edge.personId);
+      if (edge.leaderId !== null) {
+        disciplesOf.set(edge.leaderId, [...(disciplesOf.get(edge.leaderId) ?? []), edge.personId]);
+      }
+    }
+
+    // `grounded`: everything with a chain terminating at a root or at somebody holding no edge.
+    const grounded = new Set<string>();
+    const pending = edges
+      .filter((edge) => edge.leaderId === null || !holdsEdge.has(edge.leaderId))
+      .map((edge) => edge.leaderId ?? edge.personId);
+    while (pending.length > 0) {
+      const next = pending.pop() as string;
+      if (grounded.has(next)) continue;
+      grounded.add(next);
+      pending.push(...(disciplesOf.get(next) ?? []));
+    }
+    const hasCycle = edges.some((edge) => !grounded.has(edge.personId));
+
+    return {
+      subtree: (leaderId: string) => {
+        this.refuseUnresolvable(notFunctional, hasCycle, leaderId);
+
+        // The walk, breadth first, so the result is in depth order as before. The graph is
+        // known functional and acyclic by here, so nobody is reached twice.
+        const walked = [canonicalId(leaderId)];
+        for (let index = 0; index < walked.length; index += 1) {
+          walked.push(...(disciplesOf.get(walked[index]) ?? []));
+        }
+        return walked;
+      },
+    };
+  }
+
+  private refuseUnresolvable(notFunctional: boolean, hasCycle: boolean, leaderId: string): void {
     // **Functionality is checked before anything is concluded from it** (decision 0212).
     // Every argument below rests on one out-edge per person, and nothing in the schema
     // enforces that: `pastoral_assignments_one_active` is partial over open rows, so two rows
@@ -460,7 +477,7 @@ export class HierarchyService {
     // walk holds them once and refuses nothing while every total above holds them twice —
     // section 25's eleventh rule broken across exactly the aggregation a drill-down performs.
     // Checked first because a cycle conclusion drawn over a non-functional graph is unsound.
-    if (result.rows[0]?.not_functional === true) {
+    if (notFunctional) {
       throw new InvariantViolationError(
         'The pastoral placement graph is not functional: at least one person holds more than one assignment in force. This is a data defect: report it rather than retrying.',
         { person_id: leaderId },
@@ -473,16 +490,12 @@ export class HierarchyService {
     // everything with a chain terminating at a root or at somebody holding no edge; a person
     // holding an edge and not grounded is in a cycle or beneath one, and above the graph is
     // known functional, so that is exactly "is in or beneath a cycle".
-    if (result.rows[0]?.has_cycle === true) {
+    if (hasCycle) {
       throw new InvariantViolationError(
         'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
         { person_id: leaderId },
       );
     }
-
-    return result.rows
-      .map((row) => row.person_id)
-      .filter((personId): personId is string => personId !== null);
   }
 
   /**
