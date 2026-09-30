@@ -551,6 +551,9 @@ export class ReportingService {
             )
           : await this.hierarchy.rootSeatsAsOf(trx, end);
 
+      // One read of the placement graph serves every row and the total (it was one per row).
+      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure & {
         leader_id: string;
@@ -558,9 +561,7 @@ export class ReportingService {
         people: Set<string>;
       })[] = [];
       for (const { personId: leaderId, network } of rowIds) {
-        const people = await peopleOf(
-          await this.hierarchy.reportingSubtree(trx, leaderId, start, end),
-        );
+        const people = await peopleOf(graph.subtree(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
@@ -571,9 +572,7 @@ export class ReportingService {
 
       const ownPeople = subject.kind === 'LEADER' ? await peopleOf([subject.person_id]) : null;
       const totalPeople = await peopleOf(
-        subject.kind === 'LEADER'
-          ? await this.hierarchy.reportingSubtree(trx, subject.person_id, start, end)
-          : null,
+        subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
       );
 
       // **Due meetings stop at the end of the current month.** A month that has not begun is
@@ -689,6 +688,9 @@ export class ReportingService {
             ? []
             : await this.hierarchy.rootSeatsAsOf(trx, end);
 
+      // One read of the placement graph serves every row and the total (it was one per row).
+      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure & {
         leader_id: string;
@@ -696,9 +698,7 @@ export class ReportingService {
         people: Set<string>;
       })[] = [];
       for (const { personId: leaderId, network } of rowIds) {
-        const { people } = await figuresOf(
-          await this.hierarchy.reportingSubtree(trx, leaderId, start, end),
-        );
+        const { people } = await figuresOf(graph.subtree(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
@@ -711,7 +711,7 @@ export class ReportingService {
         subject.kind === 'LEADER' ? (await figuresOf([subject.person_id])).people : null;
       const total = await figuresOf(
         subject.kind === 'LEADER'
-          ? await this.hierarchy.reportingSubtree(trx, subject.person_id, start, end)
+          ? graph.subtree(subject.person_id)
           : subject.kind === 'NETWORK'
             ? await this.networks.peopleInNetworkAsOf(trx, subject.network, end)
             : undefined,
