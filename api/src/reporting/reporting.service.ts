@@ -882,7 +882,8 @@ export class ReportingService {
    * `CELL` narrows by the Cell itself, which makes section 20's attribution vacuous —
    * every pair belongs to the one Cell asked for. `WHOLE_CHURCH` narrows nothing.
    * `LEADER` narrows by whether the scheduled-date leader stood in the actor's subtree
-   * **on that date**, which is one walk per distinct date rather than one per pair.
+   * **on that date**, which is one walk per distinct date rather than one per pair, all
+   * from one read of the tree.
    */
   private async scheduledPairsInScope(
     trx: Transaction<Database>,
@@ -897,12 +898,13 @@ export class ReportingService {
       return pairs;
     }
 
-    const subtrees = new Map<string, Set<string>>();
-    for (const date of new Set(pairs.map((pair) => pair.scheduledDate))) {
-      const members = await this.hierarchy.subtreeAsOf(trx, scope.person_id, endOfManilaDay(date));
-
-      subtrees.set(date, new Set(members.map(canonicalId)));
-    }
+    const dates = [...new Set(pairs.map((pair) => pair.scheduledDate))];
+    const walked = await this.hierarchy.subtreesAsOf(
+      trx,
+      scope.person_id,
+      dates.map((date) => endOfManilaDay(date)),
+    );
+    const subtrees = new Map(dates.map((date, index) => [date, walked[index]]));
 
     return pairs.filter(
       (pair) =>

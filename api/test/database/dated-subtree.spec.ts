@@ -181,6 +181,65 @@ describe('the dated subtree walk (decision 0206)', () => {
   });
 
   /**
+   * `subtreesAsOf`, which answers several instants from one read for Cell coverage's
+   * per-date walk. It owes exactly `subtreeAsOf`'s answer at each instant, so it is pinned
+   * against that method rather than against a second statement of the rules.
+   */
+  describe('several instants from one read', () => {
+    it('agrees with the single walk at every instant, a reassignment included', async () => {
+      const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, raymond.id, null, OCTOBER);
+      await assignTo(db, manuel.id, raymond.id, OCTOBER);
+      await assignTo(db, ben.id, raymond.id, MID_OCTOBER);
+      const marksFirst = await assignTo(db, mark.id, manuel.id, OCTOBER);
+      await closeAt(marksFirst, NOVEMBER);
+      await assignTo(db, mark.id, ben.id, NOVEMBER);
+
+      // Before the tree, on each row's first instant, on the reassignment's shared instant,
+      // and after it.
+      const instants = [
+        new Date('2027-09-15T00:00:00+08:00'),
+        OCTOBER,
+        MID_OCTOBER,
+        NOVEMBER,
+        DECEMBER,
+      ];
+      for (const person of [raymond, manuel, ben, mark]) {
+        const many = await hierarchy.subtreesAsOf(db, person.id, instants);
+        for (const [index, at] of instants.entries()) {
+          const one = await hierarchy.subtreeAsOf(db, person.id, at);
+          expect([...many[index]].sort()).toEqual([...new Set(one)].sort());
+        }
+      }
+
+      // And the instants genuinely differ, so the loop is not asserting one answer five times.
+      const [, , inOctober, , inDecember] = await hierarchy.subtreesAsOf(db, ben.id, instants);
+      expect(inOctober.has(mark.id)).toBe(false);
+      expect(inDecember.has(mark.id)).toBe(true);
+    });
+
+    it('refuses a cycle as the single walk does', async () => {
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await sql`
+        INSERT INTO pastoral_assignments (person_id, leader_id, started_at)
+        VALUES (${mark.id}::uuid, ${manuel.id}::uuid, ${OCTOBER}),
+               (${manuel.id}::uuid, ${mark.id}::uuid, ${OCTOBER})
+      `.execute(db);
+
+      await expect(hierarchy.subtreesAsOf(db, manuel.id, [MID_OCTOBER])).rejects.toThrow(/cycle/i);
+      await expect(
+        hierarchy.subtreesAsOf(db, manuel.id, [new Date('2027-09-15T00:00:00+08:00')]),
+      ).resolves.toEqual([new Set([manuel.id])]);
+    });
+  });
+
+  /**
    * The dated **upward** walk (decision 0214), which is what authorizes a report.
    *
    * **It is here rather than beside the route, because the property is this walk's.** The
