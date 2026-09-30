@@ -51,7 +51,8 @@ import type { TestPerson } from '../setup/fixtures';
  * is an open Stop Condition rather than a settled rule. Each says so where it is written.
  *
  * *The third was verified by mutation too, though against a rival **claim** rather than a rival
- * implementation: adding `WHERE subtree.depth > 0` to `reportingSubtree`'s final select — which
+ * implementation: adding `WHERE subtree.depth > 0` to `reportingSubtree`'s final select, as the
+ * query stood before commit 8f95530 moved the walk into `reportingGraph` — which
  * is what "out of **every** leader's Cell figure" would mean if it were true — compiles and
  * reddens this case alone, on `toLito`, which is the assertion that carries the claim. Recorded
  * here rather than only in a commit message, because the next reader of this file reads the

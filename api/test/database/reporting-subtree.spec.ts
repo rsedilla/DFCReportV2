@@ -214,14 +214,14 @@ describe('the reporting placement graph (decision 0206)', () => {
   it('refuses an overlap whose second edge points inside the subtree of the first', async () => {
     // **Decision 0212: the graph is not functional, so every figure computed from it
     // refuses.** This fixture used to pin the walk's own `CYCLE` flag, on the reasoning that
-    // `has_cycle` misses this shape -- every chain here reaches the root, so no chain fails
+    // `hasCycle` misses this shape -- every chain here reaches the root, so no chain fails
     // to terminate, while the walk itself revisits Manuel.
     //
     // That flag is gone. Under 0212 the overlap is detected first and directly: Manuel holds
     // two edges in force at the period's end, which is the premise `grounded` depends on and
     // which nothing enforced. Refusing on the overlap makes a second cycle detector
     // unreachable rather than merely redundant -- in a functional graph a cycle is a closed
-    // component, so `has_cycle` is complete.
+    // component, so `hasCycle` is complete.
     //
     // Both rows are writable: `pastoral_assignments_one_active` is partial over open rows,
     // and the second row is closed -- after the period, so still in force at its end.
@@ -439,7 +439,7 @@ describe('the reporting placement graph (decision 0206)', () => {
   it('answers cleanly for a leader beside a cycle the walk does not enter', async () => {
     // **Decision 0212, and the case that decided it.** `grounded` is reachability from a
     // terminal, so a cycle member holding a *second* edge that is grounded grounds itself and
-    // so grounds the whole cycle: `has_cycle` is false here. Mark, beside the cycle rather
+    // so grounds the whole cycle: `hasCycle` is false here. Mark, beside the cycle rather
     // than above it, used to be answered cleanly over a graph that holds one.
     //
     // The overlap refusal closes it without a second cycle detector, which is what 0212 means

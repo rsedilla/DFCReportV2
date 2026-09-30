@@ -397,6 +397,11 @@ function median(values: number[]): number {
 }
 
 async function main(): Promise<void> {
+  // The seed script's guard: the screens include church-wide searches, which are audited, so
+  // this never runs against a database holding real people.
+  if (new URL(process.env.DATABASE_URL ?? 'x:').pathname.replace('/', '') !== 'dfc_perf') {
+    throw new Error('time:screens runs only against a database named dfc_perf.');
+  }
   const out = argument('--out');
   const only = argument('--only');
   const personas = await loadPersonas();

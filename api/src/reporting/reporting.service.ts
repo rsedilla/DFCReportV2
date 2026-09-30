@@ -688,8 +688,11 @@ export class ReportingService {
             ? []
             : await this.hierarchy.rootSeatsAsOf(trx, end);
 
-      // One read of the placement graph serves every row and the total (it was one per row).
-      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+      // One read of the placement graph serves every row and the total (it was one per row),
+      // made only when a subtree is asked for: a Network subject asks for none.
+      let graph: Awaited<ReturnType<HierarchyService['reportingGraph']>> | null = null;
+      const subtreeOf = async (leaderId: string) =>
+        (graph ??= await this.hierarchy.reportingGraph(trx, start, end)).subtree(leaderId);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure & {
@@ -698,7 +701,7 @@ export class ReportingService {
         people: Set<string>;
       })[] = [];
       for (const { personId: leaderId, network } of rowIds) {
-        const { people } = await figuresOf(graph.subtree(leaderId));
+        const { people } = await figuresOf(await subtreeOf(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
@@ -711,7 +714,7 @@ export class ReportingService {
         subject.kind === 'LEADER' ? (await figuresOf([subject.person_id])).people : null;
       const total = await figuresOf(
         subject.kind === 'LEADER'
-          ? graph.subtree(subject.person_id)
+          ? await subtreeOf(subject.person_id)
           : subject.kind === 'NETWORK'
             ? await this.networks.peopleInNetworkAsOf(trx, subject.network, end)
             : undefined,
