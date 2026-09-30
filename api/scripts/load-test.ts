@@ -2,7 +2,7 @@
  * Many leaders using the made-up church `seed:perf` builds at once, as on a Sunday night.
  *
  *   DATABASE_URL=<dfc_perf> JWT_SECRET=<the running API's> PERF_API=http://127.0.0.1:3002 \
- *     npm run load:test -- [--levels 50,100,200] [--seconds 90] [--out report.md]
+ *     npm run load:test -- [--levels 50,100,200] [--seconds 90] [--spread 600] [--out report.md]
  *
  * **It refuses any database not named `dfc_perf`**, because it writes: every leader saves
  * their DCC checklist, flipping each mark, over and over. Nothing it writes can be removed.
@@ -32,12 +32,15 @@ const MIN_GAP_MS = 60_000 / 100;
 const TIMEOUT_MS = 60_000;
 
 const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-const M = `${today.slice(0, 7)}-01`;
-const PREVIOUS = (() => {
-  const d = new Date(`${M}T00:00:00Z`);
+function monthBefore(month: string): string {
+  const d = new Date(`${month}T00:00:00Z`);
   d.setUTCMonth(d.getUTCMonth() - 1);
   return d.toISOString().slice(0, 10);
-})();
+}
+// The month the leaders record and report on: this one, or the last while its window is still
+// open and this one has no Sunday yet (set in `main`).
+let M = `${today.slice(0, 7)}-01`;
+let PREVIOUS = monthBefore(M);
 
 // A response is read loosely: this script follows ids and cursors, and checks no shapes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,7 +205,17 @@ async function round(level: Level, leader: Leader, sundayId: string): Promise<vo
   await sleep(1000 + Math.random() * 2000);
 }
 
-async function runLevel(leaders: Leader[], seconds: number, sundayId: string): Promise<Level> {
+/**
+ * Without `spread`, every leader arrives within five seconds and repeats rounds until the
+ * time is up. With it, each arrives at a random moment within `spread` seconds, does one
+ * round and leaves, which is closer to a Sunday evening than leaders who never stop.
+ */
+async function runLevel(
+  leaders: Leader[],
+  seconds: number,
+  sundayId: string,
+  spread: number | null,
+): Promise<Level> {
   const level: Level = {
     requests: [],
     steps: { Record: [], Checklist: [], Save: [], Reports: [] },
@@ -210,6 +223,11 @@ async function runLevel(leaders: Leader[], seconds: number, sundayId: string): P
   const until = Date.now() + seconds * 1000;
   await Promise.all(
     leaders.map(async (leader, index) => {
+      if (spread !== null) {
+        await sleep(Math.random() * spread * 1000);
+        await round(level, leader, sundayId);
+        return;
+      }
       await sleep((index / leaders.length) * 5000); // arriving over five seconds, not in one instant
       while (Date.now() < until) {
         await round(level, leader, sundayId);
@@ -236,19 +254,28 @@ async function main(): Promise<void> {
   }
   const levels = (argument('--levels') ?? '50,100,200').split(',').map(Number);
   const seconds = Number(argument('--seconds') ?? '90');
+  const spread = argument('--spread') === null ? null : Number(argument('--spread'));
   const out = argument('--out');
   const leaders = await loadLeaders(Math.max(...levels));
   if (leaders.length < Math.max(...levels)) {
     throw new Error(`dfc_perf has ${leaders.length} leader accounts; a level asks for more.`);
   }
 
-  const events = await call(
-    { requests: [], steps: { Record: [], Checklist: [], Save: [], Reports: [] } },
-    leaders[0],
-    `/api/v1/dcc/events?month=${M}`,
-  );
-  const sunday = ((events.body.data ?? []) as Body[]).filter((e) => e.recordable).pop();
-  if (!sunday) throw new Error(`No recordable Sunday in ${M}.`);
+  let sunday: Body | undefined;
+  for (const month of [M, PREVIOUS]) {
+    const events = await call(
+      { requests: [], steps: { Record: [], Checklist: [], Save: [], Reports: [] } },
+      leaders[0],
+      `/api/v1/dcc/events?month=${month}`,
+    );
+    sunday = ((events.body.data ?? []) as Body[]).filter((e) => e.recordable).pop();
+    if (sunday) {
+      M = month;
+      PREVIOUS = monthBefore(month);
+      break;
+    }
+  }
+  if (!sunday) throw new Error(`No recordable Sunday in ${M} or ${PREVIOUS}.`);
   console.log(`Sunday ${sunday.event_date ?? sunday.date ?? sunday.id}, ${seconds} s per level.`);
 
   const lines = [
@@ -258,7 +285,9 @@ async function main(): Promise<void> {
     '| ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | --- |',
   ];
   for (const count of levels) {
-    const level = await runLevel(leaders.slice(0, count), seconds, sunday.id);
+    const started = Date.now();
+    const level = await runLevel(leaders.slice(0, count), seconds, sunday.id, spread);
+    const wall = (Date.now() - started) / 1000;
     const times = level.requests.map((r) => r.ms);
     const errors = new Map<number, number>();
     for (const r of level.requests) {
@@ -266,7 +295,7 @@ async function main(): Promise<void> {
     }
     const step = (name: Step): string =>
       `${s(percentile(level.steps[name], 50))} s (worst ${s(percentile(level.steps[name], 100))} s)`;
-    const line = `| ${count} | ${times.length} | ${(times.length / seconds).toFixed(1)} | ${s(
+    const line = `| ${count} | ${times.length} | ${(times.length / wall).toFixed(1)} | ${s(
       percentile(times, 50),
     )} s | ${s(percentile(times, 95))} s | ${s(percentile(times, 100))} s | ${
       errors.size === 0
