@@ -128,11 +128,13 @@ export class DccFiguresService {
     // `= ANY('{}')` is false for every row, so it answers it correctly without a branch.
     const population = options.personIds === undefined ? null : [...options.personIds];
 
-    // The `YYYY-MM` prefix the calendar is matched on. Derived from the repository's
-    // reporting-month format rather than taken as a second parameter, so there is one
-    // spelling of a month in the system.
-    const month = reportingMonth.slice(0, 7);
-
+    // **The month is a date range, and the history is read for the month's attendees only.**
+    // Matching `to_char(event_date, 'YYYY-MM')` and reading every live record before narrowing
+    // made each report read the church's whole history, whatever its scope; a range lets
+    // `dcc_events_by_date` find the month, and the lifetime count then reaches each attendee
+    // through `dcc_attendance_by_person`. The figures are the same: a date is in the month
+    // exactly when its `YYYY-MM` is, and before the next month's first day exactly when its
+    // `YYYY-MM` is at most the month's.
     const rows = await sql<{
       n: string;
       removed: string[] | null;
@@ -144,35 +146,34 @@ export class DccFiguresService {
       WITH calendar AS (
         SELECT id, event_date, removed_at
           FROM dcc_events
-         WHERE to_char(event_date, 'YYYY-MM') = ${month}
-      ),
-      live AS (
-        SELECT a.person_id, e.event_date
-          FROM dcc_attendance a
-          JOIN dcc_events e ON e.id = a.dcc_event_id
-         WHERE a.present = true
-           AND a.superseded_at IS NULL
-           AND e.removed_at IS NULL
+         WHERE event_date >= ${reportingMonth}::date
+           AND event_date < (${reportingMonth}::date + interval '1 month')
       ),
       attended_this_month AS (
-        SELECT DISTINCT person_id
-          FROM live
-         WHERE to_char(event_date, 'YYYY-MM') = ${month}
+        SELECT DISTINCT a.person_id
+          FROM calendar c
+          JOIN dcc_attendance a ON a.dcc_event_id = c.id
+         WHERE c.removed_at IS NULL
+           AND a.present = true
+           AND a.superseded_at IS NULL
            AND (
              ${population}::uuid[] IS NULL
-             OR person_id = ANY (${population}::uuid[])
+             OR a.person_id = ANY (${population}::uuid[])
            )
       ),
       figures AS (
         SELECT m.person_id,
                count(*) FILTER (
-                 WHERE to_char(l.event_date, 'YYYY-MM') = ${month}
+                 WHERE e.event_date >= ${reportingMonth}::date
                ) AS times_in_month,
-               count(*) FILTER (
-                 WHERE to_char(l.event_date, 'YYYY-MM') <= ${month}
-               ) AS lifetime_through_month
+               count(*) AS lifetime_through_month
           FROM attended_this_month m
-          JOIN live l ON l.person_id = m.person_id
+          JOIN dcc_attendance a ON a.person_id = m.person_id
+          JOIN dcc_events e ON e.id = a.dcc_event_id
+         WHERE a.present = true
+           AND a.superseded_at IS NULL
+           AND e.removed_at IS NULL
+           AND e.event_date < (${reportingMonth}::date + interval '1 month')
          GROUP BY m.person_id
       ),
       month_meta AS (
@@ -242,34 +243,33 @@ export class DccFiguresService {
       lifetime: string | null;
     }>`
       WITH calendar AS (
-        SELECT event_date, removed_at
+        SELECT id, event_date, removed_at
           FROM dcc_events
          WHERE event_date BETWEEN ${from}::date AND ${to}::date
       ),
-      live AS (
-        SELECT a.person_id, e.event_date
-          FROM dcc_attendance a
+      attended AS (
+        SELECT DISTINCT a.person_id
+          FROM calendar c
+          JOIN dcc_attendance a ON a.dcc_event_id = c.id
+         WHERE c.removed_at IS NULL
+           AND a.present = true
+           AND a.superseded_at IS NULL
+           AND (
+             ${population}::uuid[] IS NULL
+             OR a.person_id = ANY (${population}::uuid[])
+           )
+      ),
+      figures AS (
+        SELECT m.person_id,
+               count(*) FILTER (WHERE e.event_date >= ${from}::date) AS times_in_range,
+               count(*) AS lifetime
+          FROM attended m
+          JOIN dcc_attendance a ON a.person_id = m.person_id
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
            AND e.removed_at IS NULL
            AND e.event_date <= ${to}::date
-      ),
-      attended AS (
-        SELECT DISTINCT person_id
-          FROM live
-         WHERE event_date >= ${from}::date
-           AND (
-             ${population}::uuid[] IS NULL
-             OR person_id = ANY (${population}::uuid[])
-           )
-      ),
-      figures AS (
-        SELECT m.person_id,
-               count(*) FILTER (WHERE l.event_date >= ${from}::date) AS times_in_range,
-               count(*) AS lifetime
-          FROM attended m
-          JOIN live l ON l.person_id = m.person_id
          GROUP BY m.person_id
       ),
       range_meta AS (
