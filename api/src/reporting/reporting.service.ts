@@ -882,8 +882,8 @@ export class ReportingService {
    * `CELL` narrows by the Cell itself, which makes section 20's attribution vacuous —
    * every pair belongs to the one Cell asked for. `WHOLE_CHURCH` narrows nothing.
    * `LEADER` narrows by whether the scheduled-date leader stood in the actor's subtree
-   * **on that date**, which is one walk per distinct date rather than one per pair, all
-   * from one read of the tree.
+   * **on that date**, which is at most one walk per distinct date rather than one per pair,
+   * all from one read of the tree.
    */
   private async scheduledPairsInScope(
     trx: Transaction<Database>,

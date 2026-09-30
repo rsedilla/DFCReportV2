@@ -200,11 +200,13 @@ describe('the dated subtree walk (decision 0206)', () => {
       await assignTo(db, mark.id, ben.id, NOVEMBER);
 
       // Before the tree, on each row's first instant, on the reassignment's shared instant,
-      // and after it.
+      // and after it. The late-October instant shares MID_OCTOBER's stretch, so one of the
+      // answers checked is a reused walk.
       const instants = [
         new Date('2027-09-15T00:00:00+08:00'),
         OCTOBER,
         MID_OCTOBER,
+        new Date('2027-10-25T00:00:00+08:00'),
         NOVEMBER,
         DECEMBER,
       ];
@@ -216,10 +218,34 @@ describe('the dated subtree walk (decision 0206)', () => {
         }
       }
 
-      // And the instants genuinely differ, so the loop is not asserting one answer five times.
-      const [, , inOctober, , inDecember] = await hierarchy.subtreesAsOf(db, ben.id, instants);
+      // And the instants genuinely differ, so the loop is not asserting one answer six times.
+      const [, , inOctober, , , inDecember] = await hierarchy.subtreesAsOf(db, ben.id, instants);
       expect(inOctober.has(mark.id)).toBe(false);
       expect(inDecember.has(mark.id)).toBe(true);
+    });
+
+    it('accepts a person reached two ways, as the single walk does', async () => {
+      // Two rows in force at once for Mark, under Manuel and under Ben: not a cycle, which
+      // the single walk accepts and lists Mark twice. Written past the services, as an
+      // overlap would arrive.
+      const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, raymond.id, null, OCTOBER);
+      await assignTo(db, manuel.id, raymond.id, OCTOBER);
+      await assignTo(db, ben.id, raymond.id, OCTOBER);
+      await sql`
+        INSERT INTO pastoral_assignments (person_id, leader_id, started_at, ended_at)
+        VALUES (${mark.id}::uuid, ${manuel.id}::uuid, ${OCTOBER}, ${DECEMBER}),
+               (${mark.id}::uuid, ${ben.id}::uuid, ${OCTOBER}, NULL)
+      `.execute(db);
+
+      const one = await hierarchy.subtreeAsOf(db, raymond.id, MID_OCTOBER);
+      const [many] = await hierarchy.subtreesAsOf(db, raymond.id, [MID_OCTOBER]);
+      expect(one.filter((id) => id === mark.id)).toHaveLength(2);
+      expect([...many].sort()).toEqual([...new Set(one)].sort());
     });
 
     it('refuses a cycle as the single walk does', async () => {

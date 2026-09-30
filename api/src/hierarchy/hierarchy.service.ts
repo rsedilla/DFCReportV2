@@ -287,7 +287,8 @@ export class HierarchyService {
    * **The same answer as `subtreeAsOf` at each instant**: the same `[started_at, ended_at)`
    * test, the person themselves included, and the same refusal where a walk meets somebody
    * already on its own path. Each result is a set, lower-cased, since no caller needs an
-   * order or a person twice.
+   * order or a person twice. Instants in one stretch share one set, so a caller reads it and
+   * never changes it.
    */
   async subtreesAsOf(
     executor: Db,
