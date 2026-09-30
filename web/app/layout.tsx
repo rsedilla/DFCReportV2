@@ -22,7 +22,7 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: 'G12 Church Management',
+  title: 'DFC Reporting Management System',
   description: 'People, pastoral hierarchy, DCC and Cell attendance, and reporting.',
 };
 

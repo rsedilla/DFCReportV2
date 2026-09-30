@@ -68,7 +68,7 @@ export function compose(
 
   if (message.kind === 'ACTIVATION') {
     return {
-      subject: 'Set your password for G12 Church Management',
+      subject: 'Set your password for DFC Reporting Management System',
       text: [
         greeting,
         '',
@@ -84,7 +84,7 @@ export function compose(
   }
 
   return {
-    subject: 'Reset your G12 Church Management password',
+    subject: 'Reset your DFC Reporting Management System password',
     text: [
       greeting,
       '',

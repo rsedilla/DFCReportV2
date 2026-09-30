@@ -91,7 +91,7 @@ const ACCOUNT: NavEntry = {
 };
 
 /** The application's name, at the top of the sidebar (owner's choice, 2026-09-15). */
-const APPLICATION_NAME = 'G12 Church Management';
+const APPLICATION_NAME = 'DFC Reporting Management System';
 
 /**
  * How wide a screen's content is allowed to get, and why there are two.
