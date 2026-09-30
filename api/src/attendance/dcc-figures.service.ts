@@ -132,9 +132,7 @@ export class DccFiguresService {
     // Matching `to_char(event_date, 'YYYY-MM')` and reading every live record before narrowing
     // made each report read the church's whole history, whatever its scope; a range lets
     // `dcc_events_by_date` find the month, and the lifetime count then reaches each attendee
-    // through `dcc_attendance_by_person`. The figures are the same: a date is in the month
-    // exactly when its `YYYY-MM` is, and before the next month's first day exactly when its
-    // `YYYY-MM` is at most the month's.
+    // through `dcc_attendance_by_person`.
     const rows = await sql<{
       n: string;
       removed: string[] | null;
