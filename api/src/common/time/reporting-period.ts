@@ -75,14 +75,6 @@ export function reportingPeriodBounds(reportingMonth: string): ReportingPeriod {
  * A reporting month is the first of a month, which is this repository's existing spelling
  * of one (`submission-window.ts`). Anything else is refused rather than answered.
  *
- * **The month comparison in the query is a string comparison and its correctness rests on
- * the shape.** `to_char` zero-pads, so a `YYYY-MM` prefix sorts lexicographically exactly
- * as it sorts chronologically — but only against a well-formed argument. A month written
- * `2027-1` matches nothing and sorts *before* `2027-10`, so a malformed value would yield a
- * plausible, understated report rather than an error. That is the shape decision 0185
- * refuses for a date-only field and decision 0200 for a format validator, and an
- * understated report is worse than a refused one because nobody can see it is wrong.
- *
  * **It composes `isCalendarDate` rather than writing a fifth regex**, which is section 22's
  * one-predicate rule: "One rather than several, because the alternative is what this system
  * actually had: three conventions for a single rule." A hand-written
