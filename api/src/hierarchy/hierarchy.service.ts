@@ -1046,6 +1046,31 @@ export class HierarchyService {
   }
 
   /**
+   * Each person's current direct leader, by identifier, for a page of people at once.
+   *
+   * A person with no open assignment, or a root, is absent from the map. Identifiers only,
+   * so the caller names the leaders from its own table rather than this module joining
+   * `persons` a third time (section 2).
+   */
+  async directLeaderIdsOf(personIds: readonly string[]): Promise<Map<string, string>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('pastoral_assignments')
+      .select(['person_id', 'leader_id'])
+      .where('person_id', 'in', personIds)
+      .where('ended_at', 'is', null)
+      .where('leader_id', 'is not', null)
+      .execute();
+
+    return new Map(
+      rows.flatMap((row) => (row.leader_id === null ? [] : [[row.person_id, row.leader_id]])),
+    );
+  }
+
+  /**
    * The name of the person's current direct leader, or null.
    *
    * Section 8 permits this church-wide, for a person outside the viewer's own

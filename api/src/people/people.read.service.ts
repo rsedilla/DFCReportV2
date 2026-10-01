@@ -614,6 +614,52 @@ export class PeopleReadService {
       this.hierarchy.directLeaderNameOf(person.id),
     ]);
 
+    return this.identityOnly(person, network, leader);
+  }
+
+  /**
+   * Each person's current direct leader's name, for a page at once: what
+   * `directLeaderNameOf` gives one person, composed the same way, in two queries.
+   */
+  async directLeaderNamesOf(personIds: readonly string[]): Promise<Map<string, string>> {
+    const leaders = await this.hierarchy.directLeaderIdsOf(personIds);
+    if (leaders.size === 0) {
+      return new Map();
+    }
+
+    const people = await this.db
+      .selectFrom('persons')
+      .select(['id', 'title', 'first_name', 'last_name'])
+      .where('id', 'in', [...new Set(leaders.values())])
+      .execute();
+    const names = new Map(
+      people.map((row) => [
+        row.id,
+        [row.title, row.first_name, row.last_name].filter((part) => part !== null).join(' '),
+      ]),
+    );
+
+    const result = new Map<string, string>();
+    for (const [personId, leaderId] of leaders) {
+      const name = names.get(leaderId);
+      if (name !== undefined) {
+        result.set(personId, name);
+      }
+    }
+    return result;
+  }
+
+  /** Each person's Network now, for a page at once (`networks` owns the table). */
+  async currentNetworksOf(personIds: readonly string[]): Promise<Map<string, NetworkName>> {
+    return this.networks.networksOf(this.db, personIds, new Date());
+  }
+
+  /** {@link minimalIdentity} from values the caller has already read for a whole page. */
+  identityOnly(
+    person: PersonRecord,
+    network: NetworkName | null,
+    leader: string | null,
+  ): Record<string, unknown> {
     return {
       id: person.id,
       member_id: person.member_id,
