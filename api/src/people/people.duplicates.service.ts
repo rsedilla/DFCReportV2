@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { sql, type ExpressionBuilder } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
+import type { Database } from '../database/schema';
 
 import {
   findCandidates,
@@ -100,17 +101,24 @@ export class PeopleDuplicatesService {
      */
     only: (match: VisibleMatch) => boolean = () => true,
   ): Promise<Record<string, unknown>[]> {
-    const [matches, publishable] = await Promise.all([
-      this.findDuplicates(subject),
-      this.findDuplicates({
+    // **One read of the population, scored twice.** The publishable subject carries no
+    // birthday and no mobile number, so its population is exactly the rows the names
+    // reach. The read marks those rows itself, in the same SQL predicates, rather than
+    // the names being re-tested here: scoring it against the wider set could admit an
+    // out-of-scope candidate the names never reached, which is a membership disclosure.
+    const { candidates, reachedByNames } = await this.populationFor(subject);
+    const matches = findCandidates(subject, candidates);
+    const publishable = findCandidates(
+      {
         firstName: subject.firstName,
         middleName: subject.middleName,
         lastName: subject.lastName,
         sex: subject.sex,
         birthDate: null,
         mobileNumberNormalized: null,
-      }),
-    ]);
+      },
+      candidates.filter((candidate) => reachedByNames.has(candidate.id)),
+    );
 
     // **`only` is not applied here, and that is the fix rather than a
     // refactor.** Applying it to `matches` — scored against the full subject —
@@ -133,19 +141,53 @@ export class PeopleDuplicatesService {
   }
 
   async findDuplicates(subject: Subject): Promise<Match[]> {
+    return findCandidates(subject, (await this.populationFor(subject)).candidates);
+  }
+
+  /**
+   * The rows the subject's narrowing reaches, and which of them its names alone reach:
+   * the surname's first letter or the first name, the two branches that read nothing
+   * section 8 protects. That second set is the population of the same subject with its
+   * birthday and mobile number removed.
+   */
+  private async populationFor(
+    subject: Subject,
+  ): Promise<{ candidates: Candidate[]; reachedByNames: Set<string> }> {
     // The same guard the search path got, for the same reason and one function
     // away. `normalizeName` drops suffix tokens, so `last_name=Jr` normalizes to
     // empty and the surname-initial branch below becomes LIKE '%' -- which
     // selects the whole directory into memory to be scored, on every request.
     if (normalizeName(subject.lastName) === '' && normalizeName(subject.firstName) === '') {
-      return [];
+      return { candidates: [], reachedByNames: new Set() };
     }
 
     const mobile = subject.mobileNumberNormalized ?? normalizeMobile(null);
 
+    // Compared against the normalized stored value, not the raw one. `unaccent`
+    // is an extension this schema does not install, so the normalization is done
+    // with `translate` over the characters that actually occur in these names.
+    const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const surnameInitial = normalizedFirstLetter(subject.lastName);
+
+    // The two branches the names reach, written once and used twice: in the narrowing
+    // below, and as the column that marks a row the names alone reach.
+    const byNames = (eb: ExpressionBuilder<Database, 'persons'>) =>
+      eb.or([
+        // Omitted entirely rather than degenerating to LIKE '%' when the surname
+        // normalizes away.
+        ...(surnameInitial === ''
+          ? []
+          : [eb(normalizedLastName, 'like', `${escapeLike(surnameInitial)}%`)]),
+        // The surname-change case: a woman's last name may change on marriage, so
+        // a shared first name has to be able to reach her earlier record on its
+        // own (section 3).
+        eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
+      ]);
+
     let query = this.db
       .selectFrom('persons')
-      .select([
+      .select((eb) => [
         'id',
         'member_id',
         'first_name',
@@ -154,37 +196,18 @@ export class PeopleDuplicatesService {
         'birth_date',
         'sex',
         'mobile_number_normalized',
+        byNames(eb).as('reached_by_names'),
       ])
       // A Person absorbed by a merge is never a candidate: the survivor is the
       // only valid target of any later write (section 3, Person Merge).
       .where('merged_into_id', 'is', null);
-
-    // Compared against the normalized stored value, not the raw one. `unaccent`
-    // is an extension this schema does not install, so the normalization is done
-    // with `translate` over the characters that actually occur in these names.
-    const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
-    const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
 
     query = query.where((eb) =>
       eb.or([
         ...(subject.birthDate === null || subject.birthDate === undefined
           ? []
           : [eb('birth_date', '=', subject.birthDate)]),
-        // Omitted entirely rather than degenerating to LIKE '%' when the surname
-        // normalizes away.
-        ...(normalizedFirstLetter(subject.lastName) === ''
-          ? []
-          : [
-              eb(
-                normalizedLastName,
-                'like',
-                `${escapeLike(normalizedFirstLetter(subject.lastName))}%`,
-              ),
-            ]),
-        // The surname-change case: a woman's last name may change on marriage, so
-        // a shared first name has to be able to reach her earlier record on its
-        // own (section 3).
-        eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
+        byNames(eb),
         ...(mobile === null ? [] : [eb('mobile_number_normalized', '=', mobile)]),
         // A birthday one digit-transposition away is not an equal birthday, so it
         // needs its own reach. Same length, same digits, different order.
@@ -196,9 +219,8 @@ export class PeopleDuplicatesService {
 
     const population = await query.execute();
 
-    return findCandidates(
-      subject,
-      population.map((row): Candidate => ({
+    return {
+      candidates: population.map((row): Candidate => ({
         id: row.id,
         memberId: row.member_id,
         firstName: row.first_name,
@@ -208,7 +230,10 @@ export class PeopleDuplicatesService {
         sex: row.sex,
         mobileNumberNormalized: row.mobile_number_normalized,
       })),
-    );
+      reachedByNames: new Set(
+        population.filter((row) => row.reached_by_names === true).map((row) => row.id),
+      ),
+    };
   }
 }
 
