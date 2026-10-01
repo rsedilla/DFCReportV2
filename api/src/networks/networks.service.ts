@@ -609,7 +609,6 @@ export class NetworksService {
   async currentNetwork(executor: Db, personId: string): Promise<NetworkName | null> {
     return this.networkAsOf(executor, personId, new Date());
   }
-
   /**
    * The bound port, or a deployment fault. Two callers now need it — the
    * precondition on open relationships, and section 4's two Cell floor terms — so

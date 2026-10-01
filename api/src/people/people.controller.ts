@@ -11,6 +11,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { unresolvableCursor } from '../common/cursor';
+import { canonicalId } from '../common/identifiers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   CurrentIdempotency,
@@ -471,13 +472,15 @@ export class PeopleController {
       }
     }
 
-    // Whole Church needs no restriction: the set would be every row, and asking
-    // for it would materialise the directory to filter it against itself.
-    const membership = query.church_wide
-      ? null
-      : await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
+    // Read once, and used twice: to restrict the rows of a search of the searcher's own
+    // scope, and to decide each row's fields in either mode. Whole Church is a sentinel, so
+    // the widest scope materialises nothing.
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.PeopleViewSubtree,
+    );
     const scoped =
-      membership === null || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+      query.church_wide || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
     // A Network narrows the rows in the query rather than the page (decision 0299), so a page
     // is never short of people who match.
     const inNetwork =
@@ -499,19 +502,30 @@ export class PeopleController {
       { memberId: !query.church_wide },
     );
 
-    const data = await Promise.all(
-      rows.map(async (person) => {
-        if (await this.read.isWithinViewScope(actor, person.id)) {
-          // The pastoral leader's name, as an out-of-scope row already carries it, for the
+    // **The page is answered in a fixed number of queries** (checklist row
+    // perf-people-search). Each row was checked one at a time, about four queries a row.
+    // Its scope is now read from the membership above, which is the enumeration of the
+    // same rule `covers` tests per target (section 7), and the leader names and Networks
+    // are read for the whole page together. The two differ only on a cycle in the tree,
+    // as `scopeMembership` records: the enumeration refuses where `covers` might answer.
+    const inView = (personId: string) =>
+      membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId));
+    const [leaderNames, networks] = await Promise.all([
+      this.read.directLeaderNamesOf(rows.map((person) => person.id)),
+      this.read.currentNetworksOf(
+        rows.filter((person) => !inView(person.id)).map((person) => person.id),
+      ),
+    ]);
+    const data = rows.map((person) =>
+      inView(person.id)
+        ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
           // People list's leader column (decision 0259).
-          return {
-            ...fullProfile(person),
-            direct_leader_name: await this.hierarchy.directLeaderNameOf(person.id),
-          };
-        }
-
-        return this.read.minimalIdentity(person);
-      }),
+          { ...fullProfile(person), direct_leader_name: leaderNames.get(person.id) ?? null }
+        : this.read.identityOnly(
+            person,
+            networks.get(person.id) ?? null,
+            leaderNames.get(person.id) ?? null,
+          ),
     );
 
     if (query.church_wide) {
