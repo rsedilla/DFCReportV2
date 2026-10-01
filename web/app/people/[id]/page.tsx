@@ -215,7 +215,7 @@ function PersonDetail() {
           </dl>
           </section>
           {mayManageAccounts ? (
-            <PersonAccount personId={id} firstName={person.data.first_name} />
+            <PersonAccount personId={id} firstName={person.data.first_name} own={own} />
           ) : null}
           </div>
           </div>

@@ -166,6 +166,14 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/disable",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
+      "route": "POST /api/v1/accounts/:id/reactivate",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "GET /api/v1/dcc/owed",
       "screen": "web/app/dashboard/page.tsx"
     },

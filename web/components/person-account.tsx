@@ -17,6 +17,7 @@ import {
   resendActivation,
   resetSecondStep,
   roleLabel,
+  setAccountAccess,
   type AccountRole,
 } from '@/lib/accounts';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
@@ -28,11 +29,20 @@ import { describeFailure, fieldErrorFor } from '@/lib/messages';
  * capabilities show that item is open. The page renders this only for a reader holding
  * `accounts.manage`; the API checks it on every request.
  *
- * Giving an account, resending its activation email and correcting a mistyped address
- * before activation (decision 0300) are what the pilot's setup needs. Changing a role or a
- * grant is not offered: no route exists for either.
+ * Giving an account, resending its activation email, correcting a mistyped address
+ * before activation (decision 0300), and disabling and re-enabling it (decision 0307) are
+ * what the pilot's setup needs. Changing a role or a grant is not offered: no route exists
+ * for either.
  */
-export function PersonAccount({ personId, firstName }: { personId: string; firstName: string }) {
+export function PersonAccount({
+  personId,
+  firstName,
+  own,
+}: {
+  personId: string;
+  firstName: string;
+  own: boolean;
+}) {
   const headingId = useId();
   const queryClient = useQueryClient();
   const [giving, setGiving] = useState(false);
@@ -116,7 +126,9 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
             })}
             {current.status === 'PENDING_ACTIVATION'
               ? `. ${firstName} hasn’t set a password yet.`
-              : '.'}
+              : current.status === 'DISABLED'
+                ? `. ${firstName} can’t sign in.`
+                : '.'}
           </p>
           {current.status === 'PENDING_ACTIVATION' ? (
             <div className="mt-3">
@@ -200,6 +212,13 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
               setUpAt={current.second_step.set_up_at}
             />
           ) : null}
+          <AccessRow
+            accountId={current.id}
+            personId={personId}
+            firstName={firstName}
+            disabled={current.status === 'DISABLED'}
+            own={own}
+          />
         </div>
       ) : giving ? (
         <form
@@ -264,6 +283,86 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Disabling an account and re-enabling it, each asked before it acts (SKILL.md section 6,
+ * decision 0307). Nobody disables their own, and the API refuses it anyway.
+ */
+function AccessRow({
+  accountId,
+  personId,
+  firstName,
+  disabled,
+  own,
+}: {
+  accountId: string;
+  personId: string;
+  firstName: string;
+  disabled: boolean;
+  own: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
+  const change = useMutation({
+    mutationFn: () => setAccountAccess(accountId, disabled ? 'reactivate' : 'disable', key),
+    onSuccess: async () => {
+      setConfirming(false);
+      setKey(crypto.randomUUID());
+      await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
+    },
+  });
+
+  if (own && !disabled) {
+    return (
+      <p className="text-muted mt-3 text-sm">
+        This is your own account. Another administrator can disable it.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <FailureNotice failure={change.isError ? describeFailure(change.error) : null} />
+      {confirming ? (
+        <div className="mt-3">
+          <p className="text-sm">
+            {disabled
+              ? `Re-enable ${firstName}’s account? They sign in with their own password, or, if they never set one, you resend the activation email. No old session comes back.`
+              : `Disable ${firstName}’s account? They’re signed out on every device at once and can’t sign in until an administrator re-enables it. Their records, Cell and disciples stay as they are.`}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button disabled={change.isPending} onClick={() => change.mutate()}>
+              {change.isPending
+                ? disabled
+                  ? 'Re-enabling…'
+                  : 'Disabling…'
+                : disabled
+                  ? 'Re-enable'
+                  : 'Disable'}
+            </Button>
+            <Button variant="quiet" type="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            // A new key each time, so a refused disable is not replayed as a re-enable.
+            setKey(crypto.randomUUID());
+            change.reset();
+            setConfirming(true);
+          }}
+        >
+          {disabled ? 'Re-enable the account' : 'Disable the account'}
+        </Button>
+      )}
+    </div>
   );
 }
 

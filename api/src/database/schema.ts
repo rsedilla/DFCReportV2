@@ -211,6 +211,10 @@ export type AuditAction =
   | 'account.activated'
   | 'account.activation_resent'
   | 'account.email_corrected'
+  // Disabled and re-enabled by an administrator (decision 0307); section 21's
+  // "disablement" and "Account reactivation". Each targets the account.
+  | 'account.disabled'
+  | 'account.reactivated'
   // Section 21 lists "Second sign-in step set up or reset, and a recovery code used".
   // Each targets the account.
   | 'second_step.set_up'

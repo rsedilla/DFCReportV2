@@ -1529,6 +1529,15 @@ one. An address another account holds, or the one already on the account, is ref
 so is an account in any other status. Changing where an account in use receives its reset
 link is a separate decision, not made here.
 
+**An administrator disables an account, and re-enables it, from the person page**
+(ruling of 2026-10-01). Both need `accounts.manage`, and neither asks for a reason.
+Disabling ends every session at once and supersedes every outstanding token, activation and
+reset alike. Nobody disables their own account, so whoever disables somebody is an
+administrator who can still sign in; any other account may be disabled, a Senior Pastor's
+included, and keeps its roles and seat (Section 10). Re-enabling returns the account to
+`ACTIVE` where a password was ever set and to `PENDING_ACTIVATION` where none was, and ends
+sessions and supersedes tokens again, so nothing from before the disablement works after it.
+
 **A delivery failure never fails the request that caused it.** This holds for
 provisioning and for a re-send alike: each records its outcome before the message is
 attempted, so raising afterwards would hand the client a failure while the store
@@ -4117,7 +4126,7 @@ Admin focuses on platform operations:
 - **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
-- Accounts — given, and their activation email resent, from the person's page, where the section shows only to a holder of `accounts.manage` (decision 0276)
+- Accounts — given, their activation email resent, and disabled or re-enabled, from the person's page, where the section shows only to a holder of `accounts.manage` (decisions 0276 and 0307)
 - Roles & Permissions
 - Audit Logs
 - System Settings
@@ -4569,6 +4578,8 @@ GET  /api/v1/auth/me
 GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles and email; `accounts.manage` (decision 0276)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
+POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)
+POST /api/v1/accounts/{id}/reactivate    re-enables a disabled account; `accounts.manage` (decision 0307)
 
 GET  /api/v1/people                       the actor's own scope, listed or searched; `church_wide=true` for the directory, term required (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one

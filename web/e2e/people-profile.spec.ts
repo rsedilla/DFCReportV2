@@ -855,6 +855,108 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await expect(page.getByText('An administrator’s second step is reset on the server.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reset the second step' })).toHaveCount(0);
   });
+
+  /** An account answered as `status`, which a disable or re-enable changes (decision 0307). */
+  async function accountWithStatus(
+    page: Page,
+    personId: string,
+    state: { status: 'ACTIVE' | 'DISABLED' },
+  ) {
+    await page.route(`**/api/v1/accounts/for-person/${personId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: '3f1b7c6e-0000-4000-8000-000000000901',
+            email: 'marilou@example.test',
+            status: state.status,
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+          },
+        }),
+      }),
+    );
+  }
+
+  test('disables an account after asking, and then offers to re-enable it (decision 0307)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const state = { status: 'ACTIVE' as 'ACTIVE' | 'DISABLED' };
+    await accountWithStatus(page, PERSON_IN_SCOPE.id, state);
+    const sent: string[] = [];
+    await page.route('**/api/v1/accounts/*/disable', async (route) => {
+      sent.push(new URL(route.request().url()).pathname);
+      state.status = 'DISABLED';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: '3f1b7c6e-0000-4000-8000-000000000901', status: 'DISABLED' }),
+      });
+    });
+
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Disable the account' }).click();
+    await expect(page.getByText(/^Disable Marilou’s account\? They’re signed out on every device/)).toBeVisible();
+    expect(sent).toEqual([]);
+
+    await page.getByRole('button', { name: 'Disable', exact: true }).click();
+    await expect(page.getByText('Disabled', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Marilou can’t sign in\./)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Re-enable the account' })).toBeVisible();
+    expect(sent).toEqual(['/api/v1/accounts/3f1b7c6e-0000-4000-8000-000000000901/disable']);
+  });
+
+  test('re-enables a disabled account after asking (decision 0307)', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const state = { status: 'DISABLED' as 'ACTIVE' | 'DISABLED' };
+    await accountWithStatus(page, PERSON_IN_SCOPE.id, state);
+    const sent: string[] = [];
+    await page.route('**/api/v1/accounts/*/reactivate', async (route) => {
+      sent.push(new URL(route.request().url()).pathname);
+      state.status = 'ACTIVE';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: '3f1b7c6e-0000-4000-8000-000000000901', status: 'ACTIVE' }),
+      });
+    });
+
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Re-enable the account' }).click();
+    await expect(page.getByText(/No old session comes back\./)).toBeVisible();
+    await page.getByRole('button', { name: 'Re-enable', exact: true }).click();
+
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Disable the account' })).toBeVisible();
+    expect(sent).toEqual(['/api/v1/accounts/3f1b7c6e-0000-4000-8000-000000000901/reactivate']);
+  });
+
+  test('offers no disable on your own account (decision 0307)', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID }),
+      }),
+    );
+    await accountWithStatus(page, SIGNED_IN_PERSON_ID, { status: 'ACTIVE' });
+
+    await page.goto(`/people/${SIGNED_IN_PERSON_ID}`);
+    await expect(
+      page.getByText('This is your own account. Another administrator can disable it.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Disable the account' })).toHaveCount(0);
+  });
 });
 
 test.describe('typing a name', () => {
