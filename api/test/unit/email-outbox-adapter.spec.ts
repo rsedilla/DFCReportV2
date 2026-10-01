@@ -28,6 +28,7 @@ describe('the development email transport (section 6)', () => {
   const config = (over: Partial<AppConfig>): AppConfig => ({
     nodeEnv: 'development',
     port: 3001,
+    host: '127.0.0.1',
     databaseUrl: 'postgresql://x:y@127.0.0.1:5432/z',
     jwtSecret: '0123456789012345678901234567890123456789',
     secondStepKey: Buffer.alloc(32),
