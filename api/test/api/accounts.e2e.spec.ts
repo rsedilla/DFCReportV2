@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import request from 'supertest';
 
+import { PasswordService } from '../../src/auth/password.service';
 import { codeForStep, stepAt } from '../../src/auth/second-step.crypto';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
@@ -855,6 +856,271 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(retry.status).toBe(200);
       expect(retry.body).toEqual(first.body);
       expect(outbox(app).sent.length).toBe(sentBefore);
+    });
+  });
+
+  describe('disabling and re-enabling an account (decision 0307)', () => {
+    function act(
+      verb: 'disable' | 'reactivate',
+      accountId: string,
+      account: TestAccount = admin,
+      key: string = randomUUID(),
+    ): request.Test {
+      return request(app.getHttpServer())
+        .post(`/api/v1/accounts/${accountId}/${verb}`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .set('Idempotency-Key', key);
+    }
+
+    function signIn(email: string, password: string = PASSWORD): request.Test {
+      return request(app.getHttpServer()).post('/api/v1/auth/login').send({ email, password });
+    }
+
+    async function statusOf(accountId: string): Promise<string | undefined> {
+      const row = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('id', '=', accountId)
+        .executeTakeFirst();
+      return row?.status;
+    }
+
+    /** A Leader who has signed in, holding a refresh token. */
+    async function signedInLeader(): Promise<{ account: TestAccount; refreshToken: string }> {
+      const account = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Lorna', network: 'WOMENS' }),
+        roles: ['LEADER'],
+        passwordHash: await app.get(PasswordService).hash(PASSWORD),
+      });
+      const session = await signIn(account.email).expect(200);
+      return { account, refreshToken: session.body.refresh_token };
+    }
+
+    it('ends every session at once and refuses sign-in', async () => {
+      const { account, refreshToken } = await signedInLeader();
+
+      const response = await act('disable', account.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ id: account.id, status: 'DISABLED' });
+
+      // The open session is cut off at its next request, not only at its next sign-in.
+      const me = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${account.accessToken}`);
+      expect(me.status).toBe(401);
+      const refresh = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: refreshToken });
+      expect(refresh.status).toBe(401);
+      expect((await signIn(account.email)).status).toBe(401);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'actor_id', 'target_type', 'target_id', 'before', 'after'])
+        .where('action', '=', 'account.disabled')
+        .execute();
+      expect(entries).toEqual([
+        {
+          action: 'account.disabled',
+          actor_id: admin.id,
+          target_type: 'account',
+          target_id: account.id,
+          before: { status: 'ACTIVE' },
+          after: { status: 'DISABLED' },
+        },
+      ]);
+    });
+
+    it('re-enables with the holder’s own password, and no old session comes back', async () => {
+      const { account, refreshToken } = await signedInLeader();
+      await act('disable', account.id).expect(200);
+
+      const response = await act('reactivate', account.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ id: account.id, status: 'ACTIVE' });
+      expect((await signIn(account.email)).status).toBe(200);
+      const refresh = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: refreshToken });
+      expect(refresh.status).toBe(401);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['actor_id', 'target_id', 'before', 'after'])
+        .where('action', '=', 'account.reactivated')
+        .execute();
+      expect(entries).toEqual([
+        {
+          actor_id: admin.id,
+          target_id: account.id,
+          before: { status: 'DISABLED' },
+          after: { status: 'ACTIVE' },
+        },
+      ]);
+    });
+
+    it('refuses the actor’s own account, and changes nothing', async () => {
+      const response = await act('disable', admin.id);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(await statusOf(admin.id)).toBe('ACTIVE');
+    });
+
+    it('leaves an administrator able to sign in when two disable each other at once', async () => {
+      // Concurrently, not in sequence: a sequential test passes against the own-account
+      // check alone and never meets the two locks this depends on.
+      const other = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Odette', network: 'WOMENS' }),
+        roles: ['ADMIN'],
+      });
+
+      const [mine, theirs] = await Promise.all([
+        act('disable', other.id, admin),
+        act('disable', admin.id, other),
+      ]);
+
+      expect([mine.status, theirs.status].sort()).toEqual([200, 401]);
+      const statuses = [await statusOf(admin.id), await statusOf(other.id)];
+      expect(statuses.sort()).toEqual(['ACTIVE', 'DISABLED']);
+    });
+
+    it('may disable another administrator', async () => {
+      const other = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Odette', network: 'WOMENS' }),
+        roles: ['ADMIN'],
+      });
+
+      expect((await act('disable', other.id)).status).toBe(200);
+      expect(await statusOf(other.id)).toBe('DISABLED');
+    });
+
+    it('keeps a Senior Pastor’s role and seat through disabling and re-enabling', async () => {
+      const person = await createPerson(db, { firstName: 'Salome', network: 'WOMENS' });
+      nameSeniorPastors(app, [person.id]);
+      const pastor = await createAccount(app, db, {
+        person,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      const roles = () =>
+        db
+          .selectFrom('account_roles')
+          .select(['role', 'senior_pastor_slot', 'revoked_at'])
+          .where('account_id', '=', pastor.id)
+          .execute();
+      const before = await roles();
+
+      await act('disable', pastor.id).expect(200);
+      expect(await roles()).toEqual(before);
+
+      await act('reactivate', pastor.id).expect(200);
+      expect(await roles()).toEqual(before);
+      expect(before).toEqual([{ role: 'SENIOR_PASTOR', senior_pastor_slot: 1, revoked_at: null }]);
+    });
+
+    it('returns a never-activated account to awaiting activation, with its old link dead', async () => {
+      const created = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      }).expect(201);
+      const old = outbox(app).last('ACTIVATION')?.token;
+      expect(old).toBeDefined();
+
+      await act('disable', created.body.id).expect(200);
+      const response = await act('reactivate', created.body.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ id: created.body.id, status: 'PENDING_ACTIVATION' });
+      // The link from before the disablement never works again, though it has not expired.
+      const redeemed = await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token: old, password: PASSWORD });
+      expect(redeemed.status).toBe(422);
+
+      // The administrator resends, and the fresh link activates.
+      await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .expect(204);
+      const fresh = outbox(app).last('ACTIVATION')?.token;
+      const activated = await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token: fresh, password: PASSWORD });
+      expect(activated.status).toBe(204);
+    });
+
+    it('kills a reset link, which re-enabling does not bring back', async () => {
+      const { account } = await signedInLeader();
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: account.email });
+      const reset = outbox(app).last('PASSWORD_RESET')?.token;
+      expect(reset).toBeDefined();
+
+      await act('disable', account.id).expect(200);
+      await act('reactivate', account.id).expect(200);
+
+      const redeemed = await request(app.getHttpServer())
+        .post('/api/v1/auth/reset-password')
+        .send({ token: reset, password: 'an entirely new passphrase' });
+      expect(redeemed.status).toBe(422);
+    });
+
+    it('refuses to disable a disabled account, or re-enable one that is not', async () => {
+      const { account } = await signedInLeader();
+
+      const notDisabled = await act('reactivate', account.id);
+      expect(notDisabled.status).toBe(409);
+      expect(notDisabled.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      await act('disable', account.id).expect(200);
+      const again = await act('disable', account.id);
+      expect(again.status).toBe(409);
+      expect(again.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses an actor without accounts.manage, both ways', async () => {
+      const { account } = await signedInLeader();
+      const leader = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Rico', network: 'MENS' }),
+        roles: ['LEADER'],
+      });
+
+      const disable = await act('disable', account.id, leader);
+      expect(disable.status).toBe(403);
+      expect(disable.body.error.details.capability).toBe('accounts.manage');
+      expect(await statusOf(account.id)).toBe('ACTIVE');
+
+      await act('disable', account.id).expect(200);
+      expect((await act('reactivate', account.id, leader)).status).toBe(403);
+      expect(await statusOf(account.id)).toBe('DISABLED');
+    });
+
+    it('answers NOT_FOUND for an identifier naming no account', async () => {
+      await act('disable', randomUUID()).expect(404);
+      await act('reactivate', randomUUID()).expect(404);
+    });
+
+    it('replays a retry rather than acting twice', async () => {
+      const { account } = await signedInLeader();
+      const key = randomUUID();
+
+      const first = await act('disable', account.id, admin, key);
+      const retry = await act('disable', account.id, admin, key);
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(first.body);
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('action', '=', 'account.disabled')
+        .execute();
+      expect(entries).toHaveLength(1);
     });
   });
 

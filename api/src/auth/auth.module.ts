@@ -9,6 +9,7 @@ import { PeopleModule } from '../people/people.module';
 
 import { AuthorizationModule } from './authorization/authorization.module';
 
+import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { AccountTokensService } from './account-tokens.service';
 import { AccountsController } from './accounts.controller';
@@ -49,6 +50,7 @@ import { TokensService } from './tokens.service';
   ],
   controllers: [AuthController, AccountsController],
   providers: [
+    AccountAccessService,
     AccountProvisioningService,
     AccountTokensService,
     AccountsRepository,

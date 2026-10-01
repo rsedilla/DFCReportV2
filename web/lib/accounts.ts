@@ -68,6 +68,18 @@ export async function resetSecondStep(accountId: string, idempotencyKey: string)
   });
 }
 
+/** Disables an account or re-enables it (decision 0307). The API refuses the caller's own. */
+export async function setAccountAccess(
+  accountId: string,
+  action: 'disable' | 'reactivate',
+  idempotencyKey: string,
+): Promise<{ id: string; status: PersonAccount['status'] }> {
+  return authenticatedRequest(`/api/v1/accounts/${accountId}/${action}`, {
+    method: 'POST',
+    idempotencyKey,
+  });
+}
+
 export function roleLabel(role: AccountRole): string {
   return role === 'ADMIN' ? 'Admin' : role === 'SENIOR_PASTOR' ? 'Senior Pastor' : 'Leader';
 }

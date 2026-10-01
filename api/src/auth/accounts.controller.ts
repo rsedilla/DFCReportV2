@@ -6,6 +6,7 @@ import {
   CurrentIdempotency,
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
+import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
@@ -27,6 +28,7 @@ export class AccountsController {
   constructor(
     private readonly provisioning: AccountProvisioningService,
     private readonly secondSteps: SecondStepService,
+    private readonly access: AccountAccessService,
   ) {}
 
   /**
@@ -112,5 +114,36 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
     await this.secondSteps.resetByAdministrator(id, actor, claim);
+  }
+
+  /**
+   * Disables an account: every session ends at once, every activation and reset link
+   * stops working, and its holder cannot sign in (section 6, decision 0307). The actor's
+   * own account is refused.
+   */
+  @Post(':id/disable')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
+  async disable(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return { ...(await this.access.disable(id, actor, claim)) };
+  }
+
+  /**
+   * Re-enables a disabled account, as active or as awaiting activation where no password
+   * was ever set (section 6, decision 0307).
+   */
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
+  async reactivate(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return { ...(await this.access.reactivate(id, actor, claim)) };
   }
 }
