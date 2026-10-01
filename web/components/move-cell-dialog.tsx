@@ -7,7 +7,13 @@ import { CellPicker } from '@/components/cell-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { addCellMember, membershipFailure, type CellSummary, type PersonCells } from '@/lib/cells';
+import {
+  addCellMember,
+  cellShortName,
+  membershipFailure,
+  type CellSummary,
+  type PersonCells,
+} from '@/lib/cells';
 import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getPerson, networkLabel, networkOfSex } from '@/lib/people';
@@ -99,7 +105,7 @@ export function MoveCellDialog({
       >
         {current ? (
           <p className="text-sm leading-relaxed">
-            Leaving {current.cell_id}
+            Leaving {cellShortName(current)}
             {current.leader ? `, led by ${current.leader.full_name}` : ''}.
           </p>
         ) : null}
@@ -129,14 +135,20 @@ export function MoveCellDialog({
 
         <p className="text-muted text-sm leading-relaxed">
           {current
-            ? `It takes effect today. Past months keep counting them in ${current.cell_id}.`
+            ? `It takes effect today. Past months keep counting them in ${cellShortName(current)}.`
             : 'It takes effect today.'}
         </p>
 
         <FailureNotice
           failure={
             move.isError
-              ? membershipFailure(move.error, personName, chosen?.cell_id ?? 'That Cell')
+              ? membershipFailure(
+                  move.error,
+                  personName,
+                  chosen
+                    ? cellShortName({ ...chosen, day_of_week: chosen.schedule.day_of_week })
+                    : 'That Cell',
+                )
               : null
           }
         />

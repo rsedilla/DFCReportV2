@@ -230,7 +230,6 @@ function PersonName({ row }: { row: ConquestPerson }) {
       >
         {row.full_name}
       </Link>
-      <span className="text-muted block font-mono text-xs">{row.member_id}</span>
     </div>
   );
 }

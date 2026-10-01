@@ -344,7 +344,6 @@ function NetworkScreen() {
                         <Link href={focusHref(row.id)} className={`${LINK} font-medium`}>
                           {row.full_name}
                         </Link>
-                        <div className="text-muted text-xs">{row.member_id}</div>
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums">{row.beneath}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{figure(dccOf(row.id))}</td>
@@ -378,7 +377,6 @@ function NetworkScreen() {
                           {row.full_name}
                         </Link>
                       </h3>
-                      <span className="text-muted text-xs">{row.member_id}</span>
                     </div>
                     <dl className="text-muted mt-2 grid grid-cols-3 gap-2 text-sm">
                       <div>
@@ -506,7 +504,6 @@ function RootsView({
                   {root.full_name}
                 </Link>
               </h3>
-              <span className="text-muted text-xs">{root.member_id}</span>
             </div>
             <dl className="text-muted mt-2 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
               <div>
@@ -722,7 +719,6 @@ function FocusBlock({
       <div>
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
         <p className="text-muted mt-1 text-sm">
-          {person.member_id} &middot;{' '}
           {parent === null ? noLeaderLabel(entries, noLeaderReason) : `reports to ${parent.full_name}`}
         </p>
       </div>
@@ -848,10 +844,7 @@ function Search() {
                     key={result.id}
                     className="flex flex-wrap items-center justify-between gap-2 p-3"
                   >
-                    <span>
-                      <span className="font-medium">{result.full_name}</span>{' '}
-                      <span className="text-muted text-xs">{result.member_id}</span>
-                    </span>
+                    <span className="font-medium">{result.full_name}</span>
                     <Link href={focusHref(result.id)} className={buttonClasses('secondary')}>
                       Open
                     </Link>

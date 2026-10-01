@@ -177,13 +177,10 @@ function WithoutACell() {
 
 function PersonName({ person }: { person: PersonWithoutACell }) {
   return (
-    <>
-      <h2 className="text-base font-medium">
-        <Link href={`/people/${person.id}`} className={LINK}>
-          {person.full_name}
-        </Link>
-      </h2>
-      <p className="text-muted text-xs">{person.member_id}</p>
-    </>
+    <h2 className="text-base font-medium">
+      <Link href={`/people/${person.id}`} className={LINK}>
+        {person.full_name}
+      </Link>
+    </h2>
   );
 }

@@ -449,7 +449,7 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(
       page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
     ).toBeVisible();
@@ -467,7 +467,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     // October's row has arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -494,17 +494,17 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
 
-    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000014' });
+    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'Youth · Sat · Cell closed' });
     await expect(row.getByRole('cell')).toHaveText([
       'Saturday 3 October',
-      'Youth · CELL-000014 · Cell closed Sunday 20 September',
+      'Youth · Sat · Cell closed Sunday 20 September',
       'You',
       'today',
       /^Record/,
     ]);
     await expect(
       page.getByRole('link', {
-        name: /^Record Youth · CELL-000014 · Cell closed Sunday 20 September, Saturday 3 October$/,
+        name: /^Record Youth · Sat · Cell closed Sunday 20 September, Saturday 3 October$/,
       }),
     ).toHaveAttribute('href', `/cells/${CLOSED_CELL}/meetings/2026-10-03`);
 
@@ -513,8 +513,8 @@ test.describe('the Record queue', () => {
     await expect(
       page
         .getByRole('listitem')
-        .filter({ hasText: 'CELL-000014' })
-        .getByText('Youth · CELL-000014 · Cell closed Sunday 20 September', { exact: true }),
+        .filter({ hasText: 'Youth · Sat · Cell closed' })
+        .getByText('Youth · Sat · Cell closed Sunday 20 September', { exact: true }),
     ).toBeVisible();
   });
 
@@ -564,10 +564,10 @@ test.describe('the Record queue', () => {
       'Waiting',
       'Record',
     ]);
-    const row = table.getByRole('row').filter({ hasText: 'CELL-000007' });
+    const row = table.getByRole('row').filter({ hasText: 'Young Pro · Sat' });
     await expect(row.getByRole('cell')).toHaveText([
       'Saturday 3 October',
-      'Young Pro · CELL-000007',
+      'Young Pro · Sat',
       'You',
       'today',
       /^Record/,
@@ -670,7 +670,7 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ }).click();
+    await page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
     await expect.poll(() => asked).toBe(1);
@@ -749,7 +749,7 @@ test.describe('the Record queue', () => {
   });
 
   // Decision 0267: the list names a Cell a meeting that came is missing from, by the
-  // server's `behind`. CELL-000001 has recorded two of the month's four and is not behind —
+  // server's `behind`. The first Cell has recorded two of the month's four and is not behind —
   // its other two have not come — so a list keyed on the whole month would name it.
   test('lists the Cells behind, and not a Cell whose unrecorded meetings have not come', async ({
     page,
@@ -762,10 +762,11 @@ test.describe('the Record queue', () => {
     await chooseList(page, /^Cells behind/);
 
     const attention = page.getByRole('region', { name: 'Cells behind' });
-    await expect(attention.getByRole('link', { name: /^CELL-/ })).toHaveText([
-      'CELL-000010',
-      'CELL-000011',
-    ]);
+    // The eleven share one name (decision 0306), so each is told apart by its address.
+    const links = attention.getByRole('link', { name: 'Youth · Sat' });
+    await expect(links).toHaveCount(2);
+    await expect(links.first()).toHaveAttribute('href', /0119\/meetings/);
+    await expect(links.nth(1)).toHaveAttribute('href', /0120\/meetings/);
   });
 
   // Decision 0269: the requests the reader sent, each with its outcome in words.
@@ -962,15 +963,15 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await page.goto('/dashboard');
 
     await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
 
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
     await expect.poll(() => whoseAsked).toContain('branch');
     // A downline leader's meeting the reader may record names that leader and offers Record.
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000021,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toBeVisible();
     await expect(
-      awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000021' }).getByRole('cell').nth(2),
+      awaitingTable(page).getByRole('row').filter({ hasText: 'Young Pro · Fri' }).getByRole('cell').nth(2),
     ).toHaveText('Ana Lim');
   });
 
@@ -980,8 +981,8 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard');
 
-    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'CELL-000007' });
-    await expect(row.getByRole('cell').nth(1)).toHaveText('Young Pro · CELL-000007');
+    const row = awaitingTable(page).getByRole('row').filter({ hasText: 'Young Pro · Sat' });
+    await expect(row.getByRole('cell').nth(1)).toHaveText('Young Pro · Sat');
     await expect(row.getByRole('cell').nth(3)).toHaveText('7 days ago');
   });
 
@@ -1006,7 +1007,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(halves.getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ })).toBeVisible();
     await expect(recordLists(page).getByRole('button', { name: /^Awaiting a record\s*3$/ })).toBeVisible();
 
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^Record DCC · / })).toHaveCount(0);
 
     await dcc.click();
@@ -1016,7 +1017,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('link', { name: /^Record Young Pro · / })).toHaveCount(0);
 
     await cellGroup.click();
-    await expect(page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
 
     // The old Show choice and its words are gone.
     await expect(page.getByRole('group', { name: 'Show', exact: true })).toHaveCount(0);
@@ -1348,13 +1349,13 @@ test.describe('Record’s four lists (decision 0290)', () => {
       'Meetings recorded',
       'Status',
     ]);
-    await expect(behind.getByRole('row').filter({ hasText: 'CELL-000007' }).getByRole('cell')).toHaveText([
-      'CELL-000007',
+    await expect(behind.getByRole('row').filter({ hasText: 'Youth · Sat' }).getByRole('cell')).toHaveText([
+      'Youth · Sat',
       'Teofilo Ramos',
       '3 of 4',
       'Open',
     ]);
-    await expect(behind.getByRole('link', { name: 'CELL-000007' })).toHaveAttribute(
+    await expect(behind.getByRole('link', { name: 'Youth · Sat' })).toHaveAttribute(
       'href',
       /^\/cells\/3f1b7c6e-0000-4000-8000-000000000101\/meetings\?month=\d{4}-\d{2}-01$/,
     );
@@ -1362,10 +1363,10 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await chooseList(page, /^Needs a new leader/);
     await expect(page.getByRole('heading', { name: 'Cells behind' })).toHaveCount(0);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Member ID', 'Was under']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Was under']);
     await expect(
       unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
-    ).toHaveText(['Amihan Bacani', 'M-001001', 'Rogelio Mendoza']);
+    ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
     // The action that resolves an entry is the reassignment (section 19).
     await expect(unplaced.getByRole('link', { name: 'Amihan Bacani' })).toHaveAttribute(
       'href',
@@ -1375,7 +1376,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await chooseList(page, /^Not in a Cell/);
     await expect(page.getByRole('heading', { name: 'Needs a new leader' })).toHaveCount(0);
     const withoutACell = page.getByRole('table', { name: 'Not in a Cell' });
-    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name', 'Member ID']);
+    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name']);
     await expect(withoutACell.getByRole('link', { name: 'Bituin Carreon' })).toHaveAttribute(
       'href',
       '/people/3f1b7c6e-0000-4000-8000-000000000921',
@@ -1454,7 +1455,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await chooseList(page, /^Needs a new leader/);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Member ID', 'Was under']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Was under']);
     // The header row and the one row saying so.
     await expect(unplaced.getByRole('row')).toHaveCount(2);
     await expect(unplaced.getByRole('cell')).toHaveText(['Nobody in your scope is waiting for a new leader.']);
@@ -1462,7 +1463,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await chooseList(page, /^Not in a Cell/);
     const withoutACell = page.getByRole('table', { name: 'Not in a Cell' });
-    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name', 'Member ID']);
+    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name']);
     await expect(withoutACell.getByRole('row')).toHaveCount(2);
     await expect(withoutACell.getByRole('cell')).toHaveText(['Everybody in your scope is in a Cell.']);
 
@@ -1490,7 +1491,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
       await page.goto('/dashboard');
 
-      const record = page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ });
+      const record = page.getByRole('link', { name: /^Record Young Pro · Sat,/ });
       await expect(record).toBeVisible();
       await expect(awaitingTable(page)).toBeHidden();
       // The visible Record button is the card's.
@@ -1509,7 +1510,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await chooseList(page, /^Cells behind/);
       await expect(page.getByRole('table', { name: 'Cells behind' })).toBeHidden();
       await expect(
-        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'CELL-000007' }) }),
+        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Youth · Sat' }) }),
       ).toBeVisible();
 
       await chooseList(page, /^Needs a new leader/);
@@ -1522,7 +1523,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await expect(page.getByRole('table', { name: 'Not in a Cell' })).toBeHidden();
       await expect(
         page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Bituin Carreon' }) }),
-      ).toContainText(/Member ID\s*M-001101/);
+      ).toBeVisible();
     });
   }
 
@@ -1533,7 +1534,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await page.goto('/dashboard');
 
-    const record = page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ });
+    const record = page.getByRole('link', { name: /^Record Young Pro · Sat,/ });
     await expect(record).toBeVisible();
     await expect(awaitingTable(page)).toBeVisible();
     // The one visible Record button for that meeting is the table's.

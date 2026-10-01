@@ -51,7 +51,7 @@ test.describe('the Cells list', () => {
       'Meets',
       'Recorded',
     ]);
-    // The Cell is named rather than coded, with its identifier beneath (decision 0261).
+    // The Cell is named rather than coded (decisions 0261 and 0306).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
     await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
     // A link styled as a button in the header (decision 0289), and still a link.
@@ -64,9 +64,9 @@ test.describe('the Cells list', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
-    await expect(page.getByRole('heading', { name: 'CELL-000011' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Couple · Wed' })).toBeVisible();
     // A phone card carries the member count the table does (walkthrough, 2026-09-21).
-    const card = page.getByRole('listitem').filter({ hasText: 'CELL-000011' });
+    const card = page.getByRole('listitem').filter({ hasText: 'Couple · Wed' });
     await expect(card).toContainText(/Members\s*4/);
   });
 });
@@ -584,14 +584,14 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
       'Why',
       'Restart',
     ]);
-    const row = table.getByRole('row', { name: /CELL-000014/ });
+    const row = table.getByRole('row', { name: /Members dispersed/ });
     await expect(row).toContainText('Paolo Reyes');
     await expect(row).toContainText('12 Jun 2026');
     await expect(row).toContainText('Members dispersed');
 
-    await row.getByRole('button', { name: 'Restart CELL-000014' }).click();
+    await row.getByRole('button', { name: 'Restart Young Pro · Fri, led by Paolo Reyes' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Restart CELL-000014' });
+    const dialog = page.getByRole('dialog', { name: 'Restart Young Pro · Fri' });
     // Filled in from how it met before, and the leader is a sentence, not a field.
     await expect(dialog.getByText('Paolo Reyes', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('radio', { name: 'Young Pro' })).toBeChecked();
@@ -623,11 +623,11 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await page.getByRole('radio', { name: 'Closed Cells' }).check();
 
     const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
-    const restarted = table.getByRole('row', { name: /CELL-000009/ });
+    const restarted = table.getByRole('row', { name: /Restarted as CELL-000021/ });
     await expect(restarted).toContainText('Restarted as CELL-000021');
     await expect(restarted.getByRole('button')).toHaveCount(0);
 
-    const inError = table.getByRole('row', { name: /CELL-000004/ });
+    const inError = table.getByRole('row', { name: /Created in error/ });
     await expect(inError).toContainText('Created in error');
     await expect(inError.getByRole('button')).toHaveCount(0);
   });

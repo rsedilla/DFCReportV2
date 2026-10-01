@@ -278,14 +278,11 @@ function CellMembers() {
  */
 function MemberName({ member }: { member: CellMember }) {
   return (
-    <>
-      <h2 className="text-base font-medium">
-        <Link href={`/people/${member.person_id}`} className={LINK}>
-          {member.full_name}
-        </Link>
-      </h2>
-      <p className="text-muted text-xs">{member.member_id}</p>
-    </>
+    <h2 className="text-base font-medium">
+      <Link href={`/people/${member.person_id}`} className={LINK}>
+        {member.full_name}
+      </Link>
+    </h2>
   );
 }
 

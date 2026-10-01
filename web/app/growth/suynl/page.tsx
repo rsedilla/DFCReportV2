@@ -424,7 +424,6 @@ function PersonName({ row, self }: { row: SuynlPerson; self: boolean }) {
       >
         {row.full_name}
       </Link>
-      <span className="text-muted block font-mono text-xs">{row.member_id}</span>
       {!row.may_file ? (
         // Decision 0280: nobody records their own; anyone else here is somebody the
         // reader may not file for, a Network root among them, who has no leader.

@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   categoryLabel,
+  cellShortName,
   dayOfWeekLabel,
   requestCellRestart,
   type CellCategory,
@@ -84,7 +85,11 @@ export function RestartCellDialog({
   const ready = category !== '' && day !== '' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 
   return (
-    <Dialog open={open} onClose={close} title={`Restart ${cell.cell_id}`}>
+    <Dialog
+      open={open}
+      onClose={close}
+      title={`Restart ${cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}`}
+    >
       <form
         className="flex flex-col gap-5"
         noValidate
@@ -96,7 +101,8 @@ export function RestartCellDialog({
         }}
       >
         <p className="text-sm leading-relaxed">
-          This asks Admin to approve a new Cell that resumes {cell.cell_id}. The closed Cell
+          This asks Admin to approve a new Cell that resumes{' '}
+          {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}. The closed Cell
           stays as it is, with its history.
         </p>
 
