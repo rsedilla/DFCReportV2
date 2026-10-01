@@ -110,9 +110,6 @@ function Gaps() {
                   <th scope="col" className="text-muted py-2 pr-4 font-medium">
                     Name
                   </th>
-                  <th scope="col" className="text-muted py-2 font-medium">
-                    Member ID
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -127,7 +124,6 @@ function Gaps() {
                         {leader.full_name}
                       </Link>
                     </td>
-                    <td className="text-muted py-3">{leader.member_id}</td>
                   </tr>
                 ))}
               </tbody>

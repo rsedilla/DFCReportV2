@@ -92,7 +92,6 @@ function PastoralNetwork() {
                     <p className="text-muted text-sm">Network root</p>
                   ) : null}
                 </div>
-                <p className="text-muted mt-1 text-sm">{entry.member_id}</p>
               </li>
             ))}
           </ol>

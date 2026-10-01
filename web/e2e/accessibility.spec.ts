@@ -666,7 +666,7 @@ const SCANS = [
       // A Cell meeting's row, the half the screen opens on. A Sunday's row is behind
       // Doulos Cell Celebration and is scanned under "dashboard, own DCC checklist".
       await expect(
-        page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ }),
+        page.getByRole('link', { name: /^Record Young Pro · Sat,/ }),
       ).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
@@ -687,7 +687,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('radio', { name: 'People I oversee' }).check();
       await expect(
-        page.getByRole('link', { name: /^Record Young Pro · CELL-000021,/ }),
+        page.getByRole('link', { name: /^Record Young Pro · Fri,/ }),
       ).toBeVisible();
     },
   },
@@ -714,7 +714,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await chooseRecordList(page, /^Cells behind/);
       await expect(page.getByRole('heading', { name: 'Cells behind' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'CELL-000007' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
     },
   },
   {
@@ -1030,7 +1030,8 @@ const SCANS = [
         'aria-pressed',
         'true',
       );
-      await expect(page.getByText('CELL-000011').filter({ visible: true })).toBeVisible();
+      // The last of the eleven, which share one name (decision 0306).
+      await expect(page.locator('a[href*="0120/meetings"]').filter({ visible: true })).toBeVisible();
     },
   },
   {
@@ -1644,7 +1645,7 @@ const TARGET_SWEEP = [
     // page, one of them hidden, and a hidden one is counted and not measured), See the
     // whole month, and the four month cards: **seventeen**.
     settleRole: 'link' as const,
-    settle: 'Record Young Pro · CELL-000007',
+    settle: 'Record Young Pro · Sat',
     minimum: 17,
   },
   {

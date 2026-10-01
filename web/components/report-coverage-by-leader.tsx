@@ -78,7 +78,6 @@ export function CoverageByLeader({
                       <Link href={openHref(row)} className={`${LINK} text-accent font-medium`}>
                         {row.leader.full_name}
                       </Link>
-                      <div className="text-muted text-xs">{row.leader.member_id}</div>
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{row.filed}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{row.owed}</td>

@@ -255,7 +255,6 @@ function PersonName({ person }: { person: Person }) {
       >
         {person.full_name}
       </Link>
-      <span className="text-muted block font-mono text-xs">{person.member_id}</span>
       {person.scope === 'IDENTITY_ONLY' ? (
         <span className="text-muted flex items-center gap-1.5 text-xs">
           {/* Decorative: the words beside it carry the meaning (1.4.1). */}

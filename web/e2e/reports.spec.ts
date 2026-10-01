@@ -345,7 +345,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
     // Table from `lg`, cards below it: whichever this viewport shows.
-    await expect(table.getByRole('link', { name: 'CELL-000007' }).filter({ visible: true })).toHaveAttribute(
+    await expect(table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true })).toHaveAttribute(
       'href',
       '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings?month=2026-06-01',
     );
@@ -365,19 +365,20 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await page.goto('/reports/filed');
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
+    // The eleven share one name (decision 0306), so each is told apart by its address.
+    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
 
     // Ten of the eleven, in the order the index returned them. The two that have
-    // recorded least are CELL-000010 and CELL-000011, so a table ordered worst-first
-    // would open with them and this one closes with them (sections 13 and 17).
+    // recorded least are the last two, so a table ordered worst-first would open with
+    // them and this one closes with them (sections 13 and 17).
     await expect(rows).toHaveCount(10);
-    await expect(rows.first()).toHaveText('CELL-000001');
-    await expect(rows.nth(9)).toHaveText('CELL-000010');
+    await expect(rows.first()).toHaveAttribute('href', /0110\/meetings/);
+    await expect(rows.nth(9)).toHaveAttribute('href', /0119\/meetings/);
     await expect(table.getByRole('button', { name: 'Previous' })).toHaveCount(0);
 
     await table.getByRole('button', { name: 'Next' }).click();
     await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toHaveText('CELL-000011');
+    await expect(rows.first()).toHaveAttribute('href', /0120\/meetings/);
 
     // The count of Cells behind is over every page and by decision 0267's predicate — two
     // of the eleven have a meeting that came with no record — and it is in words beside
@@ -402,12 +403,15 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await expect(behind).toHaveAttribute('aria-pressed', 'false');
     await behind.click();
 
-    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
-    await expect(rows).toHaveText(['CELL-000010', 'CELL-000011']);
+    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAttribute('href', /0119\/meetings/);
+    await expect(rows.nth(1)).toHaveAttribute('href', /0120\/meetings/);
     await expect(behind).toHaveAttribute('aria-pressed', 'true');
     const grid = table.getByRole('table', { name: 'Recording coverage for each Cell' });
-    await expect(grid.getByRole('row', { name: /CELL-000010/ })).toContainText('3 behind');
-    await expect(grid.getByRole('row', { name: /CELL-000011/ })).toContainText('4 behind');
+    const rowOf = (id: string) => grid.getByRole('row').filter({ has: page.locator(`a[href*="${id}/"]`) });
+    await expect(rowOf('0119')).toContainText('3 behind');
+    await expect(rowOf('0120')).toContainText('4 behind');
   });
 
   test('?behind=1, the Record screen’s link, opens By Cell already filtered to the Cells behind', async ({
@@ -425,10 +429,10 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
       'aria-pressed',
       'true',
     );
-    await expect(table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true })).toHaveText([
-      'CELL-000010',
-      'CELL-000011',
-    ]);
+    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAttribute('href', /0119\/meetings/);
+    await expect(rows.nth(1)).toHaveAttribute('href', /0120\/meetings/);
   });
 
   test('keeps the behind filter in the address, so Back returns to it', async ({ page }) => {

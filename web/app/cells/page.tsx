@@ -279,7 +279,6 @@ function CellsIndex() {
                     <span className="font-medium">
                       {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </span>
-                    <span className="text-muted block font-mono text-xs">{cell.cell_id}</span>
                   </td>
                   <td className="px-3 py-3">{cell.leader.full_name}</td>
                   <td className="px-3 py-3">
@@ -357,7 +356,6 @@ function CellsIndex() {
                     >
                       {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </Link>
-                    <span className="text-muted block font-mono text-xs">{cell.cell_id}</span>
                   </td>
                   <td className="px-3 py-3">{cell.leader.full_name}</td>
                   <td className="px-3 py-3">{cell.member_count}</td>
@@ -545,7 +543,10 @@ function RestartAction({
         type="button"
         variant="secondary"
         onClick={onRestart}
-        aria-label={`Restart ${cell.cell_id}`}
+        aria-label={`Restart ${cellShortName({
+          ...cell,
+          day_of_week: cell.schedule.day_of_week,
+        })}, led by ${cell.leader.full_name}`}
       >
         Restart…
       </Button>
@@ -568,7 +569,6 @@ function ClosedCellCard({
     <li className="border-line border p-4">
       <h2 className="text-base font-medium">
         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-        <span className="text-muted block font-mono text-xs">{cell.cell_id}</span>
       </h2>
       <dl className="text-muted mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         <div className="flex gap-2">
@@ -593,10 +593,7 @@ function ClosedCellCard({
   );
 }
 
-/**
- * One Cell, below `lg`. The heading is the Cell&rsquo;s identifier, which section 10
- * makes human-readable and stable.
- */
+/** One Cell, below `lg`. */
 function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
   return (
     <li className="border-line border p-4">
@@ -609,7 +606,6 @@ function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
           <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
             {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
           </Link>
-          <span className="text-muted block font-mono text-xs">{cell.cell_id}</span>
         </h2>
         <CoverageFigure
           recorded={cell.coverage.recorded}

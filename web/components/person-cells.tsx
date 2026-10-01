@@ -62,8 +62,6 @@ export function PersonCells({
             <p className="mt-3 text-sm">
               <span className="font-medium">{cellShortName(cells.data.membership)}</span>
               <span className="text-muted">
-                {' '}
-                · {cells.data.membership.cell_id}
                 {cells.data.membership.leader
                   ? ` · led by ${cells.data.membership.leader.full_name}`
                   : ''}
@@ -76,13 +74,7 @@ export function PersonCells({
           {cells.data.leads.length > 0 ? (
             <p className="mt-3 text-sm">
               Leads{' '}
-              {cells.data.leads
-                .map((cell) =>
-                  cellShortName(cell) === cell.cell_id
-                    ? cell.cell_id
-                    : `${cellShortName(cell)} (${cell.cell_id})`,
-                )
-                .join(', ')}
+              {cells.data.leads.map((cell) => cellShortName(cell)).join(', ')}
             </p>
           ) : null}
 

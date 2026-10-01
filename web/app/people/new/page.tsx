@@ -16,7 +16,7 @@ import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
-import { addCellMember, type CellSummary, membershipFailure } from '@/lib/cells';
+import { addCellMember, cellShortName, type CellSummary, membershipFailure } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
 import { getMe } from '@/lib/me';
 import { idempotencyKeyFor } from '@/lib/idempotency';
@@ -222,7 +222,11 @@ function NewPersonForm() {
         } catch (error) {
           setCellRefused({
             person,
-            failure: membershipFailure(error, person.full_name, cell.cell_id),
+            failure: membershipFailure(
+              error,
+              person.full_name,
+              cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week }),
+            ),
           });
           return;
         }

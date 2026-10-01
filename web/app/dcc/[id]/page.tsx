@@ -371,9 +371,9 @@ function PersonMark({
     <li className="border-line border-b py-4">
       <RadioGroup
         legend={line.full_name}
-        description={`${line.member_id} · ${
+        description={
           line.record === null ? 'Not recorded yet' : `Last recorded ${shortDate(line.record.recorded_at)}`
-        }`}
+        }
         name={`person-${line.person_id}`}
         // **The recorded mark is shown whether or not the Sunday takes a record.**
         // Decision 0194 shows marks so a leader is not asked twice; blanking them on a

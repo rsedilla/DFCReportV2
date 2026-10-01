@@ -214,7 +214,7 @@ test.describe('a person’s Cell', () => {
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another Cell`,
     });
-    await expect(dialog.getByText('Leaving CELL-000007, led by Corazon Batac.')).toBeVisible();
+    await expect(dialog.getByText('Leaving Youth · Sat, led by Corazon Batac.')).toBeVisible();
 
     await searchCells(dialog, 'CELL');
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveText([
@@ -270,7 +270,7 @@ test.describe('a person’s Cell', () => {
 
     await expect(
       dialog.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and Young Pro · Sat is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(dialog.getByText('SKILL.md')).toHaveCount(0);
@@ -977,7 +977,7 @@ test.describe('adding a person with a Cell', () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and Young Pro · Sat is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open their record' })).toHaveAttribute(

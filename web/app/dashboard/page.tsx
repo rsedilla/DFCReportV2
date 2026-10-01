@@ -14,7 +14,7 @@ import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
-  categoryLabel,
+  cellShortName,
   behindOf,
   closedOnLabel,
   listCells,
@@ -708,7 +708,7 @@ function Dashboard() {
                         href={`/cells/${cell.id}/meetings?month=${month}`}
                         className={NAME_LINK}
                       >
-                        {cell.cell_id}
+                        {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                       </Link>,
                       cell.leader.full_name,
                       <span key="recorded" className="tabular-nums">
@@ -757,7 +757,7 @@ function Dashboard() {
                 {/* The action that resolves an entry is the reassignment (section 19). */}
                 <ListTable
                   caption="Needs a new leader"
-                  columns={['Name', 'Member ID', 'Was under']}
+                  columns={['Name', 'Was under']}
                   empty="Nobody in your scope is waiting for a new leader."
                   rows={unplaced.data.map((person) => ({
                     key: person.id,
@@ -765,7 +765,6 @@ function Dashboard() {
                       <Link key="name" href={`/people/${person.id}/network`} className={NAME_LINK}>
                         {person.full_name}
                       </Link>,
-                      person.member_id,
                       person.former_leader.full_name,
                     ],
                   }))}
@@ -794,7 +793,7 @@ function Dashboard() {
               <>
                 <ListTable
                   caption="Not in a Cell"
-                  columns={['Name', 'Member ID']}
+                  columns={['Name']}
                   empty="Everybody in your scope is in a Cell."
                   rows={withoutACell.data.map((person) => ({
                     key: person.id,
@@ -802,7 +801,6 @@ function Dashboard() {
                       <Link key="name" href={`/people/${person.id}`} className={NAME_LINK}>
                         {person.full_name}
                       </Link>,
-                      person.member_id,
                     ],
                   }))}
                 />
@@ -1069,7 +1067,11 @@ function ShowMore({
 function describeQueueItem(item: QueueItem, currentMonth: string, today: string) {
   const isCell = item.kind === 'cell';
   const what = isCell
-    ? `${item.category ? `${categoryLabel(item.category)} · ` : ''}${item.cellCode}${
+    ? `${cellShortName({
+        cell_id: item.cellCode,
+        category: item.category,
+        day_of_week: item.dayOfWeek,
+      })}${
         item.closedOn === null ? '' : ` · Cell closed ${dayLabel(item.closedOn)}`
       }`
     : `DCC · ${item.marked} of ${item.total} marked`;
@@ -1197,12 +1199,12 @@ function DccChecklistGrid({
   checklists: readonly { data?: DccRosterLine[] }[];
   month: string;
 }) {
-  const people = new Map<string, { name: string; memberId: string }>();
+  const people = new Map<string, { name: string }>();
   const marks = new Map<string, Map<string, boolean>>();
 
   events.forEach((event, index) => {
     for (const line of checklists[index]?.data ?? []) {
-      people.set(line.person_id, { name: line.full_name, memberId: line.member_id });
+      people.set(line.person_id, { name: line.full_name });
       if (line.record !== null) {
         const byEvent = marks.get(line.person_id) ?? new Map<string, boolean>();
         byEvent.set(event.id, line.record.present);
@@ -1239,7 +1241,6 @@ function DccChecklistGrid({
               <tr key={personId} className={rowClasses}>
                 <td className="px-3 py-3">
                   {person.name}
-                  <div className="text-muted text-xs">{person.memberId}</div>
                 </td>
                 {events.map((event) => {
                   const mark = byEvent?.get(event.id);
@@ -1446,7 +1447,6 @@ function LeaderChecklistGrid({
               <tr key={person.person_id} className={rowClasses}>
                 <td className="px-3 py-3">
                   {person.full_name}
-                  <div className="text-muted text-xs">{person.member_id}</div>
                 </td>
                 {sheet.data.events.map((event) => {
                   const mark = person.marks[event.id];

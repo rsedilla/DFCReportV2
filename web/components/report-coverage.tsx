@@ -9,7 +9,13 @@ import { Button } from '@/components/ui/button';
 import { dccEventNote } from '@/components/dcc-event-note';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { behindOf, dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
+import {
+  behindOf,
+  cellShortName,
+  dayOfWeekLabel,
+  listAllCells,
+  type CellSummary,
+} from '@/lib/cells';
 import { listDccEvents, type DccEvent } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
@@ -133,7 +139,7 @@ export function CoverageByCell({
                 <tr key={cell.id} className={rowClasses}>
                   <td className="px-3 py-3">
                     <Link href={meetingsHref(cell, month)} className={`${LINK} font-medium`}>
-                      {cell.cell_id}
+                      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </Link>
                   </td>
                   <td className="px-3 py-3">{cell.leader.full_name}</td>
@@ -159,7 +165,7 @@ export function CoverageByCell({
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h3 className="text-base font-medium">
                     <Link href={meetingsHref(cell, month)} className={LINK}>
-                      {cell.cell_id}
+                      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </Link>
                   </h3>
                   <CoverageFigure
