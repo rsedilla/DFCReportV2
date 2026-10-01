@@ -231,23 +231,21 @@ export class CellFiguresService {
            AND status IN ('HELD', 'RESCHEDULED')
            AND (${list}::uuid[] IS NULL OR responsible_leader_id = ANY (${list}::uuid[]))
       ),
-      live AS (
-        SELECT a.person_id, a.cell_meeting_id
-          FROM cell_attendance a
-          JOIN cell_meetings m ON m.id = a.cell_meeting_id
+      attended AS (
+        SELECT DISTINCT a.person_id
+          FROM scoped s
+          JOIN cell_attendance a ON a.cell_meeting_id = s.id
          WHERE a.present = true
            AND a.superseded_at IS NULL
-           AND m.status IN ('HELD', 'RESCHEDULED')
-           AND m.scheduled_date <= ${to}::date
-      ),
-      attended AS (
-        SELECT DISTINCT person_id
-          FROM live
-         WHERE cell_meeting_id IN (SELECT id FROM scoped)
       )
       SELECT p.person_id, count(*)::text AS lifetime
         FROM attended p
-        JOIN live l ON l.person_id = p.person_id
+        JOIN cell_attendance a ON a.person_id = p.person_id
+        JOIN cell_meetings m ON m.id = a.cell_meeting_id
+       WHERE a.present = true
+         AND a.superseded_at IS NULL
+         AND m.status IN ('HELD', 'RESCHEDULED')
+         AND m.scheduled_date <= ${to}::date
        GROUP BY p.person_id
     `.execute(executor);
 
@@ -352,28 +350,27 @@ export class CellFiguresService {
              OR responsible_leader_id = ANY (${leaders}::uuid[])
            )
       ),
-      live AS (
-        SELECT a.person_id, a.cell_meeting_id
-          FROM cell_attendance a
+      -- The month's attendees first, then each one's history (DccFiguresService says why).
+      attended AS (
+        SELECT DISTINCT a.person_id
+          FROM scoped s
+          JOIN cell_attendance a ON a.cell_meeting_id = s.id
+         WHERE a.present = true
+           AND a.superseded_at IS NULL
+      ),
+      figures AS (
+        SELECT p.person_id,
+               count(*) FILTER (
+                 WHERE a.cell_meeting_id IN (SELECT id FROM scoped)
+               ) AS times_in_month,
+               count(*) AS lifetime_through_month
+          FROM attended p
+          JOIN cell_attendance a ON a.person_id = p.person_id
           JOIN cell_meetings m ON m.id = a.cell_meeting_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
            AND m.status IN ('HELD', 'RESCHEDULED')
            AND m.reporting_month <= ${reportingMonth}::date
-      ),
-      attended AS (
-        SELECT DISTINCT l.person_id
-          FROM live l
-         WHERE l.cell_meeting_id IN (SELECT id FROM scoped)
-      ),
-      figures AS (
-        SELECT p.person_id,
-               count(*) FILTER (
-                 WHERE l.cell_meeting_id IN (SELECT id FROM scoped)
-               ) AS times_in_month,
-               count(*) AS lifetime_through_month
-          FROM attended p
-          JOIN live l ON l.person_id = p.person_id
          GROUP BY p.person_id
       ),
       month_meta AS (
