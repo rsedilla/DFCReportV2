@@ -2,6 +2,7 @@
  * Builds a made-up church at the size SKILL.md section 2 records, for timing screens.
  *
  *   DATABASE_URL=<a database named dfc_perf> npm run seed:perf
+ *   PERF_PEOPLE=30000 PERF_CELLS=2000 ... npm run seed:perf    (a larger church)
  *
  * **It refuses any database not named `dfc_perf`**, and refuses to run twice, because it
  * writes a year of history nothing else could remove: every table it fills refuses a
@@ -26,8 +27,26 @@ import { Client } from 'pg';
 import { PasswordService } from '../src/auth/password.service';
 
 const DATABASE = 'dfc_perf';
-const PEOPLE_PER_NETWORK = { MENS: 7000, WOMENS: 8000 } as const;
-const CELLS_PER_NETWORK = 500;
+
+/**
+ * The church's size: `PERF_PEOPLE` (default 15000) and `PERF_CELLS` (default 1000), split
+ * between the Networks as the defaults are, 7 to 8 and evenly.
+ */
+function size(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 100) {
+    throw new Error(`${name} must be a whole number of at least 100.`);
+  }
+  return value;
+}
+const PEOPLE = size('PERF_PEOPLE', 15000);
+const PEOPLE_PER_NETWORK = {
+  MENS: Math.round((PEOPLE * 7) / 15),
+  WOMENS: PEOPLE - Math.round((PEOPLE * 7) / 15),
+} as const;
+const CELLS_PER_NETWORK = Math.floor(size('PERF_CELLS', 1000) / 2);
 const MAX_MEMBERS = 16;
 
 /** Everything structural starts here, a month before the history begins. */
