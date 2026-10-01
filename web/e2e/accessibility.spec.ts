@@ -82,8 +82,15 @@ import {
 
 const THEMES = ['light', 'dark'] as const;
 
-/** Every read the Record screen makes, answered, so each of its four lists has rows. */
+/**
+ * Every read the Record screen makes, answered, so each of its four lists has rows.
+ *
+ * Mid-June, the month the mocks describe. In the first seven days of a month the screen
+ * also asks for last month, which the meetings mock answers too, so on the real date
+ * every meeting would be listed twice.
+ */
 async function mockDashboard(page: import('@playwright/test').Page) {
+  await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
   await mockSignedIn(page);
   await mockCells(page);
   await mockCellMeetings(page);
@@ -2186,6 +2193,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // still fails on that route.
   test.setTimeout(120_000);
 
+  // The month the mocks describe, for the reason `mockDashboard` gives, and after the
+  // 27 June meeting the sweep opens for recording.
+  await page.clock.setFixedTime(new Date('2026-06-28T02:00:00Z'));
   await mockSignedIn(page);
   await mockPeople(page);
   // The attendance screens too, because the sweep counts the targets a route
