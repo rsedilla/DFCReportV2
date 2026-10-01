@@ -46,7 +46,7 @@ async function bootstrap(): Promise<void> {
     allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
   });
 
-  await app.listen(config.port);
+  await app.listen(config.port, config.host);
 }
 
 void bootstrap();

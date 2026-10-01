@@ -4,11 +4,18 @@
  * falling back to a default that would be wrong in production.
  */
 
+import { isIP } from 'node:net';
+
 import { canonicalId, isUuid } from '../common/identifiers';
 
 export interface AppConfig {
   nodeEnv: 'development' | 'test' | 'production';
   port: number;
+  /**
+   * The address the API listens on. `127.0.0.1` unless `HOST` says otherwise, so the
+   * reverse proxy on the same machine is the only way in even with no firewall in front.
+   */
+  host: string;
   databaseUrl: string;
   jwtSecret: string;
   /**
@@ -161,6 +168,11 @@ export function loadConfig(): AppConfig {
     throw new Error(`PORT must be a valid port number (got "${process.env.PORT ?? ''}")`);
   }
 
+  const host = (process.env.HOST ?? '').trim() || '127.0.0.1';
+  if (isIP(host) === 0) {
+    throw new Error(`HOST must be an IP address such as 127.0.0.1 (got "${host}")`);
+  }
+
   const jwtSecret = required('JWT_SECRET');
   if (jwtSecret.length < MINIMUM_SECRET_LENGTH) {
     throw new Error(`JWT_SECRET must be at least ${MINIMUM_SECRET_LENGTH} characters`);
@@ -181,6 +193,7 @@ export function loadConfig(): AppConfig {
   return {
     nodeEnv,
     port,
+    host,
     databaseUrl: required('DATABASE_URL'),
     jwtSecret,
     secondStepKey,
