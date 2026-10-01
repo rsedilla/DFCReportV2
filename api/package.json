@@ -29,7 +29,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\"",
     "import:tree": "ts-node scripts/import-tree.ts",
     "seed:perf": "ts-node scripts/seed-perf.ts",
-    "time:screens": "ts-node scripts/time-screens.ts"
+    "time:screens": "ts-node scripts/time-screens.ts",
+    "load:test": "ts-node scripts/load-test.ts"
   },
   "comment:overrides": [
     "multer arrives only through @nestjs/platform-express, which pins 2.2.0 exactly, and every",

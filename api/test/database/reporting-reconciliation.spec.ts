@@ -473,11 +473,6 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
   });
 
   it('refuses a month that is not the first of one, rather than under-reporting it', async () => {
-    // The calendar is matched on a `YYYY-MM` prefix, which sorts chronologically only for a
-    // well-formed month. A malformed one would match nothing and return a plausible empty
-    // report -- worse than a refusal, because nobody can see it is wrong. Decision 0185
-    // settles the same shape for a date-only field.
-    //
     // **Asserted on the error class and its details rather than on its message, and a mutation is why.** With
     // the guard removed this case still passed: `windowClosesAt` throws its own "not the
     // first of a month" and the regex matched it. But that is a plain `Error`, which the
