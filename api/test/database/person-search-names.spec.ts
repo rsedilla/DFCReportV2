@@ -10,9 +10,9 @@ import type { Database } from '../../src/database/schema';
 /**
  * The folded names the people search reads (migration 0021, checklist row perf-indexes).
  *
- * The database writes them with the accent table spelled out in the migration, and the
- * search folds the term with the one in `people.shared.ts`. If the two part, a name stops
- * being found by the spelling that used to find it, and nothing else would notice.
+ * The database writes them with the accent table spelled out in the migration; the
+ * duplicate check and the Cell pickers still fold names per row with the one in
+ * `people.shared.ts`. If the two part, the people search and those disagree about a name.
  * Fixture names are invented (CLAUDE.md, Secrets).
  */
 describe('the folded names the people search reads (migration 0021)', () => {
