@@ -2,6 +2,7 @@ import {
   type Actor,
   type ActorAuthority,
   type AuthorizationService,
+  type ScopeMembership,
 } from '../../auth/authorization/authorization.service';
 import { type Capability } from '../../auth/authorization/capabilities';
 import { ScopeType } from '../../auth/authorization/scopes';
@@ -12,7 +13,7 @@ import {
   NotFoundError,
   ScopeDeniedError,
 } from '../errors/api-error';
-import { sameId } from '../identifiers';
+import { canonicalId, sameId } from '../identifiers';
 
 import type { Db } from '../../database/database.module';
 import type { HierarchyService } from '../../hierarchy/hierarchy.service';
@@ -52,16 +53,24 @@ export async function filingFor(
   personId: string,
   identity: PersonForDecision | undefined,
   assignment: { leaderId: string | null } | undefined,
+  /** For a list: the scope each capability reaches, read once rather than per row. */
+  reach?: ReadonlyMap<Capability, ScopeMembership>,
 ): Promise<Filing | ApiError> {
   if (identity === undefined) {
     return new NotFoundError('No such person.', { person_id: personId });
   }
 
-  const covers = (capability: Capability): Promise<boolean> =>
-    deps.authorization.coversWith(executor, actor, authority, capability, {
+  const covers = async (capability: Capability): Promise<boolean> => {
+    const membership = reach?.get(capability);
+    if (membership !== undefined) {
+      return membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId));
+    }
+
+    return deps.authorization.coversWith(executor, actor, authority, capability, {
       kind: 'person',
       personId,
     });
+  };
 
   if (!(await covers(capabilities.confirm)) && !(await covers(capabilities.onBehalf))) {
     return denied(authority, capabilities.confirm, personId);
@@ -117,7 +126,14 @@ export async function filingFor(
     : denied(authority, capabilities.onBehalf, personId);
 }
 
-/** {@link filingFor} for a set of people read in one pass, as a list row needs it. */
+/**
+ * {@link filingFor} for a set of people read in one pass, as a list row needs it.
+ *
+ * **Scope is read once per capability, as `scopeMembership` enumerates it**, rather than
+ * asked of `coversWith` per row, which walked the tree twice for every person on the page
+ * (checklist row perf-growth-lists). `scopeMembership` is the list form of the same rule;
+ * its docblock records where the two are kept equal. A write still asks per person.
+ */
 export async function mayFileEach(
   deps: { authorization: AuthorizationService; hierarchy: HierarchyService },
   executor: Db,
@@ -127,11 +143,19 @@ export async function mayFileEach(
   people: readonly PersonForDecision[],
   now: Date,
 ): Promise<Set<string>> {
+  if (people.length === 0) {
+    return new Set();
+  }
+
   const assignments = await deps.hierarchy.assignmentsAsOf(
     executor,
     people.map((person) => person.id),
     now,
   );
+  const reach = new Map<Capability, ScopeMembership>([
+    [capabilities.confirm, await deps.authorization.scopeMembership(actor, capabilities.confirm)],
+    [capabilities.onBehalf, await deps.authorization.scopeMembership(actor, capabilities.onBehalf)],
+  ]);
   const allowed = new Set<string>();
 
   for (const person of people) {
@@ -144,6 +168,7 @@ export async function mayFileEach(
       person.id,
       person,
       assignments.get(person.id),
+      reach,
     );
 
     if (!(filing instanceof Error)) {
