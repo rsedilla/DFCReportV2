@@ -1779,4 +1779,59 @@ test.describe('a DCC checklist longer than one page', () => {
     ).toBeVisible();
     await expect(page.getByText('DCC · 50 of 51 marked').first()).toBeVisible();
   });
+
+  // Checklist row perf-dcc-checklist: every page builds the whole checklist on the server,
+  // so a checklist is read 200 at a time rather than fifty.
+  test('reads a checklist of 120 in one request per Sunday', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, {});
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+
+    const lines = Array.from({ length: 120 }, (_, index) => ({
+      person_id: `3f1b7c6e-0000-4000-8000-000000072${String(index).padStart(3, '0')}`,
+      member_id: `M-072${String(index).padStart(3, '0')}`,
+      full_name: `Person ${String(index).padStart(3, '0')}`,
+      responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
+      record: index === 119 ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+    }));
+    const asked: URL[] = [];
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url);
+      const start = Number(url.searchParams.get('cursor') ?? '0');
+      const end = start + Number(url.searchParams.get('limit') ?? '50');
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          event: {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: null,
+          },
+          data: lines.slice(start, end),
+          next_cursor: end < lines.length ? String(end) : null,
+        }),
+      });
+    });
+
+    await page.goto('/dashboard');
+    await chooseDcc(page);
+
+    await expect(page.getByText('DCC · 119 of 120 marked').first()).toBeVisible();
+    const sundays = new Set(asked.map((url) => url.pathname));
+    expect(asked).toHaveLength(sundays.size);
+    expect(asked.every((url) => url.searchParams.get('limit') === '200')).toBe(true);
+  });
 });
