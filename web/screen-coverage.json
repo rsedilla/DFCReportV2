@@ -261,6 +261,11 @@
       "screen": "web/app/people/[id]/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/people/membership",
+      "reason": "The same for a page of people at once, the People list's Cell column (checklist row perf-people-list-cells).",
+      "screen": "web/app/people/page.tsx"
+    },
+    {
       "route": "POST /api/v1/cells",
       "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). New Cell, from the Cells list, is how the pilot's Cells are set up.",
       "screen": "web/app/cells/new/page.tsx"

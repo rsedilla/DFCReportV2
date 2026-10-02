@@ -200,10 +200,12 @@ const SCREENS: Screen[] = [
     name: 'People',
     stages: [
       () => ['/api/v1/people?limit=10'],
-      (_p, [people]) =>
-        ((people?.data ?? []) as Body[])
+      (_p, [people]) => {
+        const ids = ((people?.data ?? []) as Body[])
           .filter((row) => row.scope === 'FULL')
-          .map((row) => `/api/v1/cells/people/${row.id}/membership`),
+          .map((row) => `person_id=${row.id}`);
+        return ids.length === 0 ? [] : [`/api/v1/cells/people/membership?${ids.join('&')}`];
+      },
     ],
   },
   {

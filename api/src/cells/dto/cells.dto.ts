@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
@@ -618,4 +619,20 @@ export class CellIndexDto {
   @IsString()
   @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
+}
+
+/**
+ * `GET /api/v1/cells/people/membership` (checklist row perf-people-list-cells): the people
+ * a list is showing, sent as `person_id` once each. At most 50; the People list sends
+ * its page of 10.
+ */
+export class PeopleCellsDto {
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value) ? (value as unknown[]) : [value],
+  )
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsUUID(undefined, { each: true })
+  person_id!: string[];
 }

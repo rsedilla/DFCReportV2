@@ -719,6 +719,21 @@ export async function getPersonCells(personId: string, signal?: AbortSignal): Pr
 }
 
 /**
+ * The same for a page of people in one request. Anyone the reader may not see is left
+ * out of the answer, so a row with no entry shows nothing.
+ */
+export async function getPeopleCells(
+  personIds: string[],
+  signal?: AbortSignal,
+): Promise<{ data: PersonCells[] }> {
+  const query = personIds.map((id) => `person_id=${encodeURIComponent(id)}`).join('&');
+  return authenticatedRequest<{ data: PersonCells[] }>(
+    `/api/v1/cells/people/membership?${query}`,
+    { signal },
+  );
+}
+
+/**
  * Every Cell of the actor's scope for a month, following the cursor to the end.
  *
  * For a picker, which has to offer the whole list rather than its first page. The
