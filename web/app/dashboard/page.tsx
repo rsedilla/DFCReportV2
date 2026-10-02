@@ -284,9 +284,13 @@ function Dashboard() {
   //
   // The checklist is read under the key the DCC screen uses, so saving there
   // refreshes this entry rather than leaving it saying something is awaiting.
+  //
+  // The Sundays only: the queue uses `recordable` and never the coverage figure, which
+  // reads the reader's whole branch. Its own key, because the DCC screen shows coverage
+  // (checklist row perf-record-load).
   const dccEvents = useQuery({
-    queryKey: ['dcc-events', month],
-    queryFn: ({ signal }) => listDccEvents(month, signal),
+    queryKey: ['dcc-events', month, 'sundays-only'],
+    queryFn: ({ signal }) => listDccEvents(month, signal, { coverage: false }),
   });
 
   const recordableEvents = (dccEvents.data?.data ?? []).filter((event) => event.recordable);
@@ -311,8 +315,8 @@ function Dashboard() {
   });
 
   const dccEventsPrevious = useQuery({
-    queryKey: ['dcc-events', previousMonth],
-    queryFn: ({ signal }) => listDccEvents(previousMonth, signal),
+    queryKey: ['dcc-events', previousMonth, 'sundays-only'],
+    queryFn: ({ signal }) => listDccEvents(previousMonth, signal, { coverage: false }),
     enabled: inCloseWeek,
   });
 
@@ -350,6 +354,30 @@ function Dashboard() {
     ? [owedNow, owedPrevious].find((query) => query.isError)
     : undefined;
 
+  // **Pending until every read the queue is built from has answered**, including the
+  // per-Cell meetings and per-Sunday checklists, which only start once the two indexes
+  // resolve. Until then an empty queue would say "nothing awaiting" when nothing is
+  // yet known.
+  //
+  // Last month's two indexes count only in the close week: a query that is not enabled
+  // stays pending for ever, and would otherwise hold the queue on "Loading…".
+  const queuePending =
+    awaiting.isPending ||
+    dccEvents.isPending ||
+    checklists.some((query) => query.isPending) ||
+    (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
+    checklistsPrevious.some((query) => query.isPending);
+
+  // The month figures wait for the lists above them, which are the work a leader acts on,
+  // so the lists do not queue behind four reports (checklist row perf-record-load). A list
+  // that failed has answered, so it holds nothing back.
+  const listsAnswered =
+    !queuePending &&
+    !scoped.isPending &&
+    !scopedClosed.isPending &&
+    !unplacedPages.isPending &&
+    !withoutACellPages.isPending;
+
   /**
    * The scope the figures are read at, and why it is not always the actor.
    *
@@ -371,20 +399,20 @@ function Dashboard() {
   const cellFigures = useQuery({
     queryKey: ['cell-report', month, reportScope],
     queryFn: ({ signal }) => getCellMonthlyReport(month, reportScope, signal),
-    enabled: me.data !== undefined,
+    enabled: me.data !== undefined && listsAnswered,
   });
 
   const dccFigures = useQuery({
     queryKey: ['dcc-report', month, reportScope],
     queryFn: ({ signal }) => getDccMonthlyReport(month, reportScope, signal),
-    enabled: me.data !== undefined,
+    enabled: me.data !== undefined && listsAnswered,
   });
 
   // Last month's figures, shown under this month's on each card and named by month.
   const cellFiguresPrevious = useQuery({
     queryKey: ['cell-report', previousMonth, reportScope],
     queryFn: ({ signal }) => getCellMonthlyReport(previousMonth, reportScope, signal),
-    enabled: me.data !== undefined,
+    enabled: me.data !== undefined && listsAnswered,
   });
 
   // Section 19: an open period says so, and last month is open until its 7th.
@@ -395,7 +423,7 @@ function Dashboard() {
   const dccFiguresPrevious = useQuery({
     queryKey: ['dcc-report', previousMonth, reportScope],
     queryFn: ({ signal }) => getDccMonthlyReport(previousMonth, reportScope, signal),
-    enabled: me.data !== undefined,
+    enabled: me.data !== undefined && listsAnswered,
   });
 
   // **Oldest first, and the page says so.** Date order is the one order that ranks
@@ -410,20 +438,6 @@ function Dashboard() {
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   const shown = queue.filter((item) => (filter === 'CELLS') === (item.kind === 'cell'));
-
-  // **Pending until every read the queue is built from has answered**, including the
-  // per-Cell meetings and per-Sunday checklists, which only start once the two indexes
-  // resolve. Until then an empty queue would say "nothing awaiting" when nothing is
-  // yet known.
-  //
-  // Last month's two indexes count only in the close week: a query that is not enabled
-  // stays pending for ever, and would otherwise hold the queue on "Loading…".
-  const queuePending =
-    awaiting.isPending ||
-    dccEvents.isPending ||
-    checklists.some((query) => query.isPending) ||
-    (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
-    checklistsPrevious.some((query) => query.isPending);
 
   // A queue built from a read that failed is not a queue, so it says nothing at all
   // and leaves the failure notice above to speak.
