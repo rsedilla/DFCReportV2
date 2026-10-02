@@ -83,6 +83,7 @@ describe('a page of a branch costs the same at 20 and at 200 (perf-network-rewal
     expect(twenty.body.data).toHaveLength(20);
     expect(all.body.data).toHaveLength(45);
     expect(all.body.next_cursor).toBeNull();
+    expect(all.rows).toBeGreaterThan(0);
     expect(all.rows).toBe(twenty.rows);
   });
 
@@ -101,6 +102,7 @@ describe('a page of a branch costs the same at 20 and at 200 (perf-network-rewal
     } while (cursor !== null);
 
     expect(pages).toBe(3);
+    expect(all.rows).toBeGreaterThan(0);
     expect(rows).toBe(3 * all.rows);
   });
 });
