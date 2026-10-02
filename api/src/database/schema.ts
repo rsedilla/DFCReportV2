@@ -6,7 +6,7 @@
  * schema tests in `test/database/`. Nothing here creates, alters or drops
  * anything.
  */
-import type { ColumnType, Generated } from 'kysely';
+import type { ColumnType, Generated, GeneratedAlways } from 'kysely';
 
 export type Sex = 'MALE' | 'FEMALE';
 export type CivilStatus = 'SINGLE' | 'MARRIED' | 'WIDOWED';
@@ -40,6 +40,10 @@ export interface PersonsTable {
   civil_status: CivilStatus;
   mobile_number: string | null;
   mobile_number_normalized: string | null;
+  /** The names folded for the people search; the database writes these (migration 0021). */
+  search_first_name: GeneratedAlways<string>;
+  search_last_name: GeneratedAlways<string>;
+  search_full_name: GeneratedAlways<string>;
   merged_into_id: string | null;
   created_at: ServerTimestamp;
   updated_at: ServerTimestamp;

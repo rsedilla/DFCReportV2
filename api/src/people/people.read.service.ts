@@ -12,14 +12,7 @@ import { databaseNow } from '../common/time/submission-window';
 import type { Database, NetworkName } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
-import {
-  ACCENTED,
-  UNACCENTED,
-  composeName,
-  escapeLike,
-  type PersonRecord,
-  type SearchCursor,
-} from './people.shared';
+import { composeName, escapeLike, type PersonRecord, type SearchCursor } from './people.shared';
 
 /**
  * What another module may learn about a Person in order to decide about them.
@@ -431,8 +424,6 @@ export class PeopleReadService {
     const pattern = normalized === null ? null : `%${escapeLike(normalized).replace(/\s+/g, '%')}%`;
     const memberIdPrefix =
       term !== null && options.memberId ? `${escapeLike(term.trim().toUpperCase())}%` : null;
-    const normalizedFirst = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
-    const normalizedLast = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
 
     let query = this.db
       .selectFrom('persons')
@@ -471,14 +462,12 @@ export class PeopleReadService {
       )
       .$if(pattern !== null, (qb) =>
         qb.where((eb) =>
+          // The names as stored folded (migration 0021) rather than folded per row on
+          // every search, which cost a scan of the church (checklist row perf-indexes).
           eb.or([
-            eb(normalizedFirst, 'like', pattern ?? ''),
-            eb(normalizedLast, 'like', pattern ?? ''),
-            eb(
-              sql<string>`lower(translate(first_name || ' ' || last_name, ${ACCENTED}, ${UNACCENTED}))`,
-              'like',
-              pattern ?? '',
-            ),
+            eb('search_first_name', 'like', pattern ?? ''),
+            eb('search_last_name', 'like', pattern ?? ''),
+            eb('search_full_name', 'like', pattern ?? ''),
             ...(memberIdPrefix === null
               ? []
               : [eb(sql<string>`upper(member_id)`, 'like', memberIdPrefix)]),
