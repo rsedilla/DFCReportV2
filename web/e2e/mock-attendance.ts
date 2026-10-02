@@ -451,7 +451,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
 
 /** A leader's DCC checklist: one person recorded already, one not. */
 export async function mockDccRoster(page: Page): Promise<void> {
-  await page.route('**/api/v1/dcc/events/*/roster', (route) =>
+  await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
     route.fulfill(
       json({
         event: {
@@ -612,7 +612,7 @@ export async function mockRecordedMeetingRoster(
 
 /** A Sunday whose month has closed: it takes no record, and what was recorded still shows. */
 export async function mockClosedDccRoster(page: Page): Promise<void> {
-  await page.route('**/api/v1/dcc/events/*/roster', (route) =>
+  await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
     route.fulfill(
       json({
         event: {
