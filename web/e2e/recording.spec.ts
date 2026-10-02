@@ -1043,6 +1043,47 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     expect(foot!.y).toBeGreaterThan(queue!.y + queue!.height);
   });
 
+  // Checklist row perf-record-load: the lists are the work, so the four reports wait for
+  // them, and the Sundays are read without the coverage figure nothing here shows.
+  test('asks for the month figures only once every list has answered', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    const LISTS = [
+      '/api/v1/cells/meetings/awaiting',
+      '/api/v1/cells',
+      '/api/v1/people/awaiting-reassignment',
+      '/api/v1/cells/people-without-a-cell',
+      '/roster',
+    ];
+    const events: string[] = [];
+    const coverageAsked: (string | null)[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith('/api/v1/reports/')) events.push(`asked ${url.pathname}`);
+      if (url.pathname === '/api/v1/dcc/events') coverageAsked.push(url.searchParams.get('coverage'));
+    });
+    page.on('requestfinished', (request) => {
+      const path = new URL(request.url()).pathname;
+      const list = LISTS.find((suffix) => path.endsWith(suffix));
+      if (list !== undefined) events.push(`answered ${list}`);
+    });
+
+    await page.goto('/dashboard');
+    await expect(
+      page.getByRole('complementary', { name: 'June so far' }).getByRole('link', { name: /DCC records filed\s*12 of 18\s*May: 12 of 18/ }),
+    ).toBeVisible();
+
+    const firstReport = events.findIndex((event) => event.startsWith('asked'));
+    expect(firstReport).toBeGreaterThan(-1);
+    for (const list of LISTS) {
+      const answered = events.indexOf(`answered ${list}`);
+      expect(answered, list).toBeGreaterThan(-1);
+      expect(answered, list).toBeLessThan(firstReport);
+    }
+    expect(coverageAsked.length).toBeGreaterThan(0);
+    expect(coverageAsked.every((value) => value === 'false')).toBe(true);
+  });
+
   test('Doulos Cell Celebration with My own Cells shows the reader’s own checklist across the month', async ({
     page,
   }) => {
