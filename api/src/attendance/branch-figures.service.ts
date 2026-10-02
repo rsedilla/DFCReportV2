@@ -65,10 +65,15 @@ export class BranchFiguresService {
     const { reportingMonth, open, today } = await this.currentMonth();
     const branch = await this.branchOf(personId);
 
-    const [scheduled, recorded, leaders] = await Promise.all([
-      this.cells.scheduledMeetingsWithLeaderIn(this.db, reportingMonth),
-      this.recordedMeetings.recordedScheduledDatesIn(this.db, reportingMonth),
-      this.cells.currentCellLeaderIds(),
+    // Only the branch's Cells and leaders, rather than the church's kept down to the
+    // branch's (checklist row perf-network-cell-figures). A meeting led by anyone outside
+    // the branch counted towards no figure here, so the answer is the same.
+    const [scheduled, leaders] = await Promise.all([
+      this.cells.scheduledMeetingsWithLeaderIn(this.db, reportingMonth, branch.members),
+      this.cells.currentCellLeaderIds(branch.members),
+    ]);
+    const recorded = await this.recordedMeetings.recordedScheduledDatesIn(this.db, reportingMonth, [
+      ...new Set(scheduled.map((meeting) => meeting.cellId)),
     ]);
 
     // A meeting whose Manila day has not begun takes no record yet (decision 0238), so it

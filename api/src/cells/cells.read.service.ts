@@ -1135,9 +1135,14 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * open leadership of an `ACTIVE` Cell, the same conjunction
    * {@link isCurrentCellLeaderWithin} states for one person.
    *
-   * For the Network screen's *Cell Leaders beneath* (decision 0252).
+   * For the Network screen's *Cell Leaders beneath* (decision 0252), asked of the branch's
+   * people only (checklist row perf-network-cell-figures).
    */
-  async currentCellLeaderIds(): Promise<Set<string>> {
+  async currentCellLeaderIds(among: readonly string[]): Promise<Set<string>> {
+    if (among.length === 0) {
+      return new Set();
+    }
+
     const rows = await this.db
       .selectFrom('cell_leaderships')
       .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
@@ -1145,6 +1150,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .distinct()
       .where('cell_leaderships.ended_at', 'is', null)
       .where('cells.state', '=', 'ACTIVE')
+      .where(sql<boolean>`cell_leaderships.person_id = ANY(${[...among]}::uuid[])`)
       .execute();
 
     return new Set(rows.map((row) => row.person_id));
@@ -1640,22 +1646,30 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   async scheduledMeetingsWithLeaderIn(
     executor: Db | Transaction<Database>,
     reportingMonth: string,
+    leaders?: readonly string[],
   ): Promise<{ cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     const [year, month] = reportingMonth.split('-').map(Number);
     const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 
-    return this.scheduledMeetingsWithLeaderBetween(executor, reportingMonth, last);
+    return this.scheduledMeetingsWithLeaderBetween(executor, reportingMonth, last, leaders);
   }
 
   /**
    * {@link scheduledMeetingsWithLeaderIn} over any run of days, inclusive — a week, a
    * quarter or a year (decision 0293). One derivation serves both, so a month asked for as
    * a range and as a month cannot disagree.
+   *
+   * **With `leaders`, only the meetings one of them led on the date**, for the Network
+   * screen's branch (checklist row perf-network-cell-figures): the same rows, less every
+   * pair whose leader is someone else or nobody. The Cells are narrowed first to those
+   * one of them led at some point in the range, which is every Cell such a pair can come
+   * from.
    */
   async scheduledMeetingsWithLeaderBetween(
     executor: Db | Transaction<Database>,
     from: string,
     to: string,
+    leaders?: readonly string[],
   ): Promise<{ cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     const result = await sql<{
       cell_id: string;
@@ -1702,6 +1716,19 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            LIMIT 1
         ) AS leader ON true
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+         ${
+           leaders === undefined
+             ? sql``
+             : sql`AND leader.person_id = ANY(${[...leaders]}::uuid[])
+                 AND cell.id IN (
+                   SELECT ever.cell_id
+                     FROM cell_leaderships AS ever
+                    WHERE ever.person_id = ANY(${[...leaders]}::uuid[])
+                      AND (ever.started_at AT TIME ZONE 'Asia/Manila')::date <= ${to}::date
+                      AND (ever.ended_at IS NULL
+                           OR (ever.ended_at AT TIME ZONE 'Asia/Manila')::date >= ${from}::date)
+                 )`
+         }
        ORDER BY cell.id, day
     `.execute(executor);
 

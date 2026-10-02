@@ -147,11 +147,20 @@ export class CellFiguresService {
   async recordedScheduledDatesIn(
     executor: Db | Transaction<Database>,
     reportingMonth: string,
+    /** Only these Cells, for the Network screen's branch (checklist row perf-network-cell-figures). */
+    cellIds?: readonly string[],
   ): Promise<Set<string>> {
+    if (cellIds !== undefined && cellIds.length === 0) {
+      return new Set();
+    }
+
     const rows = await executor
       .selectFrom('cell_meetings')
       .select(['cell_id', 'scheduled_date'])
       .where('reporting_month', '=', reportingMonth)
+      .$if(cellIds !== undefined, (qb) =>
+        qb.where(sql<boolean>`cell_id = ANY(${[...(cellIds ?? [])]}::uuid[])`),
+      )
       .execute();
 
     return new Set(rows.map((row) => `${row.cell_id}|${String(row.scheduled_date)}`));
