@@ -386,3 +386,92 @@ test.describe('the Still to record figures link to Filed reports (decision 0298)
     expect(dccAsked.searchParams.get('period')).toBe('2026-09-01');
   });
 });
+
+/**
+ * Checklist row perf-network-rewalk: every page of a branch walks the whole branch on the
+ * server, so the screen reads up to 200 at once and shows twenty at a time from them.
+ * Invented names.
+ */
+test.describe('Show 20 more on the Network screen', () => {
+  async function branchOf(page: Page, total: number) {
+    const disciples = Array.from({ length: total }, (_, index) => {
+      const n = String(index + 1).padStart(3, '0');
+      return {
+        id: `3f1b7c6e-0000-4000-8000-000000002${n}`,
+        member_id: `M-009${n}`,
+        full_name: `Disciple ${n}`,
+        leads_anyone: false,
+        direct_reports: 0,
+        beneath: 0,
+      };
+    });
+    const asked: URL[] = [];
+
+    // Registered after the default, so it is the one matched.
+    await page.route('**/api/v1/network/my-tree*', (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url);
+      const start = Number(url.searchParams.get('cursor') ?? '0');
+      const end = start + Number(url.searchParams.get('limit'));
+
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          person: {
+            id: SIGNED_IN_PERSON_ID,
+            member_id: 'M-009000',
+            full_name: 'Rosalinda Quiambao',
+            leads_anyone: true,
+            direct_reports: total,
+            beneath: total,
+          },
+          data: disciples.slice(start, end),
+          next_cursor: end < total ? String(end) : null,
+          roots: [],
+        }),
+      });
+    });
+
+    return asked;
+  }
+
+  test('reads up to 200 at once, and shows the next twenty without asking again', async ({
+    page,
+  }) => {
+    await signedInReader(page);
+    const asked = await branchOf(page, 45);
+    await page.goto('/network');
+
+    const more = page.getByRole('button', { name: 'Show 20 more' });
+    await expect(page.getByText('Showing 20 of 45 · by name')).toBeVisible();
+    await more.click();
+    await expect(page.getByText('Showing 40 of 45 · by name')).toBeVisible();
+    await more.click();
+    await expect(page.getByText('Showing 45 of 45 · by name')).toBeVisible();
+    await expect(more).toHaveCount(0);
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0].searchParams.get('limit')).toBe('200');
+  });
+
+  test('asks for the next 200 only once the first 200 are on screen', async ({ page }) => {
+    await signedInReader(page);
+    const asked = await branchOf(page, 230);
+    await page.goto('/network');
+
+    const more = page.getByRole('button', { name: 'Show 20 more' });
+    for (let shown = 40; shown <= 200; shown += 20) {
+      await more.click();
+      await expect(page.getByText(`Showing ${shown} of 230 · by name`)).toBeVisible();
+    }
+    expect(asked).toHaveLength(1);
+
+    await more.click();
+    await expect(page.getByText('Showing 220 of 230 · by name')).toBeVisible();
+    await more.click();
+    await expect(page.getByText('Showing 230 of 230 · by name')).toBeVisible();
+    await expect(more).toHaveCount(0);
+    expect(asked.map((url) => url.searchParams.get('cursor'))).toEqual([null, '200']);
+  });
+});

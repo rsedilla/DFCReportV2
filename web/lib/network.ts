@@ -53,8 +53,8 @@ export interface CellFigures {
 /** Twenty at a time, the same at every width (decision 0252). */
 const PAGE = '20';
 
-function pagingSuffix(cursor: string | undefined): string {
-  const params = new URLSearchParams({ limit: PAGE });
+function pagingSuffix(cursor: string | undefined, limit = PAGE): string {
+  const params = new URLSearchParams({ limit });
 
   // The API refuses `?cursor=` rather than restarting at page one, so an empty value is
   // dropped here rather than sent.
@@ -66,8 +66,12 @@ function pagingSuffix(cursor: string | undefined): string {
 }
 
 /** The signed-in person's own branch: where the Network screen starts. */
-export async function getMyBranch(cursor?: string, signal?: AbortSignal): Promise<Branch> {
-  return authenticatedRequest<Branch>(`/api/v1/network/my-tree${pagingSuffix(cursor)}`, {
+export async function getMyBranch(
+  cursor?: string,
+  signal?: AbortSignal,
+  limit?: string,
+): Promise<Branch> {
+  return authenticatedRequest<Branch>(`/api/v1/network/my-tree${pagingSuffix(cursor, limit)}`, {
     signal,
   });
 }
@@ -77,9 +81,10 @@ export async function getBranch(
   personId: string,
   cursor?: string,
   signal?: AbortSignal,
+  limit?: string,
 ): Promise<Branch> {
   return authenticatedRequest<Branch>(
-    `/api/v1/leaders/${encodeURIComponent(personId)}/children${pagingSuffix(cursor)}`,
+    `/api/v1/leaders/${encodeURIComponent(personId)}/children${pagingSuffix(cursor, limit)}`,
     { signal },
   );
 }
