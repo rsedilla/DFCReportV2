@@ -2945,7 +2945,7 @@ A person has **at most one** active Cell membership. Zero is legitimate: a Perso
 
 Moving a member from one Cell to another closes the current membership and opens the new one **within a single transaction**. It must never leave two open memberships, and never silently drop a person out of every Cell. Enforce with a uniqueness constraint over the person where `ended_at` is null, exactly as pastoral assignment does (Section 5).
 
-**A person's current Cell is read from the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` returns the Cell the person currently belongs to, with that Cell's current leader, or none, and separately the Cells the person currently leads (Section 11), because a Cell's leader holds no membership row and leading a Cell counts as having one, as it does on the people-without-a-Cell list (Section 15). It carries `cell.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. A person who does not exist answers `NOT_FOUND`. Resolving through the person rather than through the Cell's leader shows a reader the Cell, and its leader's name, of somebody in their scope whose Cell is led outside it, and nothing of that Cell's other members (Section 8). It returns the two apart and settles nothing about whether a Cell's leader is a member of their own Cell.
+**A person's current Cell is read from the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` returns the Cell the person currently belongs to, with that Cell's current leader, or none, and separately the Cells the person currently leads (Section 11), because a Cell's leader holds no membership row and leading a Cell counts as having one, as it does on the people-without-a-Cell list (Section 15). It carries `cell.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. A person who does not exist answers `NOT_FOUND`. A list's people are read together through `GET /api/v1/cells/people/membership` (decision 0308). Resolving through the person rather than through the Cell's leader shows a reader the Cell, and its leader's name, of somebody in their scope whose Cell is led outside it, and nothing of that Cell's other members (Section 8). It returns the two apart and settles nothing about whether a Cell's leader is a member of their own Cell.
 
 The member and the Cell's leader must belong to the same Network, consistent with the homogeneous-network rule (Section 4). A Network change must not leave a person holding a membership the rule no longer permits; resolve both together or reject the change (Section 4).
 
@@ -4620,6 +4620,7 @@ GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
 GET  /api/v1/cells/people/{id}/membership   the person's current Cell and its leader, or none, and the Cells they lead (Sections 10, 11)
+GET  /api/v1/cells/people/membership?person_id=…   the same for up to 50 people at once, leaving out anyone outside the reader's `cell.view_subtree` scope and any identifier naming nobody (decisions 0248 and 0308)
 GET  /api/v1/cells/{id}/meetings
 GET  /api/v1/cells/{id}/meetings/{meeting_id}/roster   who to record, for this meeting
 POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date;
@@ -4809,6 +4810,7 @@ GET /api/v1/people?q=dela+cruz&limit=50
 - `limit` defaults to 50, maximum 200. A church-wide people search defaults to 20 and allows no more (Section 8).
 - The cursor is opaque. Clients pass it back unmodified and never construct one.
 - `next_cursor` is absent or null on the last page.
+- **A read of people the request names, at most 50, is not a collection and carries no cursor** (ruling of 2026-10-02). A person the reader may not see is left out, and so is an identifier naming nobody.
 - **A cursor the server cannot resolve is refused** with `VALIDATION_FAILED`, carrying `field: "cursor"` in `details`. Unparseable, forged, or structurally wrong, all the same answer. An absent cursor is still absent and starts at the first page; this is about one that was sent.
 
 Refusing rather than starting again is the same choice this section makes for a body nested past its depth bound and for a Cell closure naming more than 500 members, and it is made for the same reason. A client sends a cursor because it already holds a page; handed the first page again with a `200`, it appends what it already has and cannot tell that from a collection that grew. Silently doing something other than what was asked is the worse failure, and it is the requests nobody looks at that receive it. The recovery is a request the client can already make: drop the cursor and start over, which is exactly what the old behaviour did for it, with the difference that it now knows.

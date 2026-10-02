@@ -12,6 +12,7 @@ import {
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
 
+import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 import { UuidParamPipe } from '../common/uuid-param.pipe';
 import { PeopleReadService } from '../people/people.read.service';
@@ -34,6 +35,7 @@ import {
   CreateCellDto,
   CreateLeadershipRequestDto,
   DeclineLeadershipRequestDto,
+  PeopleCellsDto,
   PeopleWithoutACellDto,
   LeadershipRequestQueueDto,
 } from './dto/cells.dto';
@@ -225,6 +227,29 @@ export class CellsController {
       })),
       next_cursor: encodeRosterCursor(nextCursor),
     };
+  }
+
+  /**
+   * `GET /api/v1/cells/people/membership?person_id=…` — the route below for a page of people
+   * at once (checklist row perf-people-list-cells), `cell.view_subtree` per person (decision
+   * 0248). The guard checks the actor themselves first, so a grant that does not cover its
+   * own holder refuses the whole batch where the route below would answer some people. The
+   * scope is read once, and a person it does not reach is left out, as is an identifier
+   * naming nobody: that tells a caller nothing the route below's refusal would not.
+   */
+  @Get('people/membership')
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
+  async peopleCells(
+    @Query() query: PeopleCellsDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[] }> {
+    const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
+    const inScope = query.person_id.filter(
+      (personId) =>
+        membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId)),
+    );
+
+    return { data: await this.membership.currentCellsOfMany(inScope) };
   }
 
   /**

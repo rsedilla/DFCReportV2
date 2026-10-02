@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { cellShortName, getPersonCells, type PersonCells } from '@/lib/cells';
+import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import {
   MINIMUM_SEARCH_LENGTH,
@@ -102,15 +102,16 @@ function PeopleList() {
   });
 
   const rows = results.data?.data ?? [];
-  // Each person's Cell, read one person at a time under `cell.view_subtree` (decision 0248).
-  const cells = useQueries({
-    queries: rows.map((person) => ({
-      queryKey: ['person-cells', person.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getPersonCells(person.id, signal),
-      enabled: person.scope === 'FULL',
-      retry: false,
-    })),
+  // The page's Cells in one request, under `cell.view_subtree` against each person
+  // (decision 0248).
+  const fullIds = rows.filter((person) => person.scope === 'FULL').map((person) => person.id);
+  const cells = useQuery({
+    queryKey: ['people-cells', fullIds],
+    queryFn: ({ signal }) => getPeopleCells(fullIds, signal),
+    enabled: fullIds.length > 0,
+    retry: false,
   });
+  const cellsById = new Map((cells.data?.data ?? []).map((entry) => [entry.person_id, entry]));
 
   const trimmed = term.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
@@ -189,23 +190,23 @@ function PeopleList() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((person, index) => (
+                {rows.map((person) => (
                   <tr key={person.id} className={rowClasses}>
                     <td className="px-3 py-3 align-top">
                       <PersonName person={person} />
                     </td>
                     <td className="px-3 py-3 align-top">{leaderOf(person)}</td>
-                    <td className="px-3 py-3 align-top">{cellOf(person, cells[index]?.data)}</td>
+                    <td className="px-3 py-3 align-top">{cellOf(person, cellsById.get(person.id))}</td>
                   </tr>
                 ))}
               </tbody>
             </Table>
             <ul className="border-line divide-line divide-y border-t border-b sm:hidden">
-              {rows.map((person, index) => (
+              {rows.map((person) => (
                 <li key={person.id} className="py-3">
                   <PersonName person={person} />
                   <p className="text-muted mt-1 text-sm">
-                    {[leaderOf(person), cellOf(person, cells[index]?.data)]
+                    {[leaderOf(person), cellOf(person, cellsById.get(person.id))]
                       .filter((part) => part !== '')
                       .join(' · ')}
                   </p>

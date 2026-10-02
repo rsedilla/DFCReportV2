@@ -12,7 +12,7 @@ import {
   NotFoundError,
   ScopeDeniedError,
 } from '../common/errors/api-error';
-import { sameId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -354,43 +354,66 @@ export class CellsMembershipService {
       throw new NotFoundError('No such person.');
     }
 
-    const { membership, leads } = await this.cells.currentCellsOf(person.id);
-    const leaderId = membership?.leaderId ?? null;
-    const names = await this.people.namesOf(leaderId === null ? [] : [leaderId]);
-    const leader = leaderId === null ? undefined : names.get(leaderId);
+    return (await this.currentCellsOfMany([person.id]))[0];
+  }
+
+  /**
+   * {@link currentCellsOf} for many people, in a fixed number of queries (checklist row
+   * perf-people-list-cells). The caller has already decided which of them may be answered;
+   * an identifier naming nobody {@link currentCellsOf} would find is left out.
+   */
+  async currentCellsOfMany(personIds: readonly string[]): Promise<Record<string, unknown>[]> {
+    const existing = new Set(
+      [...(await this.people.existingOf(personIds))].map((id) => canonicalId(id)),
+    );
+    const asked = [...new Set(personIds.map((id) => canonicalId(id)))].filter((id) =>
+      existing.has(id),
+    );
+    const cellsOf = await this.cells.currentCellsOfMany(asked);
+
+    const leaderIds = [...cellsOf.values()]
+      .map((cells) => cells.membership?.leaderId ?? null)
+      .filter((id): id is string => id !== null);
+    const cellIds = [...cellsOf.values()].flatMap((cells) => [
+      ...(cells.membership === null ? [] : [cells.membership.id]),
+      ...cells.leads.map((cell) => cell.id),
+    ]);
+    const [names, headings] = await Promise.all([
+      this.people.namesOf([...new Set(leaderIds)]),
+      this.cells.cellHeadingsWithin(this.db, [...new Set(cellIds)]),
+    ]);
     // How each Cell is named on the People list, "Young Pro · Sat" (decision 0259): category and meeting day as the Cell stands today.
-    const named = async (cellId: string) => {
-      const heading = await this.cells.cellHeadingWithin(this.db, cellId);
-
-      return { category: heading.category, day_of_week: heading.dayOfWeek };
+    const named = (cellId: string) => {
+      const heading = headings.get(cellId);
+      return { category: heading?.category ?? null, day_of_week: heading?.dayOfWeek ?? null };
     };
-    const membershipName = membership === null ? null : await named(membership.id);
-    const leadNames = await Promise.all(leads.map((cell) => named(cell.id)));
 
-    return {
-      person_id: person.id,
-      membership:
-        membership === null
-          ? null
-          : {
-              id: membership.id,
-              cell_id: membership.cellId,
-              ...membershipName,
-              leader:
-                leaderId === null
-                  ? null
-                  : {
-                      person_id: leaderId,
-                      member_id: leader?.memberId ?? '',
-                      full_name: leader?.fullName ?? '',
-                    },
-            },
-      leads: leads.map((cell, index) => ({
-        id: cell.id,
-        cell_id: cell.cellId,
-        ...leadNames[index],
-      })),
-    };
+    return asked.map((personId) => {
+      const { membership, leads } = cellsOf.get(personId) ?? { membership: null, leads: [] };
+      const leaderId = membership?.leaderId ?? null;
+      const leader = leaderId === null ? undefined : names.get(leaderId);
+
+      return {
+        person_id: personId,
+        membership:
+          membership === null
+            ? null
+            : {
+                id: membership.id,
+                cell_id: membership.cellId,
+                ...named(membership.id),
+                leader:
+                  leaderId === null
+                    ? null
+                    : {
+                        person_id: leaderId,
+                        member_id: leader?.memberId ?? '',
+                        full_name: leader?.fullName ?? '',
+                      },
+              },
+        leads: leads.map((cell) => ({ id: cell.id, cell_id: cell.cellId, ...named(cell.id) })),
+      };
+    });
   }
 
   /**

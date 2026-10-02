@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { type CellScopePort } from '../auth/authorization/cell-scope.port';
+import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-relationships.port';
 
@@ -471,15 +472,50 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     leaderPersonId: string | null;
     memberCount: number;
   }> {
+    const heading = (await this.cellHeadingsWithin(executor, [cellId])).get(cellId);
+
+    return {
+      category: heading?.category ?? null,
+      dayOfWeek: heading?.dayOfWeek ?? null,
+      scheduledTime: heading?.scheduledTime ?? null,
+      leaderPersonId: await this.leaderForScopeWithin(executor, cellId),
+      memberCount: heading?.memberCount ?? 0,
+    };
+  }
+
+  /**
+   * {@link cellHeadingWithin} for many Cells in the one statement, without the leader,
+   * keyed by the identifiers given. Every identifier has an entry.
+   */
+  async cellHeadingsWithin(
+    executor: Db | Transaction<Database>,
+    cellIds: readonly string[],
+  ): Promise<
+    Map<
+      string,
+      {
+        category: string | null;
+        dayOfWeek: number | null;
+        scheduledTime: string | null;
+        memberCount: number;
+      }
+    >
+  > {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
     const result = await sql<{
+      cell_id: string;
       category: string | null;
       day_of_week: number | null;
       scheduled_time: string | null;
       member_count: number;
     }>`
-      SELECT (SELECT category.category::text
+      SELECT asked.cell_id::text AS cell_id,
+             (SELECT category.category::text
                 FROM cell_categories AS category
-               WHERE category.cell_id = ${cellId}
+               WHERE category.cell_id = asked.cell_id
                  AND category.ended_at IS DISTINCT FROM category.started_at
                  AND category.started_at <= now()
                ORDER BY category.started_at DESC, category.ended_at DESC NULLS FIRST
@@ -488,14 +524,14 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
              schedule.scheduled_time,
              (SELECT count(*)::int
                 FROM cell_memberships AS membership
-               WHERE membership.cell_id = ${cellId}
+               WHERE membership.cell_id = asked.cell_id
                  AND membership.ended_at IS NULL) AS member_count
-        FROM (SELECT 1) AS one
+        FROM unnest(${[...cellIds]}::uuid[]) AS asked(cell_id)
         LEFT JOIN LATERAL (
           SELECT governing.day_of_week,
                  to_char(governing.time_of_day, 'HH24:MI') AS scheduled_time
             FROM cell_schedules AS governing
-           WHERE governing.cell_id = ${cellId}
+           WHERE governing.cell_id = asked.cell_id
              AND governing.ended_at IS DISTINCT FROM governing.started_at
              AND governing.started_at <= now()
            ORDER BY governing.started_at DESC,
@@ -504,15 +540,24 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            LIMIT 1
         ) AS schedule ON true
     `.execute(executor);
-    const row = result.rows[0];
 
-    return {
-      category: row?.category ?? null,
-      dayOfWeek: row?.day_of_week === null || row === undefined ? null : Number(row.day_of_week),
-      scheduledTime: row?.scheduled_time ?? null,
-      leaderPersonId: await this.leaderForScopeWithin(executor, cellId),
-      memberCount: Number(row?.member_count ?? 0),
-    };
+    const byCanonical = new Map(result.rows.map((row) => [canonicalId(row.cell_id), row]));
+
+    return new Map(
+      cellIds.map((cellId) => {
+        const row = byCanonical.get(canonicalId(cellId));
+        return [
+          cellId,
+          {
+            category: row?.category ?? null,
+            dayOfWeek:
+              row?.day_of_week === null || row === undefined ? null : Number(row.day_of_week),
+            scheduledTime: row?.scheduled_time ?? null,
+            memberCount: Number(row?.member_count ?? 0),
+          },
+        ];
+      }),
+    );
   }
 
   async leaderForScopeWithin(
@@ -936,38 +981,62 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    *
    * The leader is a left join, so a membership is still reported where no open leadership is
    * found rather than disappearing from the answer.
+   *
+   * For many people at once, keyed by the identifiers given (checklist row
+   * perf-people-list-cells). Every identifier has an entry.
    */
-  async currentCellsOf(personId: string): Promise<PersonCells> {
+  async currentCellsOfMany(personIds: readonly string[]): Promise<Map<string, PersonCells>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
     const result = await sql<{
+      person_id: string;
       membership: { id: string; cell_id: string; leader_id: string | null } | null;
       leads: { id: string; cell_id: string }[];
     }>`
       SELECT
+        asked.person_id::text AS person_id,
         (SELECT json_build_object('id', c.id, 'cell_id', c.cell_id, 'leader_id', cl.person_id)
            FROM cell_memberships cm
            JOIN cells c ON c.id = cm.cell_id
            LEFT JOIN cell_leaderships cl ON cl.cell_id = cm.cell_id AND cl.ended_at IS NULL
-          WHERE cm.person_id = ${personId}
+          WHERE cm.person_id = asked.person_id
             AND cm.ended_at IS NULL) AS membership,
         coalesce(
           (SELECT json_agg(json_build_object('id', c.id, 'cell_id', c.cell_id) ORDER BY c.cell_id)
              FROM cell_leaderships cl
              JOIN cells c ON c.id = cl.cell_id
-            WHERE cl.person_id = ${personId}
+            WHERE cl.person_id = asked.person_id
               AND cl.ended_at IS NULL),
           '[]'::json
         ) AS leads
+      FROM unnest(${[...personIds]}::uuid[]) AS asked(person_id)
     `.execute(this.db);
 
-    const { membership, leads } = result.rows[0];
+    const byCanonical = new Map(
+      result.rows.map((row) => [
+        canonicalId(row.person_id),
+        {
+          membership:
+            row.membership === null
+              ? null
+              : {
+                  id: row.membership.id,
+                  cellId: row.membership.cell_id,
+                  leaderId: row.membership.leader_id,
+                },
+          leads: row.leads.map((cell) => ({ id: cell.id, cellId: cell.cell_id })),
+        },
+      ]),
+    );
 
-    return {
-      membership:
-        membership === null
-          ? null
-          : { id: membership.id, cellId: membership.cell_id, leaderId: membership.leader_id },
-      leads: leads.map((cell) => ({ id: cell.id, cellId: cell.cell_id })),
-    };
+    return new Map(
+      personIds.map((personId) => [
+        personId,
+        byCanonical.get(canonicalId(personId)) ?? { membership: null, leads: [] },
+      ]),
+    );
   }
 
   /**
