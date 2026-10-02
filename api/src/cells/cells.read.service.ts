@@ -1659,11 +1659,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * quarter or a year (decision 0293). One derivation serves both, so a month asked for as
    * a range and as a month cannot disagree.
    *
-   * **With leaders, only the meetings one of them led on the date**, for the Network
+   * **With `leaders`, only the meetings one of them led on the date**, for the Network
    * screen's branch (checklist row perf-network-cell-figures): the same rows, less every
    * pair whose leader is someone else or nobody. The Cells are narrowed first to those
    * one of them led at some point in the range, which is every Cell such a pair can come
-   * from, so the series is generated for the branch's Cells rather than the church's.
+   * from.
    */
   async scheduledMeetingsWithLeaderBetween(
     executor: Db | Transaction<Database>,

@@ -32,7 +32,9 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
   let db: Kysely<Database>;
 
   let raymond: TestPerson;
+  let rico: TestPerson;
   let juan: TestPerson;
+  let today: string;
   let raymondAccount: TestAccount;
   let weekday: number;
   let created: Date;
@@ -48,7 +50,7 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
     const oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
-    const rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+    rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
     juan = await createPerson(db, { firstName: 'Juan', network: 'MENS' });
     await assignTo(db, oriel.id, null);
     await assignTo(db, raymond.id, oriel.id);
@@ -58,7 +60,7 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
     raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
 
     // Meeting on today's weekday, so today's meeting has begun and counts as behind.
-    const today = (
+    today = (
       await sql<{ today: string }>`
         SELECT to_char((now() AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD') AS today
       `.execute(db)
@@ -103,8 +105,27 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
   it('reads no more rows, and answers the same, when twenty Cells are added outside the branch', async () => {
     const small = await fetched();
 
+    // Each with its own leader and a meeting recorded today, so the scheduled meetings, the
+    // recorded meetings and the current Cell Leaders would each grow without the narrowing.
+    const [y, m, d] = today.split('-').map(Number);
+    const monday = new Date(Date.UTC(y, m - 1, d - (weekday - 1))).toISOString().slice(0, 10);
     for (let i = 0; i < 20; i += 1) {
-      await createCell(db, { leader: juan, dayOfWeek: weekday, createdAt: created });
+      const leader = await createPerson(db, { firstName: `Outside${i}`, network: 'MENS' });
+      await assignTo(db, leader.id, rico.id);
+      const cell = await createCell(db, { leader, dayOfWeek: weekday, createdAt: created });
+      await db
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: cell.id,
+          scheduled_date: today,
+          scheduled_time: cell.timeOfDay,
+          week_starting: monday,
+          reporting_month: `${today.slice(0, 7)}-01`,
+          status: 'NOT_HELD',
+          not_held_reason: 'LEADER_UNAVAILABLE',
+          responsible_leader_id: cell.leaderId,
+        })
+        .execute();
     }
     const large = await fetched();
 
