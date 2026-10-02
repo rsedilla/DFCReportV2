@@ -176,6 +176,15 @@ export class PeopleController {
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
     const limit = query.limit ?? 50;
 
+    // The scope is read once rather than per candidate (checklist row
+    // perf-duplicate-check): the enumeration of the rule `covers` tests per target
+    // (section 7). It differs only on a cycle: it refuses whenever the actor's own
+    // subtree holds one, where `covers` refused only a candidate whose upline met it.
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.PeopleViewSubtree,
+    );
+
     // Membership and fields are both redacted inside the service, in one place
     // shared with the creation refusal so the two surfaces cannot answer
     // differently.
@@ -187,7 +196,10 @@ export class PeopleController {
         sex: query.sex,
         mobileNumberNormalized: normalizeMobile(query.mobile_number),
       },
-      (personId) => this.read.isWithinViewScope(actor, personId),
+      (personId) =>
+        Promise.resolve(
+          membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId)),
+        ),
     );
 
     const data = visible.slice(0, limit);
