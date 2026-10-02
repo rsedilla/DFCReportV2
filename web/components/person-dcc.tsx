@@ -52,13 +52,15 @@ export function PersonDcc({ personId }: { personId: string }) {
 
   const thisMonth = reportingMonthOf();
   const lastMonth = shiftMonth(thisMonth, -1);
+  // The Sundays only: the page shows no coverage, and working it out reads the reader's
+  // whole branch (checklist row perf-person-page).
   const current = useQuery({
-    queryKey: ['dcc-events', thisMonth],
-    queryFn: ({ signal }) => listDccEvents(thisMonth, signal),
+    queryKey: ['dcc-events', thisMonth, 'sundays-only'],
+    queryFn: ({ signal }) => listDccEvents(thisMonth, signal, { coverage: false }),
   });
   const previous = useQuery({
-    queryKey: ['dcc-events', lastMonth],
-    queryFn: ({ signal }) => listDccEvents(lastMonth, signal),
+    queryKey: ['dcc-events', lastMonth, 'sundays-only'],
+    queryFn: ({ signal }) => listDccEvents(lastMonth, signal, { coverage: false }),
   });
 
   return (

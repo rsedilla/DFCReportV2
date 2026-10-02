@@ -121,7 +121,12 @@ export class TrainingService {
   async list(actor: Actor, query: TrainingListDto): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.TrainingViewSubtree);
-    const held = await this.currentPrograms(population);
+    // Only a step filter reads the scope's graduations, so a list asked for no step, as a
+    // person's page asks, skips it (checklist row perf-person-page).
+    const held =
+      query.step === undefined
+        ? new Map<string, Set<TrainingProgram>>()
+        : await this.currentPrograms(population);
 
     const { rows, nextCursor } = await growthPage(
       this.deps,

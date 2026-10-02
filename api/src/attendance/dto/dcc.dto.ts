@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -203,6 +203,17 @@ export class DccEventsQueryDto {
     message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',
   })
   month!: string;
+
+  /**
+   * `false` leaves out each Sunday's coverage line, answering it `null`, for a screen that
+   * needs only the Sundays (checklist row perf-person-page). Coverage is worked out across
+   * the reader's branch, which a person's page never shows.
+   */
+  @IsOptional()
+  // Anything but `true` or `false` is left for `@IsBoolean()` to refuse, as `church_wide` is.
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  coverage?: boolean;
 }
 
 /**

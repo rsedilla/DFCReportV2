@@ -93,7 +93,7 @@ export class DccController {
     @Query() query: DccEventsQueryDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.coverage.eventsIn(actor, query.month);
+    return this.coverage.eventsIn(actor, query.month, query.coverage !== false);
   }
 
   /**

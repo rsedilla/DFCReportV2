@@ -103,8 +103,10 @@ test.describe('a person’s DCC stage', () => {
     // Saturday 19 September in Manila, so the 20th has not begun.
     await page.clock.setFixedTime(new Date('2026-09-19T02:00:00Z'));
     await signedInWithPeople(page);
+    const asked: (string | null)[] = [];
     await page.route('**/api/v1/dcc/events?*', (route) => {
       const month = new URL(route.request().url()).searchParams.get('month') ?? '';
+      asked.push(new URL(route.request().url()).searchParams.get('coverage'));
       const event = (date: string, reason: string | null) => ({
         id: `6b000000-0000-4000-8000-0000000${date.replaceAll('-', '').slice(3)}`,
         event_date: date,
@@ -139,6 +141,10 @@ test.describe('a person’s DCC stage', () => {
     await expect(page.getByText('Open until 7 October')).toBeVisible();
     await expect(page.getByText('August: 1 of 4', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Recent Sundays' })).toBeVisible();
+    // The Sundays only, without the branch's coverage the page never shows
+    // (checklist row perf-person-page).
+    expect(asked.length).toBeGreaterThan(0);
+    expect(new Set(asked)).toEqual(new Set(['false']));
   });
 
   test('on a phone, keeps Open Sunday level with the date of a removed Sunday', async ({ page }) => {
