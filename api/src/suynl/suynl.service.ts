@@ -113,7 +113,12 @@ export class SuynlService {
   async list(actor: Actor, query: SuynlListDto): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
-    const progress = await this.currentProgress(population);
+    // Only a step filter reads the scope's progress, so a list asked for no step, as a
+    // person's page asks, skips it (checklist row perf-person-page).
+    const progress =
+      query.step === undefined
+        ? new Map<string, { count: number }>()
+        : await this.currentProgress(population);
 
     const { rows, nextCursor } = await growthPage(
       this.deps,

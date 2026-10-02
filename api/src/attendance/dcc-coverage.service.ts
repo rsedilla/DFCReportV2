@@ -125,7 +125,11 @@ export class DccCoverageService {
    * size is a function of the data; this one's size is arithmetic, exactly as
    * `GET /api/v1/cells/{id}/meetings` argues for the same shape one domain over.
    */
-  async eventsIn(actor: Actor, month: string): Promise<Record<string, unknown>> {
+  async eventsIn(
+    actor: Actor,
+    month: string,
+    withCoverage = true,
+  ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(month);
     assertReportingMonth(reportingMonth);
 
@@ -139,7 +143,10 @@ export class DccCoverageService {
       .execute();
 
     const events = rows.map((row) => this.describe(String(row.event_date), row, now));
-    const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    // Asked for no coverage, nothing reads the reader's branch: each line answers `null`.
+    const membership = withCoverage
+      ? await this.authorization.scopeMembership(actor, Capability.DccViewSubtree)
+      : null;
 
     const rendered = await Promise.all(
       events.map(async (event) => ({
@@ -156,9 +163,10 @@ export class DccCoverageService {
         // **A closed month is not in this branch and must not be.** Its coverage is the
         // frozen historical figure sections 13 and 20 require a report to keep showing;
         // withholding it would hide the month the window closed on.
-        coverage: coverable(event)
-          ? await this.coverageOf(this.db, event, leadersOf(membership))
-          : null,
+        coverage:
+          membership !== null && coverable(event)
+            ? await this.coverageOf(this.db, event, leadersOf(membership))
+            : null,
       })),
     );
 

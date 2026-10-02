@@ -67,9 +67,19 @@ export function notRecordableLabel(reason: NotRecordableReason): string {
   }
 }
 
-/** The month's Sundays, each with the coverage over the actor's scope. */
-export async function listDccEvents(month: string, signal?: AbortSignal): Promise<DccEventsMonth> {
+/**
+ * The month's Sundays, each with the coverage over the actor's scope, or with `coverage`
+ * false, without it: each line's coverage is then `null` (checklist row perf-person-page).
+ */
+export async function listDccEvents(
+  month: string,
+  signal?: AbortSignal,
+  options: { coverage?: boolean } = {},
+): Promise<DccEventsMonth> {
   const query = new URLSearchParams({ month });
+  if (options.coverage === false) {
+    query.set('coverage', 'false');
+  }
 
   return authenticatedRequest<DccEventsMonth>(`/api/v1/dcc/events?${query.toString()}`, {
     signal,

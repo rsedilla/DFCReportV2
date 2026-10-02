@@ -4594,7 +4594,7 @@ GET  /api/v1/leaders/{id}/descendants
 GET  /api/v1/leaders/{id}/dcc-behind       the Network screen's DCC figure, decision 0252
 GET  /api/v1/leaders/{id}/cell-figures     the Network screen's Cell figures, decision 0252
 
-GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per event
+GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per event; `coverage=false` answers each line's coverage `null`
 GET  /api/v1/dcc/events/{id}/roster
 GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor's scope
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
