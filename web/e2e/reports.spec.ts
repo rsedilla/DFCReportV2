@@ -724,6 +724,64 @@ test.describe('Filed reports (decision 0292)', () => {
     expect(asked.map((url) => url.searchParams.get('cursor'))).toEqual([null, '200']);
   });
 
+  test('By leader keeps the last ten on screen when the next 200 cannot be read', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellReport(page);
+    await mockDccEvents(page);
+    await mockDccReport(page);
+
+    const leaders = Array.from({ length: 205 }, (_, index) => ({
+      leader: {
+        id: `3f1b7c6e-0000-4000-8000-000000009${String(index).padStart(3, '0')}`,
+        member_id: `M-09${String(index).padStart(4, '0')}`,
+        full_name: `Leader ${String(index + 1).padStart(3, '0')}`,
+      },
+      filed: 1,
+      owed: 2,
+    }));
+    await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('cursor') !== null) {
+        return route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
+          }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          period: '2026-06-01',
+          open: true,
+          data: leaders.slice(0, 200),
+          others: null,
+          total: { filed: 205, owed: 410 },
+          next_cursor: '200',
+        }),
+      });
+    });
+
+    await page.goto('/reports/filed?month=2026-06-01&by=leader');
+    const next = page.getByRole('button', { name: 'Next' });
+    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
+    for (let shown = 2; shown <= 21; shown += 1) {
+      await next.click();
+    }
+
+    // Not "Loading…" beside the failure: the ten before it, and a way back.
+    await expect(page.getByText('Outside your scope.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Leader 200' })).toBeVisible();
+    await expect(page.getByText('Loading…')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Previous' })).toBeEnabled();
+  });
+
   test('one leader opened from By leader offers no By Cell or By Sunday, and returns to your report', async ({
     page,
   }) => {

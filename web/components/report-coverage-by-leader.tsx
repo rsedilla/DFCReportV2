@@ -63,6 +63,16 @@ export function CoverageByLeader({
 
   const first = read.data?.pages[0];
   const rows = read.data?.pages.flatMap((loaded) => loaded.data) ?? [];
+  // A later read that failed leaves the ten before it on screen, under the failure, and Next
+  // asks again.
+  if (
+    read.isFetchNextPageError &&
+    !read.isFetchingNextPage &&
+    shownPage > 0 &&
+    shownPage * SHOWN >= rows.length
+  ) {
+    setShownPage(shownPage - 1);
+  }
   const start = shownPage * SHOWN;
   const hasNext = start + SHOWN < rows.length || read.hasNextPage;
   // The rows of a later read have not arrived yet.
