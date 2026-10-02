@@ -41,6 +41,16 @@ const LINK =
 /** How many search results show before "Show 10 more" (decision 0252). */
 const SEARCH_STEP = 10;
 
+/** How many direct disciples show before "Show 20 more" (decision 0252). */
+const STEP = 20;
+
+/**
+ * How many are read at once: the API's most. Every page walks the whole branch to count
+ * what is beneath each row, so Show more reads from these rather than walking it again
+ * (checklist row perf-network-rewalk).
+ */
+const FETCH = '200';
+
 /**
  * The Network screen: one person's branch of the pastoral tree as it stands now
  * (SKILL.md section 17, decision 0252; the owner's Claude Design, adjusted to the rules).
@@ -94,8 +104,8 @@ function NetworkScreen() {
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       focusParam === null
-        ? getMyBranch(pageParam as string | undefined, signal)
-        : getBranch(focusParam, pageParam as string | undefined, signal),
+        ? getMyBranch(pageParam as string | undefined, signal, FETCH)
+        : getBranch(focusParam, pageParam as string | undefined, signal, FETCH),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 
@@ -162,9 +172,24 @@ function NetworkScreen() {
   const filterReady =
     covered.length > 0 && !(readsDcc && dcc.isPending) && !(readsCells && cells.isPending);
   const filtering = owesOnly && filterReady;
+  // Twenty on screen at a time, from rows already read (checklist row perf-network-rewalk).
+  // A new focus starts again at twenty.
+  const [visible, setVisible] = useState(STEP);
+  const [visibleFor, setVisibleFor] = useState(focusParam);
+  if (visibleFor !== focusParam) {
+    setVisibleFor(focusParam);
+    setVisible(STEP);
+  }
   const shown = filtering
     ? rows.filter((row) => (dccOf(row.id) ?? 0) > 0 || (cellOf(row.id) ?? 0) > 0)
-    : rows;
+    : rows.slice(0, visible);
+  const waitingForRows = visible >= rows.length && branch.isFetchingNextPage;
+  const showMore = () => {
+    setVisible(visible + STEP);
+    if (visible + STEP > rows.length && branch.hasNextPage && !branch.isFetchingNextPage) {
+      void branch.fetchNextPage();
+    }
+  };
 
   // The filter reaches the whole generation rather than the page on screen, so it loads
   // the remaining pages first. The figures already cover every direct disciple.
@@ -414,16 +439,12 @@ function NetworkScreen() {
           <p className="text-muted mt-4 text-sm">
             {filtering
               ? `${shown.length} of ${rows.length} behind on ${covered.join(' or ')} · by name`
-              : `Showing ${rows.length} of ${person.direct_reports} · by name`}
+              : `Showing ${shown.length} of ${person.direct_reports} · by name`}
           </p>
-          {!filtering && branch.hasNextPage ? (
+          {!filtering && (visible < rows.length || branch.hasNextPage) ? (
             <p className="mt-3">
-              <Button
-                variant="secondary"
-                onClick={() => void branch.fetchNextPage()}
-                disabled={branch.isFetchingNextPage}
-              >
-                {branch.isFetchingNextPage ? 'Loading…' : 'Show 20 more'}
+              <Button variant="secondary" onClick={showMore} disabled={waitingForRows}>
+                {waitingForRows ? 'Loading…' : 'Show 20 more'}
               </Button>
             </p>
           ) : null}
