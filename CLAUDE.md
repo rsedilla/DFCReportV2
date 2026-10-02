@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-01, the trigger being decision 0307: of 306 files, 305 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0307 each moved the first two and
+2026-10-02, the trigger being decision 0308: of 307 files, 306 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0308 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-01 and triggered by 0307, and was left stale by 0308 the next day. The one before that was dated
 2026-10-01 and triggered by 0306, and was left stale by 0307 the same day. The one before that was dated
 2026-09-29 and triggered by 0305, and was left stale by 0306 two days later. The one before that was dated
 2026-09-29 and triggered by 0304, and was left stale by 0305 the same day. The one before that was dated
@@ -655,6 +656,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-29 — [Add a Person pre-selects the adder's sex](docs/decisions/0305-add-a-person-pre-selects-the-adders-sex.md)
 - 2026-10-01 — [A Member ID or Cell ID is shown on its own page and where one is chosen](docs/decisions/0306-an-id-is-shown-on-its-own-page-and-where-one-is-chosen.md)
 - 2026-10-01 — [An administrator disables and re-enables an account from the person page](docs/decisions/0307-an-administrator-disables-and-re-enables-an-account.md)
+- 2026-10-02 — [A read of up to 50 named people needs no cursor, and leaves out who the reader may not see](docs/decisions/0308-a-read-of-named-people-needs-no-cursor.md)
 
 ### Open — awaiting a ruling
 

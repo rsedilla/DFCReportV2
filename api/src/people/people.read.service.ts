@@ -270,6 +270,25 @@ export class PeopleReadService {
   }
 
   /**
+   * Which of these identifiers name a Person {@link findById} would find: existing and not
+   * absorbed by a merge. For a caller answering many people at once.
+   */
+  async existingOf(personIds: readonly string[]): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.db
+      .selectFrom('persons')
+      .select('id')
+      .where('id', 'in', [...personIds])
+      .where('merged_into_id', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /**
    * A Person by id, or null.
    *
    * Field-level redaction is the caller's job, not this one: section 8 decides

@@ -327,6 +327,13 @@ export async function mockPersonCells(
   await page.route('**/api/v1/cells/people/*/membership', (route) =>
     route.fulfill(json({ person_id: PERSON_IN_SCOPE.id, ...answer })),
   );
+  // The People list asks for its whole page at once, and gets the same answer per person.
+  await page.route('**/api/v1/cells/people/membership?*', (route) => {
+    const asked = new URL(route.request().url()).searchParams.getAll('person_id');
+    return route.fulfill(
+      json({ data: asked.map((personId) => ({ person_id: personId, ...answer })) }),
+    );
+  });
 }
 
 /** The DCC section refused to this account, with API wording no screen should show. */
