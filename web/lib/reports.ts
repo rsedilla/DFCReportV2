@@ -176,9 +176,10 @@ export async function getCoverageByLeader(
   scope: ReportScope,
   cursor: string | null,
   signal?: AbortSignal,
+  limit: string = BY_LEADER_PAGE,
 ): Promise<ByLeaderPage> {
   const params = new URLSearchParams(query(period, scope));
-  params.set('limit', BY_LEADER_PAGE);
+  params.set('limit', limit);
   if (cursor) {
     params.set('cursor', cursor);
   }
