@@ -33,6 +33,7 @@ describe('a Growth list page (perf-growth-lists)', () => {
   let raymondAccount: TestAccount;
   let adminAccount: TestAccount;
   let admin: TestPerson;
+  let outsiders: TestPerson[];
 
   const tabs = [
     {
@@ -73,6 +74,31 @@ describe('a Growth list page (perf-growth-lists)', () => {
         const below = await createPerson(db, { firstName: `Below${i}`, network: 'MENS' });
         await assignTo(db, below.id, person.id);
       }
+    }
+
+    // Raymond may view the whole Men's Network on both tabs but file only in his own
+    // subtree, so Rico's disciples are listed to him and his scope alone decides their flag.
+    const rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+    await assignTo(db, rico.id, oriel.id);
+    outsiders = [];
+    for (let i = 0; i < 3; i += 1) {
+      const person = await createPerson(db, { firstName: `Outsider${i}`, network: 'MENS' });
+      await assignTo(db, person.id, rico.id);
+      outsiders.push(person);
+    }
+    for (const capability of ['suynl.view_subtree', 'training.view_subtree']) {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: raymondAccount.id,
+          capability,
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'Viewing wider than filing, so the filing scope decides a flag.',
+          granted_by: adminAccount.id,
+        })
+        .execute();
     }
   });
 
@@ -131,6 +157,11 @@ describe('a Growth list page (perf-growth-lists)', () => {
         const assignments = await hierarchy.assignmentsAsOf(db, ids, new Date());
 
         expect(ids.length).toBeGreaterThan(0);
+        if (account === raymondAccount) {
+          // Listed by the wider viewing grant, and outside the filing scope.
+          const flags = new Map(page.body.data.map((row) => [row.person_id, row.may_file]));
+          expect(outsiders.map((person) => flags.get(person.id))).toEqual([false, false, false]);
+        }
         for (const row of page.body.data) {
           const filing = await filingFor(
             { authorization },
