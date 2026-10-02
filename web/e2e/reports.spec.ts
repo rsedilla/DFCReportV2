@@ -660,6 +660,70 @@ test.describe('Filed reports (decision 0292)', () => {
     await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
   });
 
+  // Checklist row perf-filed-by-leader: every request works out the whole month and checks
+  // every leader, so the table reads 200 at a time and pages ten from what it read.
+  test('By leader reads 200 leaders at once and pages ten at a time without asking again', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellReport(page);
+    await mockDccEvents(page);
+    await mockDccReport(page);
+
+    const leaders = Array.from({ length: 205 }, (_, index) => ({
+      leader: {
+        id: `3f1b7c6e-0000-4000-8000-000000008${String(index).padStart(3, '0')}`,
+        member_id: `M-08${String(index).padStart(4, '0')}`,
+        full_name: `Leader ${String(index + 1).padStart(3, '0')}`,
+      },
+      filed: 1,
+      owed: 2,
+    }));
+    const asked: URL[] = [];
+    await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url);
+      const start = Number(url.searchParams.get('cursor') ?? '0');
+      const end = start + Number(url.searchParams.get('limit'));
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          period: '2026-06-01',
+          open: true,
+          data: leaders.slice(start, end),
+          others: null,
+          total: { filed: 205, owed: 410 },
+          next_cursor: end < leaders.length ? String(end) : null,
+        }),
+      });
+    });
+
+    await page.goto('/reports/filed?month=2026-06-01&by=leader');
+    const next = page.getByRole('button', { name: 'Next' });
+    const previous = page.getByRole('button', { name: 'Previous' });
+
+    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Leader \d+$/ })).toHaveCount(10);
+    await next.click();
+    await expect(page.getByRole('link', { name: 'Leader 011' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Leader 001' })).toHaveCount(0);
+    await previous.click();
+    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
+    expect(asked).toHaveLength(1);
+    expect(asked[0].searchParams.get('limit')).toBe('200');
+
+    // Through to the 200th, then the 201st asks for the rest, once.
+    for (let shown = 2; shown <= 21; shown += 1) {
+      await next.click();
+    }
+    await expect(page.getByRole('link', { name: 'Leader 205' })).toBeVisible();
+    await expect(next).toBeDisabled();
+    expect(asked.map((url) => url.searchParams.get('cursor'))).toEqual([null, '200']);
+  });
+
   test('one leader opened from By leader offers no By Cell or By Sunday, and returns to your report', async ({
     page,
   }) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -12,6 +12,9 @@ import { getCoverageByLeader, type ByLeaderRow, type ReportScope } from '@/lib/r
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+
+const SHOWN = 10;
+const READ = '200';
 
 /**
  * A report's coverage, one row per leader who owns an obligation in it (SKILL.md section 17,
@@ -25,7 +28,10 @@ const LINK =
  * **The report it opens counts the leader's whole branch**, so its figures can be larger than
  * the row — which the table says, rather than letting a reader find it.
  *
- * Ten rows a page, with Previous and Next, as the design pages it.
+ * Ten rows a page, with Previous and Next, as the design pages it. **Read 200 at a time**:
+ * every request works out the whole month and checks every leader, so Previous and Next page
+ * through rows already read rather than doing that again for each ten (checklist row
+ * perf-filed-by-leader).
  */
 export function CoverageByLeader({
   report,
@@ -38,14 +44,45 @@ export function CoverageByLeader({
   scope: ReportScope;
   unit: string;
 }) {
-  // A stack of the cursors that opened each page, so Previous returns to the one before.
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const cursor = cursors[cursors.length - 1];
-
-  const page = useQuery({
-    queryKey: ['coverage-by-leader', report, month, scope, cursor],
-    queryFn: ({ signal }) => getCoverageByLeader(report, month, scope, cursor, signal),
+  const read = useInfiniteQuery({
+    queryKey: ['coverage-by-leader', report, month, scope],
+    initialPageParam: null as string | null,
+    queryFn: ({ signal, pageParam }) =>
+      getCoverageByLeader(report, month, scope, pageParam, signal, READ),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
+
+  // The page on screen, from the first. A new report, month or scope starts again at the first.
+  const asked = JSON.stringify([report, month, scope]);
+  const [shownPage, setShownPage] = useState(0);
+  const [shownFor, setShownFor] = useState(asked);
+  if (shownFor !== asked) {
+    setShownFor(asked);
+    setShownPage(0);
+  }
+
+  const first = read.data?.pages[0];
+  const rows = read.data?.pages.flatMap((loaded) => loaded.data) ?? [];
+  const start = shownPage * SHOWN;
+  const hasNext = start + SHOWN < rows.length || read.hasNextPage;
+  // The rows of a later read have not arrived yet.
+  const waiting = start >= rows.length && read.hasNextPage;
+  const page = {
+    isPending: read.isPending || waiting,
+    isError: read.isError,
+    error: read.error,
+    data:
+      first === undefined || waiting
+        ? undefined
+        : { ...first, data: rows.slice(start, start + SHOWN) },
+  };
+
+  const next = () => {
+    if (start + 2 * SHOWN > rows.length && read.hasNextPage && !read.isFetchingNextPage) {
+      void read.fetchNextPage();
+    }
+    setShownPage(shownPage + 1);
+  };
 
   const openHref = (row: ByLeaderRow) =>
     `/reports/${report}?${new URLSearchParams({ month, leader: row.leader.id }).toString()}`;
@@ -104,25 +141,16 @@ export function CoverageByLeader({
               its figures can be larger than their row.
             </p>
 
-            {cursors.length > 1 || page.data.next_cursor !== null ? (
+            {shownPage > 0 || hasNext ? (
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="secondary"
-                  disabled={cursors.length === 1}
-                  onClick={() => setCursors((stack) => stack.slice(0, -1))}
+                  disabled={shownPage === 0}
+                  onClick={() => setShownPage(shownPage - 1)}
                 >
                   Previous
                 </Button>
-                <Button
-                  variant="secondary"
-                  disabled={page.data.next_cursor === null}
-                  onClick={() => {
-                    const next = page.data?.next_cursor;
-                    if (next) {
-                      setCursors((stack) => [...stack, next]);
-                    }
-                  }}
-                >
+                <Button variant="secondary" disabled={!hasNext} onClick={next}>
                   Next
                 </Button>
               </div>
