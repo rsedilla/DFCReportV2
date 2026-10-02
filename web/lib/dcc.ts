@@ -125,7 +125,12 @@ export async function getDccRoster(
   return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster`, { signal });
 }
 
-/** Every line of a leader's checklist, following `next_cursor` to the end (section 9: unbounded). */
+/**
+ * Every line of a leader's checklist, following `next_cursor` to the end (section 9: unbounded).
+ *
+ * 200 at a time, the API's most: every page builds the whole checklist on the server, so a
+ * page of 200 costs what a page of 50 does (checklist row perf-dcc-checklist).
+ */
 export async function getWholeDccRoster(
   eventId: string,
   signal?: AbortSignal,
@@ -134,7 +139,11 @@ export async function getWholeDccRoster(
   let cursor: string | null = null;
 
   do {
-    const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const params = new URLSearchParams({ limit: '200' });
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    const query = `?${params.toString()}`;
     const page: DccRoster = await authenticatedRequest<DccRoster>(
       `/api/v1/dcc/events/${eventId}/roster${query}`,
       { signal },
