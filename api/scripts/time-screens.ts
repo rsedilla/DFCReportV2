@@ -53,13 +53,19 @@ interface Screen {
   stages: Stage[];
 }
 
-const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+// `PERF_TODAY` times the screens as they would open on another day, so a month with its
+// Sundays held can be measured when the real month has barely begun.
+const today =
+  process.env.PERF_TODAY ?? new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 const M = `${today.slice(0, 7)}-01`;
 const PREVIOUS = (() => {
   const d = new Date(`${M}T00:00:00Z`);
   d.setUTCMonth(d.getUTCMonth() - 1);
   return d.toISOString().slice(0, 10);
 })();
+const QUARTER_START = `${today.slice(0, 4)}-${String(
+  Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1,
+).padStart(2, '0')}-01`;
 const YEAR_MONTHS = Array.from(
   { length: Number(today.slice(5, 7)) },
   (_, i) => `${today.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-01`,
@@ -155,6 +161,19 @@ const SCREENS: Screen[] = [
       () => ['/api/v1/auth/me'],
       (p) => [`/api/v1/reports/dcc/twelve?kind=MONTH&start=${M}&period=${M}&${scope(p)}`],
     ],
+  },
+  {
+    name: 'Reports › DCC, quarter',
+    stages: [
+      () => ['/api/v1/auth/me'],
+      (p) => [
+        `/api/v1/reports/dcc/twelve?kind=QUARTER&start=${QUARTER_START}&period=${M}&${scope(p)}`,
+      ],
+    ],
+  },
+  {
+    name: 'Record › People I oversee, DCC',
+    stages: [() => [`/api/v1/dcc/owed?month=${M}`]],
   },
   {
     name: 'Reports › DCC, year',
