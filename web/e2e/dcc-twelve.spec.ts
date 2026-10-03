@@ -216,12 +216,12 @@ test.describe('My 12 on DCC', () => {
       page.getByText('Who came to DCC, and where they are in their journey.'),
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'My 12 · where people are in their journey' }),
+      page.getByRole('heading', { name: 'My 12 · their journey' }),
     ).toBeVisible();
     await expect(
-      page.locator('main p').filter({ hasText: /^Different people who came/ }),
+      page.locator('main p').filter({ hasText: /^Everyone who came/ }),
     ).toHaveText(
-      'Different people who came to DCC in the month, once each, at the stage they had reached by its last day, or so far while it is open. Open a name to see their 12.',
+      'Everyone who came to DCC in the month, counted once, at their stage so far. Open a name to see their 12.',
     );
 
     const table = twelveTable(page);
@@ -272,7 +272,7 @@ test.describe('My 12 on DCC', () => {
 
     await expect(
       page.getByRole('heading', {
-        name: 'Consuelo Bautista’s 12 · where people are in their journey',
+        name: 'Consuelo Bautista’s 12 · their journey',
       }),
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
@@ -357,7 +357,7 @@ test.describe('My 12 on DCC', () => {
     await expectAsked(asked, { scope: 'NETWORK', network: 'MENS', leader_id: null });
 
     await expect(
-      page.getByRole('heading', { name: "Men's Network · where people are in their journey" }),
+      page.getByRole('heading', { name: "Men's Network · their journey" }),
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
     // The Network's membership (10), not its pastor's row (9): the Total row alone.
@@ -365,9 +365,9 @@ test.describe('My 12 on DCC', () => {
     expect(await cellsOf(rows.nth(0))).toEqual(['Total', '2', '2', '1', '1', '4', '10']);
     await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
     await expect(
-      page.locator('main p').filter({ hasText: /^Different people who came/ }),
+      page.locator('main p').filter({ hasText: /^Everyone who came/ }),
     ).toHaveText(
-      'Different people who came to DCC in the month, once each, at the stage they had reached by its last day, or so far while it is open.',
+      'Everyone who came to DCC in the month, counted once, at their stage so far.',
     );
 
     await expect(coverageLine(page)).toHaveText(

@@ -120,8 +120,8 @@ function ConquestTab() {
       />
 
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        Worked out from SUYNL lessons, Cells and the pastoral tree. If a goal looks wrong, correct
-        the record it comes from.
+        Goals fill in by themselves from lessons, Cells and leaders. If one looks wrong, fix the
+        record behind it.
       </p>
 
       <div className="mt-4">
