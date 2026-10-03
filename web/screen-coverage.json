@@ -187,6 +187,10 @@
       "screen": "web/app/cells/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/counts",
+      "screen": "web/app/cells/page.tsx"
+    },
+    {
       "route": "GET /api/v1/cells/people-without-a-cell",
       "screen": "web/app/cells/people-without-a-cell/page.tsx"
     },

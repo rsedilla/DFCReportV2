@@ -90,6 +90,15 @@ async function mockCellTotals(page: Page): Promise<URL[]> {
     body: JSON.stringify({ reporting_month: '2026-06-01', open: true, data, next_cursor }),
   });
 
+  await page.route('**/api/v1/cells/counts', (route) => {
+    asked.push(new URL(route.request().url()));
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ in_scope: 5, led_by_me: 1 }),
+    });
+  });
+
   await page.route('**/api/v1/cells?*', (route) => {
     const url = new URL(route.request().url());
     asked.push(url);
@@ -139,31 +148,19 @@ test.describe('the Cells totals (decision 0289)', () => {
     );
   });
 
-  test('counts every page, 200 at a time, and asks for the reader’s own by led_by=me', async ({
+  // Decision 0309: both totals come from one counts request, and never from reading every
+  // page of the list with its figures.
+  test('reads both totals from one counts request, and never pages the list for them', async ({
     page,
   }) => {
     await mockSignedIn(page);
     const asked = await mockCellTotals(page);
     await page.goto('/cells');
-    // Both totals have arrived, so every page either one asked for has been asked.
     await expect(scope(page)).toContainText(/Cells in your scope\s*5\s*The/);
     await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your/);
 
-    const counts = asked.filter((url) => url.searchParams.get('limit') === '200');
-    const mine = counts.filter((url) => url.searchParams.get('led_by') === 'me');
-    const scoped = counts.filter((url) => !url.searchParams.has('led_by'));
-
-    // The current month, running Cells only: a count never asks for the closed view.
-    for (const url of counts) {
-      expect(url.searchParams.get('month')).toBe('2026-06-01');
-      expect(url.searchParams.has('state')).toBe(false);
-      expect(url.searchParams.has('q')).toBe(false);
-    }
-    expect(mine.length).toBeGreaterThanOrEqual(1);
-    // Both pages of the scope count were asked for, the second by the first's cursor.
-    expect(scoped.map((url) => url.searchParams.get('cursor'))).toEqual(
-      expect.arrayContaining([null, 'second-page']),
-    );
+    expect(asked.filter((url) => url.pathname === '/api/v1/cells/counts')).toHaveLength(1);
+    expect(asked.filter((url) => url.searchParams.get('limit') === '200')).toHaveLength(0);
   });
 
   test('pressing Cells you lead shows only the reader’s own, and pressing the other clears it', async ({

@@ -733,6 +733,20 @@ export async function getPeopleCells(
   );
 }
 
+/** The Cells page's two totals, as of now (decisions 0289 and 0309). */
+export interface CellCounts {
+  in_scope: number;
+  led_by_me: number;
+}
+
+/**
+ * How many running Cells the list shows now, in the reader's scope and led by them. A route
+ * of its own because a collection returns no total (section 22, decision 0309).
+ */
+export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
+  return authenticatedRequest<CellCounts>('/api/v1/cells/counts', { signal });
+}
+
 /**
  * Every Cell of the actor's scope for a month, following the cursor to the end.
  *

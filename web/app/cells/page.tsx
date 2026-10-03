@@ -21,6 +21,7 @@ import {
   closedOnLabel,
   closureReasonLabel,
   dayOfWeekLabel,
+  getCellCounts,
   listCells,
   type CellSummary,
 } from '@/lib/cells';
@@ -420,26 +421,6 @@ function CellsIndex() {
 }
 
 /**
- * How many running Cells, counted through every page, since the list returns no total
- * (section 22).
- */
-async function countCells(month: string, mine: boolean, signal?: AbortSignal): Promise<number> {
-  let count = 0;
-  let cursor: string | null = null;
-
-  do {
-    const page = await listCells(
-      { month, ledBy: mine ? 'me' : undefined, cursor, limit: 200 },
-      signal,
-    );
-    count += page.data.length;
-    cursor = page.next_cursor;
-  } while (cursor !== null);
-
-  return count;
-}
-
-/**
  * The two totals, as of today, at the head of the list they count (decision 0289). Each
  * is also the filter that shows those Cells, the way the Growth tabs' cards are, and the
  * one matching what the list shows is marked as pressed.
@@ -454,14 +435,11 @@ function CellTotals({
   mineOnly: boolean;
   onChoose: (mine: boolean) => void;
 }) {
-  const month = reportingMonthOf();
-  const mine = useQuery({
-    queryKey: ['cells-count', month, true],
-    queryFn: ({ signal }) => countCells(month, true, signal),
-  });
-  const scoped = useQuery({
-    queryKey: ['cells-count', month, false],
-    queryFn: ({ signal }) => countCells(month, false, signal),
+  // Both totals in one request, counted on the server rather than by reading every Cell
+  // with its figures (decision 0309).
+  const counts = useQuery({
+    queryKey: ['cells-counts'],
+    queryFn: ({ signal }) => getCellCounts(signal),
   });
 
   // Every figure carries its scope (section 19), and a whole-church reader's is the church.
@@ -471,12 +449,12 @@ function CellTotals({
     : 'The Cells you oversee';
 
   const cards = [
-    { mine: true, label: 'Cells you lead', value: mine.data, scope: 'Your own Cells' },
-    { mine: false, label: 'Cells in your scope', value: scoped.data, scope: scopeLabel },
+    { mine: true, label: 'Cells you lead', value: counts.data?.led_by_me, scope: 'Your own Cells' },
+    { mine: false, label: 'Cells in your scope', value: counts.data?.in_scope, scope: scopeLabel },
   ];
 
   // A total that failed to load says why, rather than showing a bare dash.
-  const failed = mine.isError ? mine.error : scoped.isError ? scoped.error : null;
+  const failed = counts.isError ? counts.error : null;
 
   return (
     <>

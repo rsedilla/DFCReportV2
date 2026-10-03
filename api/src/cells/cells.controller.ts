@@ -179,6 +179,21 @@ export class CellsController {
   }
 
   /**
+   * How many running Cells `GET /api/v1/cells` would list now: those in the actor's scope,
+   * and those the actor leads (decision 0309). The Cells page's two totals (decision 0289),
+   * which a collection does not return (section 22).
+   *
+   * **The list's guard and the list's set**, so a total can never count a Cell the list
+   * would not show. It names no period and asks about now (section 7), as the totals are
+   * dated as of today.
+   */
+  @Get('counts')
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
+  async counts(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    return this.index.counts(actor);
+  }
+
+  /**
    * People in the actor's scope holding no active Cell membership (SKILL.md sections
    * 10, 15 and 19; decision 0233).
    *

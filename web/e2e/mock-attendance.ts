@@ -61,6 +61,7 @@ export const CELL_WITH_NO_SCHEDULE = {
  * apart (sections 13 and 17, decision 0226).
  */
 export async function mockCellsAtScale(page: Page): Promise<void> {
+  await mockCellCounts(page, { in_scope: 11, led_by_me: 0 });
   const cells = Array.from({ length: 11 }, (_, index) => ({
     ...CELL_WITH_MEETINGS,
     id: `3f1b7c6e-0000-4000-8000-0000000001${String(index + 10).padStart(2, '0')}`,
@@ -94,6 +95,17 @@ export function closedAsked(url: string): boolean {
   return new URL(url).searchParams.get('state') === 'CLOSED';
 }
 
+/**
+ * The Cells page's two totals (decision 0309), which the running-Cell mocks below answer with the
+ * rows they list, so the page never asks a route nothing answers.
+ */
+export async function mockCellCounts(
+  page: Page,
+  counts: { in_scope: number; led_by_me: number },
+): Promise<void> {
+  await page.route('**/api/v1/cells/counts', (route) => route.fulfill(json(counts)));
+}
+
 function noClosedCells() {
   return json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null });
 }
@@ -103,6 +115,7 @@ export async function mockCells(
   page: Page,
   { open = false }: { open?: boolean } = {},
 ): Promise<void> {
+  await mockCellCounts(page, { in_scope: 2, led_by_me: 1 });
   await page.route('**/api/v1/cells?*', (route) =>
     closedAsked(route.request().url())
       ? route.fulfill(noClosedCells())
@@ -119,6 +132,7 @@ export async function mockCells(
 
 /** A leader who oversees no Cell this month, which is a sentence rather than an error. */
 export async function mockCellsEmpty(page: Page): Promise<void> {
+  await mockCellCounts(page, { in_scope: 0, led_by_me: 0 });
   await page.route('**/api/v1/cells?*', (route) =>
     closedAsked(route.request().url())
       ? route.fulfill(noClosedCells())
@@ -1093,6 +1107,7 @@ export async function mockCellsWithClosed(
   page: Page,
   { open = false }: { open?: boolean } = {},
 ): Promise<void> {
+  await mockCellCounts(page, { in_scope: 2, led_by_me: 1 });
   await page.route('**/api/v1/cells?*', (route) =>
     route.fulfill(
       json({

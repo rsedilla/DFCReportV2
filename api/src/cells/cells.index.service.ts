@@ -82,6 +82,24 @@ export class CellsIndexService {
     private readonly recorded?: RecordedMeetingsPort,
   ) {}
 
+  /**
+   * `GET /api/v1/cells/counts` (decision 0309): how many running Cells the list would show
+   * now, for the reader's scope and for the Cells they lead. The same scope and the same
+   * filter as {@link list}, counted rather than paged, so the Cells page's totals do not
+   * read every Cell with its figures to count it.
+   */
+  async counts(actor: Actor): Promise<{ in_scope: number; led_by_me: number }> {
+    const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
+    const now = await databaseNow(this.db);
+
+    const [inScope, ledByMe] = await Promise.all([
+      this.cells.countCellsInScope(this.db, leadersToList(membership, actor, false), now),
+      this.cells.countCellsInScope(this.db, leadersToList(membership, actor, true), now),
+    ]);
+
+    return { in_scope: inScope, led_by_me: ledByMe };
+  }
+
   async list(
     actor: Actor,
     query: {
