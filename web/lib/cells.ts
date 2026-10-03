@@ -733,19 +733,34 @@ export async function getPeopleCells(
   );
 }
 
+/** The Cells page's two totals, as of now (decisions 0289 and 0309). */
+export interface CellCounts {
+  in_scope: number;
+  led_by_me: number;
+}
+
+/**
+ * How many running Cells the list shows now, in the reader's scope and led by them. A route
+ * of its own because a collection returns no total (section 22, decision 0309).
+ */
+export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
+  return authenticatedRequest<CellCounts>('/api/v1/cells/counts', { signal });
+}
+
 /**
  * Every Cell of the actor's scope for a month, following the cursor to the end.
  *
  * For a picker, which has to offer the whole list rather than its first page. The
  * index pages by cursor and returns no total (section 22), so this asks until
- * `next_cursor` is null.
+ * `next_cursor` is null, 200 at a time, the API's most, so the whole list takes a
+ * quarter of the requests (checklist row perf-cells-totals).
  */
 export async function listAllCells(month: string, signal?: AbortSignal): Promise<CellSummary[]> {
   const cells: CellSummary[] = [];
   let cursor: string | null = null;
 
   do {
-    const page: CellIndexPage = await listCells({ month, cursor }, signal);
+    const page: CellIndexPage = await listCells({ month, cursor, limit: 200 }, signal);
     cells.push(...page.data);
     cursor = page.next_cursor;
   } while (cursor !== null);

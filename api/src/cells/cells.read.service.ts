@@ -1455,6 +1455,66 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       memberCount: Number(row.member_count),
     }));
   }
+
+  /**
+   * How many `ACTIVE` Cells {@link cellsInScope} would list for these leaders, unsearched
+   * and unpaged (decision 0309): the Cells page's totals, which a collection does not return
+   * (section 22). `null` and an empty array mean what they mean there.
+   *
+   * **The same joins and filters as {@link cellsInScope}, stated a second time**, because
+   * every join there is an inner join and so decides membership; see that method for why
+   * each is joined as it is. Its `persons` join is left out: it serves the search alone and
+   * is one row per leadership, so it neither adds nor drops a Cell. `cells-counts.e2e.spec.ts`
+   * compares this count with the list's rows, so a change to one that the other does not
+   * follow fails there.
+   */
+  async countCellsInScope(
+    executor: Db | Transaction<Database>,
+    leaderIds: readonly string[] | null,
+    at: Date,
+  ): Promise<number> {
+    if (leaderIds !== null && leaderIds.length === 0) {
+      return 0;
+    }
+
+    const row = await executor
+      .selectFrom('cells')
+      .innerJoin('cell_leaderships', (join) =>
+        join
+          .onRef('cell_leaderships.cell_id', '=', 'cells.id')
+          .on('cell_leaderships.ended_at', 'is', null),
+      )
+      .innerJoin('cell_categories', (join) =>
+        join
+          .onRef('cell_categories.cell_id', '=', 'cells.id')
+          .on('cell_categories.started_at', '<=', at)
+          .on((eb) =>
+            eb.or([
+              eb('cell_categories.ended_at', 'is', null),
+              eb('cell_categories.ended_at', '>', at),
+            ]),
+          ),
+      )
+      .innerJoin('cell_schedules', (join) =>
+        join
+          .onRef('cell_schedules.cell_id', '=', 'cells.id')
+          .on('cell_schedules.started_at', '<=', at)
+          .on((eb) =>
+            eb.or([
+              eb('cell_schedules.ended_at', 'is', null),
+              eb('cell_schedules.ended_at', '>', at),
+            ]),
+          ),
+      )
+      .select((eb) => eb.fn.countAll<string>().as('cells'))
+      .where('cells.state', '=', 'ACTIVE')
+      .$if(leaderIds !== null, (query) =>
+        query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
+      )
+      .executeTakeFirstOrThrow();
+
+    return Number(row.cells);
+  }
   /**
    * One page of the `CLOSED` Cells whose **last** leader is one of these people, in
    * `cell_id` order (decision 0266). `leaderIds` null means every closed Cell.
