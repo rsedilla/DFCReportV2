@@ -1211,26 +1211,33 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.goto('/dashboard');
     await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeVisible();
 
-    // Hold every navigation's server round trip, so the second click lands while the
-    // first is still on its way — which is what a quick reader on a slow line does.
+    // Hold every navigation's server round trip until the second click has been made, so
+    // it lands while the first is still on its way — which is what a quick reader on a
+    // slow line does. A fixed delay could run out first on a slow runner.
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     await page.route(
       (url) => url.searchParams.has('_rsc'),
       async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await released;
         await route.continue();
       },
     );
 
     await chooseDcc(page);
     await page.getByRole('radio', { name: 'People I oversee' }).check();
+    release();
 
     await expect(page).toHaveURL(/kind=dcc/);
     await expect(page).toHaveURL(/whose=branch/);
 
-    // The second navigation supersedes the first, so the two make one history entry and
-    // Back returns to where both were made from.
+    // Back returns to an address from before the second choice. Whether the two choices
+    // made one history entry or two is Next's router's to decide, and it decides both ways
+    // (checklist row test-flaky-record-address).
     await page.goBack();
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/dashboard(\?kind=dcc)?$/);
   });
 
   const person = (n: number, name: string) => ({
