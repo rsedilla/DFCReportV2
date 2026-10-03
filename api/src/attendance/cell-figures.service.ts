@@ -223,31 +223,39 @@ export class CellFiguresService {
    * narrows nothing, which is Whole Church. The caller receives each person rather than a
    * count so that rows may be compared with their total person by person, which is how
    * decision 0293's "counted in two rows" line is computed rather than inferred.
+   *
+   * **Each person carries the responsible leaders of the meetings they attended in the
+   * range**, so a caller cuts the figures for any subset of `leaders` from one read rather
+   * than asking once per subset (checklist row perf-year-view): the subset's people are those
+   * holding a leader in it, with the same lifetime, which does not depend on the narrowing.
    */
-  async rangeFigures(
+  async rangeFiguresWithLeaders(
     executor: Db | Transaction<Database>,
     from: string,
     to: string,
     leaders: readonly string[] | null,
-  ): Promise<CellClassificationFigure[]> {
+  ): Promise<(CellClassificationFigure & { leaderIds: string[] })[]> {
     const list = leaders === null ? null : [...leaders];
 
-    const rows = await sql<{ person_id: string; lifetime: string }>`
+    const rows = await sql<{ person_id: string; lifetime: string; leader_ids: string[] }>`
       WITH scoped AS (
-        SELECT id
+        SELECT id, responsible_leader_id
           FROM cell_meetings
          WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date
            AND status IN ('HELD', 'RESCHEDULED')
            AND (${list}::uuid[] IS NULL OR responsible_leader_id = ANY (${list}::uuid[]))
       ),
       attended AS (
-        SELECT DISTINCT a.person_id
+        SELECT a.person_id,
+               array_agg(DISTINCT s.responsible_leader_id::text)
+                 FILTER (WHERE s.responsible_leader_id IS NOT NULL) AS leader_ids
           FROM scoped s
           JOIN cell_attendance a ON a.cell_meeting_id = s.id
          WHERE a.present = true
            AND a.superseded_at IS NULL
+         GROUP BY a.person_id
       )
-      SELECT p.person_id, count(*)::text AS lifetime
+      SELECT p.person_id, count(*)::text AS lifetime, p.leader_ids
         FROM attended p
         JOIN cell_attendance a ON a.person_id = p.person_id
         JOIN cell_meetings m ON m.id = a.cell_meeting_id
@@ -255,12 +263,13 @@ export class CellFiguresService {
          AND a.superseded_at IS NULL
          AND m.status IN ('HELD', 'RESCHEDULED')
          AND m.scheduled_date <= ${to}::date
-       GROUP BY p.person_id
+       GROUP BY p.person_id, p.leader_ids
     `.execute(executor);
 
     return rows.rows.map((row) => ({
       personId: row.person_id,
       lifetimeThroughMonth: Number(row.lifetime),
+      leaderIds: row.leader_ids ?? [],
     }));
   }
 

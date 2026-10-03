@@ -535,8 +535,6 @@ export class ReportingService {
       const start = startOfManilaDay(from);
       const end = endOfManilaDay(to);
 
-      const peopleOf = (leaders: readonly string[] | null) =>
-        this.cellFigures.rangeFigures(trx, from, to, leaders);
       const figureOf = (people: readonly { lifetimeThroughMonth: number }[]): TwelveFigure => ({
         unique_people: people.length,
         classification: classify(people),
@@ -554,14 +552,29 @@ export class ReportingService {
       // One read of the placement graph serves every row and the total (it was one per row).
       const graph = await this.hierarchy.reportingGraph(trx, start, end);
 
-      // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
+      // One read of the total's people, each with the leaders whose meetings they attended,
+      // serves every row and the own row as well (it was one per row): a row is the people
+      // holding a leader in its subtree, which is what reading that subtree alone answered.
+      const totalPeople = await this.cellFigures.rangeFiguresWithLeaders(
+        trx,
+        from,
+        to,
+        subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
+      );
+      const peopleOf = (leaders: readonly string[]) => {
+        const within = new Set(leaders.map((id) => canonicalId(id)));
+        return totalPeople.filter((person) =>
+          person.leaderIds.some((id) => within.has(canonicalId(id))),
+        );
+      };
+
       const rows: (TwelveFigure & {
         leader_id: string;
         network: NetworkName | null;
         people: Set<string>;
       })[] = [];
       for (const { personId: leaderId, network } of rowIds) {
-        const people = await peopleOf(graph.subtree(leaderId));
+        const people = peopleOf(graph.subtree(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
@@ -570,10 +583,7 @@ export class ReportingService {
         });
       }
 
-      const ownPeople = subject.kind === 'LEADER' ? await peopleOf([subject.person_id]) : null;
-      const totalPeople = await peopleOf(
-        subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
-      );
+      const ownPeople = subject.kind === 'LEADER' ? peopleOf([subject.person_id]) : null;
 
       // **Due meetings stop at the end of the current month.** A month that has not begun is
       // not reported (decision 0216), and a running year returns the months that have begun
