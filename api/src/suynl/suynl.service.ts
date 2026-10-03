@@ -181,12 +181,13 @@ export class SuynlService {
    *
    * **`names: false` leaves each row's people out** (checklist row perf-suynl-readiness): a
    * whole-church table carries every counted name in the church, and the screen asks for a
-   * row's people only when its name is opened, from the same route for that leader.
+   * row's people only when its name is opened, from the same route for that leader, with
+   * **`totalNames`**, which lists the total's people as one list in surname order.
    */
   async readiness(
     actor: Actor,
     subjectId: string | null,
-    options: { names: boolean } = { names: true },
+    options: { names: boolean; totalNames?: boolean } = { names: true },
   ): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
@@ -229,7 +230,7 @@ export class SuynlService {
       unique([...rows.map((row) => row.leaderId), ...(own ?? []), ...counted.keys()]),
     );
 
-    const figures = (ids: readonly string[]) => {
+    const figures = (ids: readonly string[], names = options.names) => {
       const people = unique(reached(ids))
         .flatMap((id) => {
           const entry = counted.get(canonicalId(id));
@@ -245,7 +246,7 @@ export class SuynlService {
         seven_to_nine: people.filter((person) => person.lessons >= 7 && person.lessons < 10).length,
         one_to_six: people.filter((person) => person.lessons < 7).length,
         people: people.length,
-        ...(options.names
+        ...(names
           ? {
               members: people.map((person) => ({
                 person_id: person.identity.id,
@@ -260,11 +261,10 @@ export class SuynlService {
     const leadAnyone = await this.hierarchy.whichLeadAnyone(rows.map((row) => row.leaderId));
     const leading = new Set([...leadAnyone].map(canonicalId));
 
-    const all = figures([
-      ...rows.flatMap((row) => row.members),
-      ...(own ?? []),
-      ...(elsewhere ?? []),
-    ]);
+    const all = figures(
+      [...rows.flatMap((row) => row.members), ...(own ?? []), ...(elsewhere ?? [])],
+      options.totalNames === true,
+    );
 
     const subject = own === null ? undefined : identities.get(own[0]);
 
@@ -300,6 +300,7 @@ export class SuynlService {
         seven_to_nine: all.seven_to_nine,
         one_to_six: all.one_to_six,
         people: all.people,
+        ...(all.members === undefined ? {} : { members: all.members }),
       },
     };
   }

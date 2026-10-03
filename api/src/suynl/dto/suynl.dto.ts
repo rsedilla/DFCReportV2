@@ -90,4 +90,13 @@ export class SuynlReadinessDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   names?: boolean;
+
+  /**
+   * `total_names=true` adds the people behind the total, one list in surname order, which is
+   * an opened row's people in the order the row listed them (decision 0293).
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  total_names?: boolean;
 }

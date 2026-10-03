@@ -1391,7 +1391,20 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
 
     expect(traffic.asked).toEqual([
       '/api/v1/suynl/readiness?names=false',
-      `/api/v1/suynl/readiness/${READINESS_ARTURO_ID}`,
+      `/api/v1/suynl/readiness/${READINESS_ARTURO_ID}?names=false&total_names=true`,
+    ]);
+  });
+
+  test("an opened row's group is in surname order across the leader and their branches", async ({
+    page,
+  }) => {
+    await mockSuynlReadiness(page, { crossBranch: true });
+    await page.goto('/reports/suynl');
+
+    await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
+    // Amparo Abella is Florante's disciple; one list sorted by surname puts her first.
+    await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
+      '1–6 lessons: Amparo Abella (3) · Florante Mendoza (5)',
     ]);
   });
 

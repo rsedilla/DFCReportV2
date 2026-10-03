@@ -247,7 +247,7 @@ describe('SUYNL readiness (decision 0297)', () => {
     rows: Row[];
     own: (Figures & { members: Member[] }) | null;
     elsewhere: (Figures & { members: Member[] }) | null;
-    total: Figures;
+    total: Figures & { members?: Member[] };
   }
 
   const BUCKETS = ['completed', 'seven_to_nine', 'one_to_six', 'people'] as const;
@@ -710,6 +710,39 @@ describe('SUYNL readiness (decision 0297)', () => {
   // Checklist row perf-suynl-readiness: the screen asks for the table without names and
   // reads a row's people from that leader's own table when the row is opened.
   describe('names=false, and a row read from its leader', () => {
+    let menReader: TestAccount;
+
+    beforeEach(async () => {
+      // Bacani sorts before his leader Mark Castillo, so Mark's people joined own-row-first
+      // are out of surname order.
+      const benjamin = await createPerson(db, {
+        firstName: 'Benjamin',
+        lastName: 'Bacani',
+        network: 'MENS',
+      });
+      await assignTo(db, benjamin.id, mark.id);
+      await lessons(benjamin.id, [1, 2]);
+
+      const viewer = await createPerson(db, {
+        firstName: 'Vicente',
+        lastName: 'Lorenzo',
+        network: 'MENS',
+      });
+      menReader = await createAccount(app, db, { person: viewer, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: menReader.id,
+          capability: 'suynl.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'Reads the Men’s Network readiness table.',
+          granted_by: admin.id,
+        })
+        .execute();
+    });
+
     const plain = async (account: TestAccount, path: string) => {
       const response = await request(app.getHttpServer())
         .get(path)
@@ -737,30 +770,63 @@ describe('SUYNL readiness (decision 0297)', () => {
       expect(bare.total).toEqual(full.total);
     });
 
-    it.each([
-      ['the whole church', () => admin],
-      ['a leader', () => manuelAccount],
-    ])("%s: each row's people are exactly its leader's own table, joined", async (_, account) => {
-      const table = await plain(account(), '/api/v1/suynl/readiness');
-      expect(table.rows.length).toBeGreaterThan(0);
-
-      for (const row of table.rows) {
-        const opened = await plain(account(), `/api/v1/suynl/readiness/${row.leader!.id}`);
-        const joined = [
-          ...(opened.own?.members ?? []),
-          ...opened.rows.flatMap((each) => each.members),
-        ].map((member) => member.person_id);
-
-        expect(new Set(joined).size).toBe(joined.length);
-        expect(joined.sort()).toEqual(row.members.map((member) => member.person_id).sort());
+    it('adds no people to the total unless total_names=true asks for them', async () => {
+      for (const path of ['/api/v1/suynl/readiness', `/api/v1/suynl/readiness/${manuel.id}`]) {
+        const full = await plain(admin, path);
+        expect(Object.keys(full.total).sort()).toEqual([...BUCKETS].sort());
+        expect((await plain(admin, `${path}?names=false`)).total).toEqual(full.total);
       }
     });
 
-    it('refuses a names value that is neither true nor false', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/suynl/readiness?names=banana')
-        .set('Authorization', `Bearer ${manuelAccount.accessToken}`);
-      expect(response.status).toBe(422);
-    });
+    it.each([
+      ['the whole church', () => admin, '/api/v1/suynl/readiness'],
+      ['a leader', () => manuelAccount, '/api/v1/suynl/readiness'],
+      ['a Network-scoped reader', () => menReader, `/api/v1/suynl/readiness/{raymond}`],
+    ])(
+      "%s: each row's people, at every depth, are its leader's total_names list, in the same order",
+      async (_, account, start) => {
+        const queue = [start.replace('{raymond}', raymond.id)];
+        let compared = 0;
+        let joinDiffers = false;
+
+        while (queue.length > 0) {
+          const table = await plain(account(), queue.shift()!);
+
+          // A row counting nobody lists nobody; merged Quentin's row is one, and his table 404s.
+          for (const row of table.rows.filter((each) => each.people > 0)) {
+            const path = `/api/v1/suynl/readiness/${row.leader!.id}`;
+            const opened = await plain(account(), `${path}?names=false&total_names=true`);
+
+            // Order, not only membership: the list the row used to show (decision 0293).
+            expect(opened.total.members).toEqual(row.members);
+            expect(figuresOf(opened.total)).toEqual(figuresOf(row));
+            compared += 1;
+
+            const parts = await plain(account(), path);
+            const joined = [
+              ...(parts.own?.members ?? []),
+              ...parts.rows.flatMap((each) => each.members),
+            ];
+            joinDiffers ||= JSON.stringify(joined) !== JSON.stringify(row.members);
+            queue.push(path);
+          }
+        }
+
+        expect(compared).toBeGreaterThan(0);
+        // Some opened row's people, joined part by part, are out of surname order, so the
+        // comparison above can tell the two apart.
+        expect(joinDiffers).toBe(true);
+      },
+    );
+
+    it.each(['names', 'total_names'])(
+      'refuses a %s value that is neither true nor false',
+      async (flag) => {
+        const response = await request(app.getHttpServer())
+          .get(`/api/v1/suynl/readiness?${flag}=banana`)
+          .set('Authorization', `Bearer ${manuelAccount.accessToken}`);
+        expect(response.status).toBe(422);
+      },
+    );
   });
 });

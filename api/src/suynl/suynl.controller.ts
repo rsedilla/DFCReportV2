@@ -60,7 +60,10 @@ export class SuynlController {
     @CurrentActor() actor: Actor,
     @Query() query: SuynlReadinessDto,
   ): Promise<Record<string, unknown>> {
-    return this.suynl.readiness(actor, null, { names: query.names !== false });
+    return this.suynl.readiness(actor, null, {
+      names: query.names !== false,
+      totalNames: query.total_names === true,
+    });
   }
 
   /**
@@ -79,7 +82,10 @@ export class SuynlController {
       throw new NotFoundError('No such person.');
     }
 
-    return this.suynl.readiness(actor, id, { names: query.names !== false });
+    return this.suynl.readiness(actor, id, {
+      names: query.names !== false,
+      totalNames: query.total_names === true,
+    });
   }
 
   /**

@@ -386,6 +386,28 @@ type Readiness = {
   total: ReturnType<typeof total>;
 };
 
+const AMPARO_ID = '7f000000-0000-4000-8000-000000000010';
+const AMPARO = member('10', 'Amparo Abella', 3);
+
+/** The API's order (decision 0293): surname, then first name. */
+const bySurname = (left: Member, right: Member) => {
+  const key = (each: Member) => {
+    const words = each.full_name.split(' ');
+    return `${words[words.length - 1]} ${words.slice(0, -1).join(' ')}`;
+  };
+  return key(left).localeCompare(key(right));
+};
+
+/** A table as `total_names=true` answers it: the total's people, one list in surname order. */
+function withTotalNames(table: Readiness) {
+  const everyone = [
+    ...table.rows.flatMap((each) => each.members),
+    ...(table.own?.members ?? []),
+    ...(table.elsewhere?.members ?? []),
+  ];
+  return { ...table, total: { ...table.total, members: [...everyone].sort(bySurname) } };
+}
+
 /** A table as `names=false` answers it: the counts, and no people behind them. */
 function withoutNames(table: Readiness) {
   const strip = <T extends { members: Member[] }>(figure: T) => {
@@ -403,28 +425,56 @@ function withoutNames(table: Readiness) {
 
 export async function mockSuynlReadiness(
   page: Page,
-  options: { view?: 'leader' | 'church'; elsewhere?: boolean } = {},
+  options: { view?: 'leader' | 'church'; elsewhere?: boolean; crossBranch?: boolean } = {},
 ): Promise<{ asked: string[] }> {
   const traffic = { asked: [] as string[] };
+
+  // `crossBranch`: Florante leads Amparo Abella, who sorts before him, so his people joined
+  // own-row-first are out of surname order and the API's list is not.
+  const leader: Readiness = options.crossBranch
+    ? {
+        ...READINESS_LEADER,
+        rows: READINESS_LEADER.rows.map((each) =>
+          each.leader.id === READINESS_FLORANTE_ID
+            ? row(READINESS_FLORANTE_ID, 'M-004202', 'Florante Mendoza', null, true, [
+                AMPARO,
+                FLORANTE,
+              ])
+            : each,
+        ),
+        total: total([CARMELITA, ARTURO, DIOSDADO, EPIFANIA, AMPARO, FLORANTE, READER]),
+      }
+    : READINESS_LEADER;
 
   await page.route('**/api/v1/suynl/readiness**', (route) => {
     const url = new URL(route.request().url());
     traffic.asked.push(`${url.pathname}${url.search}`);
     const id = url.pathname.split('/readiness/')[1];
-    const answer = (table: Readiness) =>
-      route.fulfill(json(url.searchParams.get('names') === 'false' ? withoutNames(table) : table));
+    const answer = (table: Readiness) => {
+      const named = url.searchParams.get('total_names') === 'true' ? withTotalNames(table) : table;
+      return route.fulfill(
+        json(url.searchParams.get('names') === 'false' ? withoutNames(named) : named),
+      );
+    };
 
     if (id === undefined) {
       return answer(
-        options.view === 'church'
-          ? readinessChurch({ elsewhere: options.elsewhere ?? true })
-          : READINESS_LEADER,
+        options.view === 'church' ? readinessChurch({ elsewhere: options.elsewhere ?? true }) : leader,
       );
     }
     if (id === READINESS_ARTURO_ID) {
       return answer(READINESS_ARTURO);
     }
-    const named = [...READINESS_LEADER.rows, ...readinessChurch({ elsewhere: false }).rows].find(
+    if (id === READINESS_FLORANTE_ID && options.crossBranch) {
+      return answer({
+        subject: { id, full_name: 'Florante Mendoza' },
+        rows: [row(AMPARO_ID, 'M-004210', 'Amparo Abella', null, false, [AMPARO])],
+        own: figures([FLORANTE]),
+        elsewhere: null,
+        total: total([AMPARO, FLORANTE]),
+      });
+    }
+    const named = [...leader.rows, ...readinessChurch({ elsewhere: false }).rows].find(
       (each) => each.leader.id === id,
     );
     if (named !== undefined) {

@@ -110,7 +110,7 @@ export interface SuynlReadiness {
   rows: ReadinessRow[];
   own: ReadinessFigures | null;
   elsewhere: ReadinessFigures | null;
-  total: Omit<ReadinessFigures, 'members'>;
+  total: ReadinessFigures;
 }
 
 /**
@@ -131,31 +131,18 @@ export function getSuynlReadiness(
 
 /**
  * The people behind one leader's row, read when the row is opened. A row counts that leader's
- * branch, which is what that leader's own table divides into its rows and its own line, so
- * those are joined, each person once.
+ * branch, which is that leader's own total, listed by the server in surname order.
  */
 export async function getReadinessPeople(
   leader: string,
   signal?: AbortSignal,
 ): Promise<ReadinessPerson[]> {
   const table = await authenticatedRequest<SuynlReadiness>(
-    `/api/v1/suynl/readiness/${encodeURIComponent(leader)}`,
+    `/api/v1/suynl/readiness/${encodeURIComponent(leader)}?names=false&total_names=true`,
     { signal },
   );
-  const seen = new Set<string>();
-  const people: ReadinessPerson[] = [];
 
-  for (const person of [
-    ...(table.own?.members ?? []),
-    ...table.rows.flatMap((row) => row.members ?? []),
-  ]) {
-    if (!seen.has(person.person_id)) {
-      seen.add(person.person_id);
-      people.push(person);
-    }
-  }
-
-  return people;
+  return table.total.members ?? [];
 }
 
 export function submitSuynl(changes: SuynlChange[], idempotencyKey: string): Promise<unknown> {
