@@ -28,13 +28,6 @@ const WHAT: Record<RangeKind, string> = {
   YEAR: 'in the year',
 };
 
-const BY: Record<RangeKind, string> = {
-  WEEK: 'its Sunday',
-  MONTH: 'its last day',
-  QUARTER: 'its last day',
-  YEAR: 'its last day',
-};
-
 /**
  * Weekly, Monthly, Quarterly and Year, as equal buttons in the Reports tabs' style
  * (decision 0293). Buttons rather than links: each is a view of the same report and address.
@@ -180,11 +173,11 @@ export function TwelveTable({
   return (
     <section aria-labelledby="twelve-heading" className={FRAME}>
       <h2 id="twelve-heading" className="field-label">
-        {title} · where people are in their journey
+        {title} · their journey
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        Different people who came to {where} {WHAT[kind]}, once each, at the stage they had
-        reached by {BY[kind]}{twelve.open ? ', or so far while it is open' : ''}.
+        Everyone who came to {where} {WHAT[kind]}, counted once, at their stage{' '}
+        {twelve.open ? 'so far' : 'by its end'}.
         {twelve.rows.length > 0 ? ' Open a name to see their 12.' : ''}
       </p>
 
