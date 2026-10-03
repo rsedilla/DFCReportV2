@@ -254,7 +254,7 @@ test.describe('My 12', () => {
     await page.goto('/reports/cells');
 
     await expect(
-      page.getByRole('heading', { name: 'My 12 · where people are in their journey' }),
+      page.getByRole('heading', { name: 'My 12 · their journey' }),
     ).toBeVisible();
     const table = twelveTable(page);
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -342,7 +342,7 @@ test.describe('My 12', () => {
 
     await expect(
       page.getByRole('heading', {
-        name: 'Consuelo Bautista’s 12 · where people are in their journey',
+        name: 'Consuelo Bautista’s 12 · their journey',
       }),
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
@@ -510,21 +510,21 @@ test.describe('the coverage line', () => {
 });
 
 test.describe('the sentence under My 12', () => {
-  test('names the period, its Sunday or last day, and says so far while it is open', async ({
+  test('names the period, and says so far while it is open and by its end once closed', async ({
     page,
   }) => {
     await arrange(page);
-    const sentence = page.locator('main p').filter({ hasText: /^Different people who came/ });
+    const sentence = page.locator('main p').filter({ hasText: /^Everyone who came/ });
 
     await page.goto('/reports/cells?period=week');
     await expect(sentence).toHaveText(
-      'Different people who came to a Cell in the week, once each, at the stage they had reached by its Sunday, or so far while it is open. Open a name to see their 12.',
+      'Everyone who came to a Cell in the week, counted once, at their stage so far. Open a name to see their 12.',
     );
 
-    // A closed quarter: its last day, and nothing about so far.
+    // A closed quarter: by its end, and nothing about so far.
     await page.goto('/reports/cells?period=quarter&start=2026-01-01');
     await expect(sentence).toHaveText(
-      'Different people who came to a Cell in the quarter, once each, at the stage they had reached by its last day. Open a name to see their 12.',
+      'Everyone who came to a Cell in the quarter, counted once, at their stage by its end. Open a name to see their 12.',
     );
   });
 
