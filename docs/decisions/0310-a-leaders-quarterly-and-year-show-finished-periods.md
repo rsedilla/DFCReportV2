@@ -16,9 +16,12 @@ when the first one opens.
 
 **2. That reader reaches back four quarters and one year, and nothing before the DCC
 calendar.** The last four finished quarters and the last finished year, none ending before the
-first Sunday of the DCC calendar (`dcc_calendar_start`, section 9), on both tabs. A period
-outside that reach, asked for in the address, opens the latest one inside it, and the screen
-says it did.
+first Sunday of the DCC calendar (`dcc_calendar_start`, section 9), on both tabs. A Cell meeting
+recorded before it stays in Monthly and in a whole-church reader's view. Until the calendar has
+a first Sunday, that reader is offered no quarter or year, and the screen says they open once
+recording begins. The two tabs' report answers carry the date, under `reports.view_subtree`. A
+period outside that reach, asked for in the address, opens the latest one inside it, and the
+screen says it did.
 
 **3. A reader holding `reports.view_subtree` at Whole Church keeps every quarter and year**, the
 running one labelled as still open, as before. By default that is the Admin and the two Senior
@@ -44,9 +47,10 @@ Three alternatives were rejected. Limiting a leader to the current calendar year
 quarter at all from 1 January until April. Disabling the two buttons would hide quarters already
 finished. Following the date initial encoding closes was preferred by the owner, but nothing
 closes it yet and no date is stored, so leaders would have had no Quarterly or Year until it
-was built; the DCC calendar's start exists now. What that floor is while it is unset, which
-capability lets a screen read it, and whether it may hide Cell meetings recorded before it are
-recorded as open in CLAUDE.md.
+was built; the DCC calendar's start exists now. The owner then settled what a review left open
+about it: nothing is offered before it exists, so no leader sees an empty quarter that looks
+like data; it travels with the reports a leader already reads rather than behind a new route or
+a settings capability; and one floor serves both tabs, the church having begun both together.
 
 ---
 
