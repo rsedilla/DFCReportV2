@@ -420,32 +420,109 @@ export class DccCoverageService {
       .execute();
 
     const lines = new Map<string, Coverage>();
+    const events = rows
+      .map((row) => this.describe(String(row.event_date), row, now))
+      .filter((event) => coverable(event));
 
-    for (const row of rows) {
-      const event = this.describe(String(row.event_date), row, now);
+    if (events.length === 0) {
+      return lines;
+    }
 
-      if (!coverable(event)) {
-        continue;
-      }
+    // `obligations` at each event, from one read of the edges, one of the records and, for a
+    // leader, one of the branch (checklist row perf-year-view): one query per Sunday cost a
+    // large upline leader's year view about 1.4 s on `seed:perf`'s church.
+    const instants = events.map((event) => event.at);
+    const narrowing = await this.leadersAtEach(executor, scope, instants);
+    const edgesAt = await this.hierarchy.edgesAsOfEach(executor, instants);
+    const recorded = await this.recordedLeadersOf(
+      executor,
+      events.map((event) => event.id),
+    );
 
-      const { owed, owing } = await this.obligations(
-        executor,
-        event,
-        await this.leadersAt(executor, scope, event.at),
+    events.forEach((event, index) => {
+      const leaders = narrowing[index];
+      const owed = new Set(
+        edgesAt[index]
+          .filter((edge) => leaders === null || leaders.has(canonicalId(edge.leaderId)))
+          .map((edge) => canonicalId(edge.leaderId)),
       );
+      const met = recorded.get(canonicalId(event.id)) ?? new Set<string>();
 
-      for (const leaderId of owed) {
-        const key = canonicalId(leaderId);
+      for (const key of owed) {
         const line = lines.get(key) ?? { met: 0, owed: 0 };
         line.owed += 1;
-        if (!owing.has(leaderId)) {
+        if (met.has(key)) {
           line.met += 1;
         }
         lines.set(key, line);
       }
-    }
+    });
 
     return lines;
+  }
+
+  /**
+   * The leaders a coverage denominator is narrowed to at each instant, or `null` for no
+   * narrowing at all; a leader's branch is walked from one read.
+   *
+   * `null` and an empty set are different answers, exactly as they are on the Cells index:
+   * `null` is Whole Church and narrows nothing, while an empty set is a scope holding
+   * nobody and must measure nothing.
+   */
+  private async leadersAtEach(
+    executor: Db,
+    scope: DccCoverageScope,
+    instants: readonly Date[],
+  ): Promise<(ReadonlySet<string> | null)[]> {
+    switch (scope.kind) {
+      case 'WHOLE_CHURCH':
+        return instants.map(() => null);
+      case 'LEADER':
+        return this.hierarchy.subtreesAsOf(executor, scope.personId, instants);
+      case 'NETWORK': {
+        const sets: ReadonlySet<string>[] = [];
+        for (const at of instants) {
+          sets.push(
+            new Set(
+              (await this.networks.peopleInNetworkAsOf(executor, scope.network, at)).map((id) =>
+                canonicalId(id),
+              ),
+            ),
+          );
+        }
+        return sets;
+      }
+      default: {
+        const unreached: never = scope;
+
+        return unreached;
+      }
+    }
+  }
+
+  /** `obligations`' numerator for each event: the leaders a live record names. */
+  private async recordedLeadersOf(
+    executor: Db,
+    eventIds: readonly string[],
+  ): Promise<Map<string, Set<string>>> {
+    const rows = await executor
+      .selectFrom('dcc_attendance')
+      .select(['dcc_event_id', 'responsible_leader_id'])
+      .where('dcc_event_id', 'in', eventIds)
+      .where('superseded_at', 'is', null)
+      .where('responsible_leader_id', 'is not', null)
+      .distinct()
+      .execute();
+
+    const byEvent = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const key = canonicalId(row.dcc_event_id);
+      const leaders = byEvent.get(key) ?? new Set<string>();
+      leaders.add(canonicalId(row.responsible_leader_id as string));
+      byEvent.set(key, leaders);
+    }
+
+    return byEvent;
   }
 
   /**
@@ -808,35 +885,6 @@ export class DccCoverageService {
         marks: line.marks,
       })),
     };
-  }
-
-  /**
-   * The leaders a coverage denominator is narrowed to at one instant, or `null` for no
-   * narrowing at all.
-   *
-   * `null` and `[]` are different arguments, exactly as they are on the Cells index:
-   * `null` is Whole Church and narrows nothing, while an empty list is a scope holding
-   * nobody and must measure nothing. `edgesAsOf` answers both correctly and the
-   * difference is not left to it.
-   */
-  private async leadersAt(
-    executor: Db,
-    scope: DccCoverageScope,
-    at: Date,
-  ): Promise<readonly string[] | null> {
-    switch (scope.kind) {
-      case 'WHOLE_CHURCH':
-        return null;
-      case 'LEADER':
-        return this.hierarchy.subtreeAsOf(executor, scope.personId, at);
-      case 'NETWORK':
-        return this.networks.peopleInNetworkAsOf(executor, scope.network, at);
-      default: {
-        const unreached: never = scope;
-
-        return unreached;
-      }
-    }
   }
 
   /**
