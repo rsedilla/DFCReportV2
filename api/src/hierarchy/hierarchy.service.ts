@@ -1230,6 +1230,43 @@ export class HierarchyService {
   }
 
   /**
+   * `edgesAsOf` with no narrowing, at each of several instants, from one read (checklist row
+   * perf-year-view): a period's DCC coverage asks once per Sunday, about 40 reads a year. The
+   * same `[started_at, ended_at)` test at each instant; the caller narrows by leader.
+   */
+  async edgesAsOfEach(
+    executor: Db,
+    instants: readonly Date[],
+  ): Promise<{ leaderId: string; personId: string }[][]> {
+    if (instants.length === 0) {
+      return [];
+    }
+
+    const times = instants.map((at) => at.getTime());
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id', 'person_id', 'started_at', 'ended_at'])
+      .where('leader_id', 'is not', null)
+      .where('started_at', '<=', new Date(Math.max(...times)))
+      .where((eb) =>
+        eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', new Date(Math.min(...times)))]),
+      )
+      .execute();
+    const edges = rows.map((row) => ({
+      leaderId: row.leader_id as string,
+      personId: row.person_id,
+      from: new Date(row.started_at).getTime(),
+      to: row.ended_at === null ? Infinity : new Date(row.ended_at).getTime(),
+    }));
+
+    return times.map((at) =>
+      edges
+        .filter((edge) => edge.from <= at && edge.to > at)
+        .map((edge) => ({ leaderId: edge.leaderId, personId: edge.personId })),
+    );
+  }
+
+  /**
    * Every pastoral edge ever held under these leaders, with its dates, for a derivation
    * that asks when a condition over several edges first held (SKILL.md section 27;
    * decisions 0284 and 0285). `null` is every leader; an empty array is nobody. A root's
