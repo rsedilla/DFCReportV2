@@ -12,7 +12,7 @@ import {
 import { UuidParamPipe } from '../common/uuid-param.pipe';
 import { PeopleReadService } from '../people/people.read.service';
 
-import { SubmitSuynlDto, SuynlListDto } from './dto/suynl.dto';
+import { SubmitSuynlDto, SuynlListDto, SuynlReadinessDto } from './dto/suynl.dto';
 import { SuynlService } from './suynl.service';
 
 /**
@@ -56,8 +56,14 @@ export class SuynlController {
    */
   @Get('readiness')
   @RequiresCapability(Capability.SuynlViewSubtree, { kind: 'actor' })
-  async readiness(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
-    return this.suynl.readiness(actor, null);
+  async readiness(
+    @CurrentActor() actor: Actor,
+    @Query() query: SuynlReadinessDto,
+  ): Promise<Record<string, unknown>> {
+    return this.suynl.readiness(actor, null, {
+      names: query.names !== false,
+      totalNames: query.total_names === true,
+    });
   }
 
   /**
@@ -70,12 +76,16 @@ export class SuynlController {
   async readinessOf(
     @Param('id', new UuidParamPipe('id')) id: string,
     @CurrentActor() actor: Actor,
+    @Query() query: SuynlReadinessDto,
   ): Promise<Record<string, unknown>> {
     if (!(await this.peopleRead.findById(id))) {
       throw new NotFoundError('No such person.');
     }
 
-    return this.suynl.readiness(actor, id);
+    return this.suynl.readiness(actor, id, {
+      names: query.names !== false,
+      totalNames: query.total_names === true,
+    });
   }
 
   /**

@@ -18,9 +18,11 @@ import {
   weekendLabel,
 } from '@/lib/encounters';
 import {
+  getReadinessPeople,
   getSuynlCounts,
   getSuynlReadiness,
   type ReadinessFigures,
+  type ReadinessPerson,
   type SuynlReadiness,
 } from '@/lib/growth';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -282,7 +284,7 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
                 {open === key ? (
                   <tr>
                     <td colSpan={COLUMNS.length + 2} className="bg-raised px-3 py-3 text-sm">
-                      <People members={row.members} />
+                      {row.leader === null ? null : <RowPeople leader={row.leader.id} />}
                     </td>
                   </tr>
                 ) : null}
@@ -314,8 +316,27 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
   );
 }
 
+/**
+ * The people behind one row, read when its name is first opened rather than with the table
+ * (checklist row perf-suynl-readiness); opening it again shows what was read.
+ */
+function RowPeople({ leader }: { leader: string }) {
+  const people = useQuery({
+    queryKey: ['suynl-readiness-people', leader],
+    queryFn: ({ signal }) => getReadinessPeople(leader, signal),
+  });
+
+  if (people.isPending) {
+    return <span className="text-muted">Loading the people&hellip;</span>;
+  }
+  if (people.isError) {
+    return <FailureNotice failure={describeFailure(people.error)} />;
+  }
+  return <People members={people.data} />;
+}
+
 /** The people behind a row, grouped by column, each with their lessons. */
-function People({ members }: { members: ReadinessFigures['members'] }) {
+function People({ members }: { members: ReadinessPerson[] }) {
   if (members.length === 0) {
     return <span className="text-muted">Nobody in this branch is counted.</span>;
   }

@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -77,4 +77,26 @@ export class SubmitSuynlDto {
   @ValidateNested({ each: true })
   @Type(() => SuynlChangeDto)
   changes!: SuynlChangeDto[];
+}
+
+/**
+ * The readiness table's query (decision 0297). `names=false` leaves out the people behind each
+ * row, for a table that fetches a row's people when its name is opened (checklist row
+ * perf-suynl-readiness); left out or `true`, the answer is as it always was.
+ */
+export class SuynlReadinessDto {
+  @IsOptional()
+  // Anything but `true` or `false` is left for `@IsBoolean()` to refuse, as `coverage` is.
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  names?: boolean;
+
+  /**
+   * `total_names=true` adds the people behind the total, one list in surname order, which is
+   * an opened row's people in the order the row listed them (decision 0293).
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  total_names?: boolean;
 }

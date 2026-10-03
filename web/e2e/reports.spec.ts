@@ -1115,12 +1115,12 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     // Counts only: the same count routes as Growth, never its lists and never a submission.
     // SUYNL also reads its readiness table (decision 0297), as of now, so with no month.
     expect(asked.length).toBeGreaterThan(0);
-    expect(asked).toContain('GET /api/v1/suynl/readiness');
+    expect(asked).toContain('GET /api/v1/suynl/readiness?names=false');
     expect(
       asked.filter(
         (line) =>
           !/^GET \/api\/v1\/(suynl|training|conquest)\/counts$/.test(line) &&
-          line !== 'GET /api/v1/suynl/readiness',
+          line !== 'GET /api/v1/suynl/readiness?names=false',
       ),
     ).toEqual([]);
   });
@@ -1339,7 +1339,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
 
     await expect(page.getByText('In neither pastor’s branch')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveCount(0);
-    expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness']);
+    expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness?names=false']);
   });
 
   test('a name opens the people behind the row, grouped by column with their lessons', async ({
@@ -1368,6 +1368,43 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
     await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
       '1–6 lessons: Florante Mendoza (5)',
+    ]);
+  });
+
+  // Checklist row perf-suynl-readiness: the table comes without the people behind its rows,
+  // and a row's people are asked for when its name is first opened, once.
+  test("the table comes without names, and a row's people are read when it is first opened", async ({
+    page,
+  }) => {
+    const traffic = await mockSuynlReadiness(page);
+    await page.goto('/reports/suynl');
+
+    const arturo = page.getByRole('button', { name: 'Arturo Buenaventura', exact: true });
+    await expect(arturo).toBeVisible();
+    expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness?names=false']);
+
+    await arturo.click();
+    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toBeVisible();
+    await arturo.click();
+    await arturo.click();
+    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toBeVisible();
+
+    expect(traffic.asked).toEqual([
+      '/api/v1/suynl/readiness?names=false',
+      `/api/v1/suynl/readiness/${READINESS_ARTURO_ID}?names=false&total_names=true`,
+    ]);
+  });
+
+  test("an opened row's group is in surname order across the leader and their branches", async ({
+    page,
+  }) => {
+    await mockSuynlReadiness(page, { crossBranch: true });
+    await page.goto('/reports/suynl');
+
+    await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
+    // Amparo Abella is Florante's disciple; one list sorted by surname puts her first.
+    await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
+      '1–6 lessons: Amparo Abella (3) · Florante Mendoza (5)',
     ]);
   });
 
@@ -1438,7 +1475,9 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
       'href',
       '/reports/suynl',
     );
-    expect([...new Set(traffic.asked)]).toEqual([`/api/v1/suynl/readiness/${READINESS_ARTURO_ID}`]);
+    expect([...new Set(traffic.asked)]).toEqual([
+      `/api/v1/suynl/readiness/${READINESS_ARTURO_ID}?names=false`,
+    ]);
   });
 
   test("following 'their 12' opens that leader's table, and Back returns", async ({ page }) => {

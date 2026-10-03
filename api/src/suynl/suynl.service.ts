@@ -178,8 +178,17 @@ export class SuynlService {
    * whole-church reader asking for nobody gets the two roots' branches instead, and a
    * line for anybody counted in neither. The rows, that row and that line are disjoint, so
    * they add up to the total, which is everyone the reader's grant reaches in them.
+   *
+   * **`names: false` leaves each row's people out** (checklist row perf-suynl-readiness): a
+   * whole-church table carries every counted name in the church, and the screen asks for a
+   * row's people only when its name is opened, from the same route for that leader, with
+   * **`totalNames`**, which lists the total's people as one list in surname order.
    */
-  async readiness(actor: Actor, subjectId: string | null): Promise<Record<string, unknown>> {
+  async readiness(
+    actor: Actor,
+    subjectId: string | null,
+    options: { names: boolean; totalNames?: boolean } = { names: true },
+  ): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
     const churchWide = subjectId === null && population === null;
@@ -221,7 +230,7 @@ export class SuynlService {
       unique([...rows.map((row) => row.leaderId), ...(own ?? []), ...counted.keys()]),
     );
 
-    const figures = (ids: readonly string[]) => {
+    const figures = (ids: readonly string[], names = options.names) => {
       const people = unique(reached(ids))
         .flatMap((id) => {
           const entry = counted.get(canonicalId(id));
@@ -237,22 +246,25 @@ export class SuynlService {
         seven_to_nine: people.filter((person) => person.lessons >= 7 && person.lessons < 10).length,
         one_to_six: people.filter((person) => person.lessons < 7).length,
         people: people.length,
-        members: people.map((person) => ({
-          person_id: person.identity.id,
-          full_name: person.identity.fullName,
-          lessons: person.lessons,
-        })),
+        ...(names
+          ? {
+              members: people.map((person) => ({
+                person_id: person.identity.id,
+                full_name: person.identity.fullName,
+                lessons: person.lessons,
+              })),
+            }
+          : {}),
       };
     };
 
     const leadAnyone = await this.hierarchy.whichLeadAnyone(rows.map((row) => row.leaderId));
     const leading = new Set([...leadAnyone].map(canonicalId));
 
-    const all = figures([
-      ...rows.flatMap((row) => row.members),
-      ...(own ?? []),
-      ...(elsewhere ?? []),
-    ]);
+    const all = figures(
+      [...rows.flatMap((row) => row.members), ...(own ?? []), ...(elsewhere ?? [])],
+      options.totalNames === true,
+    );
 
     const subject = own === null ? undefined : identities.get(own[0]);
 
@@ -288,6 +300,7 @@ export class SuynlService {
         seven_to_nine: all.seven_to_nine,
         one_to_six: all.one_to_six,
         people: all.people,
+        ...(all.members === undefined ? {} : { members: all.members }),
       },
     };
   }
