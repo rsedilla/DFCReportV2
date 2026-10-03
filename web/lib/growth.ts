@@ -77,13 +77,20 @@ export function listSuynlPeople(query: GrowthListQuery, signal?: AbortSignal): P
   return authenticatedRequest<SuynlPage>(`/api/v1/suynl/people?${listQuery(query)}`, { signal });
 }
 
-/** One row's counts, and the people behind them (decision 0297). */
+/** One person behind a row, with their lessons. */
+export interface ReadinessPerson {
+  person_id: string;
+  full_name: string;
+  lessons: number;
+}
+
+/** One row's counts, and the people behind them when they were asked for (decision 0297). */
 export interface ReadinessFigures {
   completed: number;
   seven_to_nine: number;
   one_to_six: number;
   people: number;
-  members: { person_id: string; full_name: string; lessons: number }[];
+  members?: ReadinessPerson[];
 }
 
 export interface ReadinessRow extends ReadinessFigures {
@@ -106,16 +113,49 @@ export interface SuynlReadiness {
   total: Omit<ReadinessFigures, 'members'>;
 }
 
+/**
+ * The readiness table's counts, without the people behind each row: a whole-church table
+ * would otherwise carry every counted name in the church (checklist row perf-suynl-readiness).
+ */
 export function getSuynlReadiness(
   leader: string | null,
   signal?: AbortSignal,
 ): Promise<SuynlReadiness> {
   return authenticatedRequest<SuynlReadiness>(
     leader === null
-      ? '/api/v1/suynl/readiness'
-      : `/api/v1/suynl/readiness/${encodeURIComponent(leader)}`,
+      ? '/api/v1/suynl/readiness?names=false'
+      : `/api/v1/suynl/readiness/${encodeURIComponent(leader)}?names=false`,
     { signal },
   );
+}
+
+/**
+ * The people behind one leader's row, read when the row is opened. A row counts that leader's
+ * branch, which is what that leader's own table divides into its rows and its own line, so
+ * those are joined, each person once.
+ */
+export async function getReadinessPeople(
+  leader: string,
+  signal?: AbortSignal,
+): Promise<ReadinessPerson[]> {
+  const table = await authenticatedRequest<SuynlReadiness>(
+    `/api/v1/suynl/readiness/${encodeURIComponent(leader)}`,
+    { signal },
+  );
+  const seen = new Set<string>();
+  const people: ReadinessPerson[] = [];
+
+  for (const person of [
+    ...(table.own?.members ?? []),
+    ...table.rows.flatMap((row) => row.members ?? []),
+  ]) {
+    if (!seen.has(person.person_id)) {
+      seen.add(person.person_id);
+      people.push(person);
+    }
+  }
+
+  return people;
 }
 
 export function submitSuynl(changes: SuynlChange[], idempotencyKey: string): Promise<unknown> {

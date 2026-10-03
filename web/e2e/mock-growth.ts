@@ -373,9 +373,34 @@ export const READINESS_ARTURO = {
 
 /**
  * Both readiness routes. `/readiness` answers the leader's view or, with `view: 'church'`,
- * the whole church's; `/readiness/{id}` answers Arturo's table for Arturo and a
- * `SCOPE_DENIED` for anybody else. Returns every path asked, with its query string.
+ * the whole church's; `/readiness/{id}` answers Arturo's table for Arturo, a table of the
+ * leader's own row for any other leader a table names (so opening that row has its people),
+ * and a `SCOPE_DENIED` for anybody else. `names=false` leaves the people out, as the API
+ * does (checklist row perf-suynl-readiness). Returns every path asked, with its query string.
  */
+type Readiness = {
+  subject: { id: string; full_name: string } | null;
+  rows: ReturnType<typeof row>[];
+  own: ReturnType<typeof figures> | null;
+  elsewhere: ReturnType<typeof figures> | null;
+  total: ReturnType<typeof total>;
+};
+
+/** A table as `names=false` answers it: the counts, and no people behind them. */
+function withoutNames(table: Readiness) {
+  const strip = <T extends { members: Member[] }>(figure: T) => {
+    const rest: Partial<T> = { ...figure };
+    delete rest.members;
+    return rest;
+  };
+  return {
+    ...table,
+    rows: table.rows.map(strip),
+    own: table.own === null ? null : strip(table.own),
+    elsewhere: table.elsewhere === null ? null : strip(table.elsewhere),
+  };
+}
+
 export async function mockSuynlReadiness(
   page: Page,
   options: { view?: 'leader' | 'church'; elsewhere?: boolean } = {},
@@ -386,18 +411,30 @@ export async function mockSuynlReadiness(
     const url = new URL(route.request().url());
     traffic.asked.push(`${url.pathname}${url.search}`);
     const id = url.pathname.split('/readiness/')[1];
+    const answer = (table: Readiness) =>
+      route.fulfill(json(url.searchParams.get('names') === 'false' ? withoutNames(table) : table));
 
     if (id === undefined) {
-      return route.fulfill(
-        json(
-          options.view === 'church'
-            ? readinessChurch({ elsewhere: options.elsewhere ?? true })
-            : READINESS_LEADER,
-        ),
+      return answer(
+        options.view === 'church'
+          ? readinessChurch({ elsewhere: options.elsewhere ?? true })
+          : READINESS_LEADER,
       );
     }
     if (id === READINESS_ARTURO_ID) {
-      return route.fulfill(json(READINESS_ARTURO));
+      return answer(READINESS_ARTURO);
+    }
+    const named = [...READINESS_LEADER.rows, ...readinessChurch({ elsewhere: false }).rows].find(
+      (each) => each.leader.id === id,
+    );
+    if (named !== undefined) {
+      return answer({
+        subject: { id, full_name: named.leader.full_name },
+        rows: [],
+        own: figures(named.members),
+        elsewhere: null,
+        total: total(named.members),
+      });
     }
     return route.fulfill(
       json(

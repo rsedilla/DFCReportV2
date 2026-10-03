@@ -178,8 +178,16 @@ export class SuynlService {
    * whole-church reader asking for nobody gets the two roots' branches instead, and a
    * line for anybody counted in neither. The rows, that row and that line are disjoint, so
    * they add up to the total, which is everyone the reader's grant reaches in them.
+   *
+   * **`names: false` leaves each row's people out** (checklist row perf-suynl-readiness): a
+   * whole-church table carries every counted name in the church, and the screen asks for a
+   * row's people only when its name is opened, from the same route for that leader.
    */
-  async readiness(actor: Actor, subjectId: string | null): Promise<Record<string, unknown>> {
+  async readiness(
+    actor: Actor,
+    subjectId: string | null,
+    options: { names: boolean } = { names: true },
+  ): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
     const churchWide = subjectId === null && population === null;
@@ -237,11 +245,15 @@ export class SuynlService {
         seven_to_nine: people.filter((person) => person.lessons >= 7 && person.lessons < 10).length,
         one_to_six: people.filter((person) => person.lessons < 7).length,
         people: people.length,
-        members: people.map((person) => ({
-          person_id: person.identity.id,
-          full_name: person.identity.fullName,
-          lessons: person.lessons,
-        })),
+        ...(options.names
+          ? {
+              members: people.map((person) => ({
+                person_id: person.identity.id,
+                full_name: person.identity.fullName,
+                lessons: person.lessons,
+              })),
+            }
+          : {}),
       };
     };
 

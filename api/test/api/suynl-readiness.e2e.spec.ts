@@ -706,4 +706,61 @@ describe('SUYNL readiness (decision 0297)', () => {
       before.graduations,
     );
   });
+
+  // Checklist row perf-suynl-readiness: the screen asks for the table without names and
+  // reads a row's people from that leader's own table when the row is opened.
+  describe('names=false, and a row read from its leader', () => {
+    const plain = async (account: TestAccount, path: string) => {
+      const response = await request(app.getHttpServer())
+        .get(path)
+        .set('Authorization', `Bearer ${account.accessToken}`);
+      expect(response.status).toBe(200);
+      return response.body as Readiness;
+    };
+
+    it.each([
+      ['the whole church', () => admin, '/api/v1/suynl/readiness'],
+      ['a leader', () => manuelAccount, '/api/v1/suynl/readiness'],
+    ])('%s: the same figures, and no people behind any row', async (_, account, path) => {
+      const full = await plain(account(), path);
+      const bare = await plain(account(), `${path}?names=false`);
+
+      const counts = (part: Figures | null) => (part === null ? null : figuresOf(part));
+      const rows = (body: Readiness) =>
+        body.rows.map((row) => ({ leader: row.leader, network: row.network, ...figuresOf(row) }));
+      expect(bare.rows.map((row) => row.members)).toEqual(bare.rows.map(() => undefined));
+      expect(bare.own === null || bare.own.members === undefined).toBe(true);
+      expect(bare.elsewhere === null || bare.elsewhere.members === undefined).toBe(true);
+      expect(rows(bare)).toEqual(rows(full));
+      expect(counts(bare.own)).toEqual(counts(full.own));
+      expect(counts(bare.elsewhere)).toEqual(counts(full.elsewhere));
+      expect(bare.total).toEqual(full.total);
+    });
+
+    it.each([
+      ['the whole church', () => admin],
+      ['a leader', () => manuelAccount],
+    ])("%s: each row's people are exactly its leader's own table, joined", async (_, account) => {
+      const table = await plain(account(), '/api/v1/suynl/readiness');
+      expect(table.rows.length).toBeGreaterThan(0);
+
+      for (const row of table.rows) {
+        const opened = await plain(account(), `/api/v1/suynl/readiness/${row.leader!.id}`);
+        const joined = [
+          ...(opened.own?.members ?? []),
+          ...opened.rows.flatMap((each) => each.members),
+        ].map((member) => member.person_id);
+
+        expect(new Set(joined).size).toBe(joined.length);
+        expect(joined.sort()).toEqual(row.members.map((member) => member.person_id).sort());
+      }
+    });
+
+    it('refuses a names value that is neither true nor false', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/suynl/readiness?names=banana')
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`);
+      expect(response.status).toBe(422);
+    });
+  });
 });
