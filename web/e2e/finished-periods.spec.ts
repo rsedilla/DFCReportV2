@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
-import { mockCellReport, mockCellTwelve, mockDccReport, mockDccTwelve } from './mock-attendance';
+import {
+  mockCellReport,
+  mockCellTwelve,
+  mockDccReport,
+  mockDccTwelve,
+  TWELVE,
+} from './mock-attendance';
 
 /**
  * Quarterly and Year for a reader without Reports at Whole Church (SKILL.md section 19,
@@ -106,6 +112,33 @@ for (const each of TABS) {
       await expect(label(page, '2026')).toBeVisible();
       await expect(page.getByText('2027 opens on 1 January 2028.', { exact: true })).toBeVisible();
       await expect(before(page)).toBeDisabled();
+    });
+
+    test('a leader they opened who has since left their branch still shows a quarter they may read', async ({
+      page,
+    }) => {
+      await arrange(page, each, { today: '2027-01-15' });
+      // Consuelo is outside the reader's reach at the end of Q4 2026 and inside it at the end
+      // of Q3 (decisions 0207 and 0214): only her latest quarter is refused.
+      await page.route(`**/api/v1/reports/${each.tab}/twelve*`, (route) => {
+        const params = new URL(route.request().url()).searchParams;
+        return params.get('leader_id') === TWELVE.consuelo.id && params.get('start') === '2026-10-01'
+          ? route.fulfill({
+              status: 403,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
+              }),
+            })
+          : route.fallback();
+      });
+
+      await page.goto(
+        `/reports/${each.tab}?period=quarter&start=2026-07-01&leader=${TWELVE.consuelo.id}`,
+      );
+      await expect(label(page, 'Q3 2026 · Jul–Sep')).toBeVisible();
+      await expect(page.getByRole('heading', { name: /’s 12 · their journey$/ })).toBeVisible();
+      await expect(page.getByText('Outside your scope.')).toHaveCount(0);
     });
 
     test('reaches back four quarters and no further', async ({ page }) => {

@@ -88,13 +88,14 @@ export function CellReport() {
       : null;
   const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
 
-  // The last finished period is both what a leader sees first and where the screen learns
-  // the calendar's first Sunday, which every report answer carries.
+  // The calendar's first Sunday, which every report answer carries, is read from the reader's
+  // own last finished period: a leader they opened may have left their branch since (decisions
+  // 0207 and 0214).
   const probe = useQuery({
-    queryKey: ['cell-twelve', kind, latest, subject],
+    queryKey: ['cell-twelve', kind, latest, own],
     queryFn: ({ signal }) =>
-      getCellTwelve(kind, latest, rangeGuardMonth(kind, latest, today), subject!, signal),
-    enabled: finishedOnly && subject !== null,
+      getCellTwelve(kind, latest, rangeGuardMonth(kind, latest, today), own!, signal),
+    enabled: finishedOnly && own !== null,
   });
   const chosen =
     finishedKind === null
