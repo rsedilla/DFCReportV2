@@ -630,7 +630,7 @@ function Dashboard() {
               ? shown.some((item) => item.month === previousMonth)
               : owedRows.some((row) => row.month === previousMonth)) ? (
               <p className="mt-4 text-sm">
-                {monthLabel(previousMonth).split(' ')[0]} closes{' '}
+                {monthLabel(previousMonth).split(' ')[0]} is open until the end of{' '}
                 {dayLabel(`${month.slice(0, 8)}07`)}.
               </p>
             ) : null}

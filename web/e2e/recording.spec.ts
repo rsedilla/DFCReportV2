@@ -1142,14 +1142,14 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard?whose=branch');
 
-    await expect(page.getByText('June closes Tuesday 7 July.')).toBeVisible();
+    await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toBeVisible();
     await page.getByRole('button', { name: 'Ana Lim' }).click();
     await expect(
       page.getByRole('table', { name: 'Awaiting a record, Ana Lim' }).getByText('June · open until 7 Jul').first(),
     ).toBeVisible();
 
     await page.getByRole('radio', { name: 'Mine' }).check();
-    await expect(page.getByText('June closes Tuesday 7 July.')).toHaveCount(0);
+    await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toHaveCount(0);
   });
 
   test('rows say how long a meeting has waited, in words', async ({ page }) => {
