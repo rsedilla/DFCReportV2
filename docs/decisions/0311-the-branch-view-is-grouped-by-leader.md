@@ -25,8 +25,10 @@ how long a gap has stood (section 5), which a list of who owes a record does not
 Its switch reads *Mine* rather than *My own Cells* or *My own checklist*, which suits both the
 Cell and DCC lists.
 
-**5. The screen applies this, and the API does not.** The route, who is listed and what each row
-carries are unchanged (decision 0258, points 2 and 3; decision 0301).
+**5. The screen applies this.** Who is listed and what each row allows are unchanged (decision
+0258, points 2 and 3; decision 0301). The two routes add each leader's surname, first name and
+Member ID beside the name they already send, because the order cannot be taken from a full name
+(owner's choice of 2026-10-05).
 
 ## Why
 
