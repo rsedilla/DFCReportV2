@@ -590,6 +590,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
           leader: {
             id: entry.leaderPersonId,
             full_name: leader?.fullName ?? null,
+            // The parts the branch view sorts by, which a full name cannot give
+            // (decision 0311): a surname may be two words and a title comes first.
+            last_name: leader?.lastName ?? null,
+            first_name: leader?.firstName ?? null,
+            member_id: leader?.memberId ?? null,
             is_actor: isActor(entry.leaderPersonId),
           },
           may_record: mayRecord(entry.leaderPersonId),

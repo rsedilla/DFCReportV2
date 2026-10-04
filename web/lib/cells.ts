@@ -173,7 +173,15 @@ export interface AwaitingMeeting {
   /** Members on the scheduled date, by the rule the meeting's roster uses. */
   member_count: number;
   /** The leader who files it (decision 0251), named for the branch view (decision 0258). */
-  leader: { id: string; full_name: string | null; is_actor: boolean };
+  leader: {
+    id: string;
+    full_name: string | null;
+    /** What the branch view sorts by (decision 0311): a full name cannot give it. */
+    last_name: string | null;
+    first_name: string | null;
+    member_id: string | null;
+    is_actor: boolean;
+  };
   /** Whether this actor may record it: their own, or on the leader's behalf (§14). */
   may_record: boolean;
 }

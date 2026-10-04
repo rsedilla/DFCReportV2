@@ -686,6 +686,8 @@ const SCANS = [
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('radio', { name: 'People I oversee' }).check();
+      // Opened, so the scan reaches a leader's rows as well as the lines (decision 0311).
+      await page.getByRole('button', { name: 'Ana Lim' }).click();
       await expect(
         page.getByRole('link', { name: /^Record Young Pro · Fri,/ }),
       ).toBeVisible();

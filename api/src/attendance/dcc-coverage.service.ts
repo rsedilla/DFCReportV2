@@ -676,6 +676,9 @@ export class DccCoverageService {
           person_id: line.leaderId,
           member_id: line.memberId,
           full_name: line.fullName,
+          // What the branch view sorts by (decision 0311), as the order above is.
+          last_name: line.lastName,
+          first_name: line.firstName,
           is_actor: canonicalId(line.leaderId) === me,
           // The reader files this leader's records themselves (section 9): the leader holds
           // no account and the reader is the nearest upline who does, so the leader's

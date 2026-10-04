@@ -244,7 +244,14 @@ export interface AwaitingRow {
   day_of_week: number;
   category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE' | null;
   member_count: number;
-  leader: { id: string; full_name: string | null; is_actor: boolean };
+  leader: {
+    id: string;
+    full_name: string | null;
+    last_name: string | null;
+    first_name: string | null;
+    member_id: string | null;
+    is_actor: boolean;
+  };
   may_record: boolean;
 }
 
@@ -256,7 +263,14 @@ function isoWeekday(date: string): number {
 }
 
 /** The queue's leader for a row that is the reader's own. */
-const OWN = { id: LEADER_ID, full_name: 'Teofilo Ramos', is_actor: true };
+const OWN = {
+  id: LEADER_ID,
+  full_name: 'Teofilo Ramos',
+  last_name: 'Ramos',
+  first_name: 'Teofilo',
+  member_id: 'M-000412',
+  is_actor: true,
+};
 
 /** A meeting of a Cell still `ACTIVE`, which is the ordinary row. */
 export function awaitingRow(date: string, month: string, time = '19:00'): AwaitingRow {
@@ -347,6 +361,9 @@ export async function mockMeetingsAwaiting(
                     leader: {
                       id: '3f1b7c6e-0000-4000-8000-000000000299',
                       full_name: 'Ana Lim',
+                      last_name: 'Lim',
+                      first_name: 'Ana',
+                      member_id: 'M-000415',
                       is_actor: false,
                     },
                     may_record: true,
@@ -520,6 +537,8 @@ export async function mockDccOwed(page: Page): Promise<void> {
               person_id: OWED_LEADER_ID,
               member_id: 'M-000711',
               full_name: 'Carlo Reyes',
+              last_name: 'Reyes',
+              first_name: 'Carlo',
               is_actor: false,
               recorded_by_you: false,
             },
@@ -531,6 +550,8 @@ export async function mockDccOwed(page: Page): Promise<void> {
               person_id: LEADER_ID,
               member_id: 'M-000700',
               full_name: 'The reader',
+              last_name: 'Reader',
+              first_name: 'The',
               is_actor: true,
               recorded_by_you: true,
             },

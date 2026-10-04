@@ -198,7 +198,14 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
     scheduled_date: string;
     category: string | null;
     member_count: number;
-    leader: { id: string; full_name: string | null; is_actor: boolean };
+    leader: {
+      id: string;
+      full_name: string | null;
+      last_name: string | null;
+      first_name: string | null;
+      member_id: string | null;
+      is_actor: boolean;
+    };
     may_record: boolean;
   }
 
@@ -262,6 +269,9 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
         expect(row.leader).toEqual({
           id: manuel.id,
           full_name: 'Manuel Bautista',
+          last_name: 'Bautista',
+          first_name: 'Manuel',
+          member_id: expect.stringMatching(/^M-\d{6}$/),
           is_actor: true,
         });
         expect(row.may_record).toBe(true);
@@ -283,7 +293,14 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
       const markRows = rowsOf(response.body, markCell);
       expect(markRows.map((row) => row.scheduled_date)).toEqual(dates);
       for (const row of markRows) {
-        expect(row.leader).toEqual({ id: mark.id, full_name: 'Mark Castillo', is_actor: false });
+        expect(row.leader).toEqual({
+          id: mark.id,
+          full_name: 'Mark Castillo',
+          last_name: 'Castillo',
+          first_name: 'Mark',
+          member_id: expect.stringMatching(/^M-\d{6}$/),
+          is_actor: false,
+        });
         // Manuel is a LEADER, holding cell.submit_on_behalf over his own subtree.
         expect(row.may_record).toBe(true);
       }
