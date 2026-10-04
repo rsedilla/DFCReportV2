@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { SettingsModule } from '../admin/settings/settings.module';
 import { AttendanceModule } from '../attendance/attendance.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
@@ -30,6 +31,8 @@ import { ReportingService } from './reporting.service';
   // Decision 0254: the by-leader lists name a leader only where the reader could open
   // them, which `authorization` answers, and name them through `people`. Neither imports
   // this module, so neither is a cycle.
+  // Decision 0310: the My 12 answers carry the DCC calendar's first Sunday, which `settings`
+  // owns. `SettingsModule` imports nothing, so not a cycle.
   imports: [
     AttendanceModule,
     AuthorizationModule,
@@ -37,6 +40,7 @@ import { ReportingService } from './reporting.service';
     HierarchyModule,
     NetworksModule,
     PeopleModule,
+    SettingsModule,
   ],
   controllers: [ReportingController],
   providers: [ReportingService],

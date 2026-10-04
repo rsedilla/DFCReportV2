@@ -65,12 +65,19 @@ const BEFORE = {
   YEAR: { label: '2025', start: '2025-01-01', period: '2025-12-01', open: false },
 } as const;
 
-async function arrange(page: Page, options: { ownCells?: number } = {}) {
+/**
+ * `church` reads as a whole-church reader, who keeps the running quarter and year; a leader
+ * is offered finished ones only (decision 0310, pinned in `finished-periods.spec.ts`).
+ */
+async function arrange(page: Page, options: { ownCells?: number; church?: boolean } = {}) {
   await page.clock.setFixedTime(NOW);
   await mockSignedIn(page);
+  if (options.church) {
+    await mockWholeChurchReader(page);
+  }
   // Year's month-by-month table reads the monthly report once per month begun.
   await mockCellReport(page);
-  return mockCellTwelve(page, { today: TODAY, ...options });
+  return mockCellTwelve(page, { today: TODAY, ownCells: options.ownCells });
 }
 
 /**
@@ -105,7 +112,7 @@ test.describe('the four periods (decision 0293)', () => {
   test('opens on Monthly, and each button asks for its own period and keeps it in the address', async ({
     page,
   }) => {
-    const asked = await arrange(page);
+    const asked = await arrange(page, { church: true });
     await page.goto('/reports/cells');
 
     const group = periodGroup(page);
@@ -118,8 +125,8 @@ test.describe('the four periods (decision 0293)', () => {
       kind: 'MONTH',
       start: '2026-06-01',
       period: '2026-06-01',
-      scope: 'LEADER',
-      leader_id: READER,
+      scope: 'WHOLE_CHURCH',
+      leader_id: null,
     });
 
     // Switching length always opens the current period, so Monthly's address names no month
@@ -147,7 +154,7 @@ test.describe('the four periods (decision 0293)', () => {
   });
 
   test('an address opens the period it names, and a reload keeps it', async ({ page }) => {
-    const asked = await arrange(page);
+    const asked = await arrange(page, { church: true });
 
     await page.goto('/reports/cells?period=week&start=2026-06-08');
     await expect(periodLabel(page, '8 Jun – 14 Jun 2026')).toBeVisible();
@@ -216,7 +223,7 @@ test.describe('the navigator', () => {
     test(`${each.button}: › stops at the current period, and ‹ opens the one before`, async ({
       page,
     }) => {
-      const asked = await arrange(page);
+      const asked = await arrange(page, { church: each.kind === 'QUARTER' || each.kind === 'YEAR' });
       await page.goto(`/reports/cells?${each.address}`);
 
       const before = page.getByRole('button', { name: 'The period before' });
@@ -471,7 +478,7 @@ test.describe('the coverage line', () => {
     test(`${each.button}: one line, linking to Filed reports on Monthly alone`, async ({
       page,
     }) => {
-      await arrange(page);
+      await arrange(page, { church: each.kind === 'QUARTER' || each.kind === 'YEAR' });
       await page.goto(`/reports/cells?${each.address}`);
 
       // Year 2026 is due through the end of June, the current month; the week, the month and
@@ -614,18 +621,19 @@ test.describe('Year', () => {
   test('keeps its month-by-month table beneath My 12, and no other period shows one', async ({
     page,
   }) => {
-    await arrange(page);
+    await arrange(page, { church: true });
     await page.goto('/reports/cells?period=year');
 
     const months = page.getByRole('heading', { name: 'Month by month, January to June 2026' });
     await expect(months).toBeVisible();
-    const twelve = page.getByRole('heading', { name: /^My 12 · / });
+    // A whole-church reader's table is headed by the church rather than "My 12".
+    const twelve = page.getByRole('heading', { name: / · their journey$/ });
     const [top, bottom] = await Promise.all([twelve.boundingBox(), months.boundingBox()]);
     expect(top!.y).toBeLessThan(bottom!.y);
 
     for (const each of PERIODS.filter((period) => period.kind !== 'YEAR')) {
       await page.goto(`/reports/cells?${each.address}`);
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /^Month by month/ })).toHaveCount(0);
     }
   });

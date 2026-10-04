@@ -13,6 +13,8 @@ import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
+import { SettingsService } from '../../src/admin/settings/settings.service';
+import { AuditModule } from '../../src/audit/audit.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createCell, createPerson } from '../setup/fixtures';
 
@@ -107,7 +109,7 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
     db = createTestDb();
 
     const moduleRef = await Test.createTestingModule({
-      imports: [AppConfigModule, DatabaseModule],
+      imports: [AppConfigModule, DatabaseModule, AuditModule],
       providers: [
         CellFiguresService,
         DccFiguresService,
@@ -119,6 +121,7 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
         HierarchyService,
         NetworksService,
         ReportingService,
+        SettingsService,
       ],
     }).compile();
 

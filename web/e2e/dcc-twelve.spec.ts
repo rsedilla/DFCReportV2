@@ -55,9 +55,19 @@ const PERIODS = [
   },
 ] as const;
 
-async function arrange(page: Page, options: { expectPeriod?: string; today?: string } = {}) {
+/**
+ * `church` reads as a whole-church reader, who keeps the running quarter and year; a leader
+ * is offered finished ones only (decision 0310, pinned in `finished-periods.spec.ts`).
+ */
+async function arrange(
+  page: Page,
+  { church, ...options }: { expectPeriod?: string; today?: string; church?: boolean } = {},
+) {
   await page.clock.setFixedTime(NOW);
   await mockSignedIn(page);
+  if (church) {
+    await mockWholeChurchReader(page);
+  }
   // Year's month-by-month table reads the monthly report once per month begun.
   await mockDccReport(page);
   return mockDccTwelve(page, { today: TODAY, ...options });
@@ -93,7 +103,7 @@ test.describe('the four periods (decision 0294)', () => {
   test('opens on Monthly, and each button asks DCC’s My 12 for its own period', async ({
     page,
   }) => {
-    const asked = await arrange(page);
+    const asked = await arrange(page, { church: true });
     await page.goto('/reports/dcc');
 
     const group = periodGroup(page);
@@ -106,8 +116,8 @@ test.describe('the four periods (decision 0294)', () => {
       kind: 'MONTH',
       start: '2026-06-01',
       period: '2026-06-01',
-      scope: 'LEADER',
-      leader_id: READER,
+      scope: 'WHOLE_CHURCH',
+      leader_id: null,
     });
 
     for (const each of [PERIODS[3], PERIODS[2], PERIODS[0], PERIODS[1]]) {
@@ -439,18 +449,19 @@ test.describe('How often people came, and Year', () => {
   test('Year keeps its month-by-month table beneath My 12, and no other period shows one', async ({
     page,
   }) => {
-    await arrange(page);
+    await arrange(page, { church: true });
     await page.goto('/reports/dcc?period=year');
 
     const months = page.getByRole('heading', { name: 'Month by month, January to June 2026' });
     await expect(months).toBeVisible();
-    const twelve = page.getByRole('heading', { name: /^My 12 · / });
+    // A whole-church reader's table is headed by the church rather than "My 12".
+    const twelve = page.getByRole('heading', { name: / · their journey$/ });
     const [top, bottom] = await Promise.all([twelve.boundingBox(), months.boundingBox()]);
     expect(top!.y).toBeLessThan(bottom!.y);
 
     for (const each of PERIODS.filter((period) => period.kind !== 'YEAR')) {
       await page.goto(`/reports/dcc?${each.address}`);
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /^Month by month/ })).toHaveCount(0);
     }
   });
