@@ -72,12 +72,15 @@ export function RangeNavigator({
   kind,
   start,
   current,
+  earliest,
   open,
   onChange,
 }: {
   kind: RangeKind;
   start: string;
   current: string;
+  /** The earliest period this reader is offered, where there is one (decision 0310). */
+  earliest?: string;
   open: boolean | undefined;
   onChange: (start: string) => void;
 }) {
@@ -90,6 +93,7 @@ export function RangeNavigator({
         type="button"
         className={button}
         aria-label="The period before"
+        disabled={earliest !== undefined && start <= earliest}
         onClick={() => onChange(shiftRange(kind, start, -1))}
       >
         ‹

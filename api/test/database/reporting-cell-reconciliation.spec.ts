@@ -15,6 +15,8 @@ import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
+import { SettingsService } from '../../src/admin/settings/settings.service';
+import { AuditModule } from '../../src/audit/audit.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createCell, createPerson } from '../setup/fixtures';
 
@@ -133,7 +135,7 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
     // file gives: importing the module pulls most of the application graph, which this file
     // has no use for. `module-graph.spec.ts` is what asserts the real module resolves.
     const moduleRef = await Test.createTestingModule({
-      imports: [AppConfigModule, DatabaseModule],
+      imports: [AppConfigModule, DatabaseModule, AuditModule],
       providers: [
         CellFiguresService,
         DccFiguresService,
@@ -145,6 +147,7 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
         HierarchyService,
         NetworksService,
         ReportingService,
+        SettingsService,
       ],
     }).compile();
 

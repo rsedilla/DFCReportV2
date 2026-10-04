@@ -18,6 +18,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
+import { SettingsService } from '../admin/settings/settings.service';
 
 import type { Transaction } from 'kysely';
 import {
@@ -239,6 +240,11 @@ export interface CellTwelve {
   overlap: number;
   elsewhere: number;
   total: TwelveFigure;
+  /**
+   * The DCC calendar's first Sunday, or null until it has one (decision 0310): a leader's
+   * screen offers no quarter or year ending before it.
+   */
+  calendar_start: string | null;
 }
 
 /** Who a My 12 table is about: one leader, or Whole Church for a whole-church reader. */
@@ -275,6 +281,11 @@ export interface DccTwelve {
   elsewhere: number;
   total: TwelveFigure;
   buckets: AttendanceBucket[] | null;
+  /**
+   * The DCC calendar's first Sunday, or null until it has one (decision 0310): a leader's
+   * screen offers no quarter or year ending before it.
+   */
+  calendar_start: string | null;
 }
 
 /**
@@ -335,6 +346,7 @@ export class ReportingService {
     private readonly cells: CellsReadService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -650,6 +662,7 @@ export class ReportingService {
         overlap: counted - union.size,
         elsewhere,
         total: figureOf(totalPeople),
+        calendar_start: await this.settings.dccCalendarStartWithin(trx),
       };
     });
   }
@@ -768,6 +781,7 @@ export class ReportingService {
         elsewhere: total.people.filter((p) => !union.has(canonicalId(p.personId))).length,
         total: figureOf(total.people),
         buckets: kind === 'MONTH' ? bucket(total.people, total.n) : null,
+        calendar_start: await this.settings.dccCalendarStartWithin(trx),
       };
     });
   }

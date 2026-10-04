@@ -1186,7 +1186,8 @@ export async function mockCellTwelve(
     today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
     ownCells = 2,
     expectPeriod,
-  }: { today?: string; ownCells?: number; expectPeriod?: string } = {},
+    calendarStart = '2025-01-05',
+  }: { today?: string; ownCells?: number; expectPeriod?: string; calendarStart?: string | null } = {},
 ): Promise<URLSearchParams[]> {
   const asked: URLSearchParams[] = [];
 
@@ -1201,7 +1202,14 @@ export async function mockCellTwelve(
     const closes = new Date(Date.UTC(year, month, 7)).toISOString().slice(0, 10);
     const monthEnd = twelveEnd('MONTH', `${today.slice(0, 7)}-01`);
     const through = end < monthEnd ? end : monthEnd;
-    const period = { kind, start, end, open: today <= closes, coverage: { recorded: 6, scheduled: 8, through } };
+    const period = {
+      kind,
+      start,
+      end,
+      open: today <= closes,
+      coverage: { recorded: 6, scheduled: 8, through },
+      calendar_start: calendarStart,
+    };
 
     if (expectPeriod !== undefined && params.get('period') !== expectPeriod) {
       return route.fulfill(
@@ -1318,7 +1326,8 @@ export async function mockDccTwelve(
   {
     today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
     expectPeriod,
-  }: { today?: string; expectPeriod?: string } = {},
+    calendarStart = '2025-01-05',
+  }: { today?: string; expectPeriod?: string; calendarStart?: string | null } = {},
 ): Promise<URLSearchParams[]> {
   const asked: URLSearchParams[] = [];
 
@@ -1344,6 +1353,7 @@ export async function mockDccTwelve(
       open: today <= closes,
       coverage: { met: 12, owed: 18 },
       ...sundays,
+      calendar_start: calendarStart,
     };
     const buckets = (people: number[]) =>
       kind === 'MONTH'

@@ -14,6 +14,8 @@ import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
+import { SettingsService } from '../../src/admin/settings/settings.service';
+import { AuditModule } from '../../src/audit/audit.module';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
 import { currentReportingMonth } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -126,7 +128,7 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // rows. It lives on `CellFiguresService` instead, which is a figure service taking a
     // database and nothing else — and which was already in this list.*
     const moduleRef = await Test.createTestingModule({
-      imports: [AppConfigModule, DatabaseModule],
+      imports: [AppConfigModule, DatabaseModule, AuditModule],
       providers: [
         CellFiguresService,
         DccFiguresService,
@@ -138,6 +140,7 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
         HierarchyService,
         NetworksService,
         ReportingService,
+        SettingsService,
       ],
     }).compile();
 

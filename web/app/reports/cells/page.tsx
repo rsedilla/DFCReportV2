@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
 import { PeriodTabs, RangeNavigator, TwelveTable } from '@/components/my-twelve';
@@ -15,6 +16,7 @@ import { CONTROL_BAR } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
+import { choosePeriod, latestFinished } from '@/lib/finished-periods';
 import { getCellTwelve } from '@/lib/reports';
 import {
   rangeGuardMonth,
@@ -69,18 +71,15 @@ export function CellReport() {
 
   const kind: RangeKind = PERIOD_PARAM[search.get('period') ?? ''] ?? 'MONTH';
   const current = rangeStartOf(kind, today);
-  const asked =
-    kind === 'MONTH'
-      ? monthFromQuery(search.get('month'))
-      : rangeStartOf(kind, search.get('start') ?? current);
-  // A period that has not begun is not reported (decision 0216), so an address naming one
-  // opens the current period instead.
-  const start = asked > current ? current : asked;
-  const guardMonth = rangeGuardMonth(kind, start, today);
   const leader = search.get('leader');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
+  // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
+  // only, so they wait to know who is reading before asking for any.
+  const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
+  const finishedOnly = finishedKind !== null && me.data !== undefined && !wholeChurch;
+  const latest = latestFinished(kind, today);
 
   const own = wholeChurch
     ? ({ kind: 'WHOLE_CHURCH' } as const)
@@ -89,16 +88,55 @@ export function CellReport() {
       : null;
   const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
 
+  // The calendar's first Sunday, which every report answer carries, is read from the reader's
+  // own last finished period: a leader they opened may have left their branch since (decisions
+  // 0207 and 0214).
+  const probe = useQuery({
+    queryKey: ['cell-twelve', kind, latest, own],
+    queryFn: ({ signal }) =>
+      getCellTwelve(kind, latest, rangeGuardMonth(kind, latest, today), own!, signal),
+    enabled: finishedOnly && own !== null,
+  });
+  const chosen =
+    finishedKind === null
+      ? null
+      : me.data === undefined
+        ? ({ ready: false } as const)
+        : choosePeriod(
+            finishedKind,
+            today,
+            search.get('start'),
+            finishedOnly,
+            finishedOnly ? probe.data?.calendar_start : null,
+          );
+  const reach = chosen?.ready ? chosen.reach : null;
+  const periodReady = chosen === null || (chosen.ready && chosen.start !== null);
+  const asked =
+    kind === 'MONTH'
+      ? monthFromQuery(search.get('month'))
+      : rangeStartOf(kind, search.get('start') ?? current);
+  // A period that has not begun is not reported (decision 0216), so an address naming one
+  // opens the current period instead.
+  const start =
+    chosen === null
+      ? asked > current
+        ? current
+        : asked
+      : chosen.ready && chosen.start !== null
+        ? chosen.start
+        : latest;
+  const guardMonth = rangeGuardMonth(kind, start, today);
+
   const twelve = useQuery({
     queryKey: ['cell-twelve', kind, start, subject],
     queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, subject!, signal),
-    enabled: subject !== null,
+    enabled: subject !== null && periodReady,
   });
   // The reader's own rows, which Figures for offers whichever leader is open.
   const ownTwelve = useQuery({
     queryKey: ['cell-twelve', kind, start, own],
     queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, own!, signal),
-    enabled: own !== null,
+    enabled: own !== null && periodReady,
   });
   const opened = useQuery({
     queryKey: ['branch', leader],
@@ -137,15 +175,22 @@ export function CellReport() {
         }
       />
 
+      {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
+        <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
+      ) : null}
+
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
-        <RangeNavigator
-          kind={kind}
-          start={start}
-          current={current}
-          open={twelve.data?.open}
-          onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
-        />
+        {reach?.kind === 'none' ? null : (
+          <RangeNavigator
+            kind={kind}
+            start={start}
+            current={reach?.kind === 'open' ? reach.latest : current}
+            earliest={reach?.kind === 'open' ? reach.earliest : undefined}
+            open={twelve.data?.open}
+            onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
+          />
+        )}
         <div>
           <label htmlFor="cell-scope" className="field-label block">
             Figures for
@@ -171,6 +216,10 @@ export function CellReport() {
         </div>
       </div>
 
+      {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
+        <NextOpens kind={finishedKind} start={start} />
+      ) : null}
+
       {leader ? (
         <LeaderDrill
           personId={leader}
@@ -185,14 +234,18 @@ export function CellReport() {
           failure={
             twelve.isError
               ? describeFailure(twelve.error)
-              : me.isError
-                ? describeFailure(me.error)
-                : null
+              : probe.isError
+                ? describeFailure(probe.error)
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null
           }
         />
       </div>
 
-      {twelve.isPending || subject === null ? (
+      {finishedKind !== null && reach?.kind === 'none' ? (
+        <NotYetOffered kind={finishedKind} reach={reach} />
+      ) : twelve.isPending || subject === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : twelve.data ? (
         <div className="mt-6 flex flex-col gap-4">

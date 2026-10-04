@@ -219,6 +219,8 @@ export interface CellTwelve {
   /** People in the total and in no row. */
   elsewhere: number;
   total: TwelveFigure;
+  /** The DCC calendar's first Sunday, or null before it has one (decision 0310). */
+  calendar_start: string | null;
 }
 
 /**

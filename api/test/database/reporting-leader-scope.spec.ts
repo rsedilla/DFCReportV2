@@ -13,6 +13,8 @@ import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
+import { SettingsService } from '../../src/admin/settings/settings.service';
+import { AuditModule } from '../../src/audit/audit.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson } from '../setup/fixtures';
 
@@ -73,13 +75,14 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     db = createTestDb();
 
     const moduleRef = await Test.createTestingModule({
-      imports: [AppConfigModule, DatabaseModule],
+      imports: [AppConfigModule, DatabaseModule, AuditModule],
       // `NetworksService` is here for Network scope (decision 0219), which this file never
       // asks for: every scope goes through one constructor, so a provider is owed by the
       // class rather than by the cases. Two hand-built test modules needed it and the
       // second was found by the full suite rather than by the file being changed.
       providers: [
         ReportingService,
+        SettingsService,
         CellFiguresService,
         DccFiguresService,
         DccCoverageService,

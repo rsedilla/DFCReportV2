@@ -1202,6 +1202,8 @@ test.describe('the year view (decision 0257)', () => {
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
+    // The running year is a whole-church reader's to see (decision 0310).
+    await mockWholeChurchReader(page);
     await page.route('**/api/v1/reports/dcc/monthly*', (route) => {
       const period = new URL(route.request().url()).searchParams.get('period') ?? '';
       const figures = FIGURES[period];

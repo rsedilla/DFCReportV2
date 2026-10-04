@@ -258,6 +258,7 @@ export class ReportingController {
       overlap: twelve.overlap,
       elsewhere: twelve.elsewhere,
       total: twelve.total,
+      calendar_start: twelve.calendar_start,
     };
   }
 
@@ -302,6 +303,7 @@ export class ReportingController {
       elsewhere: twelve.elsewhere,
       total: twelve.total,
       buckets: twelve.buckets,
+      calendar_start: twelve.calendar_start,
     };
   }
 
