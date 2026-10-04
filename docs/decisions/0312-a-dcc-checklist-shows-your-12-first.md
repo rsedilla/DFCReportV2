@@ -7,20 +7,29 @@ chose, from a clickable copy, to keep everybody on the list and split it into se
 
 ## The ruling
 
+This is the Sunday recording screen. The Record page's month grid and another leader's read-only
+checklist (decision 0301) are unchanged.
+
 **1. The checklist opens with the people whose direct pastoral leader is the reader**, headed
-*Your 12*, with its own count of how many are marked.
+*Your 12*, with how many of them are marked. It is left out when it would be empty.
 
 **2. Then one section per leader who holds no account and whose people fall to the reader**,
-headed by that leader's name and a line saying they have no account yet, with its own count. The
-sections follow surname order, as each section's people do.
+headed by that leader's name and a line saying they have no account yet. No count stands beside
+another leader's name (section 13, decision 0293), as in decision 0311. Where that leader's own
+line is not on the page, the heading says *A leader without an account*.
 
-**3. Who is on the checklist is unchanged**, and one Save covers every section. Once that leader
-has an account, their section leaves the reader's checklist, because their people are theirs to
-record.
+**3. Then, on a checklist holding them, the two Network roots in a section of their own.** A root
+has no leader, so a root's line falls in neither section above; it reaches the checklist of a
+Whole Church holder of `dcc.take_attendance` (section 9). The owner's practice is that the Admin
+records them.
 
-**4. The screen applies this, and the API does not.** Each line already names the person's direct
-pastoral leader, and every such leader whose people fall to the reader is on the same checklist,
-because the walk passes through them (section 9).
+**4. The total marked stays above the sections, and one Save covers them all.** Sections and the
+people in them follow surname, then first name, then Member ID (section 8). Who is on the
+checklist is unchanged. Once a leader has an account, their section leaves the reader's
+checklist, because their people are theirs to record.
+
+**5. The screen applies this, and the API does not.** Each line names the person's direct pastoral
+leader, or none for a root.
 
 ## Why
 

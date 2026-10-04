@@ -14,14 +14,16 @@ shows that leader's rows as today, each carrying its action, Record or See check
 0301), and its own month label. The line is a heading over those entries, not an entry. This
 applies to the Cell and DCC lists alike.
 
-**2. Leaders are listed A to Z by surname, Member ID breaking a tie** (decision 0259). No count
+**2. Leaders are listed by surname, then first name, then Member ID** (section 8). No count
 and no date stand on the line: a figure beside every leader in the branch would compare leaders
 who do not oversee one another (section 13, decision 0293), and an oldest date is a measure of
 how long a gap has stood (section 5), which a list of who owes a record does not carry.
 
 **3. The close of last month's open work is also stated once, above the list.**
 
-**4. *My own Cells* is unchanged**, one row per meeting, because a leader's own list is short.
+**4. The leader's own view is unchanged**, one row per meeting, because their own list is short.
+Its switch reads *Mine* rather than *My own Cells* or *My own checklist*, which suits both the
+Cell and DCC lists.
 
 **5. The screen applies this, and the API does not.** The route, who is listed and what each row
 carries are unchanged (decision 0258, points 2 and 3; decision 0301).
