@@ -126,12 +126,16 @@ export class ConquestService {
 
     // Only somebody who has had a disciple or opened a Cell can have reached a goal.
     const scope = population === null ? null : [...population];
-    const leaders = (await this.hierarchy.edgeHistoryOf(this.db, scope)).map(
-      (edge) => edge.leaderId,
-    );
+    const edges = await this.hierarchy.edgeHistoryOf(this.db, scope);
     const openers = [...(await this.cells.openingsOf(scope)).keys()];
 
-    const goals = await this.goalsOf(unique([...leaders, ...openers]), now);
+    // Every leader and opener is inside the scope, so the edges just read are all theirs.
+    const goals = await this.goalsOf(
+      unique([...edges.map((edge) => edge.leaderId), ...openers]),
+      now,
+      edges,
+      population === null,
+    );
     const identities = keyed(await this.people.forDecisions([...goals.keys()]));
     const listed = population === null ? null : new Set([...population].map(canonicalId));
 
@@ -153,22 +157,37 @@ export class ConquestService {
     return empty;
   }
 
-  /** The four goals of each of these people, keyed by canonical id. */
-  private async goalsOf(personIds: readonly string[], now: Date): Promise<Map<string, Goals>> {
+  /**
+   * The four goals of each of these people, keyed by canonical id. `known` is every edge
+   * under them already read by the caller, so the history is not read twice. `everyone`
+   * reads the lessons, leaderships and openings of the whole church rather than sending
+   * every disciple's id: rows nobody asked about are never looked up, and a list that long
+   * costs more to send than the queries cost to run (checklist row perf-conquest).
+   */
+  private async goalsOf(
+    personIds: readonly string[],
+    now: Date,
+    known?: Awaited<ReturnType<HierarchyService['edgeHistoryOf']>>,
+    everyone = false,
+  ): Promise<Map<string, Goals>> {
     const result = new Map<string, Goals>();
     if (personIds.length === 0) {
       return result;
     }
 
-    const edges = await this.hierarchy.edgeHistoryOf(this.db, personIds);
-    const disciples = unique(edges.map((edge) => edge.personId));
+    const asked = new Set(personIds.map(canonicalId));
+    const edges =
+      known === undefined
+        ? await this.hierarchy.edgeHistoryOf(this.db, personIds)
+        : known.filter((edge) => asked.has(canonicalId(edge.leaderId)));
+    const disciples = everyone ? null : unique(edges.map((edge) => edge.personId));
     const thirdLessons = keyed(await this.suynl.thirdLessonInstantsOf(disciples));
     const leading = new Map<string, Period[]>();
     for (const entry of await this.cells.leadershipPeriodsOf(disciples)) {
       const key = canonicalId(entry.personId);
       leading.set(key, [...(leading.get(key) ?? []), period(entry.startedAt, entry.endedAt)]);
     }
-    const openings = keyed(await this.cells.openingsOf(personIds));
+    const openings = keyed(await this.cells.openingsOf(everyone ? null : personIds));
     const byLeader = new Map<string, typeof edges>();
     for (const edge of edges) {
       const key = canonicalId(edge.leaderId);
