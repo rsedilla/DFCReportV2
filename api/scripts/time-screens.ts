@@ -2,7 +2,7 @@
  * Times every screen's API calls against the made-up church `seed:perf` builds.
  *
  *   DATABASE_URL=<dfc_perf> JWT_SECRET=<the running API's> PERF_API=http://127.0.0.1:3002 \
- *     npm run time:screens -- [--out report.md] [--only <screen>]
+ *     npm run time:screens -- [--out report.md] [--only <screen>] [--part screens|buttons]
  *
  * **It measures the server, as the website asks it.** Each screen is the calls its page
  * makes when it first opens (mapped from `web/app` on 2026-09-30), in the page's order:
@@ -15,7 +15,15 @@
  *
  * **It stays under the API's own rate limit** (120 a minute from one address) rather than
  * the API being changed to make the numbers easier, and reports the median of three.
+ *
+ * **Then it times the buttons** (checklist row perf-buttons): what a click sends once the
+ * screen is open, mapped from `web/app` on 2026-10-04 — a save and the refetches its page
+ * awaits, a next page, a month or a filter changed. A button's `setup` reads what the open
+ * screen already holds (a roster to save, a cursor) and is not timed. A save is a real
+ * correction on the made-up church: it flips one mark, so every run writes. Back is not
+ * timed: within 30 seconds it is served from cache, and after that it is the screen again.
  */
+import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 
 import { JwtService } from '@nestjs/jwt';
@@ -45,11 +53,18 @@ interface Chain {
 // A response is read loosely: this script follows ids and cursors, and checks no shapes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Body = Record<string, any>;
-type Stage = (persona: Persona, previous: Body[]) => Array<string | Chain>;
+/** A write, sent once with a fresh idempotency key. */
+interface Post {
+  post: string;
+  body: unknown;
+}
+type Stage = (persona: Persona, previous: Body[]) => Array<string | Chain | Post>;
 
 interface Screen {
   name: string;
   who?: readonly string[];
+  /** Read first and not timed: what the open screen already holds. */
+  setup?: Stage[];
   stages: Stage[];
 }
 
@@ -327,6 +342,222 @@ const SCREENS: Screen[] = [
   },
 ];
 
+/** The page after `first`, from the open page's answer; nothing when it was the last. */
+function nextPage(first: string, body: Body | undefined): string[] {
+  const joiner = first.includes('?') ? '&' : '?';
+  return body?.next_cursor
+    ? [`${first}${joiner}cursor=${encodeURIComponent(body.next_cursor)}`]
+    : [];
+}
+
+/** What Save sends from a DCC checklist: every recorded line, the first one flipped. */
+function dccSave(persona: Persona, roster: Body | undefined): Post[] {
+  const lines = (roster?.data ?? []) as Body[];
+  if (lines.length === 0) return [];
+  const recorded = lines.filter((line) => line.record);
+  const target = recorded[0] ?? lines[0];
+  const records = (recorded.length > 0 ? recorded : [target]).map((line) => ({
+    person_id: line.person_id,
+    present: line === target ? !(line.record?.present ?? false) : line.record.present,
+    version: line.record?.version ?? null,
+  }));
+  return [{ post: `/api/v1/dcc/events/${persona.sundayId}/submit`, body: { records } }];
+}
+
+/** What Save sends from a held Cell meeting: the whole roster, the first mark flipped. */
+function cellSave(persona: Persona, roster: Body | undefined): Post[] {
+  const members = (roster?.members ?? []) as Body[];
+  if (members.length === 0) return [];
+  return [
+    {
+      post: `/api/v1/cells/${persona.cellId}/meetings/${persona.meetingDate}/submit`,
+      body: {
+        status: 'HELD',
+        ...(roster?.meeting ? { version: roster.meeting.version } : {}),
+        attendance: members.map((member, index) => ({
+          person_id: member.person_id,
+          present: (index === 0) !== (member.record?.present ?? false),
+        })),
+      },
+    },
+  ];
+}
+
+const FIRST_WEEK = Number(today.slice(8, 10)) <= 7;
+const GROWTH_PAGE = 15;
+
+const BUTTONS: Screen[] = [
+  {
+    name: 'Save › DCC checklist',
+    setup: [(p) => [`/api/v1/dcc/events/${p.sundayId}/roster?limit=200`]],
+    stages: [
+      (p, [roster]) => dccSave(p, roster),
+      (p) => [`/api/v1/dcc/events/${p.sundayId}/roster?limit=200`],
+    ],
+  },
+  {
+    name: 'Save › Cell meeting',
+    who: LEADERS,
+    setup: [(p) => [`/api/v1/cells/${p.cellId}/meetings/${p.meetingDate}/roster`]],
+    stages: [
+      (p, [roster]) => cellSave(p, roster),
+      (p) => [`/api/v1/cells/${p.cellId}/meetings/${p.meetingDate}/roster`],
+      (p, [roster]) => [`/api/v1/cells/${p.cellId}/meetings?month=${roster?.reporting_month ?? M}`],
+    ],
+  },
+  {
+    name: 'Next page › People',
+    setup: [() => ['/api/v1/people?limit=10']],
+    stages: [
+      (_p, [page]) => nextPage('/api/v1/people?limit=10', page),
+      (_p, [people]) => {
+        const ids = ((people?.data ?? []) as Body[])
+          .filter((row) => row.scope === 'FULL')
+          .map((row) => `person_id=${row.id}`);
+        return ids.length === 0 ? [] : [`/api/v1/cells/people/membership?${ids.join('&')}`];
+      },
+    ],
+  },
+  {
+    name: 'Next page › Cells',
+    setup: [() => [`/api/v1/cells?month=${M}&limit=10`]],
+    stages: [(_p, [page]) => nextPage(`/api/v1/cells?month=${M}&limit=10`, page)],
+  },
+  ...(['suynl', 'training', 'conquest'] as const).map((kind): Screen => {
+    const first =
+      kind === 'conquest'
+        ? `/api/v1/conquest/people?limit=${GROWTH_PAGE}`
+        : `/api/v1/${kind}/people?step=STILL_TO_FINISH&limit=${GROWTH_PAGE}`;
+    return {
+      name: `Next page › Growth ${kind}`,
+      setup: [() => [first]],
+      stages: [(_p, [page]) => nextPage(first, page)],
+    };
+  }),
+  {
+    name: 'Show more › a person’s DCC Sundays',
+    setup: [(p) => [`/api/v1/dcc/people/${p.otherPersonId}/attendance`]],
+    stages: [(p, [page]) => nextPage(`/api/v1/dcc/people/${p.otherPersonId}/attendance`, page)],
+  },
+  {
+    name: 'Month › a Cell’s meetings, last month',
+    who: LEADERS,
+    stages: [(p) => [`/api/v1/cells/${p.cellId}/meetings?month=${PREVIOUS}`]],
+  },
+  {
+    name: 'Month › DCC calendar, last month',
+    who: LEADERS,
+    stages: [
+      () => [
+        `/api/v1/cells?month=${PREVIOUS}&led_by=me`,
+        `/api/v1/cells/meetings/awaiting?month=${PREVIOUS}&whose=mine`,
+        `/api/v1/dcc/events?month=${PREVIOUS}`,
+      ],
+      (_p, [cells, , events]) => [
+        ...((cells?.data ?? []) as Body[]).map(
+          (cell) => `/api/v1/cells/${cell.id}/meetings?month=${PREVIOUS}`,
+        ),
+        ...((events?.data ?? []) as Body[])
+          .filter((event) => !event.removed)
+          .map((event) => paged(`/api/v1/dcc/events/${event.id}/roster?limit=200`)),
+      ],
+    ],
+  },
+  {
+    name: 'Month › Reports DCC, last month',
+    stages: [
+      (p) => [
+        `/api/v1/reports/dcc/twelve?kind=MONTH&start=${PREVIOUS}&period=${PREVIOUS}&${scope(p)}`,
+      ],
+    ],
+  },
+  {
+    name: 'Month › Reports Cell Groups, last month',
+    stages: [
+      (p) => [
+        `/api/v1/reports/cells/twelve?kind=MONTH&start=${PREVIOUS}&period=${PREVIOUS}&${scope(p)}`,
+      ],
+    ],
+  },
+  {
+    name: 'Month › Filed by Cell, last month',
+    stages: [
+      (p) => [
+        `/api/v1/reports/cells/monthly?period=${PREVIOUS}&${scope(p)}`,
+        paged(`/api/v1/cells?month=${PREVIOUS}&limit=200`),
+      ],
+    ],
+  },
+  {
+    name: 'Filter › SUYNL graduated',
+    stages: [() => [`/api/v1/suynl/people?step=GRADUATED&limit=${GROWTH_PAGE}`]],
+  },
+  {
+    name: 'Filter › Training Life Class',
+    stages: [() => [`/api/v1/training/people?step=LIFE_CLASS&limit=${GROWTH_PAGE}`]],
+  },
+  {
+    name: 'Filter › Conquest Win 3',
+    stages: [() => [`/api/v1/conquest/people?goal=WIN_3&limit=${GROWTH_PAGE}`]],
+  },
+  {
+    name: 'Filter › Cells, only mine',
+    stages: [() => [`/api/v1/cells?month=${M}&led_by=me&limit=10`]],
+  },
+  {
+    name: 'Filter › Cells, closed',
+    stages: [() => [`/api/v1/cells?month=${M}&state=CLOSED&limit=10`]],
+  },
+  {
+    name: 'Search › People, a surname',
+    setup: [(p) => [`/api/v1/people/${p.otherPersonId}`]],
+    stages: [
+      (_p, [person]) => [
+        `/api/v1/people?q=${encodeURIComponent(person?.last_name ?? 'Santos')}&limit=10`,
+      ],
+      (_p, [people]) => {
+        const ids = ((people?.data ?? []) as Body[])
+          .filter((row) => row.scope === 'FULL')
+          .map((row) => `person_id=${row.id}`);
+        return ids.length === 0 ? [] : [`/api/v1/cells/people/membership?${ids.join('&')}`];
+      },
+    ],
+  },
+  {
+    name: 'Filter › Record, people I oversee',
+    stages: [
+      () => [
+        `/api/v1/cells/meetings/awaiting?month=${M}&whose=branch`,
+        `/api/v1/dcc/owed?month=${M}`,
+        ...(FIRST_WEEK
+          ? [
+              `/api/v1/cells/meetings/awaiting?month=${PREVIOUS}&whose=branch`,
+              `/api/v1/dcc/owed?month=${PREVIOUS}`,
+            ]
+          : []),
+      ],
+    ],
+  },
+  {
+    name: 'Open › a leader’s DCC checklist',
+    stages: [(p) => [`/api/v1/dcc/leaders/${p.otherPersonId}/checklist?month=${M}`]],
+  },
+  {
+    name: 'Drill › Reports DCC to a leader',
+    stages: [
+      (p) => [
+        `/api/v1/reports/dcc/twelve?kind=MONTH&start=${M}&period=${M}&scope=LEADER&leader_id=${p.otherPersonId}`,
+        `/api/v1/leaders/${p.otherPersonId}/children?limit=20`,
+        `/api/v1/people/${p.otherPersonId}`,
+      ],
+    ],
+  },
+  {
+    name: 'Filter › Network, owes records',
+    stages: [() => [paged('/api/v1/network/my-tree?limit=200')]],
+  },
+];
+
 let nextSlot = 0;
 let requests = 0;
 
@@ -349,10 +580,20 @@ interface CallTime {
   status: number;
 }
 
-async function call(persona: Persona, path: string): Promise<{ time: CallTime; body: Body }> {
+async function call(
+  persona: Persona,
+  path: string,
+  payload?: unknown,
+): Promise<{ time: CallTime; body: Body }> {
   const started = performance.now();
   const response = await fetch(`${API}${path}`, {
-    headers: { authorization: `Bearer ${persona.token}` },
+    headers: {
+      authorization: `Bearer ${persona.token}`,
+      ...(payload === undefined
+        ? {}
+        : { 'content-type': 'application/json', 'idempotency-key': randomUUID() }),
+    },
+    ...(payload === undefined ? {} : { method: 'POST', body: JSON.stringify(payload) }),
   });
   const text = await response.text();
   const ms = performance.now() - started;
@@ -372,8 +613,12 @@ async function call(persona: Persona, path: string): Promise<{ time: CallTime; b
  */
 async function follow(
   persona: Persona,
-  item: string | Chain,
+  item: string | Chain | Post,
 ): Promise<{ times: CallTime[]; body: Body }> {
+  if (typeof item === 'object' && 'post' in item) {
+    const result = await call(persona, item.post, item.body);
+    return { times: [result.time], body: result.body };
+  }
   const chain = typeof item === 'string' ? { first: item, next: () => null } : item;
   const times: CallTime[] = [];
   let path: string | null = chain.first;
@@ -395,6 +640,14 @@ async function openScreen(
   const calls: CallTime[] = [];
   let previous: Body[] = [];
   let total = 0;
+
+  for (const stage of screen.setup ?? []) {
+    const items = stage(persona, previous);
+    await reserve(items.length);
+    previous = (await Promise.all(items.map((item) => follow(persona, item)))).map(
+      (result) => result.body,
+    );
+  }
 
   for (const stage of screen.stages) {
     const items = stage(persona, previous);
@@ -430,35 +683,46 @@ async function main(): Promise<void> {
 
   const lines = [
     `Timed ${today} against ${new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)}, median of ${RUNS}.`,
-    '',
-    '| Screen | Who | Median (ms) | Slowest call (ms) | Calls | Refused |',
-    '| --- | --- | ---: | --- | ---: | ---: |',
+  ];
+  const parts: Array<[string, Screen[]]> = [
+    ['Screen', SCREENS],
+    ['Button', BUTTONS],
   ];
 
-  for (const screen of SCREENS) {
-    if (only !== null && !screen.name.includes(only)) continue;
-    for (const persona of personas) {
-      if (screen.who && !screen.who.includes(persona.name)) continue;
-      const totals: number[] = [];
-      let slowest: CallTime | null = null;
-      let count = 0;
-      let refused: string[] = [];
-      for (let attempt = 0; attempt < RUNS; attempt += 1) {
-        const opened = await openScreen(screen, persona);
-        totals.push(opened.total);
-        count = opened.calls.length;
-        refused = opened.calls
-          .filter((c) => c.status >= 400)
-          .map((c) => `${c.status} ${c.path.split('?')[0]}`);
-        for (const c of opened.calls) {
-          if (slowest === null || c.ms > slowest.ms) slowest = c;
+  const part = argument('--part');
+
+  for (const [heading, screens] of parts) {
+    if (part !== null && part.toLowerCase() !== `${heading.toLowerCase()}s`) continue;
+    lines.push(
+      '',
+      `| ${heading} | Who | Median (ms) | Slowest call (ms) | Calls | Refused |`,
+      '| --- | --- | ---: | --- | ---: | ---: |',
+    );
+    for (const screen of screens) {
+      if (only !== null && !screen.name.includes(only)) continue;
+      for (const persona of personas) {
+        if (screen.who && !screen.who.includes(persona.name)) continue;
+        const totals: number[] = [];
+        let slowest: CallTime | null = null;
+        let count = 0;
+        let refused: string[] = [];
+        for (let attempt = 0; attempt < RUNS; attempt += 1) {
+          const opened = await openScreen(screen, persona);
+          totals.push(opened.total);
+          count = opened.calls.length;
+          refused = opened.calls
+            .filter((c) => c.status >= 400)
+            .map((c) => `${c.status} ${c.path.split('?')[0]}`);
+          for (const c of opened.calls) {
+            if (slowest === null || c.ms > slowest.ms) slowest = c;
+          }
         }
+        const line = `| ${screen.name} | ${persona.name} | ${Math.round(median(totals))} | ${
+          slowest ? `${Math.round(slowest.ms)} ${slowest.path.split('?')[0]}` : '-'
+        } | ${count} | ${refused.length === 0 ? 0 : refused.join('; ')} |`;
+        lines.push(line);
+        console.log(line);
       }
-      const line = `| ${screen.name} | ${persona.name} | ${Math.round(median(totals))} | ${
-        slowest ? `${Math.round(slowest.ms)} ${slowest.path.split('?')[0]}` : '-'
-      } | ${count} | ${refused.length === 0 ? 0 : refused.join('; ')} |`;
-      lines.push(line);
-      console.log(line);
     }
   }
 
