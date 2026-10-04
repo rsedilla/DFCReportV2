@@ -24,7 +24,7 @@ Whole Church holder of `dcc.take_attendance` (section 9). The owner's practice i
 records them.
 
 **4. The total marked stays above the sections, and one Save covers them all.** Sections and the
-people in them follow surname, then first name, then Member ID (section 8). Who is on the
+people in them follow surname, then first name, then Member ID. Who is on the
 checklist is unchanged. Once a leader has an account, their section leaves the reader's
 checklist, because their people are theirs to record.
 
