@@ -117,12 +117,17 @@ export interface DccRecordInput {
   correction_reason?: string;
 }
 
-/** A leader's whole checklist for one event. */
+/**
+ * A leader's checklist for one event, up to 200 people: the API's most, so a checklist of
+ * up to 200 shows and saves whole (checklist row decision-dcc-record-over-50).
+ */
 export async function getDccRoster(
   eventId: string,
   signal?: AbortSignal,
 ): Promise<DccRoster> {
-  return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster`, { signal });
+  return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster?limit=200`, {
+    signal,
+  });
 }
 
 /**

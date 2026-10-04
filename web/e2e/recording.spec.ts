@@ -375,6 +375,120 @@ test.describe('a Sunday with a mark already recorded', () => {
   });
 });
 
+// Checklist row decision-dcc-record-over-50: the screen asks for 200, the API's most, so a
+// checklist of up to 200 shows and saves whole, and only a longer one says it is cut short.
+test.describe('a long DCC checklist', () => {
+  const SUNDAY = '/dcc/3f1b7c6e-0000-4000-8000-000000000501';
+  const LONG = 'More than 200 people are on this checklist.';
+
+  // Invented people, all recorded but the last.
+  const line = (n: number, size: number) => ({
+    person_id: `3f1b7c6e-0000-4000-8000-${String(700000 + n).padStart(12, '0')}`,
+    member_id: `M-${String(900000 + n)}`,
+    full_name: `Person ${String(n).padStart(3, '0')}`,
+    responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
+    record: n === size ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+  });
+
+  // Pages as the API does: 50 unless asked, at most 200, with a cursor when more remain.
+  async function mockLongRoster(page: Page, size: number) {
+    const asked: string[] = [];
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) => {
+      asked.push(route.request().url());
+      const limit = Math.min(Number(new URL(route.request().url()).searchParams.get('limit') ?? 50), 200);
+      const shown = Math.min(size, limit);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          event: {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: null,
+          },
+          data: Array.from({ length: shown }, (_, index) => line(index + 1, size)),
+          next_cursor: shown < size ? 'page-two' : null,
+        }),
+      });
+    });
+    return asked;
+  }
+
+  test('asks for 200 people at once', async ({ page }) => {
+    await mockSignedIn(page);
+    const asked = await mockLongRoster(page, 2);
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('group', { name: 'Person 002' })).toBeVisible();
+    expect(asked.length).toBeGreaterThan(0);
+    for (const url of asked) {
+      expect(new URL(url).searchParams.get('limit')).toBe('200');
+    }
+  });
+
+  test('shows a checklist of 73 whole, and saves the 73rd person with the rest', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockLongRoster(page, 73);
+    const sent: { records: { person_id: string; present: boolean }[] }[] = [];
+    await page.route('**/api/v1/dcc/events/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByText(/^72 of 73 recorded$/)).toBeVisible();
+    await expect(page.getByText(LONG)).toHaveCount(0);
+
+    await page
+      .getByRole('group', { name: 'Person 073' })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0].records).toHaveLength(73);
+    expect(sent[0].records.at(-1)).toMatchObject({ person_id: line(73, 73).person_id, present: true });
+  });
+
+  test('says so when more than 200 are on it', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockLongRoster(page, 201);
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('group', { name: 'Person 200' })).toBeVisible();
+    await expect(
+      page.getByText(
+        'More than 200 people are on this checklist. Recording the rest is not yet possible from this screen.',
+      ),
+    ).toBeVisible();
+  });
+
+  for (const width of [320, 690, 1280]) {
+    test(`scrolls nothing sideways at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockSignedIn(page);
+      await mockLongRoster(page, 201);
+
+      await page.goto(SUNDAY);
+      await expect(page.getByText(LONG)).toBeVisible();
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+});
+
 /**
  * Section 19's queue, since the ruling of 2026-09-17 moved its Cell half onto a route
  * of its own.

@@ -313,15 +313,15 @@ function DccChecklist() {
           </div>
 
           {/*
-            The roster pages (section 22). A leader's own checklist is short, so
-            this is stated rather than paged over: a "show more" that fetched a
-            second page would have to decide what a partial submission means, and
-            nothing here needs to.
+            The roster pages (section 22). This screen reads one page of 200, the
+            API's most, so only a checklist longer than that reaches this line: a
+            "show more" that fetched a second page would have to decide what a
+            partial submission means, and nothing here needs to.
           */}
           {roster.data.next_cursor !== null ? (
             <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              More people are on this checklist than fit one page. Recording them is not yet
-              possible from this screen.
+              More than 200 people are on this checklist. Recording the rest is not yet possible
+              from this screen.
             </p>
           ) : null}
 
