@@ -1160,11 +1160,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * Every Cell leadership these people held, with its dates, leaving out a Cell closed
    * `CREATED_IN_ERROR` (SKILL.md section 27; decisions 0285 and 0286). A leadership row
    * in force is a current Cell Leader (section 11): closing a Cell ends its leadership.
+   * `null` is everyone, for a church-wide caller (perf-conquest).
    */
   async leadershipPeriodsOf(
-    personIds: readonly string[],
+    personIds: readonly string[] | null,
   ): Promise<{ personId: string; startedAt: Date; endedAt: Date | null }[]> {
-    if (personIds.length === 0) {
+    if (personIds !== null && personIds.length === 0) {
       return [];
     }
 
@@ -1176,7 +1177,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'cell_leaderships.started_at',
         'cell_leaderships.ended_at',
       ])
-      .where('cell_leaderships.person_id', 'in', [...personIds])
+      .$if(personIds !== null, (query) =>
+        query.where(
+          sql<boolean>`cell_leaderships.person_id = ANY(${[...(personIds ?? [])]}::uuid[])`,
+        ),
+      )
       .where((eb) =>
         eb.or([
           eb('cells.closure_reason', 'is', null),
@@ -1216,7 +1221,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         ORDER BY cl.cell_id, cl.started_at,
           (cl.ended_at IS NOT NULL AND cl.ended_at = cl.started_at)
       ) first
-      ${personIds === null ? sql`` : sql`WHERE first.person_id IN (${sql.join([...personIds])})`}
+      ${personIds === null ? sql`` : sql`WHERE first.person_id = ANY(${[...personIds]}::uuid[])`}
       GROUP BY first.person_id
     `.execute(this.db);
 

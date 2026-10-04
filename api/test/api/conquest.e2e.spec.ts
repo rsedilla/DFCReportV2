@@ -655,12 +655,36 @@ describe('Conquest (section 27)', () => {
       return { disciples, cells };
     };
 
+    /**
+     * The card and the goal filter, which reach the goal through the counts' own reading of
+     * the history rather than the list's (checklist row perf-conquest): for a leader, and
+     * for a Whole Church reader, whose reading names nobody.
+     */
+    const raisedFor = async (reader: TestAccount) => ({
+      count: (await get(reader, 'counts')).body.raise_12_leaders,
+      ids: idsOf(await allPages(reader, 'goal=RAISE_12_LEADERS')),
+    });
+
     it('is dated the first instant twelve disciples each lead a Cell', async () => {
       await twelveLeaders();
 
       const goals = await goalsOf(mark.id);
       expect(goals.raise_12_leaders).toEqual({ reached_on: dayOf(14), now: 12 });
       expect(goals.completion_of_12).toEqual({ reached_on: dayOf(14), now: 12 });
+    });
+
+    it('is counted on the card and kept by the filter, for a leader and the whole church', async () => {
+      const { cells } = await twelveLeaders();
+
+      for (const reader of [manuelAccount, admin]) {
+        expect(await raisedFor(reader)).toEqual({ count: 1, ids: new Set([mark.id]) });
+      }
+
+      await closeCellDirectly(db, cells[11].id, { reason: 'CREATED_IN_ERROR', at: onDay(20) });
+
+      for (const reader of [manuelAccount, admin]) {
+        expect(await raisedFor(reader)).toEqual({ count: 0, ids: new Set() });
+      }
     });
 
     it('does not count a disciple who leads nothing', async () => {

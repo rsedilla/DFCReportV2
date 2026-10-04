@@ -1284,8 +1284,10 @@ export class HierarchyService {
       .selectFrom('pastoral_assignments')
       .select(['leader_id', 'person_id', 'started_at', 'ended_at'])
       .where('leader_id', 'is not', null)
+      // One array parameter rather than one per leader: a church-wide caller names a
+      // thousand or more (checklist row perf-conquest).
       .$if(leaderIds !== null, (query) =>
-        query.where('leader_id', 'in', leaderIds as readonly string[]),
+        query.where(sql<boolean>`leader_id = ANY(${[...(leaderIds ?? [])]}::uuid[])`),
       )
       .execute();
 

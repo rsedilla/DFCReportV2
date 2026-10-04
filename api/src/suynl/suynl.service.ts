@@ -462,33 +462,29 @@ export class SuynlService {
   /**
    * When each of these people's third current lesson was filed, for Win 3 (SKILL.md
    * section 27; decision 0284). A lesson corrected away never counted (section 28), so
-   * only current rows are read; somebody with fewer than three is absent.
+   * only current rows are read; somebody with fewer than three is absent. `null` is
+   * everyone, which a church-wide caller asks for rather than sending every disciple's id:
+   * a list that long costs more to send than the query costs to run (perf-conquest).
    */
-  async thirdLessonInstantsOf(personIds: readonly string[]): Promise<Map<string, Date>> {
-    if (personIds.length === 0) {
+  async thirdLessonInstantsOf(personIds: readonly string[] | null): Promise<Map<string, Date>> {
+    if (personIds !== null && personIds.length === 0) {
       return new Map();
     }
 
-    const rows = await this.db
-      .selectFrom('suynl_lessons')
-      .select(['person_id', 'confirmed_at'])
-      .where('person_id', 'in', [...personIds])
-      .where('superseded_at', 'is', null)
-      .orderBy('confirmed_at')
-      .execute();
+    // The third is picked in the database, and the people go as one array parameter.
+    const result = await sql<{ person_id: string; confirmed_at: Date }>`
+      SELECT person_id, confirmed_at
+      FROM (
+        SELECT person_id, confirmed_at,
+          row_number() OVER (PARTITION BY person_id ORDER BY confirmed_at) AS position
+        FROM suynl_lessons
+        WHERE superseded_at IS NULL
+          ${personIds === null ? sql`` : sql`AND person_id = ANY(${[...personIds]}::uuid[])`}
+      ) ordered
+      WHERE position = 3
+    `.execute(this.db);
 
-    const seen = new Map<string, number>();
-    const third = new Map<string, Date>();
-
-    for (const row of rows) {
-      const count = (seen.get(row.person_id) ?? 0) + 1;
-      seen.set(row.person_id, count);
-      if (count === 3) {
-        third.set(row.person_id, row.confirmed_at);
-      }
-    }
-
-    return third;
+    return new Map(result.rows.map((row) => [row.person_id, row.confirmed_at]));
   }
 
   /** Each current person with at least one current lesson, and how many they hold. */
