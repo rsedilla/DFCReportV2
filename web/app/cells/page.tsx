@@ -10,9 +10,8 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
-import { RadioGroup } from '@/components/ui/radio-group';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
@@ -158,264 +157,284 @@ function CellsIndex() {
         </div>
       </div>
 
-      {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}
-      <div className={`mt-6 ${CONTROL_BAR}`}>
-      {/*
-        **The search narrows the whole scope, on the server** (decision 0261): a church-wide
-        reader holds hundreds of Cells, and a filter over the page on screen would search ten
-        of them. It never reorders the list, which decision 0009 forbids.
-      */}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!tooShort) {
-            go({ q: trimmed });
-          }
-        }}
-        className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
-        noValidate
-      >
-        <Field
-          label="Search by Cell ID or leader"
-          type="search"
-          name="q"
-          autoComplete="off"
-          value={term}
-          onChange={(event) => setTerm(event.target.value)}
-          className="min-w-0 sm:flex-1"
-        />
-        <Button type="submit" disabled={tooShort}>
-          {trimmed === '' && submitted !== '' ? 'Show all' : 'Search'}
-        </Button>
-      </form>
-
       {/*
         **Two views of one list, never a mixed one** (decision 0266): every count of Cells
         means active Cells unless it says otherwise (section 10), so a closed Cell is shown
-        only where the reader has asked for closed ones.
+        only where the reader has asked for closed ones. They are the screen's two tabs, and
+        the chosen one opens into the pane holding everything of it (owner's choice of
+        2026-10-05). Buttons pressed and unpressed, as Record's lists are: each is a view of
+        this one address.
       */}
-        <RadioGroup
-          legend="Show"
-          name="view"
-          value={view}
-          onChange={(next) => {
-            setView(next);
-            go({ view: next === 'CLOSED' ? 'CLOSED' : null });
+      <div role="group" aria-label="Which Cells" className={cn('mt-6 flex', TAB_ROW)}>
+        {(
+          [
+            ['ACTIVE', 'Running Cells'],
+            ['CLOSED', 'Closed Cells'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={view === key}
+            onClick={() => {
+              setView(key);
+              go({ view: key === 'CLOSED' ? 'CLOSED' : null });
+            }}
+            className={cn(
+              'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
+              'text-xs font-bold tracking-[0.08em] uppercase',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2',
+              view === key
+                ? 'bg-accent text-surface border-accent'
+                : 'border-line text-ink hover:bg-raised',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={TAB_PANE}>
+        {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}
+        <div className={`mt-4 ${CONTROL_BAR}`}>
+        {/*
+          **The search narrows the whole scope, on the server** (decision 0261): a church-wide
+          reader holds hundreds of Cells, and a filter over the page on screen would search ten
+          of them. It never reorders the list, which decision 0009 forbids.
+        */}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!tooShort) {
+              go({ q: trimmed });
+            }
           }}
-          options={[
-            { value: 'ACTIVE', label: 'Running Cells' },
-            { value: 'CLOSED', label: 'Closed Cells' },
-          ]}
+          className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
+          noValidate
+        >
+          <Field
+            label="Search by Cell ID or leader"
+            type="search"
+            name="q"
+            autoComplete="off"
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            className="min-w-0 sm:flex-1"
+          />
+          <Button type="submit" disabled={tooShort}>
+            {trimmed === '' && submitted !== '' ? 'Show all' : 'Search'}
+          </Button>
+        </form>
+
+          {/*
+            No month in the closed view: it lists when a Cell closed and whether it may
+            restart, and neither is a figure for a period.
+          */}
+          {closed ? null : (
+            <MonthPicker
+              month={month}
+              onChange={(next) => go({ month: next })}
+              open={cells.data?.open}
+            />
+          )}
+          {/*
+            One control per job (owner's choice of 2026-10-05): among running Cells the cards
+            below are the filter, so this is offered for closed Cells alone.
+          */}
+          {closed ? (
+            <Button
+              type="button"
+              variant="secondary"
+              aria-pressed={mineOnly}
+              onClick={() => go({ mine: mineOnly ? null : '1' })}
+            >
+              {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
+            </Button>
+          ) : null}
+        </div>
+
+        <CellTotals
+          current={!closed && submitted === '' && month === reportingMonthOf()}
+          mineOnly={mineOnly}
+          onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
         />
 
-        {/*
-          No month in the closed view: it lists when a Cell closed and whether it may
-          restart, and neither is a figure for a period.
-        */}
-        {closed ? null : (
-          <MonthPicker
-            month={month}
-            onChange={(next) => go({ month: next })}
-            open={cells.data?.open}
+        <div className="mt-8">
+          <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
+        </div>
+
+        {cells.isPending ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : cells.data && cells.data.data.length === 0 ? (
+          <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
+            {submitted !== ''
+              ? `No Cell in your scope matches “${submitted}”.`
+              : closed
+                ? mineOnly
+                  ? 'No Cell you led has closed.'
+                  : 'No Cell in your scope has closed.'
+                : mineOnly
+                ? 'You do not lead a Cell this month.'
+                : 'There are no Cells in your scope this month.'}
+          </p>
+        ) : cells.data && closed ? (
+          <>
+            <Table caption="Closed Cells in your scope" className="mt-6 hidden lg:block">
+              <thead>
+                <tr>
+                  <HeaderCell>Cell</HeaderCell>
+                  <HeaderCell>Last leader</HeaderCell>
+                  <HeaderCell>Closed</HeaderCell>
+                  <HeaderCell>Why</HeaderCell>
+                  <HeaderCell>
+                    <span className="sr-only">Restart</span>
+                  </HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {cells.data.data.map((cell) => (
+                  <tr key={cell.id} className={rowClasses}>
+                    <td className="px-3 py-3">
+                      <span className="font-medium">
+                        {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">{cell.leader.full_name}</td>
+                    <td className="px-3 py-3">
+                      {cell.closed_on ? closedOnLabel(cell.closed_on) : ''}
+                    </td>
+                    <td className="px-3 py-3">
+                      {cell.closure_reason ? closureReasonLabel(cell.closure_reason) : ''}
+                    </td>
+                    <td className="px-3 py-3">
+                      <RestartAction
+                        cell={cell}
+                        sent={sent.has(cell.id)}
+                        onRestart={() => setRestarting(cell)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+
+            <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+              {cells.data.data.map((cell) => (
+                <ClosedCellCard
+                  key={cell.id}
+                  cell={cell}
+                  sent={sent.has(cell.id)}
+                  onRestart={() => setRestarting(cell)}
+                />
+              ))}
+            </ul>
+
+            <nav aria-label="Closed Cells" className="mt-6 flex items-center gap-3">
+              <Button
+                variant="secondary"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!cells.data.next_cursor}
+                onClick={() => {
+                  const next = cells.data?.next_cursor;
+                  if (!next) {
+                    return;
+                  }
+                  setCursors((current) => [...current.slice(0, page + 1), next]);
+                  setPage((current) => current + 1);
+                }}
+              >
+                Next
+              </Button>
+            </nav>
+          </>
+        ) : cells.data ? (
+          <>
+            <Table caption="Cells in your scope" className="mt-6 hidden lg:block">
+              <thead>
+                <tr>
+                  <HeaderCell>Cell</HeaderCell>
+                  <HeaderCell>Leader</HeaderCell>
+                  <HeaderCell>Members</HeaderCell>
+                  <HeaderCell>Meets</HeaderCell>
+                  <HeaderCell>Recorded</HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {cells.data.data.map((cell) => (
+                  <tr key={cell.id} className={rowClasses}>
+                    <td className="px-3 py-3">
+                      <Link
+                        href={`/cells/${cell.id}/meetings?month=${month}`}
+                        className={`${LINK} font-medium`}
+                      >
+                        {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3">{cell.leader.full_name}</td>
+                    <td className="px-3 py-3">{cell.member_count}</td>
+                    <td className="px-3 py-3">
+                      {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
+                    </td>
+                    <td className="px-3 py-3">
+                      <CoverageFigure
+                        recorded={cell.coverage.recorded}
+                        scheduled={cell.coverage.scheduled}
+                        unit="meetings"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+
+            <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+              {cells.data.data.map((cell) => (
+                <CellCard key={cell.id} cell={cell} month={month} />
+              ))}
+            </ul>
+
+            {/* No total and no page number: section 22 pages by cursor and returns neither. */}
+            <nav aria-label="Cells" className="mt-6 flex items-center gap-3">
+              <Button
+                variant="secondary"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!cells.data.next_cursor}
+                onClick={() => {
+                  const next = cells.data?.next_cursor;
+                  if (!next) {
+                    return;
+                  }
+                  setCursors((current) => [...current.slice(0, page + 1), next]);
+                  setPage((current) => current + 1);
+                }}
+              >
+                Next
+              </Button>
+            </nav>
+          </>
+        ) : null}
+
+        {restarting ? (
+          <RestartCellDialog
+            open
+            cell={restarting}
+            onClose={() => setRestarting(null)}
+            onSent={(cellId) => setSent((current) => new Set(current).add(cellId))}
           />
-        )}
-        {/*
-          One control per job (owner's choice of 2026-10-05): among running Cells the cards
-          below are the filter, so this is offered for closed Cells alone.
-        */}
-        {closed ? (
-          <Button
-            type="button"
-            variant="secondary"
-            aria-pressed={mineOnly}
-            onClick={() => go({ mine: mineOnly ? null : '1' })}
-          >
-            {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
-          </Button>
         ) : null}
       </div>
-
-      <CellTotals
-        current={!closed && submitted === '' && month === reportingMonthOf()}
-        mineOnly={mineOnly}
-        onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
-      />
-
-      <div className="mt-8">
-        <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
-      </div>
-
-      {cells.isPending ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : cells.data && cells.data.data.length === 0 ? (
-        <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-          {submitted !== ''
-            ? `No Cell in your scope matches “${submitted}”.`
-            : closed
-              ? mineOnly
-                ? 'No Cell you led has closed.'
-                : 'No Cell in your scope has closed.'
-              : mineOnly
-              ? 'You do not lead a Cell this month.'
-              : 'There are no Cells in your scope this month.'}
-        </p>
-      ) : cells.data && closed ? (
-        <>
-          <Table caption="Closed Cells in your scope" className="mt-6 hidden lg:block">
-            <thead>
-              <tr>
-                <HeaderCell>Cell</HeaderCell>
-                <HeaderCell>Last leader</HeaderCell>
-                <HeaderCell>Closed</HeaderCell>
-                <HeaderCell>Why</HeaderCell>
-                <HeaderCell>
-                  <span className="sr-only">Restart</span>
-                </HeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {cells.data.data.map((cell) => (
-                <tr key={cell.id} className={rowClasses}>
-                  <td className="px-3 py-3">
-                    <span className="font-medium">
-                      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">{cell.leader.full_name}</td>
-                  <td className="px-3 py-3">
-                    {cell.closed_on ? closedOnLabel(cell.closed_on) : ''}
-                  </td>
-                  <td className="px-3 py-3">
-                    {cell.closure_reason ? closureReasonLabel(cell.closure_reason) : ''}
-                  </td>
-                  <td className="px-3 py-3">
-                    <RestartAction
-                      cell={cell}
-                      sent={sent.has(cell.id)}
-                      onRestart={() => setRestarting(cell)}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-
-          <ul className="mt-6 flex flex-col gap-3 lg:hidden">
-            {cells.data.data.map((cell) => (
-              <ClosedCellCard
-                key={cell.id}
-                cell={cell}
-                sent={sent.has(cell.id)}
-                onRestart={() => setRestarting(cell)}
-              />
-            ))}
-          </ul>
-
-          <nav aria-label="Closed Cells" className="mt-6 flex items-center gap-3">
-            <Button
-              variant="secondary"
-              disabled={page === 0}
-              onClick={() => setPage((current) => Math.max(0, current - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!cells.data.next_cursor}
-              onClick={() => {
-                const next = cells.data?.next_cursor;
-                if (!next) {
-                  return;
-                }
-                setCursors((current) => [...current.slice(0, page + 1), next]);
-                setPage((current) => current + 1);
-              }}
-            >
-              Next
-            </Button>
-          </nav>
-        </>
-      ) : cells.data ? (
-        <>
-          <Table caption="Cells in your scope" className="mt-6 hidden lg:block">
-            <thead>
-              <tr>
-                <HeaderCell>Cell</HeaderCell>
-                <HeaderCell>Leader</HeaderCell>
-                <HeaderCell>Members</HeaderCell>
-                <HeaderCell>Meets</HeaderCell>
-                <HeaderCell>Recorded</HeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {cells.data.data.map((cell) => (
-                <tr key={cell.id} className={rowClasses}>
-                  <td className="px-3 py-3">
-                    <Link
-                      href={`/cells/${cell.id}/meetings?month=${month}`}
-                      className={`${LINK} font-medium`}
-                    >
-                      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3">{cell.leader.full_name}</td>
-                  <td className="px-3 py-3">{cell.member_count}</td>
-                  <td className="px-3 py-3">
-                    {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
-                  </td>
-                  <td className="px-3 py-3">
-                    <CoverageFigure
-                      recorded={cell.coverage.recorded}
-                      scheduled={cell.coverage.scheduled}
-                      unit="meetings"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-
-          <ul className="mt-6 flex flex-col gap-3 lg:hidden">
-            {cells.data.data.map((cell) => (
-              <CellCard key={cell.id} cell={cell} month={month} />
-            ))}
-          </ul>
-
-          {/* No total and no page number: section 22 pages by cursor and returns neither. */}
-          <nav aria-label="Cells" className="mt-6 flex items-center gap-3">
-            <Button
-              variant="secondary"
-              disabled={page === 0}
-              onClick={() => setPage((current) => Math.max(0, current - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!cells.data.next_cursor}
-              onClick={() => {
-                const next = cells.data?.next_cursor;
-                if (!next) {
-                  return;
-                }
-                setCursors((current) => [...current.slice(0, page + 1), next]);
-                setPage((current) => current + 1);
-              }}
-            >
-              Next
-            </Button>
-          </nav>
-        </>
-      ) : null}
-
-      {restarting ? (
-        <RestartCellDialog
-          open
-          cell={restarting}
-          onClose={() => setRestarting(null)}
-          onSent={(cellId) => setSent((current) => new Set(current).add(cellId))}
-        />
-      ) : null}
     </main>
   );
 }

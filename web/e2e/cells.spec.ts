@@ -219,14 +219,14 @@ test.describe('the Cells totals (decision 0289)', () => {
     await mockCellTotals(page);
     await page.goto('/cells');
 
-    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await page.getByRole('button', { name: 'Closed Cells' }).click();
     await expect(page).toHaveURL(/view=CLOSED/);
     await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
     await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
 
     await scope(page).click();
     await expect(page).not.toHaveURL(/view=/);
-    await expect(page.getByRole('radio', { name: 'Running Cells' })).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Running Cells' })).toHaveAttribute('aria-pressed', 'true');
     await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -286,12 +286,12 @@ test.describe('the browser Back button on the Cells list', () => {
     await page.getByRole('button', { name: 'Search' }).click();
     await expect(page).toHaveURL(/q=youth/);
 
-    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await page.getByRole('button', { name: 'Closed Cells' }).click();
     await expect(page).toHaveURL(/view=CLOSED/);
 
     // A reload keeps all three, because they are in the address rather than on the screen.
     await page.reload();
-    await expect(page.getByRole('radio', { name: 'Closed Cells' })).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Closed Cells' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('youth');
 
     await page.goBack();
@@ -572,7 +572,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells');
-    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await page.getByRole('button', { name: 'Closed Cells' }).click();
 
     const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -618,7 +618,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await mockCellsWithClosed(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells');
-    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await page.getByRole('button', { name: 'Closed Cells' }).click();
 
     const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
     const restarted = table.getByRole('row', { name: /Restarted as CELL-000021/ });
