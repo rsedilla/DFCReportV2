@@ -256,17 +256,17 @@ function TrainingTab() {
         </Link>
       </p>
 
-      <GrowthCards
-        cards={cards}
-        selected={step}
-        onSelect={(next) => go({ step: next, all: null })}
-      />
-
       <GrowthFilters
         submitted={q}
         mine={mine}
         onSearch={(term) => go({ q: term })}
         onMine={(next) => go({ mine: next ? '1' : null })}
+      />
+
+      <GrowthCards
+        cards={cards}
+        selected={step}
+        onSelect={(next) => go({ step: next, all: null })}
       />
 
       {step === null && q === '' && !mine ? (

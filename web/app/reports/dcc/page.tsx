@@ -169,182 +169,183 @@ export function DccReport() {
         <ReportsHeading line="Who came to DCC, and where they are in their journey." />
         <HowTheseAreCounted report="dcc" />
       </div>
-      <ReportsTabs current="dcc" month={guardMonth} />
-      <PeriodTabs
-        value={kind}
-        onChange={(value) =>
-          go({
-            period: value === 'MONTH' ? null : value.toLowerCase(),
-            start: null,
-            month: null,
-          })
-        }
-      />
-
-      {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
-        <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
-      ) : null}
-
-      {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
-      <div className={`mt-6 ${CONTROL_BAR}`}>
-        {reach?.kind === 'none' ? null : (
-          <RangeNavigator
-            kind={kind}
-            start={start}
-            current={reach?.kind === 'open' ? reach.latest : current}
-            earliest={reach?.kind === 'open' ? reach.earliest : undefined}
-            open={twelve.data?.open}
-            onChange={(value) => go(kind === 'MONTH' ? { month: value } : { start: value })}
-          />
-        )}
-        <div>
-          <label htmlFor="dcc-scope" className="field-label block">
-            Figures for
-          </label>
-          <select
-            id="dcc-scope"
-            value={leader ?? (wholeChurch && network !== null ? network : '')}
-            onChange={(event) => {
-              const value = event.target.value;
-              go(
-                value === 'MENS' || value === 'WOMENS'
-                  ? { network: value, leader: null }
-                  : { network: null, leader: value === '' ? null : value },
-              );
-            }}
-            className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <option value="">{wholeChurch ? 'The whole church' : 'Everyone you oversee'}</option>
-            {wholeChurch ? (
-              <>
-                <option value="MENS">{networkLabel('MENS')}</option>
-                <option value="WOMENS">{networkLabel('WOMENS')}</option>
-              </>
-            ) : null}
-            <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
-              {options.map((row) => (
-                <option key={row.leader!.id} value={row.leader!.id}>
-                  {row.leader!.full_name}
-                </option>
-              ))}
-            </optgroup>
-            {leader !== null && !options.some((row) => row.leader?.id === leader) ? (
-              <option value={leader}>{subjectName}</option>
-            ) : null}
-          </select>
-        </div>
-      </div>
-
-      {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
-        <NextOpens kind={finishedKind} start={start} />
-      ) : null}
-
-      {leader ? (
-        <LeaderDrill
-          personId={leader}
-          report="dcc"
-          month={guardMonth}
-          backHref={`/reports/dcc?${periodParams({})}`}
-        />
-      ) : null}
-
-      <div className="mt-8">
-        <FailureNotice
-          failure={
-            twelve.isError
-              ? describeFailure(twelve.error)
-              : probe.isError
-                ? describeFailure(probe.error)
-                : me.isError
-                  ? describeFailure(me.error)
-                  : null
+      <ReportsTabs current="dcc" month={guardMonth}>
+        <PeriodTabs
+          value={kind}
+          onChange={(value) =>
+            go({
+              period: value === 'MONTH' ? null : value.toLowerCase(),
+              start: null,
+              month: null,
+            })
           }
         />
-      </div>
 
-      {finishedKind !== null && reach?.kind === 'none' ? (
-        <NotYetOffered kind={finishedKind} reach={reach} />
-      ) : twelve.isPending || subject === null ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : twelve.data ? (
-        <div className="mt-6 flex flex-col gap-4">
-          {/* Coverage leads, as one line (decision 0224); its rows are under Filed reports. */}
-          <div className="text-sm">
-            <p>
-              <span className="font-bold tabular-nums">
-                {twelve.data.coverage.met} of {twelve.data.coverage.owed}
-              </span>{' '}
-              records filed {what}
-              {kind === 'MONTH' ? (
-                <>
-                  {' · '}
-                  <Link
-                    href={`/reports/filed?${new URLSearchParams({
-                      month: guardMonth,
-                      kind: 'dcc',
-                      ...(leader ? { leader, by: 'leader' } : {}),
-                      ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
-                    }).toString()}`}
-                    className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    see Filed reports
-                  </Link>
-                </>
-              ) : null}
-            </p>
-            {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
-            <p className="text-muted mt-1">
-              {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
-              {twelve.data.removed_events.length > 0
-                ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
-                : ''}
-            </p>
-          </div>
+        {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
+          <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
+        ) : null}
 
-          {subject?.kind === 'NETWORK' ? (
-            // A Network's own total, by membership (decision 0219); its rows are the pastors'.
-            <TwelveTable
-              twelve={{ ...twelve.data, rows: [], own: null, overlap: 0, elsewhere: 0 }}
+        {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
+        <div className={`mt-6 ${CONTROL_BAR}`}>
+          {reach?.kind === 'none' ? null : (
+            <RangeNavigator
               kind={kind}
-              subjectName={null}
-              where="DCC"
-              title={networkLabel(subject.network)}
-              openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
-            />
-          ) : (
-            <TwelveTable
-              twelve={twelve.data}
-              kind={kind}
-              subjectName={subjectName}
-              where="DCC"
-              openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+              start={start}
+              current={reach?.kind === 'open' ? reach.latest : current}
+              earliest={reach?.kind === 'open' ? reach.earliest : undefined}
+              open={twelve.data?.open}
+              onChange={(value) => go(kind === 'MONTH' ? { month: value } : { start: value })}
             />
           )}
-
-          {twelve.data.buckets !== null && twelve.data.n > 0 ? (
-            <AttendanceBuckets
-              buckets={twelve.data.buckets}
-              n={twelve.data.n}
-              // Section 9: N is the applicable DCC events, the Sundays the calendar carries a
-              // service on, and never a count of records filed.
-              summary={(n) =>
-                n === 1
-                  ? 'One Sunday carried a service this month.'
-                  : `${n} Sundays carried a service this month.`
-              }
-            />
-          ) : null}
-
-          {kind === 'YEAR' ? (
-            <YearTable
-              key={`${start}-${JSON.stringify(subject)}`}
-              report="dcc"
-              year={Number(start.slice(0, 4))}
-              scope={subject}
-            />
-          ) : null}
+          <div>
+            <label htmlFor="dcc-scope" className="field-label block">
+              Figures for
+            </label>
+            <select
+              id="dcc-scope"
+              value={leader ?? (wholeChurch && network !== null ? network : '')}
+              onChange={(event) => {
+                const value = event.target.value;
+                go(
+                  value === 'MENS' || value === 'WOMENS'
+                    ? { network: value, leader: null }
+                    : { network: null, leader: value === '' ? null : value },
+                );
+              }}
+              className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <option value="">{wholeChurch ? 'The whole church' : 'Everyone you oversee'}</option>
+              {wholeChurch ? (
+                <>
+                  <option value="MENS">{networkLabel('MENS')}</option>
+                  <option value="WOMENS">{networkLabel('WOMENS')}</option>
+                </>
+              ) : null}
+              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
+                {options.map((row) => (
+                  <option key={row.leader!.id} value={row.leader!.id}>
+                    {row.leader!.full_name}
+                  </option>
+                ))}
+              </optgroup>
+              {leader !== null && !options.some((row) => row.leader?.id === leader) ? (
+                <option value={leader}>{subjectName}</option>
+              ) : null}
+            </select>
+          </div>
         </div>
-      ) : null}
+
+        {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
+          <NextOpens kind={finishedKind} start={start} />
+        ) : null}
+
+        {leader ? (
+          <LeaderDrill
+            personId={leader}
+            report="dcc"
+            month={guardMonth}
+            backHref={`/reports/dcc?${periodParams({})}`}
+          />
+        ) : null}
+
+        <div className="mt-8">
+          <FailureNotice
+            failure={
+              twelve.isError
+                ? describeFailure(twelve.error)
+                : probe.isError
+                  ? describeFailure(probe.error)
+                  : me.isError
+                    ? describeFailure(me.error)
+                    : null
+            }
+          />
+        </div>
+
+        {finishedKind !== null && reach?.kind === 'none' ? (
+          <NotYetOffered kind={finishedKind} reach={reach} />
+        ) : twelve.isPending || subject === null ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : twelve.data ? (
+          <div className="mt-6 flex flex-col gap-4">
+            {/* Coverage leads, as one line (decision 0224); its rows are under Filed reports. */}
+            <div className="text-sm">
+              <p>
+                <span className="font-bold tabular-nums">
+                  {twelve.data.coverage.met} of {twelve.data.coverage.owed}
+                </span>{' '}
+                records filed {what}
+                {kind === 'MONTH' ? (
+                  <>
+                    {' · '}
+                    <Link
+                      href={`/reports/filed?${new URLSearchParams({
+                        month: guardMonth,
+                        kind: 'dcc',
+                        ...(leader ? { leader, by: 'leader' } : {}),
+                        ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
+                      }).toString()}`}
+                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      see Filed reports
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+              {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
+              <p className="text-muted mt-1">
+                {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
+                {twelve.data.removed_events.length > 0
+                  ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                  : ''}
+              </p>
+            </div>
+
+            {subject?.kind === 'NETWORK' ? (
+              // A Network's own total, by membership (decision 0219); its rows are the pastors'.
+              <TwelveTable
+                twelve={{ ...twelve.data, rows: [], own: null, overlap: 0, elsewhere: 0 }}
+                kind={kind}
+                subjectName={null}
+                where="DCC"
+                title={networkLabel(subject.network)}
+                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+              />
+            ) : (
+              <TwelveTable
+                twelve={twelve.data}
+                kind={kind}
+                subjectName={subjectName}
+                where="DCC"
+                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+              />
+            )}
+
+            {twelve.data.buckets !== null && twelve.data.n > 0 ? (
+              <AttendanceBuckets
+                buckets={twelve.data.buckets}
+                n={twelve.data.n}
+                // Section 9: N is the applicable DCC events, the Sundays the calendar carries a
+                // service on, and never a count of records filed.
+                summary={(n) =>
+                  n === 1
+                    ? 'One Sunday carried a service this month.'
+                    : `${n} Sundays carried a service this month.`
+                }
+              />
+            ) : null}
+
+            {kind === 'YEAR' ? (
+              <YearTable
+                key={`${start}-${JSON.stringify(subject)}`}
+                report="dcc"
+                year={Number(start.slice(0, 4))}
+                scope={subject}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </ReportsTabs>
     </main>
   );
 }

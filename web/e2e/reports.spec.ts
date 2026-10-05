@@ -48,7 +48,7 @@ const LEADER = '3f1b7c6e-0000-4000-8000-000000000701';
  * (decision 0296), and `main dl` would match both.
  */
 async function expectCards(page: Page, cards: [string, number][]) {
-  const list = page.locator('main > dl');
+  const list = page.locator('main dl');
   await expect(list.getByRole('term')).toHaveText(cards.map(([label]) => label));
   await expect(list.getByRole('definition')).toHaveText(cards.map(([, count]) => String(count)));
 }
@@ -583,9 +583,9 @@ test.describe('Filed reports (decision 0292)', () => {
     await expect(page.getByText('What has been filed, and by whom.')).toBeVisible();
 
     const which = page.getByRole('group', { name: 'Which records' });
-    await expect(which.getByRole('button')).toHaveText(['Cell Groups', 'DCC']);
-    await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(which.getByRole('button', { name: 'DCC' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(which.getByRole('button')).toHaveText(['Cell meetings', 'DCC Sundays']);
+    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(which.getByRole('button', { name: 'DCC Sundays' })).toHaveAttribute('aria-pressed', 'false');
 
     // Coverage first here too, and the rows beneath it.
     await expect(page.locator('main h2').filter({ visible: true }).first()).toHaveText('Recording coverage');
@@ -595,11 +595,11 @@ test.describe('Filed reports (decision 0292)', () => {
     await expect.poll(() => asked).toContain('cells');
     expect(asked).not.toContain('dcc');
 
-    await which.getByRole('button', { name: 'DCC' }).click();
+    await which.getByRole('button', { name: 'DCC Sundays' }).click();
     await expect(page).toHaveURL(/[?&]kind=dcc/);
     await expect(page).toHaveURL(/[?&]month=2026-06-01/);
-    await expect(which.getByRole('button', { name: 'DCC' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(which.getByRole('button', { name: 'DCC Sundays' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByText('12 of 18 records filed')).toBeVisible();
     await expect(page.getByText('6 of 8 meetings recorded')).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
@@ -611,7 +611,7 @@ test.describe('Filed reports (decision 0292)', () => {
     // Back returns to Cell Groups, because the choice is in the address.
     await page.goBack();
     await expect(page).not.toHaveURL(/kind=dcc/);
-    await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('By Cell or By Sunday against By leader, kept in the address', async ({ page }) => {
@@ -645,7 +645,7 @@ test.describe('Filed reports (decision 0292)', () => {
     await expect.poll(() => byLeader).toContain('cells');
 
     // The choice survives the switch to DCC, and the table asks the DCC figures.
-    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC' }).click();
+    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC Sundays' }).click();
     await expect(page).toHaveURL(/[?&]kind=dcc/);
     await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
     await expect(by.getByRole('radio', { name: 'By Sunday' })).not.toBeChecked();
@@ -876,7 +876,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await expect.poll(() => scopes).toContain(`cells/by-leader scope=CELL&cell_id=${CELL}`);
 
     // DCC has no Cell scope, so switching drops it and the reader's own figures return.
-    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC' }).click();
+    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC Sundays' }).click();
     await expect(page).toHaveURL(/[?&]kind=dcc/);
     await expect(page).not.toHaveURL(/[?&]cell=/);
     await expect(page.getByText(/^Figures for one Cell/)).toHaveCount(0);
@@ -919,7 +919,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     // Cell Groups has no Network scope, so switching drops it.
     await page
       .getByRole('group', { name: 'Which records' })
-      .getByRole('button', { name: 'Cell Groups' })
+      .getByRole('button', { name: 'Cell meetings' })
       .click();
     await expect(page).not.toHaveURL(/[?&]network=/);
     await expect(page.getByText('Figures for the Men’s Network.')).toHaveCount(0);
@@ -996,7 +996,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
       await expect(page.locator('main').getByRole('alert')).toContainText('You cannot view these counts.');
       // No figure is invented in its place.
-      const figures = page.locator('main > dl').getByRole('definition');
+      const figures = page.locator('main dl').getByRole('definition');
       await expect(figures.first()).toBeVisible();
       for (const text of await figures.allTextContents()) {
         expect(text).toBe('–');
@@ -1106,7 +1106,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
     for (const path of ['/reports/suynl', '/reports/training', '/reports/conquest']) {
       await page.goto(`${path}?month=2026-05-01`);
-      await expect(page.locator('main > dl').getByRole('definition').first()).not.toHaveText('–');
+      await expect(page.locator('main dl').getByRole('definition').first()).not.toHaveText('–');
       // As of now: no month is offered, because these are never counted by period.
       await expect(page.getByRole('button', { name: /^Show / })).toHaveCount(0);
       await expect(page.getByText('May 2026')).toHaveCount(0);

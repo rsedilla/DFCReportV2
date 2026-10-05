@@ -158,12 +158,6 @@ function CellsIndex() {
         </div>
       </div>
 
-      <CellTotals
-        current={!closed && submitted === '' && month === reportingMonthOf()}
-        mineOnly={mineOnly}
-        onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
-      />
-
       {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
       {/*
@@ -225,21 +219,27 @@ function CellsIndex() {
             open={cells.data?.open}
           />
         )}
-        <Button
-          type="button"
-          variant="secondary"
-          aria-pressed={mineOnly}
-          onClick={() => go({ mine: mineOnly ? null : '1' })}
-        >
-          {closed
-            ? mineOnly
-              ? 'Showing only Cells I led'
-              : 'Show only Cells I led'
-            : mineOnly
-              ? 'Showing only my Cells'
-              : 'Show only my Cells'}
-        </Button>
+        {/*
+          One control per job (owner's choice of 2026-10-05): among running Cells the cards
+          below are the filter, so this is offered for closed Cells alone.
+        */}
+        {closed ? (
+          <Button
+            type="button"
+            variant="secondary"
+            aria-pressed={mineOnly}
+            onClick={() => go({ mine: mineOnly ? null : '1' })}
+          >
+            {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
+          </Button>
+        ) : null}
       </div>
+
+      <CellTotals
+        current={!closed && submitted === '' && month === reportingMonthOf()}
+        mineOnly={mineOnly}
+        onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
+      />
 
       <div className="mt-8">
         <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
@@ -463,7 +463,7 @@ function CellTotals({
         <FailureNotice failure={describeFailure(failed)} />
       </div>
     ) : null}
-    <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+    <ul className="mt-4 grid gap-3 sm:grid-cols-2">
       {cards.map((card) => {
         const pressed = current && mineOnly === card.mine;
 

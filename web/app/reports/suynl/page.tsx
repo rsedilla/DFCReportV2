@@ -90,72 +90,73 @@ function Suynl() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="Who is getting ready for the next Encounter God Weekend, as of today." />
-      <ReportsTabs current="suynl" />
-      <div className="mt-6">
-        <FailureNotice
-          failure={
-            readiness.isError
-              ? describeFailure(readiness.error)
-              : counts.isError
-                ? describeFailure(counts.error)
-                : seasons.isError
-                  ? describeFailure(seasons.error)
-                  : null
-          }
+      <ReportsTabs current="suynl">
+        <div className="mt-6">
+          <FailureNotice
+            failure={
+              readiness.isError
+                ? describeFailure(readiness.error)
+                : counts.isError
+                  ? describeFailure(counts.error)
+                  : seasons.isError
+                    ? describeFailure(seasons.error)
+                    : null
+            }
+          />
+        </div>
+
+        <section className={`mt-2 ${FRAME}`} aria-labelledby="encounter-heading">
+          <h2 id="encounter-heading" className="field-label">
+            {next ? `Next Encounter · ${seasonLabel(next)}` : 'Next Encounter'}
+          </h2>
+          {seasons.isPending ? (
+            <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+          ) : next ? (
+            lines.map((line) => (
+              <div key={line.network} className="mt-3">
+                {lines.length > 1 ? <h3 className="text-sm font-bold">{line.network} Network</h3> : null}
+                <Steps party={line.party} encounter={line.encounter} today={today} />
+              </div>
+            ))
+          ) : shows === 'NEITHER' ? (
+            <p className="mt-2 text-sm">You are in no Network, so no Encounter weekend is shown.</p>
+          ) : (
+            <p className="mt-2 text-sm">No Encounter season has been set yet.</p>
+          )}
+          <p className="mt-2 text-sm">
+            <Link href="/growth/training/encounters" className={link}>
+              {mayChange ? 'Encounter seasons: add or change dates' : 'Every Encounter season'}
+            </Link>
+          </p>
+        </section>
+
+        {leader !== null ? (
+          <p className="mt-4 text-sm">
+            <Link href="/reports/suynl" className={link}>
+              Back to your report
+            </Link>
+          </p>
+        ) : null}
+
+        {readiness.isPending ? (
+          <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        ) : readiness.data ? (
+          <ReadinessTable readiness={readiness.data} opened={leader !== null} />
+        ) : null}
+
+        <CountCards
+          cards={[
+            { label: 'Not started', count: counts.data?.not_started },
+            { label: 'In progress', count: counts.data?.in_progress },
+            { label: 'Graduated', count: counts.data?.graduated },
+          ]}
         />
-      </div>
-
-      <section className={`mt-2 ${FRAME}`} aria-labelledby="encounter-heading">
-        <h2 id="encounter-heading" className="field-label">
-          {next ? `Next Encounter · ${seasonLabel(next)}` : 'Next Encounter'}
-        </h2>
-        {seasons.isPending ? (
-          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : next ? (
-          lines.map((line) => (
-            <div key={line.network} className="mt-3">
-              {lines.length > 1 ? <h3 className="text-sm font-bold">{line.network} Network</h3> : null}
-              <Steps party={line.party} encounter={line.encounter} today={today} />
-            </div>
-          ))
-        ) : shows === 'NEITHER' ? (
-          <p className="mt-2 text-sm">You are in no Network, so no Encounter weekend is shown.</p>
-        ) : (
-          <p className="mt-2 text-sm">No Encounter season has been set yet.</p>
-        )}
-        <p className="mt-2 text-sm">
-          <Link href="/growth/training/encounters" className={link}>
-            {mayChange ? 'Encounter seasons: add or change dates' : 'Every Encounter season'}
+        <p className="mt-6 text-sm">
+          <Link href="/growth/suynl" className={link}>
+            Tick lessons in Growth
           </Link>
         </p>
-      </section>
-
-      {leader !== null ? (
-        <p className="mt-4 text-sm">
-          <Link href="/reports/suynl" className={link}>
-            Back to your report
-          </Link>
-        </p>
-      ) : null}
-
-      {readiness.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
-      ) : readiness.data ? (
-        <ReadinessTable readiness={readiness.data} opened={leader !== null} />
-      ) : null}
-
-      <CountCards
-        cards={[
-          { label: 'Not started', count: counts.data?.not_started },
-          { label: 'In progress', count: counts.data?.in_progress },
-          { label: 'Graduated', count: counts.data?.graduated },
-        ]}
-      />
-      <p className="mt-6 text-sm">
-        <Link href="/growth/suynl" className={link}>
-          Tick lessons in Growth
-        </Link>
-      </p>
+      </ReportsTabs>
     </main>
   );
 }

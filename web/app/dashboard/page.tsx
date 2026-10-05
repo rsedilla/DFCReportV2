@@ -10,9 +10,10 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import {
   cellShortName,
   behindOf,
@@ -560,15 +561,16 @@ function Dashboard() {
 
       <TabBar
         label="Outstanding work"
-        className="mt-6 grid-cols-2 lg:grid-cols-4"
+        className={cn('mt-6 grid-cols-2 lg:grid-cols-4', TAB_ROW)}
         tabs={tabs}
         current={tab}
         onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
       />
 
-      <div className="mt-6">
+      {/* The chosen list's pane; the month's figures below it are the whole page's. */}
+      <div className={TAB_PANE}>
         {tab === 'awaiting' ? (
-          <section aria-labelledby="awaiting-heading" className={`min-w-0 ${FRAME}`}>
+          <section aria-labelledby="awaiting-heading" className={LIST}>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
                 Awaiting a record
@@ -579,10 +581,9 @@ function Dashboard() {
               </p>
             </div>
 
-            <TabBar
+            <ViewSwitch
               label="Awaiting a record"
-              className="mt-4 grid-cols-2 sm:max-w-xl"
-              tabs={[
+              options={[
                 {
                   key: 'CELLS',
                   label: 'Cell Group',
@@ -593,15 +594,15 @@ function Dashboard() {
                 },
                 {
                   key: 'DCC',
-                  label: 'Doulos Cell Celebration',
+                  label: 'DCC',
                   count:
                     queuePending || queueFailed || owedPending || owedFailure
                       ? null
                       : String(dccCount),
                 },
               ]}
-              current={filter}
-              onChoose={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
+              value={filter}
+              onChange={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
             />
 
             <div className={`mt-4 ${CONTROL_BAR}`}>
@@ -718,7 +719,7 @@ function Dashboard() {
         ) : null}
 
         {tab === 'behind' ? (
-          <section className={FRAME} aria-labelledby="attention-heading">
+          <section className={LIST} aria-labelledby="attention-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
                 Cells behind
@@ -778,7 +779,7 @@ function Dashboard() {
           behind it (decision 0232). Undated: it asks about now.
         */}
         {tab === 'leader' ? (
-          <section className={FRAME} aria-labelledby="unplaced-heading">
+          <section className={LIST} aria-labelledby="unplaced-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
                 Needs a new leader
@@ -817,7 +818,7 @@ function Dashboard() {
           section 10's closure flow fills (decision 0233). Undated: it asks about now.
         */}
         {tab === 'nocell' ? (
-          <section className={FRAME} aria-labelledby="without-cell-heading">
+          <section className={LIST} aria-labelledby="without-cell-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
                 Not in a Cell
@@ -951,6 +952,9 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
 const RECORD_TABS = ['awaiting', 'behind', 'leader', 'nocell'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
+
+/** One of the four lists, inside the pane its button opens. */
+const LIST = 'min-w-0 pt-5';
 
 /** A name that opens its record: 24px tall at least, which 2.5.8 measures. */
 const NAME_LINK =

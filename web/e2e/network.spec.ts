@@ -362,7 +362,7 @@ test.describe('the Still to record figures link to Filed reports (decision 0298)
     await expect(
       page.getByText('Figures for Marilou Reyes Santos and everyone beneath them.'),
     ).toBeVisible();
-    await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute(
+    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -379,7 +379,7 @@ test.describe('the Still to record figures link to Filed reports (decision 0298)
     await expect(
       page.getByText('Figures for Consuelo Bautista and everyone beneath them.'),
     ).toBeVisible();
-    await expect(which.getByRole('button', { name: 'DCC' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(which.getByRole('button', { name: 'DCC Sundays' })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => asked.some((url) => url.pathname.endsWith('/dcc/monthly'))).toBe(true);
     const dccAsked = asked.find((url) => url.pathname.endsWith('/dcc/monthly'))!;
     expect(dccAsked.searchParams.get('leader_id')).toBe(CONSUELO);

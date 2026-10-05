@@ -664,7 +664,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
       // A Cell meeting's row, the half the screen opens on. A Sunday's row is behind
-      // Doulos Cell Celebration and is scanned under "dashboard, own DCC checklist".
+      // DCC and is scanned under "dashboard, own DCC checklist".
       await expect(
         page.getByRole('link', { name: /^Record Young Pro · Sat,/ }),
       ).toBeVisible();
@@ -694,7 +694,7 @@ const SCANS = [
     },
   },
   {
-    // The reader's own DCC checklist across the month, under Doulos Cell Celebration,
+    // The reader's own DCC checklist across the month, under DCC,
     // with the Sundays still awaiting a record above it.
     name: 'dashboard, own DCC checklist',
     route: '/dashboard',
@@ -702,7 +702,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page
         .getByRole('group', { name: 'Awaiting a record' })
-        .getByRole('button', { name: /^Doulos Cell Celebration/ })
+        .getByRole('button', { name: /^DCC/ })
         .click();
       await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
       await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
@@ -1580,9 +1580,10 @@ const TARGET_SWEEP = [
   },
   {
     // The link to people without a Cell, the two totals (decision 0289), the search box
-    // and its button, the two view radios, two month controls, the "only my Cells"
-    // filter, a link per Cell in both the table and the cards (the hidden rendering is
-    // counted too), and the pager's two buttons: **sixteen**, measured on 2026-09-25. The
+    // and its button, the two view radios, two month controls, a link per Cell in both
+    // the table and the cards (the hidden rendering is counted too), and the pager's two
+    // buttons: **fifteen**, since the totals became the running view's only "my Cells"
+    // filter on 2026-10-05. The
     // month controls are icon-only and are the reason this state is measured rather than
     // exempted: an icon button is where a 24px target goes wrong. The totals are the
     // other reason: each is a button carrying a figure, sized by its own padding.
@@ -1590,7 +1591,7 @@ const TARGET_SWEEP = [
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 16,
+    minimum: 15,
   },
   {
     name: 'cell meetings',
@@ -1642,7 +1643,7 @@ const TARGET_SWEEP = [
     // at a time and opens on Awaiting a record, Cell Group, so the attention lists'
     // names and their links are no longer on the page it opens on, and nothing is below
     // the queue but the month's cards. Measured on 2026-09-25: the four list buttons,
-    // the two Cell Group / Doulos Cell Celebration buttons, the two "Whose" radios, the
+    // the two Cell Group / DCC buttons, the two "Whose" radios, the
     // two Cell rows' Record buttons twice over (the table and the cards are both in the
     // page, one of them hidden, and a hidden one is counted and not measured), See the
     // whole month, and the four month cards: **seventeen**.
@@ -1926,7 +1927,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'dashboard, own DCC checklist',
     why:
-      'Reached by pressing Doulos Cell Celebration, which this sweep cannot do. The table below ' +
+      'Reached by pressing DCC, which this sweep cannot do. The table below ' +
       'the queue holds no control; the Sundays\' Record buttons are the same Button primitive as ' +
       'the measured "dashboard" Cell rows, and the rest are the measured "dashboard" controls.',
   },

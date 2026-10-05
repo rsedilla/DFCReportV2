@@ -32,28 +32,29 @@ function Training() {
       <ReportsHeading
         line={`Training for ${counts.data ? `the ${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'}` : 'the people'} in your care, as of today.`}
       />
-      <ReportsTabs current="training" />
-      <div className="mt-6">
-        <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
-      </div>
-      <CountCards
-        cards={[
-          { label: 'Encounter', count: counts.data?.encounter },
-          { label: 'Life Class', count: counts.data?.life_class },
-          { label: 'SOL 1', count: counts.data?.sol_1 },
-          { label: 'SOL 2', count: counts.data?.sol_2 },
-          { label: 'SOL 3', count: counts.data?.sol_3 },
-          { label: 'None yet', count: counts.data?.not_started },
-        ]}
-      />
-      <p className="text-muted mt-4 text-sm">
-        A count of graduations in a period counts only the dated ones.
-      </p>
-      <p className="mt-6 text-sm">
-        <Link href="/growth/training" className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2">
-          Record graduations in Growth
-        </Link>
-      </p>
+      <ReportsTabs current="training">
+        <div className="mt-6">
+          <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
+        </div>
+        <CountCards
+          cards={[
+            { label: 'Encounter', count: counts.data?.encounter },
+            { label: 'Life Class', count: counts.data?.life_class },
+            { label: 'SOL 1', count: counts.data?.sol_1 },
+            { label: 'SOL 2', count: counts.data?.sol_2 },
+            { label: 'SOL 3', count: counts.data?.sol_3 },
+            { label: 'None yet', count: counts.data?.not_started },
+          ]}
+        />
+        <p className="text-muted mt-4 text-sm">
+          A count of graduations in a period counts only the dated ones.
+        </p>
+        <p className="mt-6 text-sm">
+          <Link href="/growth/training" className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2">
+            Record graduations in Growth
+          </Link>
+        </p>
+      </ReportsTabs>
     </main>
   );
 }
