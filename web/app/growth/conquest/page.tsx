@@ -108,115 +108,116 @@ function ConquestTab() {
         </p>
       </div>
 
-      <GrowthTabs current="/growth/conquest" />
+      <GrowthTabs current="/growth/conquest">
 
-      <GrowthFilters
-        submitted={q}
-        mine={mine}
-        onSearch={(term) => go({ q: term })}
-        onMine={(next) => go({ mine: next ? '1' : null })}
-      />
-
-      <GrowthCards cards={cards} selected={goal} onSelect={(next) => go({ goal: next })} />
-
-      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        Goals fill in by themselves from lessons, Cells and leaders. If one looks wrong, fix the
-        record behind it.
-      </p>
-
-      <div className="mt-4">
-        <FailureNotice
-          failure={
-            people.isError
-              ? describeFailure(people.error)
-              : counts.isError
-                ? describeFailure(counts.error)
-                : null
-          }
+        <GrowthFilters
+          submitted={q}
+          mine={mine}
+          onSearch={(term) => go({ q: term })}
+          onMine={(next) => go({ mine: next ? '1' : null })}
         />
-      </div>
 
-      <div className="mt-4">
-        {people.isPending ? (
-          <p className="text-muted text-sm">Loading&hellip;</p>
-        ) : people.isError ? null : rows.length === 0 ? (
-          <p className="text-sm">Nobody here matches.</p>
-        ) : (
-          <>
-            <Table caption="Conquest goals for the people in your care" className="hidden lg:block">
-              <thead>
-                <tr>
-                  <HeaderCell>Person</HeaderCell>
-                  {GOALS.map((entry) => (
-                    <HeaderCell key={entry.goal}>{entry.label}</HeaderCell>
-                  ))}
-                  <HeaderCell className="text-right">Goals</HeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.person_id} className={rowClasses}>
-                    <td className="px-3 py-3 align-top">
-                      <PersonName row={row} />
-                    </td>
+        <GrowthCards cards={cards} selected={goal} onSelect={(next) => go({ goal: next })} />
+
+        <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+          Goals fill in by themselves from lessons, Cells and leaders. If one looks wrong, fix the
+          record behind it.
+        </p>
+
+        <div className="mt-4">
+          <FailureNotice
+            failure={
+              people.isError
+                ? describeFailure(people.error)
+                : counts.isError
+                  ? describeFailure(counts.error)
+                  : null
+            }
+          />
+        </div>
+
+        <div className="mt-4">
+          {people.isPending ? (
+            <p className="text-muted text-sm">Loading&hellip;</p>
+          ) : people.isError ? null : rows.length === 0 ? (
+            <p className="text-sm">Nobody here matches.</p>
+          ) : (
+            <>
+              <Table caption="Conquest goals for the people in your care" className="hidden lg:block">
+                <thead>
+                  <tr>
+                    <HeaderCell>Person</HeaderCell>
                     {GOALS.map((entry) => (
-                      <td key={entry.goal} className="px-3 py-3 align-top text-sm">
-                        <GoalCell state={row.goals[entry.key]} target={entry.target} />
-                      </td>
+                      <HeaderCell key={entry.goal}>{entry.label}</HeaderCell>
                     ))}
-                    <td className="px-3 py-3 text-right align-top text-sm tabular-nums">
-                      {reachedCount(row)} of 4
-                    </td>
+                    <HeaderCell className="text-right">Goals</HeaderCell>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-
-            <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
-              {rows.map((row) => (
-                <li key={row.person_id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <PersonName row={row} />
-                    <span className="text-sm tabular-nums">{reachedCount(row)} of 4</span>
-                  </div>
-                  <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
-                    {GOALS.map((entry) => (
-                      <div key={entry.goal} className="contents">
-                        <dt className="font-medium">{entry.label}</dt>
-                        <dd>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.person_id} className={rowClasses}>
+                      <td className="px-3 py-3 align-top">
+                        <PersonName row={row} />
+                      </td>
+                      {GOALS.map((entry) => (
+                        <td key={entry.goal} className="px-3 py-3 align-top text-sm">
                           <GoalCell state={row.goals[entry.key]} target={entry.target} />
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </li>
-              ))}
-            </ul>
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right align-top text-sm tabular-nums">
+                        {reachedCount(row)} of 4
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
 
-            <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!people.data.next_cursor}
-                onClick={() => {
-                  const next = people.data.next_cursor;
-                  if (!next) return;
-                  setCursors((current) => [...current.slice(0, page + 1), next]);
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
-          </>
-        )}
-      </div>
+              <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
+                {rows.map((row) => (
+                  <li key={row.person_id} className="py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <PersonName row={row} />
+                      <span className="text-sm tabular-nums">{reachedCount(row)} of 4</span>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
+                      {GOALS.map((entry) => (
+                        <div key={entry.goal} className="contents">
+                          <dt className="font-medium">{entry.label}</dt>
+                          <dd>
+                            <GoalCell state={row.goals[entry.key]} target={entry.target} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+
+              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={!people.data.next_cursor}
+                  onClick={() => {
+                    const next = people.data.next_cursor;
+                    if (!next) return;
+                    setCursors((current) => [...current.slice(0, page + 1), next]);
+                    setPage((current) => current + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              </nav>
+            </>
+          )}
+        </div>
+      </GrowthTabs>
     </main>
   );
 }

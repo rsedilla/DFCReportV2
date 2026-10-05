@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { CONTROL_BAR } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { cn } from '@/lib/utils';
 
 /**
@@ -21,33 +21,45 @@ const TABS = [
   { href: '/growth/conquest', label: 'Conquest' },
 ] as const;
 
-/** The tabs, as links: each is its own address, so Back and a reload keep the tab. */
-export function GrowthTabs({ current }: { current: (typeof TABS)[number]['href'] }) {
+/**
+ * The tabs, as links: each is its own address, so Back and a reload keep the tab. The chosen
+ * tab opens into the pane that holds everything of it (owner's choice of 2026-10-05).
+ */
+export function GrowthTabs({
+  current,
+  children,
+}: {
+  current: (typeof TABS)[number]['href'];
+  children: ReactNode;
+}) {
   return (
-    <nav aria-label="Growth" className="border-line mt-6 flex border-b">
-      {TABS.map((tab) => {
-        const active = tab.href === current;
+    <>
+      <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
+        {TABS.map((tab) => {
+          const active = tab.href === current;
 
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              // px-3 below `sm`: three tabs fit a 320px phone with room for font differences.
-              'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
-              'text-xs font-bold tracking-[0.08em] uppercase',
-              'focus-visible:outline-2 focus-visible:-outline-offset-2',
-              active
-                ? 'bg-accent text-surface border-accent'
-                : 'border-line text-ink hover:bg-raised',
-            )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                // px-3 below `sm`: three tabs fit a 320px phone with room for font differences.
+                'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
+                'text-xs font-bold tracking-[0.08em] uppercase',
+                'focus-visible:outline-2 focus-visible:-outline-offset-2',
+                active
+                  ? 'bg-accent text-surface border-accent'
+                  : 'border-line text-ink hover:bg-raised',
+              )}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className={TAB_PANE}>{children}</div>
+    </>
   );
 }
 

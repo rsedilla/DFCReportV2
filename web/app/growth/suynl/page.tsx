@@ -225,192 +225,193 @@ function SuynlTab() {
         </p>
       </div>
 
-      <GrowthTabs current="/growth/suynl" />
+      <GrowthTabs current="/growth/suynl">
 
-      <GrowthFilters
-        submitted={q}
-        mine={mine}
-        onSearch={(term) => go({ q: term })}
-        onMine={(next) => go({ mine: next ? '1' : null })}
-      />
-
-      <GrowthCards
-        cards={cards}
-        selected={step}
-        onSelect={(next) => go({ step: next, all: null })}
-      />
-
-      {step === null && q === '' && !mine ? (
-        <StillToFinish
-          everyone={everyone}
-          finished={counts.data?.graduated}
-          what="all ten"
-          onChange={(all) => go({ all: all ? '1' : null })}
+        <GrowthFilters
+          submitted={q}
+          mine={mine}
+          onSearch={(term) => go({ q: term })}
+          onMine={(next) => go({ mine: next ? '1' : null })}
         />
-      ) : null}
 
-      <div className="mt-8">
-        <FailureNotice
-          failure={
-            people.isError
-              ? describeFailure(people.error)
-              : counts.isError
-                ? describeFailure(counts.error)
-                : save.isError
-                  ? describeFailure(save.error)
-                  : null
-          }
+        <GrowthCards
+          cards={cards}
+          selected={step}
+          onSelect={(next) => go({ step: next, all: null })}
         />
-        {stale ? (
-          <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
-            Reload
-          </Button>
+
+        {step === null && q === '' && !mine ? (
+          <StillToFinish
+            everyone={everyone}
+            finished={counts.data?.graduated}
+            what="all ten"
+            onChange={(all) => go({ all: all ? '1' : null })}
+          />
         ) : null}
-      </div>
 
-      <div className="mt-4">
-        {people.isPending ? (
-          <p className="text-muted text-sm">Loading&hellip;</p>
-        ) : people.isError ? null : rows.length === 0 ? (
-          <p className="text-sm">Nobody here matches.</p>
-        ) : (
-          <>
-            <Table caption="SUYNL lessons for the people in your care" className="hidden lg:block">
-              <thead>
-                <tr>
-                  <HeaderCell>Person</HeaderCell>
-                  {LESSONS.map((lesson) => (
-                    <HeaderCell key={lesson} className="px-1 text-center">
-                      {lesson}
-                    </HeaderCell>
+        <div className="mt-8">
+          <FailureNotice
+            failure={
+              people.isError
+                ? describeFailure(people.error)
+                : counts.isError
+                  ? describeFailure(counts.error)
+                  : save.isError
+                    ? describeFailure(save.error)
+                    : null
+            }
+          />
+          {stale ? (
+            <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
+              Reload
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="mt-4">
+          {people.isPending ? (
+            <p className="text-muted text-sm">Loading&hellip;</p>
+          ) : people.isError ? null : rows.length === 0 ? (
+            <p className="text-sm">Nobody here matches.</p>
+          ) : (
+            <>
+              <Table caption="SUYNL lessons for the people in your care" className="hidden lg:block">
+                <thead>
+                  <tr>
+                    <HeaderCell>Person</HeaderCell>
+                    {LESSONS.map((lesson) => (
+                      <HeaderCell key={lesson} className="px-1 text-center">
+                        {lesson}
+                      </HeaderCell>
+                    ))}
+                    <HeaderCell className="text-right">Lessons</HeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.person_id} className={rowClasses}>
+                      <td className="px-3 py-3 align-top">
+                        <PersonName row={row} self={row.person_id === me.data?.person_id} />
+                      </td>
+                      {folded(row, opened, draft) ? (
+                        <td colSpan={10} className="px-1 py-3 align-top">
+                          <Graduated
+                            row={row}
+                            onCorrect={() => setOpened(new Set(opened).add(row.person_id))}
+                          />
+                        </td>
+                      ) : (
+                        LESSONS.map((lesson) => (
+                          <td key={lesson} className="px-1 py-3 text-center align-top">
+                            <LessonBox row={row} lesson={lesson} draft={draft} onToggle={toggle} />
+                          </td>
+                        ))
+                      )}
+                      <td className="px-3 py-3 text-right align-top tabular-nums">
+                        {doneCount(row, draft)} of 10
+                        {closable(row, opened, draft) ? (
+                          <Button
+                            variant="secondary"
+                            className="mt-2"
+                            aria-label={`Close, ${row.full_name}`}
+                            onClick={() => close(row)}
+                          >
+                            Close
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
                   ))}
-                  <HeaderCell className="text-right">Lessons</HeaderCell>
-                </tr>
-              </thead>
-              <tbody>
+                </tbody>
+              </Table>
+
+              <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
                 {rows.map((row) => (
-                  <tr key={row.person_id} className={rowClasses}>
-                    <td className="px-3 py-3 align-top">
+                  <li key={row.person_id} className="py-4">
+                    <div className="flex items-start justify-between gap-3">
                       <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                    </td>
+                      <span className="text-sm tabular-nums">{doneCount(row, draft)} of 10</span>
+                    </div>
                     {folded(row, opened, draft) ? (
-                      <td colSpan={10} className="px-1 py-3 align-top">
+                      <div className="mt-2">
                         <Graduated
                           row={row}
                           onCorrect={() => setOpened(new Set(opened).add(row.person_id))}
                         />
-                      </td>
+                      </div>
                     ) : (
-                      LESSONS.map((lesson) => (
-                        <td key={lesson} className="px-1 py-3 text-center align-top">
-                          <LessonBox row={row} lesson={lesson} draft={draft} onToggle={toggle} />
-                        </td>
-                      ))
+                      <div className="mt-3 grid w-fit grid-cols-5 gap-x-4 gap-y-2">
+                        {LESSONS.map((lesson) => (
+                          <div key={lesson} className="flex flex-col items-center gap-1">
+                            <span aria-hidden="true" className="text-muted text-xs">
+                              {lesson}
+                            </span>
+                            <LessonBox row={row} lesson={lesson} draft={draft} onToggle={toggle} />
+                          </div>
+                        ))}
+                      </div>
                     )}
-                    <td className="px-3 py-3 text-right align-top tabular-nums">
-                      {doneCount(row, draft)} of 10
-                      {closable(row, opened, draft) ? (
-                        <Button
-                          variant="secondary"
-                          className="mt-2"
-                          aria-label={`Close, ${row.full_name}`}
-                          onClick={() => close(row)}
-                        >
-                          Close
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
+                    {closable(row, opened, draft) ? (
+                      <Button
+                        variant="secondary"
+                        className="mt-3"
+                        aria-label={`Close, ${row.full_name}`}
+                        onClick={() => close(row)}
+                      >
+                        Close
+                      </Button>
+                    ) : null}
+                  </li>
                 ))}
-              </tbody>
-            </Table>
+              </ul>
 
-            <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
-              {rows.map((row) => (
-                <li key={row.person_id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                    <span className="text-sm tabular-nums">{doneCount(row, draft)} of 10</span>
-                  </div>
-                  {folded(row, opened, draft) ? (
-                    <div className="mt-2">
-                      <Graduated
-                        row={row}
-                        onCorrect={() => setOpened(new Set(opened).add(row.person_id))}
-                      />
-                    </div>
-                  ) : (
-                    <div className="mt-3 grid w-fit grid-cols-5 gap-x-4 gap-y-2">
-                      {LESSONS.map((lesson) => (
-                        <div key={lesson} className="flex flex-col items-center gap-1">
-                          <span aria-hidden="true" className="text-muted text-xs">
-                            {lesson}
-                          </span>
-                          <LessonBox row={row} lesson={lesson} draft={draft} onToggle={toggle} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {closable(row, opened, draft) ? (
-                    <Button
-                      variant="secondary"
-                      className="mt-3"
-                      aria-label={`Close, ${row.full_name}`}
-                      onClick={() => close(row)}
-                    >
-                      Close
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={!people.data.next_cursor}
+                  onClick={() => {
+                    const next = people.data.next_cursor;
+                    if (!next) return;
+                    setCursors((current) => [...current.slice(0, page + 1), next]);
+                    setPage((current) => current + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              </nav>
+            </>
+          )}
+        </div>
 
-            <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!people.data.next_cursor}
-                onClick={() => {
-                  const next = people.data.next_cursor;
-                  if (!next) return;
-                  setCursors((current) => [...current.slice(0, page + 1), next]);
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
-          </>
-        )}
-      </div>
-
-      <GrowthSaveBar
-        summary={
-          entries.length > 0
-            ? `${entries.length === 1 ? '1 lesson' : `${entries.length} lessons`} ticked or unticked, not saved yet.`
-            : saved
-              ? 'Saved.'
-              : null
-        }
-        count={entries.length}
-        needsReason={needsReason}
-        reason={reason}
-        onReason={setReason}
-        onSave={() => save.mutate()}
-        onDiscard={() => {
-          setDraft({});
-          setOpened(new Set());
-          setReason('');
-          save.reset();
-        }}
-        saving={save.isPending}
-      />
+        <GrowthSaveBar
+          summary={
+            entries.length > 0
+              ? `${entries.length === 1 ? '1 lesson' : `${entries.length} lessons`} ticked or unticked, not saved yet.`
+              : saved
+                ? 'Saved.'
+                : null
+          }
+          count={entries.length}
+          needsReason={needsReason}
+          reason={reason}
+          onReason={setReason}
+          onSave={() => save.mutate()}
+          onDiscard={() => {
+            setDraft({});
+            setOpened(new Set());
+            setReason('');
+            save.reset();
+          }}
+          saving={save.isPending}
+        />
+      </GrowthTabs>
     </main>
   );
 }
