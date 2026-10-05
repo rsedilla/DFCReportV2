@@ -110,14 +110,14 @@ function ConquestTab() {
 
       <GrowthTabs current="/growth/conquest" />
 
-      <GrowthCards cards={cards} selected={goal} onSelect={(next) => go({ goal: next })} />
-
       <GrowthFilters
         submitted={q}
         mine={mine}
         onSearch={(term) => go({ q: term })}
         onMine={(next) => go({ mine: next ? '1' : null })}
       />
+
+      <GrowthCards cards={cards} selected={goal} onSelect={(next) => go({ goal: next })} />
 
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
         Goals fill in by themselves from lessons, Cells and leaders. If one looks wrong, fix the

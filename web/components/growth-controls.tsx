@@ -70,7 +70,8 @@ export interface GrowthCard {
 
 /**
  * The count cards, each a toggle that narrows the list to the people behind it
- * (decision 0281). Pressing the chosen one again clears it.
+ * (decision 0281). Pressing the chosen one again clears it. They sit below the search bar
+ * and right above the list they filter (owner's choice of 2026-10-05).
  */
 export function GrowthCards({
   cards,
@@ -82,7 +83,7 @@ export function GrowthCards({
   onSelect: (step: string | null) => void;
 }) {
   return (
-    <ul className={cn('mt-6 grid grid-cols-2 gap-3', COLUMNS[cards.length] ?? COLUMNS[6])}>
+    <ul className={cn('mt-4 grid grid-cols-2 gap-3', COLUMNS[cards.length] ?? COLUMNS[6])}>
       {cards.map((card) => {
         const pressed = card.step === selected;
 
