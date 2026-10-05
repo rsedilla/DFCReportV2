@@ -869,7 +869,7 @@ test.describe('the Record queue', () => {
     await expect(recordLists(page).getByRole('button', { name: 'Awaiting a record', exact: true })).toBeVisible();
     await expect(awaitingHalves(page).getByRole('button', { name: 'Cell Group', exact: true })).toBeVisible();
     await expect(
-      awaitingHalves(page).getByRole('button', { name: 'Doulos Cell Celebration', exact: true }),
+      awaitingHalves(page).getByRole('button', { name: 'DCC', exact: true }),
     ).toBeVisible();
     // The lists whose reads succeeded still count, so the absence above is the failure's.
     await expect(recordLists(page).getByRole('button', { name: /^Not in a Cell\s*2$/ })).toBeVisible();
@@ -1297,9 +1297,9 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(row.getByRole('cell').nth(3)).toHaveText('7 days ago');
   });
 
-  // Decision 0290: Awaiting a record is split into Cell Group and Doulos Cell Celebration,
+  // Decision 0290: Awaiting a record is split into Cell Group and DCC,
   // Cell Group first, each carrying its count. The All/Cells/DCC choice is gone.
-  test('splits Awaiting a record into Cell Group and Doulos Cell Celebration, Cell Group first', async ({
+  test('splits Awaiting a record into Cell Group and DCC, Cell Group first', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1309,13 +1309,13 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     const halves = awaitingHalves(page);
     const cellGroup = halves.getByRole('button', { name: /^Cell Group/ });
-    const dcc = halves.getByRole('button', { name: /^Doulos Cell Celebration/ });
+    const dcc = halves.getByRole('button', { name: /^DCC/ });
     await expect(halves.getByRole('button')).toHaveCount(2);
     await expect(cellGroup).toHaveAttribute('aria-pressed', 'true');
     await expect(dcc).toHaveAttribute('aria-pressed', 'false');
     // One meeting of the reader's own, and the two Sundays with somebody still unmarked.
     await expect(halves.getByRole('button', { name: /^Cell Group\s*1$/ })).toBeVisible();
-    await expect(halves.getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ })).toBeVisible();
+    await expect(halves.getByRole('button', { name: /^DCC\s*2$/ })).toBeVisible();
     await expect(recordLists(page).getByRole('button', { name: /^Awaiting a record\s*3$/ })).toBeVisible();
 
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
@@ -1395,7 +1395,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     expect(coverageAsked.every((value) => value === 'false')).toBe(true);
   });
 
-  test('Doulos Cell Celebration with My own Cells shows the reader’s own checklist across the month', async ({
+  test('DCC with My own Cells shows the reader’s own checklist across the month', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1444,7 +1444,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
         .getByRole('link', { name: /^Record/ }),
     ).toHaveAttribute('href', '/dcc/3f1b7c6e-0000-4000-8000-000000000501');
     await expect(
-      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ }),
+      awaitingHalves(page).getByRole('button', { name: /^DCC\s*2$/ }),
     ).toBeVisible();
 
     // The reader's own grid stays until a leader is chosen.
@@ -1508,7 +1508,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.goto('/cells');
     await page.goBack();
     await expect(
-      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration/ }),
+      awaitingHalves(page).getByRole('button', { name: /^DCC/ }),
     ).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeChecked();
 
@@ -1929,13 +1929,13 @@ async function chooseList(page: Page, name: RegExp) {
   await recordLists(page).getByRole('button', { name }).click();
 }
 
-/** Awaiting a record's two halves, Cell Group and Doulos Cell Celebration (decision 0290). */
+/** Awaiting a record's two halves, Cell Group and DCC (decision 0290). */
 function awaitingHalves(page: Page) {
   return page.getByRole('group', { name: 'Awaiting a record', exact: true });
 }
 
 async function chooseDcc(page: Page) {
-  await awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration/ }).click();
+  await awaitingHalves(page).getByRole('button', { name: /^DCC/ }).click();
 }
 
 /** The queue as a table, which is what is shown from `lg`. */
@@ -2104,7 +2104,7 @@ test.describe('a DCC checklist longer than one page', () => {
 
     // Both recordable Sundays share the mocked checklist: fifty marked and one not.
     await expect(
-      awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ }),
+      awaitingHalves(page).getByRole('button', { name: /^DCC\s*2$/ }),
     ).toBeVisible();
     await expect(page.getByText('DCC · 50 of 51 marked').first()).toBeVisible();
   });

@@ -12,7 +12,11 @@ The owner chose this answer by editing the running screen, one change at a time.
 **Record opens on four lists, one at a time, chosen by four equal buttons each carrying its
 count:** Awaiting a record, Cells behind, Needs a new leader, Not in a Cell. A list read a page
 at a time shows a count such as "50+" rather than a figure it has not read. Awaiting a record
-is itself split into Cell Group and Doulos Cell Celebration, Cell Group first.
+is itself split into Cell Group and DCC, Cell Group first.
+
+*Amended 2026-10-05 by owner ruling: the second half was labelled "Doulos Cell Celebration"
+until the split became a small switch, where the full name does not fit beside "Cell Group" on
+a phone. What DCC stands for is Section 9's to say (decision 0291), not this label's.*
 
 **Each list is a table, and a card for each row on a narrower screen.** The two lists of
 people show everybody, fifty at a time with Show more, and an empty list of Cells or people
