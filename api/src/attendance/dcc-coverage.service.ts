@@ -701,8 +701,9 @@ export class DccCoverageService {
           recorded_by_you: line.byActor,
         },
         // The leader whose Sunday screen Record opens, and whether this row offers it
-        // (decision 0313). Null where nobody's checklist holds these people.
-        record_for: line.submitterId,
+        // (decision 0313). Null where nobody's checklist holds these people, and where the
+        // row offers no Record, so it never names a leader the reader cannot reach.
+        record_for: line.mayRecord ? line.submitterId : null,
         may_record: line.mayRecord,
       })),
     };

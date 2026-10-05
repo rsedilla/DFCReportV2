@@ -827,7 +827,8 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const rows = await owedRows(markAccount, sunday, eventId);
     const paulRow = rows.find((row) => row.leader.person_id === paul.id);
 
-    expect(paulRow).toMatchObject({ record_for: manuel.id, may_record: false });
+    // Where the row offers no Record it does not say whose it is (owner's ruling).
+    expect(paulRow).toMatchObject({ record_for: null, may_record: false });
   });
 
   it('reads another leader’s checklist for the Sunday, rolled-up people included', async () => {
