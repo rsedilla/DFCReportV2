@@ -758,8 +758,7 @@ export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
 /**
  * Every Cell of the actor's scope for a month, following the cursor to the end.
  *
- * For a picker, which has to offer the whole list rather than its first page. The
- * index pages by cursor and returns no total (section 22), so this asks until
+ * The index pages by cursor and returns no total (section 22), so this asks until
  * `next_cursor` is null, 200 at a time, the API's most, so the whole list takes a
  * quarter of the requests (checklist row perf-cells-totals).
  */
