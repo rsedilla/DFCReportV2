@@ -800,7 +800,8 @@ function Dashboard() {
                   rows={unplaced.data.map((person) => ({
                     key: person.id,
                     cells: [
-                      <Link key="name" href={`/people/${person.id}/network`} className={NAME_LINK}>
+                      // The person page, where Move to another leader is.
+                      <Link key="name" href={`/people/${person.id}`} className={NAME_LINK}>
                         {person.full_name}
                       </Link>,
                       person.former_leader.full_name,

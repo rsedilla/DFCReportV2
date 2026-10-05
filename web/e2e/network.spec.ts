@@ -60,11 +60,13 @@ test.describe('the Network screen’s starting point', () => {
       page.getByText('Figures for September 2026, a month still open.', { exact: false }).last(),
     ).toBeVisible();
     await expect(page.getByText('Nobody reports to you today.')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Open Andres Villareal' })).toHaveAttribute(
+    // The name opens the branch; one control per job (owner's choice of 2026-10-05).
+    await expect(page.getByRole('link', { name: 'Andres Villareal' })).toHaveAttribute(
       'href',
       `/network?focus=${andres.id}`,
     );
-    await expect(page.getByRole('link', { name: 'Open Lorna Villareal' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Lorna Villareal' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Open / })).toHaveCount(0);
     // A root is never moved (section 5).
     await expect(page.getByRole('button', { name: /^Move/ })).toHaveCount(0);
   });
@@ -125,7 +127,8 @@ test.describe('the Network screen’s figures', () => {
 
     await page.getByRole('checkbox', { name: 'Owes records' }).check();
     await expect(page).toHaveURL(/owes=1/);
-    await expect(page.getByRole('link', { name: /^Open / }).first()).toHaveAttribute(
+    const rows = page.getByRole('table', { name: /^People reporting to/ });
+    await expect(rows.getByRole('link').first()).toHaveAttribute(
       'href',
       /owes=1/,
     );
@@ -246,7 +249,9 @@ test.describe('the Still to record figures link to Filed reports (decision 0298)
     await figuresFor(page, CONSUELO, 3, 2);
     await page.goto(`/network?focus=${CONSUELO}`);
 
-    await expect(page.getByRole('link', { name: 'Up one level' })).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Where this person sits' }).getByRole('link').first(),
+    ).toBeVisible();
     await expect(dccLink(page)).toHaveAccessibleName('3 DCC still to record: see Filed reports');
     await expect(dccLink(page)).toHaveAttribute(
       'href',
