@@ -28,6 +28,9 @@ the people whose record they owe that the reader may see now, and each Sunday's 
 carries the action that resolves it"; recording on another leader's behalf is the next
 step.
 
+*Ended by decision 0313 (2026-10-05) for every row whose leader the reader may record for: such a
+row now carries Record beside See checklist.*
+
 **4. The DCC count on the Record page follows Whose**, as the Cell count does. The reader's
 own checklist grid stays under the list until a leader's checklist is opened.
 

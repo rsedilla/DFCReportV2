@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-04, the trigger being decision 0312: of 311 files, 310 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0312 each moved the first two and
+2026-10-05, the trigger being decision 0313: of 312 files, 311 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0313 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-04 and triggered by 0312, and was left stale by 0313 the next day. The one before that was dated
 2026-10-04 and triggered by 0311, and was left stale by 0312 the same day. The one before that was dated
 2026-10-04 and triggered by 0310, and was left stale by 0311 the same day. The one before that was dated
 2026-10-03 and triggered by 0309, and was left stale by 0310 the next day. The one before that was dated
@@ -665,6 +666,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-04 — [A leader's Quarterly and Year show finished periods, the last four quarters and the last year](docs/decisions/0310-a-leaders-quarterly-and-year-show-finished-periods.md)
 - 2026-10-04 — [The branch view is grouped by leader](docs/decisions/0311-the-branch-view-is-grouped-by-leader.md)
 - 2026-10-04 — [A DCC checklist shows your 12 first](docs/decisions/0312-a-dcc-checklist-shows-your-12-first.md)
+- 2026-10-05 — [Record DCC for a leader under you who has an account](docs/decisions/0313-record-dcc-for-a-leader-under-you.md)
 
 ### Open — awaiting a ruling
 
