@@ -91,7 +91,8 @@ export interface DccRosterLine {
   person_id: string;
   member_id: string;
   full_name: string;
-  responsible_leader_id: string;
+  /** The person's direct pastoral leader; null for a Network root, who has none (section 9). */
+  responsible_leader_id: string | null;
   /**
    * The live record, or `null` for somebody nobody has recorded.
    *
