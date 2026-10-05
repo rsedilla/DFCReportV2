@@ -2,11 +2,15 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
+  CELL_WITH_NO_SCHEDULE,
+  CLOSED_CELL,
+  closedAsked,
   mockCellReport,
   mockCellReportForOneCell,
   mockCellTwelve,
   mockCells,
   mockCellsAtScale,
+  mockCellsWithClosed,
   mockCoverageByLeader,
   mockDccEvents,
   mockDccReport,
@@ -455,6 +459,85 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     await page.goBack();
     await expect(behind).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  // Record's Cells behind carries a closed Cell still behind while its month is open (decision
+  // 0314), so the list "See every Cell behind" opens carries the same Cells -- and only there:
+  // every other count of Cells means running Cells (section 15).
+  for (const [open, behind] of [
+    [true, true],
+    [false, true],
+    [true, false],
+  ] as const) {
+    test(`a closed Cell is listed ${open && behind ? '' : 'not '}with the month ${open ? 'open' : 'shut'} and Cells behind ${behind ? 'shown' : 'not chosen'}`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(NOW);
+      await mockSignedIn(page);
+      await mockCellsWithClosed(page, { open });
+      await mockCellReport(page);
+      await page.goto(`/reports/filed?month=2026-06-01${behind ? '&behind=1' : ''}`);
+
+      const region = page.getByRole('region', { name: 'Coverage by Cell' });
+      const table = region.getByRole('table', { name: 'Recording coverage for each Cell' });
+      await expect(table.getByRole('row').first()).toBeVisible();
+      const closedRows = table.getByRole('row').filter({ hasText: /Closed / });
+      if (open && behind) {
+        await expect(closedRows).toHaveCount(3);
+        await expect(closedRows.first()).toContainText('Paolo Reyes');
+        await expect(region.getByText(/and 3 closed Cells still behind/)).toBeVisible();
+      } else {
+        await expect(closedRows).toHaveCount(0);
+        await expect(region.getByText(/closed Cells? still behind$/)).toHaveCount(0);
+      }
+    });
+  }
+
+  /** The Cells index: these running Cells, and these closed ones or a failure for the closed view. */
+  async function mockCellViews(page: Page, running: unknown[], closed: unknown[] | 'fails') {
+    await page.route('**/api/v1/cells?*', (route) =>
+      closedAsked(route.request().url()) && closed === 'fails'
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+        : route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify({
+              reporting_month: '2026-06-01',
+              open: true,
+              data: closedAsked(route.request().url()) ? closed : running,
+              next_cursor: null,
+            }),
+          }),
+    );
+  }
+
+  test('a closed Cell that is not behind is not listed', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsWithClosed(page, { open: true });
+    await mockCellViews(page, [CELL_WITH_NO_SCHEDULE], [
+      { ...CLOSED_CELL, coverage: { recorded: 2, scheduled: 2, behind: 0 } },
+    ]);
+    await mockCellReport(page);
+    await page.goto('/reports/filed?month=2026-06-01&behind=1');
+
+    const region = page.getByRole('region', { name: 'Coverage by Cell' });
+    await expect(
+      region.getByText('No Cell in your scope is behind: every meeting that has come has a record.'),
+    ).toBeVisible();
+    await expect(region.getByText(/Closed /)).toHaveCount(0);
+  });
+
+  test('a failed read of the closed Cells never says that nothing is behind', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsWithClosed(page, { open: true });
+    await mockCellViews(page, [CELL_WITH_NO_SCHEDULE], 'fails');
+    await mockCellReport(page);
+    await page.goto('/reports/filed?month=2026-06-01&behind=1');
+
+    const region = page.getByRole('region', { name: 'Coverage by Cell' });
+    await expect(region.getByRole('alert')).toBeVisible();
+    await expect(region.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
   });
 
   test('Coverage by Sunday keeps a removed Sunday in its place', async ({ page }) => {
