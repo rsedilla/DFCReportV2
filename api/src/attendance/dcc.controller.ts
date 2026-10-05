@@ -149,7 +149,7 @@ export class DccController {
   /**
    * One leader's checklist for this event, to record on their behalf (sections 7 and 14;
    * decision 0313). The guard decides `dcc.submit_on_behalf` against the leader and the
-   * service `dcc.take_attendance`, so the read admits only actors who could record there.
+   * service `dcc.take_attendance`.
    */
   @Get('events/:id/leaders/:leaderId/roster')
   @RequiresCapability(Capability.DccSubmitOnBehalf, { kind: 'person', from: 'params.leaderId' })

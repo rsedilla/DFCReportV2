@@ -202,8 +202,10 @@ function DccChecklist() {
         <div className="border-accent mt-4 max-w-2xl border-2 p-4 text-sm leading-relaxed">
           <p>
             <strong>Recording for {forLeader.full_name}.</strong> These are the people{' '}
-            {forLeader.full_name} records. It is saved under your name, and {forLeader.full_name}{' '}
-            {forLeader.account_active ? 'sees it on their own checklist.' : 'will see it once their account is active.'}
+            {forLeader.full_name} records. It is saved under your name
+            {forLeader.holds_account
+              ? `, and ${forLeader.full_name} ${forLeader.account_active ? 'sees it on their own checklist.' : 'will see it once their account is active.'}`
+              : '.'}
           </p>
           <p className="mt-2">
             <Link

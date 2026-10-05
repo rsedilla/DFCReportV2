@@ -194,7 +194,7 @@ export class DccAttendanceService {
    *
    * **The guard has decided `dcc.submit_on_behalf` against the leader; this decides
    * `dcc.take_attendance` against them**, because the guard takes one capability
-   * (decision 0062) and the read must admit only actors who could also record there.
+   * (decision 0062) and the read requires both, as recording there does.
    * Both are scope questions about the leader, decided before anything about a record.
    *
    * **The leader's checklist as of the Sunday**, by section 9's submitter walk from them —
@@ -222,6 +222,12 @@ export class DccAttendanceService {
     );
 
     if (!covered) {
+      if (!authority.grants.some((grant) => grant.capability === Capability.DccTakeAttendance)) {
+        throw new CapabilityDeniedError(`You do not hold ${Capability.DccTakeAttendance}.`, {
+          capability: Capability.DccTakeAttendance,
+        });
+      }
+
       throw new ScopeDeniedError('This leader is outside your scope.', {
         capability: Capability.DccTakeAttendance,
         person_id: leaderId,

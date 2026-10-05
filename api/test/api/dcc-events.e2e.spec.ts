@@ -884,4 +884,62 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
 
     expect((await leaderRoster(account, eventId, mark.id)).status).toBe(403);
   });
+
+  /** An account holding no role, with the explicit grants given. */
+  const grantedAccount = async (
+    grants: { capability: string; scope: 'OWN_SUBTREE' | 'WHOLE_CHURCH' }[],
+  ): Promise<TestAccount> => {
+    const person = await createPerson(db, { firstName: 'Rex', network: 'MENS' });
+    await assignTo(db, person.id, raymond.id);
+    const account = await createAccount(app, db, { person, roles: [] });
+    for (const grant of grants) {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: grant.capability,
+          scope_type: grant.scope,
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+    }
+
+    return account;
+  };
+
+  it('answers CAPABILITY_DENIED for each capability the reader lacks, and SCOPE_DENIED where it does not reach', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const onBehalfOnly = await grantedAccount([
+      { capability: 'dcc.submit_on_behalf', scope: 'WHOLE_CHURCH' },
+    ]);
+    const first = await leaderRoster(onBehalfOnly, eventId, mark.id);
+    expect(first.status).toBe(403);
+    expect(first.body.error.code).toBe('CAPABILITY_DENIED');
+
+    const takeOnly = await grantedAccount([
+      { capability: 'dcc.take_attendance', scope: 'WHOLE_CHURCH' },
+    ]);
+    const second = await leaderRoster(takeOnly, eventId, mark.id);
+    expect(second.status).toBe(403);
+    expect(second.body.error.code).toBe('CAPABILITY_DENIED');
+
+    // Mark is not under this reader, so a subtree grant of take_attendance does not reach him.
+    const takeInOwnSubtree = await grantedAccount([
+      { capability: 'dcc.submit_on_behalf', scope: 'WHOLE_CHURCH' },
+      { capability: 'dcc.take_attendance', scope: 'OWN_SUBTREE' },
+    ]);
+    const third = await leaderRoster(takeInOwnSubtree, eventId, mark.id);
+    expect(third.status).toBe(403);
+    expect(third.body.error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('answers NOT_FOUND for an event that does not exist', async () => {
+    const response = await leaderRoster(manuelAccount, randomUUID(), mark.id);
+
+    expect(response.status).toBe(404);
+  });
 });
