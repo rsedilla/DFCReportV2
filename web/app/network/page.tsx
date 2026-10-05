@@ -237,10 +237,8 @@ function NetworkScreen() {
       {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
       <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
         <Breadcrumb entries={entries} meId={me.data?.person_id} />
+        {/* The path's names are the way up; one control per job (owner, 2026-10-05). */}
         <Search />
-        {roots.length === 0 && person !== undefined ? (
-          <UpOneLevel entries={entries} meId={me.data?.person_id} isMe={isMe} />
-        ) : null}
       </div>
 
       <div className="mt-6">
@@ -471,7 +469,7 @@ function NetworkScreen() {
 /**
  * Where a reader outside the pastoral tree starts (decision 0268): the Network roots their
  * scope reaches, by name, each with their whole branch's figures for the month. A root is
- * never moved (section 5), so a row offers Open and nothing else.
+ * never moved (section 5), so a row's name, which opens it, is its only control.
  */
 function RootsView({
   roots,
@@ -548,15 +546,6 @@ function RootsView({
                 </dd>
               </div>
             </dl>
-            <div className="mt-3">
-              <Link
-                href={focusHref(root.id)}
-                className={buttonClasses('secondary')}
-                aria-label={`Open ${root.full_name}`}
-              >
-                Open
-              </Link>
-            </div>
           </li>
         ))}
       </ul>
@@ -647,24 +636,12 @@ function RowActions({
   mayMove: boolean;
   onMove: () => void;
 }) {
-  const focusHref = useFocusHref();
-
-  return (
-    <span className="inline-flex gap-2">
-      {mayMove ? (
-        <Button variant="quiet" onClick={onMove} aria-label={`Move ${row.full_name}`}>
-          Move
-        </Button>
-      ) : null}
-      <Link
-        href={focusHref(row.id)}
-        className={buttonClasses('secondary')}
-        aria-label={`Open ${row.full_name}`}
-      >
-        Open
-      </Link>
-    </span>
-  );
+  // The name opens the row, so Move is the one button (owner's choice of 2026-10-05).
+  return mayMove ? (
+    <Button variant="quiet" onClick={onMove} aria-label={`Move ${row.full_name}`}>
+      Move
+    </Button>
+  ) : null;
 }
 
 /**
@@ -749,37 +726,6 @@ function FocusBlock({
         </Button>
       ) : null}
     </div>
-  );
-}
-
-/** Up to the level above, in the bar with the path and the search. */
-function UpOneLevel({
-  entries,
-  meId,
-  isMe,
-}: {
-  entries: readonly PathEntry[];
-  meId: string | undefined;
-  isMe: boolean;
-}) {
-  const focusHref = useFocusHref();
-  const parent = entries.length >= 2 ? entries[entries.length - 2] : null;
-  const meIndex = entries.findIndex((entry) => entry.id === meId);
-  // Up is offered only where the level above is one the reader may open: never from the
-  // reader's own node, and never past it.
-  const canGoUp = parent !== null && !isMe && (meIndex === -1 || meIndex < entries.length - 1);
-
-  return canGoUp && parent !== null ? (
-    <Link
-      href={focusHref(parent.id === meId ? null : parent.id)}
-      className={buttonClasses('secondary')}
-    >
-      Up one level
-    </Link>
-  ) : (
-    <Button variant="secondary" disabled>
-      Up one level
-    </Button>
   );
 }
 

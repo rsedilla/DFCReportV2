@@ -841,7 +841,7 @@ const SCANS = [
   },
   {
     // One generation down, reached by its address as the Back button would reach it: the
-    // breadcrumb links back to the reader, and Up one level is offered.
+    // breadcrumb links back to the reader, which is the way up (one control per job).
     name: 'network, one generation down',
     route: '/network?focus=3f1b7c6e-0000-4000-8000-000000000701',
     async before(page: import('@playwright/test').Page) {
@@ -852,7 +852,9 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Teresita Alcantara' }).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Up one level' })).toBeVisible();
+      await expect(
+        page.getByRole('navigation', { name: 'Where this person sits' }).getByRole('link').first(),
+      ).toBeVisible();
     },
   },
   {
@@ -1678,7 +1680,7 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
-    // Search, the disabled Up one level, the filter, two rows' Open links and Show 20
+    // Search, the filter, two rows' name links and Show 20
     // more. Settled on Show 20 more, which renders only once the page has arrived.
     name: 'network',
     route: '/network',
@@ -2163,9 +2165,8 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'network, one generation down',
     why:
-      'Its controls are the ones measured under "network" — row links, Open, Move, the filter — ' +
-      'plus Up one level and a breadcrumb link, which are the secondary button and the ' +
-      'min-h-6 min-w-6 text link measured on other screens.',
+      'Its controls are the ones measured under "network" — row links, Move, the filter — ' +
+      'plus a breadcrumb link, the min-h-6 min-w-6 text link measured on other screens.',
   },
   {
     name: 'dcc checklist, closed Sunday',

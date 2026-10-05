@@ -603,13 +603,8 @@ function RecordMeeting() {
               <p aria-live="polite" className="text-sm">
                 {saveHint}
               </p>
+              {/* One way back, the link at the top (owner's choice of 2026-10-05). */}
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-                <Link
-                  href={`/cells/${params.id}/meetings`}
-                  className="focus-visible:outline-accent inline-flex min-h-11 items-center justify-center px-3 text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  Cancel
-                </Link>
                 <Button
                   type="button"
                   className="w-full sm:w-auto"
