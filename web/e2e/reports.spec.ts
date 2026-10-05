@@ -469,7 +469,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     [false, true],
     [true, false],
   ] as const) {
-    test(`a closed Cell is listed ${open && behind ? '' : 'not '}with the month ${open ? 'open' : 'shut'} and Cells behind ${behind ? 'shown' : 'not chosen'}`, async ({
+    test(`a closed Cell is ${open && behind ? '' : 'not '}listed with the month ${open ? 'open' : 'shut'} and Cells behind ${behind ? 'shown' : 'not chosen'}`, async ({
       page,
     }) => {
       await page.clock.setFixedTime(NOW);
@@ -536,8 +536,13 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await page.goto('/reports/filed?month=2026-06-01&behind=1');
 
     const region = page.getByRole('region', { name: 'Coverage by Cell' });
-    await expect(region.getByRole('alert')).toBeVisible();
+    await expect(region.getByRole('alert')).not.toBeEmpty();
     await expect(region.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
+
+    // Without the filter the closed view is not used, so its failure is not reported.
+    await region.getByRole('button', { name: 'Show only Cells behind' }).click();
+    await expect(region.getByRole('table', { name: 'Recording coverage for each Cell' })).toBeVisible();
+    await expect(region.getByRole('alert')).toBeEmpty();
   });
 
   test('Coverage by Sunday keeps a removed Sunday in its place', async ({ page }) => {

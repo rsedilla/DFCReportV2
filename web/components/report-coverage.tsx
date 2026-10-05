@@ -61,23 +61,19 @@ export function CoverageByCell({
   behindOnly: boolean;
   onBehindOnlyChange: (on: boolean) => void;
 }) {
-  // The same query as the report's Cell picker, so the two share one request.
-  const running = useQuery({
+  const cells = useQuery({
     queryKey: ['cells-all', month],
     queryFn: ({ signal }) => listAllCells(month, signal),
   });
   // **Showing only Cells behind adds a closed Cell still behind while its month is open**,
   // exactly the Cells Record's Cells behind lists (section 15, decision 0314), so "See every
   // Cell behind" opens on the same Cells. Only there: every other count of Cells means
-  // running Cells, and the two views are never mixed (section 15).
+  // running Cells (section 15).
   const closed = useQuery({
     queryKey: ['cells-all', month, 'CLOSED'],
     queryFn: ({ signal }) => listClosedCellsWhileOpen(month, signal),
     enabled: behindOnly,
   });
-  const cells = running;
-  // A failed read of the closed Cells leaves the list incomplete, so it may not say that
-  // nothing is behind; the failure says what is missing.
 
   const [page, setPage] = useState(0);
   // Switching the filter starts the rows at their first page. Adjusted while rendering
@@ -135,7 +131,7 @@ export function CoverageByCell({
           failure={
             cells.isError
               ? describeFailure(cells.error)
-              : closed.isError
+              : behindOnly && closed.isError
                 ? describeFailure(closed.error)
                 : null
           }
