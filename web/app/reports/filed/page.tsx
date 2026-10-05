@@ -12,6 +12,7 @@ import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-b
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
@@ -22,7 +23,6 @@ import {
 } from '@/lib/reports';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
-import { cn } from '@/lib/utils';
 
 /**
  * What has been filed, and by whom (SKILL.md sections 9, 12, 17 and 19; decision 0292).
@@ -102,117 +102,106 @@ function FiledReports() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="What has been filed, and by whom." />
-      <ReportsTabs current="filed" month={month} />
-
-      <div className={`mt-6 ${CONTROL_BAR}`}>
-        <div role="group" aria-label="Which records" className="border-edge inline-flex border">
-          {(
-            [
-              ['cells', 'Cell Groups'],
-              ['dcc', 'DCC'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={kind === key}
-              onClick={() => go({ kind: key === 'dcc' ? 'dcc' : null, cell: null, network: null })}
-              className={cn(
-                'inline-flex min-h-11 items-center px-5 text-xs font-bold tracking-[0.07em] uppercase',
-                'focus-visible:outline-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
-                kind === key ? 'bg-ink text-surface' : 'text-ink hover:bg-raised',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <MonthPicker month={month} onChange={(value) => go({ month: value })} open={report.data?.open} />
-      </div>
-
-      {leader ? <LeaderDrill personId={leader} report={kind} month={month} /> : null}
-      {!leader && network !== '' ? (
-        <p className="text-muted mt-4 text-sm">
-          Figures for the {network === 'MENS' ? 'Men’s' : 'Women’s'} Network.
-        </p>
-      ) : null}
-      {!leader && cellId !== '' ? (
-        <p className="text-muted mt-4 text-sm">Figures for one Cell.</p>
-      ) : null}
-
-      <div className="mt-8">
-        <FailureNotice
-          failure={
-            report.isError
-              ? describeFailure(report.error)
-              : me.isError
-                ? describeFailure(me.error)
-                : null
-          }
+      <ReportsTabs current="filed" month={month}>
+        {/* Named for what is filed, so it never repeats the report tabs' names. */}
+        <ViewSwitch
+          label="Which records"
+          options={[
+            { key: 'cells', label: 'Cell meetings' },
+            { key: 'dcc', label: 'DCC Sundays' },
+          ]}
+          value={kind}
+          onChange={(key) => go({ kind: key === 'dcc' ? 'dcc' : null, cell: null, network: null })}
         />
-      </div>
 
-      <div className="mt-6 flex flex-col gap-4">
-        <section aria-labelledby="coverage-heading" className={FRAME}>
-          <h2 id="coverage-heading" className="field-label">
-            Recording coverage
-          </h2>
-          <p className="mt-2">
-            {cells.data && kind === 'cells' ? (
-              <CoverageFigure
-                recorded={cells.data.coverage.recorded}
-                scheduled={cells.data.coverage.scheduled}
-                unit="meetings recorded"
-                headline
-              />
-            ) : dcc.data && kind === 'dcc' ? (
-              <CoverageFigure
-                recorded={dcc.data.coverage.met}
-                scheduled={dcc.data.coverage.owed}
-                unit="records filed"
-                headline
-              />
-            ) : (
-              <span className="text-muted text-sm">Loading&hellip;</span>
-            )}
-          </p>
-          <p className="text-muted mt-2 text-sm leading-relaxed">
-            {kind === 'cells'
-              ? 'Out of the meetings the schedule says were due.'
-              : 'One per Sunday a leader was responsible for somebody.'}
-          </p>
-        </section>
+        <div className={`mt-4 ${CONTROL_BAR}`}>
+          <MonthPicker month={month} onChange={(value) => go({ month: value })} open={report.data?.open} />
+        </div>
 
-        <section aria-labelledby="coverage-by-heading" className={FRAME}>
-          <h2 id="coverage-by-heading" className="field-label">
-            Row by row
-          </h2>
-          <CoverageSwitch
-            first={firstOffered ? (kind === 'cells' ? 'By Cell' : 'By Sunday') : null}
-            value={by}
-            onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
+        {leader ? <LeaderDrill personId={leader} report={kind} month={month} /> : null}
+        {!leader && network !== '' ? (
+          <p className="text-muted mt-4 text-sm">
+            Figures for the {network === 'MENS' ? 'Men’s' : 'Women’s'} Network.
+          </p>
+        ) : null}
+        {!leader && cellId !== '' ? (
+          <p className="text-muted mt-4 text-sm">Figures for one Cell.</p>
+        ) : null}
+
+        <div className="mt-8">
+          <FailureNotice
+            failure={
+              report.isError
+                ? describeFailure(report.error)
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null
+            }
           />
-          {by === 'first' ? (
-            kind === 'cells' ? (
-              <CoverageByCell
-                month={month}
-                behindOnly={behindOnly}
-                onBehindOnlyChange={(on) => go({ behind: on ? '1' : null })}
-              />
-            ) : (
-              <CoverageBySunday month={month} />
-            )
-          ) : scope ? (
-            <CoverageByLeader
-              key={`${kind}-${month}-${JSON.stringify(scope)}`}
-              report={kind}
-              month={month}
-              scope={scope}
-              unit={kind === 'cells' ? 'meetings' : 'records'}
+        </div>
+
+        <div className="mt-6 flex flex-col gap-4">
+          <section aria-labelledby="coverage-heading" className={FRAME}>
+            <h2 id="coverage-heading" className="field-label">
+              Recording coverage
+            </h2>
+            <p className="mt-2">
+              {cells.data && kind === 'cells' ? (
+                <CoverageFigure
+                  recorded={cells.data.coverage.recorded}
+                  scheduled={cells.data.coverage.scheduled}
+                  unit="meetings recorded"
+                  headline
+                />
+              ) : dcc.data && kind === 'dcc' ? (
+                <CoverageFigure
+                  recorded={dcc.data.coverage.met}
+                  scheduled={dcc.data.coverage.owed}
+                  unit="records filed"
+                  headline
+                />
+              ) : (
+                <span className="text-muted text-sm">Loading&hellip;</span>
+              )}
+            </p>
+            <p className="text-muted mt-2 text-sm leading-relaxed">
+              {kind === 'cells'
+                ? 'Out of the meetings the schedule says were due.'
+                : 'One per Sunday a leader was responsible for somebody.'}
+            </p>
+          </section>
+
+          <section aria-labelledby="coverage-by-heading" className={FRAME}>
+            <h2 id="coverage-by-heading" className="field-label">
+              Row by row
+            </h2>
+            <CoverageSwitch
+              first={firstOffered ? (kind === 'cells' ? 'By Cell' : 'By Sunday') : null}
+              value={by}
+              onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
             />
-          ) : null}
-        </section>
-      </div>
+            {by === 'first' ? (
+              kind === 'cells' ? (
+                <CoverageByCell
+                  month={month}
+                  behindOnly={behindOnly}
+                  onBehindOnlyChange={(on) => go({ behind: on ? '1' : null })}
+                />
+              ) : (
+                <CoverageBySunday month={month} />
+              )
+            ) : scope ? (
+              <CoverageByLeader
+                key={`${kind}-${month}-${JSON.stringify(scope)}`}
+                report={kind}
+                month={month}
+                scope={scope}
+                unit={kind === 'cells' ? 'meetings' : 'records'}
+              />
+            ) : null}
+          </section>
+        </div>
+      </ReportsTabs>
     </main>
   );
 }

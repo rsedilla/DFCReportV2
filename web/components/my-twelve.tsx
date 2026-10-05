@@ -2,9 +2,9 @@ import Link from 'next/link';
 
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
 import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
-import { cn } from '@/lib/utils';
 
 const STAGES: readonly [keyof Classification, string][] = [
   ['vip', 'VIP'],
@@ -29,8 +29,9 @@ const WHAT: Record<RangeKind, string> = {
 };
 
 /**
- * Weekly, Monthly, Quarterly and Year, as equal buttons in the Reports tabs' style
- * (decision 0293). Buttons rather than links: each is a view of the same report and address.
+ * Weekly, Monthly, Quarterly and Year (decision 0293), as the small switch inside the
+ * report's pane: a view of the report the tab chose. Buttons rather than links: each is a
+ * view of the same report and address.
  */
 export function PeriodTabs({
   value,
@@ -40,27 +41,12 @@ export function PeriodTabs({
   onChange: (value: RangeKind) => void;
 }) {
   return (
-    <div
-      role="group"
-      aria-label="Report period"
-      className="border-line mt-4 grid grid-cols-2 border-b sm:grid-cols-4"
-    >
-      {PERIODS.map(([key, label]) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={value === key}
-          onClick={() => onChange(key)}
-          className={cn(
-            'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 text-center',
-            'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
-            value === key ? 'bg-ink text-surface border-ink' : 'border-line text-ink hover:bg-raised',
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <ViewSwitch
+      label="Report period"
+      options={PERIODS.map(([key, label]) => ({ key, label }))}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 

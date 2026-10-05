@@ -163,134 +163,135 @@ export function CellReport() {
         <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
         <HowTheseAreCounted report="cells" />
       </div>
-      <ReportsTabs current="cells" month={guardMonth} />
-      <PeriodTabs
-        value={kind}
-        onChange={(value) =>
-          address({
-            period: value === 'MONTH' ? null : value.toLowerCase(),
-            start: null,
-            month: null,
-          })
-        }
-      />
-
-      {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
-        <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
-      ) : null}
-
-      {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
-      <div className={`mt-6 ${CONTROL_BAR}`}>
-        {reach?.kind === 'none' ? null : (
-          <RangeNavigator
-            kind={kind}
-            start={start}
-            current={reach?.kind === 'open' ? reach.latest : current}
-            earliest={reach?.kind === 'open' ? reach.earliest : undefined}
-            open={twelve.data?.open}
-            onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
-          />
-        )}
-        <div>
-          <label htmlFor="cell-scope" className="field-label block">
-            Figures for
-          </label>
-          <select
-            id="cell-scope"
-            value={leader ?? ''}
-            onChange={(event) => address({ leader: event.target.value === '' ? null : event.target.value })}
-            className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <option value="">{wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}</option>
-            <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
-              {options.map((row) => (
-                <option key={row.leader!.id} value={row.leader!.id}>
-                  {row.leader!.full_name}
-                </option>
-              ))}
-            </optgroup>
-            {leader !== null && !options.some((row) => row.leader?.id === leader) ? (
-              <option value={leader}>{subjectName}</option>
-            ) : null}
-          </select>
-        </div>
-      </div>
-
-      {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
-        <NextOpens kind={finishedKind} start={start} />
-      ) : null}
-
-      {leader ? (
-        <LeaderDrill
-          personId={leader}
-          report="cells"
-          month={guardMonth}
-          backHref={`/reports/cells?${periodParams({})}`}
-        />
-      ) : null}
-
-      <div className="mt-8">
-        <FailureNotice
-          failure={
-            twelve.isError
-              ? describeFailure(twelve.error)
-              : probe.isError
-                ? describeFailure(probe.error)
-                : me.isError
-                  ? describeFailure(me.error)
-                  : null
+      <ReportsTabs current="cells" month={guardMonth}>
+        <PeriodTabs
+          value={kind}
+          onChange={(value) =>
+            address({
+              period: value === 'MONTH' ? null : value.toLowerCase(),
+              start: null,
+              month: null,
+            })
           }
         />
-      </div>
 
-      {finishedKind !== null && reach?.kind === 'none' ? (
-        <NotYetOffered kind={finishedKind} reach={reach} />
-      ) : twelve.isPending || subject === null ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : twelve.data ? (
-        <div className="mt-6 flex flex-col gap-4">
-          {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. */}
-          <p className="text-sm">
-            <span className="font-bold tabular-nums">
-              {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
-            </span>{' '}
-            meetings recorded {what}
-            {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
-              ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
-              : ''}
-            {kind === 'MONTH' ? (
-              <>
-                {' · '}
-                <Link
-                  href={`/reports/filed?${new URLSearchParams({
-                    month: guardMonth,
-                    ...(leader ? { leader, by: 'leader' } : {}),
-                  }).toString()}`}
-                  className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  see Filed reports
-                </Link>
-              </>
-            ) : null}
-          </p>
+        {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
+          <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
+        ) : null}
 
-          <TwelveTable
-            twelve={twelve.data}
-            kind={kind}
-            subjectName={subjectName}
-            openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
-          />
-
-          {kind === 'YEAR' ? (
-            <YearTable
-              key={`${start}-${JSON.stringify(subject)}`}
-              report="cells"
-              year={Number(start.slice(0, 4))}
-              scope={subject}
+        {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
+        <div className={`mt-6 ${CONTROL_BAR}`}>
+          {reach?.kind === 'none' ? null : (
+            <RangeNavigator
+              kind={kind}
+              start={start}
+              current={reach?.kind === 'open' ? reach.latest : current}
+              earliest={reach?.kind === 'open' ? reach.earliest : undefined}
+              open={twelve.data?.open}
+              onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
             />
-          ) : null}
+          )}
+          <div>
+            <label htmlFor="cell-scope" className="field-label block">
+              Figures for
+            </label>
+            <select
+              id="cell-scope"
+              value={leader ?? ''}
+              onChange={(event) => address({ leader: event.target.value === '' ? null : event.target.value })}
+              className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <option value="">{wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}</option>
+              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
+                {options.map((row) => (
+                  <option key={row.leader!.id} value={row.leader!.id}>
+                    {row.leader!.full_name}
+                  </option>
+                ))}
+              </optgroup>
+              {leader !== null && !options.some((row) => row.leader?.id === leader) ? (
+                <option value={leader}>{subjectName}</option>
+              ) : null}
+            </select>
+          </div>
         </div>
-      ) : null}
+
+        {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
+          <NextOpens kind={finishedKind} start={start} />
+        ) : null}
+
+        {leader ? (
+          <LeaderDrill
+            personId={leader}
+            report="cells"
+            month={guardMonth}
+            backHref={`/reports/cells?${periodParams({})}`}
+          />
+        ) : null}
+
+        <div className="mt-8">
+          <FailureNotice
+            failure={
+              twelve.isError
+                ? describeFailure(twelve.error)
+                : probe.isError
+                  ? describeFailure(probe.error)
+                  : me.isError
+                    ? describeFailure(me.error)
+                    : null
+            }
+          />
+        </div>
+
+        {finishedKind !== null && reach?.kind === 'none' ? (
+          <NotYetOffered kind={finishedKind} reach={reach} />
+        ) : twelve.isPending || subject === null ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : twelve.data ? (
+          <div className="mt-6 flex flex-col gap-4">
+            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. */}
+            <p className="text-sm">
+              <span className="font-bold tabular-nums">
+                {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
+              </span>{' '}
+              meetings recorded {what}
+              {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
+                ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
+                : ''}
+              {kind === 'MONTH' ? (
+                <>
+                  {' · '}
+                  <Link
+                    href={`/reports/filed?${new URLSearchParams({
+                      month: guardMonth,
+                      ...(leader ? { leader, by: 'leader' } : {}),
+                    }).toString()}`}
+                    className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    see Filed reports
+                  </Link>
+                </>
+              ) : null}
+            </p>
+
+            <TwelveTable
+              twelve={twelve.data}
+              kind={kind}
+              subjectName={subjectName}
+              openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+            />
+
+            {kind === 'YEAR' ? (
+              <YearTable
+                key={`${start}-${JSON.stringify(subject)}`}
+                report="cells"
+                year={Number(start.slice(0, 4))}
+                scope={subject}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </ReportsTabs>
     </main>
   );
 }

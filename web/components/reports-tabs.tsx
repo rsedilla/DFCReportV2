@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
+import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -26,34 +28,46 @@ export type ReportTab = (typeof TABS)[number]['key'];
  * are as of now and take none.
  *
  * **The current report is a filled block, not a colour alone** (1.4.1), and carries
- * `aria-current`.
+ * `aria-current`. It opens into the pane that holds everything of that report (owner's
+ * choice of 2026-10-05), so its period switch and controls read as its own.
  */
-export function ReportsTabs({ current, month }: { current: ReportTab; month?: string }) {
+export function ReportsTabs({
+  current,
+  month,
+  children,
+}: {
+  current: ReportTab;
+  month?: string;
+  children: ReactNode;
+}) {
   return (
-    <nav
-      aria-label="Which report"
-      className="border-line mt-6 grid grid-cols-2 border-b sm:grid-cols-3 lg:grid-cols-6"
-    >
-      {TABS.map((tab) => {
-        const active = tab.key === current;
-        const dated = tab.key === 'cells' || tab.key === 'dcc' || tab.key === 'filed';
+    <>
+      <nav
+        aria-label="Which report"
+        className={cn('mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6', TAB_ROW)}
+      >
+        {TABS.map((tab) => {
+          const active = tab.key === current;
+          const dated = tab.key === 'cells' || tab.key === 'dcc' || tab.key === 'filed';
 
-        return (
-          <Link
-            key={tab.key}
-            href={month && dated ? `${tab.path}?month=${month}` : tab.path}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-              'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
-              active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
-            )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
+          return (
+            <Link
+              key={tab.key}
+              href={month && dated ? `${tab.path}?month=${month}` : tab.path}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
+                'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
+                active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
+              )}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className={TAB_PANE}>{children}</div>
+    </>
   );
 }
 
