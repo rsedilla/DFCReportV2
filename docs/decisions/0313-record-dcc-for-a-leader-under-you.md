@@ -11,7 +11,8 @@ day.
 ## The ruling
 
 **1. Another leader's DCC row in *People I oversee* carries Record beside See checklist wherever
-the actor may record for that leader** (point 4). Otherwise it keeps See checklist only. This ends
+the actor may record for that leader** (point 4), or, for a leader holding no account, for the leader
+point 12 finds. Otherwise it keeps See checklist only. This ends
 decision 0301 point 3's exception for those rows.
 
 **2. Record opens the Sunday recording screen for that leader**, showing the people on that leader's
