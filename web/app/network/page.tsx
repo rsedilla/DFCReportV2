@@ -232,148 +232,190 @@ function NetworkScreen() {
       </p>
       </div>
 
-      <PeopleTabs current="/network" />
+      <PeopleTabs current="/network">
 
-      {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
-      <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
-        <Breadcrumb entries={entries} meId={me.data?.person_id} />
-        {/* The path's names are the way up; one control per job (owner, 2026-10-05). */}
-        <Search />
-      </div>
+        {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
+        <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
+          <Breadcrumb entries={entries} meId={me.data?.person_id} />
+          {/* The path's names are the way up; one control per job (owner, 2026-10-05). */}
+          <Search />
+        </div>
 
-      <div className="mt-6">
-        <FailureNotice failure={failure} />
-      </div>
+        <div className="mt-6">
+          <FailureNotice failure={failure} />
+        </div>
 
-      {branch.isPending && failure === null ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : roots.length > 0 ? (
-        <RootsView roots={roots} readsDcc={readsDcc} readsCells={readsCells} />
-      ) : person === undefined ? null : (
-        <>
-          <FocusBlock
-            person={person}
-            entries={entries}
-            noLeaderReason={path.data?.no_leader_reason ?? null}
-            isMe={isMe}
-            mayMove={mayMove}
-            onMove={() =>
-              setMoving({
-                id: person.id,
-                name: person.full_name,
-                leader: entries.at(-2)?.full_name ?? '',
-              })
-            }
-          />
-
-          <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Card label="Direct disciples" value={String(person.direct_reports)} />
-            {/* Every Cell Leader and Cell member under them is already in it (owner, 2026-09-28). */}
-            <Card
-              label={isMe ? 'Everyone under you' : `Everyone under ${person.full_name}`}
-              value={String(person.beneath)}
-            />
-            <Card
-              label="Cell Leaders beneath"
-              value={cells.data === undefined ? '—' : String(cells.data.cell_leaders_beneath)}
-            />
-            <Card
-              label="Still to record"
-              value={
-                <>
-                  <FiledLink
-                    count={dcc.data?.branch_behind}
-                    href={readsReports ? filedHref('dcc', person.id, month) : null}
-                    unit="DCC"
-                  />
-                  <span className="text-muted mx-2 text-sm font-normal">·</span>
-                  <FiledLink
-                    count={cells.data?.branch_meetings_behind}
-                    href={readsReports ? filedHref('cells', person.id, month) : null}
-                    unit="Cell"
-                  />
-                </>
+        {branch.isPending && failure === null ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : roots.length > 0 ? (
+          <RootsView roots={roots} readsDcc={readsDcc} readsCells={readsCells} />
+        ) : person === undefined ? null : (
+          <>
+            <FocusBlock
+              person={person}
+              entries={entries}
+              noLeaderReason={path.data?.no_leader_reason ?? null}
+              isMe={isMe}
+              mayMove={mayMove}
+              onMove={() =>
+                setMoving({
+                  id: person.id,
+                  name: person.full_name,
+                  leader: entries.at(-2)?.full_name ?? '',
+                })
               }
             />
-          </dl>
 
-          <section aria-labelledby="reports-to-heading" className={`mt-6 ${FRAME}`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="reports-to-heading" className="field-label">
-              {isMe ? 'Reports to you' : `Reports to ${person.full_name}`}
-            </h2>
-            {filterReady ? (
-              <label className="flex min-h-11 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={owesOnly}
-                  onChange={(event) => {
-                    setOwesOnly(event.target.checked);
-                    go({ owes: event.target.checked ? '1' : null });
-                  }}
-                  className="size-5"
-                />
-                Owes records
-              </label>
-            ) : null}
-          </div>
+            <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Card label="Direct disciples" value={String(person.direct_reports)} />
+              {/* Every Cell Leader and Cell member under them is already in it (owner, 2026-09-28). */}
+              <Card
+                label={isMe ? 'Everyone under you' : `Everyone under ${person.full_name}`}
+                value={String(person.beneath)}
+              />
+              <Card
+                label="Cell Leaders beneath"
+                value={cells.data === undefined ? '—' : String(cells.data.cell_leaders_beneath)}
+              />
+              <Card
+                label="Still to record"
+                value={
+                  <>
+                    <FiledLink
+                      count={dcc.data?.branch_behind}
+                      href={readsReports ? filedHref('dcc', person.id, month) : null}
+                      unit="DCC"
+                    />
+                    <span className="text-muted mx-2 text-sm font-normal">·</span>
+                    <FiledLink
+                      count={cells.data?.branch_meetings_behind}
+                      href={readsReports ? filedHref('cells', person.id, month) : null}
+                      unit="Cell"
+                    />
+                  </>
+                }
+              />
+            </dl>
 
-          {/*
-            Why no row carries a Move, for a reader holding no
-            `people.manage_pastoral_assignment` grant. It says nothing about anybody on
-            the screen: it is a fact about the reader's own permissions, and section 5
-            names who may act — an administrator, a leader upline of *the person* acting
-            inside their own subtree, or a Senior Pastor. That is why the sentence says a
-            leader who pastors them rather than the reader's own leader, who is upline of
-            nobody on a branch the reader reached from outside. Once, under the list,
-            rather than beside each name.
-          */}
-          {mayMove ? null : (
-            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              To move somebody to another pastoral leader, ask a leader who pastors them, or
-              an administrator.
-            </p>
-          )}
+            <section aria-labelledby="reports-to-heading" className={`mt-6 ${FRAME}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="reports-to-heading" className="field-label">
+                {isMe ? 'Reports to you' : `Reports to ${person.full_name}`}
+              </h2>
+              {filterReady ? (
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={owesOnly}
+                    onChange={(event) => {
+                      setOwesOnly(event.target.checked);
+                      go({ owes: event.target.checked ? '1' : null });
+                    }}
+                    className="size-5"
+                  />
+                  Owes records
+                </label>
+              ) : null}
+            </div>
 
-          {shown.length === 0 ? (
-            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              {filtering
-                ? branch.hasNextPage
-                  ? 'Loading…'
-                  : `Nobody here is behind on ${covered.join(' or ')} this month.`
-                : `Nobody reports to ${isMe ? 'you' : person.full_name} today.`}
-            </p>
-          ) : (
-            <>
-              <Table
-                caption={`People reporting to ${person.full_name}`}
-                className="mt-4 hidden lg:block"
-              >
-                <thead>
-                  <tr>
-                    <HeaderCell>Name</HeaderCell>
-                    <HeaderCell className="text-right">Beneath</HeaderCell>
-                    <HeaderCell className="text-right">DCC behind</HeaderCell>
-                    <HeaderCell className="text-right">Cell behind</HeaderCell>
-                    <HeaderCell>
-                      <span className="sr-only">Actions</span>
-                    </HeaderCell>
-                  </tr>
-                </thead>
-                <tbody>
+            {/*
+              Why no row carries a Move, for a reader holding no
+              `people.manage_pastoral_assignment` grant. It says nothing about anybody on
+              the screen: it is a fact about the reader's own permissions, and section 5
+              names who may act — an administrator, a leader upline of *the person* acting
+              inside their own subtree, or a Senior Pastor. That is why the sentence says a
+              leader who pastors them rather than the reader's own leader, who is upline of
+              nobody on a branch the reader reached from outside. Once, under the list,
+              rather than beside each name.
+            */}
+            {mayMove ? null : (
+              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                To move somebody to another pastoral leader, ask a leader who pastors them, or
+                an administrator.
+              </p>
+            )}
+
+            {shown.length === 0 ? (
+              <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+                {filtering
+                  ? branch.hasNextPage
+                    ? 'Loading…'
+                    : `Nobody here is behind on ${covered.join(' or ')} this month.`
+                  : `Nobody reports to ${isMe ? 'you' : person.full_name} today.`}
+              </p>
+            ) : (
+              <>
+                <Table
+                  caption={`People reporting to ${person.full_name}`}
+                  className="mt-4 hidden lg:block"
+                >
+                  <thead>
+                    <tr>
+                      <HeaderCell>Name</HeaderCell>
+                      <HeaderCell className="text-right">Beneath</HeaderCell>
+                      <HeaderCell className="text-right">DCC behind</HeaderCell>
+                      <HeaderCell className="text-right">Cell behind</HeaderCell>
+                      <HeaderCell>
+                        <span className="sr-only">Actions</span>
+                      </HeaderCell>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((row) => (
+                      <tr key={row.id} className={rowClasses}>
+                        <td className="px-3 py-3">
+                          <Link href={focusHref(row.id)} className={`${LINK} font-medium`}>
+                            {row.full_name}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.beneath}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{figure(dccOf(row.id))}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {figure(cellOf(row.id))}
+                        </td>
+                        <td className="px-3 py-3 text-right whitespace-nowrap">
+                          <RowActions
+                            row={row}
+                            mayMove={mayMove}
+                            onMove={() =>
+                              setMoving({
+                                id: row.id,
+                                name: row.full_name,
+                                leader: person.full_name,
+                              })
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+
+                <ul className="mt-4 lg:hidden">
                   {shown.map((row) => (
-                    <tr key={row.id} className={rowClasses}>
-                      <td className="px-3 py-3">
-                        <Link href={focusHref(row.id)} className={`${LINK} font-medium`}>
-                          {row.full_name}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">{row.beneath}</td>
-                      <td className="px-3 py-3 text-right tabular-nums">{figure(dccOf(row.id))}</td>
-                      <td className="px-3 py-3 text-right tabular-nums">
-                        {figure(cellOf(row.id))}
-                      </td>
-                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                    <li key={row.id} className={ROW}>
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <h3 className="text-base font-medium">
+                          <Link href={focusHref(row.id)} className={LINK}>
+                            {row.full_name}
+                          </Link>
+                        </h3>
+                      </div>
+                      <dl className="text-muted mt-2 grid grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <dt>Beneath</dt>
+                          <dd className="text-ink tabular-nums">{row.beneath}</dd>
+                        </div>
+                        <div>
+                          <dt>DCC behind</dt>
+                          <dd className="text-ink tabular-nums">{figure(dccOf(row.id))}</dd>
+                        </div>
+                        <div>
+                          <dt>Cell behind</dt>
+                          <dd className="text-ink tabular-nums">{figure(cellOf(row.id))}</dd>
+                        </div>
+                      </dl>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <RowActions
                           row={row}
                           mayMove={mayMove}
@@ -385,83 +427,42 @@ function NetworkScreen() {
                             })
                           }
                         />
-                      </td>
-                    </tr>
+                      </div>
+                    </li>
                   ))}
-                </tbody>
-              </Table>
+                </ul>
+              </>
+            )}
 
-              <ul className="mt-4 lg:hidden">
-                {shown.map((row) => (
-                  <li key={row.id} className={ROW}>
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <h3 className="text-base font-medium">
-                        <Link href={focusHref(row.id)} className={LINK}>
-                          {row.full_name}
-                        </Link>
-                      </h3>
-                    </div>
-                    <dl className="text-muted mt-2 grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <dt>Beneath</dt>
-                        <dd className="text-ink tabular-nums">{row.beneath}</dd>
-                      </div>
-                      <div>
-                        <dt>DCC behind</dt>
-                        <dd className="text-ink tabular-nums">{figure(dccOf(row.id))}</dd>
-                      </div>
-                      <div>
-                        <dt>Cell behind</dt>
-                        <dd className="text-ink tabular-nums">{figure(cellOf(row.id))}</dd>
-                      </div>
-                    </dl>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <RowActions
-                        row={row}
-                        mayMove={mayMove}
-                        onMove={() =>
-                          setMoving({
-                            id: row.id,
-                            name: row.full_name,
-                            leader: person.full_name,
-                          })
-                        }
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <p className="text-muted mt-4 text-sm">
-            {filtering
-              ? `${shown.length} of ${rows.length} behind on ${covered.join(' or ')} · by name`
-              : `Showing ${shown.length} of ${person.direct_reports} · by name`}
-          </p>
-          {!filtering && (visible < rows.length || branch.hasNextPage) ? (
-            <p className="mt-3">
-              <Button variant="secondary" onClick={showMore} disabled={waitingForRows}>
-                {waitingForRows ? 'Loading…' : 'Show 20 more'}
-              </Button>
+            <p className="text-muted mt-4 text-sm">
+              {filtering
+                ? `${shown.length} of ${rows.length} behind on ${covered.join(' or ')} · by name`
+                : `Showing ${shown.length} of ${person.direct_reports} · by name`}
             </p>
-          ) : null}
-          </section>
-        </>
-      )}
+            {!filtering && (visible < rows.length || branch.hasNextPage) ? (
+              <p className="mt-3">
+                <Button variant="secondary" onClick={showMore} disabled={waitingForRows}>
+                  {waitingForRows ? 'Loading…' : 'Show 20 more'}
+                </Button>
+              </p>
+            ) : null}
+            </section>
+          </>
+        )}
 
-      {moving === null ? null : (
-        <MoveLeaderDialog
-          open
-          personId={moving.id}
-          personName={moving.name}
-          currentLeaderName={moving.leader || null}
-          onClose={() => {
-            setMoving(null);
-            refresh();
-          }}
-        />
-      )}
+        {moving === null ? null : (
+          <MoveLeaderDialog
+            open
+            personId={moving.id}
+            personName={moving.name}
+            currentLeaderName={moving.leader || null}
+            onClose={() => {
+              setMoving(null);
+              refresh();
+            }}
+          />
+        )}
+      </PeopleTabs>
     </main>
   );
 }

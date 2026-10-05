@@ -131,118 +131,119 @@ function PeopleList() {
         <p className="text-muted text-sm">Everyone in your care, you included.</p>
       </div>
 
-      <PeopleTabs current="/people" />
+      <PeopleTabs current="/people">
 
-      {/* Stacked on a phone and inline from `sm` up, so the search box keeps its width. */}
-      <form
-        onSubmit={onSubmit}
-        // In the same grey bar as every other screen's controls (owner's choice, 2026-09-22).
-        className="border-line bg-raised mt-6 flex flex-col gap-3 border p-4 sm:flex-row sm:items-end"
-        noValidate
-      >
-        <Field
-          label="Search by name or Member ID"
-          type="search"
-          name="q"
-          autoComplete="off"
-          value={term}
-          onChange={(event) => setTerm(event.target.value)}
-          className="min-w-0 sm:flex-1"
-        />
-        <div className="flex gap-3">
-          <Button type="submit" disabled={tooShort}>
-            {trimmed.length === 0 && submitted !== '' ? 'Show everyone' : 'Search'}
-          </Button>
-          <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
-            Add a person
-          </Link>
+        {/* Stacked on a phone and inline from `sm` up, so the search box keeps its width. */}
+        <form
+          onSubmit={onSubmit}
+          // In the same grey bar as every other screen's controls (owner's choice, 2026-09-22).
+          className="border-line bg-raised mt-6 flex flex-col gap-3 border p-4 sm:flex-row sm:items-end"
+          noValidate
+        >
+          <Field
+            label="Search by name or Member ID"
+            type="search"
+            name="q"
+            autoComplete="off"
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            className="min-w-0 sm:flex-1"
+          />
+          <div className="flex gap-3">
+            <Button type="submit" disabled={tooShort}>
+              {trimmed.length === 0 && submitted !== '' ? 'Show everyone' : 'Search'}
+            </Button>
+            <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
+              Add a person
+            </Link>
+          </div>
+        </form>
+
+        {/* Mounted always, per `FailureNotice`'s own rule. */}
+        <div className="mt-8">
+          <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
         </div>
-      </form>
 
-      {/* Mounted always, per `FailureNotice`'s own rule. */}
-      <div className="mt-8">
-        <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
-      </div>
-
-      <div className="mt-4">
-        {results.isPending ? (
-          <p className="text-muted text-sm">Loading&hellip;</p>
-        ) : results.isError ? null : rows.length === 0 ? (
-          submitted === '' ? (
-            <p className="text-sm">Nobody is within your scope.</p>
+        <div className="mt-4">
+          {results.isPending ? (
+            <p className="text-muted text-sm">Loading&hellip;</p>
+          ) : results.isError ? null : rows.length === 0 ? (
+            submitted === '' ? (
+              <p className="text-sm">Nobody is within your scope.</p>
+            ) : (
+              <div>
+                <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  They may still be elsewhere in the church. Adding a person searches every branch
+                  as you type, so start there rather than assuming they are new.
+                </p>
+              </div>
+            )
           ) : (
-            <div>
-              <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
-              <p className="text-muted mt-2 text-sm leading-relaxed">
-                They may still be elsewhere in the church. Adding a person searches every branch
-                as you type, so start there rather than assuming they are new.
-              </p>
-            </div>
-          )
-        ) : (
-          <>
-            <Table caption="People within your scope" className="hidden sm:block">
-              <thead>
-                <tr>
-                  <HeaderCell>Name</HeaderCell>
-                  <HeaderCell>Pastoral leader</HeaderCell>
-                  <HeaderCell>Cell</HeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((person) => (
-                  <tr key={person.id} className={rowClasses}>
-                    <td className="px-3 py-3 align-top">
-                      <PersonName person={person} />
-                    </td>
-                    <td className="px-3 py-3 align-top">{leaderOf(person)}</td>
-                    <td className="px-3 py-3 align-top">{cellOf(person, cellsById.get(person.id))}</td>
+            <>
+              <Table caption="People within your scope" className="hidden sm:block">
+                <thead>
+                  <tr>
+                    <HeaderCell>Name</HeaderCell>
+                    <HeaderCell>Pastoral leader</HeaderCell>
+                    <HeaderCell>Cell</HeaderCell>
                   </tr>
+                </thead>
+                <tbody>
+                  {rows.map((person) => (
+                    <tr key={person.id} className={rowClasses}>
+                      <td className="px-3 py-3 align-top">
+                        <PersonName person={person} />
+                      </td>
+                      <td className="px-3 py-3 align-top">{leaderOf(person)}</td>
+                      <td className="px-3 py-3 align-top">{cellOf(person, cellsById.get(person.id))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              <ul className="border-line divide-line divide-y border-t border-b sm:hidden">
+                {rows.map((person) => (
+                  <li key={person.id} className="py-3">
+                    <PersonName person={person} />
+                    <p className="text-muted mt-1 text-sm">
+                      {[leaderOf(person), cellOf(person, cellsById.get(person.id))]
+                        .filter((part) => part !== '')
+                        .join(' · ')}
+                    </p>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
-            <ul className="border-line divide-line divide-y border-t border-b sm:hidden">
-              {rows.map((person) => (
-                <li key={person.id} className="py-3">
-                  <PersonName person={person} />
-                  <p className="text-muted mt-1 text-sm">
-                    {[leaderOf(person), cellOf(person, cellsById.get(person.id))]
-                      .filter((part) => part !== '')
-                      .join(' · ')}
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!results.data.next_cursor}
-                onClick={() => {
-                  const next = results.data.next_cursor;
-                  if (!next) {
-                    return;
-                  }
-                  setCursors((current) => {
-                    const copy = current.slice(0, page + 1);
-                    copy.push(next);
-                    return copy;
-                  });
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
-          </>
-        )}
-      </div>
+              </ul>
+              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={!results.data.next_cursor}
+                  onClick={() => {
+                    const next = results.data.next_cursor;
+                    if (!next) {
+                      return;
+                    }
+                    setCursors((current) => {
+                      const copy = current.slice(0, page + 1);
+                      copy.push(next);
+                      return copy;
+                    });
+                    setPage((current) => current + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              </nav>
+            </>
+          )}
+        </div>
+      </PeopleTabs>
     </main>
   );
 }

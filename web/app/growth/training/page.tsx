@@ -244,167 +244,168 @@ function TrainingTab() {
         </p>
       </div>
 
-      <GrowthTabs current="/growth/training" />
+      <GrowthTabs current="/growth/training">
 
-      {/* The Encounter seasons are kept here (decision 0296); Reports only reads the next. */}
-      <p className="mt-4 text-sm">
-        <Link
-          href="/growth/training/encounters"
-          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Encounter seasons
-        </Link>
-      </p>
+        {/* The Encounter seasons are kept here (decision 0296); Reports only reads the next. */}
+        <p className="mt-4 text-sm">
+          <Link
+            href="/growth/training/encounters"
+            className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Encounter seasons
+          </Link>
+        </p>
 
-      <GrowthFilters
-        submitted={q}
-        mine={mine}
-        onSearch={(term) => go({ q: term })}
-        onMine={(next) => go({ mine: next ? '1' : null })}
-      />
-
-      <GrowthCards
-        cards={cards}
-        selected={step}
-        onSelect={(next) => go({ step: next, all: null })}
-      />
-
-      {step === null && q === '' && !mine ? (
-        <StillToFinish
-          everyone={everyone}
-          finished={counts.data?.all_five}
-          what="all five"
-          onChange={(all) => go({ all: all ? '1' : null })}
+        <GrowthFilters
+          submitted={q}
+          mine={mine}
+          onSearch={(term) => go({ q: term })}
+          onMine={(next) => go({ mine: next ? '1' : null })}
         />
-      ) : null}
 
-      <div className="mt-8">
-        <FailureNotice
-          failure={
-            people.isError
-              ? describeFailure(people.error)
-              : counts.isError
-                ? describeFailure(counts.error)
-                : save.isError
-                  ? describeFailure(save.error)
-                  : null
-          }
+        <GrowthCards
+          cards={cards}
+          selected={step}
+          onSelect={(next) => go({ step: next, all: null })}
         />
-        {stale ? (
-          <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
-            Reload
-          </Button>
+
+        {step === null && q === '' && !mine ? (
+          <StillToFinish
+            everyone={everyone}
+            finished={counts.data?.all_five}
+            what="all five"
+            onChange={(all) => go({ all: all ? '1' : null })}
+          />
         ) : null}
-      </div>
 
-      <div className="mt-4">
-        {people.isPending ? (
-          <p className="text-muted text-sm">Loading&hellip;</p>
-        ) : people.isError ? null : rows.length === 0 ? (
-          <p className="text-sm">Nobody here matches.</p>
-        ) : (
-          <>
-            <Table
-              caption="Training graduations for the people in your care"
-              className="hidden lg:block"
-            >
-              <thead>
-                <tr>
-                  <HeaderCell>Person</HeaderCell>
-                  {TRAINING_PROGRAMS.map((program) => (
-                    <HeaderCell key={program} className="px-1 text-center">
-                      {PROGRAM_LABELS[program]}
-                    </HeaderCell>
-                  ))}
-                  <HeaderCell className="text-right">Done</HeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.person_id} className={rowClasses}>
-                    <td className="px-3 py-3 align-top">
-                      <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                    </td>
+        <div className="mt-8">
+          <FailureNotice
+            failure={
+              people.isError
+                ? describeFailure(people.error)
+                : counts.isError
+                  ? describeFailure(counts.error)
+                  : save.isError
+                    ? describeFailure(save.error)
+                    : null
+            }
+          />
+          {stale ? (
+            <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
+              Reload
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="mt-4">
+          {people.isPending ? (
+            <p className="text-muted text-sm">Loading&hellip;</p>
+          ) : people.isError ? null : rows.length === 0 ? (
+            <p className="text-sm">Nobody here matches.</p>
+          ) : (
+            <>
+              <Table
+                caption="Training graduations for the people in your care"
+                className="hidden lg:block"
+              >
+                <thead>
+                  <tr>
+                    <HeaderCell>Person</HeaderCell>
                     {TRAINING_PROGRAMS.map((program) => (
-                      <td key={program} className="px-1 py-3 text-center align-top">
-                        {cell(row, program)}
-                      </td>
+                      <HeaderCell key={program} className="px-1 text-center">
+                        {PROGRAM_LABELS[program]}
+                      </HeaderCell>
                     ))}
-                    <td className="px-3 py-3 text-right align-top">{doneLabel(row, draft)}</td>
+                    <HeaderCell className="text-right">Done</HeaderCell>
                   </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.person_id} className={rowClasses}>
+                      <td className="px-3 py-3 align-top">
+                        <PersonName row={row} self={row.person_id === me.data?.person_id} />
+                      </td>
+                      {TRAINING_PROGRAMS.map((program) => (
+                        <td key={program} className="px-1 py-3 text-center align-top">
+                          {cell(row, program)}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right align-top">{doneLabel(row, draft)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+
+              <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
+                {rows.map((row) => (
+                  <li key={row.person_id} className="py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <PersonName row={row} self={row.person_id === me.data?.person_id} />
+                      <span className="text-sm">{doneLabel(row, draft)}</span>
+                    </div>
+                    <ul className="mt-2">
+                      {TRAINING_PROGRAMS.map((program) => (
+                        <li
+                          key={program}
+                          className="border-line flex min-h-11 items-center justify-between gap-3 border-t py-2 first:border-t-0"
+                        >
+                          <span aria-hidden="true" className="text-sm">
+                            {PROGRAM_LABELS[program]}
+                          </span>
+                          <div className="flex flex-col items-end">{cell(row, program)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
+              </ul>
 
-            <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
-              {rows.map((row) => (
-                <li key={row.person_id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                    <span className="text-sm">{doneLabel(row, draft)}</span>
-                  </div>
-                  <ul className="mt-2">
-                    {TRAINING_PROGRAMS.map((program) => (
-                      <li
-                        key={program}
-                        className="border-line flex min-h-11 items-center justify-between gap-3 border-t py-2 first:border-t-0"
-                      >
-                        <span aria-hidden="true" className="text-sm">
-                          {PROGRAM_LABELS[program]}
-                        </span>
-                        <div className="flex flex-col items-end">{cell(row, program)}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
+              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={!people.data.next_cursor}
+                  onClick={() => {
+                    const next = people.data.next_cursor;
+                    if (!next) return;
+                    setCursors((current) => [...current.slice(0, page + 1), next]);
+                    setPage((current) => current + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              </nav>
+            </>
+          )}
+        </div>
 
-            <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!people.data.next_cursor}
-                onClick={() => {
-                  const next = people.data.next_cursor;
-                  if (!next) return;
-                  setCursors((current) => [...current.slice(0, page + 1), next]);
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
-          </>
-        )}
-      </div>
-
-      <GrowthSaveBar
-        summary={
-          entries.length > 0
-            ? `${entries.length === 1 ? '1 graduation' : `${entries.length} graduations`} changed, not saved yet.`
-            : saved
-              ? 'Saved.'
-              : null
-        }
-        count={entries.length}
-        needsReason={needsReason}
-        reason={reason}
-        onReason={setReason}
-        onSave={() => save.mutate()}
-        onDiscard={() => {
-          setDraft({});
-          setReason('');
-          save.reset();
-        }}
-        saving={save.isPending}
-      />
+        <GrowthSaveBar
+          summary={
+            entries.length > 0
+              ? `${entries.length === 1 ? '1 graduation' : `${entries.length} graduations`} changed, not saved yet.`
+              : saved
+                ? 'Saved.'
+                : null
+          }
+          count={entries.length}
+          needsReason={needsReason}
+          reason={reason}
+          onReason={setReason}
+          onSave={() => save.mutate()}
+          onDiscard={() => {
+            setDraft({});
+            setReason('');
+            save.reset();
+          }}
+          saving={save.isPending}
+        />
+      </GrowthTabs>
     </main>
   );
 }
