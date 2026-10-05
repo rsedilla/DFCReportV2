@@ -1510,7 +1510,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
                 is_actor: false,
                 recorded_by_you: false,
               },
-              record_for: '3f1b7c6e-0000-4000-8000-000000000699',
+              record_for: null,
               may_record: false,
             },
           ],

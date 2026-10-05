@@ -259,7 +259,8 @@ export interface DccOwed {
   };
   /**
    * The leader whose Sunday screen Record opens: this one, or for a leader without an
-   * account the nearest above who has one, as of the Sunday (decision 0313).
+   * account the nearest above who has one, as of the Sunday (decision 0313). Null where
+   * `may_record` is false.
    */
   record_for: string | null;
   /** Whether the reader may record there, decided by the API per row (decision 0313). */
