@@ -745,4 +745,202 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     expect((await owed(account, monthOf(sunday))).status).toBe(403);
     expect((await checklist(account, outsider.id, monthOf(sunday))).status).toBe(403);
   });
+
+  // ---------------------------------------------------------------------------
+  // Recording for another leader (decision 0313)
+  // ---------------------------------------------------------------------------
+
+  const leaderRoster = async (
+    as: TestAccount,
+    eventId: string,
+    leaderId: string,
+  ): Promise<request.Response> =>
+    request(app.getHttpServer())
+      .get(`/api/v1/dcc/events/${eventId}/leaders/${leaderId}/roster`)
+      .set('Authorization', `Bearer ${as.accessToken}`);
+
+  interface OwedRecordRow {
+    event_id: string;
+    leader: { person_id: string };
+    record_for: string | null;
+    may_record: boolean;
+  }
+
+  const owedRows = async (as: TestAccount, sunday: string, eventId: string) =>
+    ((await owed(as, monthOf(sunday))).body.data as OwedRecordRow[]).filter(
+      (row) => row.event_id === eventId,
+    );
+
+  /** Ends a person's open assignment now and opens one under another leader. */
+  const moveNow = async (personId: string, leaderId: string): Promise<void> => {
+    const moved = new Date();
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: moved })
+      .where('person_id', '=', personId)
+      .where('ended_at', 'is', null)
+      .execute();
+    await db
+      .insertInto('pastoral_assignments')
+      .values({ person_id: personId, leader_id: leaderId, started_at: moved })
+      .execute();
+  };
+
+  it('offers Record on another leader’s row, opening that leader’s own screen', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const rows = await owedRows(manuelAccount, sunday, eventId);
+    const byLeader = new Map(rows.map((row) => [row.leader.person_id, row]));
+
+    expect(byLeader.get(mark.id)).toMatchObject({ record_for: mark.id, may_record: true });
+    expect(byLeader.get(manuel.id)).toMatchObject({ record_for: manuel.id, may_record: true });
+  });
+
+  it('sends a leader without an account to the screen of the nearest account holder above them', async () => {
+    // Paul holds no account and leads Quinn, so Quinn's record falls to Mark (section 9).
+    const paul = await createPerson(db, { firstName: 'Paul', network: 'MENS' });
+    await assignTo(db, paul.id, mark.id);
+    const quinn = await createPerson(db, { firstName: 'Quinn', network: 'MENS' });
+    await assignTo(db, quinn.id, paul.id);
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const rows = await owedRows(manuelAccount, sunday, eventId);
+    const paulRow = rows.find((row) => row.leader.person_id === paul.id);
+
+    expect(paulRow).toMatchObject({ record_for: mark.id, may_record: true });
+  });
+
+  it('finds that leader by the Sunday’s tree, and offers Record only where the reader may record for them', async () => {
+    // On the Sunday Paul (no account) was under Nathan (no account), so Quinn's record fell
+    // to Manuel. Paul has since moved under Mark. Mark now sees Paul's row, but it is
+    // Manuel's to record, and Mark may not record for his own upline.
+    const paul = await createPerson(db, { firstName: 'Paul', network: 'MENS' });
+    await assignTo(db, paul.id, nathan.id);
+    const quinn = await createPerson(db, { firstName: 'Quinn', network: 'MENS' });
+    await assignTo(db, quinn.id, paul.id);
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+    await moveNow(paul.id, mark.id);
+
+    const rows = await owedRows(markAccount, sunday, eventId);
+    const paulRow = rows.find((row) => row.leader.person_id === paul.id);
+
+    // Where the row offers no Record it does not say whose it is (owner's ruling).
+    expect(paulRow).toMatchObject({ record_for: null, may_record: false });
+  });
+
+  it('reads another leader’s checklist for the Sunday, rolled-up people included', async () => {
+    const paul = await createPerson(db, { firstName: 'Paul', network: 'MENS' });
+    await assignTo(db, paul.id, mark.id);
+    const quinn = await createPerson(db, { firstName: 'Quinn', network: 'MENS' });
+    await assignTo(db, quinn.id, paul.id);
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await leaderRoster(manuelAccount, eventId, mark.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.leader).toMatchObject({ person_id: mark.id, holds_account: true });
+    expect(
+      (response.body.data as { person_id: string }[]).map((line) => line.person_id).sort(),
+    ).toEqual([paul.id, quinn.id, timothy.id].sort());
+  });
+
+  it('leaves off a person the reader can no longer reach', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+    // Timothy was Mark's on the Sunday and is Raymond's now, above Manuel.
+    await moveNow(timothy.id, raymond.id);
+
+    const response = await leaderRoster(manuelAccount, eventId, mark.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('answers an empty checklist for a leader holding no account', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const response = await leaderRoster(manuelAccount, eventId, nathan.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.leader).toMatchObject({ holds_account: false, account_active: false });
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('refuses a reader’s upline, and a reader holding no capability', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const upline = await leaderRoster(markAccount, eventId, manuel.id);
+    expect(upline.status).toBe(403);
+    expect(upline.body.error.code).toBe('SCOPE_DENIED');
+
+    const outsider = await createPerson(db, { firstName: 'Rex', network: 'MENS' });
+    await assignTo(db, outsider.id, raymond.id);
+    const account = await createAccount(app, db, { person: outsider, roles: [] });
+
+    expect((await leaderRoster(account, eventId, mark.id)).status).toBe(403);
+  });
+
+  /** An account holding no role, with the explicit grants given. */
+  const grantedAccount = async (
+    grants: { capability: string; scope: 'OWN_SUBTREE' | 'WHOLE_CHURCH' }[],
+  ): Promise<TestAccount> => {
+    const person = await createPerson(db, { firstName: 'Rex', network: 'MENS' });
+    await assignTo(db, person.id, raymond.id);
+    const account = await createAccount(app, db, { person, roles: [] });
+    for (const grant of grants) {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: grant.capability,
+          scope_type: grant.scope,
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+    }
+
+    return account;
+  };
+
+  it('answers CAPABILITY_DENIED for each capability the reader lacks, and SCOPE_DENIED where it does not reach', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const onBehalfOnly = await grantedAccount([
+      { capability: 'dcc.submit_on_behalf', scope: 'WHOLE_CHURCH' },
+    ]);
+    const first = await leaderRoster(onBehalfOnly, eventId, mark.id);
+    expect(first.status).toBe(403);
+    expect(first.body.error.code).toBe('CAPABILITY_DENIED');
+
+    const takeOnly = await grantedAccount([
+      { capability: 'dcc.take_attendance', scope: 'WHOLE_CHURCH' },
+    ]);
+    const second = await leaderRoster(takeOnly, eventId, mark.id);
+    expect(second.status).toBe(403);
+    expect(second.body.error.code).toBe('CAPABILITY_DENIED');
+
+    // Mark is not under this reader, so a subtree grant of take_attendance does not reach him.
+    const takeInOwnSubtree = await grantedAccount([
+      { capability: 'dcc.submit_on_behalf', scope: 'WHOLE_CHURCH' },
+      { capability: 'dcc.take_attendance', scope: 'OWN_SUBTREE' },
+    ]);
+    const third = await leaderRoster(takeInOwnSubtree, eventId, mark.id);
+    expect(third.status).toBe(403);
+    expect(third.body.error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('answers NOT_FOUND for an event that does not exist', async () => {
+    const response = await leaderRoster(manuelAccount, randomUUID(), mark.id);
+
+    expect(response.status).toBe(404);
+  });
 });

@@ -22,6 +22,8 @@ import {
   mockDccEvents,
   mockDccOwed,
   mockDccReport,
+  mockLeaderDccRoster,
+  OWED_LEADER_ID,
   mockDccRoster,
   mockMeetingRoster,
   mockMeetingsAwaiting,
@@ -1458,6 +1460,131 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.getByRole('button', { name: 'Back to your checklist' }).click();
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
+  });
+
+  // Decision 0313: another leader's row carries Record beside See checklist, where the API
+  // says the reader may record for them, and Record opens that leader's Sunday screen.
+  test('another leader’s row carries Record beside See checklist, opening their Sunday', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    await mockDccOwed(page);
+
+    await page.goto('/dashboard?kind=dcc&whose=branch');
+    const region = page.getByRole('region', { name: 'Awaiting a record' });
+    await region.getByRole('button', { name: 'Carlo Reyes' }).click();
+
+    const row = page
+      .getByRole('table', { name: 'DCC records still owed, Carlo Reyes' })
+      .getByRole('row', { name: /Carlo Reyes/ });
+    await expect(row.getByRole('link', { name: /^Record/ })).toHaveAttribute(
+      'href',
+      `/dcc/3f1b7c6e-0000-4000-8000-000000000501?leader=${OWED_LEADER_ID}`,
+    );
+    await expect(row.getByRole('button', { name: /See checklist/ })).toBeVisible();
+  });
+
+  test('a row the reader may not record for keeps See checklist alone', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    await mockDccOwed(page);
+    // Registered last, so it is the one matched: the API says no Record for Carlo.
+    await page.route('**/api/v1/dcc/owed?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: '2026-06-01',
+          open: true,
+          data: [
+            {
+              event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+              event_date: '2026-06-07',
+              leader: {
+                person_id: OWED_LEADER_ID,
+                member_id: 'M-000711',
+                full_name: 'Carlo Reyes',
+                last_name: 'Reyes',
+                first_name: 'Carlo',
+                is_actor: false,
+                recorded_by_you: false,
+              },
+              record_for: null,
+              may_record: false,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto('/dashboard?kind=dcc&whose=branch');
+    await page
+      .getByRole('region', { name: 'Awaiting a record' })
+      .getByRole('button', { name: 'Carlo Reyes' })
+      .click();
+
+    const row = page
+      .getByRole('table', { name: 'DCC records still owed, Carlo Reyes' })
+      .getByRole('row', { name: /Carlo Reyes/ });
+    await expect(row.getByRole('button', { name: /See checklist/ })).toBeVisible();
+    await expect(row.getByRole('link', { name: /^Record/ })).toHaveCount(0);
+  });
+});
+
+test.describe('recording a Sunday for another leader (decision 0313)', () => {
+  const FOR_CARLO = `/dcc/3f1b7c6e-0000-4000-8000-000000000501?leader=${OWED_LEADER_ID}`;
+
+  test('says whose checklist it is, in their sections, and saves only what was marked', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockLeaderDccRoster(page);
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/dcc/events/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto(FOR_CARLO);
+
+    await expect(page.getByText('Recording for Carlo Reyes.')).toBeVisible();
+    await expect(
+      page.getByText(/It is saved under your name, and Carlo Reyes sees it on their own checklist\./),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to your own checklist' })).toHaveAttribute(
+      'href',
+      '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    );
+    await expect(page.getByRole('heading', { name: /^Carlo Reyes’s 12/ })).toBeVisible();
+    await expect(page.getByText('The 2 people on Carlo Reyes’s checklist.', { exact: false })).toBeVisible();
+
+    await page
+      .getByRole('group', { name: 'Danilo Suarez' })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toEqual({
+      records: [
+        { person_id: '3f1b7c6e-0000-4000-8000-000000000612', present: true, version: 1 },
+        { person_id: '3f1b7c6e-0000-4000-8000-000000000613', present: true, version: null },
+      ],
+    });
+  });
+
+  test('says the leader will see it once their account is active, where it is not', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockLeaderDccRoster(page, { active: false });
+
+    await page.goto(FOR_CARLO);
+
+    await expect(
+      page.getByText(/Carlo Reyes will see it once their account is active\./),
+    ).toBeVisible();
   });
 });
 

@@ -1464,8 +1464,9 @@ type OwedRow = DccOwed & { month: string };
 /**
  * The DCC half of People I oversee (decision 0301): one row per Sunday and leader in the
  * reader's branch with no DCC record yet, oldest first and by name, never by how far behind.
- * The reader's own row records; another leader's opens their checklist below, read only,
- * because nothing here records on their behalf yet.
+ * The reader's own row records; another leader's carries Record, where the API says the reader
+ * may record for them, beside See checklist, which opens their month below, read only
+ * (decision 0313).
  */
 function DccBranchQueue({
   rows,
@@ -1494,24 +1495,46 @@ function DccBranchQueue({
     open: row.month === currentMonth ? null : openUntilLabel(row.month, currentMonth),
   });
 
+  const own = (row: OwedRow) => row.leader.is_actor || row.leader.recorded_by_you;
+
+  // Record opens the screen of the leader whose checklist holds this row's people, and is
+  // offered where the API says the reader may record there (decision 0313).
+  const record = (row: OwedRow) => (
+    <Link
+      href={
+        own(row) || row.record_for === null
+          ? `/dcc/${row.event_id}`
+          : `/dcc/${row.event_id}?leader=${row.record_for}`
+      }
+      className={buttonClasses('primary')}
+    >
+      Record
+      <span className="sr-only">
+        {' '}
+        DCC, {dayLabel(row.event_date)}
+        {own(row) ? '' : `, for ${row.leader.full_name}`}
+      </span>
+    </Link>
+  );
+
   const action = (row: OwedRow) =>
-    row.leader.is_actor || row.leader.recorded_by_you ? (
-      <Link href={`/dcc/${row.event_id}`} className={buttonClasses('primary')}>
-        Record
-        <span className="sr-only"> DCC, {dayLabel(row.event_date)}</span>
-      </Link>
+    own(row) ? (
+      record(row)
     ) : (
-      <button
-        type="button"
-        aria-pressed={chosenId === row.leader.person_id}
-        onClick={() =>
-          onChoose({ id: row.leader.person_id, name: row.leader.full_name, month: row.month })
-        }
-        className={buttonClasses('secondary')}
-      >
-        See checklist
-        <span className="sr-only"> of {row.leader.full_name}</span>
-      </button>
+      <span className="inline-flex flex-wrap gap-2">
+        {row.may_record ? record(row) : null}
+        <button
+          type="button"
+          aria-pressed={chosenId === row.leader.person_id}
+          onClick={() =>
+            onChoose({ id: row.leader.person_id, name: row.leader.full_name, month: row.month })
+          }
+          className={buttonClasses('secondary')}
+        >
+          See checklist
+          <span className="sr-only"> of {row.leader.full_name}</span>
+        </button>
+      </span>
     );
 
   const key = (row: OwedRow) => `${row.event_id}-${row.leader.person_id}`;

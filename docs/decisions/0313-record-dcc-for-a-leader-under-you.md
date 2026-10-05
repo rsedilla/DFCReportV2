@@ -59,6 +59,10 @@ only where the actor may record for the leader so found, now; otherwise See chec
 **13. The API decides per row whether a DCC row carries Record**, as it does for a Cell meeting, so
 the screen never offers a Record that the read would refuse.
 
+**14. A row without Record does not name the leader whose screen it would open** (owner's ruling of
+2026-10-05, on a Stop Condition from the build's review). That leader may be outside the actor's
+scope, and naming them would show where a person sat in the tree on that Sunday (Section 8).
+
 ## Why
 
 An upline following up a downline's DCC records could see what was missing and do nothing about it

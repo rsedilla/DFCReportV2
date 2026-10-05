@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -12,10 +12,12 @@ import { FRAME } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   getDccRoster,
+  getLeaderDccRoster,
   notRecordableLabel,
   submitDccAttendance,
   type DccRecordInput,
   type DccRosterLine,
+  type LeaderDccRoster,
 } from '@/lib/dcc';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
@@ -71,11 +73,18 @@ type Mark = 'present' | 'absent';
 function DccChecklist() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  // **Another leader's checklist, recorded on their behalf** (decision 0313), reached from
+  // that leader's Record on the Record page. Absent, the screen is the reader's own.
+  const leaderId = useSearchParams().get('leader');
 
   const roster = useQuery({
-    queryKey: ['dcc-roster', params.id],
-    queryFn: ({ signal }) => getDccRoster(params.id, signal),
+    queryKey: ['dcc-roster', params.id, leaderId ?? 'own'],
+    queryFn: ({ signal }) =>
+      leaderId === null
+        ? getDccRoster(params.id, signal)
+        : getLeaderDccRoster(params.id, leaderId, signal),
   });
+  const forLeader = leaderId === null ? null : ((roster.data as LeaderDccRoster | undefined)?.leader ?? null);
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -185,10 +194,37 @@ function DccChecklist() {
       <h1 className="text-accent text-2xl font-bold tracking-tight">
         {event ? dayLabel(event.event_date) : 'DCC attendance'}
       </h1>
+      {/*
+        **Recording for somebody else is said before anything else on the screen**
+        (decision 0313), because the screen is otherwise the reader's own.
+      */}
+      {forLeader ? (
+        <div className="border-accent mt-4 max-w-2xl border-2 p-4 text-sm leading-relaxed">
+          <p>
+            <strong>Recording for {forLeader.full_name}.</strong> These are the people{' '}
+            {forLeader.full_name} records. It is saved under your name
+            {forLeader.holds_account
+              ? `, and ${forLeader.full_name} ${forLeader.account_active ? 'sees it on their own checklist.' : 'will see it once their account is active.'}`
+              : '.'}
+          </p>
+          <p className="mt-2">
+            <Link
+              href={`/dcc/${params.id}`}
+              className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              Back to your own checklist
+            </Link>
+          </p>
+        </div>
+      ) : null}
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        {lines.length === 1
-          ? 'The 1 person you are responsible for.'
-          : `The ${lines.length} people you are responsible for.`}
+        {forLeader
+          ? lines.length === 1
+            ? `The 1 person on ${forLeader.full_name}’s checklist.`
+            : `The ${lines.length} people on ${forLeader.full_name}’s checklist.`
+          : lines.length === 1
+            ? 'The 1 person you are responsible for.'
+            : `The ${lines.length} people you are responsible for.`}
         {recordable && awaitingCount > 0 ? ` Awaiting a record · ${awaitingCount} to mark.` : ''}
       </p>
 
@@ -271,15 +307,20 @@ function DccChecklist() {
 
           {lines.length === 0 ? (
             <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              Nobody is on your checklist for this Sunday. Attendance is recorded by each
-              person&rsquo;s direct pastoral leader, so this is empty if you disciple nobody.
+              {forLeader
+                ? `Nobody on ${forLeader.full_name}’s checklist for this Sunday is someone you can record.`
+                : 'Nobody is on your checklist for this Sunday. Attendance is recorded by each person’s direct pastoral leader, so this is empty if you disciple nobody.'}
             </p>
           ) : (
             <>
               <p className="mt-4 text-right text-sm">
                 {markedCount} of {lines.length} marked
               </p>
-              {sectionsOf(lines, me.data?.person_id ?? null).map((section) => (
+              {sectionsOf(
+                lines,
+                leaderId ?? me.data?.person_id ?? null,
+                forLeader?.full_name ?? null,
+              ).map((section) => (
                 <section key={section.key} aria-labelledby={`section-${section.key}`} className="mt-6">
                   <h2 id={`section-${section.key}`} className="text-base font-bold">
                     {section.title}
@@ -419,11 +460,18 @@ interface Section {
  * The roster arrives in surname, first name, Member ID order, so each section keeps it,
  * and the sections of other leaders follow the order of those leaders' own lines.
  */
-function sectionsOf(lines: readonly DccRosterLine[], readerId: string | null): Section[] {
+function sectionsOf(
+  lines: readonly DccRosterLine[],
+  readerId: string | null,
+  /** The leader recorded for, by name, where it is not the reader's own (decision 0313). */
+  ownerName: string | null = null,
+): Section[] {
   const id = (value: string | null) => value?.toLowerCase() ?? null;
+  const whose = ownerName === null ? 'Your' : `${ownerName}’s`;
+  const records = ownerName === null ? 'you record them' : `${ownerName} records them`;
 
   if (readerId === null) {
-    return [{ key: 'all', title: 'Your checklist', note: null, counted: false, lines: [...lines] }];
+    return [{ key: 'all', title: `${whose} checklist`, note: null, counted: false, lines: [...lines] }];
   }
 
   const reader = id(readerId);
@@ -452,8 +500,8 @@ function sectionsOf(lines: readonly DccRosterLine[], readerId: string | null): S
         title: name === null ? 'A leader without an account' : `${name}’s people`,
         note:
           name === null
-            ? 'Their leader has no account yet, so you record them.'
-            : `${name} has no account yet, so you record them.`,
+            ? `Their leader has no account yet, so ${records}.`
+            : `${name} has no account yet, so ${records}.`,
         counted: false,
         lines: people,
       };
@@ -461,7 +509,7 @@ function sectionsOf(lines: readonly DccRosterLine[], readerId: string | null): S
 
   return [
     ...(yours.length > 0
-      ? [{ key: 'yours', title: 'Your 12', note: null, counted: true, lines: yours }]
+      ? [{ key: 'yours', title: `${whose} 12`, note: null, counted: true, lines: yours }]
       : []),
     ...others,
     ...(roots.length > 0
@@ -469,7 +517,10 @@ function sectionsOf(lines: readonly DccRosterLine[], readerId: string | null): S
           {
             key: 'roots',
             title: 'Network roots',
-            note: 'Nobody is above them, so their records fall to you.',
+            note:
+              ownerName === null
+                ? 'Nobody is above them, so their records fall to you.'
+                : `Nobody is above them, so their records fall to ${ownerName}.`,
             counted: false,
             lines: roots,
           },

@@ -178,35 +178,98 @@ export class DccAttendanceService {
   ): Promise<Record<string, unknown>> {
     const event = await this.eventForRecording(this.db, eventId);
     const authority = await this.authorization.authorityFor(actor.accountId);
-    const lines = await this.rosterLines(this.db, event, actor, authority);
+    const lines = await this.rosterLines(
+      this.db,
+      event,
+      actor.personId,
+      holdsWholeChurch(authority, Capability.DccTakeAttendance),
+    );
 
-    // Section 22: cursor-based pagination on **every** collection endpoint. A first
-    // version returned the whole checklist under `next_cursor: null`, on the argument
-    // that a page boundary "would let a leader submit a checklist they had seen half
-    // of" — which is the argument `GET /cells/{id}/members` was corrected for, and it
-    // fails the same way: it bounds the request rather than the data. Section 9 puts
-    // no bound on a checklist at all, and says the covering arrangement that grows one
-    // can persist (decision 0174).
-    const after = decodeRosterCursor(page.cursor);
-    const limit = page.limit ?? DEFAULT_PAGE;
+    return { event: this.renderEvent(event), ...pageOfLines(lines, page) };
+  }
 
-    const beyond =
-      after === null ? 0 : lines.findIndex((line) => compareKeys(keyOf(line), after) > 0);
-    // `-1` means the cursor is past every line, which is the last page rather than the
-    // first: slicing from it would restart the collection, which is the silent
-    // behaviour section 22 refuses a cursor over.
-    const start = beyond === -1 ? lines.length : beyond;
+  /**
+   * `GET /api/v1/dcc/events/{id}/leaders/{leaderId}/roster` — one leader's checklist for
+   * this Sunday, to record on their behalf (sections 7, 9 and 14; decision 0313).
+   *
+   * **The guard has decided `dcc.submit_on_behalf` against the leader; this decides
+   * `dcc.take_attendance` against them**, because the guard takes one capability
+   * (decision 0062) and the read requires both, as recording there does.
+   * Both are scope questions about the leader, decided before anything about a record.
+   *
+   * **The leader's checklist as of the Sunday**, by section 9's submitter walk from them —
+   * their direct disciples, then the people of any leader beneath them holding no account,
+   * then the Network roots where the leader's own grant puts them there — **narrowed now
+   * to the people the actor holds under `dcc.take_attendance`** (owner's ruling). A leader
+   * holding no account is nobody's submitter, so their checklist is empty: their people
+   * are on the nearest upline's, which is the screen their row opens.
+   */
+  async leaderRoster(
+    eventId: string,
+    actor: Actor,
+    leaderId: string,
+    page: { limit?: number; cursor?: string } = {},
+  ): Promise<Record<string, unknown>> {
+    const event = await this.eventForRecording(this.db, eventId);
+    const authority = await this.authorization.authorityFor(actor.accountId);
 
-    const window = lines.slice(start, start + limit);
-    const more = start + limit < lines.length;
+    const covered = await this.authorization.coversWith(
+      this.db,
+      actor,
+      authority,
+      Capability.DccTakeAttendance,
+      { kind: 'person', personId: leaderId },
+    );
+
+    if (!covered) {
+      if (!authority.grants.some((grant) => grant.capability === Capability.DccTakeAttendance)) {
+        throw new CapabilityDeniedError(`You do not hold ${Capability.DccTakeAttendance}.`, {
+          capability: Capability.DccTakeAttendance,
+        });
+      }
+
+      throw new ScopeDeniedError('This leader is outside your scope.', {
+        capability: Capability.DccTakeAttendance,
+        person_id: leaderId,
+      });
+    }
+
+    const leader = await this.people.forDecision(leaderId);
+
+    if (!leader) {
+      throw new NotFoundError('No such person.');
+    }
+
+    const account = await this.accounts.accountOfPerson(this.db, leaderId);
+    let lines: RosterLine[] = [];
+
+    if (account !== null) {
+      const leaderAuthority = await this.authorization.authorityFor(account.id);
+      lines = await this.rosterLines(
+        this.db,
+        event,
+        leaderId,
+        holdsWholeChurch(leaderAuthority, Capability.DccTakeAttendance),
+      );
+
+      const membership = await this.authorization.scopeMembership(
+        actor,
+        Capability.DccTakeAttendance,
+      );
+      if (membership.kind !== 'WHOLE_CHURCH') {
+        lines = lines.filter((line) => membership.personIds.has(canonical(line.personId)));
+      }
+    }
 
     return {
       event: this.renderEvent(event),
-      // `data`, which is the envelope every other collection in this API answers in.
-      // This route answered `people` until decision 0174; one shape, or a client
-      // writes a special case for one route.
-      data: window.map(renderLine),
-      next_cursor: more ? encodeRosterCursor(keyOf(window[window.length - 1])) : null,
+      leader: {
+        person_id: leaderId,
+        full_name: leader.fullName,
+        holds_account: account !== null,
+        account_active: account?.status === 'ACTIVE',
+      },
+      ...pageOfLines(lines, page),
     };
   }
 
@@ -334,7 +397,12 @@ export class DccAttendanceService {
 
       const personIds = records.map((record) => record.person_id);
 
-      const checklist = await this.checklist(trx, event, actor, authority);
+      const checklist = await this.checklist(
+        trx,
+        event,
+        actor.personId,
+        holdsWholeChurch(authority, Capability.DccTakeAttendance),
+      );
       const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, event.at);
       const identities = await this.people.forDecisionsWithin(trx, personIds);
       const live = await this.liveRecords(trx, event.id, personIds);
@@ -588,12 +656,14 @@ export class DccAttendanceService {
   private async checklist(
     executor: Db,
     event: EventForRecording,
-    actor: Actor,
-    authority: ActorAuthority,
+    /** Whose checklist: the actor's own, or the leader recorded for (decision 0313). */
+    submitterId: string,
+    /** Whether that submitter holds `dcc.take_attendance` at Whole Church (decision 0172). */
+    includesRoots: boolean,
   ): Promise<Set<string>> {
     const checklist = new Set<string>();
-    const visited = new Set<string>([canonical(actor.personId)]);
-    let frontier = [actor.personId];
+    const visited = new Set<string>([canonical(submitterId)]);
+    let frontier = [submitterId];
 
     while (frontier.length > 0) {
       // One statement per generation rather than one per leader: early in a pilot few
@@ -632,7 +702,7 @@ export class DccAttendanceService {
     // rather than on the `ADMIN` role (decision 0172): a Senior Pastor is a root, and
     // a role check would leave neither able to record their own attendance or the
     // other's.
-    if (holdsWholeChurch(authority, Capability.DccTakeAttendance)) {
+    if (includesRoots) {
       for (const rootId of await this.hierarchy.rootsAsOf(executor, event.at)) {
         checklist.add(rootId);
       }
@@ -644,10 +714,10 @@ export class DccAttendanceService {
   private async rosterLines(
     executor: Db,
     event: EventForRecording,
-    actor: Actor,
-    authority: ActorAuthority,
+    submitterId: string,
+    includesRoots: boolean,
   ): Promise<RosterLine[]> {
-    const checklist = [...(await this.checklist(executor, event, actor, authority))];
+    const checklist = [...(await this.checklist(executor, event, submitterId, includesRoots))];
     const identities = await this.people.forDecisionsWithin(executor, checklist);
 
     // An archived Person has left (section 3) and a merged record has been absorbed
@@ -1460,6 +1530,42 @@ function outcomeFor(stored: LiveRecord | null, present: boolean): LineOutcome {
   }
 
   return stored.present === present ? 'UNCHANGED' : 'CORRECT';
+}
+
+/**
+ * One page of a checklist, and the cursor to the next.
+ *
+ * Section 22: cursor-based pagination on **every** collection endpoint. A first version
+ * returned the whole checklist under `next_cursor: null`, on the argument that a page
+ * boundary "would let a leader submit a checklist they had seen half of" — which is the
+ * argument `GET /cells/{id}/members` was corrected for, and it fails the same way: it
+ * bounds the request rather than the data. Section 9 puts no bound on a checklist at all,
+ * and says the covering arrangement that grows one can persist (decision 0174).
+ */
+function pageOfLines(
+  lines: readonly RosterLine[],
+  page: { limit?: number; cursor?: string },
+): { data: Record<string, unknown>[]; next_cursor: string | null } {
+  const after = decodeRosterCursor(page.cursor);
+  const limit = page.limit ?? DEFAULT_PAGE;
+
+  const beyond =
+    after === null ? 0 : lines.findIndex((line) => compareKeys(keyOf(line), after) > 0);
+  // `-1` means the cursor is past every line, which is the last page rather than the
+  // first: slicing from it would restart the collection, which is the silent behaviour
+  // section 22 refuses a cursor over.
+  const start = beyond === -1 ? lines.length : beyond;
+
+  const window = lines.slice(start, start + limit);
+  const more = start + limit < lines.length;
+
+  return {
+    // `data`, which is the envelope every other collection in this API answers in. This
+    // route answered `people` until decision 0174; one shape, or a client writes a special
+    // case for one route.
+    data: window.map(renderLine),
+    next_cursor: more ? encodeRosterCursor(keyOf(window[window.length - 1])) : null,
+  };
 }
 
 /** Whether the actor holds this capability at Whole Church (decision 0172). */
