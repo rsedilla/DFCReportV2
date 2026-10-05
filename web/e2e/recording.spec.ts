@@ -375,6 +375,140 @@ test.describe('a Sunday with a mark already recorded', () => {
   });
 });
 
+// Decision 0312: the Sunday checklist opens with Your 12, then one section per leader without
+// an account whose people fall to the reader, then the Network roots. Invented names.
+test.describe('a DCC checklist in sections', () => {
+  const SUNDAY = '/dcc/3f1b7c6e-0000-4000-8000-000000000501';
+  const READER = '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9';
+  const NESTOR = '3f1b7c6e-0000-4000-8000-000000000711';
+  const ABSENT_LEADER = '3f1b7c6e-0000-4000-8000-000000000799';
+
+  const line = (n: number, name: string, leader: string | null) => ({
+    person_id: `3f1b7c6e-0000-4000-8000-${String(700 + n).padStart(12, '0')}`,
+    member_id: `M-0007${String(n).padStart(2, '0')}`,
+    full_name: name,
+    responsible_leader_id: leader,
+    record: null,
+  });
+
+  async function mockSections(page: Page, extra: ReturnType<typeof line>[] = []) {
+    await mockSignedIn(page);
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          event: {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: null,
+          },
+          // In the roster's own order: surname, first name, Member ID.
+          data: [
+            line(1, 'Corazon Dela Cruz', READER),
+            line(2, 'Eduardo Galang', null),
+            { ...line(3, 'Nestor Ilagan', READER), person_id: NESTOR },
+            line(4, 'Pia Ilagan', NESTOR),
+            line(5, 'Ramon Villa', READER),
+            ...extra,
+          ],
+          next_cursor: null,
+        }),
+      }),
+    );
+  }
+
+  const headings = (page: Page) =>
+    page.getByRole('main').getByRole('heading', { level: 2 }).allTextContents();
+
+  test('opens with Your 12, then a leader without an account, then the Network roots', async ({
+    page,
+  }) => {
+    await mockSections(page);
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('heading', { name: /^Your 12/ })).toBeVisible();
+    expect(await headings(page)).toEqual([
+      'Your 12 · 0 of 3 marked',
+      'Nestor Ilagan’s people',
+      'Network roots',
+    ]);
+    await expect(page.getByText('Nestor Ilagan has no account yet, so you record them.')).toBeVisible();
+    await expect(page.getByText(/^0 of 5 marked$/)).toBeVisible();
+
+    const yours = page.getByRole('region', { name: /^Your 12/ });
+    await expect(yours.getByRole('group')).toHaveCount(3);
+    await expect(page.getByRole('region', { name: 'Nestor Ilagan’s people' }).getByRole('group', { name: 'Pia Ilagan' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Network roots' }).getByRole('group', { name: 'Eduardo Galang' })).toBeVisible();
+  });
+
+  test('counts only Your 12 beside a heading, and one Save sends every section', async ({ page }) => {
+    await mockSections(page);
+    const sent: { records: { person_id: string }[] }[] = [];
+    await page.route('**/api/v1/dcc/events/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+    await page.goto(SUNDAY);
+
+    await page.getByRole('group', { name: 'Ramon Villa' }).getByRole('radio', { name: 'Present' }).check();
+    await page.getByRole('group', { name: 'Pia Ilagan' }).getByRole('radio', { name: 'Present' }).check();
+    await page.getByRole('group', { name: 'Eduardo Galang' }).getByRole('radio', { name: 'Absent' }).check();
+
+    await expect(page.getByRole('heading', { name: 'Your 12 · 1 of 3 marked' })).toBeVisible();
+    // No figure beside another leader's name (section 13, decision 0293).
+    await expect(page.getByRole('heading', { name: 'Nestor Ilagan’s people', exact: true })).toBeVisible();
+    await expect(page.getByText(/^3 of 5 marked$/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0].records.map((record) => record.person_id).sort()).toEqual(
+      [line(2, '', null), line(4, '', null), line(5, '', null)].map((entry) => entry.person_id).sort(),
+    );
+  });
+
+  test('names a section "A leader without an account" when that leader’s line is not on the page', async ({
+    page,
+  }) => {
+    await mockSections(page, [line(6, 'Tomas Yap', ABSENT_LEADER)]);
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('heading', { name: 'A leader without an account' })).toBeVisible();
+    expect((await headings(page)).at(-2)).toBe('A leader without an account');
+  });
+
+  test('leaves out an empty Your 12', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          event: {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: null,
+          },
+          data: [line(2, 'Eduardo Galang', null), line(7, 'Lourdes Navarro', null)],
+          next_cursor: null,
+        }),
+      }),
+    );
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('heading', { name: 'Network roots' })).toBeVisible();
+    expect(await headings(page)).toEqual(['Network roots']);
+  });
+});
+
 // Checklist row decision-dcc-record-over-50: the screen asks for 200, the API's most, so a
 // checklist of up to 200 shows and saves whole, and only a longer one says it is cut short.
 test.describe('a long DCC checklist', () => {
@@ -386,7 +520,7 @@ test.describe('a long DCC checklist', () => {
     person_id: `3f1b7c6e-0000-4000-8000-${String(700000 + n).padStart(12, '0')}`,
     member_id: `M-${String(900000 + n)}`,
     full_name: `Person ${String(n).padStart(3, '0')}`,
-    responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
+    responsible_leader_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
     record: n === size ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
   });
 

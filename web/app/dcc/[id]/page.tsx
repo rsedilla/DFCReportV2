@@ -279,19 +279,30 @@ function DccChecklist() {
               <p className="mt-4 text-right text-sm">
                 {markedCount} of {lines.length} marked
               </p>
-              <ul className="border-line mt-2 border-t [&>li:last-child]:border-b-0">
-                {lines.map((line) => (
-                  <PersonMark
-                    key={line.person_id}
-                    line={line}
-                    mark={markFor(line)}
-                    disabled={!recordable || (line.record !== null && !editing)}
-                    onChange={(value) =>
-                      setEdits((current) => ({ ...current, [line.person_id]: value }))
-                    }
-                  />
-                ))}
-              </ul>
+              {sectionsOf(lines, me.data?.person_id ?? null).map((section) => (
+                <section key={section.key} aria-labelledby={`section-${section.key}`} className="mt-6">
+                  <h2 id={`section-${section.key}`} className="text-base font-bold">
+                    {section.title}
+                    {section.counted
+                      ? ` · ${section.lines.filter((line) => markFor(line) !== undefined).length} of ${section.lines.length} marked`
+                      : ''}
+                  </h2>
+                  {section.note ? <p className="text-muted mt-1 text-sm">{section.note}</p> : null}
+                  <ul className="border-line mt-2 border-t [&>li:last-child]:border-b-0">
+                    {section.lines.map((line) => (
+                      <PersonMark
+                        key={line.person_id}
+                        line={line}
+                        mark={markFor(line)}
+                        disabled={!recordable || (line.record !== null && !editing)}
+                        onChange={(value) =>
+                          setEdits((current) => ({ ...current, [line.person_id]: value }))
+                        }
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
 
               {editing ? (
                 <div className="mt-6">
@@ -389,6 +400,82 @@ function PersonMark({
       />
     </li>
   );
+}
+
+interface Section {
+  key: string;
+  title: string;
+  note: string | null;
+  /** Only Your 12 carries a count (decision 0312): never a figure beside another leader. */
+  counted: boolean;
+  lines: DccRosterLine[];
+}
+
+/**
+ * The checklist in sections (decision 0312): the reader's direct disciples first, then
+ * one section per leader without an account whose people fall to the reader (section 9),
+ * then the Network roots, who have no leader. Who is on the checklist is unchanged.
+ *
+ * The roster arrives in surname, first name, Member ID order, so each section keeps it,
+ * and the sections of other leaders follow the order of those leaders' own lines.
+ */
+function sectionsOf(lines: readonly DccRosterLine[], readerId: string | null): Section[] {
+  const id = (value: string | null) => value?.toLowerCase() ?? null;
+
+  if (readerId === null) {
+    return [{ key: 'all', title: 'Your checklist', note: null, counted: false, lines: [...lines] }];
+  }
+
+  const reader = id(readerId);
+  const yours = lines.filter((line) => id(line.responsible_leader_id) === reader);
+  const roots = lines.filter((line) => line.responsible_leader_id === null);
+  const byLeader = new Map<string, DccRosterLine[]>();
+  for (const line of lines) {
+    const leader = id(line.responsible_leader_id);
+    if (leader !== null && leader !== reader) {
+      byLeader.set(leader, [...(byLeader.get(leader) ?? []), line]);
+    }
+  }
+
+  const position = (leader: string) => {
+    const index = lines.findIndex((line) => id(line.person_id) === leader);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+
+  const others = [...byLeader.entries()]
+    .sort(([left], [right]) => position(left) - position(right))
+    .map(([leader, people]): Section => {
+      const name = lines.find((line) => id(line.person_id) === leader)?.full_name ?? null;
+
+      return {
+        key: leader,
+        title: name === null ? 'A leader without an account' : `${name}’s people`,
+        note:
+          name === null
+            ? 'Their leader has no account yet, so you record them.'
+            : `${name} has no account yet, so you record them.`,
+        counted: false,
+        lines: people,
+      };
+    });
+
+  return [
+    ...(yours.length > 0
+      ? [{ key: 'yours', title: 'Your 12', note: null, counted: true, lines: yours }]
+      : []),
+    ...others,
+    ...(roots.length > 0
+      ? [
+          {
+            key: 'roots',
+            title: 'Network roots',
+            note: 'Nobody is above them, so their records fall to you.',
+            counted: false,
+            lines: roots,
+          },
+        ]
+      : []),
+  ];
 }
 
 /** "6 Sep", the Manila day an instant fell on. */

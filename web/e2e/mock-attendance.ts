@@ -27,6 +27,8 @@ function json(body: unknown, status = 200) {
 }
 
 const LEADER_ID = '3f1b7c6e-0000-4000-8000-000000000201';
+/** The signed-in reader's person (mock-api.ts): whose direct disciples a DCC checklist lists. */
+const READER_PERSON_ID = '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9';
 const SUBMITTER_ID = '3f1b7c6e-0000-4000-8000-000000000401';
 
 export const CELL_WITH_MEETINGS = {
@@ -482,14 +484,14 @@ export async function mockDccRoster(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
             member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
-            responsible_leader_id: LEADER_ID,
+            responsible_leader_id: READER_PERSON_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
             member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
-            responsible_leader_id: LEADER_ID,
+            responsible_leader_id: READER_PERSON_ID,
             record: null,
           },
         ],
@@ -643,7 +645,7 @@ export async function mockClosedDccRoster(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
             member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
-            responsible_leader_id: LEADER_ID,
+            responsible_leader_id: READER_PERSON_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
         ],
