@@ -1737,10 +1737,10 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(
       unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
     ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
-    // The action that resolves an entry is the reassignment (section 19).
+    // The action that resolves an entry is the reassignment (section 19), on the person page.
     await expect(unplaced.getByRole('link', { name: 'Amihan Bacani' })).toHaveAttribute(
       'href',
-      '/people/3f1b7c6e-0000-4000-8000-000000000901/network',
+      '/people/3f1b7c6e-0000-4000-8000-000000000901',
     );
 
     await chooseList(page, /^Not in a Cell/);

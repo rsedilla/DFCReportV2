@@ -7,6 +7,7 @@ import {
   mockCellTwelve,
   mockCells,
   mockCellsAtScale,
+  mockCellsWithClosed,
   mockCoverageByLeader,
   mockDccEvents,
   mockDccReport,
@@ -456,6 +457,38 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await page.goBack();
     await expect(behind).toHaveAttribute('aria-pressed', 'false');
   });
+
+  // Record's Cells behind carries a closed Cell still behind while its month is open (decision
+  // 0266), so the list "See every Cell behind" opens carries the same Cells -- and only there:
+  // every other count of Cells means running Cells (section 15).
+  for (const [open, behind] of [
+    [true, true],
+    [false, true],
+    [true, false],
+  ] as const) {
+    test(`a closed Cell is listed ${open && behind ? '' : 'not '}with the month ${open ? 'open' : 'shut'} and Cells behind ${behind ? 'shown' : 'not chosen'}`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(NOW);
+      await mockSignedIn(page);
+      await mockCellsWithClosed(page, { open });
+      await mockCellReport(page);
+      await page.goto(`/reports/filed?month=2026-06-01${behind ? '&behind=1' : ''}`);
+
+      const region = page.getByRole('region', { name: 'Coverage by Cell' });
+      const table = region.getByRole('table', { name: 'Recording coverage for each Cell' });
+      await expect(table.getByRole('row').first()).toBeVisible();
+      const closedRows = table.getByRole('row').filter({ hasText: /Closed / });
+      if (open && behind) {
+        await expect(closedRows).toHaveCount(3);
+        await expect(closedRows.first()).toContainText('Paolo Reyes');
+        await expect(region.getByText(/and 3 closed Cells still behind/)).toBeVisible();
+      } else {
+        await expect(closedRows).toHaveCount(0);
+        await expect(region.getByText(/closed Cells? still behind$/)).toHaveCount(0);
+      }
+    });
+  }
 
   test('Coverage by Sunday keeps a removed Sunday in its place', async ({ page }) => {
     await page.clock.setFixedTime(NOW);

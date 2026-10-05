@@ -777,6 +777,33 @@ export async function listAllCells(month: string, signal?: AbortSignal): Promise
 }
 
 /**
+ * Every closed Cell of the actor's scope, whenever it closed, while the month is open, and
+ * none once it has shut (section 15, decision 0266). The closed view has no date filter, so
+ * a caller keeps those behind, as Record's Cells behind does.
+ */
+export async function listClosedCellsWhileOpen(
+  month: string,
+  signal?: AbortSignal,
+): Promise<CellSummary[]> {
+  const cells: CellSummary[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const page: CellIndexPage = await listCells(
+      { month, cursor, limit: 200, state: 'CLOSED' },
+      signal,
+    );
+    if (!page.open) {
+      return [];
+    }
+    cells.push(...page.data);
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return cells;
+}
+
+/**
  * What a refused membership says, in words a leader can act on (SKILL.md section 10).
  *
  * **The same-Network refusal names both Networks.** It arrives with `member_network` and
