@@ -13,7 +13,9 @@ import {
   behindOf,
   cellShortName,
   dayOfWeekLabel,
+  closedOnLabel,
   listAllCells,
+  listClosedCellsWhileOpen,
   type CellSummary,
 } from '@/lib/cells';
 import { listDccEvents, type DccEvent } from '@/lib/dcc';
@@ -59,10 +61,18 @@ export function CoverageByCell({
   behindOnly: boolean;
   onBehindOnlyChange: (on: boolean) => void;
 }) {
-  // The same query as the report's Cell picker, so the two share one request.
   const cells = useQuery({
     queryKey: ['cells-all', month],
     queryFn: ({ signal }) => listAllCells(month, signal),
+  });
+  // **Showing only Cells behind adds a closed Cell still behind while its month is open**,
+  // exactly the Cells Record's Cells behind lists (section 15, decision 0314), so "See every
+  // Cell behind" opens on the same Cells. Only there: every other count of Cells means
+  // running Cells (section 15).
+  const closed = useQuery({
+    queryKey: ['cells-all', month, 'CLOSED'],
+    queryFn: ({ signal }) => listClosedCellsWhileOpen(month, signal),
+    enabled: behindOnly,
   });
 
   const [page, setPage] = useState(0);
@@ -79,7 +89,12 @@ export function CoverageByCell({
   // 0239) and is why a filter keyed on it was built and removed on 2026-09-20.
   const all = cells.data ?? [];
   const behindCount = all.filter((cell) => behindOf(cell.coverage) > 0).length;
-  const rows = behindOnly ? all.filter((cell) => behindOf(cell.coverage) > 0) : all;
+  const closedBehind = behindOnly
+    ? (closed.data ?? []).filter((cell) => behindOf(cell.coverage) > 0)
+    : [];
+  const rows = behindOnly
+    ? [...all.filter((cell) => behindOf(cell.coverage) > 0), ...closedBehind]
+    : all;
   // A page that no longer exists is the first one: the month changes the set underneath it.
   const start = Math.min(page, Math.max(0, Math.ceil(rows.length / PAGE_SIZE) - 1)) * PAGE_SIZE;
   const shown = rows.slice(start, start + PAGE_SIZE);
@@ -92,10 +107,11 @@ export function CoverageByCell({
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Each Cell in your scope, ten at a time, in the order the Cells list gives them. The
         rows are not added up here: the line at the top is the report&rsquo;s own figure. A
-        Cell is behind when a meeting whose day has come has no record.
+        Cell is behind when a meeting whose day has come has no record. Showing only Cells
+        behind also lists, after them, a closed Cell still behind while the month is open.
       </p>
 
-      {cells.data && cells.data.length > 0 ? (
+      {(cells.data && cells.data.length > 0) || closedBehind.length > 0 ? (
         <Button
           type="button"
           variant="secondary"
@@ -111,12 +127,22 @@ export function CoverageByCell({
       ) : null}
 
       <div className="mt-4">
-        <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
+        <FailureNotice
+          failure={
+            cells.isError
+              ? describeFailure(cells.error)
+              : behindOnly && closed.isError
+                ? describeFailure(closed.error)
+                : null
+          }
+        />
       </div>
 
-      {cells.isPending ? (
+      {cells.isPending || (behindOnly && closed.isPending) ? (
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
-      ) : cells.data && cells.data.length === 0 ? (
+      ) : behindOnly && closed.isError && rows.length === 0 ? null : cells.data &&
+        cells.data.length === 0 &&
+        closedBehind.length === 0 ? (
         <p className="text-muted mt-4 text-sm">There are no Cells in your scope this month.</p>
       ) : cells.data && rows.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
@@ -141,6 +167,7 @@ export function CoverageByCell({
                     <Link href={meetingsHref(cell, month)} className={`${LINK} font-medium`}>
                       {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </Link>
+                    <ClosedNote cell={cell} />
                   </td>
                   <td className="px-3 py-3">{cell.leader.full_name}</td>
                   <td className="px-3 py-3">
@@ -167,6 +194,7 @@ export function CoverageByCell({
                     <Link href={meetingsHref(cell, month)} className={LINK}>
                       {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                     </Link>
+                    <ClosedNote cell={cell} />
                   </h3>
                   <CoverageFigure
                     recorded={cell.coverage.recorded}
@@ -201,6 +229,9 @@ export function CoverageByCell({
           */}
           <p className="text-muted mt-4 text-sm">
             {behindCount} behind · {all.length - behindCount} not behind
+            {closedBehind.length > 0
+              ? `, and ${closedBehind.length} closed ${closedBehind.length === 1 ? 'Cell' : 'Cells'} still behind`
+              : null}
           </p>
 
           <div className="mt-6 flex gap-3">
@@ -219,6 +250,15 @@ export function CoverageByCell({
       ) : null}
     </section>
   );
+}
+
+/** A closed Cell says so in words beside its name, as Record's Cells behind does. */
+function ClosedNote({ cell }: { cell: CellSummary }) {
+  return cell.state === 'CLOSED' && cell.closed_on ? (
+    <span className="text-muted ml-2 text-sm font-normal">
+      Closed {closedOnLabel(cell.closed_on)}
+    </span>
+  ) : null;
 }
 
 /** In words, and only where it is above zero (sections 13 and 23: never colour alone). */
