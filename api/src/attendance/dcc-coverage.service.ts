@@ -618,7 +618,11 @@ export class DccCoverageService {
       (id) => covered === null || covered.has(canonicalId(id)),
     );
 
-    const owed: { event: EventRow; leaderId: string; byActor: boolean }[] = [];
+    const owed: {
+      event: EventRow;
+      leaderId: string;
+      submitterId: string | null;
+    }[] = [];
 
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
@@ -630,25 +634,36 @@ export class DccCoverageService {
       }
 
       const { owing } = await this.obligations(this.db, event, branch);
-      const byActor = await this.submittedByActor(event, [...owing], actor.personId);
+      const submitters = await this.submittersOf(event, [...owing]);
 
       for (const leaderId of owing) {
-        owed.push({ event, leaderId, byActor: byActor.has(canonicalId(leaderId)) });
+        owed.push({ event, leaderId, submitterId: submitters.get(canonicalId(leaderId)) ?? null });
       }
     }
+
+    // **Whether each row carries Record is decided here, per row** (decision 0313), as the
+    // Cell queue decides it: the reader may record for the leader whose checklist holds the
+    // row's people, found as of the Sunday, holding `dcc.take_attendance` and
+    // `dcc.submit_on_behalf` over them now — or that leader is the reader.
+    const recordable = await this.recordableBy(actor, [
+      ...new Set(owed.map((entry) => entry.submitterId).filter((id): id is string => id !== null)),
+    ]);
 
     const identities = await this.people.forDecisionsWithin(this.db, [
       ...new Set(owed.map((entry) => entry.leaderId)),
     ]);
     const me = canonicalId(actor.personId);
 
-    const lines = owed.map(({ event, leaderId, byActor }) => {
+    const lines = owed.map(({ event, leaderId, submitterId }) => {
       const identity = identities.get(leaderId);
+      const byActor = submitterId !== null && submitterId === me;
 
       return {
         event,
         leaderId,
         byActor,
+        submitterId,
+        mayRecord: submitterId !== null && (byActor || recordable.has(submitterId)),
         memberId: identity?.memberId ?? '',
         fullName: identity?.fullName ?? '',
         lastName: identity?.lastName ?? '',
@@ -685,22 +700,44 @@ export class DccCoverageService {
           // people are on the reader's own checklist for the Sunday.
           recorded_by_you: line.byActor,
         },
+        // The leader whose Sunday screen Record opens, and whether this row offers it
+        // (decision 0313). Null where nobody's checklist holds these people.
+        record_for: line.submitterId,
+        may_record: line.mayRecord,
       })),
     };
   }
 
   /**
-   * Which of these leaders' records the actor files at this event (section 9): the actor
-   * themself, and a leader holding no account whose nearest upline holding one is the
-   * actor. The walk up is one statement per level, and stops at the first account holder.
+   * Of these leaders, those the reader may record for now: holding both
+   * `dcc.take_attendance` and `dcc.submit_on_behalf` over them (decision 0313).
    */
-  private async submittedByActor(
+  private async recordableBy(actor: Actor, leaderIds: readonly string[]): Promise<Set<string>> {
+    if (leaderIds.length === 0) {
+      return new Set();
+    }
+
+    const [take, onBehalf] = await Promise.all([
+      this.authorization.scopeMembership(actor, Capability.DccTakeAttendance),
+      this.authorization.scopeMembership(actor, Capability.DccSubmitOnBehalf),
+    ]);
+    const holds = (membership: typeof take, id: string) =>
+      membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(id);
+
+    return new Set(leaderIds.filter((id) => holds(take, id) && holds(onBehalf, id)));
+  }
+
+  /**
+   * Whose checklist holds each leader's people at this event (section 9): the leader
+   * themself where they hold an account, otherwise the nearest leader above them who
+   * does, walking the tree as of the Sunday. Canonical identifiers both sides; a leader
+   * whose walk reaches the top without an account holder maps to nothing.
+   */
+  private async submittersOf(
     event: EventRow,
     leaderIds: readonly string[],
-    actorPersonId: string,
-  ): Promise<Set<string>> {
-    const me = canonicalId(actorPersonId);
-    const result = new Set<string>();
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
     const holders = new Set(
       [...(await this.accounts.personsHoldingAccounts(this.db, leaderIds))].map((id) =>
         canonicalId(id),
@@ -711,9 +748,9 @@ export class DccCoverageService {
     let pending = new Map<string, string>();
     for (const leaderId of leaderIds) {
       const key = canonicalId(leaderId);
-      if (key === me) {
-        result.add(key);
-      } else if (!holders.has(key)) {
+      if (holders.has(key)) {
+        result.set(key, key);
+      } else {
         pending.set(key, key);
       }
     }
@@ -743,9 +780,9 @@ export class DccCoverageService {
         if (parent === null) {
           continue;
         }
-        if (parent === me) {
-          result.add(leader);
-        } else if (!parentHolders.has(parent)) {
+        if (parentHolders.has(parent)) {
+          result.set(leader, parent);
+        } else {
           next.set(leader, parent);
         }
       }

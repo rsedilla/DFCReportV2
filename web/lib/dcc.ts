@@ -131,6 +131,28 @@ export async function getDccRoster(
   });
 }
 
+/** Another leader's checklist for one Sunday, to record on their behalf (decision 0313). */
+export interface LeaderDccRoster extends DccRoster {
+  leader: {
+    person_id: string;
+    full_name: string;
+    holds_account: boolean;
+    account_active: boolean;
+  };
+}
+
+/** That leader's checklist for one event, up to 200 people, as {@link getDccRoster}. */
+export async function getLeaderDccRoster(
+  eventId: string,
+  leaderId: string,
+  signal?: AbortSignal,
+): Promise<LeaderDccRoster> {
+  return authenticatedRequest<LeaderDccRoster>(
+    `/api/v1/dcc/events/${eventId}/leaders/${leaderId}/roster?limit=200`,
+    { signal },
+  );
+}
+
 /**
  * Every line of a leader's checklist, following `next_cursor` to the end (section 9: unbounded).
  *
@@ -235,6 +257,13 @@ export interface DccOwed {
     /** The reader files this leader's records: the leader has no account (section 9). */
     recorded_by_you: boolean;
   };
+  /**
+   * The leader whose Sunday screen Record opens: this one, or for a leader without an
+   * account the nearest above who has one, as of the Sunday (decision 0313).
+   */
+  record_for: string | null;
+  /** Whether the reader may record there, decided by the API per row (decision 0313). */
+  may_record: boolean;
 }
 
 /** The Record page's People I oversee view for DCC: one request for the month. */

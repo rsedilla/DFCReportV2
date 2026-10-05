@@ -188,6 +188,27 @@ export class AccountsRepository {
     return new Set(rows.map((row) => row.person_id));
   }
 
+  /**
+   * The account a Person holds, its identifier and state, or null where they hold none.
+   *
+   * For recording a leader's DCC checklist on their behalf (decision 0313): the screen says
+   * whether the leader can see the result yet, and a Network root reaches a leader's
+   * checklist only through that leader's own Whole Church grant (section 9), which is read
+   * from this account. Here because `auth` owns `accounts` (section 2).
+   */
+  async accountOfPerson(
+    executor: Db,
+    personId: string,
+  ): Promise<{ id: string; status: AccountStatus } | null> {
+    const row = await executor
+      .selectFrom('accounts')
+      .select(['id', 'status'])
+      .where('person_id', '=', personId)
+      .executeTakeFirst();
+
+    return row ?? null;
+  }
+
   async recordLogin(id: string): Promise<void> {
     await this.db
       .updateTable('accounts')

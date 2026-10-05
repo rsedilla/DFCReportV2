@@ -146,6 +146,25 @@ export class DccController {
     return this.attendance.roster(eventId, actor, { limit: query.limit, cursor: query.cursor });
   }
 
+  /**
+   * One leader's checklist for this event, to record on their behalf (sections 7 and 14;
+   * decision 0313). The guard decides `dcc.submit_on_behalf` against the leader and the
+   * service `dcc.take_attendance`, so the read admits only actors who could record there.
+   */
+  @Get('events/:id/leaders/:leaderId/roster')
+  @RequiresCapability(Capability.DccSubmitOnBehalf, { kind: 'person', from: 'params.leaderId' })
+  async leaderRoster(
+    @Param('id', new UuidParamPipe('id')) eventId: string,
+    @Param('leaderId', new UuidParamPipe('leaderId')) leaderId: string,
+    @Query() query: DccRosterDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.leaderRoster(eventId, actor, leaderId, {
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+  }
+
   /** Record this event's attendance for the people in the body (sections 9 and 14). */
   @Post('events/:id/submit')
   @RequiresCapability(Capability.DccTakeAttendance, { kind: 'actor' })

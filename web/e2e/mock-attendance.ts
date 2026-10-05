@@ -518,6 +518,54 @@ export async function mockDccRoster(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Carlo Reyes's checklist for 7 June, recorded on his behalf (decision 0313): his 12 of two,
+ * one already marked. `active` is whether his account can sign in.
+ */
+export async function mockLeaderDccRoster(
+  page: Page,
+  { active = true }: { active?: boolean } = {},
+): Promise<void> {
+  await page.route('**/api/v1/dcc/events/*/leaders/*/roster*', (route) =>
+    route.fulfill(
+      json({
+        event: {
+          id: '3f1b7c6e-0000-4000-8000-000000000501',
+          event_date: '2026-06-07',
+          recordable: true,
+          not_recordable_reason: null,
+          removed: false,
+          removal_reason: null,
+          coverage: { met: 5, owed: 8 },
+        },
+        leader: {
+          person_id: OWED_LEADER_ID,
+          full_name: 'Carlo Reyes',
+          holds_account: true,
+          account_active: active,
+        },
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000612',
+            member_id: 'M-000712',
+            full_name: 'Benito Lagman',
+            responsible_leader_id: OWED_LEADER_ID,
+            record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000613',
+            member_id: 'M-000713',
+            full_name: 'Danilo Suarez',
+            responsible_leader_id: OWED_LEADER_ID,
+            record: null,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
 /** A downline leader in the DCC branch view (decision 0301). Invented name. */
 export const OWED_LEADER_ID = '3f1b7c6e-0000-4000-8000-000000000611';
 
@@ -544,6 +592,9 @@ export async function mockDccOwed(page: Page): Promise<void> {
               is_actor: false,
               recorded_by_you: false,
             },
+            // The reader may record for Carlo (decision 0313).
+            record_for: OWED_LEADER_ID,
+            may_record: true,
           },
           {
             event_id: '3f1b7c6e-0000-4000-8000-000000000501',
@@ -557,6 +608,8 @@ export async function mockDccOwed(page: Page): Promise<void> {
               is_actor: true,
               recorded_by_you: true,
             },
+            record_for: LEADER_ID,
+            may_record: true,
           },
         ],
       }),
