@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-05, the trigger being decision 0313: of 312 files, 311 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0313 each moved the first two and
+2026-10-05, the trigger being decision 0314: of 313 files, 312 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0314 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-05 and triggered by 0313, and was left stale by 0314 the same day. The one before that was dated
 2026-10-04 and triggered by 0312, and was left stale by 0313 the next day. The one before that was dated
 2026-10-04 and triggered by 0311, and was left stale by 0312 the same day. The one before that was dated
 2026-10-04 and triggered by 0310, and was left stale by 0311 the same day. The one before that was dated
@@ -667,6 +668,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-04 — [The branch view is grouped by leader](docs/decisions/0311-the-branch-view-is-grouped-by-leader.md)
 - 2026-10-04 — [A DCC checklist shows your 12 first](docs/decisions/0312-a-dcc-checklist-shows-your-12-first.md)
 - 2026-10-05 — [Record DCC for a leader under you who has an account](docs/decisions/0313-record-dcc-for-a-leader-under-you.md)
+- 2026-10-05 — [Show only Cells behind is Record's Cells behind, read every page](docs/decisions/0314-show-only-cells-behind-is-the-cells-behind-list.md)
 
 ### Open — awaiting a ruling
 
