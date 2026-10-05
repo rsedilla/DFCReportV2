@@ -586,7 +586,13 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
 
   interface OwedRow {
     event_id: string;
-    leader: { person_id: string; is_actor: boolean };
+    leader: {
+      person_id: string;
+      full_name: string;
+      last_name: string;
+      first_name: string;
+      is_actor: boolean;
+    };
   }
 
   it('lists each leader in the branch who owes a record, the actor included, by name', async () => {
@@ -601,6 +607,12 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
       [mark.id, false],
       [manuel.id, true],
     ]);
+    // The parts the branch view sorts by (decision 0311), which the fixtures' untitled
+    // names compose into the full name.
+    for (const { leader } of rows) {
+      expect(leader.last_name).not.toBe('');
+      expect(`${leader.first_name} ${leader.last_name}`).toBe(leader.full_name);
+    }
   });
 
   it('drops a leader from the branch view once they have a record', async () => {

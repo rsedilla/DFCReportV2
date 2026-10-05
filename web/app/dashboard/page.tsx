@@ -106,7 +106,11 @@ type QueueItem =
       dayOfWeek: number;
       category: CellCategory | null;
       memberCount: number;
+      leaderId: string;
       leaderName: string | null;
+      leaderLastName: string | null;
+      leaderFirstName: string | null;
+      leaderMemberId: string | null;
       isActor: boolean;
       mayRecord: boolean;
     }
@@ -132,7 +136,11 @@ function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
     dayOfWeek: entry.day_of_week,
     category: entry.category,
     memberCount: entry.member_count,
+    leaderId: entry.leader.id,
     leaderName: entry.leader.full_name,
+    leaderLastName: entry.leader.last_name,
+    leaderFirstName: entry.leader.first_name,
+    leaderMemberId: entry.leader.member_id,
     isActor: entry.leader.is_actor,
     mayRecord: entry.may_record,
   }));
@@ -607,10 +615,25 @@ function Dashboard() {
                 }}
                 options={[
                   { value: 'branch', label: 'People I oversee' },
-                  { value: 'mine', label: filter === 'CELLS' ? 'My own Cells' : 'My own checklist' },
+                  // One word for both lists (decision 0311).
+                  { value: 'mine', label: 'Mine' },
                 ]}
               />
             </div>
+
+            {/*
+              The close of last month's open work, once, above the branch view (decision
+              0311). Each row still carries its own month label.
+            */}
+            {branchView &&
+            (filter === 'CELLS'
+              ? shown.some((item) => item.month === previousMonth)
+              : owedRows.some((row) => row.month === previousMonth)) ? (
+              <p className="mt-4 text-sm">
+                {monthLabel(previousMonth).split(' ')[0]} is open until the end of{' '}
+                {dayLabel(`${month.slice(0, 8)}07`)}.
+              </p>
+            ) : null}
 
             {filter === 'DCC' && branchView ? (
               owedFailure ? null : owedPending ? (
@@ -636,37 +659,37 @@ function Dashboard() {
                     ? 'Nobody on your DCC checklist is awaiting a record.'
                     : 'No DCC record is owed in your branch.'}
               </p>
+            ) : branchView ? (
+              <LeaderGroups
+                groups={groupByLeader(
+                  shown.flatMap((item) => (item.kind === 'cell' ? [item] : [])),
+                  (item) => ({
+                    id: item.leaderId,
+                    name: item.leaderName ?? 'Its leader',
+                    lastName: item.leaderLastName,
+                    firstName: item.leaderFirstName,
+                    memberId: item.leaderMemberId,
+                    isActor: item.isActor,
+                  }),
+                ).map((group) => ({
+                  ...group,
+                  content: (
+                    <QueueList
+                      caption={`Awaiting a record, ${group.title}`}
+                      items={group.items}
+                      currentMonth={month}
+                      today={today}
+                    />
+                  ),
+                }))}
+              />
             ) : (
-              <>
-                <Table caption="Awaiting a record" className="mt-4 hidden lg:block">
-                  <thead>
-                    <tr>
-                      <HeaderCell>Date</HeaderCell>
-                      <HeaderCell>What</HeaderCell>
-                      <HeaderCell>Leader</HeaderCell>
-                      <HeaderCell>Waiting</HeaderCell>
-                      <HeaderCell>
-                        <span className="sr-only">Record</span>
-                      </HeaderCell>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shown.map((item) => (
-                      <QueueTableRow
-                        key={queueKey(item)}
-                        item={item}
-                        currentMonth={month}
-                        today={today}
-                      />
-                    ))}
-                  </tbody>
-                </Table>
-                <ul className="mt-4 flex flex-col gap-3 lg:hidden">
-                  {shown.map((item) => (
-                    <QueueCard key={queueKey(item)} item={item} currentMonth={month} today={today} />
-                  ))}
-                </ul>
-              </>
+              <QueueList
+                caption="Awaiting a record"
+                items={shown}
+                currentMonth={month}
+                today={today}
+              />
             )}
 
             {filter === 'DCC' ? (
@@ -1097,6 +1120,147 @@ function describeQueueItem(item: QueueItem, currentMonth: string, today: string)
   return { what, leader, waiting, open, href };
 }
 
+/** Awaiting entries as a table from `lg` and as cards below it. */
+function QueueList({
+  caption,
+  items,
+  currentMonth,
+  today,
+}: {
+  caption: string;
+  items: readonly QueueItem[];
+  currentMonth: string;
+  today: string;
+}) {
+  return (
+    <>
+      <Table caption={caption} className="mt-4 hidden lg:block">
+        <thead>
+          <tr>
+            <HeaderCell>Date</HeaderCell>
+            <HeaderCell>What</HeaderCell>
+            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell>Waiting</HeaderCell>
+            <HeaderCell>
+              <span className="sr-only">Record</span>
+            </HeaderCell>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <QueueTableRow key={queueKey(item)} item={item} currentMonth={currentMonth} today={today} />
+          ))}
+        </tbody>
+      </Table>
+      <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+        {items.map((item) => (
+          <QueueCard key={queueKey(item)} item={item} currentMonth={currentMonth} today={today} />
+        ))}
+      </ul>
+    </>
+  );
+}
+
+interface LeaderOf {
+  id: string;
+  name: string;
+  lastName: string | null;
+  firstName: string | null;
+  memberId: string | null;
+  isActor: boolean;
+}
+
+/**
+ * A branch view's entries under the leader each names (decision 0311), in surname, then
+ * first name, then Member ID order: never by how much a leader owes or how long it has
+ * waited, which would read as a ranking (decision 0009). Each group keeps its entries'
+ * own order, oldest first.
+ */
+function groupByLeader<Item>(
+  items: readonly Item[],
+  leaderOf: (item: Item) => LeaderOf,
+): { key: string; title: string; items: Item[] }[] {
+  const groups = new Map<string, { leader: LeaderOf; items: Item[] }>();
+
+  for (const item of items) {
+    const leader = leaderOf(item);
+    const group = groups.get(leader.id) ?? { leader, items: [] };
+    group.items.push(item);
+    groups.set(leader.id, group);
+  }
+
+  return [...groups.values()]
+    .sort(
+      (left, right) =>
+        (left.leader.lastName ?? left.leader.name).localeCompare(
+          right.leader.lastName ?? right.leader.name,
+        ) ||
+        (left.leader.firstName ?? '').localeCompare(right.leader.firstName ?? '') ||
+        (left.leader.memberId ?? '').localeCompare(right.leader.memberId ?? ''),
+    )
+    .map(({ leader, items: grouped }) => ({
+      key: leader.id,
+      title: leader.isActor ? `${leader.name} (you)` : leader.name,
+      items: grouped,
+    }));
+}
+
+/**
+ * One line per leader, showing the name and nothing else, opened to show their entries
+ * (decision 0311). A count or the oldest date would set a figure beside every leader in
+ * the branch (sections 5 and 13). The line is a heading over entries, not an entry.
+ */
+function LeaderGroups({
+  groups,
+}: {
+  groups: readonly { key: string; title: string; content: ReactNode }[];
+}) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+
+  return (
+    <ul className="border-line mt-4 border-t">
+      {groups.map((group) => {
+        const isOpen = open.has(group.key);
+        const panel = `leader-group-${group.key}`;
+
+        return (
+          <li key={group.key} className="border-line border-b">
+            <h3>
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls={panel}
+                onClick={() =>
+                  setOpen((current) => {
+                    const next = new Set(current);
+                    if (next.has(group.key)) {
+                      next.delete(group.key);
+                    } else {
+                      next.add(group.key);
+                    }
+                    return next;
+                  })
+                }
+                className="focus-visible:outline-accent hover:bg-raised flex min-h-11 w-full items-center gap-3 px-2 py-2 text-left text-base font-medium focus-visible:outline-2 focus-visible:-outline-offset-2"
+              >
+                <span aria-hidden="true" className="w-4 text-center">
+                  {isOpen ? '−' : '+'}
+                </span>
+                {group.title}
+              </button>
+            </h3>
+            {isOpen ? (
+              <div id={panel} className="pb-4">
+                {group.content}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function QueueTableRow({
   item,
   currentMonth,
@@ -1347,9 +1511,50 @@ function DccBranchQueue({
 
   const key = (row: OwedRow) => `${row.event_id}-${row.leader.person_id}`;
 
+  // Grouped under each leader, name only, as the Cell list is (decision 0311).
+  return (
+    <LeaderGroups
+      groups={groupByLeader(rows, (row) => ({
+        id: row.leader.person_id,
+        name: row.leader.full_name,
+        lastName: row.leader.last_name,
+        firstName: row.leader.first_name,
+        memberId: row.leader.member_id,
+        isActor: row.leader.is_actor,
+      })).map((group) => ({
+        key: group.key,
+        title: group.title,
+        content: (
+          <OwedList
+            caption={`DCC records still owed, ${group.title}`}
+            rows={group.items}
+            describe={describe}
+            action={action}
+            rowKey={key}
+          />
+        ),
+      }))}
+    />
+  );
+}
+
+/** One leader's owed Sundays as a table from `lg` and as cards below it. */
+function OwedList({
+  caption,
+  rows,
+  describe,
+  action,
+  rowKey: key,
+}: {
+  caption: string;
+  rows: readonly OwedRow[];
+  describe: (row: OwedRow) => { leader: string; waiting: string; open: string | null };
+  action: (row: OwedRow) => ReactNode;
+  rowKey: (row: OwedRow) => string;
+}) {
   return (
     <>
-      <Table caption="DCC records still owed in your branch" className="mt-4 hidden lg:block">
+      <Table caption={caption} className="mt-4 hidden lg:block">
         <thead>
           <tr>
             <HeaderCell>Date</HeaderCell>

@@ -228,6 +228,9 @@ export interface DccOwed {
     person_id: string;
     member_id: string;
     full_name: string;
+    /** What the branch view sorts by (decision 0311). */
+    last_name: string;
+    first_name: string;
     is_actor: boolean;
     /** The reader files this leader's records: the leader has no account (section 9). */
     recorded_by_you: boolean;

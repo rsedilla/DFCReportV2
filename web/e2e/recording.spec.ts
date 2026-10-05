@@ -1183,7 +1183,14 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
         ...awaitingRow('2026-06-12', month),
         cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
         cell_code: 'CELL-000021',
-        leader: { id: '3f1b7c6e-0000-4000-8000-000000000299', full_name: 'Ana Lim', is_actor: false },
+        leader: {
+          id: '3f1b7c6e-0000-4000-8000-000000000299',
+          full_name: 'Ana Lim',
+          last_name: 'Lim',
+          first_name: 'Ana',
+          member_id: 'M-000415',
+          is_actor: false,
+        },
         may_record: true,
       };
 
@@ -1210,17 +1217,73 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Mine' })).toBeChecked();
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
 
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
     await expect.poll(() => whoseAsked).toContain('branch');
-    // A downline leader's meeting the reader may record names that leader and offers Record.
+    // A downline leader's meeting the reader may record is under that leader's line, and
+    // offers Record once the line is opened (decision 0311).
+    await page.getByRole('button', { name: 'Ana Lim' }).click();
     await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toBeVisible();
     await expect(
-      awaitingTable(page).getByRole('row').filter({ hasText: 'Young Pro · Fri' }).getByRole('cell').nth(2),
+      page
+        .getByRole('table', { name: 'Awaiting a record, Ana Lim' })
+        .getByRole('row')
+        .filter({ hasText: 'Young Pro · Fri' })
+        .getByRole('cell')
+        .nth(2),
     ).toHaveText('Ana Lim');
+  });
+
+  // Decision 0311: one line per leader, name only, in surname order, closed until opened.
+  test('People I oversee is one line per leader, by surname, each opened to its meetings', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+
+    await page.goto('/dashboard?whose=branch');
+
+    const lines = page.getByRole('region', { name: 'Awaiting a record' }).getByRole('button', {
+      name: /^(Ana Lim|Teofilo Ramos \(you\))$/,
+    });
+    // Lim before Ramos: surname order, whoever the reader is.
+    await expect(lines).toHaveCount(2);
+    await expect(lines.nth(0)).toHaveAccessibleName('Ana Lim');
+    await expect(lines.nth(1)).toHaveAccessibleName('Teofilo Ramos (you)');
+    // Name only: no count and no date on the line, and nothing shown until it is opened.
+    await expect(page.getByRole('link', { name: /^Record Young Pro/ })).toHaveCount(0);
+
+    const ana = page.getByRole('button', { name: 'Ana Lim' });
+    await expect(ana).toHaveAttribute('aria-expanded', 'false');
+    await ana.click();
+    await expect(ana).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toHaveCount(0);
+
+    await ana.click();
+    await expect(page.getByRole('link', { name: /^Record Young Pro/ })).toHaveCount(0);
+  });
+
+  // Decision 0311: last month's close is stated once above the list, and each row keeps
+  // its own month label.
+  test('the branch view states last month’s close once, in the first week', async ({ page }) => {
+    // 10:00 on 3 July in Manila: June is open until the 7th.
+    await page.clock.setFixedTime(new Date('2026-07-03T02:00:00Z'));
+    await mockQueue(page);
+
+    await page.goto('/dashboard?whose=branch');
+
+    await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toBeVisible();
+    await page.getByRole('button', { name: 'Ana Lim' }).click();
+    await expect(
+      page.getByRole('table', { name: 'Awaiting a record, Ana Lim' }).getByText('June · open until 7 Jul').first(),
+    ).toBeVisible();
+
+    await page.getByRole('radio', { name: 'Mine' }).check();
+    await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toHaveCount(0);
   });
 
   test('rows say how long a meeting has waited, in words', async ({ page }) => {
@@ -1363,12 +1426,23 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page).toHaveURL(/kind=dcc/);
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
-    const list = page.getByRole('table', { name: 'DCC records still owed in your branch' });
+    // One line per leader, by surname (decision 0311): Reader, then Reyes.
+    const region = page.getByRole('region', { name: 'Awaiting a record' });
+    const owedLines = region.getByRole('button', { name: /^(The reader \(you\)|Carlo Reyes)$/ });
+    await expect(owedLines).toHaveCount(2);
+    await expect(owedLines.nth(0)).toHaveAccessibleName('The reader (you)');
+    await expect(owedLines.nth(1)).toHaveAccessibleName('Carlo Reyes');
+    await region.getByRole('button', { name: 'Carlo Reyes' }).click();
+    await region.getByRole('button', { name: 'The reader (you)' }).click();
+
+    const list = page.getByRole('table', { name: 'DCC records still owed, Carlo Reyes' });
     await expect(list.getByRole('row', { name: /Carlo Reyes/ })).toContainText('See checklist');
-    await expect(list.getByRole('row', { name: /You/ }).getByRole('link', { name: /^Record/ })).toHaveAttribute(
-      'href',
-      '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
-    );
+    await expect(
+      page
+        .getByRole('table', { name: 'DCC records still owed, The reader (you)' })
+        .getByRole('row', { name: /You/ })
+        .getByRole('link', { name: /^Record/ }),
+    ).toHaveAttribute('href', '/dcc/3f1b7c6e-0000-4000-8000-000000000501');
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Doulos Cell Celebration\s*2$/ }),
     ).toBeVisible();
@@ -1439,7 +1513,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeChecked();
 
     await page.goBack();
-    await expect(page.getByRole('radio', { name: 'My own checklist' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Mine' })).toBeChecked();
     await page.goBack();
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Cell Group/ }),
