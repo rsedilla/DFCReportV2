@@ -270,7 +270,7 @@ function NetworkScreen() {
               <Card label="Direct disciples" value={String(person.direct_reports)} />
               {/* Every Cell Leader and Cell member under them is already in it (owner, 2026-09-28). */}
               <Card
-                label={isMe ? 'Everyone under you' : `Everyone under ${person.full_name}`}
+                label={isMe ? 'Everyone beneath you' : `Everyone beneath ${person.full_name}`}
                 value={String(person.beneath)}
               />
               <Card
@@ -509,8 +509,8 @@ function RootsView({
         Network roots
       </h2>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        You aren&rsquo;t in the pastoral tree, so this starts at the Network roots your scope
-        reaches.
+        You aren&rsquo;t in the pastoral tree, so this starts at the Network roots, the pastors at the
+        top of each Network, that your scope reaches.
         {answered === undefined
           ? null
           : ` Figures for ${monthLabel(answered.reporting_month)}${answered.open ? ', a month still open' : ''}.`}

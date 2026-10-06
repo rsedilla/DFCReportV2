@@ -60,6 +60,7 @@ test.describe('the Network screen’s starting point', () => {
       page.getByText('Figures for September 2026, a month still open.', { exact: false }).last(),
     ).toBeVisible();
     await expect(page.getByText('You have no direct disciples today.')).toHaveCount(0);
+    await expect(page.getByText(/the Network roots, the pastors at the top of each Network,/)).toBeVisible();
     // The name opens the branch; one control per job (owner's choice of 2026-10-05).
     await expect(page.getByRole('link', { name: 'Andres Villareal' })).toHaveAttribute(
       'href',
@@ -95,7 +96,7 @@ test.describe('the Network screen’s figures', () => {
       .filter({ has: page.getByRole('term').filter({ hasText: 'Still to record' }) });
     await expect(cards.getByRole('term')).toHaveText([
       'Direct disciples',
-      'Everyone under you',
+      'Everyone beneath you',
       'Cell Leaders beneath',
       'Still to record',
     ]);
@@ -130,7 +131,7 @@ test.describe('the Network screen’s figures', () => {
     await signedInReader(page);
     await page.goto('/network?focus=3f1b7c6e-0000-4000-8000-000000000701');
 
-    await expect(page.getByRole('term').filter({ hasText: 'Everyone under Consuelo Bautista' })).toBeVisible();
+    await expect(page.getByRole('term').filter({ hasText: 'Everyone beneath Consuelo Bautista' })).toBeVisible();
   });
 
   test('keeps Only those still to record in the address, and carries it into the next branch', async ({

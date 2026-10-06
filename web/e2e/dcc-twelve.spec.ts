@@ -259,7 +259,7 @@ test.describe('My 12 on DCC', () => {
     expect(await cellsOf(rows.nth(4))).toEqual(['Elsewhere in this branch', '+2']);
     expect(await cellsOf(rows.nth(5))).toEqual(['Total', '3', '2', '1', '1', '3', '10']);
     await expect(table.getByText('Counted in more than one row', { exact: true })).toHaveCount(0);
-    await expect(table.getByText(/Cell group|no Cell of/)).toHaveCount(0);
+    await expect(table.getByText(/Cell [Gg]roup|no Cell of/)).toHaveCount(0);
 
     // The People column adds up in plain sight (section 20): 3 + 4 + 0 + 1 + 2 = 10.
     const people = await Promise.all(

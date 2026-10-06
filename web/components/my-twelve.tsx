@@ -156,8 +156,8 @@ export function TwelveTable({
           own.cells === 0
             ? `no Cell of ${subjectName === null ? 'your' : 'their'} own`
             : own.cells === 1
-              ? `${subjectName === null ? 'your' : 'their'} own Cell group`
-              : `${subjectName === null ? 'your' : 'their'} own Cell groups (${own.cells})`
+              ? `${subjectName === null ? 'your' : 'their'} own Cell Group`
+              : `${subjectName === null ? 'your' : 'their'} own Cell Groups (${own.cells})`
         }`;
 
   return (

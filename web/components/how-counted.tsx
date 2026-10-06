@@ -43,7 +43,7 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
     {
       term: 'My 12',
       definition:
-        'Your direct disciples (for a whole-church reader, the two pastors at the root of each Network), each counting everyone under them, then your own Cell groups, then the total. People are counted once each, however many meetings they came to.',
+        'Your direct disciples (for a whole-church reader, the two pastors at the root of each Network), each counting everyone under them, then your own Cell Groups, then the total. People are counted once each, however many meetings they came to.',
     },
     {
       term: 'Where people are in their journey',
