@@ -112,6 +112,20 @@ test.describe('the Network screen’s figures', () => {
     await expect(page.getByText('DCC records · Cell meetings')).toHaveCount(0);
   });
 
+  test('names what each row is behind on, in section 17’s words', async ({ page }) => {
+    await signedInReader(page);
+    await page.goto('/network');
+
+    const rows = page.getByRole('table', { name: /^People reporting to/ });
+    await expect(rows.getByRole('columnheader')).toHaveText([
+      'Name',
+      'Beneath',
+      'DCC records behind',
+      'Cell meetings behind',
+      'Actions',
+    ]);
+  });
+
   test('names the person it is looking at, on somebody else’s branch', async ({ page }) => {
     await signedInReader(page);
     await page.goto('/network?focus=3f1b7c6e-0000-4000-8000-000000000701');
