@@ -191,6 +191,7 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
     ['second_step_challenges', 'a sign-in challenge that expires in minutes, not history'],
     ['report_snapshots', 'stored months are a cache, always derivable (SKILL.md section 20)'],
     ['report_month_versions', 'the versions of that cache'],
+    ['hierarchy_tree_version', 'one random value the in-memory tree is checked against'],
   ]);
 
   const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations');

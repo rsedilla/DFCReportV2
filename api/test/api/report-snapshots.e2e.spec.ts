@@ -135,6 +135,7 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['schema_migrations', 'the migration runner’s own history'],
       ['report_snapshots', 'the stored months themselves'],
       ['report_month_versions', 'the versions the triggers move'],
+      ['hierarchy_tree_version', 'the in-memory tree’s version, not a figure (decision 0321)'],
       ['person_lifecycle', 'neither monthly report filters on lifecycle (decision 0320 review)'],
       ['accounts', 'read by the Record and Branch lists, not by the monthly reports'],
       ['account_roles', 'authorization, decided before the report'],

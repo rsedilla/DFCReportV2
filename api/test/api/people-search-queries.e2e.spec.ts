@@ -108,6 +108,8 @@ describe('people search queries do not grow with the page (perf-people-search)',
     ['a leader searching the church, as the pickers do', true],
     ['a leader searching their own scope, as the People screen does', false],
   ])('%s', async (_label, churchWide) => {
+    // Unmeasured: builds the in-memory tree (decision 0321), so both counts below start warm.
+    await counted(raymondAccount, { q: 'Countfixture', church_wide: churchWide, limit: 5 });
     const small = await counted(raymondAccount, {
       q: 'Countfixture',
       church_wide: churchWide,
