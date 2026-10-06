@@ -1458,11 +1458,11 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await region.getByRole('button', { name: 'Carlo Reyes' }).click();
     await region.getByRole('button', { name: 'The reader (you)' }).click();
 
-    const list = page.getByRole('table', { name: 'DCC records still owed, Carlo Reyes' });
+    const list = page.getByRole('table', { name: 'DCC still to record, Carlo Reyes' });
     await expect(list.getByRole('row', { name: /Carlo Reyes/ })).toContainText('See checklist');
     await expect(
       page
-        .getByRole('table', { name: 'DCC records still owed, The reader (you)' })
+        .getByRole('table', { name: 'DCC still to record, The reader (you)' })
         .getByRole('row', { name: /You/ })
         .getByRole('link', { name: /^Record/ }),
     ).toHaveAttribute('href', '/dcc/3f1b7c6e-0000-4000-8000-000000000501');
@@ -1497,7 +1497,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await region.getByRole('button', { name: 'Carlo Reyes' }).click();
 
     const row = page
-      .getByRole('table', { name: 'DCC records still owed, Carlo Reyes' })
+      .getByRole('table', { name: 'DCC still to record, Carlo Reyes' })
       .getByRole('row', { name: /Carlo Reyes/ });
     await expect(row.getByRole('link', { name: /^Record/ })).toHaveAttribute(
       'href',
@@ -1546,7 +1546,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
       .click();
 
     const row = page
-      .getByRole('table', { name: 'DCC records still owed, Carlo Reyes' })
+      .getByRole('table', { name: 'DCC still to record, Carlo Reyes' })
       .getByRole('row', { name: /Carlo Reyes/ });
     await expect(row.getByRole('button', { name: /See checklist/ })).toBeVisible();
     await expect(row.getByRole('link', { name: /^Record/ })).toHaveCount(0);

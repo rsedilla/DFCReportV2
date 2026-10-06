@@ -313,7 +313,7 @@ function NetworkScreen() {
                     }}
                     className="size-5"
                   />
-                  Owes records
+                  Only those still to record
                 </label>
               ) : null}
             </div>
