@@ -2078,7 +2078,13 @@ function recordLists(page: Page) {
 }
 
 async function chooseList(page: Page, name: RegExp) {
-  await recordLists(page).getByRole('button', { name }).click();
+  const button = recordLists(page).getByRole('button', { name });
+  // Under a loaded suite the page can reload itself just after a click, landing back on
+  // the list it came from, so the click is repeated until this list is the chosen one.
+  await expect(async () => {
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true', { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 /** Awaiting a record's two halves, Cell Group and DCC (decision 0290). */
