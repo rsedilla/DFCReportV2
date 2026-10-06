@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-06, the trigger being decision 0315: of 314 files, 313 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0315 each moved the first two and
+2026-10-06, the trigger being decision 0316: of 315 files, 314 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0316 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-06 and triggered by 0315, and was left stale by 0316 the same day. The one before that was dated
 2026-10-05 and triggered by 0314, and was left stale by 0315 the next day. The one before that was dated
 2026-10-05 and triggered by 0313, and was left stale by 0314 the same day. The one before that was dated
 2026-10-04 and triggered by 0312, and was left stale by 0313 the next day. The one before that was dated
@@ -671,6 +672,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-05 — [Record DCC for a leader under you who has an account](docs/decisions/0313-record-dcc-for-a-leader-under-you.md)
 - 2026-10-05 — [Show only Cells behind is Record's Cells behind, read every page](docs/decisions/0314-show-only-cells-behind-is-the-cells-behind-list.md)
 - 2026-10-06 — [Cells behind carries last month while it is open](docs/decisions/0315-cells-behind-carries-last-month-while-it-is-open.md)
+- 2026-10-06 — [Record's month figures keep the reader's whole scope](docs/decisions/0316-record-figures-keep-the-whole-scope.md)
 
 ### Open — awaiting a ruling
 
