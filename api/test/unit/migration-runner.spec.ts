@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { parse } from '../../scripts/migrate';
@@ -183,48 +183,73 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
       // audit logged, so a changed setting implies an audit entry.
       'seeded by its own migration; a change to it is covered by audit_log',
     ],
+    [
+      'second_step_recovery_codes',
+      // Every row references a `second_steps` row, which 0020 guards.
+      'exists only beside a second_steps row, which is guarded',
+    ],
+    ['second_step_challenges', 'a sign-in challenge that expires in minutes, not history'],
   ]);
 
-  describe.each([['0001_foundations.sql'], ['0002_audit_idempotency_settings.sql']])(
-    'the migration this repository actually ships: %s',
-    (fileName) => {
-      // Everything above runs on string fixtures. CI cannot catch a regression
-      // here either: it reverts against empty tables, where the guard is a no-op
-      // by construction. So the real files are parsed, and what they yield is
-      // asserted.
-      const sql = readFileSync(join(__dirname, '..', '..', 'migrations', fileName), 'utf8');
-      const migration = parse(fileName, sql);
+  const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations');
+  // Every shipped file that drops a table. The list once named 0001 and 0002 alone,
+  // and 0011 dropped every attendance table unguarded with nothing to fail.
+  const DROPPING = readdirSync(MIGRATIONS_DIR)
+    .filter((fileName) => fileName.endsWith('.sql'))
+    .sort()
+    .filter((fileName) => {
+      const migration = parse(fileName, readFileSync(join(MIGRATIONS_DIR, fileName), 'utf8'));
+      return /DROP TABLE/.test(migration.down ?? '');
+    })
+    .map((fileName) => [fileName]);
 
-      it('guards every table its down section drops, or exempts it deliberately', () => {
-        // Matched over the down section alone, and without requiring IF EXISTS: a
-        // bare `DROP TABLE cell_memberships;` would otherwise match nothing, leave
-        // both sides equal, and pass while dropping an unguarded history table.
-        const dropped = [
-          ...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g),
-        ].map((match) => match[1]);
+  it('checks the attendance migration among the files that drop tables', () => {
+    expect(DROPPING.map(([fileName]) => fileName)).toEqual(
+      expect.arrayContaining([
+        '0001_foundations.sql',
+        '0002_audit_idempotency_settings.sql',
+        '0011_attendance.sql',
+      ]),
+    );
+  });
 
-        expect(dropped.length).toBeGreaterThan(0);
+  describe.each(DROPPING)('the migration this repository actually ships: %s', (fileName) => {
+    // Everything above runs on string fixtures. CI cannot catch a regression
+    // here either: it reverts against empty tables, where the guard is a no-op
+    // by construction. So the real files are parsed, and what they yield is
+    // asserted.
+    const sql = readFileSync(join(MIGRATIONS_DIR, fileName), 'utf8');
+    const migration = parse(fileName, sql);
 
-        const expected = dropped.filter((table) => !UNGUARDED.has(table)).sort();
-        expect([...migration.refuseIfPopulated].sort()).toEqual(expected);
-      });
+    it('guards every table its down section drops, or exempts it deliberately', () => {
+      // Matched over the down section alone, and without requiring IF EXISTS: a
+      // bare `DROP TABLE cell_memberships;` would otherwise match nothing, leave
+      // both sides equal, and pass while dropping an unguarded history table.
+      const dropped = [
+        ...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g),
+      ].map((match) => match[1]);
 
-      it('guards nothing its down section does not drop', () => {
-        // A guard naming a table this migration never drops reads as protection
-        // and is none, and it would refuse the down for a table whose data the
-        // down would have left alone.
-        const dropped = new Set(
-          [...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g)].map(
-            (match) => match[1],
-          ),
-        );
+      expect(dropped.length).toBeGreaterThan(0);
 
-        for (const guarded of migration.refuseIfPopulated) {
-          expect([...dropped]).toContain(guarded);
-        }
-      });
-    },
-  );
+      const expected = dropped.filter((table) => !UNGUARDED.has(table)).sort();
+      expect([...migration.refuseIfPopulated].sort()).toEqual(expected);
+    });
+
+    it('guards nothing its down section does not drop', () => {
+      // A guard naming a table this migration never drops reads as protection
+      // and is none, and it would refuse the down for a table whose data the
+      // down would have left alone.
+      const dropped = new Set(
+        [...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g)].map(
+          (match) => match[1],
+        ),
+      );
+
+      for (const guarded of migration.refuseIfPopulated) {
+        expect([...dropped]).toContain(guarded);
+      }
+    });
+  });
 
   describe('the migration this repository actually ships', () => {
     const sql = readFileSync(
