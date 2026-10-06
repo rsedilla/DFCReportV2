@@ -286,6 +286,19 @@ function Dashboard() {
     queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
   });
 
+  // **Last month's Cells behind while that month is open** (section 15, decision 0315),
+  // read only in the close week. A month that has shut answers `open: false`.
+  const scopedPrevious = useQuery({
+    queryKey: ['cells', previousMonth, false],
+    queryFn: ({ signal }) => listCells({ month: previousMonth }, signal),
+    enabled: inCloseWeek,
+  });
+  const scopedClosedPrevious = useQuery({
+    queryKey: ['cells', previousMonth, false, 'CLOSED'],
+    queryFn: ({ signal }) => listCells({ month: previousMonth, state: 'CLOSED' }, signal),
+    enabled: inCloseWeek,
+  });
+
   // **The Sundays on the leader's own checklist.** The events index says which of
   // this month's Sundays take a record now; the checklist for each says whether
   // anybody on it is still unmarked. A Sunday that has not happened, was removed,
@@ -465,9 +478,26 @@ function Dashboard() {
   // (decision 0267): a meeting that has come and has no record. It used to compare with
   // the whole month's schedule, which named a running Cell for meetings not yet held.
   const needingAttention = [
-    ...(scoped.data?.data ?? []),
-    ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
-  ].filter((cell) => behindOf(cell.coverage) > 0);
+    ...[
+      ...(scoped.data?.data ?? []),
+      ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
+    ].map((cell) => ({ cell, month })),
+    // Last month's only while its window is open, each view by its own flag.
+    ...(inCloseWeek
+      ? [
+          ...(scopedPrevious.data?.open ? scopedPrevious.data.data : []),
+          ...(scopedClosedPrevious.data?.open ? scopedClosedPrevious.data.data : []),
+        ].map((cell) => ({ cell, month: previousMonth }))
+      : []),
+  ].filter(({ cell }) => behindOf(cell.coverage) > 0);
+  const behindPreviousOpen = needingAttention.some((row) => row.month === previousMonth);
+  const behindPending =
+    scoped.isPending ||
+    scopedClosed.isPending ||
+    (inCloseWeek && (scopedPrevious.isPending || scopedClosedPrevious.isPending));
+  const behindFailed = [scoped, scopedClosed, scopedPrevious, scopedClosedPrevious].find(
+    (query) => query.isError,
+  );
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a
@@ -486,10 +516,8 @@ function Dashboard() {
           ? describeFailure(previousFailed.error)
           : owedFailure
             ? describeFailure(owedFailure.error)
-          : scoped.isError
-              ? describeFailure(scoped.error)
-              : scopedClosed.isError
-                ? describeFailure(scopedClosed.error)
+          : behindFailed
+              ? describeFailure(behindFailed.error)
               : unplaced.isError
                 ? describeFailure(unplaced.error)
                 : cellFigures.isError
@@ -505,6 +533,10 @@ function Dashboard() {
   // The tab counts. A list read fifty at a time says "50+" rather than a figure it has
   // not read; section 22 returns no total to ask for instead.
   const behindMore = scoped.data?.next_cursor != null || scopedClosed.data?.next_cursor != null;
+  const behindMorePrevious =
+    inCloseWeek &&
+    ((scopedPrevious.data?.open && scopedPrevious.data.next_cursor != null) ||
+      (scopedClosedPrevious.data?.open && scopedClosedPrevious.data.next_cursor != null));
   // The DCC count follows Whose, as the Cell count does: the branch's owed records, or the
   // reader's own Sundays with somebody unmarked.
   const dccCount = branchView
@@ -523,9 +555,9 @@ function Dashboard() {
       key: 'behind',
       label: 'Cells behind',
       count:
-        scoped.data && scopedClosed.data
-          ? `${needingAttention.length}${behindMore ? '+' : ''}`
-          : null,
+        behindPending || behindFailed
+          ? null
+          : `${needingAttention.length}${behindMore || behindMorePrevious ? '+' : ''}`,
     },
     {
       key: 'leader',
@@ -724,11 +756,15 @@ function Dashboard() {
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
                 Cells behind
               </h2>
-              <p className="text-muted text-sm">In your scope, in no particular order.</p>
+              <p className="text-muted text-sm">
+                {behindPreviousOpen
+                  ? `In your scope, this month and ${previousName} while it is open, in no particular order.`
+                  : 'In your scope, in no particular order.'}
+              </p>
             </div>
-            {scoped.isPending || scopedClosed.isPending ? (
+            {behindPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
-            ) : scoped.isError || scopedClosed.isError ? null : (
+            ) : behindFailed ? null : (
               <>
                 <ListTable
                   caption="Cells behind"
@@ -738,12 +774,12 @@ function Dashboard() {
                       ? 'None of the first 50 Cells in your scope is behind this month.'
                       : 'No Cell in your scope is behind this month.'
                   }
-                  rows={needingAttention.map((cell) => ({
-                    key: cell.id,
+                  rows={needingAttention.map(({ cell, month: cellMonth }) => ({
+                    key: `${cell.id}|${cellMonth}`,
                     cells: [
                       <Link
                         key="cell"
-                        href={`/cells/${cell.id}/meetings?month=${month}`}
+                        href={`/cells/${cell.id}/meetings?month=${cellMonth}`}
                         className={NAME_LINK}
                       >
                         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
@@ -752,9 +788,10 @@ function Dashboard() {
                       <span key="recorded" className="tabular-nums">
                         {cell.coverage.recorded} of {cell.coverage.scheduled}
                       </span>,
-                      cell.state === 'CLOSED' && cell.closed_on
+                      (cell.state === 'CLOSED' && cell.closed_on
                         ? `Closed ${closedOnLabel(cell.closed_on)}`
-                        : 'Open',
+                        : 'Open') +
+                        (cellMonth === month ? '' : ` · ${openUntilLabel(cellMonth, month)}`),
                     ],
                   }))}
                 />
@@ -766,6 +803,16 @@ function Dashboard() {
                       className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       See every Cell behind in Reports
+                    </Link>
+                  </p>
+                ) : null}
+                {behindMorePrevious ? (
+                  <p className="mt-2">
+                    <Link
+                      href={`/reports/filed?${new URLSearchParams({ month: previousMonth, behind: '1' }).toString()}`}
+                      className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      See every Cell behind for {previousName} in Reports
                     </Link>
                   </p>
                 ) : null}
