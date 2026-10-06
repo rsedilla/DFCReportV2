@@ -214,7 +214,7 @@ export function DccReport() {
               }}
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              <option value="">{wholeChurch ? 'The whole church' : 'Everyone you oversee'}</option>
+              <option value="">{wholeChurch ? 'Whole Church' : 'People you oversee'}</option>
               {wholeChurch ? (
                 <>
                   <option value="MENS">{networkLabel('MENS')}</option>

@@ -320,7 +320,7 @@ test.describe('My 12 on DCC', () => {
     await page.goto('/reports/dcc');
 
     await expectAsked(asked, { scope: 'WHOLE_CHURCH', leader_id: null });
-    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Whole Church · / })).toBeVisible();
     const table = twelveTable(page);
     // A root's row is that pastor's 12, not the Network's membership, so it names the pastor.
     await expect(table.getByRole('columnheader').first()).toHaveText('Leader');
@@ -340,7 +340,7 @@ test.describe('My 12 on DCC', () => {
     const select = page.getByLabel('Figures for');
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'The pastors’ 12');
     await expect(select.locator('option')).toHaveText([
-      'The whole church',
+      'Whole Church',
       "Men's Network",
       "Women's Network",
       'Bonifacio Esguerra',
@@ -393,9 +393,9 @@ test.describe('My 12 on DCC', () => {
     ).toHaveText('10');
 
     // Back to the whole church drops the Network.
-    await select.selectOption({ label: 'The whole church' });
+    await select.selectOption({ label: 'Whole Church' });
     await expect(page).not.toHaveURL(/[?&]network=/);
-    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Whole Church · / })).toBeVisible();
   });
 
   test('a Network in the address does not widen a leader’s own figures', async ({ page }) => {
@@ -415,7 +415,7 @@ test.describe('My 12 on DCC', () => {
     const select = page.getByLabel('Figures for');
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'Your direct 12');
     await expect(select.locator('option')).toHaveText([
-      'Everyone you oversee',
+      'People you oversee',
       'Teresita Alcantara',
       'Consuelo Bautista',
       'Efren Dimaculangan',
@@ -474,7 +474,7 @@ test.describe('what decision 0294 took off this page', () => {
     await arrange(page);
     await mockWholeChurchReader(page);
     await page.goto('/reports/dcc');
-    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Whole Church · / })).toBeVisible();
 
     await expect(page.getByRole('radiogroup', { name: 'Report period' })).toHaveCount(0);
     await expect(
