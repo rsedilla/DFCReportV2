@@ -300,7 +300,7 @@ function NetworkScreen() {
             <section aria-labelledby="reports-to-heading" className={`mt-6 ${FRAME}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="reports-to-heading" className="field-label">
-                {isMe ? 'Reports to you' : `Reports to ${person.full_name}`}
+                {isMe ? 'Your direct disciples' : `${person.full_name}’s direct disciples`}
               </h2>
               {filterReady ? (
                 <label className="flex min-h-11 items-center gap-2 text-sm">
@@ -341,12 +341,12 @@ function NetworkScreen() {
                   ? branch.hasNextPage
                     ? 'Loading…'
                     : `Nobody here is behind on ${covered.join(' or ')} this month.`
-                  : `Nobody reports to ${isMe ? 'you' : person.full_name} today.`}
+                  : `${isMe ? 'You have' : `${person.full_name} has`} no direct disciples today.`}
               </p>
             ) : (
               <>
                 <Table
-                  caption={`People reporting to ${person.full_name}`}
+                  caption={`Direct disciples of ${person.full_name}`}
                   className="mt-4 hidden lg:block"
                 >
                   <thead>
@@ -718,7 +718,7 @@ function FocusBlock({
       <div>
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
         <p className="text-muted mt-1 text-sm">
-          {parent === null ? noLeaderLabel(entries, noLeaderReason) : `reports to ${parent.full_name}`}
+          {parent === null ? noLeaderLabel(entries, noLeaderReason) : `pastored by ${parent.full_name}`}
         </p>
       </div>
       {mayMove && !isMe ? (

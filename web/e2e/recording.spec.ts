@@ -1881,7 +1881,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await chooseList(page, /^Needs a new leader/);
     await expect(page.getByRole('heading', { name: 'Cells behind' })).toHaveCount(0);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Was under']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous pastoral leader']);
     await expect(
       unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
     ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
@@ -1977,7 +1977,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await chooseList(page, /^Needs a new leader/);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Was under']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous pastoral leader']);
     // The header row and the one row saying so.
     await expect(unplaced.getByRole('row')).toHaveCount(2);
     await expect(unplaced.getByRole('cell')).toHaveText(['Nobody you oversee is waiting for a new leader.']);
@@ -2039,7 +2039,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await expect(page.getByRole('table', { name: 'Needs a new leader' })).toBeHidden();
       await expect(
         page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Amihan Bacani' }) }),
-      ).toContainText(/Was under\s*Rogelio Mendoza/);
+      ).toContainText(/Previous pastoral leader\s*Rogelio Mendoza/);
 
       await chooseList(page, /^Not in a Cell/);
       await expect(page.getByRole('table', { name: 'Not in a Cell' })).toBeHidden();

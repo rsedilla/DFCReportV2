@@ -372,7 +372,7 @@ test.describe('who pastors a person', () => {
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
     });
-    await expect(dialog.getByText(`Pastored now by ${PATH_LEADER.full_name}.`)).toBeVisible();
+    await expect(dialog.getByText(`Pastored by ${PATH_LEADER.full_name} now.`)).toBeVisible();
 
     await dialog.getByLabel('Search for a leader by name').fill('ann');
     await dialog.getByRole('button', { name: 'Find' }).click();
