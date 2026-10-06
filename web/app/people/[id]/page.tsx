@@ -160,7 +160,7 @@ function PersonDetail() {
               </Button>
             ) : null}
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
-              Pastoral network
+              Where they sit
             </Link>
           </div>
 

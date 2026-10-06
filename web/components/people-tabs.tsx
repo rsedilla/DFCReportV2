@@ -5,14 +5,14 @@ import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { cn } from '@/lib/utils';
 
 /**
- * The two tabs of the People item, People and Network (decision 0288). Each is its own
+ * The two tabs of the People item, People and Branch (decisions 0288 and 0318). Each is its own
  * address, so Back, a reload and every existing link keep working; the two screens are
  * otherwise as they were. The chosen tab opens into the pane that holds everything of it
  * (owner's choice of 2026-10-05).
  */
 const TABS = [
   { href: '/people', label: 'People' },
-  { href: '/network', label: 'Network' },
+  { href: '/network', label: 'Branch' },
 ] as const;
 
 export function PeopleTabs({
