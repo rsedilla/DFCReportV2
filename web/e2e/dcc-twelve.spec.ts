@@ -223,7 +223,7 @@ test.describe('My 12 on DCC', () => {
     await page.goto('/reports/dcc');
 
     await expect(
-      page.getByText('Who came to DCC, and where they are in their journey.'),
+      page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'My 12 · their journey' }),
