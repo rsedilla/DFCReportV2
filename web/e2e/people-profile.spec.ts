@@ -80,6 +80,7 @@ test.describe('a person’s DCC stage', () => {
     await signedInWithPeople(page);
     await page.goto(PROFILE);
 
+    await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
     await expect(page.getByText('Regular', { exact: true })).toBeVisible();
     await expect(page.getByText('6 Sundays attended')).toBeVisible();
     await expect(page.getByText('Service removed · not counted')).toHaveCount(1);
@@ -492,6 +493,7 @@ test.describe('the Add and Edit person forms', () => {
     await page.goto('/people/new');
 
     await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
+    await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
     await expect(page.getByText('None yet — it’s worked out from their Sundays.')).toBeVisible();
 
     // A man cannot be led from the Women's Network, so the default is withdrawn.
@@ -583,14 +585,14 @@ test.describe('the Add and Edit person forms', () => {
     });
   }
 
-  test('shows the journey stage on the edit form without offering to change it', async ({
+  test('shows the DCC stage on the edit form without offering to change it', async ({
     page,
   }) => {
     await signedInWithPeople(page);
     await mockPastoralPath(page);
     await page.goto(`${PROFILE}/edit`);
 
-    await expect(page.getByText('Journey stage')).toBeVisible();
+    await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
     await expect(page.getByText('Regular', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Correct this stage/ })).toHaveCount(0);
   });
