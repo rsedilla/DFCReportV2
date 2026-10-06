@@ -69,6 +69,20 @@ const REFUSE_IF_POPULATED = /^--[ \t]*migrate:down:refuse-if-populated([^\n]*)$/
  */
 const IRREVERSIBLE_MARKER = /^--[ \t]*migrate:irreversible[ \t]*([^\n]*)$/m;
 
+/**
+ * Guards for merged migrations that shipped without one, keyed by version.
+ *
+ * A merged file is frozen by its checksum, so its directive cannot be added there.
+ * 0011 drops every attendance table, and without this `migrate:down -- --all` on a
+ * live database dropped them before any other guard refused.
+ */
+const GUARDS_ADDED_AFTER_MERGE: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    '0011',
+    ['cell_meeting_changes', 'cell_attendance', 'cell_meetings', 'dcc_attendance', 'dcc_events'],
+  ],
+]);
+
 // One lock for the whole migration history, so two deploys cannot race.
 const ADVISORY_LOCK_KEY = 4_120_197_301;
 
@@ -224,10 +238,13 @@ export function parse(fileName: string, sql: string): Migration {
     up: sql.slice(upAt, downAt),
     down: sql.slice(downAt),
     irreversibleBecause: null,
-    refuseIfPopulated: (guards[0]?.[1] ?? '')
-      .split(/[\s,]+/)
-      .map((table) => table.trim())
-      .filter((table) => table !== ''),
+    refuseIfPopulated: [
+      ...(guards[0]?.[1] ?? '')
+        .split(/[\s,]+/)
+        .map((table) => table.trim())
+        .filter((table) => table !== ''),
+      ...(GUARDS_ADDED_AFTER_MERGE.get(version) ?? []),
+    ],
     checksum,
   };
 }
