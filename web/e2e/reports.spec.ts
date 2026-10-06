@@ -1513,18 +1513,18 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await page.goto('/reports/suynl');
 
     await expect(
-      page.getByRole('heading', { name: 'The whole church · SUYNL, getting ready for the Encounter' }),
+      page.getByRole('heading', { name: 'Whole Church · SUYNL, getting ready for the Encounter' }),
     ).toBeVisible();
-    await expectRows(page, 'The whole church', [
+    await expectRows(page, 'Whole Church', [
       ['Honorio Villanueva · Men’s their 12', '1', '2', '0', '3'],
       ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
       ['In neither pastor’s branch', '0', '0', '1', '1'],
       ['Total', '1', '2', '2', '5'],
     ]);
-    await expectTotalAddsUp(page, 'The whole church');
+    await expectTotalAddsUp(page, 'Whole Church');
     await expect(page.getByRole('cell', { name: 'You', exact: true })).toHaveCount(0);
 
-    const links = table(page, 'The whole church').getByRole('link', { name: 'their 12' });
+    const links = table(page, 'Whole Church').getByRole('link', { name: 'their 12' });
     await expect(links.nth(0)).toHaveAttribute('href', `/reports/suynl?leader=${READINESS_MENS_ROOT_ID}`);
     await expect(links.nth(1)).toHaveAttribute(
       'href',
@@ -1537,7 +1537,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await mockSuynlReadiness(page, { view: 'church', elsewhere: false });
     await page.goto('/reports/suynl');
 
-    await expectRows(page, 'The whole church', [
+    await expectRows(page, 'Whole Church', [
       ['Honorio Villanueva · Men’s their 12', '1', '2', '0', '3'],
       ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
       ['Total', '1', '2', '1', '4'],
