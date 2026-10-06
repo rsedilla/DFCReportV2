@@ -46,7 +46,7 @@ export function YearTable({
   scope: ReportScope;
 }) {
   const months = monthsBegunIn(year);
-  const unit = report === 'dcc' ? 'Sunday records' : 'Cell meetings';
+  const unit = report === 'dcc' ? 'DCC records' : 'Cell meetings';
 
   const results = useQueries({
     queries: months.map((month) => ({
@@ -118,7 +118,7 @@ export function YearTable({
         person once in that month.
       </p>
 
-      <Table caption={`${report === 'dcc' ? 'Sunday service' : 'Cell meetings'}, ${covered}`}>
+      <Table caption={`${report === 'dcc' ? 'DCC' : 'Cell meetings'}, ${covered}`}>
         <thead>
           <tr>
             <HeaderCell>Month</HeaderCell>
