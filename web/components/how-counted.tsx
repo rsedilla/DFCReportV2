@@ -71,7 +71,7 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
     {
       term: 'Where people are in their journey',
       definition:
-        'From every Sunday service a person has ever attended, as it stood at the end of the week, month, quarter or year: the 1st makes them a VIP, then 2nd, 3rd and 4th Timer, and Regular from the 5th. A later Sunday never changes a past period’s stage, and periods are never added together.',
+        'From every DCC Sunday a person has ever attended, as it stood at the end of the week, month, quarter or year: the 1st makes them a VIP, then 2nd, 3rd and 4th Timer, and Regular from the 5th. A later Sunday never changes a past period’s stage, and periods are never added together.',
     },
     {
       term: 'How often people came',
