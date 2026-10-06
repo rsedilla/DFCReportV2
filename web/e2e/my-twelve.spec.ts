@@ -544,7 +544,7 @@ test.describe('the sentence under My 12', () => {
     const dialog = page.getByRole('dialog', { name: 'How these are counted' });
     await expect(dialog.getByText('My 12', { exact: true })).toBeVisible();
     await expect(
-      dialog.getByText(/\(for a whole-church reader, the two pastors at the root of each Network\)/),
+      dialog.getByText(/\(if you see the Whole Church, the two pastors at the top of each Network\)/),
     ).toBeVisible();
     await expect(dialog.getByText('People who attended', { exact: true })).toHaveCount(0);
   });

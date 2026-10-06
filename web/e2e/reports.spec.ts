@@ -1139,7 +1139,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       ['SOL 1', TRAINING_COUNTS.sol_1],
       ['SOL 2', TRAINING_COUNTS.sol_2],
       ['SOL 3', TRAINING_COUNTS.sol_3],
-      ['None yet', TRAINING_COUNTS.not_started],
+      ['No graduation yet', TRAINING_COUNTS.not_started],
     ]);
     // Section 28: the consequence of an optional date is stated on the screen.
     await expect(
