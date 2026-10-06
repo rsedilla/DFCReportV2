@@ -133,13 +133,13 @@ test.describe('the Network screen’s figures', () => {
     await expect(page.getByRole('term').filter({ hasText: 'Everyone under Consuelo Bautista' })).toBeVisible();
   });
 
-  test('keeps Owes records in the address, and carries it into the next branch', async ({
+  test('keeps Only those still to record in the address, and carries it into the next branch', async ({
     page,
   }) => {
     await signedInReader(page);
     await page.goto('/network');
 
-    await page.getByRole('checkbox', { name: 'Owes records' }).check();
+    await page.getByRole('checkbox', { name: 'Only those still to record' }).check();
     await expect(page).toHaveURL(/owes=1/);
     const rows = page.getByRole('table', { name: /^Direct disciples of/ });
     await expect(rows.getByRole('link').first()).toHaveAttribute(
@@ -149,10 +149,10 @@ test.describe('the Network screen’s figures', () => {
 
     await page.goto('/cells');
     await page.goBack();
-    await expect(page.getByRole('checkbox', { name: 'Owes records' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Only those still to record' })).toBeChecked();
 
     await page.goBack();
-    await expect(page.getByRole('checkbox', { name: 'Owes records' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Only those still to record' })).not.toBeChecked();
   });
 });
 

@@ -1606,7 +1606,7 @@ function DccBranchQueue({
         title: group.title,
         content: (
           <OwedList
-            caption={`DCC records still owed, ${group.title}`}
+            caption={`DCC still to record, ${group.title}`}
             rows={group.items}
             describe={describe}
             action={action}
