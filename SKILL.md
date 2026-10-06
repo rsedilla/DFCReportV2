@@ -1083,7 +1083,7 @@ The tree import is outside it, and deliberately: it stamps one instant before it
 
 It follows that an elapsed wait must answer `RESOURCE_BUSY` **wherever it is raised**, including at a call site that knows nothing about locks; classified as an unexpected failure it would be a 500 for ordinary contention.
 
-**Advisory locks first, then row locks: every person the operation will write a relationship row for, then every `cells` row it will touch.** An operation needing both classes takes them in that order, never the reverse.
+**Advisory locks first, then row locks: every person the operation will write a relationship row for, then every `cells` row it will touch.** An operation needing both classes takes them in that order, never the reverse. The version the in-memory tree is checked against (Section 24) is moved by a deferred trigger, so its row lock comes after every lock the writer?s own statements take.
 
 The order is not a preference. A Cell membership write takes an advisory lock on the person and then, at commit, a row lock on the Cell, because the deferred trigger checking that Cell's state reads it `FOR SHARE` — so the pair was already fixed by an existing writer before any rule was written about it, and an operation taking Cell rows first and reaching back for a person runs the two in the opposite order. That is a genuine cycle rather than a wait, and the database answers it by choosing a victim.
 
@@ -1110,7 +1110,7 @@ WITH RECURSIVE subtree AS (
 CYCLE person_id SET is_cycle USING path
 ```
 
-**PostgreSQL 16 is the minimum version.** The `CYCLE` clause requires 14 or later, and pinning the version here means the visited-path fallback is never written.
+**PostgreSQL 16 is the minimum version.** The `CYCLE` clause requires 14 or later, and pinning the version here means the visited-path fallback is never written in SQL. The in-memory copy of the current tree (Section 24) walks with a visited set of its own, tested against these walks.
 
 Any query that walks the pastoral tree must carry cycle detection. A subtree query without it is a defect, not a performance preference.
 
@@ -5339,6 +5339,7 @@ Shapes are given in the section that owns each rule; this is the index.
 | `cell_attendance` | `attendance` | Section 13 |
 | `report_snapshots` | `reporting` | Section 20 |
 | `report_month_versions` | `reporting` | Section 20 |
+| `hierarchy_tree_version` | `hierarchy` | Section 24 |
 | `account_tokens` | `auth` | Section 6, Account activation |
 | `cell_meeting_changes` | `attendance` | Section 13 |
 | `notifications` | `reporting` | Section 13 |

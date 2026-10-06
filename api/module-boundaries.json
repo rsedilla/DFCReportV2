@@ -31,6 +31,7 @@
     "person_lifecycle": "people",
     "network_assignments": "networks",
     "pastoral_assignments": "hierarchy",
+    "hierarchy_tree_version": "hierarchy",
     "accounts": "auth",
     "account_roles": "auth",
     "capability_grants": "auth",

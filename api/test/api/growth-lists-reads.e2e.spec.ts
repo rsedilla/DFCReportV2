@@ -129,6 +129,8 @@ describe('a Growth list page (perf-growth-lists)', () => {
   it.each(tabs)(
     '$path: a page of 50 costs the same number of queries as a page of 20',
     async (tab) => {
+      // Unmeasured: builds the in-memory tree (decision 0321), so both counts below start warm.
+      await fetched(raymondAccount, `/api/v1/${tab.path}/people?limit=20`);
       const twenty = await fetched(raymondAccount, `/api/v1/${tab.path}/people?limit=20`);
       const fifty = await fetched(raymondAccount, `/api/v1/${tab.path}/people?limit=50`);
 

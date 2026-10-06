@@ -177,6 +177,8 @@ describe('a page of people’s Cells at once (perf-people-list-cells)', () => {
   });
 
   it('costs the same for two people as for ten', async () => {
+    // Unmeasured: builds the in-memory tree (decision 0321), so both counts below start warm.
+    await batch(disciples.slice(0, 2).map((person) => person.id)).expect(200);
     const two = await queriesOf(() =>
       batch(disciples.slice(0, 2).map((person) => person.id)).expect(200),
     );

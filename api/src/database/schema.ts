@@ -801,6 +801,16 @@ export interface ReportSnapshotsTable {
   computed_at: ServerTimestamp;
 }
 
+/**
+ * The version the in-memory tree is checked against (section 24, decision 0321). One row,
+ * given a new random value by migration 0023's triggers on every write to
+ * `pastoral_assignments`; never written by application code.
+ */
+export interface HierarchyTreeVersionTable {
+  only_row: ColumnType<boolean, never, never>;
+  version: ColumnType<string, never, never>;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -832,6 +842,7 @@ export interface Database {
   training_graduations: TrainingGraduationsTable;
   conquest_confirmations: ConquestConfirmationsTable;
   encounter_seasons: EncounterSeasonsTable;
+  hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;
 }

@@ -3,9 +3,10 @@ import { sql } from 'kysely';
 
 import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
-import { NIL_UUID, canonicalId, sameId } from '../common/identifiers';
+import { NIL_UUID, canonicalId, isUuid, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
+import { CurrentTree } from './current-tree';
 
 import type { AccountRole, Database, NetworkName } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -40,11 +41,91 @@ export type OpenAssignment = { personId: string; startedAt: Date } & (
  * than a performance preference: a cycle introduced by a migration, by direct SQL,
  * or by a defect must surface as an error rather than as a query that never
  * returns. PostgreSQL 16 is the minimum version precisely so the CYCLE clause is
- * available and the visited-path fallback is never written by hand.
+ * available and the visited-path fallback is never written by hand. The one exception is
+ * the in-memory copy of the current tree (`current-tree.ts`, decision 0321), whose walks
+ * are checked against these by `current-tree.e2e.spec.ts`.
  */
 @Injectable()
 export class HierarchyService {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
+
+  /** The last copy of the current tree built here (section 24, decision 0321). */
+  private tree: CurrentTree | undefined;
+
+  /**
+   * The in-memory tree, where it may answer this read (section 24, decision 0321).
+   *
+   * Only on the pool: a read on a transaction goes to the database, so the transaction
+   * sees its own writes and a decision taken after a lock reads after the lock. Each
+   * answer first reads the version migration 0023 moves on every write to
+   * `pastoral_assignments`; an absent version answers from the database, and a changed
+   * one rebuilds the copy. The rebuild reads its edges and its version in one statement,
+   * so the copy is committed state from one snapshot, never older than the check.
+   */
+  private async currentTree(executor: Db, personId: string): Promise<CurrentTree | undefined> {
+    // Not a UUID: the database walk refuses it on the cast, and the copy must not answer
+    // where that walk would not.
+    if (executor !== this.db || executor.isTransaction || !isUuid(personId)) {
+      return undefined;
+    }
+
+    const current = (
+      await sql<{ version: string }>`
+        SELECT version::text AS version FROM hierarchy_tree_version
+      `.execute(this.db)
+    ).rows[0];
+    if (current === undefined) {
+      return undefined;
+    }
+    if (this.tree !== undefined && this.tree.version === current.version) {
+      return this.tree;
+    }
+
+    // Requests that see one change share one rebuild, but only a rebuild that carries the
+    // version this request checked: one started earlier may hold an older tree.
+    // A failed shared rebuild is treated as none: this request rebuilds for itself.
+    const shared =
+      this.building === undefined ? undefined : await this.building.catch(() => undefined);
+    if (shared !== undefined && shared.version === current.version) {
+      return shared;
+    }
+    const building = this.rebuild();
+    this.building = building;
+    try {
+      return await building;
+    } finally {
+      if (this.building === building) {
+        this.building = undefined;
+      }
+    }
+  }
+
+  /** In-flight rebuild, shared by the requests that wait on it. */
+  private building: Promise<CurrentTree | undefined> | undefined;
+
+  /** Edges and version from one statement, so one snapshot (decision 0321). */
+  private async rebuild(): Promise<CurrentTree | undefined> {
+    const built = (
+      await sql<{
+        version: string | null;
+        edges: { person_id: string; leader_id: string | null }[];
+      }>`
+        SELECT (SELECT version::text FROM hierarchy_tree_version) AS version,
+               coalesce(
+                 (SELECT json_agg(json_build_object('person_id', pa.person_id, 'leader_id', pa.leader_id))
+                    FROM pastoral_assignments pa
+                   WHERE pa.ended_at IS NULL),
+                 '[]'::json
+               ) AS edges
+      `.execute(this.db)
+    ).rows[0];
+    if (built.version === null) {
+      return undefined;
+    }
+
+    this.tree = new CurrentTree(built.version, built.edges);
+    return this.tree;
+  }
 
   /**
    * The person's leaders, nearest first. A Network root returns an empty list:
@@ -52,6 +133,15 @@ export class HierarchyService {
    * missing data (section 5, Network roots).
    */
   async ancestorsOf(executor: Db, personId: string): Promise<string[]> {
+    const tree = await this.currentTree(executor, personId);
+    if (tree !== undefined) {
+      const { leaders, cycle } = tree.ancestors(personId);
+      if (cycle) {
+        throw this.cycleError(personId);
+      }
+      return leaders;
+    }
+
     const result = await sql<{ leader_id: string | null; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE upline AS (
         SELECT pa.person_id, pa.leader_id, 1 AS depth
@@ -187,6 +277,15 @@ export class HierarchyService {
    * (section 5, Direct leaders vs descendants); this is the second of the two.
    */
   async subtreeOf(executor: Db, personId: string): Promise<string[]> {
+    const tree = await this.currentTree(executor, personId);
+    if (tree !== undefined) {
+      const { people, cycle } = tree.subtree(personId);
+      if (cycle) {
+        throw this.cycleError(personId);
+      }
+      return people;
+    }
+
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE subtree AS (
         SELECT ${personId}::uuid AS person_id, 0 AS depth
@@ -1494,11 +1593,16 @@ export class HierarchyService {
 
   private rejectCycle(rows: readonly { is_cycle: boolean }[], personId: string): void {
     if (rows.some((row) => row.is_cycle)) {
-      throw new InvariantViolationError(
-        'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
-        { person_id: personId },
-      );
+      throw this.cycleError(personId);
     }
+  }
+
+  /** One refusal for a cycle, whether the database walk or the in-memory one met it. */
+  private cycleError(personId: string): InvariantViolationError {
+    return new InvariantViolationError(
+      'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
+      { person_id: personId },
+    );
   }
 }
 
