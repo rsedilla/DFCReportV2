@@ -22,6 +22,14 @@ import { SettingsService } from '../admin/settings/settings.service';
 
 import type { Transaction } from 'kysely';
 import {
+  prepareToStore,
+  readSnapshot,
+  readVersion,
+  writeSnapshot,
+  type SnapshotKey,
+  type SnapshotKind,
+} from './report-snapshots';
+import {
   assertReportingMonth,
   assertReportingPeriodHasBegun,
   reportingPeriodBounds,
@@ -377,51 +385,55 @@ export class ReportingService {
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
   async dccMonthly(scope: DccReportScope, period: string): Promise<DccMonthlyReport> {
-    return this.overPeriod(period, async (trx, { start, end }) => {
-      // **Each narrower scope is computed by the module that owns the rows it reads**
-      // (section 2, decision 0206): `hierarchy` walks the placement graph for a leader,
-      // `networks` reads membership for a Network. `reporting` composes and roots no query
-      // of its own.
-      //
-      // `undefined` rather than a list is Whole Church, and the difference from an empty
-      // list is load-bearing: a scope holding nobody reports zero, which is not the same
-      // question as "everybody".
-      //
-      // **A Network takes `end` and not the period**, because its population is membership
-      // at an instant rather than a graph collapsed over a span (decision 0219). The two
-      // arguments differ in kind for that reason, not by oversight.
-      const personIds =
-        scope.kind === 'LEADER'
-          ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
-          : scope.kind === 'NETWORK'
-            ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
-            : undefined;
+    return this.overPeriod(
+      period,
+      async (trx, { start, end }) => {
+        // **Each narrower scope is computed by the module that owns the rows it reads**
+        // (section 2, decision 0206): `hierarchy` walks the placement graph for a leader,
+        // `networks` reads membership for a Network. `reporting` composes and roots no query
+        // of its own.
+        //
+        // `undefined` rather than a list is Whole Church, and the difference from an empty
+        // list is load-bearing: a scope holding nobody reports zero, which is not the same
+        // question as "everybody".
+        //
+        // **A Network takes `end` and not the period**, because its population is membership
+        // at an instant rather than a graph collapsed over a span (decision 0219). The two
+        // arguments differ in kind for that reason, not by oversight.
+        const personIds =
+          scope.kind === 'LEADER'
+            ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
+            : scope.kind === 'NETWORK'
+              ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
+              : undefined;
 
-      const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
 
-      // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
-      // than an inconsistency.** The population above is the placement graph collapsed
-      // over the period, which is where a *person* is counted; a coverage denominator is
-      // a subtree walked at each event date, which is where an *obligation* sits. Handing
-      // `personIds` here would measure this month's obligations against the tree as it
-      // stood at the period's end, and a leader assigned in the third week would owe
-      // records for the first two.
-      const coverage = await this.dccCoverage.monthCoverage(period, coverageScopeOf(scope), {
-        executor: trx,
-      });
+        // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
+        // than an inconsistency.** The population above is the placement graph collapsed
+        // over the period, which is where a *person* is counted; a coverage denominator is
+        // a subtree walked at each event date, which is where an *obligation* sits. Handing
+        // `personIds` here would measure this month's obligations against the tree as it
+        // stood at the period's end, and a leader assigned in the third week would owe
+        // records for the first two.
+        const coverage = await this.dccCoverage.monthCoverage(period, coverageScopeOf(scope), {
+          executor: trx,
+        });
 
-      return {
-        scope,
-        period,
-        open: figures.open,
-        n: figures.n,
-        removed_events: figures.removed,
-        unique_people: figures.people.length,
-        classification: classify(figures.people),
-        buckets: bucket(figures.people, figures.n),
-        coverage,
-      };
-    });
+        return {
+          scope,
+          period,
+          open: figures.open,
+          n: figures.n,
+          removed_events: figures.removed,
+          unique_people: figures.people.length,
+          classification: classify(figures.people),
+          buckets: bucket(figures.people, figures.n),
+          coverage,
+        };
+      },
+      { kind: 'DCC_MONTHLY', scope },
+    );
   }
 
   /**
@@ -453,60 +465,64 @@ export class ReportingService {
    * they would otherwise describe two states of the database.
    */
   async cellMonthly(scope: CellReportScope, period: string): Promise<CellMonthlyReport> {
-    return this.overPeriod(period, async (trx, { start, end }) => {
-      // **The owning module computes and `reporting` composes** (section 2, decision 0206).
-      // `hierarchy` walks the placement graph for a leader; the Cell and Whole Church
-      // scopes need no walk at all, because `cell_meetings` carries both the Cell and the
-      // frozen responsible leader as its own columns.
-      //
-      // **The subtree is handed over as `RESPONSIBLE_LEADERS` rather than as a population**,
-      // which is the whole difference from `dccMonthly` above: the same walk, feeding a
-      // different key.
-      //
-      // **Cell scope returns from its own branch** rather than from a check on what came
-      // back, so `n` and the buckets exist exactly where the scope asked for them. The
-      // figures service is overloaded on the population, which is what makes that a
-      // compiler guarantee rather than a convention here.
-      if (scope.kind === 'CELL') {
-        const figures = await this.cellFigures.monthFigures(
-          period,
-          { kind: 'CELL', cellId: scope.cell_id },
-          { executor: trx },
-        );
+    return this.overPeriod(
+      period,
+      async (trx, { start, end }) => {
+        // **The owning module computes and `reporting` composes** (section 2, decision 0206).
+        // `hierarchy` walks the placement graph for a leader; the Cell and Whole Church
+        // scopes need no walk at all, because `cell_meetings` carries both the Cell and the
+        // frozen responsible leader as its own columns.
+        //
+        // **The subtree is handed over as `RESPONSIBLE_LEADERS` rather than as a population**,
+        // which is the whole difference from `dccMonthly` above: the same walk, feeding a
+        // different key.
+        //
+        // **Cell scope returns from its own branch** rather than from a check on what came
+        // back, so `n` and the buckets exist exactly where the scope asked for them. The
+        // figures service is overloaded on the population, which is what makes that a
+        // compiler guarantee rather than a convention here.
+        if (scope.kind === 'CELL') {
+          const figures = await this.cellFigures.monthFigures(
+            period,
+            { kind: 'CELL', cellId: scope.cell_id },
+            { executor: trx },
+          );
+
+          return {
+            scope,
+            period,
+            open: figures.open,
+            n: figures.n,
+            unique_people: figures.people.length,
+            classification: classify(figures.people),
+            buckets: bucket(figures.people, figures.n),
+            coverage: await this.cellCoverage(trx, period, scope),
+          };
+        }
+
+        const population: Exclude<CellFiguresPopulation, { kind: 'CELL' }> =
+          scope.kind === 'LEADER'
+            ? {
+                kind: 'RESPONSIBLE_LEADERS',
+                personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
+              }
+            : { kind: 'EVERY_CELL' };
+
+        const figures = await this.cellFigures.monthFigures(period, population, { executor: trx });
 
         return {
           scope,
           period,
           open: figures.open,
-          n: figures.n,
           unique_people: figures.people.length,
           classification: classify(figures.people),
-          buckets: bucket(figures.people, figures.n),
+          // Decision 0202: coverage is the figure an aggregate view leads with, and the
+          // only one of the three that survives having no `N` to measure against.
           coverage: await this.cellCoverage(trx, period, scope),
         };
-      }
-
-      const population: Exclude<CellFiguresPopulation, { kind: 'CELL' }> =
-        scope.kind === 'LEADER'
-          ? {
-              kind: 'RESPONSIBLE_LEADERS',
-              personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
-            }
-          : { kind: 'EVERY_CELL' };
-
-      const figures = await this.cellFigures.monthFigures(period, population, { executor: trx });
-
-      return {
-        scope,
-        period,
-        open: figures.open,
-        unique_people: figures.people.length,
-        classification: classify(figures.people),
-        // Decision 0202: coverage is the figure an aggregate view leads with, and the
-        // only one of the three that survives having no `N` to measure against.
-        coverage: await this.cellCoverage(trx, period, scope),
-      };
-    });
+      },
+      { kind: 'CELL_MONTHLY', scope },
+    );
   }
 
   /**
@@ -989,9 +1005,18 @@ export class ReportingService {
    * *A first version of this sentence credited the hand-off with the guard's agreement. Had
    * the callback re-derived the bounds with the same helper, the value would be identical.*
    */
+  /**
+   * **`storeAs` makes a monthly report stored once its month has closed** (section 20,
+   * decision 0320). It is here rather than in a wrapper because the seam is the one place
+   * that touches the pool. An open month is computed every time. A closed one is served
+   * from its stored copy while its month's version is the one it was computed at, and is
+   * otherwise computed, served and stored; `report-snapshots.ts` carries why storing waits
+   * first.
+   */
   private async overPeriod<T>(
     period: string,
     compute: (trx: Transaction<Database>, bounds: ReportingPeriod) => Promise<T>,
+    storeAs?: { kind: SnapshotKind; scope: ReportScope },
   ): Promise<T> {
     // **Refused before anything is derived from it.** `reportingPeriodBounds` validates
     // nothing and will happily build `2020-14-01` out of `2020-13-01`, so a malformed month
@@ -1000,9 +1025,26 @@ export class ReportingService {
     // client needs in order to fix it, and that field is `period`.
     assertReportingMonth(period);
 
+    const key =
+      storeAs !== undefined && !(await isMonthOpen(this.db, period))
+        ? snapshotKeyOf(storeAs.kind, storeAs.scope, period)
+        : undefined;
+
+    if (key !== undefined) {
+      const stored = await readSnapshot(this.db, key);
+      if (stored !== undefined) {
+        // The request's own scope rather than the stored one, so a hit and a computation
+        // answer in the same words.
+        return { ...(stored as T), scope: storeAs!.scope };
+      }
+    }
+
+    const storing = key !== undefined && (await prepareToStore(this.db, period));
+    let version: string | undefined;
+
     const bounds = reportingPeriodBounds(period);
 
-    return this.db
+    const report = await this.db
       .transaction()
       .setIsolationLevel('repeatable read')
       .setAccessMode('read only')
@@ -1016,8 +1058,16 @@ export class ReportingService {
         // not hold is still answered `SCOPE_DENIED` first (section 7, decision 0193).
         await assertReportingPeriodHasBegun(trx, period);
 
+        if (storing) {
+          version = await readVersion(trx, period);
+        }
         return compute(trx, bounds);
       });
+
+    if (key !== undefined && version !== undefined) {
+      await writeSnapshot(this.db, key, version, report);
+    }
+    return report;
   }
 }
 
@@ -1155,4 +1205,22 @@ function bucket(figures: readonly { timesInMonth: number }[], n: number): Attend
   }
 
   return buckets;
+}
+
+/** The key a stored month is filed under. Exhaustive, so a new scope must choose one. */
+function snapshotKeyOf(kind: SnapshotKind, scope: ReportScope, period: string): SnapshotKey {
+  switch (scope.kind) {
+    case 'WHOLE_CHURCH':
+      return { kind, scopeType: 'WHOLE_CHURCH', scopeId: null, period };
+    case 'NETWORK':
+      return { kind, scopeType: 'NETWORK', scopeId: scope.network, period };
+    case 'LEADER':
+      return { kind, scopeType: 'LEADER', scopeId: canonicalId(scope.person_id), period };
+    case 'CELL':
+      return { kind, scopeType: 'CELL', scopeId: canonicalId(scope.cell_id), period };
+    default: {
+      const unreachable: never = scope;
+      return unreachable;
+    }
+  }
 }
