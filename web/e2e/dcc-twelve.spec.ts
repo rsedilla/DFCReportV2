@@ -238,9 +238,9 @@ test.describe('My 12 on DCC', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Leader',
       'VIP',
-      '2nd timer',
-      '3rd timer',
-      '4th timer',
+      '2nd Timer',
+      '3rd Timer',
+      '4th Timer',
       'Regular',
       'People',
     ]);

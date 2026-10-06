@@ -8,9 +8,9 @@ import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
 
 const STAGES: readonly [keyof Classification, string][] = [
   ['vip', 'VIP'],
-  ['second_timer', '2nd timer'],
-  ['third_timer', '3rd timer'],
-  ['fourth_timer', '4th timer'],
+  ['second_timer', '2nd Timer'],
+  ['third_timer', '3rd Timer'],
+  ['fourth_timer', '4th Timer'],
   ['regular', 'Regular'],
 ];
 
