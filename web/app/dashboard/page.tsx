@@ -846,7 +846,7 @@ function Dashboard() {
                 {/* The action that resolves an entry is the reassignment (section 19). */}
                 <ListTable
                   caption="Needs a new leader"
-                  columns={['Name', 'Was under']}
+                  columns={['Name', 'Previous pastoral leader']}
                   empty="Nobody in your scope is waiting for a new leader."
                   rows={unplaced.data.map((person) => ({
                     key: person.id,
