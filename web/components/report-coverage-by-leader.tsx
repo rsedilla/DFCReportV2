@@ -132,7 +132,7 @@ export function CoverageByLeader({
                 ))}
                 {page.data.others === null ? null : (
                   <tr className={rowClasses}>
-                    <td className="text-muted px-3 py-3">Leaders outside your reach</td>
+                    <td className="text-muted px-3 py-3">Leaders you don’t oversee</td>
                     <td className="px-3 py-3 text-right tabular-nums">{page.data.others.filed}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{page.data.others.owed}</td>
                   </tr>

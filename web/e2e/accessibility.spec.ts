@@ -1065,7 +1065,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
-      await expect(page.getByText('Leaders outside your reach')).toBeVisible();
+      await expect(page.getByText('Leaders you don’t oversee')).toBeVisible();
     },
   },
   {
