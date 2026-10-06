@@ -258,7 +258,7 @@ test.describe('My 12 on DCC', () => {
     expect(await cellsOf(rows.nth(3))).toEqual(['You', '0', '1', '0', '0', '0', '1']);
     expect(await cellsOf(rows.nth(4))).toEqual(['Elsewhere in this branch', '+2']);
     expect(await cellsOf(rows.nth(5))).toEqual(['Total', '3', '2', '1', '1', '3', '10']);
-    await expect(table.getByText('Counted in more than one row', { exact: true })).toHaveCount(0);
+    await expect(table.getByText('Counted under more than one leader', { exact: true })).toHaveCount(0);
     await expect(table.getByText(/Cell [Gg]roup|no Cell of/)).toHaveCount(0);
 
     // The People column adds up in plain sight (section 20): 3 + 4 + 0 + 1 + 2 = 10.
@@ -332,7 +332,7 @@ test.describe('My 12 on DCC', () => {
     await expect(
       rows.nth(1).getByRole('link', { name: "Aurora Dizon · Women's", exact: true }),
     ).toHaveAttribute('href', `/reports/dcc?month=2026-06-01&leader=${TWELVE.aurora.id}`);
-    expect(await cellsOf(rows.nth(2))).toEqual(['In no row', '+1']);
+    expect(await cellsOf(rows.nth(2))).toEqual(['Under none of these leaders', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
     await expect(table.getByText('You', { exact: true })).toHaveCount(0);
     await expect(table.getByText("Men's Network", { exact: true })).toHaveCount(0);
@@ -413,7 +413,7 @@ test.describe('My 12 on DCC', () => {
     await page.goto('/reports/dcc');
 
     const select = page.getByLabel('Figures for');
-    await expect(select.locator('optgroup')).toHaveAttribute('label', 'Your direct 12');
+    await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
     await expect(select.locator('option')).toHaveText([
       'People you oversee',
       'Teresita Alcantara',

@@ -215,7 +215,7 @@ function TrainingTab() {
       label: PROGRAM_LABELS[program],
       count: counts.data?.[program.toLowerCase() as keyof typeof counts.data],
     })),
-    { step: 'NOT_STARTED', label: 'None yet', count: counts.data?.not_started },
+    { step: 'NOT_STARTED', label: 'No graduation yet', count: counts.data?.not_started },
   ];
 
   function cell(row: TrainingPerson, program: TrainingProgram) {
