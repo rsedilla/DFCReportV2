@@ -353,8 +353,8 @@ function NetworkScreen() {
                     <tr>
                       <HeaderCell>Name</HeaderCell>
                       <HeaderCell className="text-right">Beneath</HeaderCell>
-                      <HeaderCell className="text-right">DCC behind</HeaderCell>
-                      <HeaderCell className="text-right">Cell behind</HeaderCell>
+                      <HeaderCell className="text-right">DCC records behind</HeaderCell>
+                      <HeaderCell className="text-right">Cell meetings behind</HeaderCell>
                       <HeaderCell>
                         <span className="sr-only">Actions</span>
                       </HeaderCell>
@@ -401,17 +401,17 @@ function NetworkScreen() {
                           </Link>
                         </h3>
                       </div>
-                      <dl className="text-muted mt-2 grid grid-cols-3 gap-2 text-sm">
+                      <dl className="text-muted mt-2 grid grid-cols-3 items-end gap-2 text-sm">
                         <div>
                           <dt>Beneath</dt>
                           <dd className="text-ink tabular-nums">{row.beneath}</dd>
                         </div>
                         <div>
-                          <dt>DCC behind</dt>
+                          <dt>DCC records behind</dt>
                           <dd className="text-ink tabular-nums">{figure(dccOf(row.id))}</dd>
                         </div>
                         <div>
-                          <dt>Cell behind</dt>
+                          <dt>Cell meetings behind</dt>
                           <dd className="text-ink tabular-nums">{figure(cellOf(row.id))}</dd>
                         </div>
                       </dl>
@@ -525,7 +525,7 @@ function RootsView({
                 </Link>
               </h3>
             </div>
-            <dl className="text-muted mt-2 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
+            <dl className="text-muted mt-2 grid grid-cols-2 items-end gap-2 text-sm lg:grid-cols-4">
               <div>
                 <dt>Direct disciples</dt>
                 <dd className="text-ink tabular-nums">{root.direct_reports}</dd>
@@ -535,13 +535,13 @@ function RootsView({
                 <dd className="text-ink tabular-nums">{root.beneath}</dd>
               </div>
               <div>
-                <dt>DCC behind</dt>
+                <dt>DCC records behind</dt>
                 <dd className="text-ink tabular-nums">
                   {figure(dcc[index]?.data?.branch_behind ?? null)}
                 </dd>
               </div>
               <div>
-                <dt>Cell behind</dt>
+                <dt>Cell meetings behind</dt>
                 <dd className="text-ink tabular-nums">
                   {figure(cells[index]?.data?.branch_meetings_behind ?? null)}
                 </dd>
