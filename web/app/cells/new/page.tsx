@@ -89,7 +89,7 @@ function NewCellForm() {
         <FailureNotice failure={create.isError ? describeFailure(create.error) : null} />
 
         <PersonPicker
-          legend="Cell leader"
+          legend="Cell Leader"
           description="The person who will lead it. Its members must be in the same Network as them."
           searchLabel="Search for the leader by name"
           selectedId={leader?.id ?? null}
