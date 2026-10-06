@@ -919,3 +919,28 @@ test('names the role the server honours, and asks before ending every other sess
   await page.getByRole('button', { name: 'Yes, sign out everywhere' }).click();
   await expect.poll(() => endedEverywhere).toBe(1);
 });
+
+test('the Account page names permissions in plain words, never as codes (audit of 2026-10-06)', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+  await page.route('**/api/v1/people/9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9', member_id: 'M-000412', full_name: 'Marilou Santos' }),
+    }),
+  );
+  await page.goto('/session');
+
+  const main = page.locator('main');
+  await expect(main.getByText('Marilou Santos · M-000412')).toBeVisible();
+  await expect(main.getByRole('heading', { name: 'What you can do' })).toBeVisible();
+  await expect(main.getByText('Add a person', { exact: true })).toBeVisible();
+  await expect(main.getByText('See reports (view only)', { exact: true })).toBeVisible();
+  await expect(main.getByText("Men's Network", { exact: true })).toBeVisible();
+  await expect(main.getByText('Whole Church', { exact: true })).toBeVisible();
+  for (const code of ['people.create', 'OWN_SUBTREE', 'WHOLE_CHURCH', 'GRANT', '4f8c1d6a']) {
+    await expect(main).not.toContainText(code);
+  }
+});
