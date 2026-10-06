@@ -150,12 +150,12 @@ export function CoverageByLeader({
               rows add up to the total. A leader&rsquo;s own report counts their whole branch, so
               its figures can be larger than their row.
               {/*
-                Why the Network screen's Still to record can differ from this table, said where
+                Why the Branch screen's Still to record can differ from this table, said where
                 its link lands (decisions 0239 and 0298 point 4; owner, 2026-10-05).
               */}
               {report === 'cells'
-                ? ' Owed is the whole month’s schedule, meetings still to come included. The Network screen’s Still to record counts only meetings whose day has come and have no record, and counts the branch as it stands today, so the two can differ.'
-                : ' The Network screen’s Still to record counts the branch as it stands today, so it can differ from this table where somebody changed leader during the month.'}
+                ? ' Owed is the whole month’s schedule, meetings still to come included. The Branch screen’s Still to record counts only meetings whose day has come and have no record, and counts the branch as it stands today, so the two can differ.'
+                : ' The Branch screen’s Still to record counts the branch as it stands today, so it can differ from this table where somebody changed leader during the month.'}
             </p>
 
             {shownPage > 0 || hasNext ? (

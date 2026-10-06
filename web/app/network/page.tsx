@@ -223,7 +223,7 @@ function NetworkScreen() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      <h1 className="text-2xl font-semibold tracking-tight">Network</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Branch</h1>
       <p className="text-muted text-sm">
         The people under your care, one level at a time.
         {month === null
