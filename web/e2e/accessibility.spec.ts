@@ -1182,7 +1182,7 @@ const SCANS = [
       await mockEncounterSeasons(page, { shows: 'NEITHER' });
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('You are in no Network, so no Encounter weekend is shown.')).toBeVisible();
+      await expect(page.getByText('You are in no Network, so no Encounter God Weekend is shown.')).toBeVisible();
     },
   },
   {
