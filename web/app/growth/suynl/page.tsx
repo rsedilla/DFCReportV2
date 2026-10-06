@@ -221,7 +221,8 @@ function SuynlTab() {
         <p className="text-muted text-sm">
           {counts.data
             ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} you oversee, as of today.`
-            : 'The people you oversee, as of today.'}
+            : 'The people you oversee, as of today.'}{' '}
+          SUYNL is Start Up Your New Life, ten lessons taken one to one.
         </p>
       </div>
 

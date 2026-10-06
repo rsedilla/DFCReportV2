@@ -240,7 +240,7 @@ function TrainingTab() {
           {counts.data
             ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} you oversee, as of today.`
             : 'The people you oversee, as of today.'}{' '}
-          A count of graduations in a period counts only the dated ones.
+          LC Party is the Life Class Party, and SOL is the School of Leaders. A count of graduations in a period counts only the dated ones.
         </p>
       </div>
 
