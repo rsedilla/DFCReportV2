@@ -306,7 +306,7 @@ test.describe('My 12', () => {
       '0',
     ]);
     expect(await cellsOf(rows.nth(3))).toEqual([
-      'You · your own Cell groups (2)',
+      'You · your own Cell Groups (2)',
       '0',
       '1',
       '0',
@@ -384,7 +384,7 @@ test.describe('My 12', () => {
   });
 
   for (const [cells, label] of [
-    [1, 'You · your own Cell group'],
+    [1, 'You · your own Cell Group'],
     [0, 'You · no Cell of your own'],
   ] as const) {
     test(`labels an own row of ${cells} Cells “${label}”`, async ({ page }) => {
