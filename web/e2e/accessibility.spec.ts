@@ -934,7 +934,7 @@ const SCANS = [
       // Coverage leads as one line, then My 12 (decision 0293), and the six tabs.
       await expect(page.getByText(/^6 of 8 meetings recorded/)).toBeVisible();
       await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
-      await expect(page.getByText('Counted in more than one row', { exact: true })).toBeVisible();
+      await expect(page.getByText('Counted under more than one leader', { exact: true })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
@@ -1079,7 +1079,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByText('Report coverage')).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     },
   },
   {
@@ -1094,7 +1094,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('Figures for the Women’s Network.')).toBeVisible();
-      await expect(page.getByText('Report coverage')).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     },
   },
   {

@@ -91,6 +91,14 @@ export function monthLabel(reportingMonth: string): string {
   );
 }
 
+/**
+ * "Open until 7 October": an open month's submission window closes at the end of the 7th of
+ * the month after (section 13, decision 0170). One wording for every open tag.
+ */
+export function openUntilLabel(reportingMonth: string): string {
+  return `Open until 7 ${monthLabel(shiftMonth(reportingMonth, 1)).split(' ')[0]}`;
+}
+
 /** A `YYYY-MM-DD` day as a person reads it — "Sunday 7 June". */
 export function dayLabel(date: string): string {
   const [year, month, day] = date.split('-').map(Number);

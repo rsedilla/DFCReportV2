@@ -729,7 +729,7 @@ test.describe('Filed reports (decision 0292)', () => {
     await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
-    await expect(page.getByText('Report coverage')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     await expect.poll(() => byLeader).toContain('cells');
 
     // The choice survives the switch to DCC, and the table asks the DCC figures.
@@ -899,7 +899,7 @@ test.describe('Filed reports (decision 0292)', () => {
       );
       // By Cell and By Sunday list the reader's own Cells and calendar, so they are not
       // offered once the scope is somebody else's.
-      await expect(page.getByText('Report coverage')).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
       await expect(page.getByRole('radio', { name: 'By Cell' })).toHaveCount(0);
       await expect(page.getByRole('radio', { name: 'By Sunday' })).toHaveCount(0);
       await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
@@ -908,7 +908,7 @@ test.describe('Filed reports (decision 0292)', () => {
 
     // Without `by=leader` in the address a leader still opens By leader.
     await page.goto(`/reports/filed?month=2026-06-01&leader=${LEADER}`);
-    await expect(page.getByText('Report coverage')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
 
     await expect.poll(() => scopes.length).toBeGreaterThan(0);
@@ -959,7 +959,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await expect(page.getByText('3 of 4 meetings recorded')).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-    await expect(page.getByText('Report coverage')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     await expect.poll(() => scopes).toContain(`cells scope=CELL&cell_id=${CELL}`);
     await expect.poll(() => scopes).toContain(`cells/by-leader scope=CELL&cell_id=${CELL}`);
 
@@ -1000,7 +1000,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await expect(page.getByText('Figures for the Men’s Network.')).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
-    await expect(page.getByText('Report coverage')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     await expect.poll(() => scopes).toContain('dcc scope=NETWORK&network=MENS');
     await expect.poll(() => scopes).toContain('dcc/by-leader scope=NETWORK&network=MENS');
 
@@ -1139,7 +1139,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       ['SOL 1', TRAINING_COUNTS.sol_1],
       ['SOL 2', TRAINING_COUNTS.sol_2],
       ['SOL 3', TRAINING_COUNTS.sol_3],
-      ['None yet', TRAINING_COUNTS.not_started],
+      ['No graduation yet', TRAINING_COUNTS.not_started],
     ]);
     // Section 28: the consequence of an optional date is stated on the screen.
     await expect(

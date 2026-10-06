@@ -221,7 +221,7 @@ export function DccReport() {
                   <option value="WOMENS">{networkLabel('WOMENS')}</option>
                 </>
               ) : null}
-              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
+              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'My 12'}>
                 {options.map((row) => (
                   <option key={row.leader!.id} value={row.leader!.id}>
                     {row.leader!.full_name}

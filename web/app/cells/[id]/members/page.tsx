@@ -184,7 +184,7 @@ function CellMembers() {
             ? 'Nobody is in this Cell.'
             : closedOn !== null
               ? 'Closing this Cell ended every membership in it. The months it was open keep counting the people who were in it.'
-              : 'This Cell has no members yet. A meeting can still be recorded as met with nobody to mark, which counts towards its coverage.'}
+              : 'This Cell has no members yet. A meeting can still be recorded as met with nobody to mark, which still counts as a meeting recorded.'}
         </p>
       ) : members.data ? (
         <>

@@ -202,7 +202,7 @@ export function CellReport() {
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <option value="">{wholeChurch ? 'Whole Church' : 'People you oversee'}</option>
-              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
+              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'My 12'}>
                 {options.map((row) => (
                   <option key={row.leader!.id} value={row.leader!.id}>
                     {row.leader!.full_name}

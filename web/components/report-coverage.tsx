@@ -106,7 +106,7 @@ export function CoverageByCell({
       </h2>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Each Cell you oversee, ten at a time, in the order the Cells list gives them. The
-        rows are not added up here: the line at the top is the report&rsquo;s own figure. A
+        Cells are not added up here: the line at the top is the report&rsquo;s own figure. A
         Cell is behind when a meeting whose day has come has no record. Showing only Cells
         behind also lists, after them, a closed Cell still behind while the month is open.
       </p>

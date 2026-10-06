@@ -43,7 +43,7 @@ function Training() {
             { label: 'SOL 1', count: counts.data?.sol_1 },
             { label: 'SOL 2', count: counts.data?.sol_2 },
             { label: 'SOL 3', count: counts.data?.sol_3 },
-            { label: 'None yet', count: counts.data?.not_started },
+            { label: 'No graduation yet', count: counts.data?.not_started },
           ]}
         />
         <p className="text-muted mt-4 text-sm">

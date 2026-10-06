@@ -1313,7 +1313,7 @@ export async function mockCellTwelve(
           ],
           own: null,
           overlap: 0,
-          // Somebody in the total and under neither root: the "In no row" line (7 + 9 + 1).
+          // Somebody in the total and under neither root: the "Under none of these leaders" line (7 + 9 + 1).
           elsewhere: 1,
           total: stages(5, 3, 1, 1, 7),
         }),
@@ -1486,7 +1486,7 @@ export async function mockDccTwelve(
           ],
           own: null,
           overlap: 0,
-          // Somebody in the total and under neither root: the "In no row" line (9 + 7 + 1).
+          // Somebody in the total and under neither root: the "Under none of these leaders" line (9 + 7 + 1).
           elsewhere: 1,
           total: stages(5, 3, 1, 1, 7),
           buckets: buckets([9, 5, 3]),

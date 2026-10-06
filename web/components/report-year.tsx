@@ -5,7 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { getCellMonthlyReport, getDccMonthlyReport, type ReportScope } from '@/lib/reports';
-import { hasNotBegun, monthLabel } from '@/lib/reporting-month';
+import { hasNotBegun, monthLabel, openUntilLabel } from '@/lib/reporting-month';
 import { describeFailure } from '@/lib/messages';
 
 /** The months of `year` that have begun, January first, as `YYYY-MM-01`. */
@@ -143,7 +143,7 @@ export function YearTable({
                     <td className="px-3 py-3 text-right tabular-nums">{row.people}</td>
                     <td className="px-3 py-3">
                       {row.open
-                        ? 'Open for submission'
+                        ? openUntilLabel(month)
                         : row.owed > row.filed
                           ? `Closed · ${row.owed - row.filed} not filed`
                           : 'Closed'}
