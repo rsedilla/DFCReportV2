@@ -457,8 +457,8 @@ function NewPersonForm() {
           label="Cell"
           description={
             network === null
-              ? 'Optional. A Cell in your scope. They can also be added to a Cell later, from their record.'
-              : `Optional. A ${networkLabel(network)} Cell in your scope, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
+              ? 'Optional. A Cell you oversee. They can also be added to a Cell later, from their record.'
+              : `Optional. A ${networkLabel(network)} Cell you oversee, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
           }
           leaderId={chosenLeaderId}
           leaderName={chosenLeaderSearchName}

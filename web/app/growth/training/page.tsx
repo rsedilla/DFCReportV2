@@ -238,8 +238,8 @@ function TrainingTab() {
         <h1 className="text-2xl font-semibold tracking-tight">Growth</h1>
         <p className="text-muted text-sm">
           {counts.data
-            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} in your care, as of today.`
-            : 'The people in your care, as of today.'}{' '}
+            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} you oversee, as of today.`
+            : 'The people you oversee, as of today.'}{' '}
           A count of graduations in a period counts only the dated ones.
         </p>
       </div>
@@ -305,7 +305,7 @@ function TrainingTab() {
           ) : (
             <>
               <Table
-                caption="Training graduations for the people in your care"
+                caption="Training graduations for the people you oversee"
                 className="hidden lg:block"
               >
                 <thead>

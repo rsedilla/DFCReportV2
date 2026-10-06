@@ -147,7 +147,7 @@ export function CellPicker({
         <p className="text-muted mt-3 text-sm">Searching…</p>
       ) : pages.isError && !pages.isFetchNextPageError ? null : found.length === 0 &&
         !pages.hasNextPage ? (
-        <p className="text-muted mt-3 text-sm">No Cell in your scope matches “{submitted}”.</p>
+        <p className="text-muted mt-3 text-sm">No Cell you oversee matches “{submitted}”.</p>
       ) : (
         <>
           <CellList cells={found} onSelect={onSelect} listRef={list} />

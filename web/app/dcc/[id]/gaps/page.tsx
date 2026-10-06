@@ -80,7 +80,7 @@ function Gaps() {
         )}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        The leaders in your scope who owe a record for this Sunday and have not filed one.
+        The leaders you oversee who owe a record for this Sunday and have not filed one.
         Listed by name; nothing here counts or ranks how far behind anybody is.
       </p>
 
@@ -100,7 +100,7 @@ function Gaps() {
 
           {gaps.data.data.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-              Everyone in your scope who owed a record for this Sunday has filed one.
+              Everyone you oversee who owed a record for this Sunday has filed one.
             </p>
           ) : (
             <table className="mt-6 w-full border-collapse text-sm">

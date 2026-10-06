@@ -57,7 +57,7 @@ test.describe('which search each surface asks for', () => {
 
     await page.goto('/people');
 
-    const table = page.getByRole('table', { name: 'People within your scope' });
+    const table = page.getByRole('table', { name: 'People you oversee' });
     await expect(table.getByRole('row', { name: /Marilou Reyes Santos/ })).toContainText(
       'Teofilo Ramos',
     );

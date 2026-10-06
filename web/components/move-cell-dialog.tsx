@@ -121,7 +121,7 @@ export function MoveCellDialog({
             label="Cell"
             description={
               network === null
-                ? 'The Cells in your scope.'
+                ? 'The Cells you oversee.'
                 : `Only ${networkLabel(network)} Cells are listed: a member and their Cell’s leader share one Network.`
             }
             leaderId={leader?.id ?? null}

@@ -968,7 +968,7 @@ test.describe('the Record queue', () => {
 
     await expect(page.getByRole('heading', { name: 'As things stand today' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Cells you lead/i })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Cells in your scope/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Cells you oversee/i })).toHaveCount(0);
     expect(ledByMe).toEqual([]);
   });
 
@@ -995,7 +995,7 @@ test.describe('the Record queue', () => {
     // No count box: the button's whole name is its label.
     await recordLists(page).getByRole('button', { name: 'Cells behind', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Cells behind' })).toBeVisible();
-    await expect(page.getByText('No Cell in your scope is behind this month.')).toHaveCount(0);
+    await expect(page.getByText('No Cell you oversee is behind this month.')).toHaveCount(0);
   });
 
   // Decision 0267: the list names a Cell a meeting that came is missing from, by the
@@ -1130,7 +1130,7 @@ test.describe('the Record queue', () => {
     await chooseList(page, /^Cells behind/);
     const attention = page.getByRole('region', { name: 'Cells behind' });
     await expect(
-      attention.getByRole('cell', { name: 'No Cell in your scope is behind this month.' }),
+      attention.getByRole('cell', { name: 'No Cell you oversee is behind this month.' }),
     ).toBeVisible();
     await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveCount(0);
     await expect(attention.getByText(/None of the first 50/)).toHaveCount(0);
@@ -1148,10 +1148,10 @@ test.describe('the Record queue', () => {
     await chooseList(page, /^Cells behind/);
     await expect(
       attention.getByRole('cell', {
-        name: 'None of the first 50 Cells in your scope is behind this month.',
+        name: 'None of the first 50 Cells you oversee is behind this month.',
       }),
     ).toBeVisible();
-    await expect(attention.getByText('No Cell in your scope is behind this month.')).toHaveCount(0);
+    await expect(attention.getByText('No Cell you oversee is behind this month.')).toHaveCount(0);
     await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveAttribute(
       'href',
       // Decision 0292: the rows behind the Cell figure are under Filed reports.
@@ -1976,19 +1976,19 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Was under']);
     // The header row and the one row saying so.
     await expect(unplaced.getByRole('row')).toHaveCount(2);
-    await expect(unplaced.getByRole('cell')).toHaveText(['Nobody in your scope is waiting for a new leader.']);
+    await expect(unplaced.getByRole('cell')).toHaveText(['Nobody you oversee is waiting for a new leader.']);
     await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
 
     await chooseList(page, /^Not in a Cell/);
     const withoutACell = page.getByRole('table', { name: 'Not in a Cell' });
     await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name']);
     await expect(withoutACell.getByRole('row')).toHaveCount(2);
-    await expect(withoutACell.getByRole('cell')).toHaveText(['Everybody in your scope is in a Cell.']);
+    await expect(withoutACell.getByRole('cell')).toHaveText(['Everybody you oversee is in a Cell.']);
 
     // Below lg the same sentence stands in for the cards.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(withoutACell).toBeHidden();
-    await expect(page.getByRole('listitem').filter({ hasText: 'Everybody in your scope is in a Cell.' })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'Everybody you oversee is in a Cell.' })).toBeVisible();
   });
 
   /**
@@ -2373,7 +2373,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await mockRecord(page, false);
     await page.goto('/dashboard?list=behind');
 
-    await expect(table(page)).toContainText('No Cell in your scope is behind this month.');
+    await expect(table(page)).toContainText('No Cell you oversee is behind this month.');
     await expect(page.getByText(/while it is open/)).toHaveCount(0);
   });
 
@@ -2386,7 +2386,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await page.goto('/dashboard?list=behind');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
+    await expect(page.getByText(/No Cell you oversee is behind/)).toHaveCount(0);
   });
 
   test('does not ask for last month after the 7th', async ({ page }) => {
@@ -2399,7 +2399,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await mockRecord(page, true);
     await page.goto('/dashboard?list=behind');
 
-    await expect(table(page)).toContainText('No Cell in your scope is behind this month.');
+    await expect(table(page)).toContainText('No Cell you oversee is behind this month.');
     expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
   });
 });

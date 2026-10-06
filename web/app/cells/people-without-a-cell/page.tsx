@@ -69,7 +69,7 @@ function WithoutACell() {
 
       <h1 className="text-2xl font-semibold tracking-tight">People without a Cell</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        People in your scope who are not in a Cell. Listed by name; nothing here counts or
+        People you oversee who are not in a Cell. Listed by name; nothing here counts or
         ranks how long anybody has been waiting. Somebody who leads a Cell is not listed.
       </p>
 
@@ -95,8 +95,8 @@ function WithoutACell() {
         <>
           {people.data.data.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-              Nobody in your scope is without a Cell. Somebody whose own leader holds no
-              assignment can fall outside your branch, so a reader with a wider scope may
+              Nobody you oversee is without a Cell. Somebody whose own leader holds no
+              assignment can fall outside your branch, so someone who oversees more may
               see them.
             </p>
           ) : (

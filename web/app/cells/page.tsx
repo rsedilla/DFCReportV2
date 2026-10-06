@@ -268,18 +268,18 @@ function CellsIndex() {
         ) : cells.data && cells.data.data.length === 0 ? (
           <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
             {submitted !== ''
-              ? `No Cell in your scope matches “${submitted}”.`
+              ? `No Cell you oversee matches “${submitted}”.`
               : closed
                 ? mineOnly
                   ? 'No Cell you led has closed.'
-                  : 'No Cell in your scope has closed.'
+                  : 'No Cell you oversee has closed.'
                 : mineOnly
                 ? 'You do not lead a Cell this month.'
-                : 'There are no Cells in your scope this month.'}
+                : 'There are no Cells you oversee this month.'}
           </p>
         ) : cells.data && closed ? (
           <>
-            <Table caption="Closed Cells in your scope" className="mt-6 hidden lg:block">
+            <Table caption="Closed Cells you oversee" className="mt-6 hidden lg:block">
               <thead>
                 <tr>
                   <HeaderCell>Cell</HeaderCell>
@@ -355,7 +355,7 @@ function CellsIndex() {
           </>
         ) : cells.data ? (
           <>
-            <Table caption="Cells in your scope" className="mt-6 hidden lg:block">
+            <Table caption="Cells you oversee" className="mt-6 hidden lg:block">
               <thead>
                 <tr>
                   <HeaderCell>Cell</HeaderCell>
@@ -465,11 +465,11 @@ function CellTotals({
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const scopeLabel = holdsWholeChurch(me.data, 'cell.view_subtree')
     ? 'Whole Church'
-    : 'The Cells you oversee';
+    : 'People you oversee';
 
   const cards = [
     { mine: true, label: 'Cells you lead', value: counts.data?.led_by_me, scope: 'Your own Cells' },
-    { mine: false, label: 'Cells in your scope', value: counts.data?.in_scope, scope: scopeLabel },
+    { mine: false, label: 'Cells you oversee', value: counts.data?.in_scope, scope: scopeLabel },
   ];
 
   // A total that failed to load says why, rather than showing a bare dash.

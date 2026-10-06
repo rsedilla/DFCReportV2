@@ -128,7 +128,7 @@ function PeopleList() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-        <p className="text-muted text-sm">Everyone in your care, you included.</p>
+        <p className="text-muted text-sm">Everyone you oversee, you included.</p>
       </div>
 
       <PeopleTabs current="/people">
@@ -169,7 +169,7 @@ function PeopleList() {
             <p className="text-muted text-sm">Loading&hellip;</p>
           ) : results.isError ? null : rows.length === 0 ? (
             submitted === '' ? (
-              <p className="text-sm">Nobody is within your scope.</p>
+              <p className="text-sm">Nobody you oversee yet.</p>
             ) : (
               <div>
                 <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
@@ -181,7 +181,7 @@ function PeopleList() {
             )
           ) : (
             <>
-              <Table caption="People within your scope" className="hidden sm:block">
+              <Table caption="People you oversee" className="hidden sm:block">
                 <thead>
                   <tr>
                     <HeaderCell>Name</HeaderCell>

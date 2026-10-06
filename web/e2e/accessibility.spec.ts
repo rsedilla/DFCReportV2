@@ -489,7 +489,7 @@ const SCANS = [
       await mockCellsEmpty(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('There are no Cells in your scope this month.')).toBeVisible();
+      await expect(page.getByText('There are no Cells you oversee this month.')).toBeVisible();
     },
   },
   {
