@@ -166,7 +166,7 @@ export function DccReport() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ReportsHeading line="Who came to DCC, and where they are in their journey." />
+        <ReportsHeading line="Who came to DCC (Doulos Cell Celebration), and where they are in their journey." />
         <HowTheseAreCounted report="dcc" />
       </div>
       <ReportsTabs current="dcc" month={guardMonth}>
