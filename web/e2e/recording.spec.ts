@@ -1885,6 +1885,10 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(
       unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
     ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
+    // Why they are listed, in plain words (UI label audit, Medium 3).
+    await expect(
+      page.getByText('People you oversee whose pastoral leader is not in the pastoral tree.'),
+    ).toBeVisible();
     // The action that resolves an entry is the reassignment (section 19), on the person page.
     await expect(unplaced.getByRole('link', { name: 'Amihan Bacani' })).toHaveAttribute(
       'href',
