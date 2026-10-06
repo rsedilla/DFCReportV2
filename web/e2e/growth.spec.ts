@@ -86,6 +86,8 @@ test.describe('the SUYNL tab', () => {
     const traffic = await openSuynl(page);
 
     await expect(page.getByText('4 people you oversee, as of today.')).toBeVisible();
+    // Each abbreviation is spelled out once, under the heading (UI label audit, Medium 7).
+    await expect(page.getByText('SUYNL is Start Up Your New Life, ten lessons taken one to one.')).toBeVisible();
     const notStarted = page.getByRole('button', { name: /^Not started/ });
     const inProgress = page.getByRole('button', { name: /^In progress/ });
     const graduated = page.getByRole('button', { name: /^Graduated/ });
@@ -283,6 +285,7 @@ test.describe('the Training tab', () => {
     await openTraining(page);
 
     await expect(page.getByText('4 people you oversee, as of today.')).toBeVisible();
+    await expect(page.getByText('LC Party is the Life Class Party, and SOL is the School of Leaders.')).toBeVisible();
     // Section 28 requires the screen to say this.
     await expect(
       page.getByText('A count of graduations in a period counts only the dated ones.'),

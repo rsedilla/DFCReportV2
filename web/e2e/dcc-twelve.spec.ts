@@ -223,7 +223,7 @@ test.describe('My 12 on DCC', () => {
     await page.goto('/reports/dcc');
 
     await expect(
-      page.getByText('Who came to DCC, and where they are in their journey.'),
+      page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'My 12 · their journey' }),
@@ -454,6 +454,9 @@ test.describe('How often people came, and Year', () => {
 
     const months = page.getByRole('heading', { name: 'Month by month, January to June 2026' });
     await expect(months).toBeVisible();
+    // DCC for the thing, Sunday for the day (UI label audit, Medium 6).
+    await expect(page.getByText(/Owed and Filed count DCC records;/)).toBeVisible();
+    await expect(page.getByRole('table', { name: /^DCC, / })).toBeVisible();
     // A whole-church reader's table is headed by the church rather than "My 12".
     const twelve = page.getByRole('heading', { name: / · their journey$/ });
     const [top, bottom] = await Promise.all([twelve.boundingBox(), months.boundingBox()]);

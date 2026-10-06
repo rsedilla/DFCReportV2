@@ -608,7 +608,7 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
     await page.goto('/reports/dcc?month=2026-05-01');
 
     await expect(
-      page.getByText('Who came to DCC, and where they are in their journey.'),
+      page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
     // Coverage is the first figure, and decision 0294 makes it one line above My 12.
     const coverage = page.getByText('12 of 18 records filed in the month');
