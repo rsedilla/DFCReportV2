@@ -75,9 +75,9 @@ test.describe('the Encounter seasons page', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Season',
       'Men’s LC Party',
-      'Men’s Encounter',
+      'Men’s Encounter Weekend',
       'Women’s LC Party',
-      'Women’s Encounter',
+      'Women’s Encounter Weekend',
       '',
     ]);
     const rows = table.getByRole('row');
@@ -238,7 +238,7 @@ test.describe('the Encounter seasons page', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Season',
       'Men’s LC Party',
-      'Men’s Encounter',
+      'Men’s Encounter Weekend',
     ]);
     await expect(table.getByRole('row').nth(2).getByRole('cell')).toHaveText([
       'August 2026',
@@ -258,7 +258,7 @@ test.describe('the Encounter seasons page', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Season',
       'Women’s LC Party',
-      'Women’s Encounter',
+      'Women’s Encounter Weekend',
     ]);
     await expect(table.getByRole('row').nth(2).getByRole('cell')).toHaveText([
       'August 2026',
@@ -272,7 +272,7 @@ test.describe('the Encounter seasons page', () => {
     await page.goto('/growth/training/encounters');
 
     await expect(
-      list(page).getByText('You are in no Network, so no Encounter weekend is shown.'),
+      list(page).getByText('You are in no Network, so no Encounter God Weekend is shown.'),
     ).toBeVisible();
     await expect(page.getByRole('table')).toHaveCount(0);
   });
@@ -384,7 +384,7 @@ test.describe('the SUYNL report’s Next Encounter', () => {
     const next = card(page);
     await expect(cardHeading(page)).toHaveText('Next Encounter');
     await expect(
-      next.getByText('You are in no Network, so no Encounter weekend is shown.'),
+      next.getByText('You are in no Network, so no Encounter God Weekend is shown.'),
     ).toBeVisible();
     await expect(next.getByRole('listitem')).toHaveCount(0);
   });

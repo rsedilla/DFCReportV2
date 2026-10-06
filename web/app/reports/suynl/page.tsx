@@ -119,7 +119,7 @@ function Suynl() {
               </div>
             ))
           ) : shows === 'NEITHER' ? (
-            <p className="mt-2 text-sm">You are in no Network, so no Encounter weekend is shown.</p>
+            <p className="mt-2 text-sm">You are in no Network, so no Encounter God Weekend is shown.</p>
           ) : (
             <p className="mt-2 text-sm">No Encounter season has been set yet.</p>
           )}
@@ -196,7 +196,7 @@ function Steps({ party, encounter, today }: { party: string; encounter: string; 
 }
 
 const COLUMNS = [
-  ['completed', 'Completed (10 of 10)'],
+  ['completed', 'Graduated (10 of 10)'],
   ['seven_to_nine', '7–9 lessons'],
   ['one_to_six', '1–6 lessons'],
 ] as const;
@@ -342,7 +342,7 @@ function People({ members }: { members: ReadinessPerson[] }) {
     return <span className="text-muted">Nobody in this branch is counted.</span>;
   }
   const groups = [
-    ['Completed', members.filter((person) => person.lessons >= 10)],
+    ['Graduated', members.filter((person) => person.lessons >= 10)],
     ['7–9 lessons', members.filter((person) => person.lessons >= 7 && person.lessons < 10)],
     ['1–6 lessons', members.filter((person) => person.lessons < 7)],
   ] as const;

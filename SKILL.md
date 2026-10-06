@@ -5451,7 +5451,7 @@ SUYNL, then the LC Party, then Life Class, whose fifth lesson is the Encounter, 
 - **SUYNL** (Start Up Your New Life) — ten lessons, taken one to one. Recorded lesson by lesson.
 - **The LC Party** (Life Class Party) — held before Life Class lesson 1, and not itself a lesson. Some join here before finishing SUYNL, where their leader judges them ready.
 - **Life Class** — nine lessons: new life, healing, freedom, a personal relationship with Christ, for a believer established in faith and ready for discipleship.
-- **The Encounter** — lesson 5 of Life Class, a three-day weekend held in the first week of April, August and December. Recorded as its own graduation, and first of the five because it is attended before Life Class is completed. The months are the church's calendar, and nothing refuses a graduation dated otherwise.
+- **The Encounter** — lesson 5 of Life Class, a three-day weekend the church calls the **Encounter God Weekend** (ruling of 2026-10-06, decision 0319), held in the first week of April, August and December. Recorded as its own graduation, and first of the five because it is attended before Life Class is completed. The months are the church's calendar, and nothing refuses a graduation dated otherwise.
 - **SOL 1** (School of Leaders 1) — biblical foundations and family: a disciple rooted in doctrine and godly living.
 - **SOL 2** (School of Leaders 2) — vision, intercession, evangelism and ministry: a disciple reaching, praying for and caring for people.
 - **SOL 3** (School of Leaders 3) — leadership, cell ministry and multiplication: a trained leader ready to lead and develop other disciples.
@@ -5476,7 +5476,7 @@ The cost is that a lesson done long before it was recorded carries the later day
 
 ### Encounter seasons
 
-**The Encounter's dates are recorded, not derived** (ruling of 2026-09-26, decision 0296). An administrator keeps a list of seasons, three a year. Each has a **Men's Encounter**, for men only, and a **Women's Encounter**, for women only, usually a week apart, each recorded as the day its weekend starts; and an **LC Party** before each, one for men and one for women.
+**The Encounter's dates are recorded, not derived** (ruling of 2026-09-26, decision 0296). An administrator keeps a list of seasons, three a year. Each has a **Men's Encounter Weekend**, for men only, and a **Women's Encounter Weekend**, for women only (decision 0319), usually a week apart, each recorded as the day its weekend starts; and an **LC Party** before each, one for men and one for women.
 
 **Each LC Party is at least five weeks before its own weekend** — the party, then Life Class lessons 1 to 4 a week apart, then the Encounter as lesson 5. One left empty is exactly five weeks before, and nothing limits how early a party may be. The rule is a constraint on `encounter_seasons` as well as a refusal naming the field.
 
@@ -5484,7 +5484,7 @@ The cost is that a lesson done long before it was recorded carries the later day
 
 ### Getting ready for the Encounter
 
-**The SUYNL tab under `Reports` counts who is getting ready for the next LC Party** (ruling of 2026-09-26, decision 0297), read under `suynl.view_subtree` as of now. **A person is counted** when they are current, hold at least one current SUYNL lesson, and hold no current Encounter or Life Class graduation — somebody already there is past the LC Party, so they are left out of every column. The columns are Completed (ten of ten), 7–9 lessons and 1–6 lessons, and People is the three added up.
+**The SUYNL tab under `Reports` counts who is getting ready for the next LC Party** (ruling of 2026-09-26, decision 0297), read under `suynl.view_subtree` as of now. **A person is counted** when they are current, hold at least one current SUYNL lesson, and hold no current Encounter or Life Class graduation — somebody already there is past the LC Party, so they are left out of every column. The columns are Graduated (ten of ten) (decision 0319), 7–9 lessons and 1–6 lessons, and People is the three added up.
 
 **The rows are the reader's direct disciples**, or those of a leader they opened, each counting their branch now, themselves included, then the reader or that leader alone, then the total. A Whole Church reader's rows are the two roots' branches, named by the pastor with their Network beside (decision 0294), with a line for anybody counted in neither. The rows, that line and the total add up. Rows are in surname order, or Network order, never by a figure.
 

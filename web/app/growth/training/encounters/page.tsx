@@ -180,7 +180,7 @@ function EncounterSeasons() {
           {seasons.isPending ? (
             <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
           ) : shows === 'NEITHER' ? (
-            <p className="mt-3 text-sm">You are in no Network, so no Encounter weekend is shown.</p>
+            <p className="mt-3 text-sm">You are in no Network, so no Encounter God Weekend is shown.</p>
           ) : seasons.data && seasons.data.data.length === 0 ? (
             <p className="mt-3 text-sm">No Encounter season has been set yet.</p>
           ) : seasons.data ? (
@@ -189,9 +189,9 @@ function EncounterSeasons() {
                 <tr>
                   <HeaderCell>Season</HeaderCell>
                   {showMen ? <HeaderCell>Men’s LC Party</HeaderCell> : null}
-                  {showMen ? <HeaderCell>Men’s Encounter</HeaderCell> : null}
+                  {showMen ? <HeaderCell>Men’s Encounter Weekend</HeaderCell> : null}
                   {showWomen ? <HeaderCell>Women’s LC Party</HeaderCell> : null}
-                  {showWomen ? <HeaderCell>Women’s Encounter</HeaderCell> : null}
+                  {showWomen ? <HeaderCell>Women’s Encounter Weekend</HeaderCell> : null}
                   {mayChange ? <HeaderCell>{''}</HeaderCell> : null}
                 </tr>
               </thead>

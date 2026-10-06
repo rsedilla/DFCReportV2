@@ -1360,7 +1360,7 @@ test.describe('the year view (decision 0257)', () => {
  * them.
  */
 test.describe('the SUYNL readiness table (decision 0297)', () => {
-  const COLUMNS = ['Leader', 'Completed (10 of 10)', '7–9 lessons', '1–6 lessons', 'People'];
+  const COLUMNS = ['Leader', 'Graduated (10 of 10)', '7–9 lessons', '1–6 lessons', 'People'];
 
   const table = (page: Page, title: string) =>
     page.getByRole('table', { name: `${title} · SUYNL readiness` });
@@ -1444,7 +1444,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
 
     const opened = table(page, 'My 12').locator('tbody > tr').nth(1);
     await expect(opened.locator('p')).toHaveText([
-      'Completed: Carmelita Aquino (10)',
+      'Graduated: Carmelita Aquino (10)',
       '7–9 lessons: Arturo Buenaventura (8)',
       '1–6 lessons: Diosdado Cruz (3) · Epifania Reyes (1)',
     ]);
@@ -1452,7 +1452,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     // Pressed again, it closes.
     await arturo.click();
     await expect(arturo).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toHaveCount(0);
+    await expect(page.getByText('Graduated: Carmelita Aquino (10)')).toHaveCount(0);
 
     // A group with nobody in it is left out rather than shown empty.
     await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
@@ -1474,10 +1474,10 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness?names=false']);
 
     await arturo.click();
-    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toBeVisible();
+    await expect(page.getByText('Graduated: Carmelita Aquino (10)')).toBeVisible();
     await arturo.click();
     await arturo.click();
-    await expect(page.getByText('Completed: Carmelita Aquino (10)')).toBeVisible();
+    await expect(page.getByText('Graduated: Carmelita Aquino (10)')).toBeVisible();
 
     expect(traffic.asked).toEqual([
       '/api/v1/suynl/readiness?names=false',
