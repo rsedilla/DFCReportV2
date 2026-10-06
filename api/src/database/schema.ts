@@ -778,6 +778,29 @@ export interface EncounterSeasonsTable {
   updated_at: Date | null;
 }
 
+/**
+ * The version of a stored month (section 20, decision 0320). Moved by migration 0022's
+ * triggers, never by application code; a row exists only for a month asked to be stored.
+ */
+export interface ReportMonthVersionsTable {
+  /** The first day of an Asia/Manila month. */
+  month: DateOnly;
+  /** `bigint`, which `pg` returns as a string. */
+  version: ColumnType<string, never, never>;
+}
+
+/** A stored closed-month report (section 20, decision 0320). */
+export interface ReportSnapshotsTable {
+  id: Generated<string>;
+  report_kind: 'DCC_MONTHLY' | 'CELL_MONTHLY';
+  scope_type: 'CELL' | 'LEADER' | 'NETWORK' | 'WHOLE_CHURCH';
+  scope_id: string | null;
+  period: DateOnly;
+  source_version: ColumnType<string, string, string>;
+  payload: ColumnType<unknown, string, string>;
+  computed_at: ServerTimestamp;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -809,4 +832,6 @@ export interface Database {
   training_graduations: TrainingGraduationsTable;
   conquest_confirmations: ConquestConfirmationsTable;
   encounter_seasons: EncounterSeasonsTable;
+  report_month_versions: ReportMonthVersionsTable;
+  report_snapshots: ReportSnapshotsTable;
 }

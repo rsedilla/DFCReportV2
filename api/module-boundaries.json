@@ -56,6 +56,8 @@
     "suynl_lessons": "suynl",
     "training_graduations": "training",
     "encounter_seasons": "training",
+    "report_month_versions": "reporting",
+    "report_snapshots": "reporting",
     "conquest_confirmations": "conquest"
   },
   "infrastructure": ["database"],

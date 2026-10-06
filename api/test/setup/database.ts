@@ -44,6 +44,8 @@ export function createTestDb(): Kysely<Database> {
 export async function truncateAll(db: Kysely<Database>): Promise<void> {
   await sql`
     TRUNCATE TABLE
+      report_snapshots,
+      report_month_versions,
       idempotency_keys,
       audit_log,
       cell_meeting_changes,
