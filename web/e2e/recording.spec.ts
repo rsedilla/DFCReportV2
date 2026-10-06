@@ -1358,6 +1358,25 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     expect(foot!.y).toBeGreaterThan(queue!.y + queue!.height);
   });
 
+  test('the month’s figures keep the whole scope whichever list Whose shows (decision 0316)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    const scopes: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/v1/reports/cells/monthly?')) scopes.push(new URL(request.url()).search);
+    });
+
+    for (const address of ['/dashboard', '/dashboard?whose=branch']) {
+      await page.goto(address);
+      const cards = page.getByRole('complementary', { name: 'June so far' });
+      await expect(cards.getByText(/· People you oversee, whichever list is shown above$/)).toBeVisible();
+      await expect(cards.getByRole('link', { name: /Cell meetings recorded\s*6 of 8/ })).toBeVisible();
+    }
+    expect(new Set(scopes.filter((search) => search.includes('2026-06-01'))).size).toBe(1);
+  });
+
   // Checklist row perf-record-load: the lists are the work, so the four reports wait for
   // them, and the Sundays are read without the coverage figure nothing here shows.
   test('asks for the month figures only once every list has answered', async ({ page }) => {
