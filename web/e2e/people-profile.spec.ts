@@ -291,7 +291,7 @@ test.describe('editing a person', () => {
 
     await expect(page.getByLabel('First name')).toHaveValue('Marilou');
     await expect(page.getByLabel('Last name')).toHaveValue('Santos');
-    await expect(page.getByText('Only an Admin can correct this')).toBeVisible();
+    await expect(page.getByText('Only an administrator can correct this')).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Female' })).toHaveCount(0);
     await expect(
       page.getByText('A move is saved as soon as you confirm it. It is not part of Save changes.'),
