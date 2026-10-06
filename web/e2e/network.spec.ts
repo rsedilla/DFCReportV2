@@ -59,7 +59,7 @@ test.describe('the Network screen’s starting point', () => {
     await expect(
       page.getByText('Figures for September 2026, a month still open.', { exact: false }).last(),
     ).toBeVisible();
-    await expect(page.getByText('Nobody reports to you today.')).toHaveCount(0);
+    await expect(page.getByText('You have no direct disciples today.')).toHaveCount(0);
     // The name opens the branch; one control per job (owner's choice of 2026-10-05).
     await expect(page.getByRole('link', { name: 'Andres Villareal' })).toHaveAttribute(
       'href',
@@ -75,7 +75,7 @@ test.describe('the Network screen’s starting point', () => {
     await signedInReader(page);
     await page.goto('/network');
 
-    await expect(page.getByRole('heading', { name: 'Reports to you' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your direct disciples' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Network roots' })).toHaveCount(0);
   });
 });
@@ -116,7 +116,7 @@ test.describe('the Network screen’s figures', () => {
     await signedInReader(page);
     await page.goto('/network');
 
-    const rows = page.getByRole('table', { name: /^People reporting to/ });
+    const rows = page.getByRole('table', { name: /^Direct disciples of/ });
     await expect(rows.getByRole('columnheader')).toHaveText([
       'Name',
       'Beneath',
@@ -141,7 +141,7 @@ test.describe('the Network screen’s figures', () => {
 
     await page.getByRole('checkbox', { name: 'Owes records' }).check();
     await expect(page).toHaveURL(/owes=1/);
-    const rows = page.getByRole('table', { name: /^People reporting to/ });
+    const rows = page.getByRole('table', { name: /^Direct disciples of/ });
     await expect(rows.getByRole('link').first()).toHaveAttribute(
       'href',
       /owes=1/,

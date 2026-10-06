@@ -90,7 +90,7 @@ export function MoveLeaderDialog({
       <p className="text-sm">
         {currentLeaderName ? (
           <>
-            Pastored now by <strong>{currentLeaderName}</strong>.
+            Pastored by <strong>{currentLeaderName}</strong> now.
           </>
         ) : (
           'No pastoral leader is recorded now.'
