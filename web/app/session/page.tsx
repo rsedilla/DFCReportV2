@@ -7,8 +7,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { HeaderCell, rowClasses, Table } from '@/components/ui/table';
+import { describeGrants } from '@/lib/capability-labels';
 import { getMe, roleLabel } from '@/lib/me';
+import { getPerson } from '@/lib/people';
 import { describeFailure } from '@/lib/messages';
 import {
   forgetSession,
@@ -37,7 +38,7 @@ import {
  * What this screen does instead is show what the server says about this session.
  * That is worth having on its own: the first time a grant does not behave as an
  * administrator expected, this is the screen that says whether the grant is
- * there, at what scope, and where it came from.
+ * there, and how far it reaches.
  *
  * **It reports; it does not decide.** Nothing here is consulted before making a
  * request, and no control is hidden on the strength of it.
@@ -64,6 +65,14 @@ function SessionDetail() {
   const session = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: ({ signal }) => getMe(signal),
+  });
+
+  // The name and Member ID, from the person's own record: `/auth/me` carries the first
+  // name only. Every role may read its own record; if this fails the first name stands.
+  const person = useQuery({
+    queryKey: ['person', session.data?.person_id],
+    queryFn: ({ signal }) => getPerson(session.data!.person_id, signal),
+    enabled: session.data !== undefined,
   });
 
   const [endingEverywhere, setEndingEverywhere] = useState(false);
@@ -96,8 +105,7 @@ function SessionDetail() {
       ) : null}
 
       <p className="text-muted mt-2 text-sm leading-relaxed">
-        What the API reports about the account you are signed in as. Nothing on this screen
-        decides what you may do — that is answered by the server on every request.
+        Who you are signed in as, and what this account lets you do.
       </p>
 
       {session.isPending ? (
@@ -137,14 +145,15 @@ function SessionDetail() {
       ) : (
         <>
           <dl className="border-line mt-8 grid gap-x-6 gap-y-3 border-t pt-6 sm:grid-cols-[10rem_1fr]">
+            <dt className="text-sm font-medium">Signed in as</dt>
+            <dd className="text-muted text-sm">
+              {person.data
+                ? `${person.data.full_name} · ${person.data.member_id}`
+                : (session.data.first_name ?? '—')}
+            </dd>
+
             <dt className="text-sm font-medium">Email</dt>
             <dd className="text-muted text-sm break-words">{session.data.email ?? '—'}</dd>
-
-            <dt className="text-sm font-medium">Account</dt>
-            <dd className="text-muted font-mono text-sm break-all">{session.data.account_id}</dd>
-
-            <dt className="text-sm font-medium">Person</dt>
-            <dd className="text-muted font-mono text-sm break-all">{session.data.person_id}</dd>
 
             {/*
               The role the server honours, never one worked out here (decision 0263).
@@ -157,54 +166,33 @@ function SessionDetail() {
             </dt>
             <dd className="text-muted text-sm">
               {(session.data.roles ?? []).length === 0
-                ? 'None the server honours'
+                ? 'None'
                 : (session.data.roles ?? []).map(roleLabel).join(', ')}
             </dd>
           </dl>
 
-          <h2 className="mt-10 text-base font-medium">Authority</h2>
-          <p className="text-muted mt-1 text-sm leading-relaxed">
-            Capabilities the API advertises for this account, with the scope each is held at. A
-            grant that covers nothing is not listed, because an action refused every time it is
-            attempted should not be offered.
-          </p>
-
+          {/*
+            The account's grants in plain words, grouped by how far each reaches (audit of
+            2026-10-06). The server checks every action; nothing here grants anything.
+          */}
+          <h2 className="mt-10 text-base font-medium">What you can do</h2>
           {session.data.capabilities.length === 0 ? (
-            <p className="text-muted mt-4 text-sm">
-              This account is advertised no capabilities.
-            </p>
+            <p className="text-muted mt-2 text-sm">This account has no permissions yet.</p>
           ) : (
-            <Table
-              className="mt-4"
-              // Shown at every width and wide enough to scroll sideways, so its frame keeps
-              // scrolling; UI-7 restyles this page.
-              pinHeader={false}
-              caption="Capabilities held by this account, with scope, source, and whether the grant is read-only."
-            >
-                <thead>
-                  <tr>
-                    <HeaderCell>Capability</HeaderCell>
-                    <HeaderCell>Scope</HeaderCell>
-                    <HeaderCell>Source</HeaderCell>
-                  </tr>
-                </thead>
-                <tbody>
-                  {session.data.capabilities.map((grant) => (
-                    <tr
-                      key={`${grant.capability}:${grant.scope_type}:${grant.source}`}
-                      className={rowClasses}
-                    >
-                      <td className="px-3 py-2 font-mono">{grant.capability}</td>
-                      <td className="text-muted px-3 py-2">
-                        {grant.scope_type}
-                        {grant.scope_network ? ` · ${grant.scope_network}` : ''}
-                        {grant.read_only ? ' · read only' : ''}
-                      </td>
-                      <td className="text-muted px-3 py-2">{grant.source}</td>
-                    </tr>
-                  ))}
-                </tbody>
-            </Table>
+            <dl className="border-line mt-4 grid gap-x-6 gap-y-3 border-t pt-4 sm:grid-cols-[12rem_1fr]">
+              {describeGrants(session.data.capabilities).map((group) => (
+                <div key={group.reach} className="contents">
+                  <dt className="text-sm font-medium">{group.reach}</dt>
+                  <dd className="text-muted text-sm leading-relaxed">
+                    <ul>
+                      {group.actions.map((action) => (
+                        <li key={action}>{action}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           )}
         </>
       )}
