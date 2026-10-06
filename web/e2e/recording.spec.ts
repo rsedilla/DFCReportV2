@@ -1104,6 +1104,8 @@ test.describe('the Record queue', () => {
   test('counts the Cells behind that it read, and says there is more when there is', async ({
     page,
   }) => {
+    // Mid-month, so last month is not read too (decision 0315).
+    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
     await mockRecordScreen(page, {});
     const notBehind = (url: string, nextCursor: string | null) =>
       JSON.stringify({
@@ -2289,5 +2291,96 @@ test.describe('a DCC checklist longer than one page', () => {
     const sundays = new Set(asked.map((url) => url.pathname));
     expect(asked).toHaveLength(sundays.size);
     expect(asked.every((url) => url.searchParams.get('limit') === '200')).toBe(true);
+  });
+});
+
+test.describe('Cells behind carries last month while it is open (decision 0315)', () => {
+  /** The Cells index by month: Youth is behind in September only, and October has nothing behind. */
+  async function mockCellsByMonth(page: Page, { septemberOpen }: { septemberOpen: boolean }) {
+    await page.route('**/api/v1/cells?*', (route) => {
+      const url = new URL(route.request().url());
+      const month = url.searchParams.get('month');
+      const september = month === '2026-09-01';
+      const closed = url.searchParams.get('state') === 'CLOSED';
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: month,
+          open: september ? septemberOpen : true,
+          data: september && !closed ? [CELL_WITH_MEETINGS] : [],
+          next_cursor: null,
+        }),
+      });
+    });
+  }
+
+  async function mockRecord(page: Page, septemberOpen: boolean) {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, {});
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+    await mockDccOwed(page);
+    await mockCellsByMonth(page, { septemberOpen });
+  }
+
+  const table = (page: Page) => page.getByRole('table', { name: 'Cells behind', exact: true });
+
+  test('lists a Cell behind for last month in the first seven days, with its month', async ({
+    page,
+  }) => {
+    // 10:00 on 3 October in Manila.
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecord(page, true);
+    await page.goto('/dashboard?list=behind');
+
+    await expect(page.getByText(/this month and September while it is open/)).toBeVisible();
+    const row = table(page).getByRole('row').filter({ hasText: 'Youth · Sat' });
+    await expect(row).toContainText('Open · September · open until 7 Oct');
+    await expect(row.getByRole('link', { name: 'Youth · Sat' })).toHaveAttribute(
+      'href',
+      /month=2026-09-01/,
+    );
+    await expect(recordLists(page).getByRole('button', { name: /^Cells behind/ })).toContainText('1');
+  });
+
+  test('lists none of last month once its window has shut', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecord(page, false);
+    await page.goto('/dashboard?list=behind');
+
+    await expect(table(page)).toContainText('No Cell in your scope is behind this month.');
+    await expect(page.getByText(/while it is open/)).toHaveCount(0);
+  });
+
+  test('a failed read of last month never says that nothing is behind', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecord(page, true);
+    await page.route('**/api/v1/cells?*month=2026-09-01*', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+    );
+    await page.goto('/dashboard?list=behind');
+
+    await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
+    await expect(page.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
+  });
+
+  test('does not ask for last month after the 7th', async ({ page }) => {
+    // 10:00 on 10 October in Manila.
+    await page.clock.setFixedTime(new Date('2026-10-10T02:00:00Z'));
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/v1/cells?')) asked.push(request.url());
+    });
+    await mockRecord(page, true);
+    await page.goto('/dashboard?list=behind');
+
+    await expect(table(page)).toContainText('No Cell in your scope is behind this month.');
+    expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
   });
 });
