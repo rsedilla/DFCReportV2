@@ -30,7 +30,7 @@ function Conquest() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading
-        line={`The four goals for ${counts.data ? `the ${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'}` : 'the people'} in your care, as of today.`}
+        line={`The four goals for ${counts.data ? `the ${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'}` : 'the people'} you oversee, as of today.`}
       />
       <ReportsTabs current="conquest">
         <div className="mt-6">

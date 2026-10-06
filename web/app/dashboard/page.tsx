@@ -762,8 +762,8 @@ function Dashboard() {
               </h2>
               <p className="text-muted text-sm">
                 {lastMonthRead
-                  ? `In your scope, this month and ${previousName} while it is open, in no particular order.`
-                  : 'In your scope, in no particular order.'}
+                  ? `Cells you oversee, this month and ${previousName} while it is open, in no particular order.`
+                  : 'Cells you oversee, in no particular order.'}
               </p>
             </div>
             {behindPending ? (
@@ -775,8 +775,8 @@ function Dashboard() {
                   columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
                   empty={
                     behindMore || behindMorePrevious
-                      ? `None of the first 50 Cells in your scope is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
-                      : `No Cell in your scope is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
+                      ? `None of the first 50 Cells you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
+                      : `No Cell you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
                   }
                   rows={needingAttention.map(({ cell, month: cellMonth }) => ({
                     key: `${cell.id}|${cellMonth}`,
@@ -836,7 +836,7 @@ function Dashboard() {
                 Needs a new leader
               </h2>
               <p className="text-muted text-sm">
-                In your scope, and their pastoral leader holds no assignment.
+                People you oversee whose pastoral leader holds no assignment.
               </p>
             </div>
             {unplaced.isPending ? (
@@ -847,7 +847,7 @@ function Dashboard() {
                 <ListTable
                   caption="Needs a new leader"
                   columns={['Name', 'Previous pastoral leader']}
-                  empty="Nobody in your scope is waiting for a new leader."
+                  empty="Nobody you oversee is waiting for a new leader."
                   rows={unplaced.data.map((person) => ({
                     key: person.id,
                     cells: [
@@ -875,7 +875,7 @@ function Dashboard() {
               <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
                 Not in a Cell
               </h2>
-              <p className="text-muted text-sm">In your scope, and not in a Cell or leading one.</p>
+              <p className="text-muted text-sm">People you oversee who are not in a Cell or leading one.</p>
             </div>
             {withoutACell.isPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
@@ -884,7 +884,7 @@ function Dashboard() {
                 <ListTable
                   caption="Not in a Cell"
                   columns={['Name']}
-                  empty="Everybody in your scope is in a Cell."
+                  empty="Everybody you oversee is in a Cell."
                   rows={withoutACell.data.map((person) => ({
                     key: person.id,
                     cells: [

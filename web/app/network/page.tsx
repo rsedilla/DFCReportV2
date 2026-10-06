@@ -225,7 +225,7 @@ function NetworkScreen() {
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
       <h1 className="text-2xl font-semibold tracking-tight">Branch</h1>
       <p className="text-muted text-sm">
-        The people under your care, one level at a time.
+        The people you oversee, one level at a time.
         {month === null
           ? null
           : ` Figures for ${monthLabel(month)}${open ? ', a month still open' : ''}.`}
@@ -803,7 +803,7 @@ function Search() {
           {results.isPending ? (
             <p className="text-muted text-sm">Searching&hellip;</p>
           ) : found.length === 0 ? (
-            <p className="text-muted text-sm">Nobody by that name in your scope.</p>
+            <p className="text-muted text-sm">Nobody by that name among the people you oversee.</p>
           ) : (
             <>
               <ul className="border-line flex flex-col divide-y border">

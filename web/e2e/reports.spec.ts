@@ -522,7 +522,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     const region = page.getByRole('region', { name: 'Coverage by Cell' });
     await expect(
-      region.getByText('No Cell in your scope is behind: every meeting that has come has a record.'),
+      region.getByText('No Cell you oversee is behind: every meeting that has come has a record.'),
     ).toBeVisible();
     await expect(region.getByText(/Closed /)).toHaveCount(0);
   });
@@ -537,7 +537,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     const region = page.getByRole('region', { name: 'Coverage by Cell' });
     await expect(region.getByRole('alert')).not.toBeEmpty();
-    await expect(region.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
+    await expect(region.getByText(/No Cell you oversee is behind/)).toHaveCount(0);
 
     // Without the filter the closed view is not used, so its failure is not reported.
     await region.getByRole('button', { name: 'Show only Cells behind' }).click();
@@ -1089,7 +1089,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       for (const text of await figures.allTextContents()) {
         expect(text).toBe('–');
       }
-      await expect(page.getByText(/for the \d+ (person|people) in your care/)).toHaveCount(0);
+      await expect(page.getByText(/for the \d+ (person|people) you oversee/)).toHaveCount(0);
     });
   }
 
@@ -1131,7 +1131,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     await page.goto('/reports/training');
 
     await expect(
-      page.getByText(`Training for the ${TRAINING_COUNTS.people} people in your care, as of today.`),
+      page.getByText(`Training for the ${TRAINING_COUNTS.people} people you oversee, as of today.`),
     ).toBeVisible();
     await expectCards(page, [
       ['Encounter', TRAINING_COUNTS.encounter],
@@ -1160,7 +1160,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     await page.goto('/reports/conquest');
 
     await expect(
-      page.getByText(`The four goals for the ${CONQUEST_COUNTS.people} people in your care, as of today.`),
+      page.getByText(`The four goals for the ${CONQUEST_COUNTS.people} people you oversee, as of today.`),
     ).toBeVisible();
     await expectCards(page, [
       ['Win 3', CONQUEST_COUNTS.win_3],
