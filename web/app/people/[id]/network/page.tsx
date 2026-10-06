@@ -52,7 +52,7 @@ function PastoralNetwork() {
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {person ? `${person.full_name} in the tree` : 'Pastoral network'}
+        {person ? `${person.full_name} in the tree` : 'Where they sit'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Who pastors whom, from the top of the Network down to this person. To move them to

@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-06, the trigger being decision 0317: of 316 files, 315 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0317 each moved the first two and
+2026-10-06, the trigger being decision 0318: of 317 files, 316 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0318 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-06 and triggered by 0317, and was left stale by 0318 the same day. The one before that was dated
 2026-10-06 and triggered by 0316, and was left stale by 0317 the same day. The one before that was dated
 2026-10-06 and triggered by 0315, and was left stale by 0316 the same day. The one before that was dated
 2026-10-05 and triggered by 0314, and was left stale by 0315 the next day. The one before that was dated
@@ -675,6 +676,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-06 — [Cells behind carries last month while it is open](docs/decisions/0315-cells-behind-carries-last-month-while-it-is-open.md)
 - 2026-10-06 — [Record's month figures keep the reader's whole scope](docs/decisions/0316-record-figures-keep-the-whole-scope.md)
 - 2026-10-06 — [One name for the reader's whole scope](docs/decisions/0317-one-name-for-the-readers-whole-scope.md)
+- 2026-10-06 — [The Network tab is named Branch](docs/decisions/0318-the-network-tab-is-named-branch.md)
 
 ### Open — awaiting a ruling
 

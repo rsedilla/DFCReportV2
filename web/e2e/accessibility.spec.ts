@@ -1562,7 +1562,7 @@ const TARGET_SWEEP = [
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
-    // Settled on a link: Edit details and Pastoral network navigate. With the link to the
+    // Settled on a link: Edit details and Where they sit navigate. With the link to the
     // leader who pastors them, three; the Cell and DCC sections add more once they load.
     // No Move to another leader for this account, which may not move people.
     //
@@ -2504,11 +2504,11 @@ test('only the most specific navigation entry is marked as the current page', as
 
   await page.goto('/people');
 
-  // Network is a tab of People (decision 0288): the tab is followed, and People stays
-  // the one current entry of the main navigation while the tab marks Network.
+  // Branch is a tab of People (decisions 0288 and 0318): the tab is followed, and People stays
+  // the one current entry of the main navigation while the tab marks Branch.
   const navigation = page.getByRole('navigation', { name: 'Main' });
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await tabs.getByRole('link', { name: 'Network', exact: true }).click();
+  await tabs.getByRole('link', { name: 'Branch', exact: true }).click();
 
   await expect(page).toHaveURL(/\/network$/);
 
@@ -2518,27 +2518,27 @@ test('only the most specific navigation entry is marked as the current page', as
     1,
   );
   await expect(current).toHaveText('People');
-  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Network');
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Branch');
 });
 
-/** People carries two tabs, People and Network, each marked on its own screen (decision 0288). */
-test('the People item carries a People tab and a Network tab', async ({ page }) => {
+/** People carries two tabs, People and Branch, each marked on its own screen (decisions 0288 and 0318). */
+test('the People item carries a People tab and a Branch tab', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['People', 'Network']);
+  await expect(tabs.getByRole('link')).toHaveText(['People', 'Branch']);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('People');
-  await expect(tabs.getByRole('link', { name: 'Network', exact: true })).toHaveAttribute(
+  await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveAttribute(
     'href',
     '/network',
   );
 
   await tabs.getByRole('link', { name: 'People', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(tabs.getByRole('link', { name: 'Network', exact: true })).toBeFocused();
+  await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toBeFocused();
 });
 
 /**
