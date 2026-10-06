@@ -469,7 +469,7 @@ function NewPersonForm() {
 
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
         <div className="flex flex-col gap-1.5">
-          <p className="field-label">Journey stage</p>
+          <p className="field-label">DCC stage</p>
           <p className="text-muted text-sm">None yet — it&rsquo;s worked out from their Sundays.</p>
         </div>
 

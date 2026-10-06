@@ -262,7 +262,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <p className="field-label">Journey stage</p>
+            <p className="field-label">DCC stage</p>
             <p className="text-sm">{stage}</p>
             <p className="text-muted text-sm leading-relaxed">
               Worked out from their Sundays. If it looks wrong, correct the Sunday on their page.

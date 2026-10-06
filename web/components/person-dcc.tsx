@@ -87,7 +87,7 @@ export function PersonDcc({ personId }: { personId: string }) {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card kicker="Journey">
+            <Card kicker="DCC stage">
               <p className="text-xl font-bold">
                 {attendance.data.pages[0].classification
                   ? classificationLabel(attendance.data.pages[0].classification)
