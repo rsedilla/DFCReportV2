@@ -236,7 +236,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <p className="field-label">Sex</p>
             <p className="text-sm">{sexLabel(person.sex)}</p>
             <p className="text-muted text-sm leading-relaxed">
-              Only an Admin can correct this, because it decides which Network they belong to.
+              Only an administrator can correct this, because it decides which Network they belong to.
             </p>
           </div>
 

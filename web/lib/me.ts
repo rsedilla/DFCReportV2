@@ -43,7 +43,7 @@ export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
 export function roleLabel(role: AccountRole): string {
   switch (role) {
     case 'ADMIN':
-      return 'Administrator';
+      return 'Admin';
     case 'SENIOR_PASTOR':
       return 'Senior Pastor';
     case 'LEADER':

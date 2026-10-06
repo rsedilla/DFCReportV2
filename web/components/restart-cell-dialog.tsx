@@ -101,7 +101,7 @@ export function RestartCellDialog({
         }}
       >
         <p className="text-sm leading-relaxed">
-          This asks Admin to approve a new Cell that resumes{' '}
+          This asks an administrator to approve a new Cell that resumes{' '}
           {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}. The closed Cell
           stays as it is, with its history.
         </p>
@@ -138,7 +138,7 @@ export function RestartCellDialog({
         />
 
         <p className="text-muted text-sm leading-relaxed">
-          Filled in from how it met before. Once Admin approves, add its members to the new
+          Filled in from how it met before. Once an administrator approves, add its members to the new
           Cell.
         </p>
 
