@@ -836,7 +836,7 @@ function Dashboard() {
                 Needs a new leader
               </h2>
               <p className="text-muted text-sm">
-                People you oversee whose pastoral leader holds no assignment.
+                People you oversee whose pastoral leader is not in the pastoral tree.
               </p>
             </div>
             {unplaced.isPending ? (
