@@ -43,7 +43,7 @@ test.describe('the Cells list', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells');
 
-    const table = page.getByRole('table', { name: 'Cells in your scope' });
+    const table = page.getByRole('table', { name: 'Cells you oversee' });
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
@@ -135,7 +135,7 @@ test.describe('the Cells totals (decision 0289)', () => {
   });
 
   const lead = (page: Page) => page.getByRole('button', { name: /^Cells you lead/ });
-  const scope = (page: Page) => page.getByRole('button', { name: /^Cells in your scope/ });
+  const scope = (page: Page) => page.getByRole('button', { name: /^Cells you oversee/ });
 
   test('shows both totals, each counted and dated as of today', async ({ page }) => {
     await mockSignedIn(page);
@@ -144,7 +144,7 @@ test.describe('the Cells totals (decision 0289)', () => {
 
     await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your own Cells · as of today/);
     await expect(scope(page)).toContainText(
-      /Cells in your scope\s*5\s*The Cells you oversee · as of today/,
+      /Cells you oversee\s*5\s*People you oversee · as of today/,
     );
   });
 
@@ -156,7 +156,7 @@ test.describe('the Cells totals (decision 0289)', () => {
     await mockSignedIn(page);
     const asked = await mockCellTotals(page);
     await page.goto('/cells');
-    await expect(scope(page)).toContainText(/Cells in your scope\s*5\s*The/);
+    await expect(scope(page)).toContainText(/Cells you oversee\s*5\s*People/);
     await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your/);
 
     expect(asked.filter((url) => url.pathname === '/api/v1/cells/counts')).toHaveLength(1);
@@ -182,7 +182,7 @@ test.describe('the Cells totals (decision 0289)', () => {
     await expect
       .poll(() => listReads(asked).some((url) => url.searchParams.get('led_by') === 'me'))
       .toBe(true);
-    const table = page.getByRole('table', { name: 'Cells in your scope' });
+    const table = page.getByRole('table', { name: 'Cells you oversee' });
     await expect(table.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toHaveCount(0);
 
@@ -574,7 +574,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await page.goto('/cells');
     await page.getByRole('button', { name: 'Closed Cells' }).click();
 
-    const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
+    const table = page.getByRole('table', { name: 'Closed Cells you oversee' });
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Last leader',
@@ -620,7 +620,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await page.goto('/cells');
     await page.getByRole('button', { name: 'Closed Cells' }).click();
 
-    const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
+    const table = page.getByRole('table', { name: 'Closed Cells you oversee' });
     const restarted = table.getByRole('row', { name: /Restarted as CELL-000021/ });
     await expect(restarted).toContainText('Restarted as CELL-000021');
     await expect(restarted.getByRole('button')).toHaveCount(0);

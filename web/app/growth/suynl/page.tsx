@@ -220,8 +220,8 @@ function SuynlTab() {
         <h1 className="text-2xl font-semibold tracking-tight">Growth</h1>
         <p className="text-muted text-sm">
           {counts.data
-            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} in your care, as of today.`
-            : 'The people in your care, as of today.'}
+            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} you oversee, as of today.`
+            : 'The people you oversee, as of today.'}
         </p>
       </div>
 
@@ -275,7 +275,7 @@ function SuynlTab() {
             <p className="text-sm">Nobody here matches.</p>
           ) : (
             <>
-              <Table caption="SUYNL lessons for the people in your care" className="hidden lg:block">
+              <Table caption="SUYNL lessons for the people you oversee" className="hidden lg:block">
                 <thead>
                   <tr>
                     <HeaderCell>Person</HeaderCell>
