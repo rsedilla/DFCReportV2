@@ -914,7 +914,8 @@ function Dashboard() {
           {monthLabel(month).split(' ')[0]} so far
         </h2>
         <p className="text-muted mt-1 text-sm">
-          {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}
+          {/* Whose changes the list above and never these figures (decision 0316). */}
+          {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}, whichever list is shown above
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MonthCard
