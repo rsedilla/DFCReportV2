@@ -413,7 +413,7 @@ test.describe('My 12', () => {
     await expect(rows).toHaveCount(4);
     // Each row is that pastor's 12, so it names the pastor with the Network beside (decision
     // 0294); nothing on the table is titled or headed by Network.
-    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Whole Church · / })).toBeVisible();
     await expect(page.getByRole('heading', { name: /^The Networks · / })).toHaveCount(0);
     await expect(twelveTable(page).getByRole('columnheader').first()).toHaveText('Leader');
     await expect(
@@ -441,7 +441,7 @@ test.describe('Figures for', () => {
     const select = page.getByLabel('Figures for');
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'Your direct 12');
     await expect(select.locator('option')).toHaveText([
-      'Everyone you oversee',
+      'People you oversee',
       'Teresita Alcantara',
       'Consuelo Bautista',
       'Efren Dimaculangan',
@@ -464,7 +464,7 @@ test.describe('Figures for', () => {
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'The pastors’ 12');
     // Cell Groups has no Network figure of its own, so no Network option (unlike DCC).
     await expect(select.locator('option')).toHaveText([
-      'Everyone in your scope',
+      'Whole Church',
       'Bonifacio Esguerra',
       'Aurora Dizon',
     ]);

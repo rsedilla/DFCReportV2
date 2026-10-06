@@ -213,7 +213,7 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
   const cell = 'px-3 py-3 text-right tabular-nums';
   const byRoot = readiness.own === null;
   const subjectName = opened ? (readiness.subject?.full_name ?? 'This leader') : null;
-  const title = subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'The whole church' : 'My 12';
+  const title = subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'Whole Church' : 'My 12';
 
   const figureCells = (figures: Omit<ReadinessFigures, 'members'>) => (
     <>

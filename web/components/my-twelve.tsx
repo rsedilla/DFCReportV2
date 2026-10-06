@@ -146,7 +146,7 @@ export function TwelveTable({
   // Network beside (decision 0294): a Network's own figure is its membership, not a root's 12.
   const byRoot = twelve.rows.length > 0 && twelve.rows.every((row) => row.network);
   const title =
-    heading ?? (subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'The whole church' : 'My 12');
+    heading ?? (subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'Whole Church' : 'My 12');
   const ownLabel =
     own === null
       ? null
