@@ -51,7 +51,7 @@ for (const each of TABS) {
       await page.goto(`/reports/${each.tab}?period=quarter`);
 
       await expect(label(page, 'Q3 2026 · Jul–Sep')).toBeVisible();
-      await expect(page.getByText('Open for submission', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/)).toBeVisible();
       await expect(page.getByText('Q4 2026 · Oct–Dec opens on 1 January.', { exact: true })).toBeVisible();
       // Q2 ended before the calendar's first Sunday, and Q4 has not finished.
       await expect(before(page)).toBeDisabled();
@@ -180,7 +180,7 @@ for (const each of TABS) {
 
       await page.goto(`/reports/${each.tab}?period=quarter`);
       await expect(label(page, 'Q4 2026 · Oct–Dec')).toBeVisible();
-      await expect(page.getByText('Open for submission', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/)).toBeVisible();
       await expect(before(page)).toBeEnabled();
       await expect(page.getByText(/opens on/)).toHaveCount(0);
 

@@ -4,7 +4,8 @@ import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
-import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
+import { rangeGuardMonth, rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
+import { openUntilLabel, todayInManila } from '@/lib/reporting-month';
 
 const STAGES: readonly [keyof Classification, string][] = [
   ['vip', 'VIP'],
@@ -96,7 +97,7 @@ export function RangeNavigator({
       <span className="text-accent text-sm font-bold">{rangeLabel(kind, start)}</span>
       {open === undefined ? null : (
         <span className="border-edge border px-2 py-0.5 text-xs font-bold tracking-[0.07em] uppercase">
-          {open ? 'Open for submission' : 'Closed for submission'}
+          {open ? openUntilLabel(rangeGuardMonth(kind, start, todayInManila())) : 'Closed'}
         </span>
       )}
     </div>
@@ -230,7 +231,7 @@ export function TwelveTable({
           {twelve.overlap === 0 ? null : (
             <tr className={rowClasses}>
               <td className="text-muted px-3 py-3 italic" colSpan={STAGES.length + 1}>
-                Counted in more than one row
+                Counted under more than one leader
               </td>
               <td className={`${cell} text-muted italic`}>−{twelve.overlap}</td>
             </tr>
@@ -239,7 +240,7 @@ export function TwelveTable({
           {twelve.elsewhere === 0 ? null : (
             <tr className={rowClasses}>
               <td className="text-muted px-3 py-3 italic" colSpan={STAGES.length + 1}>
-                {subjectName === null && twelve.own === null ? 'In no row' : 'Elsewhere in this branch'}
+                {subjectName === null && twelve.own === null ? 'Under none of these leaders' : 'Elsewhere in this branch'}
               </td>
               <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
             </tr>

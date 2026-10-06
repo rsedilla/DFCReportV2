@@ -231,7 +231,7 @@ test.describe('the navigator', () => {
       await expect(periodLabel(page, each.label)).toBeVisible();
       await expect(after).toBeDisabled();
       await expect(before).toBeEnabled();
-      await expect(page.getByText('Open for submission', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/).first()).toBeVisible();
 
       await before.click();
       const previous = BEFORE[each.kind];
@@ -240,9 +240,7 @@ test.describe('the navigator', () => {
       await expect(after).toBeEnabled();
       await expect(
         page
-          .getByText(previous.open ? 'Open for submission' : 'Closed for submission', {
-            exact: true,
-          })
+          .getByText(previous.open ? /^Open until 7 [A-Z][a-z]+$/ : /^Closed$/)
           .first(),
       ).toBeVisible();
 
@@ -316,7 +314,7 @@ test.describe('My 12', () => {
       '1',
       '2',
     ]);
-    expect(await cellsOf(rows.nth(4))).toEqual(['Counted in more than one row', '−1']);
+    expect(await cellsOf(rows.nth(4))).toEqual(['Counted under more than one leader', '−1']);
     expect(await cellsOf(rows.nth(5))).toEqual(['Elsewhere in this branch', '+2']);
     expect(await cellsOf(rows.nth(6))).toEqual(['Total', '2', '2', '1', '1', '4', '10']);
 
@@ -365,7 +363,7 @@ test.describe('My 12', () => {
     await expect(own).not.toContainText(/\d/);
     // Neither conditional line: nobody is in two rows, and nobody is elsewhere.
     await expect(
-      twelveTable(page).getByText('Counted in more than one row', { exact: true }),
+      twelveTable(page).getByText('Counted under more than one leader', { exact: true }),
     ).toHaveCount(0);
     await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
     expect(await cellsOf(rows.nth(2))).toEqual(['Total', '1', '1', '0', '1', '1', '4']);
@@ -423,8 +421,8 @@ test.describe('My 12', () => {
       rows.nth(1).getByRole('link', { name: "Aurora Dizon · Women's", exact: true }),
     ).toHaveAttribute('href', new RegExp(`[?&]leader=${TWELVE.aurora.id}`));
     await expect(twelveTable(page).getByText("Men's Network")).toHaveCount(0);
-    // With no own row there is no branch to be elsewhere in: the line says "In no row".
-    expect(await cellsOf(rows.nth(2))).toEqual(['In no row', '+1']);
+    // With no own row there is no branch to be elsewhere in: the line says "Under none of these leaders".
+    expect(await cellsOf(rows.nth(2))).toEqual(['Under none of these leaders', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
     await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
     await expect(twelveTable(page).getByText(/^You · /)).toHaveCount(0);
@@ -439,7 +437,7 @@ test.describe('Figures for', () => {
     await page.goto('/reports/cells');
 
     const select = page.getByLabel('Figures for');
-    await expect(select.locator('optgroup')).toHaveAttribute('label', 'Your direct 12');
+    await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
     await expect(select.locator('option')).toHaveText([
       'People you oversee',
       'Teresita Alcantara',

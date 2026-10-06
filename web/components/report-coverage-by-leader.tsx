@@ -138,7 +138,7 @@ export function CoverageByLeader({
                   </tr>
                 )}
                 <tr className="border-edge border-t-2 font-semibold">
-                  <td className="px-3 py-3">Report coverage</td>
+                  <td className="px-3 py-3">Total</td>
                   <td className="px-3 py-3 text-right tabular-nums">{page.data.total.filed}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{page.data.total.owed}</td>
                 </tr>

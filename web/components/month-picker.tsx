@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { buttonClasses } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
-import { hasNotBegun, monthLabel, shiftMonth } from '@/lib/reporting-month';
+import { hasNotBegun, monthLabel, openUntilLabel, shiftMonth } from '@/lib/reporting-month';
 import { cn } from '@/lib/utils';
 
 /**
@@ -91,9 +91,9 @@ export function MonthPicker({
           indicator (1.4.1), and neither says anything about a leader or a record.
         */}
         {open === undefined ? null : open ? (
-          <Tag>Open for submission</Tag>
+          <Tag>{openUntilLabel(month)}</Tag>
         ) : (
-          <Tag appearance="outline">Closed for submission</Tag>
+          <Tag appearance="outline">Closed</Tag>
         )}
       </p>
     </div>
