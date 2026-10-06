@@ -13,7 +13,7 @@ still open".
 
 **2. Cells behind keeps the reader's whole scope and has no Whose switch.** It is Section 15's list
 for the leader who oversees the Cells, and decision 0314 made Reports' *Show only Cells behind* the
-same list, so its link opens on the same Cells. The Whose switch stays on Awaiting a record.
+same list, so each month's link opens on that month's Cells. The Whose switch stays on Awaiting a record.
 
 ## Why
 

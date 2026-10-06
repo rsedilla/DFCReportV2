@@ -1104,6 +1104,8 @@ test.describe('the Record queue', () => {
   test('counts the Cells behind that it read, and says there is more when there is', async ({
     page,
   }) => {
+    // Mid-month, so last month is not read too (decision 0315).
+    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
     await mockRecordScreen(page, {});
     const notBehind = (url: string, nextCursor: string | null) =>
       JSON.stringify({
@@ -2354,6 +2356,18 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
 
     await expect(table(page)).toContainText('No Cell in your scope is behind this month.');
     await expect(page.getByText(/while it is open/)).toHaveCount(0);
+  });
+
+  test('a failed read of last month never says that nothing is behind', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecord(page, true);
+    await page.route('**/api/v1/cells?*month=2026-09-01*', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+    );
+    await page.goto('/dashboard?list=behind');
+
+    await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
+    await expect(page.getByText(/No Cell in your scope is behind/)).toHaveCount(0);
   });
 
   test('does not ask for last month after the 7th', async ({ page }) => {

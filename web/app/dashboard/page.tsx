@@ -490,14 +490,18 @@ function Dashboard() {
         ].map((cell) => ({ cell, month: previousMonth }))
       : []),
   ].filter(({ cell }) => behindOf(cell.coverage) > 0);
-  const behindPreviousOpen = needingAttention.some((row) => row.month === previousMonth);
+  // Last month was read and is still open, so the list speaks for it too.
+  const lastMonthRead =
+    inCloseWeek && (scopedPrevious.data?.open === true || scopedClosedPrevious.data?.open === true);
   const behindPending =
     scoped.isPending ||
     scopedClosed.isPending ||
     (inCloseWeek && (scopedPrevious.isPending || scopedClosedPrevious.isPending));
-  const behindFailed = [scoped, scopedClosed, scopedPrevious, scopedClosedPrevious].find(
-    (query) => query.isError,
-  );
+  const behindFailed = [
+    scoped,
+    scopedClosed,
+    ...(inCloseWeek ? [scopedPrevious, scopedClosedPrevious] : []),
+  ].find((query) => query.isError);
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a
@@ -757,7 +761,7 @@ function Dashboard() {
                 Cells behind
               </h2>
               <p className="text-muted text-sm">
-                {behindPreviousOpen
+                {lastMonthRead
                   ? `In your scope, this month and ${previousName} while it is open, in no particular order.`
                   : 'In your scope, in no particular order.'}
               </p>
@@ -770,9 +774,9 @@ function Dashboard() {
                   caption="Cells behind"
                   columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
                   empty={
-                    behindMore
-                      ? 'None of the first 50 Cells in your scope is behind this month.'
-                      : 'No Cell in your scope is behind this month.'
+                    behindMore || behindMorePrevious
+                      ? `None of the first 50 Cells in your scope is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
+                      : `No Cell in your scope is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
                   }
                   rows={needingAttention.map(({ cell, month: cellMonth }) => ({
                     key: `${cell.id}|${cellMonth}`,
@@ -802,7 +806,7 @@ function Dashboard() {
                       href={`/reports/filed?${new URLSearchParams({ month, behind: '1' }).toString()}`}
                       className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
-                      See every Cell behind in Reports
+                      See every Cell behind{lastMonthRead ? ` for ${monthLabel(month).split(' ')[0]}` : ''} in Reports
                     </Link>
                   </p>
                 ) : null}
