@@ -256,7 +256,7 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
                 <tr className={rowClasses}>
                   <td className="px-3 py-3">
                     {row.leader === null ? (
-                      <span className="text-muted">A leader who cannot be named</span>
+                      <span className="text-muted">A leader no longer on the records</span>
                     ) : (
                       <>
                         <button

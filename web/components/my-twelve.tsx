@@ -188,7 +188,7 @@ export function TwelveTable({
             <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
               <td className="px-3 py-3">
                 {row.leader === null ? (
-                  <span className="text-muted">A leader outside your reach</span>
+                  <span className="text-muted">A leader you don’t oversee</span>
                 ) : (
                   <Link
                     href={openHref(row.leader.id)}
