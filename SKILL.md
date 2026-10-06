@@ -5146,6 +5146,21 @@ It is load-bearing for exactly one comparison. Account-wide revocation compares 
 
 **One comparison is deliberately outside that list, and this is a requirement on the code that implements it rather than a description of code that exists.** The submission window closing on the 7th (Sections 9, 13 and 20) is **to be built** so that no tolerance can apply to it: the boundary and the instant a request is judged against it are both read from the database, whose clock every instance shares. It is named here rather than left to the stage that builds it, because a window compared against a host clock would join the list above silently. A comparison that can be moved to the database belongs there rather than in a tolerance.
 
+### The current tree in memory
+
+**The API may hold a copy of the current pastoral tree in memory** (ruling of 2026-10-07, decision 0321). The tree is every open `pastoral_assignments` row, a Network root's included, with no person filtered for being archived or merged, exactly as the walks it replaces read them. It answers three questions only: a person's whole subtree, the leaders above them, and whether one person is within another's subtree. Network membership is not part of it. It is a cache, so Section 2's statelessness holds: any instance can build it from the database.
+
+**What is guaranteed, and what has to fail if it stops being true:**
+
+- **An answer from the copy is never older than the database read it replaces.** Before each answer, the database is asked whether the tree has changed since the copy was built, and the copy is rebuilt first if it has. A change committed by any route, by the tree import, directly in the database or by a `TRUNCATE` is seen by the next answer on every instance.
+- **The version never takes a value it has held before**, including after a `TRUNCATE` of its own table, and an absent version never matches a copy. A restore from a backup brings an old version back, so every API instance is restarted after one.
+- **The copy holds committed state only.** It and the version it is checked against are read in one snapshot, outside any transaction a request has opened.
+- **A tree read inside a transaction reads the database, never the copy**, whether or not a lock was taken first. The lock-then-decide mechanisms in Transaction isolation below are unchanged.
+- **Each answer refuses a cycle exactly when the database walk for that question would** (Section 5), and every walk of the copy terminates. A cycle refuses only the answers whose walk reaches it, and no walk from a Network root reaches one.
+- **Only the current tree is held.** A walk at an instant, and the placement graph a report uses (Section 20), stay in the database.
+
+How the copy is kept and checked is the code's, reviewed against these tests: an answer from the copy equals the database walk over a varied tree; a change committed on another connection and one made outside the API are each seen by the next answer; a `TRUNCATE` followed by writes that bring the version back to the copy's old count, with no request between, is still seen; a change committed while the copy is being built is not missed; a tree read inside a transaction sees that transaction's own write; and walks over a cycle refuse while both roots' subtree answers do not. Any table the check needs is named in Section 26 with the build and owned by `hierarchy`.
+
 ### Backups
 
 Daily is the minimum, and weekly is not acceptable here.

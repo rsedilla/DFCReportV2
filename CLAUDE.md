@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-06, the trigger being decision 0320: of 319 files, 318 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0320 each moved the first two and
+2026-10-07, the trigger being decision 0321: of 320 files, 319 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0321 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-06 and triggered by 0320, and was left stale by 0321 the next day. The one before that was dated
 2026-10-06 and triggered by 0319, and was left stale by 0320 the same day. The one before that was dated
 2026-10-06 and triggered by 0318, and was left stale by 0319 the same day. The one before that was dated
 2026-10-06 and triggered by 0317, and was left stale by 0318 the same day. The one before that was dated
@@ -681,6 +682,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-06 — [The Network tab is named Branch](docs/decisions/0318-the-network-tab-is-named-branch.md)
 - 2026-10-06 — [The Encounter God Weekend, and Graduated on the readiness table](docs/decisions/0319-the-encounter-god-weekend.md)
 - 2026-10-06 — [A stored month is cleared by what can move it](docs/decisions/0320-a-stored-month-is-cleared-by-what-can-move-it.md)
+- 2026-10-07 — [The current tree may be held in memory, checked on every request](docs/decisions/0321-the-current-tree-may-be-held-in-memory.md)
 
 ### Open — awaiting a ruling
 
