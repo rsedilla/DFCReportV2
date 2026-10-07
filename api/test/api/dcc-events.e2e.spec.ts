@@ -773,7 +773,8 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
 
   /** Ends a person's open assignment now and opens one under another leader. */
   const moveNow = async (personId: string, leaderId: string): Promise<void> => {
-    const moved = new Date();
+    // The database's clock, because the service reads now from it.
+    const moved = await databaseNow(db);
     await db
       .updateTable('pastoral_assignments')
       .set({ ended_at: moved })

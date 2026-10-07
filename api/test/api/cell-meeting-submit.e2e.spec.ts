@@ -1621,6 +1621,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         rootAccount,
       );
       expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('cell.submit_on_behalf');
       expect((await meetingRow()).status).toBe('HELD');
     });
 
@@ -1644,7 +1645,9 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         attendance: [{ person_id: one.id, present: true }],
       };
 
-      expect((await submit(body, pastor)).status).toBe(403);
+      const refused = await submit(body, pastor);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('cell.submit_on_behalf');
       expect((await submit(body, admin)).status).toBe(201);
       expect((await meetingRow()).status).toBe('RESCHEDULED');
     });
