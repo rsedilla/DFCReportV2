@@ -154,12 +154,13 @@ describe('SUYNL (section 28)', () => {
 
   /**
    * Moves a person under another leader by closing and opening the rows directly, both
-   * ends from one host `Date` (fixtures.ts, *Never take the two ends ... from different
-   * clocks*), as `reports-by-leader.e2e.spec.ts` does.
+   * ends from one `Date` (fixtures.ts, *Never take the two ends ... from different
+   * clocks*). It is the database's, because the service reads "now" from the database:
+   * a host clock a few milliseconds ahead dated the move after the filing that needs it.
    */
   const reassign = async (personId: string, leaderId: string): Promise<void> => {
     await db.transaction().execute(async (trx) => {
-      const at = new Date();
+      const at = await databaseNow(trx);
       await trx
         .updateTable('pastoral_assignments')
         .set({ ended_at: at })
