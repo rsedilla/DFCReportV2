@@ -1561,6 +1561,10 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
 
     await list.getByRole('button', { name: /See checklist/ }).click();
+    // The checklist opens at the foot of the page, so the page is taken to it.
+    const theirHeading = page.getByRole('heading', { name: /Carlo Reyes’s DCC checklist/ });
+    await expect(theirHeading).toBeFocused();
+    await expect(theirHeading).toBeInViewport();
     const theirs = page.getByRole('table', { name: /Carlo Reyes’s DCC checklist by Sunday/ });
     await expect(theirs.getByRole('row', { name: /Benito Lagman/ })).toContainText('Not recorded yet');
     await expect(theirs.getByRole('row', { name: /Danilo Suarez/ })).toContainText('Present');
@@ -1568,6 +1572,8 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.getByRole('button', { name: 'Back to your checklist' }).click();
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
+    // And back to the row it was opened from.
+    await expect(list.getByRole('button', { name: /See checklist/ })).toBeFocused();
   });
 
   // Decision 0313: another leader's row carries Record beside See checklist, where the API
