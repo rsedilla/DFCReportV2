@@ -430,6 +430,16 @@ export class DccAttendanceService {
 
         await this.assertInScope(trx, actor, authority, personId);
 
+        // Decision 0322: nobody records their own DCC line, whatever capability they hold,
+        // except the two Network roots, who have no leader (section 9). Decided on who is
+        // asking and never on what is stored, so it discloses nothing about the record.
+        if (sameId(personId, actor.personId) && assignments.get(personId)?.leaderId !== null) {
+          throw new ScopeDeniedError(
+            'Nobody records their own DCC attendance; their leader does (decision 0322).',
+            { person_id: personId },
+          );
+        }
+
         const stored = live.get(personId) ?? null;
         const outcome = outcomeFor(stored, record.present);
 

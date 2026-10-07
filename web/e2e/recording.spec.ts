@@ -179,6 +179,50 @@ test.describe('who ran a Cell meeting', () => {
     }
   }
 
+  test('shows another leader’s meeting read only, with nothing to save (decision 0322)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    // Registered last, so it is the one matched: this reader may not record it.
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: false,
+          meeting: null,
+          members: [
+            {
+              person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+              member_id: 'M-000701',
+              first_name: 'Rosalinda',
+              last_name: 'Ocampo',
+              record: null,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText(/The Cell’s leader records it; you can see it here to follow up\./)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save this meeting' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Met' })).toHaveCount(0);
+    for (const radio of await page.getByRole('radio', { name: 'Present' }).all()) {
+      await expect(radio).toBeDisabled();
+    }
+  });
+
   test('sends nobody for the leader, which is the default', async ({ page }) => {
     await mockSignedIn(page);
     await mockMeetingRoster(page);
@@ -1239,6 +1283,49 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
         .getByRole('cell')
         .nth(2),
     ).toHaveText('Ana Lim');
+  });
+
+  // Decision 0322: another leader's meeting is followed up, not recorded.
+  test('a downline leader’s meeting the reader may not record offers See meeting, not Record', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+    // Registered last, so it is the one matched: the API says the reader may not record Ana's.
+    await page.route('**/api/v1/cells/meetings/awaiting?*', (route) => {
+      const month = new URL(route.request().url()).searchParams.get('month') ?? '2026-06-01';
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: month,
+          open: true,
+          whose: 'branch',
+          meetings: [
+            {
+              ...awaitingRow('2026-06-12', month),
+              cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
+              cell_code: 'CELL-000021',
+              leader: {
+                id: '3f1b7c6e-0000-4000-8000-000000000299',
+                full_name: 'Ana Lim',
+                last_name: 'Lim',
+                first_name: 'Ana',
+                member_id: 'M-000415',
+                is_actor: false,
+              },
+              may_record: false,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto('/dashboard?whose=branch');
+    await page.getByRole('button', { name: 'Ana Lim' }).click();
+
+    await expect(page.getByRole('link', { name: /^See meeting Young Pro · Fri,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toHaveCount(0);
   });
 
   // Decision 0311: one line per leader, name only, in surname order, closed until opened.

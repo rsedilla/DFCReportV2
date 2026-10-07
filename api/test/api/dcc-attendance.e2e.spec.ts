@@ -1210,22 +1210,25 @@ describe('DCC recording (sections 9 and 14)', () => {
   // ---------------------------------------------------------------------------
 
   describe('who may record', () => {
-    it('lets an upline record on behalf, and audits it', async () => {
+    it('refuses an upline recording on behalf, and lets an Admin, auditing it', async () => {
       const eventId = await createEvent(await recentSunday());
 
-      // Timothy is Mark's, not Manuel's, but he is inside Manuel's subtree — which is
-      // what section 14's on-behalf rule reaches.
+      // Timothy is Mark's, not Manuel's. He is inside Manuel's subtree, but since
+      // decision 0322 only an Admin records on another leader's behalf (section 14).
       await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: true, version: null },
+      ]).expect(403);
+
+      await submit(admin, eventId, [
         { person_id: timothy.id, present: true, version: null },
       ]).expect(201);
 
       const rows = await liveRows(eventId);
       const row = rows.find((each) => each.person_id === timothy.id);
 
-      // The responsible leader stays Mark; the actor is recorded separately
-      // (section 9, An upline leader may record on behalf).
+      // The responsible leader stays Mark; the actor is recorded separately (section 9).
       expect(row?.responsible_leader_id).toBe(mark.id);
-      expect(row?.recorded_by).toBe(manuelAccount.id);
+      expect(row?.recorded_by).toBe(admin.id);
 
       const entries = await db
         .selectFrom('audit_log')
@@ -1237,7 +1240,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       // target is the Person so that section 7 can resolve who may read it.
       expect(entries).toHaveLength(1);
       expect(entries[0].target_id).toBe(timothy.id);
-      expect(entries[0].actor_id).toBe(manuelAccount.id);
+      expect(entries[0].actor_id).toBe(admin.id);
     });
 
     it('writes no audit entry for a leader recording their own checklist', async () => {
@@ -1279,19 +1282,22 @@ describe('DCC recording (sections 9 and 14)', () => {
     });
 
     it('marks a correction made on somebody else’s behalf', async () => {
-      // Section 21 lists both actions, and an upline correcting a downline's record
-      // performs one of them — a correction — for somebody else. Carried on that entry
-      // rather than written as a second: a reader filtering
-      // `dcc_attendance.submitted_on_behalf` for what an upline did to other people's
-      // records would otherwise miss every correction.
+      // Section 21 lists both actions, and an Admin correcting a leader's record performs
+      // one of them — a correction — for somebody else. Carried on that entry rather than
+      // written as a second: a reader filtering `dcc_attendance.submitted_on_behalf` for
+      // what was done to other people's records would otherwise miss every correction.
+      // Since decision 0322 an upline leader is refused it, which is pinned here too.
       const eventId = await createEvent(await recentSunday());
 
-      await submit(manuelAccount, eventId, [
+      await submit(markAccount, eventId, [
         { person_id: timothy.id, present: true, version: null },
       ]).expect(201);
       await submit(manuelAccount, eventId, [
         { person_id: timothy.id, present: false, version: 1 },
-      ]).expect(201);
+      ]).expect(403);
+      await submit(admin, eventId, [{ person_id: timothy.id, present: false, version: 1 }]).expect(
+        201,
+      );
 
       const entries = await db
         .selectFrom('audit_log')
@@ -1304,6 +1310,55 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect((entries[0].after as { responsible_leader_id: string }).responsible_leader_id).toBe(
         mark.id,
       );
+    });
+
+    it('refuses anybody but a root their own DCC line, an Admin included (decision 0322)', async () => {
+      const eventId = await createEvent(await recentSunday());
+
+      const own = await submit(manuelAccount, eventId, [
+        { person_id: manuel.id, present: true, version: null },
+      ]);
+      expect(own.status).toBe(403);
+      expect(own.body.error.code).toBe('SCOPE_DENIED');
+
+      // An Admin who sits in the tree holds dcc.submit_on_behalf at Whole Church, and is
+      // still refused their own line: it is marked by their leader.
+      const ivan = await createPerson(db, { firstName: 'Ivan', network: 'MENS' });
+      await assignTo(db, ivan.id, manuel.id);
+      const ivanAccount = await createAccount(app, db, { person: ivan, roles: ['ADMIN'] });
+      const adminOwn = await submit(ivanAccount, eventId, [
+        { person_id: ivan.id, present: true, version: null },
+      ]);
+      expect(adminOwn.status).toBe(403);
+      expect(adminOwn.body.error.code).toBe('SCOPE_DENIED');
+
+      // Their leader records it.
+      await submit(manuelAccount, eventId, [
+        { person_id: ivan.id, present: true, version: null },
+      ]).expect(201);
+      expect(await liveRows(eventId)).toHaveLength(1);
+    });
+
+    it('lets a root record their own DCC line, as section 9 places the roots', async () => {
+      // A root has no leader. The roots are on the checklist of any holder of
+      // dcc.take_attendance at Whole Church, as a Senior Pastor holds it.
+      const eventId = await createEvent(await recentSunday());
+      const raymondAccount = await createAccount(app, db, { person: raymond, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: raymondAccount.id,
+          capability: 'dcc.take_attendance',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await submit(raymondAccount, eventId, [
+        { person_id: raymond.id, present: true, version: null },
+      ]).expect(201);
     });
 
     it('answers one refusal for somebody out of scope, whatever is stored', async () => {

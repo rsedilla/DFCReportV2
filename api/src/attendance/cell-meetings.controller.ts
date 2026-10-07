@@ -128,8 +128,9 @@ export class CellMeetingsController {
   async roster(
     @Param('id', new UuidParamPipe('id')) cellId: string,
     @Param('meetingId') meetingId: string,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.meetings.rosterFor(cellId, meetingId);
+    return this.meetings.rosterFor(cellId, meetingId, actor);
   }
 
   /**

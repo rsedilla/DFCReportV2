@@ -25,6 +25,64 @@ export interface FilingCapabilities {
   onBehalf: Capability;
 }
 
+/**
+ * Who files a person's record by the confirming capability, given their pastoral leader.
+ * Absent, it is that leader; SUYNL passes {@link submitterLookup}, so it follows DCC
+ * (section 28, decision 0322). Null where nobody holding an account is above them.
+ */
+export type FilerOf = (leaderId: string) => Promise<string | null>;
+
+/**
+ * Section 9's submitter, as of `at`: the person's leader if they hold an account, or the
+ * nearest leader above who does (decision 0322 makes SUYNL follow it). One lookup per
+ * request, so a list asking about many people walks each chain once.
+ */
+export function submitterLookup(
+  deps: {
+    hierarchy: HierarchyService;
+    accounts: {
+      personsHoldingAccounts(executor: Db, ids: readonly string[]): Promise<Set<string>>;
+    };
+  },
+  executor: Db,
+  at: Date,
+): FilerOf {
+  const known = new Map<string, string | null>();
+
+  return async (leaderId) => {
+    const chain: string[] = [];
+    const seen = new Set<string>();
+    let current: string | null = leaderId;
+    let answer: string | null = null;
+
+    while (current !== null) {
+      const key = canonicalId(current);
+      if (known.has(key)) {
+        answer = known.get(key) ?? null;
+        break;
+      }
+      if (seen.has(key)) {
+        break; // a cycle holds nobody's account; section 5 refuses it elsewhere
+      }
+      seen.add(key);
+      chain.push(key);
+
+      if ((await deps.accounts.personsHoldingAccounts(executor, [current])).size > 0) {
+        answer = current;
+        break;
+      }
+      current =
+        (await deps.hierarchy.assignmentsAsOf(executor, [current], at)).get(current)?.leaderId ??
+        null;
+    }
+
+    for (const key of chain) {
+      known.set(key, answer);
+    }
+    return answer;
+  };
+}
+
 /** Who a row filed for this person names, once the actor may file it. */
 export interface Filing {
   /** The person's pastoral leader now; null only for a Network root. */
@@ -55,6 +113,7 @@ export async function filingFor(
   assignment: { leaderId: string | null } | undefined,
   /** For a list: the scope each capability reaches, read once rather than per row. */
   reach?: ReadonlyMap<Capability, ScopeMembership>,
+  filerOf?: FilerOf,
 ): Promise<Filing | ApiError> {
   if (identity === undefined) {
     return new NotFoundError('No such person.', { person_id: personId });
@@ -115,9 +174,17 @@ export async function filingFor(
       : denied(authority, capabilities.confirm, personId);
   }
 
-  if (sameId(assignment.leaderId, actor.personId)) {
+  // The confirming capability reaches the person's own filer: their leader, or for SUYNL
+  // the nearest leader above with an account (decision 0322). A covering leader's filing
+  // stays the direct leader's statement, recorded as on behalf, as it was before; whether
+  // that is right is open in CLAUDE.md.
+  const filer = filerOf === undefined ? assignment.leaderId : await filerOf(assignment.leaderId);
+  if (filer !== null && sameId(filer, actor.personId)) {
     return (await covers(capabilities.confirm))
-      ? { confirmedBy: assignment.leaderId, onBehalf: false }
+      ? {
+          confirmedBy: assignment.leaderId,
+          onBehalf: !sameId(assignment.leaderId, actor.personId),
+        }
       : denied(authority, capabilities.confirm, personId);
   }
 
@@ -142,6 +209,7 @@ export async function mayFileEach(
   capabilities: FilingCapabilities,
   people: readonly PersonForDecision[],
   now: Date,
+  filerOf?: FilerOf,
 ): Promise<Set<string>> {
   if (people.length === 0) {
     return new Set();
@@ -169,6 +237,7 @@ export async function mayFileEach(
       person,
       assignments.get(person.id),
       reach,
+      filerOf,
     );
 
     if (!(filing instanceof Error)) {

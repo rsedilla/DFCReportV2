@@ -563,43 +563,41 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         covers(onBehalf, id) &&
         covers(takeAttendance, id));
 
-    // **Only what the actor can record is listed** (owner's choice of 2026-09-19, decision
-    // 0258): every queue entry carries the action that resolves it (sections 15 and 19).
-    // A meeting they may see and not record stays on the attention list below the queue.
-    const meetings = outstanding
-      .filter((entry) => mayRecord(entry.leaderPersonId))
-      .map((entry) => {
-        const leader = names.get(entry.leaderPersonId);
+    // **Every outstanding meeting the actor may see is listed, and `may_record` says which
+    // they may record** (decision 0322, replacing decision 0258's "only what the actor can
+    // record"): another leader's meeting is followed up, and its row carries See meeting.
+    const meetings = outstanding.map((entry) => {
+      const leader = names.get(entry.leaderPersonId);
 
-        return {
-          cell_id: entry.cellId,
-          // The human Cell ID and the time, because the row rendering this is the only
-          // one a closed Cell reaches: the Cells index cannot name it, so a client
-          // stitching the two would be back where section 19's gap started.
-          cell_code: entry.cellCode,
-          scheduled_date: entry.scheduledDate,
-          scheduled_time: entry.scheduledTime,
-          day_of_week: entry.dayOfWeek,
-          reporting_month: reportingMonth,
-          // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
-          // what a leader needs is why it is no longer in their Cells list, and sections
-          // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
-          cell_closed_on: entry.cellClosedOn,
-          category: entry.category,
-          member_count: entry.memberCount,
-          leader: {
-            id: entry.leaderPersonId,
-            full_name: leader?.fullName ?? null,
-            // The parts the branch view sorts by, which a full name cannot give
-            // (decision 0311): a surname may be two words and a title comes first.
-            last_name: leader?.lastName ?? null,
-            first_name: leader?.firstName ?? null,
-            member_id: leader?.memberId ?? null,
-            is_actor: isActor(entry.leaderPersonId),
-          },
-          may_record: mayRecord(entry.leaderPersonId),
-        };
-      });
+      return {
+        cell_id: entry.cellId,
+        // The human Cell ID and the time, because the row rendering this is the only
+        // one a closed Cell reaches: the Cells index cannot name it, so a client
+        // stitching the two would be back where section 19's gap started.
+        cell_code: entry.cellCode,
+        scheduled_date: entry.scheduledDate,
+        scheduled_time: entry.scheduledTime,
+        day_of_week: entry.dayOfWeek,
+        reporting_month: reportingMonth,
+        // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
+        // what a leader needs is why it is no longer in their Cells list, and sections
+        // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
+        cell_closed_on: entry.cellClosedOn,
+        category: entry.category,
+        member_count: entry.memberCount,
+        leader: {
+          id: entry.leaderPersonId,
+          full_name: leader?.fullName ?? null,
+          // The parts the branch view sorts by, which a full name cannot give
+          // (decision 0311): a surname may be two words and a title comes first.
+          last_name: leader?.lastName ?? null,
+          first_name: leader?.firstName ?? null,
+          member_id: leader?.memberId ?? null,
+          is_actor: isActor(entry.leaderPersonId),
+        },
+        may_record: mayRecord(entry.leaderPersonId),
+      };
+    });
 
     return { reporting_month: reportingMonth, open: true, whose, meetings };
   }
@@ -745,7 +743,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * for four days. It was one, and section 13's sentence is what has changed: it split
    * by method, and now splits by capability.*
    */
-  async rosterFor(cellId: string, meetingId: string): Promise<Record<string, unknown>> {
+  async rosterFor(
+    cellId: string,
+    meetingId: string,
+    actor: Actor,
+  ): Promise<Record<string, unknown>> {
     const cell = await this.cells.cellById(this.db, cellId);
     if (cell === null) {
       throw new NotFoundError('No such Cell.', { cell_id: cellId });
@@ -802,6 +804,22 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         ? new Map<string, { present: boolean }>()
         : await this.marksFor(recorded.id as string);
 
+    // **Whether this reader may record it**, by the rule the submission applies: their own
+    // meeting, or another leader's under `cell.submit_on_behalf` (section 14), which since
+    // decision 0322 only an Admin holds by default. A leader following up a downline
+    // leader's meeting reads it here and is shown it read only.
+    const through = await this.meetingScope.leaderForMeetingScopeWithin(this.db, cellId, meetingId);
+    const mayRecord =
+      through !== null &&
+      (canonicalId(through) === canonicalId(actor.personId) ||
+        (await this.authorization.coversWith(
+          this.db,
+          actor,
+          await this.authorization.authorityFor(actor.accountId),
+          Capability.CellSubmitOnBehalf,
+          { kind: 'person', personId: through },
+        )));
+
     return {
       cell_id: cell.cellId,
       meeting_id: meetingId,
@@ -814,6 +832,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // a client showing "who was there" needs to know which.
       roster_date: rosterDate,
       responsible_leader_id: responsibleLeaderId,
+      may_record: mayRecord,
       meeting: recorded,
       members: members.map((member) => ({
         person_id: member.personId,

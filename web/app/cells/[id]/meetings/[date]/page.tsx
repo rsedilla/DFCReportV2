@@ -158,8 +158,12 @@ function RecordMeeting() {
     (grant) => grant.capability === 'cell.correct_subtree',
   );
 
+  // Another leader's meeting, opened to follow it up (decision 0322): the API says this
+  // reader may not record it, so it is shown and nothing on it is changeable.
+  const followOnly = roster.data?.may_record === false;
+
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
-  const locked = correcting && !editing;
+  const locked = (correcting && !editing) || followOnly;
 
   /**
    * What is stored, overlaid with what the leader has changed since.
@@ -364,7 +368,11 @@ function RecordMeeting() {
       ) : null}
       {notYet ? null : (
         <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
-          {recordedNotHeld
+          {followOnly
+            ? recorded === null
+              ? 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
+              : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
+            : recordedNotHeld
             ? 'This meeting is recorded: the Cell did not meet.'
             : correcting
               ? 'This meeting has already been recorded. A correction replaces the whole roster, so every member is sent again — the marks below are what is stored now.'
@@ -449,7 +457,7 @@ function RecordMeeting() {
                       </p>
                     </>
                   )}
-                  {me.data ? (
+                  {me.data && !followOnly ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
                         Edit this record
@@ -467,7 +475,7 @@ function RecordMeeting() {
           ) : null}
 
           {/* On a first record, and while correcting a Met or Did-not-meet record. */}
-          {correcting && !statusEditable ? null : (
+          {(correcting && !statusEditable) || followOnly ? null : (
             <div className="mt-8">
               <RadioGroup
                 legend="Did the meeting take place?"
@@ -483,7 +491,7 @@ function RecordMeeting() {
             </div>
           )}
 
-          {askRanBy ? (
+          {askRanBy && !followOnly ? (
             <div className="mt-6 flex flex-col gap-4">
               <RadioGroup
                 legend="Who ran the meeting?"

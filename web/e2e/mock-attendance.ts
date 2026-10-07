@@ -460,6 +460,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
         reporting_month: '2026-06-01',
         roster_date: '2026-06-27',
         responsible_leader_id: LEADER_ID,
+        may_record: true,
         meeting: null,
         members: [
           {
