@@ -12,6 +12,7 @@ import {
   createCell,
   createPerson,
   createTestApp,
+  nameSeniorPastors,
   resetRateLimits,
 } from '../setup/fixtures';
 
@@ -112,10 +113,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
   /**
    * An account holding exactly the capabilities named, and no role at all.
    *
-   * **The only way to hold one Cell capability and not another.** A `LEADER` holds
-   * `cell.take_attendance`, `cell.submit_on_behalf` and `cell.correct_subtree` all at
-   * `OWN_SUBTREE`, so a role-based actor passes every check and could not tell them
-   * apart. Section 7 permits a grant with no role behind it: "A capability without an
+   * Section 7 permits a grant with no role behind it: "A capability without an
    * explicit scope grant is not usable", which says nothing about a role.
    *
    * The Person is Root, who is upline of Mark — `OWN_SUBTREE` must reach the leader the
@@ -1604,6 +1602,51 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         from_date: meetingDate,
         to_date: movedTo(),
       });
+    });
+
+    it('refuses an upline Leader rescheduling a downline leader’s meeting (decision 0322)', async () => {
+      const one = await member('Aurelio');
+      await submit({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] }).expect(
+        201,
+      );
+      const rootAccount = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+
+      const refused = await submit(
+        {
+          status: 'RESCHEDULED',
+          version: 1,
+          actual_date: movedTo(),
+          attendance: [{ person_id: one.id, present: true }],
+        },
+        rootAccount,
+      );
+      expect(refused.status).toBe(403);
+      expect((await meetingRow()).status).toBe('HELD');
+    });
+
+    it('refuses a Senior Pastor rescheduling a leader’s meeting, and lets an Admin (decision 0322)', async () => {
+      const one = await member('Aurelio');
+      await submit({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] }).expect(
+        201,
+      );
+      nameSeniorPastors(app, [root.id]);
+      const pastor = await createAccount(app, db, {
+        person: root,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      const adminPerson = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
+      const admin = await createAccount(app, db, { person: adminPerson, roles: ['ADMIN'] });
+      const body = {
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      };
+
+      expect((await submit(body, pastor)).status).toBe(403);
+      expect((await submit(body, admin)).status).toBe(201);
+      expect((await meetingRow()).status).toBe('RESCHEDULED');
     });
 
     it('takes the roster from the day it moved to, both directions', async () => {

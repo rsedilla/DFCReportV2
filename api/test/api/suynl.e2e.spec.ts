@@ -283,6 +283,23 @@ describe('SUYNL (section 28)', () => {
       const sideways = await submit(markAccount, [tick(quinn.id, 2)]);
       expect(sideways.status).toBe(403);
     });
+
+    it('refuses a Senior Pastor filing for a leader’s disciple (decision 0322)', async () => {
+      const refused = await submit(raymondAccount, [tick(timothy.id, 1)]);
+      expect(refused.status).toBe(403);
+      expect(await allRows()).toHaveLength(0);
+    });
+
+    it('refuses an upline withdrawing a lesson their downline filed (decision 0322)', async () => {
+      await submit(markAccount, [tick(timothy.id, 3)]).expect(201);
+      const seen = await currentRow(timothy.id, 3);
+
+      const refused = await submit(manuelAccount, [
+        { person_id: timothy.id, lesson: 3, done: false, seen_id: seen.id, reason: 'Not yet.' },
+      ]);
+      expect(refused.status).toBe(403);
+      expect((await currentRow(timothy.id, 3)).id).toBe(seen.id);
+    });
   });
 
   // ---------------------------------------------------------------------------

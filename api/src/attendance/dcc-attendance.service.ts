@@ -465,12 +465,6 @@ export class DccAttendanceService {
         // do and cannot: `liveRecords` loads the event's records in one query above the
         // loop. Reading them is permitted; answering differently because of them, before
         // the capability is decided, is not.*
-        //
-        // Nobody could observe it under role defaults, because the two scopes are equal
-        // for every role -- and equality is the load-bearing fact rather than the value,
-        // which is `OWN_SUBTREE` for `LEADER` and `WHOLE_CHURCH` for the other two. It
-        // became observable under an asymmetric grant section 7 permits an Admin to
-        // issue, and the ordering costs nothing, so it is not left resting on that.
         if (outcome === 'CREATE' && record.correction_reason !== undefined) {
           throw new InvariantViolationError(
             'There is no record to correct for this person, so a correction reason has no ' +

@@ -473,12 +473,6 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * Section 19's recording queue: the meetings of a month this actor owes a record for
    * (ruling of 2026-09-17).
    *
-   * **The queue is the actor's own work and nobody else's** (owner's choice of
-   * 2026-09-15). The capability admits the caller; this method is the check that keeps
-   * the answer to their own meetings, which is the shape section 7 already names for the
-   * DCC checklist. A downline leader's outstanding meetings are section 15's attention
-   * list, never this.
-   *
    * **The closed-Cell half is the whole reason this exists.** The Cells index is
    * `ACTIVE`-only, so a Cell closed part-way through a month took its already-scheduled
    * meetings out of every client's reach with it, and section 19 says this queue is "the

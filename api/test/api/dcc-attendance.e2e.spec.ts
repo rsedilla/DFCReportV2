@@ -8,7 +8,13 @@ import { databaseNow } from '../../src/common/time/submission-window';
 import { manilaDayOf, startOfManilaDay } from '../../src/common/time/manila';
 import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
+import {
+  assignTo,
+  createAccount,
+  createPerson,
+  createTestApp,
+  nameSeniorPastors,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -1359,6 +1365,30 @@ describe('DCC recording (sections 9 and 14)', () => {
       await submit(raymondAccount, eventId, [
         { person_id: raymond.id, present: true, version: null },
       ]).expect(201);
+    });
+
+    it('lets a Senior Pastor record both roots, and refuses them a line off their checklist (decision 0322)', async () => {
+      const eventId = await createEvent(await recentSunday());
+      const grace = await createPerson(db, { firstName: 'Grace', network: 'WOMENS' });
+      await assignTo(db, grace.id, null);
+      nameSeniorPastors(app, [raymond.id, grace.id]);
+      const raymondAccount = await createAccount(app, db, {
+        person: raymond,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+
+      // Timothy is Mark's, and Mark holds an account: recording him is on behalf.
+      const offChecklist = await submit(raymondAccount, eventId, [
+        { person_id: timothy.id, present: true, version: null },
+      ]);
+      expect(offChecklist.status).toBe(403);
+
+      await submit(raymondAccount, eventId, [
+        { person_id: raymond.id, present: true, version: null },
+        { person_id: grace.id, present: true, version: null },
+      ]).expect(201);
+      expect(await liveRows(eventId)).toHaveLength(2);
     });
 
     it('answers one refusal for somebody out of scope, whatever is stored', async () => {
