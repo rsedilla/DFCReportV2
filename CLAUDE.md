@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-07, the trigger being decision 0322: of 321 files, 320 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0322 each moved the first two and
+2026-10-08, the trigger being decision 0323: of 322 files, 321 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0323 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-07 and triggered by 0322, and was left stale by 0323 the next day. The one before that was dated
 2026-10-07 and triggered by 0321, and was left stale by 0322 the same day. The one before that was dated
 2026-10-06 and triggered by 0320, and was left stale by 0321 the next day. The one before that was dated
 2026-10-06 and triggered by 0319, and was left stale by 0320 the same day. The one before that was dated
@@ -685,6 +686,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-06 — [A stored month is cleared by what can move it](docs/decisions/0320-a-stored-month-is-cleared-by-what-can-move-it.md)
 - 2026-10-07 — [The current tree may be held in memory, checked on every request](docs/decisions/0321-the-current-tree-may-be-held-in-memory.md)
 - 2026-10-07 — [Ground reporting: a leader records only what they owe](docs/decisions/0322-ground-reporting.md)
+- 2026-10-08 — [Full view, and the screens of a leader who records](docs/decisions/0323-full-view-and-the-recording-screens.md)
 
 ### Open — awaiting a ruling
 

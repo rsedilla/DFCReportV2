@@ -1675,22 +1675,22 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.request_leadership` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
 | `cell.approve_leadership` | — | Whole Church | — |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
-| `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `reports.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
 | `audit.view` | Whole Church | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
 | `settings.manage` | — | Whole Church | — |
 | `accounts.manage` | — | Whole Church | — |
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
-| `conquest.view_subtree` | Whole Church | Whole Church | own/subtree |
-| `conquest.confirm` | Whole Church | Whole Church | own/subtree |
-| `conquest.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
+| `conquest.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
+| `conquest.confirm` | Whole Church | Whole Church | own/subtree, with Full view |
+| `conquest.confirm_on_behalf` | Whole Church | Whole Church | own/subtree, with Full view |
 | `suynl.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `suynl.confirm` | Whole Church | Whole Church | own/subtree |
 | `suynl.confirm_on_behalf` | — | Whole Church | — |
-| `training.view_subtree` | Whole Church | Whole Church | own/subtree |
-| `training.confirm` | Whole Church | Whole Church | own/subtree |
-| `training.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
+| `training.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
+| `training.confirm` | Whole Church | Whole Church | own/subtree, with Full view |
+| `training.confirm_on_behalf` | Whole Church | Whole Church | own/subtree, with Full view |
 
 Six of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
@@ -1707,6 +1707,8 @@ Six of these defaults are deliberate and must not be widened for convenience. Tw
 **Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin or a Senior Pastor.
 
 A role is a starting set, never a ceiling or a substitute for the checks themselves. The API still evaluates capability and scope on every request (Section 7, above); it never infers permission from a role name.
+
+**A Leader account without *Full view* holds no `reports.view_subtree` and no Training or Conquest capability** (ruling of 2026-10-08, decision 0323). An account holding `roles.manage` ticks Full view on a Leader account, as many as it chooses, and each change is audit logged with its previous and new value; a new account starts without it. Beside `reports.view_subtree` it withholds `training.view_subtree`, `training.confirm`, `training.confirm_on_behalf`, `conquest.view_subtree`, `conquest.confirm` and `conquest.confirm_on_behalf`, and the API refuses their routes to such an account. It changes only what the Leader role gives, so an account that also holds `SENIOR_PASTOR` or `ADMIN` keeps that role's defaults. Section 19 gives the account the recording screens.
 
 ### Capability and Scope are independent grants
 
@@ -1946,7 +1948,7 @@ capability_grants
 - revoked_at         nullable
 ```
 
-**Role defaults are specification, not data.** The role catalog above is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
+**Role defaults are specification, not data.** The role catalog above is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, and Full view, which picks between two Leader default sets this catalog states, never what a role means.
 
 **Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against **the request's primary target** — the record being read or written. Neither half alone is sufficient, and an account with no matching row is denied: the absence of a grant is a denial, never a default allow.
 
@@ -4095,7 +4097,7 @@ No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meet
 
 ### Sidebar
 
-The sidebar has five items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training; `Network` became a tab of `People` by the ruling of 2026-09-24, and was renamed `Branch` by the ruling of 2026-10-06). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
+The sidebar has five items, four for a Leader account without Full view (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training; `Network` became a tab of `People` by the ruling of 2026-09-24, and was renamed `Branch` by the ruling of 2026-10-06). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
@@ -4103,6 +4105,8 @@ Reports    Cell Groups, DCC, SUYNL, Training, Conquest and Filed reports, and Ne
 People     My People and Search (Sections 3 and 8), and My Network, the pastoral tree (Section 5)
 Cells      the Cell Leaders module (Section 15)
 Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
+My Cell    a Leader account without Full view: its own Cells (Section 15, decision 0323)
+SUYNL      a Leader account without Full view: the Growth SUYNL tab (Section 28, decision 0323)
 ```
 
 **`Growth` is its own item rather than a screen under `Record`**, even though a leader files lessons, graduations and confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A lesson is done, a school is graduated and a goal is reached on days nobody scheduled, and none of them shuts. Putting Growth under `Record` would put screens with no window inside the one place a window always applies.
@@ -4115,7 +4119,7 @@ Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**Every account sees one order, `Record · Reports · People · Cells · Growth`** (rulings of 2026-09-22 and 2026-09-24). **`People` carries two tabs, `People` and `Branch`, each its own address and each screen as it was** (decision 0288): finding a person and seeing one's branch are one question from two sides. **The tab is `Branch`, and a person's page links to their place in the tree as *Where they sit*** (ruling of 2026-10-06, decision 0318), so *Network* only ever names the Men's or the Women's Network (Section 4). **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
+**A Leader account without *Full view* sees the recording screens** (ruling of 2026-10-08, decision 0323, replacing decision 0277's one order for every account). Its sidebar is `Record · People · My Cell · SUYNL`, and it lands on `Record`. `Record` shows Awaiting a record and no other list and no month figures; its *People I oversee* switch shows only while a leader holding an account sits directly beneath the reader, and then lists the reader's direct leaders only. `People` is the People tab without `Branch`. `My Cell` is the reader's own Cells — members, this month's meetings, and asking for a new Cell — and adds members without offering removal. `SUYNL` is the Growth SUYNL tab as an item of its own. Section 7 refuses such an account the routes of the seven capabilities it withholds; what else these screens leave out, the reader may still be allowed to read, and it is left out to keep the screens short. The API tells the client which screens an account has, and the client never works it out from a role or the capabilities. When this is built, the two Network roots and their direct leaders start with Full view and every other Leader account without it, taken once from the tree that day. **Every other account sees `Record · Reports · People · Cells · Growth`** (rulings of 2026-09-22 and 2026-09-24), a Leader account with Full view over its own branch. **`People` carries two tabs, `People` and `Branch`, each its own address and each screen as it was** (decision 0288): finding a person and seeing one's branch are one question from two sides. **The tab is `Branch`, and a person's page links to their place in the tree as *Where they sit*** (ruling of 2026-10-06, decision 0318), so *Network* only ever names the Men's or the Women's Network (Section 4). **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
