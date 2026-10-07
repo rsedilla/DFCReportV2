@@ -4,7 +4,7 @@ import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SentRequests } from '@/components/sent-requests';
@@ -1588,6 +1588,7 @@ function DccBranchQueue({
         {row.may_record ? record(row) : null}
         <button
           type="button"
+          data-see-checklist={row.leader.person_id}
           aria-pressed={chosenId === row.leader.person_id}
           onClick={() =>
             onChoose({ id: row.leader.person_id, name: row.leader.full_name, month: row.month })
@@ -1720,18 +1721,40 @@ function LeaderChecklistGrid({
   });
   const title = `${leader.name}’s DCC checklist`;
 
+  // The checklist opens at the foot of the page, below every leader in the list, so the page
+  // is taken to it and back again; otherwise See checklist looks as if it did nothing.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.scrollIntoView({ block: 'start' });
+    heading.current?.focus();
+  }, [leader.id, leader.month]);
+
+  const back = () => {
+    onBack();
+    requestAnimationFrame(() => {
+      const button = document.querySelector<HTMLElement>(`[data-see-checklist="${leader.id}"]`);
+      button?.scrollIntoView({ block: 'center' });
+      button?.focus();
+    });
+  };
+
   return (
     <section aria-labelledby="leader-grid-heading" className="mt-8">
       <p className="mb-4 text-sm">
         <button
           type="button"
-          onClick={onBack}
+          onClick={back}
           className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Back to your checklist
         </button>
       </p>
-      <h3 id="leader-grid-heading" className="text-base font-bold">
+      <h3
+        id="leader-grid-heading"
+        ref={heading}
+        tabIndex={-1}
+        className="scroll-mt-20 text-base font-bold focus:outline-none"
+      >
         {title}, {monthLabel(leader.month)}
       </h3>
       {sheet.isError ? (
