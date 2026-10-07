@@ -430,6 +430,16 @@ export class DccAttendanceService {
 
         await this.assertInScope(trx, actor, authority, personId);
 
+        // Decision 0322: nobody records their own DCC line, whatever capability they hold,
+        // except the two Network roots, who have no leader (section 9). Decided on who is
+        // asking and never on what is stored, so it discloses nothing about the record.
+        if (sameId(personId, actor.personId) && assignments.get(personId)?.leaderId !== null) {
+          throw new ScopeDeniedError(
+            'Nobody records their own DCC attendance; their leader does (decision 0322).',
+            { person_id: personId },
+          );
+        }
+
         const stored = live.get(personId) ?? null;
         const outcome = outcomeFor(stored, record.present);
 
@@ -455,12 +465,6 @@ export class DccAttendanceService {
         // do and cannot: `liveRecords` loads the event's records in one query above the
         // loop. Reading them is permitted; answering differently because of them, before
         // the capability is decided, is not.*
-        //
-        // Nobody could observe it under role defaults, because the two scopes are equal
-        // for every role -- and equality is the load-bearing fact rather than the value,
-        // which is `OWN_SUBTREE` for `LEADER` and `WHOLE_CHURCH` for the other two. It
-        // became observable under an asymmetric grant section 7 permits an Admin to
-        // issue, and the ordering costs nothing, so it is not left resting on that.
         if (outcome === 'CREATE' && record.correction_reason !== undefined) {
           throw new InvariantViolationError(
             'There is no record to correct for this person, so a correction reason has no ' +

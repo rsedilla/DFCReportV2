@@ -13,7 +13,12 @@ import {
 } from '../common/errors/api-error';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { GrowthConflictError, nameOfAccount, nameOfPerson } from '../common/growth/growth-conflict';
-import { filingFor, mayFileEach, type Filing } from '../common/growth/growth-filing';
+import {
+  filingFor,
+  mayFileEach,
+  submitterLookup,
+  type Filing,
+} from '../common/growth/growth-filing';
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -142,6 +147,8 @@ export class SuynlService {
       CAPABILITIES,
       [...identities.values()],
       now,
+      // SUYNL follows DCC: whoever records a person's DCC files their lessons (decision 0322).
+      submitterLookup(this.deps, this.db, now),
     );
 
     return {
@@ -327,6 +334,7 @@ export class SuynlService {
         const personIds = unique(changes.map((change) => change.person_id));
         const identities = await this.people.forDecisionsWithin(trx, personIds);
         const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, now);
+        const filerOf = submitterLookup(this.deps, trx, now);
         const filings = new Map<string, Filing>();
 
         for (const change of changes) {
@@ -344,6 +352,8 @@ export class SuynlService {
             change.person_id,
             identities.get(change.person_id),
             assignments.get(change.person_id),
+            undefined,
+            filerOf,
           );
 
           if (filing instanceof Error) {

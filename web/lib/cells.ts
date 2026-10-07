@@ -545,6 +545,8 @@ export interface MeetingRoster {
   /** The date the roster was read at — the actual date where the meeting moved. */
   roster_date: string;
   responsible_leader_id: string;
+  /** Whether this reader may record or correct it; false where they only follow it up (decision 0322). */
+  may_record: boolean;
   meeting: RecordedMeeting | null;
   members: RosterMember[];
 }

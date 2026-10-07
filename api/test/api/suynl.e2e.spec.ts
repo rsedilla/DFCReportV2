@@ -154,12 +154,13 @@ describe('SUYNL (section 28)', () => {
 
   /**
    * Moves a person under another leader by closing and opening the rows directly, both
-   * ends from one host `Date` (fixtures.ts, *Never take the two ends ... from different
-   * clocks*), as `reports-by-leader.e2e.spec.ts` does.
+   * ends from one `Date` (fixtures.ts, *Never take the two ends ... from different
+   * clocks*). It is the database's, because the service reads "now" from the database:
+   * a host clock a few milliseconds ahead dated the move after the filing that needs it.
    */
   const reassign = async (personId: string, leaderId: string): Promise<void> => {
     await db.transaction().execute(async (trx) => {
-      const at = new Date();
+      const at = await databaseNow(trx);
       await trx
         .updateTable('pastoral_assignments')
         .set({ ended_at: at })
@@ -243,8 +244,13 @@ describe('SUYNL (section 28)', () => {
       }
     });
 
-    it("records an upline filing for a downline leader's disciple as on behalf", async () => {
-      const response = await submit(manuelAccount, [tick(timothy.id, 1)]);
+    it("refuses an upline filing for a downline leader's disciple, and records an Admin's as on behalf", async () => {
+      // Since decision 0322 only an Admin files on another leader's behalf; Timothy's
+      // lessons are Mark's, who records his DCC.
+      const refused = await submit(manuelAccount, [tick(timothy.id, 1)]);
+      expect(refused.status).toBe(403);
+
+      const response = await submit(admin, [tick(timothy.id, 1)]);
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({ created: 1, corrected: 0, unchanged: 0 });
@@ -252,12 +258,48 @@ describe('SUYNL (section 28)', () => {
       const row = await currentRow(timothy.id, 1);
       // Section 14: the statement is the confirming leader's, the filing the actor's.
       expect(row.confirmed_by).toBe(mark.id);
-      expect(row.recorded_by).toBe(manuelAccount.id);
+      expect(row.recorded_by).toBe(admin.id);
 
       const [entry] = await auditOf('suynl_lesson.confirmed');
-      expect(entry.actor_id).toBe(manuelAccount.id);
+      expect(entry.actor_id).toBe(admin.id);
       expect(entry.target_id).toBe(timothy.id);
       expect(entry.after).toMatchObject({ lesson: 1, confirmed_by: mark.id, on_behalf: true });
+    });
+
+    it('lets the leader who records a person’s DCC file their lessons, through a leader with no account (decision 0322)', async () => {
+      // Nathan holds no account, so his disciple's DCC is Manuel's (section 9), and so are
+      // her lessons. Whether such a filing should read as on behalf is open in CLAUDE.md;
+      // it is recorded as before, the statement Nathan's and the filing Manuel's.
+      const quinn = await createPerson(db, { firstName: 'Quinn', network: 'MENS' });
+      await assignTo(db, quinn.id, nathan.id);
+
+      const response = await submit(manuelAccount, [tick(quinn.id, 1)]);
+      expect(response.status).toBe(201);
+
+      const row = await currentRow(quinn.id, 1);
+      expect(row.confirmed_by).toBe(nathan.id);
+      expect(row.recorded_by).toBe(manuelAccount.id);
+
+      // Mark, beside Nathan, does not record her DCC and may not file.
+      const sideways = await submit(markAccount, [tick(quinn.id, 2)]);
+      expect(sideways.status).toBe(403);
+    });
+
+    it('refuses a Senior Pastor filing for a leader’s disciple (decision 0322)', async () => {
+      const refused = await submit(raymondAccount, [tick(timothy.id, 1)]);
+      expect(refused.status).toBe(403);
+      expect(await allRows()).toHaveLength(0);
+    });
+
+    it('refuses an upline withdrawing a lesson their downline filed (decision 0322)', async () => {
+      await submit(markAccount, [tick(timothy.id, 3)]).expect(201);
+      const seen = await currentRow(timothy.id, 3);
+
+      const refused = await submit(manuelAccount, [
+        { person_id: timothy.id, lesson: 3, done: false, seen_id: seen.id, reason: 'Not yet.' },
+      ]);
+      expect(refused.status).toBe(403);
+      expect((await currentRow(timothy.id, 3)).id).toBe(seen.id);
     });
   });
 
@@ -463,7 +505,8 @@ describe('SUYNL (section 28)', () => {
       await submit(markAccount, [tick(timothy.id, 4)]);
       const seen = await currentRow(timothy.id, 4);
 
-      const other = await submit(manuelAccount, [
+      // The other filer is an Admin: since decision 0322 nobody else files for Timothy.
+      const other = await submit(admin, [
         { person_id: timothy.id, lesson: 4, done: false, seen_id: seen.id, reason: 'Duplicate.' },
       ]);
       expect(other.status).toBe(201);
@@ -489,10 +532,10 @@ describe('SUYNL (section 28)', () => {
       const seen = await currentRow(timothy.id, 4);
 
       // Somebody else withdraws it and ticks it again: a new current row.
-      await submit(manuelAccount, [
+      await submit(admin, [
         { person_id: timothy.id, lesson: 4, done: false, seen_id: seen.id, reason: 'Re-filing.' },
       ]);
-      await submit(manuelAccount, [tick(timothy.id, 4)]);
+      await submit(admin, [tick(timothy.id, 4)]);
       const replacement = await currentRow(timothy.id, 4);
 
       const rowsBefore = await allRows();
@@ -520,7 +563,7 @@ describe('SUYNL (section 28)', () => {
       // naming A disagrees with nothing stored... except that A is no longer current.
       await submit(markAccount, [tick(timothy.id, 4)]);
       const seen = await currentRow(timothy.id, 4);
-      await submit(manuelAccount, [
+      await submit(admin, [
         { person_id: timothy.id, lesson: 4, done: false, seen_id: seen.id, reason: 'Not yet.' },
       ]);
 
@@ -538,7 +581,7 @@ describe('SUYNL (section 28)', () => {
     });
 
     it('answers a tick of a lesson somebody else already ticked as unchanged', async () => {
-      await submit(manuelAccount, [tick(timothy.id, 5)]);
+      await submit(admin, [tick(timothy.id, 5)]);
       const auditBefore = await allAudit();
 
       const response = await submit(markAccount, [tick(timothy.id, 5)]);
@@ -617,7 +660,8 @@ describe('SUYNL (section 28)', () => {
       for (let lesson = 1; lesson <= 10; lesson += 1) {
         const responses = await Promise.all([
           submit(markAccount, [tick(timothy.id, lesson)]),
-          submit(manuelAccount, [tick(timothy.id, lesson)]),
+          // An Admin is the only other filer since decision 0322.
+          submit(admin, [tick(timothy.id, lesson)]),
         ]);
 
         for (const response of responses) {
@@ -792,8 +836,8 @@ describe('SUYNL (section 28)', () => {
       expect(byId.get(manuel.id)?.may_file).toBe(false);
       expect(byId.get(mark.id)?.may_file).toBe(true);
       expect(byId.get(nathan.id)?.may_file).toBe(true);
-      // On behalf, through Mark.
-      expect(byId.get(timothy.id)?.may_file).toBe(true);
+      // Mark records Timothy's DCC, so his lessons are Mark's to file (decision 0322).
+      expect(byId.get(timothy.id)?.may_file).toBe(false);
       expect(byId.has(silas.id)).toBe(false);
     });
 
@@ -803,7 +847,9 @@ describe('SUYNL (section 28)', () => {
 
       expect(byId.get(raymond.id)?.may_file).toBe(false);
       expect(byId.get(grace.id)?.may_file).toBe(true);
-      expect(byId.get(hannah.id)?.may_file).toBe(true);
+      // Grace, Hannah's leader, holds no account and is a root, so nobody holds Hannah on
+      // a DCC checklist and only an Admin files her lessons (decision 0322).
+      expect(byId.get(hannah.id)?.may_file).toBe(false);
     });
 
     it('returns every person exactly once across pages', async () => {

@@ -21,6 +21,9 @@
  *     lower totals for periods already reported
  *   - Leaders do not hold `people.manage_lifecycle`; archiving reduces a leader's
  *     own People count, which is the incentive Person Lifecycle guards against
+ *   - Leaders and Senior Pastors hold none of `dcc.submit_on_behalf`,
+ *     `cell.submit_on_behalf` and `suynl.confirm_on_behalf`: reporting is done on the
+ *     ground by the leader who owes it, and only Admin steps in (decision 0322)
  */
 import { Capability } from './capabilities';
 import { ScopeType } from './scopes';
@@ -32,26 +35,25 @@ export type RoleDefaults = Partial<Record<Capability, ScopeType>>;
 /**
  * The nine Growth capabilities at one scope, written once for the three roles.
  *
- * Section 7 gives every one of them the same scope as the role's other subtree
- * capabilities — Whole Church for a Senior Pastor and an Admin, own subtree for a
- * Leader — so the only thing that varies between the three roles is the scope,
- * and nine lines repeated three times would be nine chances to mistype one.
+ * Section 7 gives them the same scope as the role's other subtree capabilities —
+ * Whole Church for a Senior Pastor and an Admin, own subtree for a Leader — except
+ * `suynl.confirm_on_behalf`, which only Admin holds (decision 0322). So the scope and
+ * that one flag are what vary between the three roles.
  */
-function growthAt(scope: ScopeType): RoleDefaults {
+function growthAt(scope: ScopeType, suynlOnBehalf: boolean): RoleDefaults {
   return {
     [Capability.ConquestViewSubtree]: scope,
     [Capability.ConquestConfirm]: scope,
     [Capability.ConquestConfirmOnBehalf]: scope,
     [Capability.SuynlViewSubtree]: scope,
     [Capability.SuynlConfirm]: scope,
-    [Capability.SuynlConfirmOnBehalf]: scope,
+    // Admin's alone (decision 0322); Training and Conquest keep theirs.
+    ...(suynlOnBehalf ? { [Capability.SuynlConfirmOnBehalf]: scope } : {}),
     [Capability.TrainingViewSubtree]: scope,
     [Capability.TrainingConfirm]: scope,
     [Capability.TrainingConfirmOnBehalf]: scope,
   };
 }
-
-const GROWTH_WHOLE_CHURCH = growthAt(ScopeType.WholeChurch);
 
 const SENIOR_PASTOR: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.WholeChurch,
@@ -61,11 +63,9 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.PeopleManagePastoralAssignment]: ScopeType.WholeChurch,
   [Capability.DccTakeAttendance]: ScopeType.WholeChurch,
   [Capability.DccViewSubtree]: ScopeType.WholeChurch,
-  [Capability.DccSubmitOnBehalf]: ScopeType.WholeChurch,
   [Capability.DccCorrectSubtree]: ScopeType.WholeChurch,
   [Capability.CellTakeAttendance]: ScopeType.WholeChurch,
   [Capability.CellViewSubtree]: ScopeType.WholeChurch,
-  [Capability.CellSubmitOnBehalf]: ScopeType.WholeChurch,
   [Capability.CellCorrectSubtree]: ScopeType.WholeChurch,
   [Capability.CellManageMembership]: ScopeType.WholeChurch,
   [Capability.CellManageLeadership]: ScopeType.WholeChurch,
@@ -79,7 +79,7 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
   [Capability.AuditView]: ScopeType.WholeChurch,
-  ...GROWTH_WHOLE_CHURCH,
+  ...growthAt(ScopeType.WholeChurch, false),
 };
 
 const ADMIN: RoleDefaults = {
@@ -113,7 +113,7 @@ const ADMIN: RoleDefaults = {
   [Capability.AccountsManage]: ScopeType.WholeChurch,
   [Capability.RolesManage]: ScopeType.WholeChurch,
   [Capability.PeopleMerge]: ScopeType.WholeChurch,
-  ...GROWTH_WHOLE_CHURCH,
+  ...growthAt(ScopeType.WholeChurch, true),
 };
 
 const LEADER: RoleDefaults = {
@@ -123,11 +123,9 @@ const LEADER: RoleDefaults = {
   [Capability.PeopleManagePastoralAssignment]: ScopeType.OwnSubtree,
   [Capability.DccTakeAttendance]: ScopeType.OwnSubtree,
   [Capability.DccViewSubtree]: ScopeType.OwnSubtree,
-  [Capability.DccSubmitOnBehalf]: ScopeType.OwnSubtree,
   [Capability.DccCorrectSubtree]: ScopeType.OwnSubtree,
   [Capability.CellTakeAttendance]: ScopeType.OwnSubtree,
   [Capability.CellViewSubtree]: ScopeType.OwnSubtree,
-  [Capability.CellSubmitOnBehalf]: ScopeType.OwnSubtree,
   [Capability.CellCorrectSubtree]: ScopeType.OwnSubtree,
   [Capability.CellManageMembership]: ScopeType.OwnSubtree,
   [Capability.CellManageLeadership]: ScopeType.OwnSubtree,
@@ -135,7 +133,7 @@ const LEADER: RoleDefaults = {
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.CellManageLifecycle]: ScopeType.OwnSubtree,
   [Capability.ReportsViewSubtree]: ScopeType.OwnSubtree,
-  ...growthAt(ScopeType.OwnSubtree),
+  ...growthAt(ScopeType.OwnSubtree, false),
 };
 
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {

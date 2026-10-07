@@ -278,7 +278,7 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
       }
     });
 
-    it('adds a downline leader’s meetings in `branch`, naming them, with Record offered', async () => {
+    it('adds a downline leader’s meetings in `branch`, naming them, to follow up rather than record', async () => {
       const { month, dayOfWeek, dates, created } = await stage(1);
       const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
       const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
@@ -301,8 +301,9 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
           member_id: expect.stringMatching(/^M-\d{6}$/),
           is_actor: false,
         });
-        // Manuel is a LEADER, holding cell.submit_on_behalf over his own subtree.
-        expect(row.may_record).toBe(true);
+        // A LEADER no longer holds cell.submit_on_behalf (decision 0322): Mark's meeting
+        // is Manuel's to follow up, and Mark's to record.
+        expect(row.may_record).toBe(false);
       }
 
       for (const row of rowsOf(response.body, manuelCell)) {
@@ -310,11 +311,19 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
         expect(row.may_record).toBe(true);
       }
 
-      // **`may_record: true` is a promise the submission route must keep.** Manuel
-      // records Mark's meeting on his behalf (section 14), and it leaves both views.
-      const submitted = await request(app.getHttpServer())
+      // **`may_record: false` is a promise the submission route keeps.**
+      const refused = await request(app.getHttpServer())
         .post(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/submit`)
         .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ status: 'HELD', attendance: [{ person_id: juan.id, present: true }] });
+
+      expect(refused.status).toBe(403);
+
+      // Only an Admin steps in (section 14), and the meeting then leaves the view.
+      const submitted = await request(app.getHttpServer())
+        .post(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/submit`)
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
         .set('Idempotency-Key', randomUUID())
         .send({ status: 'HELD', attendance: [{ person_id: juan.id, present: true }] });
 
@@ -322,6 +331,47 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
 
       const after = await queue(month, manuelAccount, 'branch');
       expect(rowsOf(after.body, markCell).map((row) => row.scheduled_date)).toEqual(dates.slice(1));
+    });
+
+    it('lets an upline read a downline meeting, says they may not record it, and refuses its correction (decision 0322)', async () => {
+      const { dayOfWeek, dates, created } = await stage(1);
+      const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+      await addMember(markCell, juan, created);
+
+      const roster = (account: TestAccount) =>
+        request(app.getHttpServer())
+          .get(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/roster`)
+          .set('Authorization', `Bearer ${account.accessToken}`);
+
+      // See meeting: Manuel reads it, and is told he may not record it.
+      const asManuel = await roster(manuelAccount);
+      expect(asManuel.status).toBe(200);
+      expect(asManuel.body.may_record).toBe(false);
+      expect((await roster(markAccount)).body.may_record).toBe(true);
+      expect((await roster(adminAccount)).body.may_record).toBe(true);
+
+      // Mark records it; Manuel may not correct it, and an Admin may.
+      const recorded = await request(app.getHttpServer())
+        .post(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/submit`)
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ status: 'HELD', attendance: [{ person_id: juan.id, present: true }] });
+      expect(recorded.status).toBe(201);
+
+      const correction = (account: TestAccount) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/submit`)
+          .set('Authorization', `Bearer ${account.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            status: 'HELD',
+            version: recorded.body.version,
+            attendance: [{ person_id: juan.id, present: false }],
+            correction_reason: 'Marked present in error.',
+          });
+
+      expect((await correction(manuelAccount)).status).toBe(403);
+      expect((await correction(adminAccount)).status).toBe(201);
     });
 
     it('never reaches a sibling branch or the upline', async () => {
@@ -367,7 +417,7 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
       expect(mine.body.meetings).toEqual([]);
     });
 
-    it('lists a downline leader’s row only where the actor may see it and record it', async () => {
+    it('lists a downline leader’s row where the actor may see it, saying whether they may record it', async () => {
       const { month, dayOfWeek, dates, created } = await stage(1);
       const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
       const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
@@ -415,17 +465,20 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
       const response = await queue(month, recorderOnly, 'branch');
 
       expect(response.status).toBe(200);
-      // Seeing is not enough: every queue entry carries the action that resolves it
-      // (sections 15 and 19, owner's choice of 2026-09-19), so a meeting he may not record
-      // is not listed. His own rows are.
-      expect(rowsOf(response.body, markCell)).toEqual([]);
+      // Seeing is enough to be listed (decision 0322): another leader's meeting is followed
+      // up, and `may_record` says he may not record it. His own rows he may.
+      const markRows = rowsOf(response.body, markCell);
+      expect(markRows.length).toBeGreaterThan(0);
+      for (const row of markRows) {
+        expect(row.may_record).toBe(false);
+      }
       const ownRows = rowsOf(response.body, manuelCell);
       expect(ownRows.length).toBeGreaterThan(0);
       for (const row of ownRows) {
         expect(row.may_record).toBe(true);
       }
 
-      // **Leaving it out agrees with the submission route**, which refuses him.
+      // **`may_record: false` agrees with the submission route**, which refuses him.
       const submitted = await request(app.getHttpServer())
         .post(`/api/v1/cells/${markCell.id}/meetings/${dates[0]}/submit`)
         .set('Authorization', `Bearer ${recorderOnly.accessToken}`)

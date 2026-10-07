@@ -1173,8 +1173,11 @@ function describeQueueItem(item: QueueItem, currentMonth: string, today: string)
   const waiting = daysAgoLabel(item.date, today);
   const open = item.month === currentMonth ? null : openUntilLabel(item.month, currentMonth);
   const href = isCell ? `/cells/${item.cellId}/meetings/${item.date}` : `/dcc/${item.eventId}`;
+  // Another leader's meeting is followed up rather than recorded (decision 0322): the API
+  // says per row whether this reader may record it.
+  const action = isCell && !item.mayRecord ? 'See meeting' : 'Record';
 
-  return { what, leader, waiting, open, href };
+  return { what, leader, waiting, open, href, action };
 }
 
 /** Awaiting entries as a table from `lg` and as cards below it. */
@@ -1327,7 +1330,11 @@ function QueueTableRow({
   currentMonth: string;
   today: string;
 }) {
-  const { what, leader, waiting, open, href } = describeQueueItem(item, currentMonth, today);
+  const { what, leader, waiting, open, href, action } = describeQueueItem(
+    item,
+    currentMonth,
+    today,
+  );
 
   return (
     <tr className={rowClasses}>
@@ -1339,8 +1346,8 @@ function QueueTableRow({
         {open === null ? null : <span className="text-muted block text-xs">{open}</span>}
       </td>
       <td className="px-3 py-3 text-right align-top">
-        <Link href={href} className={buttonClasses('primary')}>
-          Record
+        <Link href={href} className={buttonClasses(action === 'Record' ? 'primary' : 'secondary')}>
+          {action}
           <span className="sr-only">
             {' '}
             {what}, {dayLabel(item.date)}
@@ -1361,7 +1368,11 @@ function QueueCard({
   currentMonth: string;
   today: string;
 }) {
-  const { what, leader, waiting, open, href } = describeQueueItem(item, currentMonth, today);
+  const { what, leader, waiting, open, href, action } = describeQueueItem(
+    item,
+    currentMonth,
+    today,
+  );
 
   return (
     <li className="border-line flex flex-wrap items-center justify-between gap-3 border p-4">
@@ -1373,8 +1384,8 @@ function QueueCard({
           {open === null ? '' : ` · ${open}`}
         </p>
       </div>
-      <Link href={href} className={buttonClasses('primary')}>
-        Record
+      <Link href={href} className={buttonClasses(action === 'Record' ? 'primary' : 'secondary')}>
+        {action}
         <span className="sr-only">
           {' '}
           {what}, {dayLabel(item.date)}

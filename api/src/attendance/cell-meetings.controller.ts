@@ -76,8 +76,6 @@ export class CellMeetingsController {
    * **`cell.take_attendance` against the actor.** The capability follows the act that
    * resolves an entry — submitting a meeting's record — rather than the rows the answer
    * contains, which is the discriminator the people-without-a-Cell list already uses.
-   * The guard admits the caller and the service keeps the answer to the caller's own
-   * meetings; section 7 names that same division for the DCC checklist.
    */
   @Get('meetings/awaiting')
   @RequiresCapability(Capability.CellTakeAttendance, { kind: 'actor' })
@@ -128,8 +126,9 @@ export class CellMeetingsController {
   async roster(
     @Param('id', new UuidParamPipe('id')) cellId: string,
     @Param('meetingId') meetingId: string,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.meetings.rosterFor(cellId, meetingId);
+    return this.meetings.rosterFor(cellId, meetingId, actor);
   }
 
   /**

@@ -773,7 +773,8 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
 
   /** Ends a person's open assignment now and opens one under another leader. */
   const moveNow = async (personId: string, leaderId: string): Promise<void> => {
-    const moved = new Date();
+    // The database's clock, because the service reads now from it.
+    const moved = await databaseNow(db);
     await db
       .updateTable('pastoral_assignments')
       .set({ ended_at: moved })
@@ -786,9 +787,45 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
       .execute();
   };
 
+  /**
+   * Since decision 0322 only Admin holds `dcc.submit_on_behalf` by default; section 7 lets
+   * an Admin grant it beyond that. The cases below exercise decision 0313's screen under
+   * such a grant, at the leader's own subtree, and the next case the default.
+   */
+  const grantOnBehalf = async (account: TestAccount): Promise<void> => {
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: account.id,
+        capability: 'dcc.submit_on_behalf',
+        scope_type: 'OWN_SUBTREE',
+        read_only: false,
+        reason: 'Invented for this case (CLAUDE.md, Secrets).',
+        granted_by: admin.id,
+      })
+      .execute();
+  };
+
+  it('offers a leader no Record on another leader’s row by default, and refuses their screen (decision 0322)', async () => {
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+
+    const rows = await owedRows(manuelAccount, sunday, eventId);
+    const byLeader = new Map(rows.map((row) => [row.leader.person_id, row]));
+
+    // Mark's row is still listed, to follow up, and says nothing about whose screen it is.
+    expect(byLeader.get(mark.id)).toMatchObject({ record_for: null, may_record: false });
+    expect(byLeader.get(manuel.id)).toMatchObject({ record_for: manuel.id, may_record: true });
+
+    const refused = await leaderRoster(manuelAccount, eventId, mark.id);
+    expect(refused.status).toBe(403);
+    expect(refused.body.error.code).toBe('CAPABILITY_DENIED');
+  });
+
   it('offers Record on another leader’s row, opening that leader’s own screen', async () => {
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
+    await grantOnBehalf(manuelAccount);
 
     const rows = await owedRows(manuelAccount, sunday, eventId);
     const byLeader = new Map(rows.map((row) => [row.leader.person_id, row]));
@@ -805,6 +842,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     await assignTo(db, quinn.id, paul.id);
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
+    await grantOnBehalf(manuelAccount);
 
     const rows = await owedRows(manuelAccount, sunday, eventId);
     const paulRow = rows.find((row) => row.leader.person_id === paul.id);
@@ -823,6 +861,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
     await moveNow(paul.id, mark.id);
+    await grantOnBehalf(markAccount);
 
     const rows = await owedRows(markAccount, sunday, eventId);
     const paulRow = rows.find((row) => row.leader.person_id === paul.id);
@@ -838,6 +877,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     await assignTo(db, quinn.id, paul.id);
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
+    await grantOnBehalf(manuelAccount);
 
     const response = await leaderRoster(manuelAccount, eventId, mark.id);
 
@@ -853,6 +893,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const eventId = await createEvent(sunday);
     // Timothy was Mark's on the Sunday and is Raymond's now, above Manuel.
     await moveNow(timothy.id, raymond.id);
+    await grantOnBehalf(manuelAccount);
 
     const response = await leaderRoster(manuelAccount, eventId, mark.id);
 
@@ -863,6 +904,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
   it('answers an empty checklist for a leader holding no account', async () => {
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
+    await grantOnBehalf(manuelAccount);
 
     const response = await leaderRoster(manuelAccount, eventId, nathan.id);
 
@@ -874,6 +916,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
   it('refuses a reader’s upline, and a reader holding no capability', async () => {
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
+    await grantOnBehalf(markAccount);
 
     const upline = await leaderRoster(markAccount, eventId, manuel.id);
     expect(upline.status).toBe(403);
@@ -939,6 +982,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
   });
 
   it('answers NOT_FOUND for an event that does not exist', async () => {
+    await grantOnBehalf(manuelAccount);
     const response = await leaderRoster(manuelAccount, randomUUID(), mark.id);
 
     expect(response.status).toBe(404);

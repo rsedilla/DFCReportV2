@@ -1,9 +1,10 @@
 import request from 'supertest';
 import { Client } from 'pg';
 
+import { AccountsRepository } from '../../src/auth/accounts.repository';
 import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
 import { Capability } from '../../src/auth/authorization/capabilities';
-import { filingFor } from '../../src/common/growth/growth-filing';
+import { filingFor, submitterLookup } from '../../src/common/growth/growth-filing';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { PeopleReadService } from '../../src/people/people.read.service';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -39,6 +40,8 @@ describe('a Growth list page (perf-growth-lists)', () => {
     {
       path: 'suynl',
       capabilities: { confirm: Capability.SuynlConfirm, onBehalf: Capability.SuynlConfirmOnBehalf },
+      // SUYNL follows DCC (decision 0322): the save asks who records the person's DCC.
+      followsDcc: true,
     },
     {
       path: 'training',
@@ -46,6 +49,7 @@ describe('a Growth list page (perf-growth-lists)', () => {
         confirm: Capability.TrainingConfirm,
         onBehalf: Capability.TrainingConfirmOnBehalf,
       },
+      followsDcc: false,
     },
   ];
 
@@ -157,6 +161,9 @@ describe('a Growth list page (perf-growth-lists)', () => {
         const ids = page.body.data.map((row) => row.person_id);
         const identities = await people.forDecisions(ids);
         const assignments = await hierarchy.assignmentsAsOf(db, ids, new Date());
+        const filerOf = tab.followsDcc
+          ? submitterLookup({ hierarchy, accounts: app.get(AccountsRepository) }, db, new Date())
+          : undefined;
 
         expect(ids.length).toBeGreaterThan(0);
         if (account === raymondAccount) {
@@ -174,6 +181,8 @@ describe('a Growth list page (perf-growth-lists)', () => {
             row.person_id,
             identities.get(row.person_id),
             assignments.get(row.person_id),
+            undefined,
+            filerOf,
           );
           expect([row.person_id, row.may_file]).toEqual([
             row.person_id,
