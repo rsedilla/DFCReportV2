@@ -762,7 +762,9 @@ export class DccCoverageService {
       }
 
       const { owed, owing } = await this.obligations(executor, event, null);
-      const submitters = await this.submittersOf(event, [...owed], executor);
+      // Accounts as they stood on the Sunday, so a later account moves no past period
+      // (decision 0325, owner 2026-10-08).
+      const submitters = await this.submittersOf(event, [...owed], executor, true);
       const recordedBy = new Map<string, boolean>();
 
       for (const leaderId of owed) {
@@ -814,10 +816,13 @@ export class DccCoverageService {
     event: EventRow,
     leaderIds: readonly string[],
     executor: Db = this.db,
+    /** Read who holds an account as of the event rather than now (decision 0325). */
+    accountsAsOfEvent = false,
   ): Promise<Map<string, string>> {
+    const accountsAt = accountsAsOfEvent ? event.at : undefined;
     const result = new Map<string, string>();
     const holders = new Set(
-      [...(await this.accounts.personsHoldingAccounts(executor, leaderIds))].map((id) =>
+      [...(await this.accounts.personsHoldingAccounts(executor, leaderIds, accountsAt))].map((id) =>
         canonicalId(id),
       ),
     );
@@ -847,7 +852,7 @@ export class DccCoverageService {
         ...new Set([...parentOf.values()].filter((id): id is string => id !== null)),
       ];
       const parentHolders = new Set(
-        [...(await this.accounts.personsHoldingAccounts(executor, parents))].map((id) =>
+        [...(await this.accounts.personsHoldingAccounts(executor, parents, accountsAt))].map((id) =>
           canonicalId(id),
         ),
       );

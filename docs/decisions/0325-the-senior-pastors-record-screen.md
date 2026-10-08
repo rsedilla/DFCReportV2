@@ -22,7 +22,8 @@ chosen by a switch and opening on the current week:
   decision 0187), its frozen responsible leader where
   the meeting has a record (decision 0163); a later handover never moves it (owner, 2026-10-08), or when, as of a DCC event in it that has begun and
   is not removed (decision 0229), they are the submitter of at least one DCC line (Section 9). They count whether or not their account
-  is active.
+  is active. **Who held an account is read as of that event** (owner, 2026-10-08), so an account
+  given later moves no past week or month.
 - **A leader has recorded their Cell group** when every such meeting has a record, and **their DCC checklist** when each such event has a record for someone on it, whoever
   entered it, an administrator stepping in included.
 - **Each leader counts once over the period, all or nothing** (owner, 2026-10-08). Decision 0224

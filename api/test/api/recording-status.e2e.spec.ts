@@ -44,7 +44,7 @@ describe('Recording status (decision 0325)', () => {
   beforeEach(async () => {
     await truncateAll(db);
 
-    // Created before Gemma and sorting after her, so the tables' surname order is tested.
+    // Sorting after Gemma by surname, so the tables' Network order is what puts him first.
     oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Villanueva', network: 'MENS' });
     await assignTo(db, oriel.id, null);
     gemma = await createPerson(db, { firstName: 'Gemma', lastName: 'Bautista', network: 'WOMENS' });
@@ -56,7 +56,16 @@ describe('Recording status (decision 0325)', () => {
       seniorPastorSlot: 1,
     });
     await createAccount(app, db, { person: gemma, roles: ['SENIOR_PASTOR'], seniorPastorSlot: 2 });
+    await accountsHeldSinceLongAgo();
   });
+
+  /**
+   * Every account so far existed long before any week read here: Recording status reads who
+   * held an account as of each Sunday (decision 0325), and a fixture's is created now.
+   */
+  async function accountsHeldSinceLongAgo(): Promise<void> {
+    await db.updateTable('accounts').set({ created_at: LONG_AGO }).execute();
+  }
 
   afterAll(async () => {
     await app.close();
@@ -303,6 +312,20 @@ describe('Recording status (decision 0325)', () => {
     expect(rowOf(response.body, ana)?.status).toEqual({ kind: 'NOTHING_OWED' });
   });
 
+  it('keeps a past Sunday with the submitter who held an account then, after a later account', async () => {
+    const { monday, day } = await lastWeek();
+    const ana = await leader('Ana', 'Cruz', oriel);
+    await leader('Dan', 'Esguerra', ana);
+    await createEvent(day(7));
+    // Ana is given an account now, after the Sunday: on the Sunday Oriel recorded her people.
+    await createAccount(app, db, { person: ana, roles: ['LEADER'] });
+
+    const response = await status(pastor, 'WEEK', monday).expect(200);
+
+    expect(response.body.whole_church.dcc).toEqual({ recorded: 0, owed: 1, percent: 0 });
+    expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 0 });
+  });
+
   it('counts a DCC submitter whose account is awaiting activation', async () => {
     const { monday, day } = await lastWeek();
     const ana = await leader('Ana', 'Cruz', oriel);
@@ -313,6 +336,7 @@ describe('Recording status (decision 0325)', () => {
       .set({ status: 'PENDING_ACTIVATION' })
       .where('id', '=', anaAccount.id)
       .execute();
+    await accountsHeldSinceLongAgo();
     await createEvent(day(7));
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
@@ -341,6 +365,7 @@ describe('Recording status (decision 0325)', () => {
     });
     await createAccount(app, db, { person: ana, roles: ['LEADER'] });
     await createAccount(app, db, { person: cara, roles: ['LEADER'] });
+    await accountsHeldSinceLongAgo();
 
     await cellOf(ana, 2);
     const danCell = await cellOf(dan, 2);
@@ -359,13 +384,14 @@ describe('Recording status (decision 0325)', () => {
     expect(body.whole_church.cell).toEqual({ recorded: 2, owed: 4, percent: 50 });
     expect(body.whole_church.dcc).toEqual({ recorded: 1, owed: 3, percent: 33 });
 
-    // One table per root, in surname order, rows in surname order.
+    // One table per root, the Men's first whatever the names (owner, 2026-10-08): Oriel sorts
+    // after Gemma by surname and still comes first. Rows in surname order.
     expect(body.tables.map((table: { root: { id: string } }) => table.root.id)).toEqual([
-      gemma.id,
       oriel.id,
+      gemma.id,
     ]);
-    expect(body.tables[0].rows.map((row: Row) => row.leader.id)).toEqual([cara.id]);
-    expect(body.tables[1].rows.map((row: Row) => row.leader.id)).toEqual([ana.id, ben.id]);
+    expect(body.tables[0].rows.map((row: Row) => row.leader.id)).toEqual([ana.id, ben.id]);
+    expect(body.tables[1].rows.map((row: Row) => row.leader.id)).toEqual([cara.id]);
 
     // Ana's row counts Ana and Dan. Ana is missing both columns and is counted once.
     expect(rowOf(body, ana)).toMatchObject({
