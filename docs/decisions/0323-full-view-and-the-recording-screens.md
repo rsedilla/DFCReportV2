@@ -45,7 +45,7 @@ from a role or from the capabilities.
 **6. On the day this is built, the two Network roots and their direct leaders start with Full
 view, and every other Leader account starts without it** (owner, 2026-10-07). The set is taken
 once from the tree as it stands that day and is not kept up afterwards: a leader who joins a root's
-direct leaders later is ticked by an administrator.
+direct leaders later is ticked by an administrator. **An administrator ticks the launch set by hand on that day** (owner, 2026-10-08), so each tick is logged under their name like any other; nothing ticks it as a system action.
 
 **7. This replaces decision 0277's one sidebar for every account.** Where an account lands is
 unchanged (decision 0245).
@@ -54,8 +54,7 @@ unchanged (decision 0245).
 route guarded by a point 2 capability, and the same account with Full view is admitted; ticking
 and clearing are refused to a Leader and to a Senior Pastor and admitted to an Admin, and each is
 audit logged; a new Leader account starts without Full view; Full view changes nothing for a
-Senior Pastor or an Admin; and the launch step ticks exactly the two roots and their direct
-leaders who hold Leader accounts.
+Senior Pastor or an Admin.
 
 ---
 

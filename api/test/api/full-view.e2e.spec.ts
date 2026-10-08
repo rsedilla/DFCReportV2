@@ -1,11 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { ModulesContainer } from '@nestjs/core';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { sql } from 'kysely';
 import request from 'supertest';
 
 import { CAPABILITY_METADATA } from '../../src/auth/authorization/authorization.decorators';
@@ -287,17 +284,22 @@ describe('Full view (decision 0323)', () => {
       expect(entries).toHaveLength(1);
     });
 
-    it('is refused to a Leader, with or without Full view', async () => {
-      const target = await leaderAccount(false);
-      const other = await createAccount(app, db, {
-        person: await createPerson(db, { firstName: 'Teodoro', network: 'MENS' }),
-        roles: ['LEADER'],
-        fullView: true,
-      });
+    it.each([true, false])(
+      'refuses ticking and clearing to a Leader (actor with Full view: %s)',
+      async (actorFullView) => {
+        const target = await leaderAccount(false);
+        const other = await createAccount(app, db, {
+          person: await createPerson(db, { firstName: 'Teodoro', network: 'MENS' }),
+          roles: ['LEADER'],
+          fullView: actorFullView,
+        });
 
-      const response = await setFullView(other, target.id, true).expect(403);
-      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
-    });
+        for (const value of [true, false]) {
+          const response = await setFullView(other, target.id, value).expect(403);
+          expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+        }
+      },
+    );
 
     it('is refused to a Senior Pastor', async () => {
       nameSeniorPastors(app, [root.id]);
@@ -308,8 +310,10 @@ describe('Full view (decision 0323)', () => {
       });
       const target = await leaderAccount(false);
 
-      const response = await setFullView(pastor, target.id, true).expect(403);
-      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      for (const value of [true, false]) {
+        const response = await setFullView(pastor, target.id, value).expect(403);
+        expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      }
     });
 
     it('is refused on an account holding no Leader role', async () => {
@@ -374,87 +378,6 @@ describe('Full view (decision 0323)', () => {
       expect(body.screens).toBe('RECORDING');
       for (const capability of LEADER_FULL_VIEW_ONLY) {
         expect(capabilitiesOf(body)).not.toContain(capability);
-      }
-    });
-  });
-
-  describe('the launch step (migration 0024)', () => {
-    /** The migration's own statement, read from the file so the test runs what deploys. */
-    function launchStep(): string {
-      const file = readFileSync(
-        join(__dirname, '..', '..', 'migrations', '0024_account_full_view.sql'),
-        'utf8',
-      );
-      const up = file.slice(0, file.indexOf('-- migrate:down'));
-
-      return up.slice(up.indexOf('WITH ticked AS ('));
-    }
-
-    it('ticks exactly the two roots and their direct leaders who hold Leader accounts', async () => {
-      const womensRoot = await createPerson(db, { firstName: 'Gemma', network: 'WOMENS' });
-      await assignTo(db, womensRoot.id, null);
-      const womensLeader = await createPerson(db, { firstName: 'Liza', network: 'WOMENS' });
-      await assignTo(db, womensLeader.id, womensRoot.id);
-      const grandchild = await createPerson(db, { firstName: 'Mario', network: 'MENS' });
-      await assignTo(db, grandchild.id, leader.id);
-
-      // One root holds a Leader account, which the step ticks; the other holds
-      // `SENIOR_PASTOR` alone, which Full view does not touch.
-      nameSeniorPastors(app, [womensRoot.id]);
-      const rootLeader = await createAccount(app, db, {
-        person: root,
-        roles: ['LEADER'],
-        fullView: false,
-      });
-      const pastor = await createAccount(app, db, {
-        person: womensRoot,
-        roles: ['SENIOR_PASTOR'],
-        seniorPastorSlot: 2,
-        fullView: false,
-      });
-      const direct = await createAccount(app, db, {
-        person: leader,
-        roles: ['LEADER'],
-        fullView: false,
-      });
-      const directWomens = await createAccount(app, db, {
-        person: womensLeader,
-        roles: ['LEADER'],
-        fullView: false,
-      });
-      const deeper = await createAccount(app, db, {
-        person: grandchild,
-        roles: ['LEADER'],
-        fullView: false,
-      });
-
-      await sql.raw(launchStep()).execute(db);
-
-      const ticked = await db
-        .selectFrom('accounts')
-        .select('id')
-        .where('full_view', '=', true)
-        .execute();
-      expect(ticked.map((row) => row.id).sort()).toEqual(
-        [rootLeader.id, direct.id, directWomens.id].sort(),
-      );
-      expect(ticked.map((row) => row.id)).not.toContain(pastor.id);
-      expect(ticked.map((row) => row.id)).not.toContain(deeper.id);
-
-      const entries = await db
-        .selectFrom('audit_log')
-        .select(['actor_id', 'target_id', 'before', 'after'])
-        .where('action', '=', 'account.full_view_changed')
-        .execute();
-      expect(entries.map((entry) => entry.target_id).sort()).toEqual(
-        ticked.map((row) => row.id).sort(),
-      );
-      for (const entry of entries) {
-        expect(entry).toMatchObject({
-          actor_id: null,
-          before: { full_view: false },
-          after: { full_view: true },
-        });
       }
     });
   });

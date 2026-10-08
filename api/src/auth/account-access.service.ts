@@ -32,11 +32,12 @@ export type FullViewBody = {
  * Disabling an account and re-enabling it, by an administrator (SKILL.md section 6,
  * decision 0307), and ticking Full view (section 7, decision 0323).
  *
- * **Both take every lock in the order setting a password takes them**: the account's
+ * **Disabling and re-enabling take every lock in the order setting a password takes them**:
+ * the account's
  * tokens first, then the account row. An activation already under way finishes first
  * and this then sees its outcome; one that comes later finds its link used.
  *
- * Roles, grants and a Senior Pastor seat are untouched by either. Disablement is an
+ * Roles, grants and a Senior Pastor seat are untouched by those two. Disablement is an
  * authentication decision (section 10), so a disabled account keeps its authority and
  * re-enabling gives it all back.
  */
