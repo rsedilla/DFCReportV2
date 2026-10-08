@@ -220,7 +220,7 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
         </span>
       );
     case 'NOTHING_OWED':
-      return <span className="text-muted">Nothing owed</span>;
+      return <span>Nothing owed</span>;
   }
 }
 

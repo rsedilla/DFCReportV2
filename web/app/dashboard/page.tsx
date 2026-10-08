@@ -217,8 +217,7 @@ function Dashboard() {
 
   // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
   // decision 0323): no other list, no month figures, and People I oversee only while the
-  // server says a leader holding an account sits directly beneath it. Its other lists are
-  // not asked for, so nothing is fetched to be hidden.
+  // server says a leader holding an account sits directly beneath it.
   const recordingOnly = me.data?.screens === 'RECORDING';
   // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
   // their own Awaiting a record with no People I oversee, and none of the other lists or

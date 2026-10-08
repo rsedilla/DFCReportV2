@@ -1024,7 +1024,7 @@ export class ReportingService {
     const end = reportRangeEnd(kind, start);
 
     // **Through the report seam** (decision 0210), at the month a range resolves at, as the
-    // My 12 tables are: the client names it and ssertRangeReadable refuses any other.
+    // My 12 tables are: the client names it and assertRangeReadable refuses any other.
     return this.overPeriod(guardMonth, async (trx) => {
       // A period that has not begun owes nothing yet and is refused (decision 0216).
       const today = await assertRangeReadable(trx, kind, start, guardMonth);
