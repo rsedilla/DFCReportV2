@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-08, the trigger being decision 0324: of 323 files, 322 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0324 each moved the first two and
+2026-10-08, the trigger being decision 0325: of 324 files, 323 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0325 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-08 and triggered by 0324, and was left stale by 0325 the same day. The one before that was dated
 2026-10-08 and triggered by 0323, and was left stale by 0324 the same day. The one before that was dated
 2026-10-07 and triggered by 0322, and was left stale by 0323 the next day. The one before that was dated
 2026-10-07 and triggered by 0321, and was left stale by 0322 the same day. The one before that was dated
@@ -689,6 +690,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-07 — [Ground reporting: a leader records only what they owe](docs/decisions/0322-ground-reporting.md)
 - 2026-10-08 — [Full view, and the screens of a leader who records](docs/decisions/0323-full-view-and-the-recording-screens.md)
 - 2026-10-08 — [People I oversee stops two levels down](docs/decisions/0324-people-i-oversee-stops-two-levels-down.md)
+- 2026-10-08 — [The Senior Pastors' Record screen](docs/decisions/0325-the-senior-pastors-record-screen.md)
 
 ### Open — awaiting a ruling
 
