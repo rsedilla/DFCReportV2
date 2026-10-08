@@ -161,6 +161,19 @@ describe('People I oversee stops two levels down (decision 0324)', () => {
       );
     });
 
+    it('leaves the list of an account holding Leader and Admin together unchanged', async () => {
+      const { month } = await cellsFor([raymond, jhoemar, dave, angelo]);
+      const both = await createAccount(app, db, {
+        person: raymond,
+        roles: ['LEADER', 'ADMIN'],
+        fullView: false,
+      });
+
+      expect(await cellLeadersListed(both, month)).toEqual(
+        [raymond.id, jhoemar.id, dave.id, angelo.id].sort(),
+      );
+    });
+
     it('leaves an Admin’s list unchanged', async () => {
       const { month } = await cellsFor([raymond, jhoemar, dave, angelo]);
       const admin = await createAccount(app, db, { person: raymond, roles: ['ADMIN'] });

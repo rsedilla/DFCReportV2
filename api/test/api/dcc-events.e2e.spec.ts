@@ -850,10 +850,9 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     expect(paulRow).toMatchObject({ record_for: mark.id, may_record: true });
   });
 
-  it('finds that leader by the Sunday’s tree, and offers Record only where the reader may record for them', async () => {
+  it('leaves off a row whose submitter on the Sunday is outside the reader’s branch now (decision 0324)', async () => {
     // On the Sunday Paul (no account) was under Nathan (no account), so Quinn's record fell
-    // to Manuel. Paul has since moved under Mark. Mark now sees Paul's row, but it is
-    // Manuel's to record, and Mark may not record for his own upline.
+    // to Manuel. Paul has since moved under Mark, but the row is still Manuel's to record.
     const paul = await createPerson(db, { firstName: 'Paul', network: 'MENS' });
     await assignTo(db, paul.id, nathan.id);
     const quinn = await createPerson(db, { firstName: 'Quinn', network: 'MENS' });
@@ -866,7 +865,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const rows = await owedRows(markAccount, sunday, eventId);
     const paulRow = rows.find((row) => row.leader.person_id === paul.id);
 
-    // Manuel recorded it on the Sunday and is outside Mark's branch now, so a Leader account
+    // Manuel was the one to record it, and is outside Mark's branch now, so a Leader account
     // does not list it (decision 0324).
     expect(paulRow).toBeUndefined();
   });
