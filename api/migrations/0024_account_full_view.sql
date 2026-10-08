@@ -15,14 +15,14 @@
 ALTER TABLE accounts ADD COLUMN full_view boolean NOT NULL DEFAULT false;
 
 -- ---------------------------------------------------------------------------
--- The launch step (decision 0323, point 6): the two roots' direct leaders who hold a
--- Leader account start with Full view, taken once from the tree as it stands when this
--- runs. Nothing keeps it up afterwards. Each tick is audit logged as a system action
+-- The launch step (decision 0323, point 6): the two roots and their direct leaders who
+-- hold a Leader account start with Full view, taken once from the tree as it stands when
+-- this runs. Nothing keeps it up afterwards. Each tick is audit logged as a system action
 -- (`actor_id` null, which section 21 and migration 0002 allow), with its previous and
 -- new value, as an administrator's tick is.
 --
--- The roots themselves hold `SENIOR_PASTOR` accounts, which Full view does not touch.
--- On a database with no tree, which is every test and CI database, this ticks nobody.
+-- A root holding `SENIOR_PASTOR` alone is not ticked: Full view changes only what the
+-- Leader role gives. On a database with no tree this ticks nobody.
 -- ---------------------------------------------------------------------------
 
 WITH ticked AS (
@@ -30,13 +30,14 @@ WITH ticked AS (
      SET full_view = true, updated_at = now()
    WHERE EXISTS (
            SELECT 1
-             FROM pastoral_assignments child
-             JOIN pastoral_assignments root
-               ON root.person_id = child.leader_id
+             FROM pastoral_assignments own
+             LEFT JOIN pastoral_assignments root
+               ON root.person_id = own.leader_id
               AND root.ended_at IS NULL
               AND root.leader_id IS NULL
-            WHERE child.person_id = a.person_id
-              AND child.ended_at IS NULL
+            WHERE own.person_id = a.person_id
+              AND own.ended_at IS NULL
+              AND (own.leader_id IS NULL OR root.id IS NOT NULL)
          )
      AND EXISTS (
            SELECT 1

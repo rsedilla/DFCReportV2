@@ -284,7 +284,7 @@ export class AuthService {
    */
   async describe(actor: Actor): Promise<Record<string, unknown>> {
     const account = await this.accounts.findById(actor.accountId);
-    const { roles, grants } = await this.authorization.rolesAndGrantsFor(actor.accountId);
+    const { roles, grants, screens } = await this.authorization.rolesAndGrantsFor(actor.accountId);
     const person = await this.people.forDecision(actor.personId);
 
     return {
@@ -316,6 +316,9 @@ export class AuthService {
       // within `v1`, and a list rather than a value because the table permits more than
       // one row and provisioning's one-role rule is a rule about provisioning.
       roles,
+      // Which screens the account has (decision 0323, point 5), so that the client never
+      // works it out from `roles` or from the capabilities below. Additive (section 22).
+      screens,
       // **A grant that covers nothing is not advertised.** Section 7 gives some
       // capabilities Whole Church and nothing narrower, and a narrower grant of one
       // authorizes no request at all — so publishing it invites a client to render

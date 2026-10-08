@@ -11,6 +11,7 @@ import { isCapability, isReadCapability, type Capability } from './capabilities'
 import { isGrantMaking } from './grant-making';
 import { LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
+import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
@@ -217,8 +218,10 @@ export class AuthorizationService {
    */
   async rolesAndGrantsFor(
     accountId: string,
-  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
-    return this.effective(accountId);
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[]; screens: Screens }> {
+    const { roles, grants, fullView } = await this.effective(accountId);
+
+    return { roles, grants, screens: screensFor(roles, fullView) };
   }
 
   /**
@@ -251,7 +254,7 @@ export class AuthorizationService {
    */
   private async effective(
     accountId: string,
-  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[]; fullView: boolean }> {
     const [roles, grants] = await Promise.all([
       this.activeRoles(this.db, accountId),
       this.db
@@ -328,7 +331,7 @@ export class AuthorizationService {
       });
     }
 
-    return { roles: roles.honoured, grants: effective };
+    return { roles: roles.honoured, grants: effective, fullView: roles.fullView };
   }
 
   /**

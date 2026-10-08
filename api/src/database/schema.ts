@@ -225,6 +225,9 @@ export type AuditAction =
   // "disablement" and "Account reactivation". Each targets the account.
   | 'account.disabled'
   | 'account.reactivated'
+  // Full view ticked or cleared (section 7, decision 0323), with its previous and new
+  // value. Targets the account; the launch step in migration 0024 writes it with no actor.
+  | 'account.full_view_changed'
   // Section 21 lists "Second sign-in step set up or reset, and a recovery code used".
   // Each targets the account.
   | 'second_step.set_up'
