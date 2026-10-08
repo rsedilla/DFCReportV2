@@ -20,6 +20,7 @@ import {
   mockPersonCreated,
   mockPossibleMatches,
   mockSignInRefused,
+  mockScreens,
   mockSecondStep,
   SECOND_STEP_CODE,
   mockSignedIn,
@@ -48,6 +49,7 @@ import {
   mockMeetingRoster,
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
+  mockRecordingStatus,
 } from './mock-attendance';
 import {
   READINESS_ARTURO_ID,
@@ -493,6 +495,38 @@ const SCANS = [
     },
   },
   {
+    // A Recording-only account's own Cells (decision 0323): two cards, each with its
+    // members and this month's meetings, and asking for a new Cell.
+    name: 'my cell',
+    route: '/my-cell',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockScreens(page, 'RECORDING');
+      await mockCells(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { level: 2, name: 'Couple · Wed' })).toBeVisible();
+    },
+  },
+  {
+    // Asking for a new Cell (section 10), the dialog over My Cell: the person picker, two
+    // radio groups and a time field.
+    name: 'my cell, asking for a new cell',
+    route: '/my-cell',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockScreens(page, 'RECORDING');
+      await mockCells(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { level: 2, name: 'Couple · Wed' })).toBeVisible();
+      await page.getByRole('button', { name: 'Ask for a new Cell' }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'Ask for a new Cell' }).getByLabel('What time'),
+      ).toBeVisible();
+    },
+  },
+  {
     // All four states in one month: met, did not meet, moved, and the one that
     // is not a status at all.
     name: 'cell meetings',
@@ -653,6 +687,26 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('This Sunday takes no record')).toBeVisible();
+    },
+  },
+  {
+    // The Senior Pastors' Record opens on Recording status (decision 0325): two Whole Church
+    // boxes, a table per root's direct leaders, and Others. Completed is a pale red label,
+    // the one status shown by colour, which is why its contrast is worth scanning.
+    name: 'record, recording status',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockScreens(page, 'SENIOR_PASTOR');
+      await mockMeetingsAwaiting(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
+      await mockRecordingStatus(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { level: 3, name: 'Others' })).toBeVisible();
+      await expect(page.getByText('Completed').filter({ visible: true }).first()).toBeVisible();
     },
   },
   {
@@ -1596,6 +1650,14 @@ const TARGET_SWEEP = [
     minimum: 15,
   },
   {
+    // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
+    // **five**. Your requests renders nothing here, the sweep answering no sent requests.
+    name: 'my cell',
+    route: '/my-cell',
+    settle: 'Ask for a new Cell',
+    minimum: 5,
+  },
+  {
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
     settleRole: 'heading' as const,
@@ -1883,6 +1945,20 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'my cell, asking for a new cell',
+    why:
+      'Opens the Ask for a new Cell dialog over the measured "my cell". Its controls are the ' +
+      "person picker's search field and Find button, measured under \"new cell\", which counts " +
+      'that same picker, labelled radios as on "add a person", a time field, and two Buttons, ' +
+      'the primitive measured on every screen.',
+  },
+  {
+    name: 'record, recording status',
+    why:
+      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
+      'full-view.spec.ts, on the same fixture.',
+  },
   {
     name: 'suynl report, a row opened',
     why:
