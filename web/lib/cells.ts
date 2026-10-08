@@ -103,6 +103,25 @@ export function closedOnLabel(date: string): string {
 }
 
 /**
+ * Ask for a new Cell led by somebody beneath the asker (section 10): a new-Cell request
+ * an administrator approves. Nobody may name themselves, and the server refuses it.
+ */
+export async function requestNewCell(
+  body: {
+    prospective_leader_id: string;
+    category: CellCategory;
+    day_of_week: number;
+    time_of_day: string;
+  },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>('/api/v1/cells/leadership-requests', {
+    method: 'POST',
+    body: { kind: 'NEW_CELL', ...body },
+    idempotencyKey,
+  });
+}
+/**
  * Ask for a closed Cell to restart (decisions 0264 and 0265): a new-Cell request naming
  * the Cell it resumes and the leader who led it. Admin approves it like any other.
  */

@@ -187,6 +187,32 @@ export class CellFiguresService {
   }
 
   /**
+   * The frozen responsible leader of every meeting scheduled in the range that has a record,
+   * keyed `cell_id|scheduled_date`, for the Senior Pastors' *Recording status* (decision 0325,
+   * point 2): a recorded meeting is owed by its frozen leader (decision 0163), whatever its
+   * status.
+   */
+  async recordedLeadersBetween(
+    executor: Db | Transaction<Database>,
+    from: string,
+    to: string,
+  ): Promise<Map<string, string>> {
+    const rows = await executor
+      .selectFrom('cell_meetings')
+      .select(['cell_id', 'scheduled_date', 'responsible_leader_id'])
+      .where('scheduled_date', '>=', from)
+      .where('scheduled_date', '<=', to)
+      .execute();
+
+    return new Map(
+      rows.map((row) => [
+        `${row.cell_id}|${String(row.scheduled_date)}`,
+        row.responsible_leader_id,
+      ]),
+    );
+  }
+
+  /**
    * The Cells whose meetings scheduled in the range were recorded with this person as
    * responsible leader, for My 12's own-row label (decision 0293).
    */

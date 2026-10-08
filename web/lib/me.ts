@@ -34,8 +34,18 @@ export interface SessionDescription {
    * row an account holds is one this system refuses to honour.
    */
   roles: AccountRole[];
+  /**
+   * Which screens the account has (decision 0323, point 5): today's, the Senior Pastors',
+   * or the recording ones. Named by the server so this client never works it out from
+   * `roles` or the capabilities.
+   */
+  screens: Screens;
+  /** Whether `Record` offers *People I oversee* (section 19, decision 0323). */
+  people_i_oversee: boolean;
   capabilities: GrantSummary[];
 }
+
+export type Screens = 'FULL' | 'SENIOR_PASTOR' | 'RECORDING';
 
 export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
 

@@ -174,16 +174,24 @@ export class AccountsRepository {
    * Here rather than in `attendance` because `auth` owns `accounts` (section 2), and
    * the query is rooted in this table rather than in the caller's.
    */
-  async personsHoldingAccounts(executor: Db, personIds: readonly string[]): Promise<Set<string>> {
+  async personsHoldingAccounts(
+    executor: Db,
+    personIds: readonly string[],
+    /** Only accounts created by this instant (decision 0325); every account where omitted. */
+    asOf?: Date,
+  ): Promise<Set<string>> {
     if (personIds.length === 0) {
       return new Set();
     }
 
-    const rows = await executor
+    let query = executor
       .selectFrom('accounts')
       .select('person_id')
-      .where('person_id', 'in', [...personIds])
-      .execute();
+      .where('person_id', 'in', [...personIds]);
+    if (asOf !== undefined) {
+      query = query.where('created_at', '<=', asOf);
+    }
+    const rows = await query.execute();
 
     return new Set(rows.map((row) => row.person_id));
   }

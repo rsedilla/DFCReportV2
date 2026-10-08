@@ -63,6 +63,9 @@ const ME = {
   email: 'admin@example.invalid',
   first_name: 'Marilou',
   roles: ['LEADER'],
+  // Today's screens, which every suite written before decision 0323 exercises.
+  screens: 'FULL',
+  people_i_oversee: true,
   capabilities: CAPABILITIES,
 };
 
@@ -127,6 +130,42 @@ export async function mockAdministrator(page: Page): Promise<void> {
 
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
+/**
+ * The same account on the screens the server names other than today's (decision 0323,
+ * point 5), overriding `/auth/me` alone as above.
+ *
+ * `RECORDING` is a Leader without Full view: it holds no `reports.view_subtree` (point 2), and
+ * `peopleIOversee` is the server's answer for whether a leader with an account sits directly
+ * beneath it. `SENIOR_PASTOR` reads reports at Whole Church, as section 7 gives the role, and
+ * is never offered People I oversee (decision 0325, point 1).
+ */
+export async function mockScreens(
+  page: Page,
+  screens: 'RECORDING' | 'SENIOR_PASTOR',
+  { peopleIOversee = false }: { peopleIOversee?: boolean } = {},
+): Promise<void> {
+  const capabilities =
+    screens === 'RECORDING'
+      ? CAPABILITIES.filter((grant) => grant.capability !== 'reports.view_subtree')
+      : CAPABILITIES.map((grant) =>
+          grant.capability === 'reports.view_subtree'
+            ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
+            : grant,
+        );
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({
+        ...ME,
+        roles: screens === 'SENIOR_PASTOR' ? ['SENIOR_PASTOR'] : ['LEADER'],
+        screens,
+        people_i_oversee: screens === 'RECORDING' && peopleIOversee,
+        capabilities,
+      }),
+    ),
   );
 }
 

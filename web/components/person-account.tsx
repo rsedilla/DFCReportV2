@@ -18,7 +18,9 @@ import {
   resetSecondStep,
   roleLabel,
   setAccountAccess,
+  setFullView,
   type AccountRole,
+  type PersonAccount as PersonAccountRecord,
 } from '@/lib/accounts';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
 
@@ -38,10 +40,13 @@ export function PersonAccount({
   personId,
   firstName,
   own,
+  mayTickFullView = false,
 }: {
   personId: string;
   firstName: string;
   own: boolean;
+  /** The reader holds `roles.manage`, which ticks Full view (decision 0323). */
+  mayTickFullView?: boolean;
 }) {
   const headingId = useId();
   const queryClient = useQueryClient();
@@ -212,6 +217,14 @@ export function PersonAccount({
               setUpAt={current.second_step.set_up_at}
             />
           ) : null}
+          {mayTickFullView && current.roles.includes('LEADER') ? (
+            <FullViewRow
+              accountId={current.id}
+              personId={personId}
+              firstName={firstName}
+              fullView={current.full_view}
+            />
+          ) : null}
           <AccessRow
             accountId={current.id}
             personId={personId}
@@ -362,6 +375,66 @@ function AccessRow({
           {disabled ? 'Re-enable the account' : 'Disable the account'}
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Full view on a Leader account (SKILL.md sections 7 and 19, decision 0323): ticked, the
+ * account has today's screens over its own branch; cleared, the recording screens, and the API
+ * refuses it reports, Training and Conquest. Saved as soon as it is changed, and audit logged.
+ */
+function FullViewRow({
+  accountId,
+  personId,
+  firstName,
+  fullView,
+}: {
+  accountId: string;
+  personId: string;
+  firstName: string;
+  fullView: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const inputId = useId();
+
+  const change = useMutation({
+    mutationFn: (next: boolean) => setFullView(accountId, next, crypto.randomUUID()),
+    onSuccess: async (saved) => {
+      // The saved value at once, so the box does not show the old one while the account is
+      // read again.
+      queryClient.setQueryData<{ account: PersonAccountRecord | null }>(
+        ['person-account', personId],
+        (old) =>
+          old?.account ? { account: { ...old.account, full_view: saved.full_view } } : old,
+      );
+      await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
+    },
+  });
+
+  const shown = change.isPending && change.variables !== undefined ? change.variables : fullView;
+
+  return (
+    <div className="mt-3">
+      <FailureNotice failure={change.isError ? describeFailure(change.error) : null} />
+      <div className="mt-2 flex items-start gap-3">
+        <input
+          id={inputId}
+          type="checkbox"
+          className="accent-accent mt-0.5 size-6 shrink-0"
+          checked={shown}
+          disabled={change.isPending}
+          onChange={(event) => change.mutate(event.target.checked)}
+        />
+        <label htmlFor={inputId} className="text-sm leading-relaxed">
+          <span className="font-bold">Full view</span>
+          <span className="text-muted block">
+            {shown
+              ? `${firstName} sees Record, Reports, People, Cells and Growth over their branch.`
+              : `${firstName} sees the recording screens: Record, People, My Cell and SUYNL.`}
+          </span>
+        </label>
+      </div>
     </div>
   );
 }

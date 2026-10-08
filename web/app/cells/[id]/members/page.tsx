@@ -19,6 +19,7 @@ import {
   type CellMember,
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 
@@ -77,6 +78,10 @@ function CellMembers() {
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+
+  // **The recording screens add members and offer no removal** (decision 0323).
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayRemove = me.data !== undefined && me.data.screens !== 'RECORDING';
 
   const month = reportingMonthOf();
   const cell = useQuery({
@@ -208,13 +213,15 @@ function CellMembers() {
                     {dayLabel(todayInManila(new Date(member.started_at)))}
                   </td>
                   <td className="px-3 py-3 text-right align-top">
-                    <RemoveControl
-                      confirming={removing === member.person_id}
-                      pending={remove.isPending && removing === member.person_id}
-                      onAskRemove={() => setRemoving(member.person_id)}
-                      onCancel={() => setRemoving(null)}
-                      onConfirm={() => remove.mutate(member.person_id)}
-                    />
+                    {mayRemove ? (
+                      <RemoveControl
+                        confirming={removing === member.person_id}
+                        pending={remove.isPending && removing === member.person_id}
+                        onAskRemove={() => setRemoving(member.person_id)}
+                        onCancel={() => setRemoving(null)}
+                        onConfirm={() => remove.mutate(member.person_id)}
+                      />
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -231,13 +238,15 @@ function CellMembers() {
                       A member since {dayLabel(todayInManila(new Date(member.started_at)))}
                     </p>
                   </div>
-                  <RemoveControl
-                    confirming={removing === member.person_id}
-                    pending={remove.isPending && removing === member.person_id}
-                    onAskRemove={() => setRemoving(member.person_id)}
-                    onCancel={() => setRemoving(null)}
-                    onConfirm={() => remove.mutate(member.person_id)}
-                  />
+                  {mayRemove ? (
+                    <RemoveControl
+                      confirming={removing === member.person_id}
+                      pending={remove.isPending && removing === member.person_id}
+                      onAskRemove={() => setRemoving(member.person_id)}
+                      onCancel={() => setRemoving(null)}
+                      onConfirm={() => remove.mutate(member.person_id)}
+                    />
+                  ) : null}
                 </div>
               </li>
             ))}

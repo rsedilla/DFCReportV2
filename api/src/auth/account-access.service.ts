@@ -22,15 +22,22 @@ export type AccountAccessBody = {
   status: AccountStatus;
 };
 
+/** What setting Full view answers: the account's value after the change. */
+export type FullViewBody = {
+  id: string;
+  full_view: boolean;
+};
+
 /**
  * Disabling an account and re-enabling it, by an administrator (SKILL.md section 6,
- * decision 0307).
+ * decision 0307), and ticking Full view (section 7, decision 0323).
  *
- * **Both take every lock in the order setting a password takes them**: the account's
+ * **Disabling and re-enabling take every lock in the order setting a password takes them**:
+ * the account's
  * tokens first, then the account row. An activation already under way finishes first
  * and this then sees its outcome; one that comes later finds its link used.
  *
- * Roles, grants and a Senior Pastor seat are untouched by either. Disablement is an
+ * Roles, grants and a Senior Pastor seat are untouched by those two. Disablement is an
  * authentication decision (section 10), so a disabled account keeps its authority and
  * re-enabling gives it all back.
  */
@@ -169,6 +176,72 @@ export class AccountAccessService {
       });
 
       const body: AccountAccessBody = { id: accountId, status };
+
+      // Last statement (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body });
+
+      return body;
+    });
+  }
+
+  /**
+   * Ticks or clears Full view on a Leader account (decision 0323, point 1). An account
+   * holding no `LEADER` role is refused, since Full view changes only what that role gives.
+   *
+   * **Setting the value it already has writes nothing and is not audited**: the audit log
+   * records each change, and two administrators ticking the same box at once both see it
+   * ticked rather than one of them being refused.
+   */
+  async setFullView(
+    accountId: string,
+    fullView: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<FullViewBody> {
+    return this.db.transaction().execute(async (trx) => {
+      const account = await trx
+        .selectFrom('accounts')
+        .select(['id', 'full_view'])
+        .where('id', '=', accountId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+
+      if (!account) {
+        throw new NotFoundError('No such account.');
+      }
+
+      const leader = await trx
+        .selectFrom('account_roles')
+        .select('role')
+        .where('account_id', '=', accountId)
+        .where('role', '=', 'LEADER')
+        .where('revoked_at', 'is', null)
+        .executeTakeFirst();
+
+      if (!leader) {
+        throw new InvariantViolationError('Full view applies only to a Leader account.', {
+          account_id: accountId,
+        });
+      }
+
+      if (account.full_view !== fullView) {
+        await trx
+          .updateTable('accounts')
+          .set({ full_view: fullView, updated_at: new Date() })
+          .where('id', '=', accountId)
+          .execute();
+
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'account.full_view_changed',
+          targetType: 'account',
+          targetId: accountId,
+          before: { full_view: account.full_view },
+          after: { full_view: fullView },
+        });
+      }
+
+      const body: FullViewBody = { id: accountId, full_view: fullView };
 
       // Last statement (CLAUDE.md, Write endpoints).
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body });

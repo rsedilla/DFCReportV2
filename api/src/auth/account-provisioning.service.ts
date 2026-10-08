@@ -101,6 +101,8 @@ export class AccountProvisioningService {
       created_at: string;
       /** Whether it signs in with a second step, and since when (decision 0302). */
       second_step: { required: boolean; set_up_at: string | null };
+      /** Full view (decision 0323); meaningful on a Leader account only. */
+      full_view: boolean;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -111,7 +113,7 @@ export class AccountProvisioningService {
 
     const account = await this.db
       .selectFrom('accounts')
-      .select(['id', 'email', 'status', 'created_at'])
+      .select(['id', 'email', 'status', 'created_at', 'full_view'])
       .where('person_id', '=', personId)
       .executeTakeFirst();
 
@@ -135,6 +137,7 @@ export class AccountProvisioningService {
         roles: roles.map((row) => row.role),
         created_at: new Date(account.created_at).toISOString(),
         second_step: await this.secondSteps.describeFor(account.id),
+        full_view: account.full_view,
       },
     };
   }

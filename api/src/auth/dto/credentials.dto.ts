@@ -1,4 +1,4 @@
-import { IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 import type { AccountRole } from '../../database/schema';
 import { IsEmailAddress } from '../../common/text/is-email-address';
@@ -41,6 +41,12 @@ export class CorrectAccountEmailDto {
   @IsEmailAddress()
   @MaxLength(320)
   email!: string;
+}
+
+/** Full view on a Leader account, ticked or cleared (section 7, decision 0323). */
+export class SetFullViewDto {
+  @IsBoolean()
+  full_view!: boolean;
 }
 
 export class ForgotPasswordDto {

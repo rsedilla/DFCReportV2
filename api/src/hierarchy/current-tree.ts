@@ -36,13 +36,16 @@ export class CurrentTree {
    * The person and everyone beneath them, by depth, the person first. `cycle` is true where
    * the walk comes back to somebody already on its path, which in a tree whose people hold
    * one open row each is only possible when the person is on a cycle.
+   *
+   * `maxDepth` stops the walk that many levels below the person (decision 0324); a cycle
+   * beyond it is not reached and so not reported.
    */
-  subtree(personId: string): { people: string[]; cycle: boolean } {
+  subtree(personId: string, maxDepth = Infinity): { people: string[]; cycle: boolean } {
     const seed = personId.toLowerCase();
     const people = [seed];
     const seen = new Set([seed]);
     let frontier = [seed];
-    while (frontier.length > 0) {
+    for (let depth = 0; frontier.length > 0 && depth < maxDepth; depth += 1) {
       const next: string[] = [];
       for (const leader of frontier) {
         for (const child of this.childrenOf.get(leader) ?? []) {

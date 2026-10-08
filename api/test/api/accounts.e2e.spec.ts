@@ -103,6 +103,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         created_at: expect.any(String),
         // An administrator, with the second step still to set up (decision 0302).
         second_step: { required: true, set_up_at: null },
+        // A new account starts without Full view (decision 0323).
+        full_view: false,
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);

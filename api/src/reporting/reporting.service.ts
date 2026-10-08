@@ -12,7 +12,12 @@ import {
   reportRangeGuardMonth,
   type ReportRangeKind,
 } from '../common/time/report-range';
-import { databaseNow, isMonthOpen } from '../common/time/submission-window';
+import {
+  databaseNow,
+  isMonthOpen,
+  reportingMonthOf,
+  windowClosesAt,
+} from '../common/time/submission-window';
 import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -81,6 +86,46 @@ export type ReportScope =
  */
 export type DccReportScope = Exclude<ReportScope, { kind: 'CELL' }>;
 export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
+
+/** One column of *Recording status*: X of Y leaders (decision 0325). */
+export interface RecordingColumn {
+  recorded: number;
+  owed: number;
+}
+
+/** A row's status: everyone recorded, how many still to, or nobody owed anything. */
+export type RecordingRowStatus =
+  { kind: 'COMPLETED' } | { kind: 'STILL_TO_RECORD'; leaders: number } | { kind: 'NOTHING_OWED' };
+
+export interface RecordingFigures {
+  cell: RecordingColumn;
+  dcc: RecordingColumn;
+  status: RecordingRowStatus;
+}
+
+/** The Senior Pastors' *Recording status* for a week or a month (decision 0325). */
+export interface RecordingStatus {
+  kind: 'WEEK' | 'MONTH';
+  start: string;
+  end: string;
+  open: boolean;
+  wholeChurch: RecordingFigures;
+  /** The period before, for the boxes alone, with its own open flag (section 17). */
+  previous: { start: string; end: string; open: boolean; figures: RecordingFigures };
+  /** One per root on the placement graph, null where section 20 refuses that graph. */
+  tables:
+    | {
+        rootId: string;
+        /** The Network the root heads, which orders the tables: Men's, then Women's. */
+        network: NetworkName | null;
+        rows: { leaderId: string; figures: RecordingFigures }[];
+      }[]
+    | null;
+  others: RecordingFigures | null;
+}
+
+/** Per leader, how many records they owed in a run of days and how many have none. */
+type OwedByLeader = Map<string, { owed: number; unrecorded: number }>;
 
 /**
  * The five classification buckets, in the order sections 9 and 12 list them.
@@ -954,6 +999,135 @@ export class ReportingService {
   }
 
   /**
+   * The Senior Pastors' *Recording status* for a week or a month (decision 0325).
+   *
+   * **A leader owes a record** where a Cell meeting scheduled in the period has begun and they
+   * led that Cell on its date, or its frozen leader where it has a record; or where, as of a
+   * DCC Sunday in the period that has begun and is not removed, they are section 9's submitter
+   * of at least one line (point 2). **They have recorded a column** when every such record of
+   * it is in, and count once over the period, all or nothing.
+   *
+   * **The tables are the roots' children on section 20's placement graph at the period's final
+   * millisecond**, each counting its leader and everyone beneath on that graph; *Others* is
+   * every leader who owed and is in no table, the roots among them, so the rows and *Others*
+   * add up to the whole church (point 4). Where section 20 refuses the graph the tables and
+   * *Others* are null and the whole-church figures stand.
+   *
+   * One `READ ONLY REPEATABLE READ` transaction, as every report (decision 0210).
+   */
+  async recordingStatus(
+    kind: 'WEEK' | 'MONTH',
+    start: string,
+    guardMonth: string,
+  ): Promise<RecordingStatus> {
+    assertReportRangeStart(kind, start);
+    const end = reportRangeEnd(kind, start);
+
+    // **Through the report seam** (decision 0210), at the month a range resolves at, as the
+    // My 12 tables are: the client names it and assertRangeReadable refuses any other.
+    return this.overPeriod(guardMonth, async (trx) => {
+      // A period that has not begun owes nothing yet and is refused (decision 0216).
+      const today = await assertRangeReadable(trx, kind, start, guardMonth);
+      const now = await databaseNow(trx);
+
+      const owing = await this.owedBetween(trx, start, end < today ? end : today);
+
+      const previousStart =
+        kind === 'WEEK' ? shiftDays(start, -7) : reportingMonthOf(shiftDays(start, -1));
+      const previousEnd = reportRangeEnd(kind, previousStart);
+      const previous = await this.owedBetween(trx, previousStart, previousEnd);
+
+      const everyone = (byLeader: { cell: OwedByLeader; dcc: OwedByLeader }) =>
+        new Set([...byLeader.cell.keys(), ...byLeader.dcc.keys()]);
+
+      const graph = await this.hierarchy.reportingGraph(
+        trx,
+        startOfManilaDay(start),
+        endOfManilaDay(end),
+      );
+
+      let tables: RecordingStatus['tables'] = null;
+      let others: RecordingFigures | null = null;
+
+      if (!graph.refused) {
+        const placed = new Set<string>();
+        const seats = new Map(
+          (await this.hierarchy.rootSeatsAsOf(trx, endOfManilaDay(end))).map((seat) => [
+            canonicalId(seat.personId),
+            seat.network,
+          ]),
+        );
+        tables = graph.roots().map((rootId) => ({
+          rootId,
+          network: seats.get(canonicalId(rootId)) ?? null,
+          rows: graph.children(rootId).map((leaderId) => {
+            const beneath = graph.subtree(leaderId);
+            beneath.forEach((id) => placed.add(id));
+
+            return { leaderId, figures: figuresOf(owing, beneath) };
+          }),
+        }));
+        others = figuresOf(
+          owing,
+          [...everyone(owing)].filter((id) => !placed.has(id)),
+        );
+      }
+
+      return {
+        kind,
+        start,
+        end,
+        open: now.getTime() < windowClosesAt(reportingMonthOf(end)).getTime(),
+        wholeChurch: figuresOf(owing, [...everyone(owing)]),
+        previous: {
+          start: previousStart,
+          end: previousEnd,
+          open: now.getTime() < windowClosesAt(reportingMonthOf(previousEnd)).getTime(),
+          figures: figuresOf(previous, [...everyone(previous)]),
+        },
+        tables,
+        others,
+      };
+    });
+  }
+
+  /**
+   * Each leader who owed a Cell or DCC record in the run of days, per column (decision 0325,
+   * point 2). The Cell half comes from `cells`, which derives the schedule and the leader on
+   * each date, and `attendance`, which owns the records; the DCC half from `attendance`.
+   */
+  private async owedBetween(
+    trx: Transaction<Database>,
+    from: string,
+    to: string,
+  ): Promise<{ cell: OwedByLeader; dcc: OwedByLeader }> {
+    const cell: OwedByLeader = new Map();
+    if (to < from) {
+      return { cell, dcc: new Map() };
+    }
+
+    const pairs = await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, to);
+    const recorded = await this.cellFigures.recordedLeadersBetween(trx, from, to);
+
+    for (const pair of pairs) {
+      const frozen = recorded.get(`${pair.cellId}|${pair.scheduledDate}`);
+      const leaderId = frozen ?? pair.leaderId;
+      if (leaderId === null) {
+        continue;
+      }
+      const key = canonicalId(leaderId);
+      const entry = cell.get(key) ?? { owed: 0, unrecorded: 0 };
+      entry.owed += 1;
+      entry.unrecorded += frozen === undefined ? 1 : 0;
+      cell.set(key, entry);
+    }
+
+    const dcc = await this.dccCoverage.recordingBySubmitterBetween(trx, from, to);
+
+    return { cell, dcc };
+  }
+
+  /**
    * The one way a report reads the database, and the reason it is a seam rather than a
    * convention.
    *
@@ -1223,4 +1397,50 @@ function snapshotKeyOf(kind: SnapshotKind, scope: ReportScope, period: string): 
       return unreachable;
     }
   }
+}
+
+/** A calendar date shifted by whole days, in UTC arithmetic on a date with no time zone. */
+function shiftDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+/** *Recording status*'s two columns and status over a set of leaders (decision 0325). */
+function figuresOf(
+  owing: { cell: OwedByLeader; dcc: OwedByLeader },
+  leaders: readonly string[],
+): RecordingFigures {
+  let cellOwed = 0;
+  let cellRecorded = 0;
+  let dccOwed = 0;
+  let dccRecorded = 0;
+  let still = 0;
+
+  for (const id of new Set(leaders.map((leader) => canonicalId(leader)))) {
+    const cell = owing.cell.get(id);
+    const dcc = owing.dcc.get(id);
+    if (cell !== undefined) {
+      cellOwed += 1;
+      cellRecorded += cell.unrecorded === 0 ? 1 : 0;
+    }
+    if (dcc !== undefined) {
+      dccOwed += 1;
+      dccRecorded += dcc.unrecorded === 0 ? 1 : 0;
+    }
+    if ((cell?.unrecorded ?? 0) > 0 || (dcc?.unrecorded ?? 0) > 0) {
+      still += 1;
+    }
+  }
+
+  return {
+    cell: { recorded: cellRecorded, owed: cellOwed },
+    dcc: { recorded: dccRecorded, owed: dccOwed },
+    status:
+      cellOwed === 0 && dccOwed === 0
+        ? { kind: 'NOTHING_OWED' }
+        : still === 0
+          ? { kind: 'COMPLETED' }
+          : { kind: 'STILL_TO_RECORD', leaders: still },
+  };
 }

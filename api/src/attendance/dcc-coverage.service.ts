@@ -645,6 +645,25 @@ export class DccCoverageService {
     // Cell queue decides it: the reader may record for the leader whose checklist holds the
     // row's people, found as of the Sunday, holding `dcc.take_attendance` and
     // `dcc.submit_on_behalf` over them now — or that leader is the reader.
+    // **For a Leader account, a row is listed by its submitter's depth** (decision 0324):
+    // the submitter as of the Sunday must sit within one or two levels of the reader now,
+    // the reader included. A row with no submitter, or one outside the branch, is not
+    // listed; it still counts in every figure. Filtered on the internal submitter, since
+    // `record_for` is null on every row a Leader may not record.
+    const depth = await this.authorization.overseeDepthFor(actor.accountId);
+    if (depth !== null) {
+      const near = new Set(
+        (await this.hierarchy.subtreeOf(this.db, actor.personId, depth)).map((id) =>
+          canonicalId(id),
+        ),
+      );
+      owed.splice(
+        0,
+        owed.length,
+        ...owed.filter((entry) => entry.submitterId !== null && near.has(entry.submitterId)),
+      );
+    }
+
     const recordable = await this.recordableBy(actor, [
       ...new Set(owed.map((entry) => entry.submitterId).filter((id): id is string => id !== null)),
     ]);
@@ -710,6 +729,65 @@ export class DccCoverageService {
   }
 
   /**
+   * For the Senior Pastors' *Recording status* (decision 0325, point 2): each leader who owed
+   * a DCC record in the run of days, with how many of its Sundays they owed and how many of
+   * those have none.
+   *
+   * **The leader is section 9's submitter as of each Sunday**, whose checklist holds the
+   * lines of every leader they record for. They owe a Sunday that has begun and is not
+   * removed where they submit at least one line, and have recorded it where any line on that
+   * checklist has a live record, whoever entered it. A Sunday whose month has closed still
+   * counts, as a closed period's figure.
+   */
+  async recordingBySubmitterBetween(
+    executor: Db,
+    from: string,
+    to: string,
+  ): Promise<Map<string, { owed: number; unrecorded: number }>> {
+    const now = await databaseNow(executor);
+    const rows = await executor
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', from)
+      .where('event_date', '<=', to)
+      .orderBy('event_date')
+      .execute();
+
+    const result = new Map<string, { owed: number; unrecorded: number }>();
+
+    for (const row of rows) {
+      const event = this.describe(String(row.event_date), row, now);
+      if (event.notRecordable === 'REMOVED' || event.notRecordable === 'NOT_YET_HELD') {
+        continue;
+      }
+
+      const { owed, owing } = await this.obligations(executor, event, null);
+      // Accounts as they stood on the Sunday, so a later account moves no past period
+      // (decision 0325, owner 2026-10-08).
+      const submitters = await this.submittersOf(event, [...owed], executor, true);
+      const recordedBy = new Map<string, boolean>();
+
+      for (const leaderId of owed) {
+        const submitter = submitters.get(canonicalId(leaderId));
+        if (submitter === undefined) {
+          continue;
+        }
+        const met = !owing.has(leaderId);
+        recordedBy.set(submitter, (recordedBy.get(submitter) ?? false) || met);
+      }
+
+      for (const [submitter, recorded] of recordedBy) {
+        const entry = result.get(submitter) ?? { owed: 0, unrecorded: 0 };
+        entry.owed += 1;
+        entry.unrecorded += recorded ? 0 : 1;
+        result.set(submitter, entry);
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Of these leaders, those the reader may record for now: holding both
    * `dcc.take_attendance` and `dcc.submit_on_behalf` over them (decision 0313).
    */
@@ -737,10 +815,14 @@ export class DccCoverageService {
   private async submittersOf(
     event: EventRow,
     leaderIds: readonly string[],
+    executor: Db = this.db,
+    /** Read who holds an account as of the event rather than now (decision 0325). */
+    accountsAsOfEvent = false,
   ): Promise<Map<string, string>> {
+    const accountsAt = accountsAsOfEvent ? event.at : undefined;
     const result = new Map<string, string>();
     const holders = new Set(
-      [...(await this.accounts.personsHoldingAccounts(this.db, leaderIds))].map((id) =>
+      [...(await this.accounts.personsHoldingAccounts(executor, leaderIds, accountsAt))].map((id) =>
         canonicalId(id),
       ),
     );
@@ -759,7 +841,7 @@ export class DccCoverageService {
     // Bounded, as every walk here is, so a cycle in the data cannot hang the request.
     for (let depth = 0; pending.size > 0 && depth < 64; depth += 1) {
       const nodes = [...new Set(pending.values())];
-      const assignments = await this.hierarchy.assignmentsAsOf(this.db, nodes, event.at);
+      const assignments = await this.hierarchy.assignmentsAsOf(executor, nodes, event.at);
       const parentOf = new Map(
         [...assignments].map(([personId, row]) => [
           canonicalId(personId),
@@ -770,7 +852,7 @@ export class DccCoverageService {
         ...new Set([...parentOf.values()].filter((id): id is string => id !== null)),
       ];
       const parentHolders = new Set(
-        [...(await this.accounts.personsHoldingAccounts(this.db, parents))].map((id) =>
+        [...(await this.accounts.personsHoldingAccounts(executor, parents, accountsAt))].map((id) =>
           canonicalId(id),
         ),
       );

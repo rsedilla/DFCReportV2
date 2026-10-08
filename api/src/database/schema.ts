@@ -96,6 +96,12 @@ export interface AccountsTable {
   status: Generated<AccountStatus>;
   sessions_revoked_at: Date | null;
   last_login_at: Date | null;
+  /**
+   * Full view (section 7, decision 0323): without it a Leader account holds no
+   * `reports.view_subtree` and no Training or Conquest capability. Set only by an
+   * account holding `roles.manage`.
+   */
+  full_view: Generated<boolean>;
   created_at: ServerTimestamp;
   updated_at: ServerTimestamp;
 }
@@ -219,6 +225,9 @@ export type AuditAction =
   // "disablement" and "Account reactivation". Each targets the account.
   | 'account.disabled'
   | 'account.reactivated'
+  // Full view ticked or cleared (section 7, decision 0323), with its previous and new
+  // value, by an administrator. Targets the account.
+  | 'account.full_view_changed'
   // Section 21 lists "Second sign-in step set up or reset, and a recovery code used".
   // Each targets the account.
   | 'second_step.set_up'

@@ -10,7 +10,7 @@ import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
-import { CorrectAccountEmailDto, ProvisionAccountDto } from './dto/credentials.dto';
+import { CorrectAccountEmailDto, ProvisionAccountDto, SetFullViewDto } from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
 
@@ -145,5 +145,21 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return { ...(await this.access.reactivate(id, actor, claim)) };
+  }
+
+  /**
+   * Ticks or clears Full view on a Leader account (section 7, decision 0323). Guarded by
+   * `roles.manage`, which picks between the two Leader default sets, against the Account.
+   */
+  @Post(':id/full-view')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setFullView(
+    @Param('id') id: string,
+    @Body() body: SetFullViewDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return { ...(await this.access.setFullView(id, body.full_view, actor, claim)) };
   }
 }

@@ -1,7 +1,11 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,6 +26,13 @@ export function PeopleTabs({
   current: (typeof TABS)[number]['href'];
   children: ReactNode;
 }) {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // **The recording screens have the People tab alone, without Branch** (decision 0323).
+  if (me.data?.screens === 'RECORDING') {
+    return <div className="mt-6">{children}</div>;
+  }
+
   return (
     <>
       <nav aria-label="People" className={cn('mt-6 flex', TAB_ROW)}>

@@ -19,6 +19,7 @@ import {
   DccByLeaderDto,
   DccMonthlyReportDto,
   DccTwelveDto,
+  RecordingStatusDto,
 } from './dto/reporting.dto';
 import {
   ReportingService,
@@ -28,6 +29,7 @@ import {
   type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
+  type RecordingFigures,
 } from './reporting.service';
 
 /**
@@ -308,6 +310,102 @@ export class ReportingController {
   }
 
   /**
+   * The Senior Pastors' *Recording status* (decision 0325): whether the church has recorded,
+   * for a week or a month, as Whole Church boxes, one table per root's direct leaders in
+   * surname order, and an *Others* line.
+   *
+   * **Whole Church only** (point 8): `reports.view_subtree` against the church, so a reader
+   * holding it over a subtree is refused rather than handed a narrower screen under a
+   * church-wide heading. The percentage is computed here for the two boxes alone, rounded
+   * down, and absent where nobody owed (point 3).
+   */
+  @Get('recording-status')
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
+  async recordingStatus(@Query() query: RecordingStatusDto): Promise<Record<string, unknown>> {
+    const status = await this.reporting.recordingStatus(query.kind, query.start, query.period);
+
+    const ids = [
+      ...(status.tables ?? []).flatMap((table) => [
+        table.rootId,
+        ...table.rows.map((row) => row.leaderId),
+      ]),
+    ];
+    const identities = await this.people.forDecisions(ids);
+    const person = (id: string) => {
+      const identity = identities.get(id);
+
+      return {
+        id,
+        member_id: identity?.memberId ?? null,
+        full_name: identity?.fullName ?? null,
+      };
+    };
+    const byName = (left: string, right: string) => {
+      const a = identities.get(left);
+      const b = identities.get(right);
+
+      // An unnamed identity sorts last, then by identifier, so the order is total.
+      return a !== undefined && b !== undefined
+        ? compareKeys(keyOf(a), keyOf(b))
+        : a !== undefined
+          ? -1
+          : b !== undefined
+            ? 1
+            : left.localeCompare(right);
+    };
+    const box = (column: { recorded: number; owed: number }) => ({
+      ...column,
+      percent: column.owed === 0 ? null : Math.floor((column.recorded * 100) / column.owed),
+    });
+    const figures = (row: RecordingFigures) => ({
+      cell: row.cell,
+      dcc: row.dcc,
+      status:
+        row.status.kind === 'STILL_TO_RECORD'
+          ? { kind: row.status.kind, leaders: row.status.leaders }
+          : { kind: row.status.kind },
+    });
+
+    return {
+      kind: status.kind,
+      start: status.start,
+      end: status.end,
+      open: status.open,
+      whole_church: {
+        cell: box(status.wholeChurch.cell),
+        dcc: box(status.wholeChurch.dcc),
+      },
+      // The period before carries no percentage: point 3 gives one to the boxes alone.
+      previous: {
+        start: status.previous.start,
+        end: status.previous.end,
+        open: status.previous.open,
+        cell: status.previous.figures.cell,
+        dcc: status.previous.figures.dcc,
+      },
+      tables:
+        status.tables === null
+          ? null
+          : [...status.tables]
+              // By Network, Men's first, rather than by name: both roots may share a surname
+              // (owner, 2026-10-08). Never by a figure.
+              .sort(
+                (left, right) =>
+                  networkOrder(left.network) - networkOrder(right.network) ||
+                  byName(left.rootId, right.rootId),
+              )
+              .map((table) => ({
+                root: person(table.rootId),
+                network: table.network,
+                rows: [...table.rows]
+                  .sort((left, right) => byName(left.leaderId, right.leaderId))
+                  .map((row) => ({ leader: person(row.leaderId), ...figures(row.figures) })),
+              })),
+      others: status.others === null ? null : figures(status.others),
+    };
+  }
+
+  /**
    * Checks the actor's reach at the instant a My 12 table was read, and names and orders its
    * rows (decisions 0214, 0254, 0293 and 0294).
    *
@@ -522,6 +620,11 @@ function keyOf(identity: { lastName: string; firstName: string; memberId: string
     firstName: identity.firstName,
     memberId: identity.memberId,
   };
+}
+
+/** Men's before Women's, and a root with no seat last. */
+function networkOrder(network: NetworkName | null): number {
+  return network === 'MENS' ? 0 : network === 'WOMENS' ? 1 : 2;
 }
 
 /** The roster order: last name, first name, Member ID, so the sort and the cursor agree. */

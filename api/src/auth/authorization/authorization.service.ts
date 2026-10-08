@@ -9,8 +9,9 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
-import { ROLE_DEFAULTS } from './role-defaults';
+import { LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
+import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
@@ -38,6 +39,8 @@ interface ActiveRoles {
   honoured: AccountRole[];
   /** Every active role row, honoured or not. See `activeRoles` for why both. */
   held: AccountRole[];
+  /** Full view (section 7, decision 0323), read on the same row as the roles. */
+  fullView: boolean;
 }
 
 /**
@@ -130,12 +133,13 @@ export class AuthorizationService {
     const rows = await executor
       .selectFrom('account_roles')
       .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
-      .select(['account_roles.role', 'accounts.person_id'])
+      .select(['account_roles.role', 'accounts.person_id', 'accounts.full_view'])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
     return {
+      fullView: rows.some((row) => row.full_view),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -214,8 +218,46 @@ export class AuthorizationService {
    */
   async rolesAndGrantsFor(
     accountId: string,
-  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
-    return this.effective(accountId);
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[]; screens: Screens }> {
+    const { roles, grants, fullView } = await this.effective(accountId);
+
+    return { roles, grants, screens: screensFor(roles, fullView) };
+  }
+
+  /**
+   * Whether a leader holding an account sits directly beneath this person in the tree as it
+   * stands now: what shows *People I oversee* on a Recording-only account's `Record`
+   * (section 19, decision 0323). Any account counts, whatever its status, as section 9's
+   * submitter walk counts it.
+   */
+  async leadsAnAccountHolder(personId: string): Promise<boolean> {
+    const children = await this.hierarchy.directChildrenOf(personId);
+    if (children.length === 0) {
+      return false;
+    }
+
+    const holder = await this.db
+      .selectFrom('accounts')
+      .select('id')
+      .where('person_id', 'in', children)
+      .limit(1)
+      .executeTakeFirst();
+
+    return holder !== undefined;
+  }
+  /**
+   * How many levels below the reader *People I oversee* lists (section 19, decision 0324):
+   * two for a Leader account with Full view, one without, and no limit (null) for an
+   * account holding `SENIOR_PASTOR` or `ADMIN`. Read from the honoured roles, as `screens`.
+   */
+  async overseeDepthFor(accountId: string): Promise<number | null> {
+    const roles = await this.activeRoles(this.db, accountId);
+
+    if (roles.honoured.includes('ADMIN') || roles.honoured.includes('SENIOR_PASTOR')) {
+      return null;
+    }
+
+    return roles.fullView ? 2 : 1;
   }
 
   /**
@@ -248,7 +290,7 @@ export class AuthorizationService {
    */
   private async effective(
     accountId: string,
-  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[]; fullView: boolean }> {
     const [roles, grants] = await Promise.all([
       this.activeRoles(this.db, accountId),
       this.db
@@ -263,6 +305,15 @@ export class AuthorizationService {
 
     for (const role of roles.honoured) {
       for (const [capability, scopeType] of Object.entries(ROLE_DEFAULTS[role])) {
+        // A Leader account without Full view holds none of these (decision 0323).
+        if (
+          role === 'LEADER' &&
+          !roles.fullView &&
+          LEADER_FULL_VIEW_ONLY.has(capability as Capability)
+        ) {
+          continue;
+        }
+
         effective.push({
           capability: capability as Capability,
           scope: { type: scopeType, network: null },
@@ -316,7 +367,7 @@ export class AuthorizationService {
       });
     }
 
-    return { roles: roles.honoured, grants: effective };
+    return { roles: roles.honoured, grants: effective, fullView: roles.fullView };
   }
 
   /**

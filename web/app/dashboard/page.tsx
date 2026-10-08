@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { RecordingStatusPanel } from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -212,7 +213,24 @@ function Dashboard() {
     setLastWhose(whoseInAddress);
     setWhose(whoseInAddress);
   }
-  const branchView = whose === 'branch';
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
+  // decision 0323): no other list, no month figures, and People I oversee only while the
+  // server says a leader holding an account sits directly beneath it.
+  const recordingOnly = me.data?.screens === 'RECORDING';
+  // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
+  // their own Awaiting a record with no People I oversee, and none of the other lists or
+  // the month figures.
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
+  const listTab: RecordTab = recordingOnly || seniorPastor ? 'awaiting' : tab;
+  const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
+  const mayOversee = me.data?.people_i_oversee !== false;
+  const shownWhose: Whose = mayOversee ? whose : 'mine';
+  const branchView = shownWhose === 'branch';
+  // The branch is asked for only once the account says the reader may have one.
+  const whoseKnown = !branchView || me.data !== undefined;
 
   // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
   // when the list or the view changes, so a list switched away from does not come back open.
@@ -222,8 +240,6 @@ function Dashboard() {
     setChosenFor(`${filter}|${whose}`);
     setChosenLeader(null);
   }
-
-  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // Section 20's attention list (decision 0232). It takes no month: the list asks
   // about now, so it is deliberately not keyed on the period the figures below use.
@@ -236,6 +252,7 @@ function Dashboard() {
     queryFn: ({ signal, pageParam }) =>
       awaitingReassignment({ limit: 50, cursor: pageParam }, signal),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: fullRecord,
   });
   const unplaced = {
     isPending: unplacedPages.isPending,
@@ -252,6 +269,7 @@ function Dashboard() {
     queryFn: ({ signal, pageParam }) =>
       peopleWithoutACell({ limit: 50, cursor: pageParam }, signal),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: fullRecord,
   });
   const withoutACell = {
     isPending: withoutACellPages.isPending,
@@ -269,13 +287,15 @@ function Dashboard() {
   // under that prefix. Said the other way round, moving the queue onto its own route
   // moved it out of the reach of the only thing that refreshed it.
   const awaiting = useQuery({
-    queryKey: ['meetings-awaiting', month, whose],
-    queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, whose),
+    queryKey: ['meetings-awaiting', month, shownWhose],
+    queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, shownWhose),
+    enabled: whoseKnown,
   });
 
   const scoped = useQuery({
     queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
+    enabled: fullRecord,
   });
 
   // **Section 15's attention list includes a closed Cell while its month is open**, and
@@ -284,6 +304,7 @@ function Dashboard() {
   const scopedClosed = useQuery({
     queryKey: ['cells', month, false, 'CLOSED'],
     queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
+    enabled: fullRecord,
   });
 
   // **Last month's Cells behind while that month is open** (section 15, decision 0315),
@@ -291,12 +312,12 @@ function Dashboard() {
   const scopedPrevious = useQuery({
     queryKey: ['cells', previousMonth, false],
     queryFn: ({ signal }) => listCells({ month: previousMonth }, signal),
-    enabled: inCloseWeek,
+    enabled: fullRecord && inCloseWeek,
   });
   const scopedClosedPrevious = useQuery({
     queryKey: ['cells', previousMonth, false, 'CLOSED'],
     queryFn: ({ signal }) => listCells({ month: previousMonth, state: 'CLOSED' }, signal),
-    enabled: inCloseWeek,
+    enabled: fullRecord && inCloseWeek,
   });
 
   // **The Sundays on the leader's own checklist.** The events index says which of
@@ -331,9 +352,9 @@ function Dashboard() {
   // shut answers `open: false` and an empty list rather than refusing, so nothing here
   // has to decide whether it is still the leader's to record.
   const awaitingPrevious = useQuery({
-    queryKey: ['meetings-awaiting', previousMonth, whose],
-    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal, whose),
-    enabled: inCloseWeek,
+    queryKey: ['meetings-awaiting', previousMonth, shownWhose],
+    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal, shownWhose),
+    enabled: inCloseWeek && whoseKnown,
   });
 
   const dccEventsPrevious = useQuery({
@@ -359,12 +380,12 @@ function Dashboard() {
   const owedNow = useQuery({
     queryKey: ['dcc-owed', month],
     queryFn: ({ signal }) => getDccOwed(month, signal),
-    enabled: branchView,
+    enabled: branchView && whoseKnown,
   });
   const owedPrevious = useQuery({
     queryKey: ['dcc-owed', previousMonth],
     queryFn: ({ signal }) => getDccOwed(previousMonth, signal),
-    enabled: branchView && inCloseWeek,
+    enabled: branchView && whoseKnown && inCloseWeek,
   });
   const owedRows: OwedRow[] = [
     ...(owedPrevious.data?.data ?? []).map((row) => ({ ...row, month: previousMonth })),
@@ -421,20 +442,20 @@ function Dashboard() {
   const cellFigures = useQuery({
     queryKey: ['cell-report', month, reportScope],
     queryFn: ({ signal }) => getCellMonthlyReport(month, reportScope, signal),
-    enabled: me.data !== undefined && listsAnswered,
+    enabled: fullRecord && listsAnswered,
   });
 
   const dccFigures = useQuery({
     queryKey: ['dcc-report', month, reportScope],
     queryFn: ({ signal }) => getDccMonthlyReport(month, reportScope, signal),
-    enabled: me.data !== undefined && listsAnswered,
+    enabled: fullRecord && listsAnswered,
   });
 
   // Last month's figures, shown under this month's on each card and named by month.
   const cellFiguresPrevious = useQuery({
     queryKey: ['cell-report', previousMonth, reportScope],
     queryFn: ({ signal }) => getCellMonthlyReport(previousMonth, reportScope, signal),
-    enabled: me.data !== undefined && listsAnswered,
+    enabled: fullRecord && listsAnswered,
   });
 
   // Section 19: an open period says so, and last month is open until its 7th.
@@ -445,7 +466,7 @@ function Dashboard() {
   const dccFiguresPrevious = useQuery({
     queryKey: ['dcc-report', previousMonth, reportScope],
     queryFn: ({ signal }) => getDccMonthlyReport(previousMonth, reportScope, signal),
-    enabled: me.data !== undefined && listsAnswered,
+    enabled: fullRecord && listsAnswered,
   });
 
   // **Oldest first, and the page says so.** Date order is the one order that ranks
@@ -587,7 +608,11 @@ function Dashboard() {
           {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
         </h1>
         <p className="text-muted text-sm">
-          What needs doing first, and this month&rsquo;s figures at the foot.
+          {recordingOnly
+            ? 'What still needs a record.'
+            : seniorPastor
+              ? 'Whether the church has recorded, and your own work.'
+              : 'What needs doing first, and this month’s figures at the foot.'}
         </p>
       </div>
 
@@ -595,17 +620,32 @@ function Dashboard() {
         <FailureNotice failure={failure} />
       </div>
 
-      <TabBar
-        label="Outstanding work"
-        className={cn('mt-6 grid-cols-2 lg:grid-cols-4', TAB_ROW)}
-        tabs={tabs}
-        current={tab}
-        onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
-      />
+      {/* A Recording-only account has one list, so no tabs (decision 0323). */}
+      {recordingOnly ? null : seniorPastor ? (
+        <TabBar
+          label="Record"
+          className={cn('mt-6 grid-cols-2', TAB_ROW)}
+          tabs={[
+            { key: 'status', label: 'Recording status', count: null },
+            { key: 'awaiting', label: 'Awaiting a record', count: tabs[0].count },
+          ]}
+          current={spTab}
+          onChoose={(next) => go({ list: next === 'status' ? null : 'awaiting' })}
+        />
+      ) : (
+        <TabBar
+          label="Outstanding work"
+          className={cn('mt-6 grid-cols-2 lg:grid-cols-4', TAB_ROW)}
+          tabs={tabs}
+          current={tab}
+          onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
+        />
+      )}
 
       {/* The chosen list's pane; the month's figures below it are the whole page's. */}
-      <div className={TAB_PANE}>
-        {tab === 'awaiting' ? (
+      <div className={recordingOnly ? 'mt-6' : TAB_PANE}>
+        {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
+        {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
           <section aria-labelledby="awaiting-heading" className={LIST}>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
@@ -641,11 +681,12 @@ function Dashboard() {
               onChange={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
             />
 
+            {mayOversee ? (
             <div className={`mt-4 ${CONTROL_BAR}`}>
               <RadioGroup
                 legend="Whose"
                 name="queue-whose"
-                value={whose}
+                value={shownWhose}
                 onChange={(next) => {
                   setWhose(next);
                   go({ whose: next === 'branch' ? 'branch' : null });
@@ -657,6 +698,7 @@ function Dashboard() {
                 ]}
               />
             </div>
+            ) : null}
 
             {/*
               The close of last month's open work, once, above the branch view (decision
@@ -689,10 +731,10 @@ function Dashboard() {
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
                 {filter === 'CELLS'
-                  ? whose === 'mine'
+                  ? shownWhose === 'mine'
                     ? 'No Cell meeting of yours is awaiting a record.'
                     : 'No Cell meeting in your branch is awaiting a record.'
-                  : whose === 'mine'
+                  : shownWhose === 'mine'
                     ? 'Nobody on your DCC checklist is awaiting a record.'
                     : 'No DCC record is owed in your branch.'}
               </p>
@@ -754,7 +796,7 @@ function Dashboard() {
           </section>
         ) : null}
 
-        {tab === 'behind' ? (
+        {listTab === 'behind' ? (
           <section className={LIST} aria-labelledby="attention-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
@@ -829,7 +871,7 @@ function Dashboard() {
           Section 19's fifth outstanding-work entry, and section 20 requires the list
           behind it (decision 0232). Undated: it asks about now.
         */}
-        {tab === 'leader' ? (
+        {listTab === 'leader' ? (
           <section className={LIST} aria-labelledby="unplaced-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
@@ -869,7 +911,7 @@ function Dashboard() {
           Section 19's third outstanding-work entry, which section 15 requires and
           section 10's closure flow fills (decision 0233). Undated: it asks about now.
         */}
-        {tab === 'nocell' ? (
+        {listTab === 'nocell' ? (
           <section className={LIST} aria-labelledby="without-cell-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
@@ -901,9 +943,12 @@ function Dashboard() {
         ) : null}
       </div>
 
-      {/* The reader's own requests, below their own work (decision 0269). */}
-      <SentRequests />
+      {/* The reader's own requests, below their own work (decision 0269); on the recording
+          screens they are on My Cell, beside asking for one (decision 0323). */}
+      {recordingOnly || seniorPastor ? null : <SentRequests />}
 
+      {recordingOnly || seniorPastor ? null : (
+      <>
       {/*
         This month so far, as a row at the foot (decision 0290). Each figure carries last
         month's, named by its month; no bars, because coverage is two figures and never a
@@ -968,6 +1013,8 @@ function Dashboard() {
           />
         </div>
       </aside>
+      </>
+      )}
     </main>
   );
 }

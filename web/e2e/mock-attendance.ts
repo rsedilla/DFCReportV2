@@ -1532,3 +1532,109 @@ export async function mockDccTwelve(
 
   return asked;
 }
+
+/**
+ * One week of `GET /reports/recording-status` (decision 0325). The rows and Others add up to
+ * the two boxes, as decision 0325's point 4 requires: Cell 6 of 10 and DCC 9 of 13.
+ *
+ * **The order is the server's and is built to tell a client that re-sorts it apart.** The Men's
+ * root comes first although his name sorts after the Women's root's, and the rows are in
+ * surname order while their figures are not monotonic, so a client sorting by name or by a
+ * figure reorders them.
+ */
+const MENS_ROOT = {
+  id: '3f1b7c6e-0000-4000-8000-000000000a01',
+  member_id: 'M-000901',
+  full_name: 'Ptr. Teodulo Villareal',
+};
+const WOMENS_ROOT = {
+  id: '3f1b7c6e-0000-4000-8000-000000000a02',
+  member_id: 'M-000902',
+  full_name: 'Ptra. Amparo Lacson',
+};
+
+function leader(id: string, fullName: string) {
+  return { id: `3f1b7c6e-0000-4000-8000-000000000${id}`, member_id: null, full_name: fullName };
+}
+
+export function recordingStatus(kind: 'WEEK' | 'MONTH', start: string, end: string) {
+  return {
+    kind,
+    start,
+    end,
+    open: true,
+    whole_church: {
+      cell: { recorded: 6, owed: 10, percent: 60 },
+      dcc: { recorded: 9, owed: 13, percent: 69 },
+    },
+    previous: {
+      start: '2026-09-28',
+      end: '2026-10-04',
+      open: false,
+      cell: { recorded: 5, owed: 9 },
+      dcc: { recorded: 8, owed: 11 },
+    },
+    tables: [
+      {
+        root: MENS_ROOT,
+        network: 'MENS',
+        rows: [
+          {
+            leader: leader('b01', 'Bernardo Abad'),
+            cell: { recorded: 2, owed: 2 },
+            dcc: { recorded: 3, owed: 3 },
+            status: { kind: 'COMPLETED' },
+          },
+          {
+            leader: leader('b02', 'Celestino Ocampo'),
+            cell: { recorded: 1, owed: 4 },
+            dcc: { recorded: 2, owed: 4 },
+            status: { kind: 'STILL_TO_RECORD', leaders: 3 },
+          },
+          {
+            leader: leader('b03', 'Dionisio Yap'),
+            cell: { recorded: 0, owed: 0 },
+            dcc: { recorded: 0, owed: 0 },
+            status: { kind: 'NOTHING_OWED' },
+          },
+        ],
+      },
+      {
+        root: WOMENS_ROOT,
+        network: 'WOMENS',
+        rows: [
+          {
+            leader: leader('b04', 'Felicidad Bautista'),
+            cell: { recorded: 1, owed: 2 },
+            dcc: { recorded: 1, owed: 2 },
+            status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+          },
+          {
+            leader: leader('b05', 'Gloria Salazar'),
+            cell: { recorded: 2, owed: 2 },
+            dcc: { recorded: 2, owed: 2 },
+            status: { kind: 'COMPLETED' },
+          },
+        ],
+      },
+    ],
+    others: {
+      cell: { recorded: 0, owed: 0 },
+      dcc: { recorded: 1, owed: 2 },
+      status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+    },
+  };
+}
+
+
+/** `GET /reports/recording-status`, answering any week or month with `recordingStatus`. */
+export async function mockRecordingStatus(page: Page): Promise<void> {
+  await page.route('**/api/v1/reports/recording-status?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const start = params.get('start') ?? '2026-06-15';
+
+    return route.fulfill(
+      json(recordingStatus(params.get('kind') === 'MONTH' ? 'MONTH' : 'WEEK', start, start)),
+    );
+  });
+}

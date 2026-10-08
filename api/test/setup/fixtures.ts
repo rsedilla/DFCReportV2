@@ -216,6 +216,13 @@ export async function createAccount(
      * session and every suite minting such an account's token would be refused.
      */
     secondStep?: boolean;
+    /**
+     * Full view (decision 0323). **True by default here, while a new account in the
+     * application starts without it**: every suite written before that ruling exercises a
+     * Leader holding reports, Training and Conquest, which only Full view now gives. The
+     * cases that pin the ruling pass false.
+     */
+    fullView?: boolean;
   },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
@@ -230,6 +237,7 @@ export async function createAccount(
       // a real hash; the rest mint an access token directly.
       password_hash: options.passwordHash ?? 'argon2-placeholder-not-a-valid-hash',
       status: 'ACTIVE',
+      full_view: options.fullView ?? true,
     })
     .returning('id')
     .executeTakeFirstOrThrow();
