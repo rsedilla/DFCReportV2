@@ -509,9 +509,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     // **The branch is the pastoral tree as it stands now, never the actor's grant**
     // (decision 0258): a Whole Church grant would make it every meeting in the church.
+    // For a Leader account it stops one or two levels down (decision 0324); the leaders
+    // walked are the ones who file, which is the depth that ruling counts.
     const leaders =
       whose === 'branch'
-        ? await this.hierarchy.subtreeOf(this.db, actor.personId)
+        ? await this.hierarchy.subtreeOf(
+            this.db,
+            actor.personId,
+            (await this.authorization.overseeDepthFor(actor.accountId)) ?? undefined,
+          )
         : [actor.personId];
 
     const scheduled = await this.cells.meetingsAwaitingFor(this.db, leaders, reportingMonth);

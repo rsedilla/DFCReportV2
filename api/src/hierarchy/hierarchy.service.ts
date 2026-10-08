@@ -275,11 +275,14 @@ export class HierarchyService {
    *
    * Direct leaders and descendants are different things and are never conflated
    * (section 5, Direct leaders vs descendants); this is the second of the two.
+   *
+   * `maxDepth` keeps only those at most that many levels below the person, for *People I
+   * oversee* (decision 0324). A cycle beyond it is not reached and so not refused.
    */
-  async subtreeOf(executor: Db, personId: string): Promise<string[]> {
+  async subtreeOf(executor: Db, personId: string, maxDepth?: number): Promise<string[]> {
     const tree = await this.currentTree(executor, personId);
     if (tree !== undefined) {
-      const { people, cycle } = tree.subtree(personId);
+      const { people, cycle } = tree.subtree(personId, maxDepth);
       if (cycle) {
         throw this.cycleError(personId);
       }
@@ -294,6 +297,7 @@ export class HierarchyService {
           FROM pastoral_assignments pa
           JOIN subtree s ON pa.leader_id = s.person_id
          WHERE pa.ended_at IS NULL
+           AND (s.depth < ${maxDepth ?? null}::int) IS NOT FALSE
       ) CYCLE person_id SET is_cycle USING path
       SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
     `.execute(executor);

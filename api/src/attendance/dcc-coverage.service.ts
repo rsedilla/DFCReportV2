@@ -645,6 +645,25 @@ export class DccCoverageService {
     // Cell queue decides it: the reader may record for the leader whose checklist holds the
     // row's people, found as of the Sunday, holding `dcc.take_attendance` and
     // `dcc.submit_on_behalf` over them now — or that leader is the reader.
+    // **For a Leader account, a row is listed by its submitter's depth** (decision 0324):
+    // the submitter as of the Sunday must sit within one or two levels of the reader now,
+    // the reader included. A row with no submitter, or one outside the branch, is not
+    // listed; it still counts in every figure. Filtered on the internal submitter, since
+    // `record_for` is null on every row a Leader may not record.
+    const depth = await this.authorization.overseeDepthFor(actor.accountId);
+    if (depth !== null) {
+      const near = new Set(
+        (await this.hierarchy.subtreeOf(this.db, actor.personId, depth)).map((id) =>
+          canonicalId(id),
+        ),
+      );
+      owed.splice(
+        0,
+        owed.length,
+        ...owed.filter((entry) => entry.submitterId !== null && near.has(entry.submitterId)),
+      );
+    }
+
     const recordable = await this.recordableBy(actor, [
       ...new Set(owed.map((entry) => entry.submitterId).filter((id): id is string => id !== null)),
     ]);

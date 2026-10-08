@@ -225,6 +225,21 @@ export class AuthorizationService {
   }
 
   /**
+   * How many levels below the reader *People I oversee* lists (section 19, decision 0324):
+   * two for a Leader account with Full view, one without, and no limit (null) for an
+   * account holding `SENIOR_PASTOR` or `ADMIN`. Read from the honoured roles, as `screens`.
+   */
+  async overseeDepthFor(accountId: string): Promise<number | null> {
+    const roles = await this.activeRoles(this.db, accountId);
+
+    if (roles.honoured.includes('ADMIN') || roles.honoured.includes('SENIOR_PASTOR')) {
+      return null;
+    }
+
+    return roles.fullView ? 2 : 1;
+  }
+
+  /**
    * An account's roles and the authority they and its explicit grants carry, from
    * one read of each table.
    *

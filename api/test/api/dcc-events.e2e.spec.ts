@@ -866,8 +866,9 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const rows = await owedRows(markAccount, sunday, eventId);
     const paulRow = rows.find((row) => row.leader.person_id === paul.id);
 
-    // Where the row offers no Record it does not say whose it is (owner's ruling).
-    expect(paulRow).toMatchObject({ record_for: null, may_record: false });
+    // Manuel recorded it on the Sunday and is outside Mark's branch now, so a Leader account
+    // does not list it (decision 0324).
+    expect(paulRow).toBeUndefined();
   });
 
   it('reads another leader’s checklist for the Sunday, rolled-up people included', async () => {
