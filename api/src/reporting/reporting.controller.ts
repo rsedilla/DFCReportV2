@@ -387,9 +387,16 @@ export class ReportingController {
         status.tables === null
           ? null
           : [...status.tables]
-              .sort((left, right) => byName(left.rootId, right.rootId))
+              // By Network, Men's first, rather than by name: both roots may share a surname
+              // (owner, 2026-10-08). Never by a figure.
+              .sort(
+                (left, right) =>
+                  networkOrder(left.network) - networkOrder(right.network) ||
+                  byName(left.rootId, right.rootId),
+              )
               .map((table) => ({
                 root: person(table.rootId),
+                network: table.network,
                 rows: [...table.rows]
                   .sort((left, right) => byName(left.leaderId, right.leaderId))
                   .map((row) => ({ leader: person(row.leaderId), ...figures(row.figures) })),
@@ -613,6 +620,11 @@ function keyOf(identity: { lastName: string; firstName: string; memberId: string
     firstName: identity.firstName,
     memberId: identity.memberId,
   };
+}
+
+/** Men's before Women's, and a root with no seat last. */
+function networkOrder(network: NetworkName | null): number {
+  return network === 'MENS' ? 0 : network === 'WOMENS' ? 1 : 2;
 }
 
 /** The roster order: last name, first name, Member ID, so the sort and the cursor agree. */

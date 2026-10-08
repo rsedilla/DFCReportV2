@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { RecordingStatusPanel } from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -219,7 +220,13 @@ function Dashboard() {
   // server says a leader holding an account sits directly beneath it. Its other lists are
   // not asked for, so nothing is fetched to be hidden.
   const recordingOnly = me.data?.screens === 'RECORDING';
-  const fullRecord = me.data !== undefined && !recordingOnly;
+  // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
+  // their own Awaiting a record with no People I oversee, and none of the other lists or
+  // the month figures.
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
+  const listTab: RecordTab = recordingOnly || seniorPastor ? 'awaiting' : tab;
+  const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
   const mayOversee = me.data?.people_i_oversee !== false;
   const shownWhose: Whose = mayOversee ? whose : 'mine';
   const branchView = shownWhose === 'branch';
@@ -601,7 +608,9 @@ function Dashboard() {
         <p className="text-muted text-sm">
           {recordingOnly
             ? 'What still needs a record.'
-            : 'What needs doing first, and this month’s figures at the foot.'}
+            : seniorPastor
+              ? 'Whether the church has recorded, and your own work.'
+              : 'What needs doing first, and this month’s figures at the foot.'}
         </p>
       </div>
 
@@ -610,7 +619,18 @@ function Dashboard() {
       </div>
 
       {/* A Recording-only account has one list, so no tabs (decision 0323). */}
-      {recordingOnly ? null : (
+      {recordingOnly ? null : seniorPastor ? (
+        <TabBar
+          label="Record"
+          className={cn('mt-6 grid-cols-2', TAB_ROW)}
+          tabs={[
+            { key: 'status', label: 'Recording status', count: null },
+            { key: 'awaiting', label: 'Awaiting a record', count: tabs[0].count },
+          ]}
+          current={spTab}
+          onChoose={(next) => go({ list: next === 'status' ? null : 'awaiting' })}
+        />
+      ) : (
         <TabBar
           label="Outstanding work"
           className={cn('mt-6 grid-cols-2 lg:grid-cols-4', TAB_ROW)}
@@ -622,7 +642,8 @@ function Dashboard() {
 
       {/* The chosen list's pane; the month's figures below it are the whole page's. */}
       <div className={recordingOnly ? 'mt-6' : TAB_PANE}>
-        {tab === 'awaiting' || recordingOnly ? (
+        {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
+        {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
           <section aria-labelledby="awaiting-heading" className={LIST}>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
@@ -773,7 +794,7 @@ function Dashboard() {
           </section>
         ) : null}
 
-        {tab === 'behind' ? (
+        {listTab === 'behind' ? (
           <section className={LIST} aria-labelledby="attention-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
@@ -848,7 +869,7 @@ function Dashboard() {
           Section 19's fifth outstanding-work entry, and section 20 requires the list
           behind it (decision 0232). Undated: it asks about now.
         */}
-        {tab === 'leader' ? (
+        {listTab === 'leader' ? (
           <section className={LIST} aria-labelledby="unplaced-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
@@ -888,7 +909,7 @@ function Dashboard() {
           Section 19's third outstanding-work entry, which section 15 requires and
           section 10's closure flow fills (decision 0233). Undated: it asks about now.
         */}
-        {tab === 'nocell' ? (
+        {listTab === 'nocell' ? (
           <section className={LIST} aria-labelledby="without-cell-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
@@ -922,9 +943,9 @@ function Dashboard() {
 
       {/* The reader's own requests, below their own work (decision 0269); on the recording
           screens they are on My Cell, beside asking for one (decision 0323). */}
-      {recordingOnly ? null : <SentRequests />}
+      {recordingOnly || seniorPastor ? null : <SentRequests />}
 
-      {recordingOnly ? null : (
+      {recordingOnly || seniorPastor ? null : (
       <>
       {/*
         This month so far, as a row at the foot (decision 0290). Each figure carries last

@@ -179,8 +179,7 @@
     },
     {
       "route": "GET /api/v1/reports/recording-status",
-      "waived_to": "screens block",
-      "reason": "The Senior Pastors' Record screen (decision 0325), built on this branch after the route."
+      "screen": "web/components/recording-status.tsx"
     },
     {
       "route": "GET /api/v1/dcc/owed",

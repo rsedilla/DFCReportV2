@@ -392,6 +392,18 @@ describe('Full view (decision 0323)', () => {
     it('is always offered with Full view', async () => {
       expect((await me(await leaderAccount(true)).expect(200)).body.people_i_oversee).toBe(true);
     });
+
+    it('is never offered to a Senior Pastor (decision 0325, point 1)', async () => {
+      nameSeniorPastors(app, [root.id]);
+      const pastor = await createAccount(app, db, {
+        person: root,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      await createAccount(app, db, { person: leader, roles: ['LEADER'], fullView: false });
+
+      expect((await me(pastor).expect(200)).body.people_i_oversee).toBe(false);
+    });
   });
   describe('what Full view does not touch', () => {
     it('changes nothing for a Senior Pastor', async () => {

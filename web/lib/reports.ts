@@ -305,3 +305,71 @@ export async function getCellTwelve(
     );
   }
 }
+
+/** One column of *Recording status*: X of Y leaders (decision 0325). */
+export interface RecordingColumn {
+  recorded: number;
+  owed: number;
+}
+
+export type RecordingRowStatus =
+  | { kind: 'COMPLETED' }
+  | { kind: 'STILL_TO_RECORD'; leaders: number }
+  | { kind: 'NOTHING_OWED' };
+
+export interface RecordingRow {
+  leader: { id: string; member_id: string | null; full_name: string | null };
+  cell: RecordingColumn;
+  dcc: RecordingColumn;
+  status: RecordingRowStatus;
+}
+
+/** `GET /reports/recording-status` (decision 0325). The percentages are the server's. */
+export interface RecordingStatus {
+  kind: 'WEEK' | 'MONTH';
+  start: string;
+  end: string;
+  open: boolean;
+  whole_church: {
+    cell: RecordingColumn & { percent: number | null };
+    dcc: RecordingColumn & { percent: number | null };
+  };
+  previous: { start: string; end: string; open: boolean; cell: RecordingColumn; dcc: RecordingColumn };
+  /** Null where the placement graph is refused (section 20); the boxes stand. */
+  tables:
+    | {
+        root: { id: string; member_id: string | null; full_name: string | null };
+        network: 'MENS' | 'WOMENS' | null;
+        rows: RecordingRow[];
+      }[]
+    | null;
+  others: Omit<RecordingRow, 'leader'> | null;
+}
+
+/** `GET /reports/recording-status`, retried once with the guard month the API names. */
+export async function getRecordingStatus(
+  kind: 'WEEK' | 'MONTH',
+  start: string,
+  guardMonth: string,
+  signal?: AbortSignal,
+): Promise<RecordingStatus> {
+  const params = new URLSearchParams({ kind, start, period: guardMonth });
+
+  try {
+    return await authenticatedRequest<RecordingStatus>(
+      `/api/v1/reports/recording-status?${params.toString()}`,
+      { signal },
+    );
+  } catch (error) {
+    const expected = error instanceof ApiRequestError ? error.details.expected : undefined;
+    if (typeof expected !== 'string' || expected === guardMonth) {
+      throw error;
+    }
+    params.set('period', expected);
+
+    return authenticatedRequest<RecordingStatus>(
+      `/api/v1/reports/recording-status?${params.toString()}`,
+      { signal },
+    );
+  }
+}

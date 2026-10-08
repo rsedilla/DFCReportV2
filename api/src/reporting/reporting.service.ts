@@ -113,7 +113,14 @@ export interface RecordingStatus {
   /** The period before, for the boxes alone, with its own open flag (section 17). */
   previous: { start: string; end: string; open: boolean; figures: RecordingFigures };
   /** One per root on the placement graph, null where section 20 refuses that graph. */
-  tables: { rootId: string; rows: { leaderId: string; figures: RecordingFigures }[] }[] | null;
+  tables:
+    | {
+        rootId: string;
+        /** The Network the root heads, which orders the tables: Men's, then Women's. */
+        network: NetworkName | null;
+        rows: { leaderId: string; figures: RecordingFigures }[];
+      }[]
+    | null;
   others: RecordingFigures | null;
 }
 
@@ -1044,8 +1051,15 @@ export class ReportingService {
 
       if (!graph.refused) {
         const placed = new Set<string>();
+        const seats = new Map(
+          (await this.hierarchy.rootSeatsAsOf(trx, endOfManilaDay(end))).map((seat) => [
+            canonicalId(seat.personId),
+            seat.network,
+          ]),
+        );
         tables = graph.roots().map((rootId) => ({
           rootId,
+          network: seats.get(canonicalId(rootId)) ?? null,
           rows: graph.children(rootId).map((leaderId) => {
             const beneath = graph.subtree(leaderId);
             beneath.forEach((id) => placed.add(id));
