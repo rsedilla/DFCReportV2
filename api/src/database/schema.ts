@@ -96,6 +96,12 @@ export interface AccountsTable {
   status: Generated<AccountStatus>;
   sessions_revoked_at: Date | null;
   last_login_at: Date | null;
+  /**
+   * Full view (section 7, decision 0323): without it a Leader account holds no
+   * `reports.view_subtree` and no Training or Conquest capability. Set only by an
+   * account holding `roles.manage`.
+   */
+  full_view: Generated<boolean>;
   created_at: ServerTimestamp;
   updated_at: ServerTimestamp;
 }

@@ -9,7 +9,7 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
-import { ROLE_DEFAULTS } from './role-defaults';
+import { LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
@@ -38,6 +38,8 @@ interface ActiveRoles {
   honoured: AccountRole[];
   /** Every active role row, honoured or not. See `activeRoles` for why both. */
   held: AccountRole[];
+  /** Full view (section 7, decision 0323), read on the same row as the roles. */
+  fullView: boolean;
 }
 
 /**
@@ -130,12 +132,13 @@ export class AuthorizationService {
     const rows = await executor
       .selectFrom('account_roles')
       .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
-      .select(['account_roles.role', 'accounts.person_id'])
+      .select(['account_roles.role', 'accounts.person_id', 'accounts.full_view'])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
     return {
+      fullView: rows.some((row) => row.full_view),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -263,6 +266,15 @@ export class AuthorizationService {
 
     for (const role of roles.honoured) {
       for (const [capability, scopeType] of Object.entries(ROLE_DEFAULTS[role])) {
+        // A Leader account without Full view holds none of these (decision 0323).
+        if (
+          role === 'LEADER' &&
+          !roles.fullView &&
+          LEADER_FULL_VIEW_ONLY.has(capability as Capability)
+        ) {
+          continue;
+        }
+
         effective.push({
           capability: capability as Capability,
           scope: { type: scopeType, network: null },

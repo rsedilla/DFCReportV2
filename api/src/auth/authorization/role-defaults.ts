@@ -136,6 +136,22 @@ const LEADER: RoleDefaults = {
   ...growthAt(ScopeType.OwnSubtree, false),
 };
 
+/**
+ * What a Leader account holds only with Full view (section 7, decision 0323): reports and
+ * the Training and Conquest capabilities. An account that also holds `SENIOR_PASTOR` or
+ * `ADMIN` keeps those roles' defaults whatever Full view says, because only the Leader
+ * role's defaults are withheld.
+ */
+export const LEADER_FULL_VIEW_ONLY: ReadonlySet<Capability> = new Set([
+  Capability.ReportsViewSubtree,
+  Capability.TrainingViewSubtree,
+  Capability.TrainingConfirm,
+  Capability.TrainingConfirmOnBehalf,
+  Capability.ConquestViewSubtree,
+  Capability.ConquestConfirm,
+  Capability.ConquestConfirmOnBehalf,
+]);
+
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
   SENIOR_PASTOR: SENIOR_PASTOR,
   ADMIN: ADMIN,
