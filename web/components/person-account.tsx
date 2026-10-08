@@ -397,12 +397,10 @@ function FullViewRow({
 }) {
   const queryClient = useQueryClient();
   const inputId = useId();
-  const [key, setKey] = useState(() => crypto.randomUUID());
 
   const change = useMutation({
-    mutationFn: (next: boolean) => setFullView(accountId, next, key),
+    mutationFn: (next: boolean) => setFullView(accountId, next, crypto.randomUUID()),
     onSuccess: async (saved) => {
-      setKey(crypto.randomUUID());
       // The saved value at once, so the box does not show the old one while the account is
       // read again.
       queryClient.setQueryData<{ account: PersonAccountRecord | null }>(

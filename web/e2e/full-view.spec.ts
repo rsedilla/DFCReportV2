@@ -139,8 +139,8 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
-    // Its other lists and the month figures are not asked for, so nothing is fetched to be
-    // hidden (the page's own comment), and the API's refusals are never met.
+    // Its other lists and the month figures are not asked for, and the API's refusals are
+    // never met.
     expect(asked.filter((request) => /\/api\/v1\/cells\?/.test(request))).toEqual([]);
     expect(asked.filter((request) => request.includes('/people/awaiting-reassignment'))).toEqual(
       [],
