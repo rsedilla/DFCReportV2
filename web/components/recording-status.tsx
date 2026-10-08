@@ -156,7 +156,7 @@ export function RecordingStatusPanel() {
           <p className="mt-8 text-sm">
             <Link
               href="/reports/filed?behind=1"
-              className="text-accent focus-visible:outline-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               See which Cells are behind
             </Link>

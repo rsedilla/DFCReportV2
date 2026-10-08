@@ -230,6 +230,8 @@ function Dashboard() {
   const mayOversee = me.data?.people_i_oversee !== false;
   const shownWhose: Whose = mayOversee ? whose : 'mine';
   const branchView = shownWhose === 'branch';
+  // The branch is asked for only once the account says the reader may have one.
+  const whoseKnown = !branchView || me.data !== undefined;
 
   // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
   // when the list or the view changes, so a list switched away from does not come back open.
@@ -288,6 +290,7 @@ function Dashboard() {
   const awaiting = useQuery({
     queryKey: ['meetings-awaiting', month, shownWhose],
     queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, shownWhose),
+    enabled: whoseKnown,
   });
 
   const scoped = useQuery({
@@ -352,7 +355,7 @@ function Dashboard() {
   const awaitingPrevious = useQuery({
     queryKey: ['meetings-awaiting', previousMonth, shownWhose],
     queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal, shownWhose),
-    enabled: inCloseWeek,
+    enabled: inCloseWeek && whoseKnown,
   });
 
   const dccEventsPrevious = useQuery({
@@ -378,12 +381,12 @@ function Dashboard() {
   const owedNow = useQuery({
     queryKey: ['dcc-owed', month],
     queryFn: ({ signal }) => getDccOwed(month, signal),
-    enabled: branchView,
+    enabled: branchView && whoseKnown,
   });
   const owedPrevious = useQuery({
     queryKey: ['dcc-owed', previousMonth],
     queryFn: ({ signal }) => getDccOwed(previousMonth, signal),
-    enabled: branchView && inCloseWeek,
+    enabled: branchView && whoseKnown && inCloseWeek,
   });
   const owedRows: OwedRow[] = [
     ...(owedPrevious.data?.data ?? []).map((row) => ({ ...row, month: previousMonth })),
