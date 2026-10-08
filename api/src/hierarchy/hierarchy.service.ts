@@ -578,7 +578,14 @@ export class HierarchyService {
     executor: Db,
     periodStart: Date,
     periodEnd: Date,
-  ): Promise<{ subtree: (leaderId: string) => string[] }> {
+  ): Promise<{
+    subtree: (leaderId: string) => string[];
+    /** The roots on the graph, and a leader's direct leaders on it (decision 0325). */
+    roots: () => string[];
+    children: (leaderId: string) => string[];
+    /** Whether section 20 refuses this graph, so a caller can refuse its own figures. */
+    refused: boolean;
+  }> {
     const result = await sql<{ person_id: string; leader_id: string | null }>`
       WITH RECURSIVE in_force AS (
         SELECT person_id, leader_id
@@ -669,6 +676,15 @@ export class HierarchyService {
         }
         return walked;
       },
+      roots: () => {
+        this.refuseUnresolvable(notFunctional, hasCycle, '');
+        return edges.filter((edge) => edge.leaderId === null).map((edge) => edge.personId);
+      },
+      children: (leaderId: string) => {
+        this.refuseUnresolvable(notFunctional, hasCycle, leaderId);
+        return [...(disciplesOf.get(canonicalId(leaderId)) ?? [])];
+      },
+      refused: notFunctional || hasCycle,
     };
   }
 

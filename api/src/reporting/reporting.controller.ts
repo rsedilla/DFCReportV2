@@ -19,6 +19,7 @@ import {
   DccByLeaderDto,
   DccMonthlyReportDto,
   DccTwelveDto,
+  RecordingStatusDto,
 } from './dto/reporting.dto';
 import {
   ReportingService,
@@ -28,6 +29,7 @@ import {
   type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
+  type RecordingFigures,
 } from './reporting.service';
 
 /**
@@ -304,6 +306,86 @@ export class ReportingController {
       total: twelve.total,
       buckets: twelve.buckets,
       calendar_start: twelve.calendar_start,
+    };
+  }
+
+  /**
+   * The Senior Pastors' *Recording status* (decision 0325): whether the church has recorded,
+   * for a week or a month, as Whole Church boxes, one table per root's direct leaders in
+   * surname order, and an *Others* line.
+   *
+   * **Whole Church only** (point 8): `reports.view_subtree` against the church, so a reader
+   * holding it over a subtree is refused rather than handed a narrower screen under a
+   * church-wide heading. The percentage is computed here for the two boxes alone, rounded
+   * down, and absent where nobody owed (point 3).
+   */
+  @Get('recording-status')
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
+  async recordingStatus(@Query() query: RecordingStatusDto): Promise<Record<string, unknown>> {
+    const status = await this.reporting.recordingStatus(query.kind, query.start, query.period);
+
+    const ids = [
+      ...(status.tables ?? []).flatMap((table) => [
+        table.rootId,
+        ...table.rows.map((row) => row.leaderId),
+      ]),
+    ];
+    const identities = await this.people.forDecisions(ids);
+    const person = (id: string) => {
+      const identity = identities.get(id);
+
+      return {
+        id,
+        member_id: identity?.memberId ?? null,
+        full_name: identity?.fullName ?? null,
+      };
+    };
+    const byName = (left: string, right: string) => {
+      const a = identities.get(left);
+      const b = identities.get(right);
+
+      return a === undefined || b === undefined ? 0 : compareKeys(keyOf(a), keyOf(b));
+    };
+    const box = (column: { recorded: number; owed: number }) => ({
+      ...column,
+      percent: column.owed === 0 ? null : Math.floor((column.recorded * 100) / column.owed),
+    });
+    const figures = (row: RecordingFigures) => ({
+      cell: row.cell,
+      dcc: row.dcc,
+      status:
+        row.status.kind === 'STILL_TO_RECORD'
+          ? { kind: row.status.kind, leaders: row.status.leaders }
+          : { kind: row.status.kind },
+    });
+
+    return {
+      kind: status.kind,
+      start: status.start,
+      end: status.end,
+      open: status.open,
+      whole_church: {
+        cell: box(status.wholeChurch.cell),
+        dcc: box(status.wholeChurch.dcc),
+      },
+      previous: {
+        start: status.previous.start,
+        end: status.previous.end,
+        cell: box(status.previous.figures.cell),
+        dcc: box(status.previous.figures.dcc),
+      },
+      tables:
+        status.tables === null
+          ? null
+          : [...status.tables]
+              .sort((left, right) => byName(left.rootId, right.rootId))
+              .map((table) => ({
+                root: person(table.rootId),
+                rows: [...table.rows]
+                  .sort((left, right) => byName(left.leaderId, right.leaderId))
+                  .map((row) => ({ leader: person(row.leaderId), ...figures(row.figures) })),
+              })),
+      others: status.others === null ? null : figures(status.others),
     };
   }
 

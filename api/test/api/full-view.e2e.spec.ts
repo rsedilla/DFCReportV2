@@ -7,6 +7,7 @@ import request from 'supertest';
 
 import { CAPABILITY_METADATA } from '../../src/auth/authorization/authorization.decorators';
 import { LEADER_FULL_VIEW_ONLY } from '../../src/auth/authorization/role-defaults';
+import { reportRangeGuardMonth } from '../../src/common/time/report-range';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -95,6 +96,16 @@ describe('Full view (decision 0323)', () => {
         kind: 'MONTH',
         start: period,
       }),
+      'GET /reports/recording-status': get('reports/recording-status', {
+        kind: 'WEEK',
+        start: lastMonday(),
+        // The month a last-week range resolves at, as the My 12 tables name it.
+        period: reportRangeGuardMonth(
+          'WEEK',
+          lastMonday(),
+          new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
+        ),
+      }),
       'GET /training/counts': get('training/counts'),
       'GET /training/people': get('training/people'),
       'POST /training/submit': (token) =>
@@ -108,6 +119,20 @@ describe('Full view (decision 0323)', () => {
     };
   }
 
+  /** A Monday that has passed, for a week that has begun. */
+  function lastMonday(): string {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+
+    return new Date(Date.UTC(y, m - 1, d - ((weekday + 6) % 7) - 7)).toISOString().slice(0, 10);
+  }
+
+  /**
+   * Routes a Leader holds the capability for and still may not read, because they are
+   * Whole Church only: refused at the scope rather than at the capability (decision 0325).
+   */
+  const WHOLE_CHURCH_ONLY = new Set(['GET /reports/recording-status']);
   /** Every route whose declared capability is one Full view withholds, from the controllers. */
   function declaredGuardedRoutes(): string[] {
     const found: string[] = [];
@@ -207,6 +232,13 @@ describe('Full view (decision 0323)', () => {
 
       for (const [route, send] of Object.entries(guardedRequests(leader.id, disciple.id))) {
         const response = await send(account.accessToken);
+        if (WHOLE_CHURCH_ONLY.has(route)) {
+          expect({ route, code: response.body.error?.code }).toEqual({
+            route,
+            code: 'SCOPE_DENIED',
+          });
+          continue;
+        }
         expect({ route, admitted: response.status >= 200 && response.status < 300 }).toEqual({
           route,
           admitted: true,

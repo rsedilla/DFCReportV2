@@ -204,3 +204,19 @@ export class DccTwelveDto extends DccMonthlyReportDto {
   @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
   start!: string;
 }
+
+/**
+ * `GET /reports/recording-status`: the Senior Pastors' *Recording status* over a week or a
+ * month (decision 0325), named by its first day.
+ */
+export class RecordingStatusDto {
+  @IsIn(['WEEK', 'MONTH'])
+  kind!: 'WEEK' | 'MONTH';
+
+  @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
+  start!: string;
+
+  /** The month the range resolves at, as the My 12 tables name it (decision 0293). */
+  @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
+  period!: string;
+}
