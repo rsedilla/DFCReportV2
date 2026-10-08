@@ -16,6 +16,8 @@ export interface PersonAccount {
   created_at: string;
   /** Whether it signs in with a second step, and since when (decision 0302). */
   second_step: { required: boolean; set_up_at: string | null };
+  /** Full view (decision 0323); meaningful on a Leader account only. */
+  full_view: boolean;
 }
 
 export async function getAccountForPerson(
@@ -76,6 +78,19 @@ export async function setAccountAccess(
 ): Promise<{ id: string; status: PersonAccount['status'] }> {
   return authenticatedRequest(`/api/v1/accounts/${accountId}/${action}`, {
     method: 'POST',
+    idempotencyKey,
+  });
+}
+
+/** Ticks or clears Full view on a Leader account (decision 0323). Needs `roles.manage`. */
+export async function setFullView(
+  accountId: string,
+  fullView: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; full_view: boolean }> {
+  return authenticatedRequest(`/api/v1/accounts/${accountId}/full-view`, {
+    method: 'POST',
+    body: { full_view: fullView },
     idempotencyKey,
   });
 }

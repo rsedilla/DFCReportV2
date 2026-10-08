@@ -83,6 +83,24 @@ const GROWTH: NavEntry = {
   icon: Sprout,
   matches: ['/growth'],
 };
+/**
+ * A Recording-only account's own Cells (decision 0323): its members, this month's meetings
+ * and asking for a new Cell. A Cell's own pages are under `/cells/`, so they are this item's
+ * on the recording screens, where there is no Cells item.
+ */
+const MY_CELL: NavEntry = {
+  href: '/my-cell',
+  label: 'My Cell',
+  icon: LayoutGrid,
+  matches: ['/my-cell', '/cells'],
+};
+/** The Growth SUYNL tab as an item of its own on the recording screens (decision 0323). */
+const SUYNL: NavEntry = {
+  href: '/growth/suynl',
+  label: 'SUYNL',
+  icon: Sprout,
+  matches: ['/growth'],
+};
 const ACCOUNT: NavEntry = {
   href: '/session',
   label: 'Account and session',
@@ -140,8 +158,9 @@ export const PAGE_WIDTH = {
  * navigation has to be computed on every page load and arrives stripped of the
  * scope and period that make it readable.
  *
- * **One order for every account** (decision 0277). Where a person lands still follows
- * the reach of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
+ * **A Recording-only account has four items** (decision 0323): `Record · People · My Cell ·
+ * SUYNL`. Every other account has the five. Where a person lands still follows the reach
+ * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
  * 2026-09-15). Below `lg` (1024px) — phones and tablets — the items are a tab bar
@@ -158,7 +177,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // request per page.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const links = [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
+  // **Which items, by the screens the server names** (decision 0323, replacing decision
+  // 0277's one order for every account). Until `/auth/me` answers, today's items, which is
+  // what every account but a Recording-only one sees.
+  const links =
+    me.data?.screens === 'RECORDING'
+      ? [RECORD, PEOPLE, MY_CELL, SUYNL]
+      : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

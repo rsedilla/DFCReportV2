@@ -344,7 +344,14 @@ export class ReportingController {
       const a = identities.get(left);
       const b = identities.get(right);
 
-      return a === undefined || b === undefined ? 0 : compareKeys(keyOf(a), keyOf(b));
+      // An unnamed identity sorts last, then by identifier, so the order is total.
+      return a !== undefined && b !== undefined
+        ? compareKeys(keyOf(a), keyOf(b))
+        : a !== undefined
+          ? -1
+          : b !== undefined
+            ? 1
+            : left.localeCompare(right);
     };
     const box = (column: { recorded: number; owed: number }) => ({
       ...column,
@@ -368,11 +375,13 @@ export class ReportingController {
         cell: box(status.wholeChurch.cell),
         dcc: box(status.wholeChurch.dcc),
       },
+      // The period before carries no percentage: point 3 gives one to the boxes alone.
       previous: {
         start: status.previous.start,
         end: status.previous.end,
-        cell: box(status.previous.figures.cell),
-        dcc: box(status.previous.figures.dcc),
+        open: status.previous.open,
+        cell: status.previous.figures.cell,
+        dcc: status.previous.figures.dcc,
       },
       tables:
         status.tables === null

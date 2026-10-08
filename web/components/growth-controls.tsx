@@ -1,11 +1,13 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
 /**
@@ -32,6 +34,14 @@ export function GrowthTabs({
   current: (typeof TABS)[number]['href'];
   children: ReactNode;
 }) {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // **On the recording screens SUYNL is an item of its own, with no tabs** (decision 0323):
+  // Training and Conquest are refused to such an account.
+  if (me.data?.screens === 'RECORDING') {
+    return <div className="mt-6">{children}</div>;
+  }
+
   return (
     <>
       <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>

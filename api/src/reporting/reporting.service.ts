@@ -87,15 +87,6 @@ export type ReportScope =
 export type DccReportScope = Exclude<ReportScope, { kind: 'CELL' }>;
 export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
 
-/**
- * The five classification buckets, in the order sections 9 and 12 list them.
- *
- * **One type for both domains because the ladder is identical** — first attendance is a
- * VIP, fifth and beyond is a Regular — while the *journeys* are separate and are counted
- * separately: section 12 says a person may be "DCC Regular and Cell 2nd Timer, or vice
- * versa". What is shared is the mapping from a lifetime count to a bucket, and it would
- * stop being shareable the moment either section changed its own ladder.
- */
 /** One column of *Recording status*: X of Y leaders (decision 0325). */
 export interface RecordingColumn {
   recorded: number;
@@ -119,7 +110,8 @@ export interface RecordingStatus {
   end: string;
   open: boolean;
   wholeChurch: RecordingFigures;
-  previous: { start: string; end: string; figures: RecordingFigures };
+  /** The period before, for the boxes alone, with its own open flag (section 17). */
+  previous: { start: string; end: string; open: boolean; figures: RecordingFigures };
   /** One per root on the placement graph, null where section 20 refuses that graph. */
   tables: { rootId: string; rows: { leaderId: string; figures: RecordingFigures }[] }[] | null;
   others: RecordingFigures | null;
@@ -128,6 +120,15 @@ export interface RecordingStatus {
 /** Per leader, how many records they owed in a run of days and how many have none. */
 type OwedByLeader = Map<string, { owed: number; unrecorded: number }>;
 
+/**
+ * The five classification buckets, in the order sections 9 and 12 list them.
+ *
+ * **One type for both domains because the ladder is identical** — first attendance is a
+ * VIP, fifth and beyond is a Regular — while the *journeys* are separate and are counted
+ * separately: section 12 says a person may be "DCC Regular and Cell 2nd Timer, or vice
+ * versa". What is shared is the mapping from a lifetime count to a bucket, and it would
+ * stop being shareable the moment either section changed its own ladder.
+ */
 export interface Classification {
   vip: number;
   second_timer: number;
@@ -991,66 +992,6 @@ export class ReportingService {
   }
 
   /**
-   * The one way a report reads the database, and the reason it is a seam rather than a
-   * convention.
-   *
-   * **Every rule a report owes its period is applied here, once.** A report validates the
-   * month's shape (decision 0185), refuses a period that has not begun (decision 0216), and
-   * computes inside a single `READ ONLY REPEATABLE READ` transaction (decision 0210). Those
-   * were three statements at the top of the one report that exists, which made each of them
-   * a thing the *next* report route has to remember -- and section 22 names five report
-   * routes, of which one is built. Nothing would have reddened for the second route
-   * omitting any of the three: not a test, not a derivation, not a type.
-   *
-   * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
-   * than any other, and it is closed by something that fails rather than by a convention:
-   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts that
-   * **every public member of every class in it that is not a `@Controller` calls this
-   * method on its own body**, that the module opens one transaction and touches the pool
-   * once, and that all three rules are applied here. Members rather than methods, and a
-   * call rather than a mention: three earlier versions of that check missed an arrow-valued
-   * field, a provider carrying no `@Injectable`, and a seam call appearing only in a
-   * comment. It carries a fixture for each.
-   *
-   * **The public-surface claim is the load-bearing one**, and the transaction ones are not
-   * enough on their own. The idiomatic second report method opens no transaction and names
-   * no pool at all -- `reporting` composes what the owning modules compute (decision 0206),
-   * so it calls a figures service whose executor is optional and defaults to the pool. Such
-   * a method applies none of the three rules, compiles clean, and left the transaction
-   * assertions green when `architecture-guardian` ran them against one.
-   *
-   * **What still is not reached**, so this is not read as wider than it is: a callback is
-   * handed `trx` and nothing compels it to use it, for that same reason. A report ignoring
-   * `trx` would take two snapshots and lose decision 0210's identity -- the defect that
-   * shipped once already, under two docblocks claiming "by construction" over code that did
-   * not have it.
-   *
-   * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
-   * site and nothing able to fail on a second; again on the fix, which claimed a report
-   * "cannot" bypass the seam while nothing stopped one; again on the check written to close
-   * that, which only ever saw a report that opened a transaction; and again on the check
-   * written to close **that**, which asked whether the method's text contained the seam's
-   * name. Four passes, each finding the previous fix had reproduced the shape it removed.*
-   *
-   * The bounds are handed to the callback rather than re-derived inside it, which keeps this
-   * method and its callback from drifting apart. It buys nothing against the **guard**, which
-   * never receives them: the guard calls `reportingPeriodBounds` itself, on its own
-   * connection, before this transaction opens. What makes those two the same instant is that
-   * both import one function from `common/time` -- which is what decision 0214 means by
-   * **the same** being a property of sharing one derivation rather than of two agreeing.
-   *
-   * *A first version of this sentence credited the hand-off with the guard's agreement. Had
-   * the callback re-derived the bounds with the same helper, the value would be identical.*
-   */
-  /**
-   * **`storeAs` makes a monthly report stored once its month has closed** (section 20,
-   * decision 0320). It is here rather than in a wrapper because the seam is the one place
-   * that touches the pool. An open month is computed every time. A closed one is served
-   * from its stored copy while its month's version is the one it was computed at, and is
-   * otherwise computed, served and stored; `report-snapshots.ts` carries why storing waits
-   * first.
-   */
-  /**
    * The Senior Pastors' *Recording status* for a week or a month (decision 0325).
    *
    * **A leader owes a record** where a Cell meeting scheduled in the period has begun and they
@@ -1127,6 +1068,7 @@ export class ReportingService {
         previous: {
           start: previousStart,
           end: previousEnd,
+          open: now.getTime() < windowClosesAt(reportingMonthOf(previousEnd)).getTime(),
           figures: figuresOf(previous, [...everyone(previous)]),
         },
         tables,
@@ -1171,6 +1113,66 @@ export class ReportingService {
     return { cell, dcc };
   }
 
+  /**
+   * The one way a report reads the database, and the reason it is a seam rather than a
+   * convention.
+   *
+   * **Every rule a report owes its period is applied here, once.** A report validates the
+   * month's shape (decision 0185), refuses a period that has not begun (decision 0216), and
+   * computes inside a single `READ ONLY REPEATABLE READ` transaction (decision 0210). Those
+   * were three statements at the top of the one report that exists, which made each of them
+   * a thing the *next* report route has to remember -- and section 22 names five report
+   * routes, of which one is built. Nothing would have reddened for the second route
+   * omitting any of the three: not a test, not a derivation, not a type.
+   *
+   * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
+   * than any other, and it is closed by something that fails rather than by a convention:
+   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts that
+   * **every public member of every class in it that is not a `@Controller` calls this
+   * method on its own body**, that the module opens one transaction and touches the pool
+   * once, and that all three rules are applied here. Members rather than methods, and a
+   * call rather than a mention: three earlier versions of that check missed an arrow-valued
+   * field, a provider carrying no `@Injectable`, and a seam call appearing only in a
+   * comment. It carries a fixture for each.
+   *
+   * **The public-surface claim is the load-bearing one**, and the transaction ones are not
+   * enough on their own. The idiomatic second report method opens no transaction and names
+   * no pool at all -- `reporting` composes what the owning modules compute (decision 0206),
+   * so it calls a figures service whose executor is optional and defaults to the pool. Such
+   * a method applies none of the three rules, compiles clean, and left the transaction
+   * assertions green when `architecture-guardian` ran them against one.
+   *
+   * **What still is not reached**, so this is not read as wider than it is: a callback is
+   * handed `trx` and nothing compels it to use it, for that same reason. A report ignoring
+   * `trx` would take two snapshots and lose decision 0210's identity -- the defect that
+   * shipped once already, under two docblocks claiming "by construction" over code that did
+   * not have it.
+   *
+   * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
+   * site and nothing able to fail on a second; again on the fix, which claimed a report
+   * "cannot" bypass the seam while nothing stopped one; again on the check written to close
+   * that, which only ever saw a report that opened a transaction; and again on the check
+   * written to close **that**, which asked whether the method's text contained the seam's
+   * name. Four passes, each finding the previous fix had reproduced the shape it removed.*
+   *
+   * The bounds are handed to the callback rather than re-derived inside it, which keeps this
+   * method and its callback from drifting apart. It buys nothing against the **guard**, which
+   * never receives them: the guard calls `reportingPeriodBounds` itself, on its own
+   * connection, before this transaction opens. What makes those two the same instant is that
+   * both import one function from `common/time` -- which is what decision 0214 means by
+   * **the same** being a property of sharing one derivation rather than of two agreeing.
+   *
+   * *A first version of this sentence credited the hand-off with the guard's agreement. Had
+   * the callback re-derived the bounds with the same helper, the value would be identical.*
+   */
+  /**
+   * **`storeAs` makes a monthly report stored once its month has closed** (section 20,
+   * decision 0320). It is here rather than in a wrapper because the seam is the one place
+   * that touches the pool. An open month is computed every time. A closed one is served
+   * from its stored copy while its month's version is the one it was computed at, and is
+   * otherwise computed, served and stored; `report-snapshots.ts` carries why storing waits
+   * first.
+   */
   private async overPeriod<T>(
     period: string,
     compute: (trx: Transaction<Database>, bounds: ReportingPeriod) => Promise<T>,

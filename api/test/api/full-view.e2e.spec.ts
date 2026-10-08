@@ -377,6 +377,22 @@ describe('Full view (decision 0323)', () => {
     expect(read.body.account.full_view).toBe(false);
   });
 
+  describe('People I oversee on the recording screens (decision 0323, point 3)', () => {
+    it('is offered to a Recording-only leader only while someone directly beneath holds an account', async () => {
+      const reader = await leaderAccount(false);
+      const disciple = await createPerson(db, { firstName: 'Danilo', network: 'MENS' });
+      await assignTo(db, disciple.id, leader.id);
+
+      expect((await me(reader).expect(200)).body.people_i_oversee).toBe(false);
+
+      await createAccount(app, db, { person: disciple, roles: ['LEADER'], fullView: false });
+      expect((await me(reader).expect(200)).body.people_i_oversee).toBe(true);
+    });
+
+    it('is always offered with Full view', async () => {
+      expect((await me(await leaderAccount(true)).expect(200)).body.people_i_oversee).toBe(true);
+    });
+  });
   describe('what Full view does not touch', () => {
     it('changes nothing for a Senior Pastor', async () => {
       nameSeniorPastors(app, [root.id]);

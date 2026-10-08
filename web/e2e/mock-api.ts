@@ -63,6 +63,9 @@ const ME = {
   email: 'admin@example.invalid',
   first_name: 'Marilou',
   roles: ['LEADER'],
+  // Today's screens, which every suite written before decision 0323 exercises.
+  screens: 'FULL',
+  people_i_oversee: true,
   capabilities: CAPABILITIES,
 };
 

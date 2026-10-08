@@ -106,6 +106,10 @@ function PersonDetail() {
   const mayManageAccounts = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'accounts.manage',
   );
+  // Full view is ticked under `roles.manage` (decision 0323); the API checks it again.
+  const mayTickFullView = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'roles.manage',
+  );
 
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
@@ -215,7 +219,12 @@ function PersonDetail() {
           </dl>
           </section>
           {mayManageAccounts ? (
-            <PersonAccount personId={id} firstName={person.data.first_name} own={own} />
+            <PersonAccount
+              personId={id}
+              firstName={person.data.first_name}
+              own={own}
+              mayTickFullView={mayTickFullView}
+            />
           ) : null}
           </div>
           </div>

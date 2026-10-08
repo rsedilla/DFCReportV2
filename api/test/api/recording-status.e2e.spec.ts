@@ -44,7 +44,8 @@ describe('Recording status (decision 0325)', () => {
   beforeEach(async () => {
     await truncateAll(db);
 
-    oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Arcega', network: 'MENS' });
+    // Created before Gemma and sorting after her, so the tables' surname order is tested.
+    oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Villanueva', network: 'MENS' });
     await assignTo(db, oriel.id, null);
     gemma = await createPerson(db, { firstName: 'Gemma', lastName: 'Bautista', network: 'WOMENS' });
     await assignTo(db, gemma.id, null);
@@ -199,7 +200,12 @@ describe('Recording status (decision 0325)', () => {
 
   it('does not count a meeting whose day has not begun', async () => {
     const monday = await thisMonday();
-    const tomorrow = shift(await today(), 1);
+    const now = await today();
+    // On a Sunday no day of this week is still to begin.
+    if (isoDay(now) === 7) {
+      return;
+    }
+    const tomorrow = shift(now, 1);
     const ana = await leader('Ana', 'Cruz', oriel);
     await cellOf(ana, isoDay(tomorrow));
 
@@ -284,6 +290,19 @@ describe('Recording status (decision 0325)', () => {
     expect(response.body.whole_church.cell).toEqual({ recorded: 1, owed: 1, percent: 100 });
   });
 
+  it('gives a recorded meeting to its frozen leader, whoever leads the Cell on the date', async () => {
+    const { monday, day } = await lastWeek();
+    const ana = await leader('Ana', 'Cruz', oriel);
+    const ben = await leader('Ben', 'Dizon', oriel);
+    const cell = await cellOf(ana, 2);
+    await recordMeeting(cell, day(2), ben.id);
+
+    const response = await status(pastor, 'WEEK', monday).expect(200);
+
+    expect(rowOf(response.body, ben)?.cell).toEqual({ recorded: 1, owed: 1 });
+    expect(rowOf(response.body, ana)?.status).toEqual({ kind: 'NOTHING_OWED' });
+  });
+
   it('counts a DCC submitter whose account is awaiting activation', async () => {
     const { monday, day } = await lastWeek();
     const ana = await leader('Ana', 'Cruz', oriel);
@@ -310,8 +329,9 @@ describe('Recording status (decision 0325)', () => {
   it('adds the tables and Others up to the whole church, with each row’s status', async () => {
     const { monday, day } = await lastWeek();
     // Oriel -> Ana -> Dan, Oriel -> Ben; Gemma -> Cara; Xavier holds no assignment.
-    const ana = await leader('Ana', 'Cruz', oriel);
+    // Ben first, so the rows' surname order is tested rather than their creation order.
     const ben = await leader('Ben', 'Dizon', oriel);
+    const ana = await leader('Ana', 'Cruz', oriel);
     const dan = await leader('Dan', 'Esguerra', ana);
     const cara = await leader('Cara', 'Flores', gemma);
     const xavier = await createPerson(db, {
@@ -341,11 +361,11 @@ describe('Recording status (decision 0325)', () => {
 
     // One table per root, in surname order, rows in surname order.
     expect(body.tables.map((table: { root: { id: string } }) => table.root.id)).toEqual([
-      oriel.id,
       gemma.id,
+      oriel.id,
     ]);
-    expect(body.tables[0].rows.map((row: Row) => row.leader.id)).toEqual([ana.id, ben.id]);
-    expect(body.tables[1].rows.map((row: Row) => row.leader.id)).toEqual([cara.id]);
+    expect(body.tables[0].rows.map((row: Row) => row.leader.id)).toEqual([cara.id]);
+    expect(body.tables[1].rows.map((row: Row) => row.leader.id)).toEqual([ana.id, ben.id]);
 
     // Ana's row counts Ana and Dan. Ana is missing both columns and is counted once.
     expect(rowOf(body, ana)).toMatchObject({
@@ -420,6 +440,9 @@ describe('Recording status (decision 0325)', () => {
       previous: { start: shift(monday, -7), end: shift(monday, -1) },
     });
     expect(typeof week.body.open).toBe('boolean');
+    // The period before has its own open flag, and no percentage (point 3).
+    expect(typeof week.body.previous.open).toBe('boolean');
+    expect(Object.keys(week.body.previous.cell).sort()).toEqual(['owed', 'recorded']);
 
     const month = `${monday.slice(0, 7)}-01`;
     const byMonth = await status(pastor, 'MONTH', month).expect(200);

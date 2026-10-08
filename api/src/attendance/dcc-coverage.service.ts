@@ -784,6 +784,7 @@ export class DccCoverageService {
 
     return result;
   }
+
   /**
    * Of these leaders, those the reader may record for now: holding both
    * `dcc.take_attendance` and `dcc.submit_on_behalf` over them (decision 0313).

@@ -225,6 +225,27 @@ export class AuthorizationService {
   }
 
   /**
+   * Whether a leader holding an account sits directly beneath this person in the tree as it
+   * stands now: what shows *People I oversee* on a Recording-only account's `Record`
+   * (section 19, decision 0323). Any account counts, whatever its status, as section 9's
+   * submitter walk counts it.
+   */
+  async leadsAnAccountHolder(personId: string): Promise<boolean> {
+    const children = await this.hierarchy.directChildrenOf(personId);
+    if (children.length === 0) {
+      return false;
+    }
+
+    const holder = await this.db
+      .selectFrom('accounts')
+      .select('id')
+      .where('person_id', 'in', children)
+      .limit(1)
+      .executeTakeFirst();
+
+    return holder !== undefined;
+  }
+  /**
    * How many levels below the reader *People I oversee* lists (section 19, decision 0324):
    * two for a Leader account with Full view, one without, and no limit (null) for an
    * account holding `SENIOR_PASTOR` or `ADMIN`. Read from the honoured roles, as `screens`.

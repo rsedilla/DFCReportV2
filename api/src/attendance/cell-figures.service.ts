@@ -211,6 +211,7 @@ export class CellFiguresService {
       ]),
     );
   }
+
   /**
    * The Cells whose meetings scheduled in the range were recorded with this person as
    * responsible leader, for My 12's own-row label (decision 0293).
