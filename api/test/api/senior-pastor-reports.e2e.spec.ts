@@ -419,18 +419,12 @@ describe('Senior Pastor reports (decision 0326)', () => {
         'MENS',
         'WOMENS',
       ]);
-      // Which months are still open, read from the database's clock (sections 17 and 19): the
-      // current one, and the one before it while its window runs.
+      // A count is so far only in the month still running (decision 0326), even while the
+      // month before is inside its recording window.
       const open = response.body.open as boolean[];
       expect(open).toHaveLength(12);
       expect(open[11]).toBe(true);
-      expect(open.slice(0, 10).every((each) => !each)).toBe(true);
-      const day = Number(
-        new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', day: '2-digit' }).format(
-          new Date(),
-        ),
-      );
-      expect(open[10]).toBe(day <= 7);
+      expect(open.slice(0, 11).every((each) => !each)).toBe(true);
       for (const line of lines) {
         expect(line.values).toHaveLength(12);
       }

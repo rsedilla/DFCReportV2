@@ -124,9 +124,10 @@ export async function mockTrends(
         lines:
           leader === undefined
             ? [
+                // Women's first, unlike the API, so a client naming lines by position fails.
                 { leader: null, network: null, values: series(3) },
-                { leader: SP_MENS_ROOT, network: 'MENS', values: series(1.5) },
                 { leader: SP_WOMENS_ROOT, network: 'WOMENS', values: series(1.2) },
+                { leader: SP_MENS_ROOT, network: 'MENS', values: series(1.5) },
               ]
             : [{ leader, network: null, values: series(0.5) }],
       }),

@@ -352,8 +352,8 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Month',
       'Whole Church',
-      `${SP_MENS_ROOT.full_name} · Men’s`,
       `${SP_WOMENS_ROOT.full_name} · Women’s`,
+      `${SP_MENS_ROOT.full_name} · Men’s`,
     ]);
     await expect(table.getByRole('row', { name: /March 2026/ })).toContainText('could not be read');
 

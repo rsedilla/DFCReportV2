@@ -33,7 +33,7 @@ const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: 
 
 /**
  * The Senior Pastors' *Trends* (SKILL.md sections 17 and 19, decision 0326, point 4): one
- * figure over the last twelve months, one point a month, the current month marked *so far*.
+ * figure over the last twelve months, one point a month, a month still open marked *so far*.
  *
  * **Three lines, or one.** The whole church and each root's branch, named by the pastor with
  * their Network beside (decision 0294); or one leader's branch chosen by name. **One leader is
@@ -245,7 +245,7 @@ function TrendsChart({
     values: line.values,
     // Lines are told apart by weight and dash as well as colour, because lines cross (1.4.1).
     // Bars are solid and always in this order, the key's, with the figures one click away.
-    width: line.leader === null ? 3 : 1.75,
+    width: single || line.leader === null ? 3 : 1.75,
     dash: line.network === 'WOMENS' ? '6 4' : undefined,
     tone: single
       ? singleTone
@@ -414,7 +414,7 @@ function TrendsChart({
                         height={y(0) - y(v)}
                         fill="currentColor"
                         stroke="currentColor"
-                        // The current month is open, so its bar is a lighter shade with a solid edge.
+                        // A month still open is a lighter shade with a solid edge.
                         fillOpacity={data.open[i] ? 0.45 : 1}
                       />
                     ),
@@ -447,15 +447,22 @@ function TrendsChart({
               })}
         </svg>
       </div>
-      <p className="text-muted text-xs">
-        {kind === 'LINE' ? 'A hollow point is' : 'A lighter bar is'} a month still open, its figure so far:{' '}
-        {data.months
-          .filter((_, i) => data.open[i])
-          .map((month) => rangeLabel('MONTH', month))
-          .join(' and ')}
-        .
-        {gaps.length > 0 ? ' A gap is a month this figure could not be read for.' : ''}
-      </p>
+      {/* Said only where a month is open, so the list is never empty. */}
+      {data.open.some(Boolean) || gaps.length > 0 ? (
+        <p className="text-muted text-xs">
+          {data.open.some(Boolean) ? (
+          <>
+            {kind === 'LINE' ? 'A hollow point is' : 'A lighter bar is'} a month still open, its figure so far:{' '}
+          {data.months
+            .filter((_, i) => data.open[i])
+            .map((month) => rangeLabel('MONTH', month))
+            .join(' and ')}
+            .
+          </>
+        ) : null}
+          {gaps.length > 0 ? ' A gap is a month this figure could not be read for.' : ''}
+        </p>
+      ) : null}
 
       {/* The graph alone until the reader asks for the figures (owner, 2026-10-09): the table
           is the graph's text alternative (1.1.1) and the exact figure where two lines meet. */}

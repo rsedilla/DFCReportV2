@@ -558,7 +558,9 @@ export class ReportingController {
       for (const id of branches) {
         values.set(id, pick(counts.branches.get(canonicalId(id))));
       }
-      return { values, open: counts.open };
+      // A count is taken on the month's last day, so only the month still running is *so far*
+      // (decision 0326); the recording window is attendance's, not a count's.
+      return { values, open: counts.current };
     }
 
     const report = (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>

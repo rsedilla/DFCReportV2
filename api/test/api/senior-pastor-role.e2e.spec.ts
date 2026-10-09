@@ -174,8 +174,7 @@ describe('the Senior Pastors change nothing but what they record and reassign (d
    * not an unrelated 4xx.
    *
    * **Three of the fourteen are referenced by no route, so no request can exercise them**:
-   * `people.manage_lifecycle` (no archive or restore endpoint exists; the capability appears
-   * only in `single-scope.ts`), `conquest.confirm` and `conquest.confirm_on_behalf` (nothing
+   * `people.manage_lifecycle` (no archive or restore endpoint exists), `conquest.confirm` and `conquest.confirm_on_behalf` (nothing
    * writes `conquest_confirmations`). That they are withheld is pinned by the `/auth/me`
    * case above; no request is invented for them.
    *

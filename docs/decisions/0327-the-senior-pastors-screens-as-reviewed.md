@@ -33,7 +33,9 @@ Sections 17 and 19 require, in words that fit people who do not record the rest 
 
 **4. `Trends` draws *CG attendance*, *DCC attendance*, *# of Cells*, *# of Cell Leaders* or *# of
 people*,** the last three drawing Total, Cell Leaders and People, under the same tabs and pane as
-`Reports`. The lines are named in a key above the graph rather than at their ends, where two lines
+`Reports`. On CG and DCC attendance every month still open for recording is marked *so far*, the
+month before the current one included until its window closes; a count only in the month still
+running. The lines are named in a key above the graph rather than at their ends, where two lines
 ending on one value overlapped. The reader may draw them as a line or as bars and may untick any
 of the three, one always staying ticked; the device remembers both. The figures sit behind
 *Show the figures*, still on the page for anyone who asks and for a screen reader (Section 23).
