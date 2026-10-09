@@ -324,11 +324,11 @@ describe('SUYNL (section 28)', () => {
       expect(await allRows()).toHaveLength(0);
     });
 
-    it('refuses a Senior Pastor, a Network root with a Whole Church grant, filing for themselves', async () => {
-      const response = await submit(raymondAccount, [tick(raymond.id, 1)]);
+    it('refuses a Senior Pastor, who files nothing (decision 0326)', async () => {
+      const response = await submit(raymondAccount, [tick(grace.id, 1)]);
 
       expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
       expect(await allRows()).toHaveLength(0);
     });
 
@@ -375,13 +375,12 @@ describe('SUYNL (section 28)', () => {
       expect(byAdmin.status).toBe(201);
       expect(byAdmin.body.created).toBe(1);
 
-      // The other root, filed by a Senior Pastor who is not that root.
-      const bySeniorPastor = await submit(raymondAccount, [tick(grace.id, 1)]);
-      expect(bySeniorPastor.status).toBe(201);
+      const otherRoot = await submit(admin, [tick(grace.id, 1)]);
+      expect(otherRoot.status).toBe(201);
 
       expect((await currentRow(raymond.id, 1)).confirmed_by).toBeNull();
       expect((await currentRow(grace.id, 1)).confirmed_by).toBeNull();
-      expect((await currentRow(grace.id, 1)).recorded_by).toBe(raymondAccount.id);
+      expect((await currentRow(grace.id, 1)).recorded_by).toBe(admin.id);
     });
 
     it('refuses a leader filing for a Network root', async () => {
@@ -841,15 +840,11 @@ describe('SUYNL (section 28)', () => {
       expect(byId.has(silas.id)).toBe(false);
     });
 
-    it("shows a Senior Pastor's own row with may_file false and the other root's true", async () => {
+    it('shows a Senior Pastor every row with may_file false (decision 0326)', async () => {
       const rows = await allPages(raymondAccount, 'limit=200');
-      const byId = new Map(rows.map((row) => [row.person_id, row]));
 
-      expect(byId.get(raymond.id)?.may_file).toBe(false);
-      expect(byId.get(grace.id)?.may_file).toBe(true);
-      // Grace, Hannah's leader, holds no account and is a root, so nobody holds Hannah on
-      // a DCC checklist and only an Admin files her lessons (decision 0322).
-      expect(byId.get(hannah.id)?.may_file).toBe(false);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.filter((row) => row.may_file)).toEqual([]);
     });
 
     it('returns every person exactly once across pages', async () => {

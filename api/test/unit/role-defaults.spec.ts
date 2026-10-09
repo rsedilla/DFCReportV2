@@ -9,7 +9,7 @@ import type { AccountRole } from '../../src/database/schema';
  * cell. Every row of that table is here since the Growth modules were built
  * (sections 27 and 28), which is what the case below asserts.
  *
- * A dash in the specification's table is an absence here. The six deliberate
+ * A dash in the specification's table is an absence here. The seven deliberate
  * absences have their own cases below, because each of them looks like an
  * oversight, each would be convenient to widen, and each is load-bearing.
  */
@@ -20,16 +20,16 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     LEADER: 'OWN_SUBTREE',
   },
   'people.create': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'people.edit_basic': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
-  'people.manage_lifecycle': { SENIOR_PASTOR: 'WHOLE_CHURCH', ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  'people.manage_lifecycle': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'people.manage_pastoral_assignment': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
@@ -48,7 +48,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   },
   'dcc.submit_on_behalf': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'dcc.correct_subtree': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
@@ -64,22 +64,22 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   },
   'cell.submit_on_behalf': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'cell.correct_subtree': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'cell.manage_membership': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'cell.manage_leadership': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'cell.manage_configuration': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
@@ -90,7 +90,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   },
   'cell.approve_leadership': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'cell.manage_lifecycle': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
@@ -105,8 +105,9 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   'accounts.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'roles.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'people.merge': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
-  // Sections 27 and 28. Every one of the nine is given to all three roles, at the
-  // role's usual scope, except suynl.confirm_on_behalf, Admin's alone (decision 0322).
+  // Sections 27 and 28. Admin and Leader hold all nine at the role's usual scope, except
+  // suynl.confirm_on_behalf, Admin's alone (decision 0322); a Senior Pastor holds the three
+  // views (decision 0326).
   // They are written out rather than generated — a generated row would agree with the
   // code it is checking by construction.
   'conquest.view_subtree': {
@@ -115,12 +116,12 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     LEADER: 'OWN_SUBTREE',
   },
   'conquest.confirm': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'conquest.confirm_on_behalf': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
@@ -129,7 +130,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
-  'suynl.confirm': { SENIOR_PASTOR: 'WHOLE_CHURCH', ADMIN: 'WHOLE_CHURCH', LEADER: 'OWN_SUBTREE' },
+  'suynl.confirm': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: 'OWN_SUBTREE' },
   'suynl.confirm_on_behalf': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'training.view_subtree': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
@@ -137,12 +138,12 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     LEADER: 'OWN_SUBTREE',
   },
   'training.confirm': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
   'training.confirm_on_behalf': {
-    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
@@ -165,7 +166,7 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(Object.keys(TABLE).sort()).toEqual([...ALL_CAPABILITIES].sort());
   });
 
-  describe('the six deliberate absences', () => {
+  describe('the seven deliberate absences', () => {
     it('keeps recording on behalf with Admin alone (decision 0322)', () => {
       // Reporting is done on the ground by the leader who owes it; the leaders above
       // see whether it is done, and only Admin steps in. Training and Conquest keep theirs.
@@ -173,9 +174,9 @@ describe('the role catalog (SKILL.md section 7)', () => {
         expect(ROLE_DEFAULTS[role]['dcc.submit_on_behalf']).toBeUndefined();
         expect(ROLE_DEFAULTS[role]['cell.submit_on_behalf']).toBeUndefined();
         expect(ROLE_DEFAULTS[role]['suynl.confirm_on_behalf']).toBeUndefined();
-        expect(ROLE_DEFAULTS[role]['training.confirm_on_behalf']).toBeDefined();
-        expect(ROLE_DEFAULTS[role]['conquest.confirm_on_behalf']).toBeDefined();
       }
+      expect(ROLE_DEFAULTS.LEADER['training.confirm_on_behalf']).toBeDefined();
+      expect(ROLE_DEFAULTS.LEADER['conquest.confirm_on_behalf']).toBeDefined();
       expect(ROLE_DEFAULTS.ADMIN['dcc.submit_on_behalf']).toBe('WHOLE_CHURCH');
       expect(ROLE_DEFAULTS.ADMIN['cell.submit_on_behalf']).toBe('WHOLE_CHURCH');
       expect(ROLE_DEFAULTS.ADMIN['suynl.confirm_on_behalf']).toBe('WHOLE_CHURCH');
@@ -208,6 +209,20 @@ describe('the role catalog (SKILL.md section 7)', () => {
       expect(ROLE_DEFAULTS.ADMIN['people.correct_sex']).toBe('WHOLE_CHURCH');
       expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.correct_sex']).toBeUndefined();
       expect(ROLE_DEFAULTS.LEADER['people.correct_sex']).toBeUndefined();
+    });
+
+    it('keeps the Senior Pastors to reading, recording and reassigning (decision 0326)', () => {
+      // They read the church and delegate the work: every write capability but recording
+      // what they owe and reassigning is an administrator's.
+      const writes = Object.keys(ROLE_DEFAULTS.SENIOR_PASTOR).filter(
+        (capability) => !capability.endsWith('.view_subtree') && capability !== 'audit.view',
+      );
+      expect(writes.sort()).toEqual([
+        'cell.request_leadership',
+        'cell.take_attendance',
+        'dcc.take_attendance',
+        'people.manage_pastoral_assignment',
+      ]);
     });
 
     it('keeps archival away from Leaders', () => {

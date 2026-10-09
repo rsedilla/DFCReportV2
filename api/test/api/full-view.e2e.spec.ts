@@ -417,7 +417,15 @@ describe('Full view (decision 0323)', () => {
 
       const body = (await me(pastor).expect(200)).body;
       expect(body.screens).toBe('SENIOR_PASTOR');
-      expect(capabilitiesOf(body)).toEqual(expect.arrayContaining([...LEADER_FULL_VIEW_ONLY]));
+      // The role's own views stay, which Full view would withhold from a Leader; its filing
+      // capabilities were withdrawn by decision 0326, not by Full view.
+      expect(capabilitiesOf(body)).toEqual(
+        expect.arrayContaining([
+          'reports.view_subtree',
+          'training.view_subtree',
+          'conquest.view_subtree',
+        ]),
+      );
     });
 
     it('changes nothing for an Admin', async () => {

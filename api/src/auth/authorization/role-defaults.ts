@@ -33,12 +33,13 @@ import type { AccountRole } from '../../database/schema';
 export type RoleDefaults = Partial<Record<Capability, ScopeType>>;
 
 /**
- * The nine Growth capabilities at one scope, written once for the three roles.
+ * The nine Growth capabilities at one scope, written once for Admin and Leader; a
+ * Senior Pastor holds only the three views (decision 0326).
  *
  * Section 7 gives them the same scope as the role's other subtree capabilities —
- * Whole Church for a Senior Pastor and an Admin, own subtree for a Leader — except
+ * Whole Church for an Admin, own subtree for a Leader — except
  * `suynl.confirm_on_behalf`, which only Admin holds (decision 0322). So the scope and
- * that one flag are what vary between the three roles.
+ * that one flag are what vary between the two roles.
  */
 function growthAt(scope: ScopeType, suynlOnBehalf: boolean): RoleDefaults {
   return {
@@ -55,31 +56,27 @@ function growthAt(scope: ScopeType, suynlOnBehalf: boolean): RoleDefaults {
   };
 }
 
+// **The Senior Pastors read the church, record what they owe and reassign, and change
+// nothing else** (section 7, decision 0326): adding, editing and archiving people,
+// correcting attendance, managing Cells and filing Growth records are an administrator's.
 const SENIOR_PASTOR: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.WholeChurch,
-  [Capability.PeopleCreate]: ScopeType.WholeChurch,
-  [Capability.PeopleEditBasic]: ScopeType.WholeChurch,
-  [Capability.PeopleManageLifecycle]: ScopeType.WholeChurch,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.WholeChurch,
   [Capability.DccTakeAttendance]: ScopeType.WholeChurch,
   [Capability.DccViewSubtree]: ScopeType.WholeChurch,
-  [Capability.DccCorrectSubtree]: ScopeType.WholeChurch,
   [Capability.CellTakeAttendance]: ScopeType.WholeChurch,
   [Capability.CellViewSubtree]: ScopeType.WholeChurch,
-  [Capability.CellCorrectSubtree]: ScopeType.WholeChurch,
-  [Capability.CellManageMembership]: ScopeType.WholeChurch,
-  [Capability.CellManageLeadership]: ScopeType.WholeChurch,
-  [Capability.CellManageConfiguration]: ScopeType.WholeChurch,
   // Held at subtree scope by every role, because section 10 prohibits naming oneself
   // for everyone. **The default carries the prohibition; it does not enforce it** — a
   // wider grant is an ordinary row section 7 does not refuse, and `scopeCovers` returns
   // before the target is read at Whole Church. `CellsLeadershipRequestService.request`
   // is what makes section 10's "at any scope" true.
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
-  [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
   [Capability.AuditView]: ScopeType.WholeChurch,
-  ...growthAt(ScopeType.WholeChurch, false),
+  [Capability.ConquestViewSubtree]: ScopeType.WholeChurch,
+  [Capability.SuynlViewSubtree]: ScopeType.WholeChurch,
+  [Capability.TrainingViewSubtree]: ScopeType.WholeChurch,
 };
 
 const ADMIN: RoleDefaults = {

@@ -618,7 +618,7 @@ export class CellsMembershipService {
    *
    * **Section 10 does not spell out the move case**, and this is the reading rather
    * than a rule quoted: it is what "over their own Cells" means when an operation
-   * touches two. Admin and the Senior Pastors hold Whole Church and are unaffected;
+   * touches two. Admin holds Whole Church and is unaffected;
    * an upline leader is unaffected; only a peer taking from a peer is refused, which
    * is a pastoral conversation rather than a system action. Escalated in CLAUDE.md.
    */
