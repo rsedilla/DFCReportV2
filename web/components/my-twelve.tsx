@@ -37,15 +37,19 @@ const WHAT: Record<RangeKind, string> = {
 export function PeriodTabs({
   value,
   onChange,
+  inBar = false,
 }: {
   value: RangeKind;
   onChange: (value: RangeKind) => void;
+  /** Inside the control bar, beside the period it chooses (the Senior Pastors, owner 2026-10-09). */
+  inBar?: boolean;
 }) {
   return (
     <ViewSwitch
       label="Report period"
       options={PERIODS.map(([key, label]) => ({ key, label }))}
       even
+      className={inBar ? 'mt-0 w-auto' : undefined}
       value={value}
       onChange={onChange}
     />
@@ -63,6 +67,7 @@ export function RangeNavigator({
   earliest,
   open,
   onChange,
+  quiet = false,
 }: {
   kind: RangeKind;
   start: string;
@@ -71,6 +76,12 @@ export function RangeNavigator({
   earliest?: string;
   open: boolean | undefined;
   onChange: (start: string) => void;
+  /**
+   * An open period says *so far* in plain words rather than the window's date in a tag, and a
+   * closed one says nothing (the Senior Pastors, owner 2026-10-09). Still the open flag
+   * sections 17 and 19 ask for; they do not record, so the window's last day is not theirs.
+   */
+  quiet?: boolean;
 }) {
   const button =
     'border-line focus-visible:outline-accent inline-flex min-h-11 min-w-11 items-center justify-center border text-lg focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40';
@@ -96,7 +107,9 @@ export function RangeNavigator({
         ›
       </button>
       <span className="text-accent text-sm font-bold">{rangeLabel(kind, start)}</span>
-      {open === undefined ? null : (
+      {quiet ? (
+        open ? <span className="text-muted text-sm">· so far</span> : null
+      ) : open === undefined ? null : (
         <span className="border-edge border px-2 py-0.5 text-xs font-bold tracking-[0.07em] uppercase">
           {open ? openUntilLabel(rangeGuardMonth(kind, start, todayInManila())) : 'Closed'}
         </span>
@@ -325,7 +338,7 @@ export function RootLeadersTwelve({
             <Table caption={heading} className="mt-2">
               <thead>
                 <tr>
-                  <HeaderCell style={{ width: '34%' }}>Leader</HeaderCell>
+                  <HeaderCell style={{ width: '34%' }}>Primaries</HeaderCell>
                   {/* The six figures share the rest of the row equally (owner, 2026-10-09). */}
                   <HeaderCell className="text-right" style={{ width: '11%' }}>
                     Total

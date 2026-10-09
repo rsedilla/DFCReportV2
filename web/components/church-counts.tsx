@@ -158,7 +158,7 @@ function CountTable({
       <Table caption={heading} className="mt-2 hidden lg:block">
         <thead>
           <tr>
-            <HeaderCell style={{ width: '36%' }}>Leader</HeaderCell>
+            <HeaderCell style={{ width: '36%' }}>Primaries</HeaderCell>
             {/* The figures share the rest of the row equally (owner, 2026-10-09). */}
             {COLUMNS[figure].map(([key, label]) => (
               <HeaderCell
@@ -225,7 +225,8 @@ function BranchLink({
   return (
     <Link
       href={`/network?focus=${leader.id}`}
-      className="focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+      // Red, as every Primary's name on Reports (owner, 2026-10-09).
+      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {leader.full_name ?? leader.member_id ?? 'A leader'}
     </Link>

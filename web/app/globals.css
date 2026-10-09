@@ -95,7 +95,8 @@
   --raised: #f7f7f7;
   --ink: #111111;
   --muted: #6b6b6b;
-  --line: #d6d6d6;
+  /* Darkened from #d6d6d6 so boxes and rules are plain to see (owner, 2026-10-09). */
+  --line: #9a9a9a;
   --edge: #111111;
   /*
    * A step darker than the design's `#e4002b`, chosen by the owner on 2026-09-15.
@@ -128,7 +129,7 @@
     --raised: #1c1c1c;
     --ink: #f2f2f2;
     --muted: #a6a6a6;
-    --line: #303030;
+    --line: #666666;
     --edge: #9a9a9a;
     --accent: #ff6b80;
     --accent-tint: #3a1219;

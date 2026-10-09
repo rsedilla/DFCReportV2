@@ -176,16 +176,18 @@ export function DccReport() {
         {seniorPastor ? null : <HowTheseAreCounted report="dcc" />}
       </div>
       <ReportsTabs current="dcc" month={guardMonth}>
-        <PeriodTabs
-          value={kind}
-          onChange={(value) =>
-            go({
-              period: value === 'MONTH' ? null : value.toLowerCase(),
-              start: null,
-              month: null,
-            })
-          }
-        />
+        {seniorPastor ? null : (
+          <PeriodTabs
+            value={kind}
+            onChange={(value) =>
+              go({
+                period: value === 'MONTH' ? null : value.toLowerCase(),
+                start: null,
+                month: null,
+              })
+            }
+          />
+        )}
 
         {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
           <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
@@ -193,6 +195,20 @@ export function DccReport() {
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
         <div className={`mt-6 ${CONTROL_BAR}`}>
+          {/* The Senior Pastors' controls in one row: period, month, Figures for (owner, 2026-10-09). */}
+          {seniorPastor ? (
+            <PeriodTabs
+              inBar
+              value={kind}
+              onChange={(value) =>
+                go({
+                  period: value === 'MONTH' ? null : value.toLowerCase(),
+                  start: null,
+                  month: null,
+                })
+              }
+            />
+          ) : null}
           {reach?.kind === 'none' ? null : (
             <RangeNavigator
               kind={kind}
@@ -200,6 +216,7 @@ export function DccReport() {
               current={reach?.kind === 'open' ? reach.latest : current}
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
+              quiet={seniorPastor}
               onChange={(value) => go(kind === 'MONTH' ? { month: value } : { start: value })}
             />
           )}

@@ -49,13 +49,8 @@ export function RecordingStatusPanel() {
   const data = status.data;
 
   return (
-    <section aria-labelledby="recording-status-heading">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h2 id="recording-status-heading" className="text-lg font-bold tracking-tight">
-          Recording status
-        </h2>
-        <p className="text-muted text-sm">Which leaders have recorded what they owe.</p>
-      </div>
+    // No heading of its own: the tab above names it (owner, 2026-10-09).
+    <section aria-label="Recording status">
 
       <ViewSwitch
         label="Period"
@@ -214,7 +209,8 @@ function LeaderTable({ heading, rows }: { heading: string; rows: readonly Record
       <Table caption={heading} className="mt-2 hidden sm:block">
         <thead>
           <tr>
-            <HeaderCell>Leader</HeaderCell>
+            {/* The roots' direct disciples are their Primaries (owner, 2026-10-09). */}
+            <HeaderCell>Primaries</HeaderCell>
             <HeaderCell>Cell group recorded</HeaderCell>
             <HeaderCell>DCC checklist recorded</HeaderCell>
             <HeaderCell>Status</HeaderCell>
@@ -258,7 +254,8 @@ function BranchLink({ row }: { row: RecordingRow }) {
   return (
     <Link
       href={`/network?focus=${row.leader.id}`}
-      className="focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+      // Red, as every Primary's name on Reports (owner, 2026-10-09).
+      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {row.leader.full_name ?? row.leader.member_id ?? 'A leader'}
     </Link>
