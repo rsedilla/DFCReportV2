@@ -4,10 +4,17 @@ import { RequiresCapability } from '../auth/authorization/authorization.decorato
 import { Capability } from '../auth/authorization/capabilities';
 import { type Actor, AuthorizationService } from '../auth/authorization/authorization.service';
 import { CurrentActor } from '../auth/current-actor.decorator';
-import { NotFoundError, ScopeDeniedError, ValidationFailedError } from '../common/errors/api-error';
+import {
+  ApiError,
+  NotFoundError,
+  ScopeDeniedError,
+  ValidationFailedError,
+} from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { reportingPeriodBounds } from '../common/time/reporting-period';
+import { manilaDayOf } from '../common/time/manila';
+import { reportingMonthOf } from '../common/time/submission-window';
 import { CellsReadService } from '../cells/cells.read.service';
 import type { NetworkName } from '../database/schema';
 import { PeopleReadService } from '../people/people.read.service';
@@ -16,16 +23,20 @@ import {
   CellByLeaderDto,
   CellMonthlyReportDto,
   CellTwelveDto,
+  ChurchCountsDto,
   DccByLeaderDto,
   DccMonthlyReportDto,
   DccTwelveDto,
   RecordingStatusDto,
+  TrendsDto,
+  type TrendFigure,
 } from './dto/reporting.dto';
 import {
   ReportingService,
   type CellMonthlyReport,
   type Classification,
   type CellReportScope,
+  type ChurchCountFigures,
   type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
@@ -230,11 +241,14 @@ export class ReportingController {
       );
     }
     await this.assertNamesSomebody(scope);
+    const rootLeaders = rootLeadersAsked(query.rows, scope.kind);
 
     const twelve = await this.reporting.cellTwelve(
       scope.kind === 'LEADER'
         ? { kind: 'LEADER', person_id: scope.person_id }
-        : { kind: 'WHOLE_CHURCH' },
+        : rootLeaders
+          ? { kind: 'ROOT_LEADERS' }
+          : { kind: 'WHOLE_CHURCH' },
       query.kind,
       query.start,
       query.period,
@@ -261,6 +275,7 @@ export class ReportingController {
       elsewhere: twelve.elsewhere,
       total: twelve.total,
       calendar_start: twelve.calendar_start,
+      ...(rootLeaders ? { roots: await this.rootsOf(twelve.rows) } : {}),
     };
   }
 
@@ -286,10 +301,15 @@ export class ReportingController {
   ): Promise<Record<string, unknown>> {
     const scope = scopeOf(query);
     await this.assertNamesSomebody(scope);
+    const rootLeaders = rootLeadersAsked(query.rows, scope.kind);
 
-    const subject = scope;
-    const twelve = await this.reporting.dccTwelve(subject, query.kind, query.start, query.period);
-    const rows = await this.nameTwelveRows(actor, subject, twelve.at, twelve.rows);
+    const twelve = await this.reporting.dccTwelve(
+      rootLeaders ? { kind: 'ROOT_LEADERS' } : scope,
+      query.kind,
+      query.start,
+      query.period,
+    );
+    const rows = await this.nameTwelveRows(actor, scope, twelve.at, twelve.rows);
 
     return {
       kind: query.kind,
@@ -306,6 +326,7 @@ export class ReportingController {
       total: twelve.total,
       buckets: twelve.buckets,
       calendar_start: twelve.calendar_start,
+      ...(rootLeaders ? { roots: await this.rootsOf(twelve.rows) } : {}),
     };
   }
 
@@ -406,6 +427,172 @@ export class ReportingController {
   }
 
   /**
+   * The Senior Pastors' *Number of Cells* and *Number of people* for a month (decision 0326,
+   * point 3): the whole church, one table per root's direct leaders, and *Others*.
+   *
+   * **Whole Church only**, as *Recording status* is: `reports.view_subtree` against the
+   * church, so a reader holding it over a subtree is refused.
+   */
+  @Get('church-counts')
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
+  async churchCounts(@Query() query: ChurchCountsDto): Promise<Record<string, unknown>> {
+    const counts = await this.reporting.churchCounts(query.period);
+    const { person, byName } = await this.namer(
+      (counts.tables ?? []).flatMap((table) => [
+        table.rootId,
+        ...table.rows.map((row) => row.leaderId),
+      ]),
+    );
+
+    return {
+      period: counts.period,
+      current: counts.current,
+      at: counts.at.toISOString(),
+      whole_church: countFigures(counts.wholeChurch),
+      tables:
+        counts.tables === null
+          ? null
+          : [...counts.tables]
+              .sort(
+                (left, right) =>
+                  networkOrder(left.network) - networkOrder(right.network) ||
+                  byName(left.rootId, right.rootId),
+              )
+              .map((table) => ({
+                root: person(table.rootId),
+                network: table.network,
+                rows: [...table.rows]
+                  .sort((left, right) => byName(left.leaderId, right.leaderId))
+                  .map((row) => ({ leader: person(row.leaderId), ...countFigures(row.figures) })),
+              })),
+      others: counts.others === null ? null : countFigures(counts.others),
+    };
+  }
+
+  /**
+   * The Senior Pastors' *Trends* (decision 0326, point 4): one figure for each of the last
+   * twelve months, the current one *so far*.
+   *
+   * **Three lines, or one.** Without `leader_id`, the whole church and each root's branch;
+   * with it, that leader's branch alone — one leader at a time, never two, so the graph cannot
+   * rank them (sections 13 and 17). Each point is the figure its tab leads with: CG and DCC
+   * attendance the month's unique people (sections 9 and 12), Number of Cells its Cell Groups,
+   * Number of people its People. A month a figure cannot be read for is null, and the screen
+   * says so (decision 0257).
+   */
+  @Get('trends')
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
+  async trends(@Query() query: TrendsDto): Promise<Record<string, unknown>> {
+    const current = reportingMonthOf(manilaDayOf(new Date()));
+    const months = Array.from({ length: 12 }, (_, index) => shiftMonth(current, index - 11));
+
+    let lines: { leaderId: string | null }[];
+    if (query.leader_id !== undefined) {
+      if (!(await this.people.findById(query.leader_id))) {
+        throw new NotFoundError('No such person.');
+      }
+      lines = [{ leaderId: canonicalId(query.leader_id) }];
+    } else {
+      const now = await this.reporting.churchCounts(current);
+      lines = [
+        { leaderId: null },
+        ...[...(now.tables ?? [])]
+          .sort((left, right) => networkOrder(left.network) - networkOrder(right.network))
+          .map((table) => ({ leaderId: table.rootId })),
+      ];
+    }
+
+    const branches = lines.flatMap((line) => (line.leaderId === null ? [] : [line.leaderId]));
+    const points = new Map<string, (number | null)[]>(
+      lines.map((line) => [line.leaderId ?? 'church', []]),
+    );
+
+    for (const month of months) {
+      const values = await this.trendPoint(query.figure, month, branches).catch(refusalAsNull);
+      for (const line of lines) {
+        const key = line.leaderId ?? 'church';
+        points.get(key)!.push(values === null ? null : (values.get(key) ?? null));
+      }
+    }
+
+    const { person } = await this.namer(branches);
+
+    return {
+      figure: query.figure,
+      months,
+      current,
+      lines: lines.map((line) => ({
+        leader: line.leaderId === null ? null : person(line.leaderId),
+        values: points.get(line.leaderId ?? 'church'),
+      })),
+    };
+  }
+
+  /** One month of *Trends*, keyed `church` and by each branch's leader. */
+  private async trendPoint(
+    figure: TrendFigure,
+    month: string,
+    branches: readonly string[],
+  ): Promise<Map<string, number | null>> {
+    const values = new Map<string, number | null>();
+
+    if (figure === 'CELLS' || figure === 'PEOPLE') {
+      const counts = await this.reporting.churchCounts(month, branches);
+      const pick = (figures: ChurchCountFigures | null | undefined) =>
+        figures === null || figures === undefined
+          ? null
+          : figure === 'CELLS'
+            ? figures.cellGroups
+            : figures.people;
+      values.set('church', pick(counts.wholeChurch));
+      for (const id of branches) {
+        values.set(id, pick(counts.branches.get(canonicalId(id))));
+      }
+      return values;
+    }
+
+    const read = async (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
+      figure === 'CG'
+        ? (await this.reporting.cellMonthly(scope, month)).unique_people
+        : (await this.reporting.dccMonthly(scope, month)).unique_people;
+
+    values.set('church', await read({ kind: 'WHOLE_CHURCH' }));
+    for (const id of branches) {
+      values.set(id, await read({ kind: 'LEADER', person_id: id }).catch(refusalAsNull));
+    }
+    return values;
+  }
+
+  /** Names identities and orders them by surname, first name and Member ID, never by a figure. */
+  private async namer(ids: readonly string[]): Promise<{
+    person: (id: string) => { id: string; member_id: string | null; full_name: string | null };
+    byName: (left: string, right: string) => number;
+  }> {
+    const identities = await this.people.forDecisions([...ids]);
+
+    return {
+      person: (id: string) => {
+        const identity = identities.get(id);
+
+        return { id, member_id: identity?.memberId ?? null, full_name: identity?.fullName ?? null };
+      },
+      byName: (left: string, right: string) => {
+        const a = identities.get(left);
+        const b = identities.get(right);
+
+        // An unnamed identity sorts last, then by identifier, so the order is total.
+        return a !== undefined && b !== undefined
+          ? compareKeys(keyOf(a), keyOf(b))
+          : a !== undefined
+            ? -1
+            : b !== undefined
+              ? 1
+              : left.localeCompare(right);
+      },
+    };
+  }
+
+  /**
    * Checks the actor's reach at the instant a My 12 table was read, and names and orders its
    * rows (decisions 0214, 0254, 0293 and 0294).
    *
@@ -426,6 +613,8 @@ export class ReportingController {
       network: NetworkName | null;
       unique_people: number;
       classification: Classification;
+      root_id?: string | null;
+      root_network?: NetworkName | null;
     }[],
   ): Promise<Record<string, unknown>[]> {
     const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
@@ -466,7 +655,11 @@ export class ReportingController {
           return {
             key: identity === undefined ? null : keyOf(identity),
             network: row.network,
+            rootNetwork: row.root_network ?? null,
             row: {
+              ...(row.root_id === undefined || row.root_id === null
+                ? {}
+                : { root_id: row.root_id }),
               leader:
                 identity === undefined
                   ? null
@@ -481,18 +674,38 @@ export class ReportingController {
             },
           };
         })
-        // A whole-church reader's rows are labelled by Network, so they are in that order.
+        // A whole-church reader's rows are labelled by Network, so they are in that order;
+        // the Senior Pastors' rows are grouped by their root, the Men's first (decision 0326).
         .sort((left, right) =>
-          left.key === null
-            ? 1
-            : right.key === null
-              ? -1
-              : left.network !== null && right.network !== null
-                ? left.network.localeCompare(right.network)
-                : compareKeys(left.key, right.key),
+          networkOrder(left.rootNetwork) !== networkOrder(right.rootNetwork)
+            ? networkOrder(left.rootNetwork) - networkOrder(right.rootNetwork)
+            : left.key === null
+              ? 1
+              : right.key === null
+                ? -1
+                : left.network !== null && right.network !== null
+                  ? left.network.localeCompare(right.network)
+                  : compareKeys(left.key, right.key),
         )
         .map((entry) => entry.row)
     );
+  }
+
+  /** The two roots a `ROOT_LEADERS` table's rows sit under, the Men's first, named with titles. */
+  private async rootsOf(
+    rows: readonly { root_id: string | null; root_network: NetworkName | null }[],
+  ): Promise<{ id: string; full_name: string | null; network: NetworkName | null }[]> {
+    const seen = new Map<string, NetworkName | null>();
+    for (const row of rows) {
+      if (row.root_id !== null && !seen.has(row.root_id)) {
+        seen.set(row.root_id, row.root_network);
+      }
+    }
+    const identities = await this.people.forDecisions([...seen.keys()]);
+
+    return [...seen]
+      .sort(([, left], [, right]) => networkOrder(left) - networkOrder(right))
+      .map(([id, network]) => ({ id, full_name: identities.get(id)?.fullName ?? null, network }));
   }
 
   /**
@@ -728,4 +941,55 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
   }
 
   return { kind: 'WHOLE_CHURCH' };
+}
+
+/** A month's *Number of Cells* and *Number of people*, at the response boundary. */
+function countFigures(figures: ChurchCountFigures): Record<string, number> {
+  return {
+    cell_groups: figures.cellGroups,
+    youth: figures.youth,
+    young_pro: figures.youngPro,
+    couple: figures.couple,
+    cell_leaders: figures.cellLeaders,
+    people: figures.people,
+  };
+}
+
+/** The first of the month `offset` months from `month`, itself the first of a month. */
+function shiftMonth(month: string, offset: number): string {
+  const [year, number] = month.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, number - 1 + offset, 1));
+
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
+ * Whether the Senior Pastors' tables were asked for (decision 0326). They are Whole Church's
+ * figures with other rows, so any other selector is refused rather than quietly ignored.
+ */
+function rootLeadersAsked(rows: 'ROOT_LEADERS' | undefined, scope: string): boolean {
+  if (rows === undefined) {
+    return false;
+  }
+  if (scope !== 'WHOLE_CHURCH') {
+    throw new ValidationFailedError(
+      'rows=ROOT_LEADERS is offered with the Whole Church scope only.',
+      {
+        field: 'rows',
+        value: rows,
+      },
+    );
+  }
+  return true;
+}
+
+/**
+ * A month of *Trends* the API refuses to report, such as a placement graph section 20 refuses,
+ * is a gap the screen names (decision 0257). Anything else is a fault and is not hidden.
+ */
+function refusalAsNull(error: unknown): null {
+  if (error instanceof ApiError) {
+    return null;
+  }
+  throw error;
 }

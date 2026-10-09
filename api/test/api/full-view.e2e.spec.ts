@@ -106,6 +106,9 @@ describe('Full view (decision 0323)', () => {
           new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
         ),
       }),
+      // The Senior Pastors' Number of Cells, Number of people and Trends (decision 0326).
+      'GET /reports/church-counts': get('reports/church-counts', { period }),
+      'GET /reports/trends': get('reports/trends', { figure: 'CELLS' }),
       'GET /training/counts': get('training/counts'),
       'GET /training/people': get('training/people'),
       'POST /training/submit': (token) =>
@@ -132,7 +135,11 @@ describe('Full view (decision 0323)', () => {
    * Routes a Leader holds the capability for and still may not read, because they are
    * Whole Church only: refused at the scope rather than at the capability (decision 0325).
    */
-  const WHOLE_CHURCH_ONLY = new Set(['GET /reports/recording-status']);
+  const WHOLE_CHURCH_ONLY = new Set([
+    'GET /reports/recording-status',
+    'GET /reports/church-counts',
+    'GET /reports/trends',
+  ]);
   /** Every route whose declared capability is one Full view withholds, from the controllers. */
   function declaredGuardedRoutes(): string[] {
     const found: string[] = [];

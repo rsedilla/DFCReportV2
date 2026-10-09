@@ -23,6 +23,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
+import { PeopleReadService } from '../people/people.read.service';
 import { SettingsService } from '../admin/settings/settings.service';
 
 import type { Transaction } from 'kysely';
@@ -122,6 +123,39 @@ export interface RecordingStatus {
       }[]
     | null;
   others: RecordingFigures | null;
+}
+
+/** The Senior Pastors' *Number of Cells* and *Number of people* for one scope (decision 0326). */
+export interface ChurchCountFigures {
+  cellGroups: number;
+  youth: number;
+  youngPro: number;
+  couple: number;
+  cellLeaders: number;
+  people: number;
+}
+
+/**
+ * *Number of Cells* and *Number of people* for a month (decision 0326, point 3), counted at
+ * `at`: the month's final millisecond where it has ended, now where it has not.
+ */
+export interface ChurchCounts {
+  period: string;
+  at: Date;
+  /** The month is still running, so its figures are *so far*. */
+  current: boolean;
+  wholeChurch: ChurchCountFigures;
+  /** One per root on the placement graph, null where section 20 refuses that graph. */
+  tables:
+    | {
+        rootId: string;
+        network: NetworkName | null;
+        rows: { leaderId: string; figures: ChurchCountFigures }[];
+      }[]
+    | null;
+  others: ChurchCountFigures | null;
+  /** Each branch asked for, by its leader; null where section 20 refuses the graph. */
+  branches: Map<string, ChurchCountFigures | null>;
 }
 
 /** Per leader, how many records they owed in a run of days and how many have none. */
@@ -266,6 +300,12 @@ export interface TwelveFigure {
   classification: Classification;
 }
 
+/** The root a `ROOT_LEADERS` row sits under, and that root's Network; null on any other row. */
+export interface RootOfRow {
+  root_id: string | null;
+  root_network: NetworkName | null;
+}
+
 /**
  * A My 12 table over one period (decision 0293), before `people` names its rows.
  *
@@ -288,7 +328,7 @@ export interface CellTwelve {
   /** Coverage counts meetings due through this day, the end of the current month at most. */
   coverage: CellCoverage & { through: string };
   /** `network` is set on a whole-church reader's rows, which are the Network roots. */
-  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null })[];
+  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null } & RootOfRow)[];
   own: (TwelveFigure & { cells: number }) | null;
   overlap: number;
   elsewhere: number;
@@ -301,7 +341,12 @@ export interface CellTwelve {
 }
 
 /** Who a My 12 table is about: one leader, or Whole Church for a whole-church reader. */
-export type CellTwelveSubject = { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
+/**
+ * `ROOT_LEADERS` is the two Senior Pastors' tables (decision 0326, point 3): Whole Church's
+ * figures, with each root's direct leaders as the rows rather than the roots themselves.
+ */
+export type CellTwelveSubject =
+  { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' } | { kind: 'ROOT_LEADERS' };
 
 /**
  * Who a DCC My 12 table is about: a leader, Whole Church, or a Network (decision 0294). A
@@ -328,7 +373,7 @@ export interface DccTwelve {
   coverage: Coverage;
   n: number;
   removed_events: string[];
-  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null })[];
+  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null } & RootOfRow)[];
   own: TwelveFigure | null;
   overlap: number;
   elsewhere: number;
@@ -400,6 +445,7 @@ export class ReportingService {
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
     private readonly settings: SettingsService,
+    private readonly people: PeopleReadService,
   ) {}
 
   /**
@@ -615,12 +661,14 @@ export class ReportingService {
 
       // A whole-church reader disciples neither root, so each root row is labelled by its
       // Network rather than by name (decision 0293).
-      const rowIds: { personId: string; network: NetworkName | null }[] =
+      const rowIds: { personId: string; network: NetworkName | null; root?: RootOfRow }[] =
         subject.kind === 'LEADER'
           ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
               (personId) => ({ personId, network: null }),
             )
-          : await this.hierarchy.rootSeatsAsOf(trx, end);
+          : subject.kind === 'ROOT_LEADERS'
+            ? await this.rootLeadersAsOf(trx, end)
+            : await this.hierarchy.rootSeatsAsOf(trx, end);
 
       // One read of the placement graph serves every row and the total (it was one per row).
       const graph = await this.hierarchy.reportingGraph(trx, start, end);
@@ -641,16 +689,19 @@ export class ReportingService {
         );
       };
 
-      const rows: (TwelveFigure & {
-        leader_id: string;
-        network: NetworkName | null;
-        people: Set<string>;
-      })[] = [];
-      for (const { personId: leaderId, network } of rowIds) {
+      const rows: (TwelveFigure &
+        RootOfRow & {
+          leader_id: string;
+          network: NetworkName | null;
+          people: Set<string>;
+        })[] = [];
+      for (const { personId: leaderId, network, root } of rowIds) {
         const people = peopleOf(graph.subtree(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
+          root_id: root?.root_id ?? null,
+          root_network: root?.root_network ?? null,
           ...figureOf(people),
           people: new Set(people.map((p) => canonicalId(p.personId))),
         });
@@ -697,6 +748,8 @@ export class ReportingService {
         rows: rows.map((row) => ({
           leader_id: row.leader_id,
           network: row.network,
+          root_id: row.root_id,
+          root_network: row.root_network,
           unique_people: row.unique_people,
           classification: row.classification,
         })),
@@ -763,14 +816,16 @@ export class ReportingService {
         classification: classify(people),
       });
 
-      const rowIds: { personId: string; network: NetworkName | null }[] =
+      const rowIds: { personId: string; network: NetworkName | null; root?: RootOfRow }[] =
         subject.kind === 'LEADER'
           ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
               (personId) => ({ personId, network: null }),
             )
           : subject.kind === 'NETWORK'
             ? []
-            : await this.hierarchy.rootSeatsAsOf(trx, end);
+            : subject.kind === 'ROOT_LEADERS'
+              ? await this.rootLeadersAsOf(trx, end)
+              : await this.hierarchy.rootSeatsAsOf(trx, end);
 
       // One read of the placement graph serves every row and the total (it was one per row),
       // made only when a subtree is asked for: a Network subject asks for none.
@@ -779,16 +834,19 @@ export class ReportingService {
         (graph ??= await this.hierarchy.reportingGraph(trx, start, end)).subtree(leaderId);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
-      const rows: (TwelveFigure & {
-        leader_id: string;
-        network: NetworkName | null;
-        people: Set<string>;
-      })[] = [];
-      for (const { personId: leaderId, network } of rowIds) {
+      const rows: (TwelveFigure &
+        RootOfRow & {
+          leader_id: string;
+          network: NetworkName | null;
+          people: Set<string>;
+        })[] = [];
+      for (const { personId: leaderId, network, root } of rowIds) {
         const { people } = await figuresOf(await subtreeOf(leaderId));
         rows.push({
           leader_id: leaderId,
           network,
+          root_id: root?.root_id ?? null,
+          root_network: root?.root_network ?? null,
           ...figureOf(people),
           people: new Set(people.map((p) => canonicalId(p.personId))),
         });
@@ -834,6 +892,8 @@ export class ReportingService {
         rows: rows.map((row) => ({
           leader_id: row.leader_id,
           network: row.network,
+          root_id: row.root_id,
+          root_network: row.root_network,
           unique_people: row.unique_people,
           classification: row.classification,
         })),
@@ -1087,6 +1147,114 @@ export class ReportingService {
         },
         tables,
         others,
+      };
+    });
+  }
+
+  /**
+   * Each root's direct leaders at an instant, for the Senior Pastors' My 12 tables (decision
+   * 0326, point 3), in the tree as it stood then, as a leader's own rows are.
+   */
+  private async rootLeadersAsOf(
+    trx: Transaction<Database>,
+    at: Date,
+  ): Promise<{ personId: string; network: null; root: RootOfRow }[]> {
+    const rows: { personId: string; network: null; root: RootOfRow }[] = [];
+    for (const seat of await this.hierarchy.rootSeatsAsOf(trx, at)) {
+      for (const personId of await this.hierarchy.directChildrenAsOf(trx, seat.personId, at)) {
+        rows.push({
+          personId,
+          network: null,
+          root: { root_id: seat.personId, root_network: seat.network },
+        });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * The Senior Pastors' *Number of Cells* and *Number of people* for a month (decision 0326,
+   * point 3), and any branches asked for, which *Trends* draws (point 4).
+   *
+   * **Counted at the month's final millisecond where it has ended, and now where it has
+   * not** (owner, 2026-10-09). Which instant places the current month's rows is recorded as
+   * open in `CLAUDE.md`: they are placed as every month's are, on section 20's placement
+   * graph at the period's final millisecond, which agrees with now while no row is
+   * future-dated.
+   *
+   * **A Cell counts towards the leader it had then**, and a person towards themselves, so a
+   * row counts the Cells led by, and the people who are, that leader or anyone beneath them
+   * on the graph. *Others* is everything in no table, the two roots among them, so the rows
+   * and *Others* add up to the whole church. Where section 20 refuses the graph, the tables,
+   * *Others* and the branches are null and the whole-church figures stand.
+   */
+  async churchCounts(period: string, branches: readonly string[] = []): Promise<ChurchCounts> {
+    return this.overPeriod(period, async (trx, bounds) => {
+      const now = await databaseNow(trx);
+      const current = now.getTime() < bounds.end.getTime();
+      const at = current ? now : bounds.end;
+
+      const cells = await this.cells.cellsInForceAt(trx, at);
+      const people = await this.people.currentIdsAt(trx, at);
+
+      const figuresOf = (members: ReadonlySet<string> | null): ChurchCountFigures => {
+        const counted = cells.filter((cell) => members === null || members.has(cell.leaderId));
+
+        return {
+          cellGroups: counted.length,
+          youth: counted.filter((cell) => cell.category === 'YOUTH').length,
+          youngPro: counted.filter((cell) => cell.category === 'YOUNG_PRO').length,
+          couple: counted.filter((cell) => cell.category === 'COUPLE').length,
+          cellLeaders: new Set(counted.map((cell) => cell.leaderId)).size,
+          people: members === null ? people.length : people.filter((id) => members.has(id)).length,
+        };
+      };
+
+      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const asked = new Map<string, ChurchCountFigures | null>();
+      let tables: ChurchCounts['tables'] = null;
+      let others: ChurchCountFigures | null = null;
+
+      if (graph.refused) {
+        branches.forEach((id) => asked.set(canonicalId(id), null));
+      } else {
+        const placed = new Set<string>();
+        const seats = new Map(
+          (await this.hierarchy.rootSeatsAsOf(trx, bounds.end)).map((seat) => [
+            canonicalId(seat.personId),
+            seat.network,
+          ]),
+        );
+        tables = graph.roots().map((rootId) => ({
+          rootId,
+          network: seats.get(canonicalId(rootId)) ?? null,
+          rows: graph.children(rootId).map((leaderId) => {
+            const beneath = new Set(graph.subtree(leaderId));
+            beneath.forEach((id) => placed.add(id));
+
+            return { leaderId, figures: figuresOf(beneath) };
+          }),
+        }));
+
+        const unplaced = new Set([
+          ...cells.map((cell) => cell.leaderId).filter((id) => !placed.has(id)),
+          ...people.filter((id) => !placed.has(id)),
+        ]);
+        others = figuresOf(unplaced);
+
+        for (const id of branches) {
+          asked.set(canonicalId(id), figuresOf(new Set(graph.subtree(id))));
+        }
+      }
+
+      return {
+        period,
+        at,
+        current,
+        wholeChurch: figuresOf(null),
+        tables,
+        others,
+        branches: asked,
       };
     });
   }

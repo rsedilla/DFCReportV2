@@ -9,7 +9,7 @@ import { AttendanceBuckets } from '@/components/attendance-figures';
 import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
-import { PeriodTabs, RangeNavigator, TwelveTable } from '@/components/my-twelve';
+import { PeriodTabs, RangeNavigator, RootLeadersTwelve, TwelveTable } from '@/components/my-twelve';
 import { YearTable } from '@/components/report-year';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -79,13 +79,18 @@ export function DccReport() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
+  // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
+  // server's screens and never by a role.
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
   // only, so they wait to know who is reading before asking for any.
   const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
   const finishedOnly = finishedKind !== null && me.data !== undefined && !wholeChurch;
   const latest = latestFinished(kind, today);
 
-  const own = wholeChurch
+  const own = seniorPastor
+    ? ({ kind: 'ROOT_LEADERS' } as const)
+    : wholeChurch
     ? ({ kind: 'WHOLE_CHURCH' } as const)
     : me.data
       ? ({ kind: 'LEADER', person_id: me.data.person_id } as const)
@@ -311,6 +316,13 @@ export function DccReport() {
                 title={networkLabel(subject.network)}
                 openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
               />
+            ) : subject?.kind === 'ROOT_LEADERS' ? (
+              <RootLeadersTwelve
+                twelve={twelve.data}
+                kind={kind}
+                where="DCC"
+                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+              />
             ) : (
               <TwelveTable
                 twelve={twelve.data}
@@ -340,7 +352,7 @@ export function DccReport() {
                 key={`${start}-${JSON.stringify(subject)}`}
                 report="dcc"
                 year={Number(start.slice(0, 4))}
-                scope={subject}
+                scope={subject.kind === 'ROOT_LEADERS' ? { kind: 'WHOLE_CHURCH' } : subject}
               />
             ) : null}
           </div>

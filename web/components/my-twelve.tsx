@@ -267,3 +267,125 @@ export function TwelveTable({
     </section>
   );
 }
+
+/**
+ * The two Senior Pastors' My 12 (decision 0326, point 3): the whole church's figures as cards,
+ * then one table for each root's direct leaders, the Men's root first, each headed by the
+ * root's title, name and number of rows. Each Senior Pastor sees both tables in full.
+ *
+ * **Decision 0293's two lines sit once, under both tables**: somebody at Cells in two branches
+ * is in both rows, so one line takes off each count beyond a person's first and another adds
+ * those in no row, the roots among them, and the People column adds up to the total.
+ */
+export function RootLeadersTwelve({
+  twelve,
+  kind,
+  openHref,
+  where = 'a Cell',
+}: {
+  twelve: Omit<CellTwelve, 'own' | 'coverage'>;
+  kind: RangeKind;
+  openHref: (leaderId: string) => string;
+  where?: string;
+}) {
+  const cell = 'px-3 py-3 text-right tabular-nums';
+  const roots = twelve.roots ?? [];
+
+  return (
+    <section aria-labelledby="root-leaders-heading" className={FRAME}>
+      <h2 id="root-leaders-heading" className="field-label">
+        Whole Church · their journey
+      </h2>
+      <p className="text-muted mt-1 text-sm leading-relaxed">
+        Everyone who came to {where} {WHAT[kind]}, counted once, at their stage{' '}
+        {twelve.open ? 'so far' : 'by its end'}. Open a name to see their 12.
+      </p>
+
+      <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
+        <div className="border-line border p-2">
+          <dt className="text-muted text-xs">Total</dt>
+          <dd className="text-xl font-bold tabular-nums">{twelve.total.unique_people}</dd>
+        </div>
+        {STAGES.map(([key, label]) => (
+          <div key={key} className="border-line border p-2">
+            <dt className="text-muted text-xs">{label}</dt>
+            <dd className="text-xl font-bold tabular-nums">{twelve.total.classification[key]}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {roots.map((root) => {
+        const rows = twelve.rows.filter((row) => row.root_id === root.id);
+        const heading = `${root.full_name ?? 'A Network root'}’s ${rows.length} ${
+          rows.length === 1 ? 'leader' : 'leaders'
+        }`;
+
+        return (
+          <div key={root.id} className="mt-5">
+            <h3 className="text-base font-bold tracking-tight">{heading}</h3>
+            <Table caption={heading} className="mt-2">
+              <thead>
+                <tr>
+                  <HeaderCell>Leader</HeaderCell>
+                  {STAGES.map(([key, label]) => (
+                    <HeaderCell key={key} className="text-right">
+                      {label}
+                    </HeaderCell>
+                  ))}
+                  <HeaderCell className="text-right">People</HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
+                    <td className="px-3 py-3">
+                      {row.leader === null ? (
+                        <span className="text-muted">A leader you don’t oversee</span>
+                      ) : (
+                        <Link
+                          href={openHref(row.leader.id)}
+                          className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {row.leader.full_name}
+                        </Link>
+                      )}
+                    </td>
+                    {STAGES.map(([key]) => (
+                      <td key={key} className={cell}>
+                        {row.classification[key]}
+                      </td>
+                    ))}
+                    <td className={`${cell} font-bold`}>{row.unique_people}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        );
+      })}
+
+      <Table caption="Under both tables" className="mt-5">
+        <tbody>
+          {twelve.overlap === 0 ? null : (
+            <tr className={rowClasses}>
+              <td className="text-muted px-3 py-3 italic">Counted under more than one leader</td>
+              <td className={`${cell} text-muted italic`}>−{twelve.overlap}</td>
+            </tr>
+          )}
+          {twelve.elsewhere === 0 ? null : (
+            <tr className={rowClasses}>
+              <td className="text-muted px-3 py-3 italic">
+                Under none of these leaders, the two Network roots among them
+              </td>
+              <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
+            </tr>
+          )}
+          <tr className="border-edge border-t-2 font-bold">
+            <td className="px-3 py-3">Total</td>
+            <td className={cell}>{twelve.total.unique_people}</td>
+          </tr>
+        </tbody>
+      </Table>
+    </section>
+  );
+}

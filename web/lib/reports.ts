@@ -211,7 +211,11 @@ export interface CellTwelve {
   rows: (TwelveFigure & {
     leader: { id: string; member_id: string; full_name: string } | null;
     network?: 'MENS' | 'WOMENS' | null;
+    /** On the Senior Pastors' tables, the root a row's leader sits under (decision 0326). */
+    root_id?: string | null;
   })[];
+  /** On the Senior Pastors' tables, the two roots, Men's first, each named with their title. */
+  roots?: { id: string; full_name: string | null; network: 'MENS' | 'WOMENS' | null }[];
   /** The subject's own Cell groups; null for Whole Church. */
   own: (TwelveFigure & { cells: number }) | null;
   /** Counts beyond a person's first, for somebody in more than one row. */
@@ -243,17 +247,11 @@ export async function getDccTwelve(
   subject:
     | { kind: 'LEADER'; person_id: string }
     | { kind: 'WHOLE_CHURCH' }
-    | { kind: 'NETWORK'; network: ReportNetwork },
+    | { kind: 'NETWORK'; network: ReportNetwork }
+    | { kind: 'ROOT_LEADERS' },
   signal?: AbortSignal,
 ): Promise<DccTwelve> {
-  const params = new URLSearchParams({ kind, start, period: guardMonth, scope: subject.kind });
-  if (subject.kind === 'LEADER') {
-    params.set('leader_id', subject.person_id);
-  }
-  if (subject.kind === 'NETWORK') {
-    params.set('network', subject.network);
-  }
-
+  const params = twelveParams(kind, start, guardMonth, subject);
   try {
     return await authenticatedRequest<DccTwelve>(`/api/v1/reports/dcc/twelve?${params.toString()}`, {
       signal,
@@ -276,13 +274,10 @@ export async function getCellTwelve(
   kind: RangeKind,
   start: string,
   guardMonth: string,
-  subject: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' },
+  subject: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' } | { kind: 'ROOT_LEADERS' },
   signal?: AbortSignal,
 ): Promise<CellTwelve> {
-  const params = new URLSearchParams({ kind, start, period: guardMonth, scope: subject.kind });
-  if (subject.kind === 'LEADER') {
-    params.set('leader_id', subject.person_id);
-  }
+  const params = twelveParams(kind, start, guardMonth, subject);
 
   try {
     return await authenticatedRequest<CellTwelve>(
@@ -372,4 +367,116 @@ export async function getRecordingStatus(
       { signal },
     );
   }
+}
+/**
+ * A My 12 request's query. The Senior Pastors' tables (decision 0326) are Whole Church's
+ * figures with each root's direct leaders as the rows, asked for as `rows=ROOT_LEADERS`.
+ */
+function twelveParams(
+  kind: RangeKind,
+  start: string,
+  guardMonth: string,
+  subject:
+    | { kind: 'LEADER'; person_id: string }
+    | { kind: 'WHOLE_CHURCH' }
+    | { kind: 'NETWORK'; network: ReportNetwork }
+    | { kind: 'ROOT_LEADERS' },
+): URLSearchParams {
+  const params = new URLSearchParams({
+    kind,
+    start,
+    period: guardMonth,
+    scope: subject.kind === 'ROOT_LEADERS' ? 'WHOLE_CHURCH' : subject.kind,
+  });
+  if (subject.kind === 'LEADER') {
+    params.set('leader_id', subject.person_id);
+  }
+  if (subject.kind === 'NETWORK') {
+    params.set('network', subject.network);
+  }
+  if (subject.kind === 'ROOT_LEADERS') {
+    params.set('rows', 'ROOT_LEADERS');
+  }
+  return params;
+}
+
+/** One scope's *Number of Cells* and *Number of people* (decision 0326). */
+export interface ChurchCountFigures {
+  cell_groups: number;
+  youth: number;
+  young_pro: number;
+  couple: number;
+  cell_leaders: number;
+  people: number;
+}
+
+/** `GET /reports/church-counts`: a month's counts, the current one *so far* (decision 0326). */
+export interface ChurchCounts {
+  period: string;
+  current: boolean;
+  at: string;
+  whole_church: ChurchCountFigures;
+  /** Null where the placement graph is refused (section 20); the whole church stands. */
+  tables:
+    | {
+        root: { id: string; member_id: string | null; full_name: string | null };
+        network: 'MENS' | 'WOMENS' | null;
+        rows: (ChurchCountFigures & {
+          leader: { id: string; member_id: string | null; full_name: string | null };
+        })[];
+      }[]
+    | null;
+  others: ChurchCountFigures | null;
+}
+
+export async function getChurchCounts(period: string, signal?: AbortSignal): Promise<ChurchCounts> {
+  return authenticatedRequest<ChurchCounts>(
+    `/api/v1/reports/church-counts?${new URLSearchParams({ period }).toString()}`,
+    { signal },
+  );
+}
+
+export type TrendFigure = 'CG' | 'DCC' | 'CELLS' | 'PEOPLE';
+
+/** `GET /reports/trends`: twelve months of one figure (decision 0326, point 4). */
+export interface Trends {
+  figure: TrendFigure;
+  months: string[];
+  current: string;
+  /** Whole Church first (`leader` null), then each root's branch; or one leader's branch. */
+  lines: {
+    leader: { id: string; member_id: string | null; full_name: string | null } | null;
+    /** One per month; null for a month the figure could not be read for. */
+    values: (number | null)[];
+  }[];
+}
+
+export async function getTrends(
+  figure: TrendFigure,
+  leaderId: string | null,
+  signal?: AbortSignal,
+): Promise<Trends> {
+  const params = new URLSearchParams({ figure });
+  if (leaderId !== null) {
+    params.set('leader_id', leaderId);
+  }
+  return authenticatedRequest<Trends>(`/api/v1/reports/trends?${params.toString()}`, { signal });
+}
+
+/** `GET /suynl/encounter-candidates` (decision 0326): as of now. */
+export interface EncounterCandidates {
+  total: number;
+  tables: {
+    root: { id: string; member_id: string | null; full_name: string | null };
+    network: 'MENS' | 'WOMENS' | null;
+    rows: {
+      leader: { id: string; member_id: string | null; full_name: string | null };
+      candidates: number;
+    }[];
+  }[];
+  others: number;
+}
+
+export async function getEncounterCandidates(signal?: AbortSignal): Promise<EncounterCandidates> {
+  return authenticatedRequest<EncounterCandidates>('/api/v1/suynl/encounter-candidates', { signal });
 }

@@ -313,6 +313,54 @@ export class SuynlService {
   }
 
   /**
+   * The Senior Pastors' *Encounter candidates* (decision 0326, point 3), as of now: current
+   * people holding four or more current lessons and no current Encounter or Life Class
+   * graduation. A count only; it refuses nobody (section 28).
+   *
+   * **One table per root, its rows the root's direct disciples, each counting their branch
+   * now**, as the readiness table counts (decision 0297); *Others* is every candidate in no
+   * row, the roots among them, so the rows and *Others* add up to the total. Whole Church
+   * only, so the population is never narrowed.
+   */
+  async encounterCandidates(): Promise<{
+    total: number;
+    tables: {
+      rootId: string;
+      network: NetworkName | null;
+      rows: { leaderId: string; candidates: number }[];
+    }[];
+    others: number;
+  }> {
+    const now = await databaseNow(this.db);
+    const progress = await this.currentProgress(null);
+    const four = [...progress].filter(([, entry]) => entry.count >= 4).map(([id]) => id);
+    const past = await this.training.pastTheLcPartyOf(four);
+    const candidates = new Set(four.filter((id) => !past.has(id)));
+
+    const placed = new Set<string>();
+    const tables = [];
+    for (const seat of await this.hierarchy.rootSeatsAsOf(this.db, now)) {
+      const branches = branchesOf(
+        seat.personId,
+        await this.hierarchy.subtreeEdgesOf(seat.personId),
+      );
+      const rows = [...branches.byChild].map(([leaderId, members]) => {
+        const counted = unique(members).filter((id) => candidates.has(canonicalId(id)));
+        counted.forEach((id) => placed.add(canonicalId(id)));
+
+        return { leaderId, candidates: counted.length };
+      });
+      tables.push({ rootId: seat.personId, network: seat.network, rows });
+    }
+
+    return {
+      total: candidates.size,
+      tables,
+      others: [...candidates].filter((id) => !placed.has(id)).length,
+    };
+  }
+
+  /**
    * `POST /api/v1/suynl/submit` (sections 14, 22 and 28; decisions 0279, 0280, 0282).
    *
    * **All or nothing**, as a DCC submission is: every line is decided before anything

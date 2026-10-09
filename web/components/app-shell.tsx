@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   ChartColumn,
+  ChartLine,
   CircleUserRound,
   ClipboardCheck,
   LayoutGrid,
@@ -101,6 +102,13 @@ const SUYNL: NavEntry = {
   icon: Sprout,
   matches: ['/growth'],
 };
+/** The Senior Pastors' twelve months of one figure (decision 0326, point 4). */
+const TRENDS: NavEntry = {
+  href: '/trends',
+  label: 'Trends',
+  icon: ChartLine,
+  matches: ['/trends'],
+};
 const ACCOUNT: NavEntry = {
   href: '/session',
   label: 'Account and session',
@@ -159,7 +167,8 @@ export const PAGE_WIDTH = {
  * scope and period that make it readable.
  *
  * **A Recording-only account has four items** (decision 0323): `Record · People · My Cell ·
- * SUYNL`. Every other account has the five. Where a person lands still follows the reach
+ * SUYNL`. **The two Senior Pastors have three**, `Record · Reports · Trends` (decision 0326).
+ * Every other account has the five. Where a person lands still follows the reach
  * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
@@ -183,7 +192,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links =
     me.data?.screens === 'RECORDING'
       ? [RECORD, PEOPLE, MY_CELL, SUYNL]
-      : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
+      : me.data?.screens === 'SENIOR_PASTOR'
+        ? [RECORD, REPORTS, TRENDS]
+        : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

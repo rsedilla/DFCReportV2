@@ -5,6 +5,7 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
+import { canonicalId } from '../common/identifiers';
 import { type RosterCursor } from '../common/roster-cursor';
 import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
@@ -546,6 +547,31 @@ export class PeopleReadService {
       .executeTakeFirstOrThrow();
 
     return Number(row.count);
+  }
+
+  /**
+   * Every Person current at one instant, for the Senior Pastors' *Number of people*
+   * (decision 0326, point 3): a lifecycle row in force then reads `CURRENT`. Lifecycle is
+   * effective-dated so that an archival moves no earlier month (section 3). An absorbed
+   * record is left out, as everywhere else here; nothing writes one yet.
+   */
+  async currentIdsAt(executor: Db | Transaction<Database>, at: Date): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('persons')
+      .innerJoin('person_lifecycle', 'person_lifecycle.person_id', 'persons.id')
+      .select('persons.id')
+      .where('persons.merged_into_id', 'is', null)
+      .where('person_lifecycle.state', '=', 'CURRENT')
+      .where('person_lifecycle.started_at', '<=', at)
+      .where((eb) =>
+        eb.or([
+          eb('person_lifecycle.ended_at', 'is', null),
+          eb('person_lifecycle.ended_at', '>', at),
+        ]),
+      )
+      .execute();
+
+    return rows.map((row) => canonicalId(row.id));
   }
 
   /**
