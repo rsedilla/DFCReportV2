@@ -443,9 +443,13 @@ export interface Trends {
   figure: TrendFigure;
   months: string[];
   current: string;
+  /** One per month: whether it is still open, the current one and last month until the 7th. */
+  open: boolean[];
   /** Whole Church first (`leader` null), then each root's branch; or one leader's branch. */
   lines: {
     leader: { id: string; member_id: string | null; full_name: string | null } | null;
+    /** A root's branch names its Network; the church and one leader carry none. */
+    network: 'MENS' | 'WOMENS' | null;
     /** One per month; null for a month the figure could not be read for. */
     values: (number | null)[];
   }[];

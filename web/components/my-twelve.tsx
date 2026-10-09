@@ -285,7 +285,7 @@ export function TwelveTable({
 /**
  * The two Senior Pastors' My 12 (decision 0326, point 3): the whole church's figures as cards,
  * then one table for each root's direct leaders, the Men's root first, each headed by the
- * root's title, name and number of rows. Each Senior Pastor sees both tables in full.
+ * root's title and name. Each Senior Pastor sees both tables in full.
  *
  * **Decision 0293's two lines sit once, under both tables**: somebody at Cells in two branches
  * is in both rows, so one line takes off each count beyond a person's first and another adds

@@ -301,7 +301,7 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
     // Eleven months read, three bars each, none of them zero.
     await expect(graph(page).locator('rect')).toHaveCount(33);
-    await expect(page.getByText(/The lighter bars are October 2026/)).toBeVisible();
+    await expect(page.getByText(/A lighter bar is a month still open, its figure so far: October 2026/)).toBeVisible();
 
     await page.getByRole('checkbox', { name: 'Whole Church' }).uncheck();
     await expect(graph(page).locator('rect')).toHaveCount(22);
@@ -311,6 +311,28 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
     await expect(shape.getByRole('button', { name: 'Bars' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('checkbox', { name: 'Whole Church' })).not.toBeChecked();
     await expect(graph(page).locator('rect')).toHaveCount(22);
+  });
+
+  test('marks every month still open, a finished one inside its window too', async ({ page }) => {
+    await seniorPastor(page);
+    await mockChurchCounts(page);
+    // From the 1st to the 7th the month before is still open (sections 13, 17 and 19).
+    await mockTrends(page, { open: ['2026-09-01', '2026-10-01'] });
+
+    await page.goto('/trends');
+
+    // A hollow point for each open month on each of the three lines.
+    await expect(graph(page).locator('circle.fill-surface')).toHaveCount(6);
+    await expect(
+      page.getByText(/A hollow point is a month still open, its figure so far: September 2026 and October 2026/),
+    ).toBeVisible();
+
+    await page.getByText('Show the figures').click();
+    const table = page.getByRole('table', { name: 'CG attendance by month' });
+    for (const month of ['September 2026', 'October 2026']) {
+      await expect(table.getByRole('row', { name: new RegExp(month) })).toContainText('so far');
+    }
+    await expect(table.getByRole('row', { name: /August 2026/ })).not.toContainText('so far');
   });
 
   test('keeps the figures behind Show the figures, following the ticks', async ({ page }) => {

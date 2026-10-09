@@ -144,6 +144,11 @@ export interface ChurchCounts {
   at: Date;
   /** The month is still running, so its figures are *so far*. */
   current: boolean;
+  /**
+   * The month is still open for recording: the current one, or the one before it until its
+   * window closes (section 13). *Trends* flags every such month (sections 17 and 19).
+   */
+  open: boolean;
   wholeChurch: ChurchCountFigures;
   /** One per root on the placement graph, null where section 20 refuses that graph. */
   tables:
@@ -1251,6 +1256,7 @@ export class ReportingService {
         period,
         at,
         current,
+        open: await isMonthOpen(trx, period),
         wholeChurch: figuresOf(null),
         tables,
         others,

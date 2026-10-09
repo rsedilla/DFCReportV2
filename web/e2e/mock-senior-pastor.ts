@@ -98,9 +98,14 @@ const MONTHS = [
 /**
  * `GET /reports/trends` (decisions 0326 and 0327): twelve months ending with October 2026, the
  * church then the Men's and Women's branches, or one leader's branch where one is named.
- * March could not be read, so every line has a gap there. Returns the queries asked.
+ * March could not be read, so every line has a gap there. `open` names the months still open,
+ * October alone by default; a case set on the 1st to the 7th passes September too. Returns the
+ * queries asked.
  */
-export async function mockTrends(page: Page): Promise<URLSearchParams[]> {
+export async function mockTrends(
+  page: Page,
+  { open = ['2026-10-01'] }: { open?: string[] } = {},
+): Promise<URLSearchParams[]> {
   const asked: URLSearchParams[] = [];
   await page.route('**/api/v1/reports/trends?*', (route) => {
     const params = new URL(route.request().url()).searchParams;
@@ -115,14 +120,15 @@ export async function mockTrends(page: Page): Promise<URLSearchParams[]> {
         figure: params.get('figure') ?? 'CG',
         months: MONTHS,
         current: '2026-10-01',
+        open: MONTHS.map((month) => open.includes(month)),
         lines:
           leader === undefined
             ? [
-                { leader: null, values: series(3) },
-                { leader: SP_MENS_ROOT, values: series(1.5) },
-                { leader: SP_WOMENS_ROOT, values: series(1.2) },
+                { leader: null, network: null, values: series(3) },
+                { leader: SP_MENS_ROOT, network: 'MENS', values: series(1.5) },
+                { leader: SP_WOMENS_ROOT, network: 'WOMENS', values: series(1.2) },
               ]
-            : [{ leader, values: series(0.5) }],
+            : [{ leader, network: null, values: series(0.5) }],
       }),
     );
   });

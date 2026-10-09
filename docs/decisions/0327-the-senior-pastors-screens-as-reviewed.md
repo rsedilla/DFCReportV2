@@ -19,7 +19,7 @@ and the heading names the root without a count. On CG and DCC attendance *Total*
 figure and there is no People column: a row's Total is its unique people, which is VIP through
 Regular added, each person being in one stage. Every other row is shaded so a row can be followed
 across; the rows are still never numbered (decision 0293). Every Primary's name is a link in the
-link colour, opening what 0326 says it opens.
+link colour.
 
 **3. What the two Senior Pastors' attendance tabs leave out.** No coverage line and no link to
 Filed reports, which is not one of their tabs: they read whether the church has recorded on
@@ -27,7 +27,7 @@ Filed reports, which is not one of their tabs: they read whether the church has 
 readers, to Section 12's rule that coverage is the figure an aggregate view leads with. No *How these are counted*, and under Year no month-by-month table
 (decision 0257). On DCC attendance the number of Sundays counted is not shown; a Sunday with no
 service is still named (Section 9). Their period, month and *Figures for* are one row, and a
-period still running says *so far* rather than the date its window closes — the open flag
+period still open says *so far* rather than the date its window closes — the open flag
 Sections 17 and 19 require, in words that fit people who do not record the rest of the church.
 *Recording status* gives no link to the Cells behind.
 

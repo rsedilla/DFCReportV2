@@ -3148,7 +3148,7 @@ The first two are fairness questions with a defined behaviour behind them; an im
 
 #### What an aggregate view offers instead
 
-**Nothing further. Unique people, classification and coverage are the whole of it** (ruling of 2026-09-04), and coverage is the figure to lead with — except on the two Senior Pastors' attendance tabs, which show none and send them to their `Record` for whether the church has recorded (decision 0327).
+**Nothing further. Unique people, classification and coverage are the whole of it** (ruling of 2026-09-04), and coverage is the figure to lead with — except on the two Senior Pastors' attendance tabs, which show none (decision 0327).
 
 The reason is not that no replacement could be designed. It is that **the bucket denominator is self-reported**, and every candidate replacement inherits that. `N` counts the meetings a Cell actually recorded, so any figure expressed as a share of `N` rewards a Cell for recording fewer meetings — including the obvious repair of normalising each person against their own Cell's `N` before aggregating. That removes the cross-Cell inflation described above and leaves the incentive untouched: a person at one of one still outranks a person at three of four. The constraint this section already sets is the test, and it is about the incentive rather than the arithmetic — *no bucket rewards a Cell for recording fewer meetings*.
 
@@ -4095,7 +4095,7 @@ One fixed set of tiles serves nobody. A Cell leader has no downline leaders to c
 
 - **Cell leader** — meetings awaiting a record first, then their own Cells: members, and this month's recorded meetings and attendance.
 - **Upline leader** — Cells needing attention first, then subtree totals: People, Direct Leaders, Cell Leaders, Cell Groups, and recording coverage.
-- **Senior Pastor** — scope selector for Whole Church, Men's, and Women's; church-wide totals, coverage, and the Development metrics from Section 16. Their `Record` is decision 0325's, above, and their `Reports` and `Trends` decision 0326's, below.
+- **Senior Pastor** — scope selector for Whole Church, Men's, and Women's; church-wide totals and the Development metrics from Section 16. Their `Record` is decision 0325's, above, and their `Reports` and `Trends` decision 0326's, below.
 - **Admin** — platform operations, per the Admin dashboard below, not pastoral metrics.
 
 No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meeting summary and the ranking prohibition), decision 0325's *Completed* label aside.

@@ -478,7 +478,9 @@ export class ReportingController {
    * rank them (sections 13 and 17). Each point is the figure its tab leads with: CG and DCC
    * attendance the month's unique people (sections 9 and 12), Number of Cells its Cell Groups,
    * Number of Cell Leaders its Cell Leaders, Number of people its People. A month a figure cannot be read for is null, and the screen
-   * says so (decision 0257).
+   * says so (decision 0257). `open` says which months are still open, so a finished month
+   * inside its window is flagged as well as the current one (sections 17 and 19), and each
+   * branch line names its Network rather than leaving the client to infer it from position.
    */
   @Get('trends')
   @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
@@ -486,19 +488,19 @@ export class ReportingController {
     const current = reportingMonthOf(manilaDayOf(new Date()));
     const months = Array.from({ length: 12 }, (_, index) => shiftMonth(current, index - 11));
 
-    let lines: { leaderId: string | null }[];
+    let lines: { leaderId: string | null; network: NetworkName | null }[];
     if (query.leader_id !== undefined) {
       if (!(await this.people.findById(query.leader_id))) {
         throw new NotFoundError('No such person.');
       }
-      lines = [{ leaderId: canonicalId(query.leader_id) }];
+      lines = [{ leaderId: canonicalId(query.leader_id), network: null }];
     } else {
       const now = await this.reporting.churchCounts(current);
       lines = [
-        { leaderId: null },
+        { leaderId: null, network: null },
         ...[...(now.tables ?? [])]
           .sort((left, right) => networkOrder(left.network) - networkOrder(right.network))
-          .map((table) => ({ leaderId: table.rootId })),
+          .map((table) => ({ leaderId: table.rootId, network: table.network })),
       ];
     }
 
@@ -507,11 +509,15 @@ export class ReportingController {
       lines.map((line) => [line.leaderId ?? 'church', []]),
     );
 
+    // Each month's open flag comes from that month's own report, inside the seam that owns
+    // the period rules; a month that could not be read has no figure to flag.
+    const open: boolean[] = [];
     for (const month of months) {
-      const values = await this.trendPoint(query.figure, month, branches).catch(refusalAsNull);
+      const point = await this.trendPoint(query.figure, month, branches).catch(refusalAsNull);
+      open.push(point?.open ?? false);
       for (const line of lines) {
         const key = line.leaderId ?? 'church';
-        points.get(key)!.push(values === null ? null : (values.get(key) ?? null));
+        points.get(key)!.push(point === null ? null : (point.values.get(key) ?? null));
       }
     }
 
@@ -521,8 +527,10 @@ export class ReportingController {
       figure: query.figure,
       months,
       current,
+      open,
       lines: lines.map((line) => ({
         leader: line.leaderId === null ? null : person(line.leaderId),
+        network: line.network,
         values: points.get(line.leaderId ?? 'church'),
       })),
     };
@@ -533,7 +541,7 @@ export class ReportingController {
     figure: TrendFigure,
     month: string,
     branches: readonly string[],
-  ): Promise<Map<string, number | null>> {
+  ): Promise<{ values: Map<string, number | null>; open: boolean }> {
     const values = new Map<string, number | null>();
 
     if (figure === 'CELLS' || figure === 'CELL_LEADERS' || figure === 'PEOPLE') {
@@ -550,19 +558,22 @@ export class ReportingController {
       for (const id of branches) {
         values.set(id, pick(counts.branches.get(canonicalId(id))));
       }
-      return values;
+      return { values, open: counts.open };
     }
 
-    const read = async (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
+    const report = (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
       figure === 'CG'
-        ? (await this.reporting.cellMonthly(scope, month)).unique_people
-        : (await this.reporting.dccMonthly(scope, month)).unique_people;
+        ? this.reporting.cellMonthly(scope, month)
+        : this.reporting.dccMonthly(scope, month);
+    const read = async (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
+      (await report(scope)).unique_people;
 
-    values.set('church', await read({ kind: 'WHOLE_CHURCH' }));
+    const church = await report({ kind: 'WHOLE_CHURCH' });
+    values.set('church', church.unique_people);
     for (const id of branches) {
       values.set(id, await read({ kind: 'LEADER', person_id: id }).catch(refusalAsNull));
     }
-    return values;
+    return { values, open: church.open };
   }
 
   /** Names identities and orders them by surname, first name and Member ID, never by a figure. */
@@ -957,14 +968,6 @@ function countFigures(figures: ChurchCountFigures): Record<string, number> {
   };
 }
 
-/** The first of the month `offset` months from `month`, itself the first of a month. */
-function shiftMonth(month: string, offset: number): string {
-  const [year, number] = month.split('-').map(Number);
-  const shifted = new Date(Date.UTC(year, number - 1 + offset, 1));
-
-  return shifted.toISOString().slice(0, 10);
-}
-
 /**
  * Whether the Senior Pastors' tables were asked for (decision 0326). They are Whole Church's
  * figures with other rows, so any other selector is refused rather than quietly ignored.
@@ -994,4 +997,12 @@ function refusalAsNull(error: unknown): null {
     return null;
   }
   throw error;
+}
+
+/** The first of the month `offset` months from `month`, itself the first of a month. */
+function shiftMonth(month: string, offset: number): string {
+  const [year, number] = month.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, number - 1 + offset, 1));
+
+  return shifted.toISOString().slice(0, 10);
 }

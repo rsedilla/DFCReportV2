@@ -163,7 +163,7 @@ function TrendsScreen() {
 }
 
 /** How a line is named: the church, a root's branch by its pastor, or one leader's branch. */
-function lineName(line: Trends['lines'][number], index: number, single: boolean): string {
+function lineName(line: Trends['lines'][number], single: boolean): string {
   if (line.leader === null) {
     return 'Whole Church';
   }
@@ -171,8 +171,12 @@ function lineName(line: Trends['lines'][number], index: number, single: boolean)
   if (single) {
     return name;
   }
-  // The second line is the Men's root's branch and the third the Women's (decision 0326).
-  return `${name} · ${index === 1 ? 'Men’s' : 'Women’s'}`;
+  // Named by the Network the server gives the line, never by its position.
+  return line.network === 'MENS'
+    ? `${name} · Men’s`
+    : line.network === 'WOMENS'
+      ? `${name} · Women’s`
+      : name;
 }
 
 type Kind = 'LINE' | 'BARS';
@@ -232,16 +236,26 @@ function TrendsChart({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const single = data.lines.length === 1;
+  // One leader drawn, rather than a church line left alone where the branches could not be read.
+  const single = data.lines.length === 1 && data.lines[0].leader !== null;
   const all = data.lines.map((line, index) => ({
     index,
-    name: lineName(line, index, single),
+    name: lineName(line, single),
+    church: line.leader === null,
     values: line.values,
     // Lines are told apart by weight and dash as well as colour, because lines cross (1.4.1).
     // Bars are solid and always in this order, the key's, with the figures one click away.
-    width: index === 0 ? 3 : 1.75,
-    dash: index === 2 ? '6 4' : undefined,
-    tone: single ? singleTone : (['text-chart-green', 'text-chart-blue', 'text-chart-pink'][index] ?? 'text-ink'),
+    width: line.leader === null ? 3 : 1.75,
+    dash: line.network === 'WOMENS' ? '6 4' : undefined,
+    tone: single
+      ? singleTone
+      : line.leader === null
+        ? 'text-chart-green'
+        : line.network === 'MENS'
+          ? 'text-chart-blue'
+          : line.network === 'WOMENS'
+            ? 'text-chart-pink'
+            : 'text-ink',
   }));
   // One always stays ticked, so the graph is never empty.
   const lines = single ? all : all.filter((line) => !hidden.includes(line.index));
@@ -401,15 +415,13 @@ function TrendsChart({
                         fill="currentColor"
                         stroke="currentColor"
                         // The current month is open, so its bar is a lighter shade with a solid edge.
-                        fillOpacity={i === last ? 0.45 : 1}
+                        fillOpacity={data.open[i] ? 0.45 : 1}
                       />
                     ),
                   )}
                 </g>
               ))
             : lines.map((line) => {
-                const end = line.values[last];
-
                 return (
                   <g key={line.name} className={line.tone}>
                     {runs(line.values).map((run) => (
@@ -422,14 +434,13 @@ function TrendsChart({
                         strokeDasharray={line.dash}
                       />
                     ))}
+                    {/* A month still open has a hollow point (sections 17 and 19). */}
                     {line.values.map((v, i) =>
-                      v === null || i === last ? null : (
+                      v === null ? null : data.open[i] ? (
+                        <circle key={i} cx={x(i)} cy={y(v)} r={3.5} className="fill-surface" stroke="currentColor" strokeWidth={1.5} />
+                      ) : (
                         <circle key={i} cx={x(i)} cy={y(v)} r={2.5} fill="currentColor" />
                       ),
-                    )}
-                    {/* The current month is open, so its point is hollow. */}
-                    {end === null ? null : (
-                      <circle cx={x(last)} cy={y(end)} r={3.5} className="fill-surface" stroke="currentColor" strokeWidth={1.5} />
                     )}
                   </g>
                 );
@@ -437,8 +448,12 @@ function TrendsChart({
         </svg>
       </div>
       <p className="text-muted text-xs">
-        {kind === 'LINE' ? 'The hollow point is' : 'The lighter bars are'}{' '}
-        {rangeLabel('MONTH', data.months[last])}, still open, so far.
+        {kind === 'LINE' ? 'A hollow point is' : 'A lighter bar is'} a month still open, its figure so far:{' '}
+        {data.months
+          .filter((_, i) => data.open[i])
+          .map((month) => rangeLabel('MONTH', month))
+          .join(' and ')}
+        .
         {gaps.length > 0 ? ' A gap is a month this figure could not be read for.' : ''}
       </p>
 
@@ -464,12 +479,12 @@ function TrendsChart({
               <tr key={month} className={rowClasses}>
                 <td className="px-3 py-1.5">
                   {rangeLabel('MONTH', month)}
-                  {i === last ? <span className="text-muted text-xs"> · so far</span> : null}
+                  {data.open[i] ? <span className="text-muted text-xs"> · so far</span> : null}
                 </td>
                 {lines.map((line) => (
                   <td
                     key={line.name}
-                    className={`px-3 py-1.5 text-right tabular-nums${line.index === 0 ? ' font-bold' : ''}`}
+                    className={`px-3 py-1.5 text-right tabular-nums${line.church ? ' font-bold' : ''}`}
                   >
                     {line.values[i] === null ? (
                       <span className="text-muted">could not be read</span>
