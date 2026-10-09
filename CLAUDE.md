@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-09, the trigger being decision 0326: of 325 files, 324 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0326 each moved the first two and
+2026-10-09, the trigger being decision 0327: of 326 files, 325 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0327 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-09 and triggered by 0326, and was left stale by 0327 the same day. The one before that was dated
 2026-10-08 and triggered by 0325, and was left stale by 0326 the next day. The one before that was dated
 2026-10-08 and triggered by 0324, and was left stale by 0325 the same day. The one before that was dated
 2026-10-08 and triggered by 0323, and was left stale by 0324 the same day. The one before that was dated
@@ -693,6 +694,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-08 — [People I oversee stops two levels down](docs/decisions/0324-people-i-oversee-stops-two-levels-down.md)
 - 2026-10-08 — [The Senior Pastors' Record screen](docs/decisions/0325-the-senior-pastors-record-screen.md)
 - 2026-10-09 — [The Senior Pastors' screens](docs/decisions/0326-the-senior-pastors-screens.md)
+- 2026-10-09 — [The Senior Pastors' screens, as the owner reviewed them](docs/decisions/0327-the-senior-pastors-screens-as-reviewed.md)
 
 ### Open — awaiting a ruling
 
@@ -882,4 +884,4 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **At which instant "whose DCC the actor records" is decided for SUYNL.** §9's submitter walk resolves as of each Sunday, while §28 reads as of now, and decision 0322 does not say which a SUYNL filing uses. Raised by `architecture-guardian` on decision 0322.
 - **Whether an explicit grant of a capability Full view withholds reaches a Leader without it.** **A Stop Condition.** §7 says such an account "holds no `reports.view_subtree` and no Training or Conquest capability", and also frames Full view as picking between two Leader default sets; the build withholds the defaults only, so a `capability_grants` row of one of the seven would be honoured. Not reachable: nothing writes `capability_grants`. Raised by `architecture-guardian` on decision 0323's build.
 - **Whether an explicit grant of a capability decision 0326 withdraws reaches a Senior Pastor.** **A Stop Condition.** Section 7 lets an Admin exceed every role default but `roles.manage` and `accounts.manage`, which would admit a grant of any of the fourteen capabilities decision 0326 withdraws from the Senior Pastor role, while that ruling withdraws them so that an administrator does that work; the two are not reconciled. Not reachable: nothing writes `capability_grants`. Raised by `architecture-guardian` on decision 0326.
-- **Which instant places the rows of the current month's Number of Cells and Number of people.** **A Stop Condition.** Decision 0326 counts the current month as of now, which Section 20 gives a current-state figure, and places a month's rows on the placement graph at the period's final millisecond, which for a month still running has not arrived. The two agree while no row is future-dated, and nothing writes one, but decision 0214 warns against counting and placing at different instants. Raised by `architecture-guardian` on the second review of decision 0326.
+- **Which instant places the rows of the current month's # of Cells, # of Cell Leaders and # of people.** **A Stop Condition.** Decision 0326 counts the current month as of now, which Section 20 gives a current-state figure, and places a month's rows on the placement graph at the period's final millisecond, which for a month still running has not arrived. The two agree while no row is future-dated, and nothing writes one, but decision 0214 warns against counting and placing at different instants. Raised by `architecture-guardian` on the second review of decision 0326.

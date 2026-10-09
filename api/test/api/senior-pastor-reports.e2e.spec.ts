@@ -441,6 +441,22 @@ describe('Senior Pastor reports (decision 0326)', () => {
       expect(lines[0].values[10]).toBe(month.whole_church.people);
     });
 
+    it('draws the church’s Cell Leaders as # of Cell Leaders’ whole-church figure (decision 0327)', async () => {
+      const response = await trends(pastor, { figure: 'CELL_LEADERS' }).expect(200);
+      const lines = response.body.lines as Line[];
+
+      for (const index of [10, 11]) {
+        const period = response.body.months[index] as string;
+        const month = (await counts(pastor, period).expect(200)).body as Counts;
+        expect({ period, value: lines[0].values[index] }).toEqual({
+          period,
+          value: month.whole_church.cell_leaders,
+        });
+      }
+      // Ana, Dan and Cara each lead a Cell this month, so the point is not a default zero.
+      expect(lines[0].values[11]).toBe(3);
+    });
+
     it('draws one line for a leader named, and answers NOT_FOUND for nobody', async () => {
       const response = await trends(pastor, { figure: 'CELLS', leader_id: ana.id }).expect(200);
       const lines = response.body.lines as Line[];
@@ -518,6 +534,13 @@ describe('Senior Pastor reports (decision 0326)', () => {
           code: 'CAPABILITY_DENIED',
         });
       }
+    });
+
+    it('no longer has an Encounter candidates route (decision 0327)', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/suynl/encounter-candidates')
+        .set('Authorization', `Bearer ${pastor.accessToken}`)
+        .expect(404);
     });
 
     it('admits both Senior Pastors and an Admin', async () => {

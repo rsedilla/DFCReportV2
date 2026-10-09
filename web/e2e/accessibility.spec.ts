@@ -60,6 +60,7 @@ import {
   mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
+import { mockChurchCounts, mockTrends } from './mock-senior-pastor';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -707,6 +708,66 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { level: 3, name: 'Others' })).toBeVisible();
       await expect(page.getByText('Completed').filter({ visible: true }).first()).toBeVisible();
+    },
+  },
+  {
+    // The two Senior Pastors' reports, # of cells (decisions 0326 and 0327).
+    name: 'reports, # of cells',
+    route: '/reports/number-of-cells',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockScreens(page, 'SENIOR_PASTOR');
+      await mockChurchCounts(page);
+      await mockTrends(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: 'Number of Cells' }).getByRole('term').first()).toBeVisible();
+    },
+  },
+  {
+    // The two Senior Pastors' reports, # of cell leaders (decisions 0326 and 0327).
+    name: 'reports, # of cell leaders',
+    route: '/reports/number-of-cell-leaders',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockScreens(page, 'SENIOR_PASTOR');
+      await mockChurchCounts(page);
+      await mockTrends(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: 'Number of Cell Leaders' }).getByRole('term').first()).toBeVisible();
+    },
+  },
+  {
+    // The two Senior Pastors' reports, # of people (decisions 0326 and 0327).
+    name: 'reports, # of people',
+    route: '/reports/number-of-people',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockScreens(page, 'SENIOR_PASTOR');
+      await mockChurchCounts(page);
+      await mockTrends(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: 'Number of people' }).getByRole('term').first()).toBeVisible();
+    },
+  },
+  {
+    // The two Senior Pastors' trends (decisions 0326 and 0327).
+    name: 'trends',
+    route: '/trends',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockScreens(page, 'SENIOR_PASTOR');
+      await mockChurchCounts(page);
+      await mockTrends(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('checkbox', { name: 'Whole Church' })).toBeVisible();
     },
   },
   {
@@ -1958,6 +2019,30 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
       'full-view.spec.ts, on the same fixture.',
+  },
+  {
+    name: 'reports, # of cells',
+    why:
+      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
+      'senior-pastor-reports.spec.ts, on the same fixture.',
+  },
+  {
+    name: 'reports, # of cell leaders',
+    why:
+      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
+      'senior-pastor-reports.spec.ts, on the same fixture.',
+  },
+  {
+    name: 'reports, # of people',
+    why:
+      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
+      'senior-pastor-reports.spec.ts, on the same fixture.',
+  },
+  {
+    name: 'trends',
+    why:
+      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
+      'senior-pastor-reports.spec.ts, on the same fixture.',
   },
   {
     name: 'suynl report, a row opened',
