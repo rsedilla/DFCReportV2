@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { RangeNavigator } from '@/components/my-twelve';
+import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
-import { rangeGuardMonth, rangeLabel, rangeStartOf, shiftRange } from '@/lib/report-range';
+import { rangeGuardMonth, rangeStartOf } from '@/lib/report-range';
 import { todayInManila } from '@/lib/reporting-month';
 import {
   getRecordingStatus,
@@ -37,7 +38,6 @@ export function RecordingStatusPanel() {
   const current = rangeStartOf(kind, today);
   const [start, setStart] = useState(current);
   const shown = rangeStartOf(kind, start);
-  const isCurrent = shown === current;
 
   const status = useQuery({
     queryKey: ['recording-status', kind, shown],
@@ -59,6 +59,8 @@ export function RecordingStatusPanel() {
 
       <ViewSwitch
         label="Period"
+        even
+        className="max-w-xs"
         options={[
           { key: 'WEEK', label: 'Week' },
           { key: 'MONTH', label: 'Month' },
@@ -70,26 +72,15 @@ export function RecordingStatusPanel() {
         }}
       />
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button variant="secondary" onClick={() => setStart(shiftRange(kind, shown, -1))}>
-          Previous {unit}
-        </Button>
-        <p className="text-sm font-bold" aria-live="polite">
-          {rangeLabel(kind, shown)}
-          {data ? (
-            <span className="text-muted font-normal">
-              {' '}
-              · {data.open ? 'still open' : 'closed'}
-            </span>
-          ) : null}
-        </p>
-        <Button
-          variant="secondary"
-          disabled={isCurrent}
-          onClick={() => setStart(shiftRange(kind, shown, 1))}
-        >
-          Next {unit}
-        </Button>
+      {/* The same ‹ › control as Reports, in the same bar (owner, 2026-10-09). */}
+      <div className={`mt-4 ${CONTROL_BAR}`}>
+        <RangeNavigator
+          kind={kind}
+          start={shown}
+          current={current}
+          open={data?.open}
+          onChange={setStart}
+        />
       </div>
 
       <div className="mt-4">
@@ -100,7 +91,8 @@ export function RecordingStatusPanel() {
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <h3 className="field-label mt-4">Whole Church</h3>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <WholeChurchBox
               label="Recorded their Cell group"
               column={data.whole_church.cell}
@@ -125,9 +117,8 @@ export function RecordingStatusPanel() {
               {data.tables.map((table) => (
                 <LeaderTable
                   key={table.root.id}
-                  heading={`${table.root.full_name ?? 'A Network root'}’s ${table.rows.length} ${
-                    table.rows.length === 1 ? 'leader' : 'leaders'
-                  }`}
+                  // No count in the heading (owner, 2026-10-09).
+                  heading={`${table.root.full_name ?? 'A Network root'}’s leaders`}
                   rows={table.rows}
                 />
               ))}
@@ -153,14 +144,6 @@ export function RecordingStatusPanel() {
             </>
           )}
 
-          <p className="mt-8 text-sm">
-            <Link
-              href="/reports/filed?behind=1"
-              className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              See which Cells are behind
-            </Link>
-          </p>
         </>
       ) : null}
     </section>
@@ -191,9 +174,7 @@ function WholeChurchBox({
 }) {
   return (
     <div className="border-line border p-3">
-      <span className="text-muted block text-sm">
-        {label} · Whole Church
-      </span>
+      <span className="text-ink block text-sm font-bold">{label}</span>
       <span className="mt-1 block text-xl font-bold tabular-nums">
         {ofLeaders(column)}
         {column.percent === null ? null : ` · ${column.percent}%`}
@@ -230,7 +211,7 @@ function LeaderTable({ heading, rows }: { heading: string; rows: readonly Record
     <div className="mt-6">
       <h3 className="text-base font-bold tracking-tight">{heading}</h3>
 
-      <Table caption={heading} className="mt-2 hidden lg:block">
+      <Table caption={heading} className="mt-2 hidden sm:block">
         <thead>
           <tr>
             <HeaderCell>Leader</HeaderCell>
@@ -241,7 +222,8 @@ function LeaderTable({ heading, rows }: { heading: string; rows: readonly Record
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.leader.id} className={rowClasses}>
+            // Every other row shaded, never numbered (owner, 2026-10-09).
+            <tr key={row.leader.id} className={`${rowClasses} even:bg-raised`}>
               <td className="px-3 py-3 align-top">
                 <BranchLink row={row} />
               </td>
@@ -255,13 +237,14 @@ function LeaderTable({ heading, rows }: { heading: string; rows: readonly Record
         </tbody>
       </Table>
 
-      <ul className="mt-2 flex flex-col gap-3 lg:hidden">
+      {/* On a phone each leader is a few short lines, shaded every other row (owner, 2026-10-09). */}
+      <ul className="mt-2 flex flex-col sm:hidden">
         {rows.map((row) => (
-          <li key={row.leader.id} className="border-line border p-4">
+          <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
             <BranchLink row={row} />
-            <p className="text-muted mt-1 text-sm">Cell group recorded: {ofLeaders(row.cell)}</p>
+            <p className="text-muted text-sm">Cell group recorded: {ofLeaders(row.cell)}</p>
             <p className="text-muted text-sm">DCC checklist recorded: {ofLeaders(row.dcc)}</p>
-            <p className="mt-2 text-sm">
+            <p className="mt-1 text-sm">
               <StatusLabel status={row.status} />
             </p>
           </li>

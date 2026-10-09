@@ -19,14 +19,31 @@ const TABS = [
 
 /**
  * The two Senior Pastors' five tabs (decision 0326, point 3), in place of the six. The first
- * two are the same reports under the names the church uses.
+ * two are the same reports under the names the church uses. **A `#` label keeps its words as
+ * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
+ * "hash" (section 23).
  */
 const SENIOR_PASTOR_TABS = [
   { key: 'cells', label: 'CG attendance', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC attendance', path: '/reports/dcc' },
-  { key: 'number-of-cells', label: 'Number of Cells', path: '/reports/number-of-cells' },
-  { key: 'number-of-people', label: 'Number of people', path: '/reports/number-of-people' },
-  { key: 'encounter-candidates', label: 'Encounter candidates', path: '/reports/encounter-candidates' },
+  {
+    key: 'number-of-cells',
+    label: '# of Cells',
+    name: 'Number of Cells',
+    path: '/reports/number-of-cells',
+  },
+  {
+    key: 'number-of-cell-leaders',
+    label: '# of Cell Leaders',
+    name: 'Number of Cell Leaders',
+    path: '/reports/number-of-cell-leaders',
+  },
+  {
+    key: 'number-of-people',
+    label: '# of people',
+    name: 'Number of people',
+    path: '/reports/number-of-people',
+  },
 ] as const;
 
 export type ReportTab =
@@ -61,7 +78,8 @@ export function ReportsTabs({
   // Which tabs follow the screens the server names (decision 0323, point 5), never a role.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
-  const tabs: readonly { key: ReportTab; label: string; path: string }[] = seniorPastor
+  const tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] =
+    seniorPastor
     ? SENIOR_PASTOR_TABS
     : TABS;
 
@@ -70,8 +88,9 @@ export function ReportsTabs({
       <nav
         aria-label="Which report"
         className={cn(
-          'mt-6 grid grid-cols-2 sm:grid-cols-3',
-          seniorPastor ? 'lg:grid-cols-5' : 'lg:grid-cols-6',
+          'mt-6 grid grid-cols-2',
+          // The five shorter labels fit one row from a small screen up (owner, 2026-10-09).
+          seniorPastor ? 'sm:grid-cols-5' : 'sm:grid-cols-3 lg:grid-cols-6',
           TAB_ROW,
         )}
       >
@@ -82,6 +101,7 @@ export function ReportsTabs({
             tab.key === 'dcc' ||
             tab.key === 'filed' ||
             tab.key === 'number-of-cells' ||
+            tab.key === 'number-of-cell-leaders' ||
             tab.key === 'number-of-people';
 
           return (
@@ -89,6 +109,7 @@ export function ReportsTabs({
               key={tab.key}
               href={month && dated ? `${tab.path}?month=${month}` : tab.path}
               aria-current={active ? 'page' : undefined}
+              aria-label={tab.name}
               className={cn(
                 'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
                 'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',

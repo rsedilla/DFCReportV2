@@ -190,10 +190,6 @@
       "screen": "web/app/trends/page.tsx"
     },
     {
-      "route": "GET /api/v1/suynl/encounter-candidates",
-      "screen": "web/app/reports/encounter-candidates/page.tsx"
-    },
-    {
       "route": "GET /api/v1/dcc/owed",
       "screen": "web/app/dashboard/page.tsx"
     },

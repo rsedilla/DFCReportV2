@@ -20,7 +20,7 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
 
 /**
- * The Senior Pastors' *Number of Cells*, *Number of people*, *Encounter candidates* and
+ * The Senior Pastors' *Number of Cells*, *Number of Cell Leaders*, *Number of people* and
  * *Trends* at the API (SKILL.md sections 19 and 20; decision 0326, points 3, 4 and 5).
  *
  * The two Network roots are `Oriel Villanueva` (Men's) and `Gemma Bautista` (Women's), each
@@ -162,12 +162,6 @@ describe('Senior Pastor reports (decision 0326)', () => {
     return request(app.getHttpServer())
       .get('/api/v1/reports/trends')
       .query(query)
-      .set('Authorization', `Bearer ${as.accessToken}`);
-  }
-
-  function candidates(as: TestAccount): request.Test {
-    return request(app.getHttpServer())
-      .get('/api/v1/suynl/encounter-candidates')
       .set('Authorization', `Bearer ${as.accessToken}`);
   }
 
@@ -383,142 +377,6 @@ describe('Senior Pastor reports (decision 0326)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Encounter candidates
-  // ---------------------------------------------------------------------------
-
-  describe('GET /suynl/encounter-candidates', () => {
-    const lessons = async (person: TestPerson, numbers: number[]) => {
-      for (const lesson of numbers) {
-        await db
-          .insertInto('suynl_lessons')
-          .values({ person_id: person.id, lesson, confirmed_by: null, recorded_by: pastor.id })
-          .execute();
-      }
-    };
-
-    const supersededLesson = async (person: TestPerson, lesson: number) => {
-      await db
-        .insertInto('suynl_lessons')
-        .values({
-          person_id: person.id,
-          lesson,
-          confirmed_by: null,
-          recorded_by: pastor.id,
-          superseded_at: new Date(),
-          corrected_by: pastor.id,
-          correction_reason: 'Ticked against the wrong person.',
-        })
-        .execute();
-    };
-
-    const graduation = async (person: TestPerson, program: 'ENCOUNTER' | 'LIFE_CLASS') => {
-      await db
-        .insertInto('training_graduations')
-        .values({ person_id: person.id, program, confirmed_by: null, recorded_by: pastor.id })
-        .execute();
-    };
-
-    /**
-     *   Oriel (4 lessons)                          -> candidate, in Others
-     *     -> Ben Dizon (3 lessons)                 -> left out
-     *     -> Ana Cruz (5 lessons, ENCOUNTER)       -> left out
-     *          -> Dan Esguerra (4 lessons)         -> candidate, Ana's row
-     *          -> Silas Ybarra (5 lessons, archived) -> left out
-     *          -> Pio Quinto (3 current, 1 superseded) -> left out
-     *   Gemma
-     *     -> Cara Flores (6 lessons, LIFE_CLASS)   -> left out
-     *          -> Hana Ramos (4 lessons)           -> candidate, Cara's row
-     *   Adele Ocampo, outside the tree -> Ines Pineda (4 lessons) -> candidate, in Others
-     */
-    let ana: TestPerson;
-    let ben: TestPerson;
-    let cara: TestPerson;
-
-    beforeEach(async () => {
-      ben = await leader('Ben', 'Dizon', oriel);
-      ana = await leader('Ana', 'Cruz', oriel);
-      const dan = await leader('Dan', 'Esguerra', ana);
-      const silas = await createPerson(db, {
-        firstName: 'Silas',
-        lastName: 'Ybarra',
-        network: 'MENS',
-        archived: true,
-      });
-      await assignTo(db, silas.id, ana.id);
-      const pio = await leader('Pio', 'Quinto', ana);
-      cara = await leader('Cara', 'Flores', gemma);
-      const hana = await leader('Hana', 'Ramos', cara);
-      const adele = await createPerson(db, {
-        firstName: 'Adele',
-        lastName: 'Ocampo',
-        network: 'WOMENS',
-      });
-      const ines = await createPerson(db, {
-        firstName: 'Ines',
-        lastName: 'Pineda',
-        network: 'WOMENS',
-      });
-      await assignTo(db, ines.id, adele.id);
-
-      await lessons(oriel, [1, 2, 3, 4]);
-      await lessons(ben, [1, 2, 3]);
-      await lessons(ana, [1, 2, 3, 4, 5]);
-      await graduation(ana, 'ENCOUNTER');
-      await lessons(dan, [1, 2, 3, 4]);
-      await lessons(silas, [1, 2, 3, 4, 5]);
-      await lessons(pio, [1, 2, 3]);
-      await supersededLesson(pio, 4);
-      await lessons(cara, [1, 2, 3, 4, 5, 6]);
-      await graduation(cara, 'LIFE_CLASS');
-      await lessons(hana, [1, 2, 3, 4]);
-      await lessons(ines, [1, 2, 3, 4]);
-    });
-
-    interface CandidateTable {
-      root: { id: string };
-      network: string | null;
-      rows: { leader: { id: string }; candidates: number }[];
-    }
-
-    it('counts four or more current lessons and no Encounter or Life Class graduation, and the rows and Others add up', async () => {
-      const response = await candidates(pastor).expect(200);
-      const body = response.body as { total: number; tables: CandidateTable[]; others: number };
-
-      // Oriel, Dan, Hana and Ines. Not Ben (3), Pio (3 current), Ana (ENCOUNTER), Cara
-      // (LIFE_CLASS) or Silas (archived).
-      expect(body.total).toBe(4);
-
-      expect(body.tables.map((table) => table.root.id)).toEqual([oriel.id, gemma.id]);
-      expect(body.tables[0].rows.map((row) => [row.leader.id, row.candidates])).toEqual([
-        [ana.id, 1],
-        [ben.id, 0],
-      ]);
-      expect(body.tables[1].rows.map((row) => [row.leader.id, row.candidates])).toEqual([
-        [cara.id, 1],
-      ]);
-      // The root itself and the person outside the tree.
-      expect(body.others).toBe(2);
-
-      const rows = body.tables
-        .flatMap((table) => table.rows)
-        .reduce((sum, row) => sum + row.candidates, 0);
-      expect(rows + body.others).toBe(body.total);
-    });
-
-    it('stops counting somebody the moment an Encounter graduation is recorded for them', async () => {
-      const before = (await candidates(pastor).expect(200)).body as { total: number };
-      await graduation(oriel, 'ENCOUNTER');
-      const after = (await candidates(pastor).expect(200)).body as {
-        total: number;
-        others: number;
-      };
-
-      expect(after.total).toBe(before.total - 1);
-      expect(after.others).toBe(1);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
   // Trends
   // ---------------------------------------------------------------------------
 
@@ -615,7 +473,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
   // ---------------------------------------------------------------------------
 
   describe('authorization', () => {
-    it('refuses a Leader, with or without Full view, all three routes, while no Admin account exists', async () => {
+    it('refuses a Leader, with or without Full view, both routes, while no Admin account exists', async () => {
       const ana = await leader('Ana', 'Cruz', oriel);
       const ben = await leader('Ben', 'Dizon', oriel);
       const withFullView = await createAccount(app, db, {
@@ -637,13 +495,12 @@ describe('Senior Pastor reports (decision 0326)', () => {
 
       const last = shiftMonth(await currentMonth(), -1);
 
-      // Full view holds reports.view_subtree and suynl.view_subtree over its own subtree,
+      // Full view holds reports.view_subtree over its own subtree,
       // which does not cover the church.
       for (const response of [
         await counts(withFullView, last),
         await trends(withFullView, { figure: 'CELLS' }),
         await trends(withFullView, { figure: 'CELLS', leader_id: ana.id }),
-        await candidates(withFullView),
       ]) {
         expect({ status: response.status, code: response.body.error?.code }).toEqual({
           status: 403,
@@ -661,42 +518,6 @@ describe('Senior Pastor reports (decision 0326)', () => {
           code: 'CAPABILITY_DENIED',
         });
       }
-      // Encounter candidates' guard checks suynl.view_subtree first, which a Leader holds
-      // over their own subtree with or without Full view, so the refusal is on scope there
-      // before reports.view_subtree is reached.
-      const encounter = await candidates(without);
-      expect({ status: encounter.status, code: encounter.body.error?.code }).toEqual({
-        status: 403,
-        code: 'SCOPE_DENIED',
-      });
-    });
-
-    it('refuses Encounter candidates to a Leader granted suynl.view_subtree at Whole Church but holding reports.view_subtree over their subtree only', async () => {
-      const ana = await leader('Ana', 'Cruz', oriel);
-      const reader = await createAccount(app, db, {
-        person: ana,
-        roles: ['LEADER'],
-        fullView: true,
-      });
-      await db
-        .insertInto('capability_grants')
-        .values({
-          account_id: reader.id,
-          capability: 'suynl.view_subtree',
-          scope_type: 'WHOLE_CHURCH',
-          scope_network: null,
-          read_only: true,
-          reason: 'Invented for this case (CLAUDE.md, Secrets).',
-          granted_by: pastor.id,
-        })
-        .execute();
-
-      // The guard's capability is covered, so this is the controller's second check.
-      const response = await candidates(reader);
-      expect({ status: response.status, code: response.body.error?.code }).toEqual({
-        status: 403,
-        code: 'SCOPE_DENIED',
-      });
     });
 
     it('admits both Senior Pastors and an Admin', async () => {
@@ -713,7 +534,6 @@ describe('Senior Pastor reports (decision 0326)', () => {
       for (const reader of [pastor, otherPastor, admin]) {
         await counts(reader, last).expect(200);
         await trends(reader, { figure: 'PEOPLE' }).expect(200);
-        await candidates(reader).expect(200);
       }
     });
   });

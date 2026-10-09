@@ -172,7 +172,8 @@ export function DccReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ReportsHeading line="Who came to DCC (Doulos Cell Celebration), and where they are in their journey." />
-        <HowTheseAreCounted report="dcc" />
+        {/* Not for the Senior Pastors (owner, 2026-10-09). */}
+        {seniorPastor ? null : <HowTheseAreCounted report="dcc" />}
       </div>
       <ReportsTabs current="dcc" month={guardMonth}>
         <PeriodTabs
@@ -273,37 +274,49 @@ export function DccReport() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
-            {/* Coverage leads, as one line (decision 0224); its rows are under Filed reports. */}
+            {/* Coverage leads, as one line (decision 0224); its rows are under Filed reports. The
+                Senior Pastors read it on Record's Recording status instead (owner, 2026-10-09), and
+                see only a Sunday with no service, which section 9 names. */}
             <div className="text-sm">
-              <p>
-                <span className="font-bold tabular-nums">
-                  {twelve.data.coverage.met} of {twelve.data.coverage.owed}
-                </span>{' '}
-                records filed {what}
-                {kind === 'MONTH' ? (
-                  <>
-                    {' · '}
-                    <Link
-                      href={`/reports/filed?${new URLSearchParams({
-                        month: guardMonth,
-                        kind: 'dcc',
-                        ...(leader ? { leader, by: 'leader' } : {}),
-                        ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
-                      }).toString()}`}
-                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      see Filed reports
-                    </Link>
-                  </>
-                ) : null}
-              </p>
+              {seniorPastor ? null : (
+                <p>
+                  <span className="font-bold tabular-nums">
+                    {twelve.data.coverage.met} of {twelve.data.coverage.owed}
+                  </span>{' '}
+                  records filed {what}
+                  {kind === 'MONTH' ? (
+                    <>
+                      {' · '}
+                      <Link
+                        href={`/reports/filed?${new URLSearchParams({
+                          month: guardMonth,
+                          kind: 'dcc',
+                          ...(leader ? { leader, by: 'leader' } : {}),
+                          ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
+                        }).toString()}`}
+                        className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        see Filed reports
+                      </Link>
+                    </>
+                  ) : null}
+                </p>
+              )}
               {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
-              <p className="text-muted mt-1">
-                {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
-                {twelve.data.removed_events.length > 0
-                  ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
-                  : ''}
-              </p>
+              {seniorPastor ? (
+                twelve.data.removed_events.length > 0 ? (
+                  <p className="text-muted">
+                    No service on {twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}
+                  </p>
+                ) : null
+              ) : (
+                <p className="text-muted mt-1">
+                  {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
+                  {twelve.data.removed_events.length > 0
+                    ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                    : ''}
+                </p>
+              )}
             </div>
 
             {subject?.kind === 'NETWORK' ? (
@@ -347,7 +360,8 @@ export function DccReport() {
               />
             ) : null}
 
-            {kind === 'YEAR' ? (
+            {/* Not the month-by-month table for the Senior Pastors (owner, 2026-10-09). */}
+            {kind === 'YEAR' && !seniorPastor ? (
               <YearTable
                 key={`${start}-${JSON.stringify(subject)}`}
                 report="dcc"

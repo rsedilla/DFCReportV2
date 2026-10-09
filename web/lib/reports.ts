@@ -436,7 +436,7 @@ export async function getChurchCounts(period: string, signal?: AbortSignal): Pro
   );
 }
 
-export type TrendFigure = 'CG' | 'DCC' | 'CELLS' | 'PEOPLE';
+export type TrendFigure = 'CG' | 'DCC' | 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 
 /** `GET /reports/trends`: twelve months of one figure (decision 0326, point 4). */
 export interface Trends {
@@ -461,22 +461,4 @@ export async function getTrends(
     params.set('leader_id', leaderId);
   }
   return authenticatedRequest<Trends>(`/api/v1/reports/trends?${params.toString()}`, { signal });
-}
-
-/** `GET /suynl/encounter-candidates` (decision 0326): as of now. */
-export interface EncounterCandidates {
-  total: number;
-  tables: {
-    root: { id: string; member_id: string | null; full_name: string | null };
-    network: 'MENS' | 'WOMENS' | null;
-    rows: {
-      leader: { id: string; member_id: string | null; full_name: string | null };
-      candidates: number;
-    }[];
-  }[];
-  others: number;
-}
-
-export async function getEncounterCandidates(signal?: AbortSignal): Promise<EncounterCandidates> {
-  return authenticatedRequest<EncounterCandidates>('/api/v1/suynl/encounter-candidates', { signal });
 }

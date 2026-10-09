@@ -477,7 +477,7 @@ export class ReportingController {
    * with it, that leader's branch alone — one leader at a time, never two, so the graph cannot
    * rank them (sections 13 and 17). Each point is the figure its tab leads with: CG and DCC
    * attendance the month's unique people (sections 9 and 12), Number of Cells its Cell Groups,
-   * Number of people its People. A month a figure cannot be read for is null, and the screen
+   * Number of Cell Leaders its Cell Leaders, Number of people its People. A month a figure cannot be read for is null, and the screen
    * says so (decision 0257).
    */
   @Get('trends')
@@ -536,14 +536,16 @@ export class ReportingController {
   ): Promise<Map<string, number | null>> {
     const values = new Map<string, number | null>();
 
-    if (figure === 'CELLS' || figure === 'PEOPLE') {
+    if (figure === 'CELLS' || figure === 'CELL_LEADERS' || figure === 'PEOPLE') {
       const counts = await this.reporting.churchCounts(month, branches);
       const pick = (figures: ChurchCountFigures | null | undefined) =>
         figures === null || figures === undefined
           ? null
           : figure === 'CELLS'
             ? figures.cellGroups
-            : figures.people;
+            : figure === 'CELL_LEADERS'
+              ? figures.cellLeaders
+              : figures.people;
       values.set('church', pick(counts.wholeChurch));
       for (const id of branches) {
         values.set(id, pick(counts.branches.get(canonicalId(id))));

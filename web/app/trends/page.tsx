@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -13,11 +14,18 @@ import { getChurchCounts, getTrends, type TrendFigure, type Trends } from '@/lib
 import { monthFromQuery } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 
-const FIGURES: readonly { key: TrendFigure; label: string; what: string }[] = [
+/** The same five names as Reports (owner, 2026-10-09); a `#` label keeps its words as its name. */
+const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: string }[] = [
   { key: 'CG', label: 'CG attendance', what: 'the different people who came to a Cell Group in the month' },
   { key: 'DCC', label: 'DCC attendance', what: 'the different people who came to DCC in the month' },
-  { key: 'CELLS', label: 'Number of Cells', what: 'the Cell Groups running on the month’s last day' },
-  { key: 'PEOPLE', label: 'Number of people', what: 'everyone in the branch on the month’s last day' },
+  { key: 'CELLS', label: '# of Cells', name: 'Number of Cells', what: 'the Cell Groups running on the month’s last day' },
+  {
+    key: 'CELL_LEADERS',
+    label: '# of Cell Leaders',
+    name: 'Number of Cell Leaders',
+    what: 'the people leading a Cell on the month’s last day',
+  },
+  { key: 'PEOPLE', label: '# of people', name: 'Number of people', what: 'everyone in the branch on the month’s last day' },
 ];
 
 /**
@@ -27,8 +35,10 @@ const FIGURES: readonly { key: TrendFigure; label: string; what: string }[] = [
  * **Three lines, or one.** The whole church and each root's branch, named by the pastor with
  * their Network beside (decision 0294); or one leader's branch chosen by name. **One leader is
  * drawn at a time, never two**, so the graph cannot rank them (sections 13 and 17). The lines
- * are told apart by weight, dash and a name at each line's end, not by colour, and the same
- * figures follow in a table. A month a figure could not be read for is a gap, and says so.
+ * are told apart by weight and dash, and by colour beside them (owner, 2026-10-09): green the
+ * church, blue the Men's root's branch, pink the Women's, a single leader's line in ink. Named in a key above the graph
+ * rather than at their ends, where two lines ending on one value overlapped (owner,
+ * 2026-10-09); the same figures follow in a table. A month a figure could not be read for is a gap, and says so.
  */
 export default function TrendsPage() {
   return (
@@ -66,8 +76,11 @@ function TrendsScreen() {
 
       <ViewSwitch
         label="Report"
-        className="mt-4"
-        options={FIGURES.map((entry) => ({ key: entry.key, label: entry.label }))}
+        // One row of equal buttons, as the period switch on Reports (owner, 2026-10-09).
+        even
+        // Two rows of three on a phone, where five equal columns are too narrow for the words.
+        className="mt-4 max-w-3xl grid-flow-row grid-cols-3 sm:grid-flow-col sm:grid-cols-none"
+        options={FIGURES.map((entry) => ({ key: entry.key, label: entry.label, name: entry.name }))}
         value={figure}
         onChange={(next) => go({ figure: next === 'CG' ? null : next })}
       />
@@ -85,7 +98,7 @@ function TrendsScreen() {
         {(roster.data?.tables ?? []).map((table) => (
           <optgroup
             key={table.root.id}
-            label={`${table.root.full_name ?? 'A Network root'}’s ${table.rows.length} leaders`}
+            label={`${table.root.full_name ?? 'A Network root'}’s leaders`}
           >
             {table.rows.map((row) => (
               <option key={row.leader.id} value={row.leader.id}>
@@ -103,7 +116,7 @@ function TrendsScreen() {
       {trends.isPending ? (
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
-        <TrendsChart data={data} label={chosen.label} what={chosen.what} />
+        <TrendsChart data={data} label={chosen.name ?? chosen.label} what={chosen.what} />
       ) : null}
     </main>
   );
@@ -123,21 +136,39 @@ function lineName(line: Trends['lines'][number], index: number, single: boolean)
 }
 
 function TrendsChart({ data, label, what }: { data: Trends; label: string; what: string }) {
+  const [shown, setShown] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
+  const [drawn, setDrawn] = useState(720);
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) =>
+      setDrawn(Math.max(280, Math.round(entry.contentRect.width))),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const single = data.lines.length === 1;
   const lines = data.lines.map((line, index) => ({
     name: lineName(line, index, single),
     values: line.values,
-    // Told apart by weight and dash, never by colour (decision 0326, point 4).
+    // Told apart by weight and dash first; colour is added, never the only difference (1.4.1).
     width: index === 0 ? 3 : 1.75,
     dash: index === 2 ? '6 4' : undefined,
+    tone: single ? 'text-ink' : (['text-chart-green', 'text-chart-blue', 'text-chart-pink'][index] ?? 'text-ink'),
   }));
   const short = (month: string) =>
     new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 
-  const W = 720;
-  const H = 260;
+  // Drawn at the width it is shown at, so its labels stay 12px on a phone rather than
+  // shrinking with a fixed drawing (owner's request to tidy, 2026-10-09).
+  const W = drawn;
+  const H = W < 520 ? 220 : 260;
+  const narrow = W < 520;
   const left = 48;
-  const right = 170;
+  const right = 16;
   const top = 16;
   const bottom = 32;
   const known = lines.flatMap((line) => line.values.filter((value): value is number => value !== null));
@@ -176,30 +207,57 @@ function TrendsChart({ data, label, what }: { data: Trends; label: string; what:
       </h2>
       <p className="text-muted text-xs">Each point counts {what}.</p>
 
+      {single ? null : (
+        <ul aria-label="Lines" className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          {lines.map((line) => (
+            <li key={line.name} className="flex items-center gap-2">
+              <svg width="32" height="10" aria-hidden="true" className={`${line.tone} shrink-0`}>
+                <line
+                  x1="0"
+                  x2="32"
+                  y1="5"
+                  y2="5"
+                  stroke="currentColor"
+                  strokeWidth={line.width}
+                  strokeDasharray={line.dash}
+                />
+              </svg>
+              {line.name}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div ref={frame} className="mt-2 w-full">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="text-ink mt-2 w-full"
+        width={W}
+        height={H}
+        className="text-ink block max-w-full"
         role="img"
-        aria-label={`${label}, ${rangeLabel('MONTH', data.months[0])} to ${rangeLabel('MONTH', data.months[last])}: ${lines.map((line) => line.name).join(', ')}. The figures follow in a table.`}
+        aria-label={`${label}, ${rangeLabel('MONTH', data.months[0])} to ${rangeLabel('MONTH', data.months[last])}: ${lines.map((line) => line.name).join(', ')}. The figures are under Show the figures.`}
       >
         {ticks.map((t) => (
           <g key={t}>
             <line x1={left} x2={W - right} y1={y(t)} y2={y(t)} className="text-line" stroke="currentColor" />
-            <text x={left - 6} y={y(t) + 4} textAnchor="end" className="text-muted fill-current text-[11px]">
+            <text x={left - 6} y={y(t) + 4} textAnchor="end" className="text-muted fill-current text-[12px]">
               {t.toLocaleString()}
             </text>
           </g>
         ))}
-        {data.months.map((month, i) => (
-          <text key={month} x={x(i)} y={H - 10} textAnchor="middle" className="text-muted fill-current text-[11px]">
-            {short(month)}
-          </text>
-        ))}
+        {data.months.map((month, i) =>
+          // On a phone every other month is named, and always the last, so the names never touch.
+          narrow && (last - i) % 2 === 1 ? null : (
+            <text key={month} x={x(i)} y={H - 10} textAnchor="middle" className="text-muted fill-current text-[12px]">
+              {short(month)}
+            </text>
+          ),
+        )}
         {lines.map((line) => {
           const end = line.values[last];
 
           return (
-            <g key={line.name}>
+            <g key={line.name} className={line.tone}>
               {runs(line.values).map((run) => (
                 <polyline
                   key={run[0].i}
@@ -215,24 +273,26 @@ function TrendsChart({ data, label, what }: { data: Trends; label: string; what:
                   <circle key={i} cx={x(i)} cy={y(v)} r={2.5} fill="currentColor" />
                 ),
               )}
+              {/* The current month is open, so its point is hollow. */}
               {end === null ? null : (
-                <>
-                  {/* The current month is open, so its point is hollow. */}
-                  <circle cx={x(last)} cy={y(end)} r={3.5} className="fill-surface" stroke="currentColor" strokeWidth={1.5} />
-                  <text x={W - right + 8} y={y(end) + 4} className="fill-current text-[12px] font-bold">
-                    {line.name}
-                  </text>
-                </>
+                <circle cx={x(last)} cy={y(end)} r={3.5} className="fill-surface" stroke="currentColor" strokeWidth={1.5} />
               )}
             </g>
           );
         })}
       </svg>
+      </div>
       <p className="text-muted text-xs">
         The hollow point is {rangeLabel('MONTH', data.months[last])}, still open, so far.
         {gaps.length > 0 ? ' A gap is a month this figure could not be read for.' : ''}
       </p>
 
+      {/* The graph alone until the reader asks for the figures (owner, 2026-10-09): the table
+          is the graph's text alternative (1.1.1) and the exact figure where two lines meet. */}
+      <details className="mt-4" onToggle={(event) => setShown(event.currentTarget.open)}>
+        <summary className="border-edge focus-visible:outline-accent inline-flex min-h-11 cursor-pointer items-center rounded-md border px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2">
+          {shown ? 'Hide the figures' : 'Show the figures'}
+        </summary>
       <Table caption={`${label} by month`} className="mt-4">
         <thead>
           <tr>
@@ -267,6 +327,7 @@ function TrendsChart({ data, label, what }: { data: Trends; label: string; what:
           ))}
         </tbody>
       </Table>
+      </details>
     </section>
   );
 }

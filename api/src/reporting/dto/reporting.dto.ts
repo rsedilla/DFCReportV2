@@ -221,8 +221,8 @@ export class ChurchCountsDto {
   period!: string;
 }
 
-/** The four figures *Trends* draws (decision 0326, point 4). */
-export const TREND_FIGURES = ['CG', 'DCC', 'CELLS', 'PEOPLE'] as const;
+/** The five figures *Trends* draws (decision 0326, point 4; Cell Leaders, owner 2026-10-09). */
+export const TREND_FIGURES = ['CG', 'DCC', 'CELLS', 'CELL_LEADERS', 'PEOPLE'] as const;
 export type TrendFigure = (typeof TREND_FIGURES)[number];
 
 /** `GET /reports/trends`: twelve months of one figure, for the church or one leader's branch. */

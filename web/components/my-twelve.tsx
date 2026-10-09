@@ -45,6 +45,7 @@ export function PeriodTabs({
     <ViewSwitch
       label="Report period"
       options={PERIODS.map(([key, label]) => ({ key, label }))}
+      even
       value={value}
       onChange={onChange}
     />
@@ -275,13 +276,14 @@ export function TwelveTable({
  *
  * **Decision 0293's two lines sit once, under both tables**: somebody at Cells in two branches
  * is in both rows, so one line takes off each count beyond a person's first and another adds
- * those in no row, the roots among them, and the People column adds up to the total.
+ * those in no row, the roots among them, and the Total column adds up to the total.
+ *
+ * **Total comes first and there is no People column** (owner, 2026-10-09): a row's Total is
+ * its unique people, which is VIP through Regular added, everyone being in one stage.
  */
 export function RootLeadersTwelve({
   twelve,
-  kind,
   openHref,
-  where = 'a Cell',
 }: {
   twelve: Omit<CellTwelve, 'own' | 'coverage'>;
   kind: RangeKind;
@@ -292,23 +294,21 @@ export function RootLeadersTwelve({
   const roots = twelve.roots ?? [];
 
   return (
-    <section aria-labelledby="root-leaders-heading" className={FRAME}>
+    // Unframed, so the tables take the whole width, and headed in two words (owner, 2026-10-09).
+    // The period's open tag, beside the period above, says when a figure is *so far* (section 17).
+    <section aria-labelledby="root-leaders-heading">
       <h2 id="root-leaders-heading" className="field-label">
-        Whole Church · their journey
+        Whole Church
       </h2>
-      <p className="text-muted mt-1 text-sm leading-relaxed">
-        Everyone who came to {where} {WHAT[kind]}, counted once, at their stage{' '}
-        {twelve.open ? 'so far' : 'by its end'}. Open a name to see their 12.
-      </p>
 
       <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
         <div className="border-line border p-2">
-          <dt className="text-muted text-xs">Total</dt>
+          <dt className="text-ink text-sm font-bold">Total</dt>
           <dd className="text-xl font-bold tabular-nums">{twelve.total.unique_people}</dd>
         </div>
         {STAGES.map(([key, label]) => (
           <div key={key} className="border-line border p-2">
-            <dt className="text-muted text-xs">{label}</dt>
+            <dt className="text-ink text-sm font-bold">{label}</dt>
             <dd className="text-xl font-bold tabular-nums">{twelve.total.classification[key]}</dd>
           </div>
         ))}
@@ -316,9 +316,8 @@ export function RootLeadersTwelve({
 
       {roots.map((root) => {
         const rows = twelve.rows.filter((row) => row.root_id === root.id);
-        const heading = `${root.full_name ?? 'A Network root'}’s ${rows.length} ${
-          rows.length === 1 ? 'leader' : 'leaders'
-        }`;
+        // No count in the heading (owner, 2026-10-09): the rows are there to see.
+        const heading = `${root.full_name ?? 'A Network root'}’s leaders`;
 
         return (
           <div key={root.id} className="mt-5">
@@ -326,18 +325,22 @@ export function RootLeadersTwelve({
             <Table caption={heading} className="mt-2">
               <thead>
                 <tr>
-                  <HeaderCell>Leader</HeaderCell>
+                  <HeaderCell style={{ width: '34%' }}>Leader</HeaderCell>
+                  {/* The six figures share the rest of the row equally (owner, 2026-10-09). */}
+                  <HeaderCell className="text-right" style={{ width: '11%' }}>
+                    Total
+                  </HeaderCell>
                   {STAGES.map(([key, label]) => (
-                    <HeaderCell key={key} className="text-right">
+                    <HeaderCell key={key} className="text-right" style={{ width: '11%' }}>
                       {label}
                     </HeaderCell>
                   ))}
-                  <HeaderCell className="text-right">People</HeaderCell>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, index) => (
-                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
+                  // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
+                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
                     <td className="px-3 py-3">
                       {row.leader === null ? (
                         <span className="text-muted">A leader you don’t oversee</span>
@@ -350,12 +353,12 @@ export function RootLeadersTwelve({
                         </Link>
                       )}
                     </td>
+                    <td className={`${cell} font-bold`}>{row.unique_people}</td>
                     {STAGES.map(([key]) => (
                       <td key={key} className={cell}>
                         {row.classification[key]}
                       </td>
                     ))}
-                    <td className={`${cell} font-bold`}>{row.unique_people}</td>
                   </tr>
                 ))}
               </tbody>

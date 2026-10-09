@@ -166,7 +166,8 @@ export function CellReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
-        <HowTheseAreCounted report="cells" />
+        {/* Not for the Senior Pastors (owner, 2026-10-09). */}
+        {seniorPastor ? null : <HowTheseAreCounted report="cells" />}
       </div>
       <ReportsTabs current="cells" month={guardMonth}>
         <PeriodTabs
@@ -254,30 +255,33 @@ export function CellReport() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
-            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. */}
-            <p className="text-sm">
-              <span className="font-bold tabular-nums">
-                {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
-              </span>{' '}
-              meetings recorded {what}
-              {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
-                ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
-                : ''}
-              {kind === 'MONTH' ? (
-                <>
-                  {' · '}
-                  <Link
-                    href={`/reports/filed?${new URLSearchParams({
-                      month: guardMonth,
-                      ...(leader ? { leader, by: 'leader' } : {}),
-                    }).toString()}`}
-                    className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    see Filed reports
-                  </Link>
-                </>
-              ) : null}
-            </p>
+            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. The
+                Senior Pastors read it on Record's Recording status instead (owner, 2026-10-09). */}
+            {seniorPastor ? null : (
+              <p className="text-sm">
+                <span className="font-bold tabular-nums">
+                  {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
+                </span>{' '}
+                meetings recorded {what}
+                {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
+                  ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
+                  : ''}
+                {kind === 'MONTH' ? (
+                  <>
+                    {' · '}
+                    <Link
+                      href={`/reports/filed?${new URLSearchParams({
+                        month: guardMonth,
+                        ...(leader ? { leader, by: 'leader' } : {}),
+                      }).toString()}`}
+                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      see Filed reports
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            )}
 
             {subject?.kind === 'ROOT_LEADERS' ? (
               <RootLeadersTwelve
@@ -294,7 +298,8 @@ export function CellReport() {
               />
             )}
 
-            {kind === 'YEAR' ? (
+            {/* Not the month-by-month table for the Senior Pastors (owner, 2026-10-09). */}
+            {kind === 'YEAR' && !seniorPastor ? (
               <YearTable
                 key={`${start}-${JSON.stringify(subject)}`}
                 report="cells"

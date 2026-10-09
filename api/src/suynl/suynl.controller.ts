@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
-import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import { type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { NotFoundError } from '../common/errors/api-error';
@@ -31,7 +31,6 @@ export class SuynlController {
   constructor(
     private readonly suynl: SuynlService,
     private readonly peopleRead: PeopleReadService,
-    private readonly authorization: AuthorizationService,
   ) {}
 
   /** The three count cards (decision 0281). */
@@ -87,65 +86,6 @@ export class SuynlController {
       names: query.names !== false,
       totalNames: query.total_names === true,
     });
-  }
-
-  /**
-   * The Senior Pastors' *Encounter candidates* (decision 0326, point 3): a total, and each
-   * root's direct leaders with theirs, then *Others*.
-   *
-   * **Whole Church only, under both capabilities the ruling names**: `suynl.view_subtree` in
-   * the guard, against the church, and `reports.view_subtree` here, because it is a figure
-   * on `Reports` (section 7). A reader holding either over a subtree is refused rather than
-   * handed a narrower figure under a church-wide heading.
-   */
-  @Get('encounter-candidates')
-  @RequiresCapability(Capability.SuynlViewSubtree, { kind: 'church' })
-  async encounterCandidates(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
-    await this.authorization.authorize(actor, Capability.ReportsViewSubtree, { kind: 'church' });
-
-    const figures = await this.suynl.encounterCandidates();
-    const identities = await this.peopleRead.forDecisions(
-      figures.tables.flatMap((table) => [table.rootId, ...table.rows.map((row) => row.leaderId)]),
-    );
-    const person = (id: string) => {
-      const identity = identities.get(id);
-
-      return {
-        id,
-        member_id: identity?.memberId ?? null,
-        full_name: identity?.fullName ?? null,
-        last_name: identity?.lastName ?? null,
-        first_name: identity?.firstName ?? null,
-      };
-    };
-
-    // Men's root first, rows by surname, first name and Member ID, never by a figure
-    // (sections 13 and 17, decision 0325).
-    const nameKey = (id: string) => {
-      const identity = identities.get(id);
-
-      return [identity?.lastName ?? '￿', identity?.firstName ?? '', identity?.memberId ?? id];
-    };
-    const byName = (left: string, right: string) => {
-      const a = nameKey(left);
-      const b = nameKey(right);
-
-      return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
-    };
-
-    return {
-      total: figures.total,
-      tables: [...figures.tables]
-        .sort((left, right) => Number(left.network !== 'MENS') - Number(right.network !== 'MENS'))
-        .map((table) => ({
-          root: person(table.rootId),
-          network: table.network,
-          rows: [...table.rows]
-            .sort((left, right) => byName(left.leaderId, right.leaderId))
-            .map((row) => ({ leader: person(row.leaderId), candidates: row.candidates })),
-        })),
-      others: figures.others,
-    };
   }
 
   /**

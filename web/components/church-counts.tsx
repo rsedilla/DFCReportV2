@@ -3,30 +3,38 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
+import { RangeNavigator } from '@/components/my-twelve';
+import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { describeFailure } from '@/lib/messages';
-import { rangeLabel, shiftRange } from '@/lib/report-range';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 
-type Figure = 'CELLS' | 'PEOPLE';
+type Figure = 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 
 const COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
   CELLS: [
-    ['cell_groups', 'Cell Groups'],
+    // Every Cell is Youth, Young Pro or Couple, so the Cell Groups are their total (owner, 2026-10-09).
+    ['cell_groups', 'Total'],
     ['youth', 'Youth'],
     ['young_pro', 'Young Pro'],
     ['couple', 'Couple'],
-    ['cell_leaders', 'Cell Leaders'],
   ],
+  CELL_LEADERS: [['cell_leaders', 'Cell Leaders']],
   PEOPLE: [['people', 'People']],
 };
 
+const LABEL: Record<Figure, string> = {
+  CELLS: 'Number of Cells',
+  CELL_LEADERS: 'Number of Cell Leaders',
+  PEOPLE: 'Number of people',
+};
+
 /**
- * The Senior Pastors' *Number of Cells* or *Number of people* (decision 0326, point 3).
+ * The Senior Pastors' *Number of Cells*, *Number of Cell Leaders* or *Number of people*
+ * (decision 0326, point 3).
  *
  * **A month at a time, with previous and next**: a month that has ended is counted on its last
  * day, and the current month as of now, *so far*. The whole church first, then one table for
@@ -54,22 +62,21 @@ export function ChurchCountsPanel({
   const data = counts.data;
 
   return (
-    <section aria-label={figure === 'CELLS' ? 'Number of Cells' : 'Number of people'}>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button variant="secondary" onClick={() => go({ month: shiftRange('MONTH', month, -1) })}>
-          Previous month
-        </Button>
-        <p className="text-sm font-bold" aria-live="polite">
-          {rangeLabel('MONTH', month)}
-          <span className="text-muted font-normal"> · {asAt(month, month === current)}</span>
-        </p>
-        <Button
-          variant="secondary"
-          disabled={month === current}
-          onClick={() => go({ month: shiftRange('MONTH', month, 1) })}
-        >
-          Next month
-        </Button>
+    <section aria-label={LABEL[figure]}>
+      {/* The same ‹ › month control as CG and DCC attendance (owner, 2026-10-09), in the same bar. */}
+      <div className={`mt-4 ${CONTROL_BAR}`}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <RangeNavigator
+            kind="MONTH"
+            start={month}
+            current={current}
+            open={undefined}
+            onChange={(value) => go({ month: value })}
+          />
+          <span className="text-muted text-sm" aria-live="polite">
+            {asAt(month, month === current)}
+          </span>
+        </div>
       </div>
 
       <div className="mt-4">
@@ -80,16 +87,17 @@ export function ChurchCountsPanel({
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
         <>
+          <h2 className="field-label mt-4">Whole Church</h2>
           <dl
             className={
               figure === 'CELLS'
-                ? 'mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5'
-                : 'mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3'
+                ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4'
+                : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
             }
           >
             {COLUMNS[figure].map(([key, label]) => (
               <div key={key} className="border-line border p-3">
-                <dt className="text-muted text-sm">{label} · Whole Church</dt>
+                <dt className="text-ink text-sm font-bold">{label}</dt>
                 <dd className="mt-1 text-xl font-bold tabular-nums">
                   {data.whole_church[key].toLocaleString()}
                 </dd>
@@ -140,9 +148,8 @@ function CountTable({
   figure: Figure;
   table: NonNullable<ChurchCounts['tables']>[number];
 }) {
-  const heading = `${table.root.full_name ?? 'A Network root'}’s ${table.rows.length} ${
-    table.rows.length === 1 ? 'leader' : 'leaders'
-  }`;
+  // No count in the heading (owner, 2026-10-09).
+  const heading = `${table.root.full_name ?? 'A Network root'}’s leaders`;
 
   return (
     <div className="mt-6">
@@ -151,9 +158,14 @@ function CountTable({
       <Table caption={heading} className="mt-2 hidden lg:block">
         <thead>
           <tr>
-            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell style={{ width: '36%' }}>Leader</HeaderCell>
+            {/* The figures share the rest of the row equally (owner, 2026-10-09). */}
             {COLUMNS[figure].map(([key, label]) => (
-              <HeaderCell key={key} className="text-right">
+              <HeaderCell
+                key={key}
+                className="text-right"
+                style={{ width: `${64 / COLUMNS[figure].length}%` }}
+              >
                 {label}
               </HeaderCell>
             ))}
@@ -161,7 +173,8 @@ function CountTable({
         </thead>
         <tbody>
           {table.rows.map((row) => (
-            <tr key={row.leader.id} className={rowClasses}>
+            // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
+            <tr key={row.leader.id} className={`${rowClasses} even:bg-raised`}>
               <td className="px-3 py-3">
                 <BranchLink leader={row.leader} />
               </td>
@@ -178,7 +191,7 @@ function CountTable({
       {/* On a phone each leader is two short lines (owner, 2026-10-08). */}
       <ul className="mt-2 flex flex-col lg:hidden">
         {table.rows.map((row) => (
-          <li key={row.leader.id} className="border-line border-b py-2">
+          <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
             <BranchLink leader={row.leader} />
             <p className="text-muted text-sm tabular-nums">
               {COLUMNS[figure].map(([key, label]) => `${label} ${row[key]}`).join(' · ')}
