@@ -5051,6 +5051,8 @@ Sorting a leader's **own Cells** by those figures is permitted and useful — th
 
 Additive changes — a new optional field, a new endpoint — do not require a new version. Removing a field, renaming one, narrowing a type, or changing the meaning of an existing value does. When in doubt, add rather than change.
 
+**Until the first native client is released, `/api/v1` may be narrowed** where the web application ships the matching change in the same deployment (owner ruling of 2026-10-10, decision 0328). The rule above exists for installed builds that cannot be updated, and before one is released there are none. A browser tab still holding the previous page is refused until it reloads, which is the accepted cost. From the first native release the rule above applies without exception.
+
 Controllers/routes should delegate to authorization and application/domain services rather than containing SQL/business logic directly.
 
 ---

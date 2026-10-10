@@ -1,8 +1,8 @@
 # 2026-10-10 — A birthday and a mobile number are asked for, unless not given yet
 
 Owner ruling, 2026-10-10, at Bishop Oriel's request. It amends Section 3's rule that both
-fields are optional, Section 9's registration steps 4 and 5, and the sentences in Sections 2 and
-28 that rested on it.
+fields are optional, Section 9's registration steps 4 and 5, the sentences in Sections 2 and
+28 that rested on it, and Section 22's versioning rule.
 
 ## The ruling
 
@@ -41,6 +41,11 @@ available, so asking is required and inventing is still never needed.
 
 More recorded numbers means more relatives on one household number matching at Tier 1 and
 Tier 2 (Section 3). The matching rules are unchanged.
+
+Refusing a body the route accepted yesterday narrows `/api/v1`, which Section 22 forbids. The
+owner ruled the same day that until the first native client is released the API may be narrowed
+when the web application ships the matching change in the same deployment, and Section 22 now
+says so.
 
 Decision 0328, indexed in [CLAUDE.md](../../CLAUDE.md).
 
