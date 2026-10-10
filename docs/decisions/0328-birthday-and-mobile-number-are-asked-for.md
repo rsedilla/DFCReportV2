@@ -11,7 +11,7 @@ them ticks *Not given yet*.** `POST /api/v1/people` refuses a request that leave
 blank without its tick, as `VALIDATION_FAILED` naming the field. The ticks travel as
 `birth_date_not_given` and `mobile_number_not_given`, both booleans, both optional, both on
 that route alone. A field is blank when its key is absent, `null`, or a string with nothing but
-spaces. A value sent together with its tick is refused the same way, because the
+spaces. A value sent together with its tick is refused the same way, naming the tick, because the
 request then says two things about one field.
 
 **2. Nothing is stored about the tick.** A Person added with *Not given yet* is recorded with

@@ -1454,6 +1454,201 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  describe('birthday and mobile number are asked for (decision 0328)', () => {
+    // SKILL.md section 3, Required personal information: both are required when a
+    // Person is added, unless *Not given yet* is ticked. Blank is an absent key, null,
+    // or a string of nothing but spaces. A value beside its tick is refused, and
+    // nothing about the tick is stored. Bodies are written out in full here rather
+    // than through `personBody`, which adds the ticks for a case that does not care.
+
+    const BIRTHDAY = '1991-07-19';
+    const MOBILE = '0917 555 0142';
+
+    function body(overrides: Record<string, unknown>): Record<string, unknown> {
+      const sent: Record<string, unknown> = {
+        first_name: 'Celia',
+        last_name: 'Marquez',
+        birth_date: BIRTHDAY,
+        mobile_number: MOBILE,
+        sex: 'FEMALE',
+        civil_status: 'SINGLE',
+        pastoral_leader_id: geraldine.id,
+        ...overrides,
+      };
+      // An override of `undefined` means the key is absent from the body, not sent.
+      for (const key of Object.keys(sent)) if (sent[key] === undefined) delete sent[key];
+      return sent;
+    }
+
+    async function personCount(): Promise<number> {
+      return (await db.selectFrom('persons').select('id').execute()).length;
+    }
+
+    async function storedRow(id: string) {
+      return db
+        .selectFrom('persons')
+        .select(['birth_date', 'mobile_number', 'mobile_number_normalized'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+    }
+
+    async function expectRefusedNaming(sent: Record<string, unknown>, fields: string[]) {
+      const before = await personCount();
+      const response = await post(adminAccount, randomUUID()).send(sent);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const named = (response.body.error.details.fields as { field: string }[]).map(
+        (entry) => entry.field,
+      );
+      expect(named.some((field) => fields.includes(field))).toBe(true);
+
+      // The status says nothing about whether a row was written; this does.
+      expect(await personCount()).toBe(before);
+    }
+
+    it.each([
+      ['absent', undefined],
+      ['null', null],
+      ['an empty string', ''],
+      ['spaces only', '   '],
+    ])('refuses a birthday that is %s without its tick, naming birth_date', async (_, value) => {
+      await expectRefusedNaming(body({ birth_date: value }), ['birth_date']);
+    });
+
+    it.each([
+      ['absent', undefined],
+      ['null', null],
+      ['an empty string', ''],
+      ['spaces only', '   '],
+    ])(
+      'refuses a mobile number that is %s without its tick, naming mobile_number',
+      async (_, value) => {
+        await expectRefusedNaming(body({ mobile_number: value }), ['mobile_number']);
+      },
+    );
+
+    it('refuses birth_date_not_given beside a birthday', async () => {
+      // The request says two things about one field (decision 0328, point 1). Either
+      // name is a fair answer to which field is at fault, so either is accepted.
+      await expectRefusedNaming(body({ birth_date_not_given: true }), [
+        'birth_date',
+        'birth_date_not_given',
+      ]);
+    });
+
+    it('refuses mobile_number_not_given beside a number', async () => {
+      await expectRefusedNaming(body({ mobile_number_not_given: true }), [
+        'mobile_number',
+        'mobile_number_not_given',
+      ]);
+    });
+
+    it.each([
+      ['absent', undefined],
+      ['null', null],
+      ['an empty string', ''],
+      ['spaces only', '   '],
+    ])('accepts a ticked birthday that is %s, and stores no birthday', async (_, value) => {
+      const response = await post(adminAccount, randomUUID()).send(
+        body({ birth_date: value, birth_date_not_given: true }),
+      );
+
+      expect(response.status).toBe(201);
+      const stored = await storedRow(response.body.id);
+      // Null, never a placeholder (section 3, Never fabricate one).
+      expect(stored.birth_date).toBeNull();
+      expect(stored.mobile_number).toBe(MOBILE);
+    });
+
+    it.each([
+      ['absent', undefined],
+      ['null', null],
+      ['an empty string', ''],
+      ['spaces only', '   '],
+    ])('accepts a ticked mobile number that is %s, and stores no number', async (_, value) => {
+      const response = await post(adminAccount, randomUUID()).send(
+        body({ mobile_number: value, mobile_number_not_given: true }),
+      );
+
+      expect(response.status).toBe(201);
+      const stored = await storedRow(response.body.id);
+      expect(stored.mobile_number).toBeNull();
+      // The matcher reads the normalized column; a blank stored there would let two
+      // people with no number match each other at Tier 1 (section 3).
+      expect(stored.mobile_number_normalized).toBeNull();
+      expect(stored.birth_date).toBe(BIRTHDAY);
+    });
+
+    it('accepts both ticks together, storing neither field', async () => {
+      const response = await post(adminAccount, randomUUID()).send(
+        body({
+          birth_date: undefined,
+          mobile_number: undefined,
+          birth_date_not_given: true,
+          mobile_number_not_given: true,
+        }),
+      );
+
+      expect(response.status).toBe(201);
+      const stored = await storedRow(response.body.id);
+      expect(stored.birth_date).toBeNull();
+      expect(stored.mobile_number).toBeNull();
+      expect(stored.mobile_number_normalized).toBeNull();
+    });
+
+    it('stores both as sent when both are given with no tick', async () => {
+      const response = await post(adminAccount, randomUUID()).send(body({}));
+
+      expect(response.status).toBe(201);
+      const stored = await storedRow(response.body.id);
+      expect(stored.birth_date).toBe(BIRTHDAY);
+      expect(stored.mobile_number).toBe(MOBILE);
+      expect(stored.mobile_number_normalized).not.toBeNull();
+    });
+
+    it('accepts a false tick beside a value, as no tick at all', async () => {
+      const response = await post(adminAccount, randomUUID()).send(
+        body({ birth_date_not_given: false, mobile_number_not_given: false }),
+      );
+
+      expect(response.status).toBe(201);
+      const stored = await storedRow(response.body.id);
+      expect(stored.birth_date).toBe(BIRTHDAY);
+      expect(stored.mobile_number).toBe(MOBILE);
+    });
+
+    it('does not require either on an edit that changes only the name', async () => {
+      // Decision 0328, point 4: PATCH keeps its rules, so a record added without a
+      // birthday or a number can still have its name corrected.
+      const created = await post(adminAccount, randomUUID()).send(
+        body({
+          birth_date: undefined,
+          mobile_number: undefined,
+          birth_date_not_given: true,
+          mobile_number_not_given: true,
+        }),
+      );
+      expect(created.status).toBe(201);
+
+      const edited = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${created.body.id}`)
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ first_name: 'Cecilia' });
+
+      expect(edited.status).toBe(200);
+      const stored = await db
+        .selectFrom('persons')
+        .select(['first_name', 'birth_date', 'mobile_number'])
+        .where('id', '=', created.body.id)
+        .executeTakeFirstOrThrow();
+      expect(stored.first_name).toBe('Cecilia');
+      expect(stored.birth_date).toBeNull();
+      expect(stored.mobile_number).toBeNull();
+    });
+  });
+
   function post(actor: TestAccount, key: string) {
     return request(app.getHttpServer())
       .post('/api/v1/people')
@@ -1709,16 +1904,21 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
 /**
  * The create body with the birthday omitted entirely, as a client sends it when a
- * leader did not ask or the person declined (SKILL.md section 3).
+ * leader did not ask or the person declined (SKILL.md section 3) — which since
+ * decision 0328 means *Not given yet* is ticked.
  */
 function withoutBirthday(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  const body = personBody(overrides);
+  const body = personBody({ birth_date_not_given: true, ...overrides });
   delete body.birth_date;
   return body;
 }
 
+/**
+ * A field the case leaves blank is marked *Not given yet*, so a body that does not care
+ * about a birthday or a number satisfies decision 0328 without inventing one.
+ */
 function personBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     first_name: 'Bene',
     last_name: 'Newcomer',
     birth_date: '1994-03-02',
@@ -1726,4 +1926,9 @@ function personBody(overrides: Record<string, unknown> = {}): Record<string, unk
     civil_status: 'SINGLE',
     ...overrides,
   };
+  if (body.birth_date === undefined || body.birth_date === null) body.birth_date_not_given ??= true;
+  if (body.mobile_number === undefined || body.mobile_number === null) {
+    body.mobile_number_not_given ??= true;
+  }
+  return body;
 }

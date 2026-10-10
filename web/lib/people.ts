@@ -136,7 +136,11 @@ export interface PersonInput {
   sex: Sex;
   civil_status: CivilStatus;
   birth_date?: string | null;
+  /** *Not given yet* (decision 0328): required in place of a blank birthday. */
+  birth_date_not_given?: boolean;
   mobile_number?: string | null;
+  /** *Not given yet* (decision 0328): required in place of a blank number. */
+  mobile_number_not_given?: boolean;
   pastoral_leader_id: string;
   acknowledged_duplicate_ids?: string[];
 }
