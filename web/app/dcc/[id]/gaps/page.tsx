@@ -11,6 +11,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { getCoverageGaps, notRecordableLabel } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * Who still owes a record for one Sunday (SKILL.md sections 9, 13, 14, 15 and 19;
@@ -62,12 +63,7 @@ function Gaps() {
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
-        <Link
-          href="/reports/dcc"
-          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to DCC reports
-        </Link>
+        <TextLink href="/reports/dcc">Back to DCC reports</TextLink>
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">

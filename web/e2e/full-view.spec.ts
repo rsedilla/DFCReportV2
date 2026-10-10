@@ -346,7 +346,7 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(send).toBeDisabled();
 
     await dialog.getByLabel('Search for the leader by name').fill('Marilou');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).first().click();
     await dialog.getByRole('radio', { name: 'Couple' }).check();
     await dialog.getByRole('radio', { name: 'Wednesday' }).check();

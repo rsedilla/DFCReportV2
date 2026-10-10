@@ -47,7 +47,7 @@ export function noLeaderLabel(
     ? 'Archived'
     : reason === 'OUTSIDE_TREE'
       ? 'Outside the pastoral tree'
-      : 'No pastoral leader yet';
+      : 'No Cell Leader yet';
 }
 
 export async function getPastoralPath(

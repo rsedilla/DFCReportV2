@@ -1,12 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 
 import { getPerson } from '@/lib/people';
-
-const LINK =
-  'focus-visible:outline-accent text-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * Says whose report this is when a leader was opened from the By leader table (decision
@@ -37,12 +34,11 @@ export function LeaderDrill({
         Figures for <span className="font-semibold">{person.data?.full_name ?? 'one leader'}</span>{' '}
         and everyone beneath them.
       </span>
-      <Link
+      <TextLink
         href={backHref ?? `/reports/${report}?${new URLSearchParams({ month }).toString()}`}
-        className={LINK}
       >
         Back to your report
-      </Link>
+      </TextLink>
     </p>
   );
 }

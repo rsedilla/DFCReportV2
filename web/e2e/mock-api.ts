@@ -432,8 +432,8 @@ export async function mockCellChoices(
 
 /** Searches a Cell picker (owner's choice, 2026-09-30) within `scope`. */
 export async function searchCells(scope: Page | Locator, term: string): Promise<void> {
-  await scope.getByLabel('Find a Cell').fill(term);
-  await scope.getByRole('button', { name: 'Search', exact: true }).click();
+  await scope.getByLabel('Search for a Cell').fill(term);
+  await scope.getByRole('button', { name: 'Search Cells' }).click();
 }
 
 /**

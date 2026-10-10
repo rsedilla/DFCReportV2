@@ -93,13 +93,13 @@ export function MoveLeaderDialog({
             Pastored by <strong>{currentLeaderName}</strong> now.
           </>
         ) : (
-          'No pastoral leader is recorded now.'
+          'No Cell Leader is recorded now.'
         )}
       </p>
 
       <div className="mt-4">
         <PersonPicker
-          legend="New pastoral leader"
+          legend="New Cell Leader"
           description="Search by name. Whether you may make this move is decided when you confirm it."
           network={network}
           networkReason={

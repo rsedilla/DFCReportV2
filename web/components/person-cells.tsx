@@ -46,7 +46,7 @@ export function PersonCells({
   return (
     <section aria-labelledby={headingId} className={`${FRAME} ${className}`}>
       <h2 id={headingId} className="field-label">
-        Cell
+        Cell Group Information
       </h2>
       {note ? <p className="text-muted mt-1 text-sm leading-relaxed">{note}</p> : null}
 

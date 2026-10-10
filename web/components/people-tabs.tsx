@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
@@ -44,14 +44,7 @@ export function PeopleTabs({
               key={tab.href}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={cn(
-                'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
-                'text-xs font-bold tracking-[0.08em] uppercase',
-                'focus-visible:outline-2 focus-visible:-outline-offset-2',
-                active
-                  ? 'bg-accent text-surface border-accent'
-                  : 'border-line text-ink hover:bg-raised',
-              )}
+              className={tabClasses(active)}
             >
               {tab.label}
             </Link>

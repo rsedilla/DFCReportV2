@@ -339,7 +339,7 @@ test.describe('New Cell', () => {
     await expect(create).toBeDisabled();
 
     await page.getByLabel('Search for the leader by name').fill('Marilou');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
     await page.getByRole('radio', { name: 'Young Pro' }).check();
     await page.getByRole('combobox', { name: 'Meets every' }).selectOption({ label: 'Friday' });
@@ -459,7 +459,7 @@ test.describe('a Cell’s members', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).first().click();
     await dialog.getByRole('button', { name: 'Add', exact: true }).click();
 
@@ -673,7 +673,7 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
     await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
 
     const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-    await expect(dialog.getByText('Their pastoral leader’s Cell', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Their Cell Leader’s Cell', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(1);
     await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toBeVisible();
     // Nothing is chosen for them: the leader still picks.

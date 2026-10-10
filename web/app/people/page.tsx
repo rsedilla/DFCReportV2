@@ -185,7 +185,7 @@ function PeopleList() {
                 <thead>
                   <tr>
                     <HeaderCell>Name</HeaderCell>
-                    <HeaderCell>Pastoral leader</HeaderCell>
+                    <HeaderCell>Cell Leader</HeaderCell>
                     <HeaderCell>Cell</HeaderCell>
                   </tr>
                 </thead>

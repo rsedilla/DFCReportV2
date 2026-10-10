@@ -11,7 +11,7 @@ import { RecordingStatusPanel } from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
@@ -635,7 +635,7 @@ function Dashboard() {
       ) : (
         <TabBar
           label="Outstanding work"
-          className={cn('mt-6 grid-cols-2 lg:grid-cols-4', TAB_ROW)}
+          className={cn('mt-6 grid-cols-2', TAB_ROW)}
           tabs={tabs}
           current={tab}
           onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
@@ -888,7 +888,7 @@ function Dashboard() {
                 {/* The action that resolves an entry is the reassignment (section 19). */}
                 <ListTable
                   caption="Needs a new leader"
-                  columns={['Name', 'Previous pastoral leader']}
+                  columns={['Name', 'Previous Cell Leader']}
                   empty="Nobody you oversee is waiting for a new leader."
                   rows={unplaced.data.map((person) => ({
                     key: person.id,
@@ -1085,20 +1085,20 @@ function TabBar<Key extends string>({
   onChoose: (key: Key) => void;
 }) {
   return (
-    <div role="group" aria-label={label} className={cn('border-line grid border-b', className)}>
+    // Sized to their words from `sm`, as every tab row is; a 2-by-2 grid on a phone, where
+    // four long labels in one wrapping row would leave ragged gaps (owner, 2026-10-10).
+    <div
+      role="group"
+      aria-label={label}
+      className={cn('border-line grid border-b sm:flex sm:flex-wrap', className)}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}
           type="button"
           aria-pressed={tab.key === current}
           onClick={() => onChoose(tab.key)}
-          className={cn(
-            'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 border border-b-0 px-3 py-2 text-center sm:px-4',
-            'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
-            tab.key === current
-              ? 'bg-accent text-surface border-accent'
-              : 'border-line text-ink hover:bg-raised',
-          )}
+          className={cn(tabClasses(tab.key === current), 'justify-center py-2 text-center')}
         >
           {tab.label}
           {tab.count === null ? null : (
@@ -1787,11 +1787,12 @@ function LeaderChecklistGrid({
 
   return (
     <section aria-labelledby="leader-grid-heading" className="mt-8">
-      <p className="mb-4 text-sm">
+      <p className="mb-4">
+        {/* A button, since it goes back in place; styled as every other "Back to…" link. */}
         <button
           type="button"
           onClick={back}
-          className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Back to your checklist
         </button>

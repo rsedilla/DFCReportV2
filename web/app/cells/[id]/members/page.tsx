@@ -22,6 +22,7 @@ import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
+import { TextLink } from '@/components/ui/text-link';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -121,9 +122,9 @@ function CellMembers() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <p className="mb-4">
-        <Link href={`/cells/${params.id}/meetings`} className={`${LINK} text-accent text-sm font-medium`}>
+        <TextLink href={`/cells/${params.id}/meetings`}>
           Back to this Cell&rsquo;s meetings
-        </Link>
+        </TextLink>
       </p>
 
       <div className="flex flex-wrap items-end justify-between gap-4">

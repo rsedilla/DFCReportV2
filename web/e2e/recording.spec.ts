@@ -54,7 +54,7 @@ test.describe('a recorded Cell meeting', () => {
 
     await expect(page.getByText('Already recorded')).toBeVisible();
     await expect(page.getByText('needs permission to correct records')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit this record' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
 
     const present = page.getByRole('radio', { name: 'Present' }).first();
     await expect(present).toBeChecked();
@@ -71,11 +71,11 @@ test.describe('a recorded Cell meeting', () => {
     const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit this record' }).click();
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
 
     await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
-    await page.getByRole('button', { name: 'Save the correction' }).click();
+    await page.getByRole('button', { name: 'Save correction' }).click();
 
     // `version`, the field the API declares: it refuses any field it does not.
     await expect.poll(() => sent.length).toBe(1);
@@ -92,15 +92,15 @@ test.describe('a recorded Cell meeting', () => {
     const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit this record' }).click();
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
     await page.getByRole('radio', { name: 'Did not meet' }).check();
     await page.getByRole('radio', { name: 'Leader could not be there' }).check();
 
     await expect(page.getByText('Say why this is being corrected to save.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save the correction' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save correction' })).toBeDisabled();
 
     await page.getByLabel('Why is this being corrected?').fill('Filed as met by mistake');
-    await page.getByRole('button', { name: 'Save the correction' }).click();
+    await page.getByRole('button', { name: 'Save correction' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toEqual({
@@ -136,13 +136,13 @@ test.describe('a recorded Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
-    await page.getByRole('button', { name: 'Edit this record' }).click();
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
     await page.getByRole('radio', { name: 'Met', exact: true }).check();
 
     await page.getByRole('radio', { name: 'Present' }).first().check();
     await page.getByRole('radio', { name: 'Absent' }).nth(1).check();
     await page.getByLabel('Why is this being corrected?').fill('It did meet');
-    await page.getByRole('button', { name: 'Save the correction' }).click();
+    await page.getByRole('button', { name: 'Save correction' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toEqual({
@@ -165,7 +165,7 @@ test.describe('a recorded Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit this record' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
   });
 });
 
@@ -216,7 +216,7 @@ test.describe('who ran a Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText(/The Cell’s leader records it; you can see it here to follow up\./)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save this meeting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save meeting' })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Met' })).toHaveCount(0);
     for (const radio of await page.getByRole('radio', { name: 'Present' }).all()) {
       await expect(radio).toBeDisabled();
@@ -231,7 +231,7 @@ test.describe('who ran a Cell meeting', () => {
     await page.goto(MEETING);
     await expect(page.getByRole('radio', { name: 'The leader' })).toBeChecked();
     await markEveryone(page);
-    await page.getByRole('button', { name: 'Save this meeting' }).click();
+    await page.getByRole('button', { name: 'Save meeting' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).not.toHaveProperty('facilitated_by');
@@ -248,12 +248,12 @@ test.describe('who ran a Cell meeting', () => {
     await page.getByRole('radio', { name: 'Someone else' }).check();
 
     await expect(page.getByText('Choose who ran it to save.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save this meeting' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save meeting' })).toBeDisabled();
 
     await page.getByLabel('Search for a person by name').fill('Marilou');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
-    await page.getByRole('button', { name: 'Save this meeting' }).click();
+    await page.getByRole('button', { name: 'Save meeting' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toMatchObject({ status: 'HELD', facilitated_by: PERSON_IN_SCOPE.id });
@@ -320,7 +320,7 @@ test.describe('a Sunday with a mark already recorded', () => {
     await expect(
       page.getByText('Changing a recorded mark needs permission to correct records'),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Change recorded marks' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit marks' })).toHaveCount(0);
 
     const recorded = page.getByRole('group', { name: RECORDED.name }).getByRole('radio', {
       name: 'Present',
@@ -332,12 +332,12 @@ test.describe('a Sunday with a mark already recorded', () => {
     ).toBeEnabled();
 
     // Save is offered only once something differs from what is stored.
-    await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toHaveCount(0);
     await page
       .getByRole('group', { name: UNRECORDED.name })
       .getByRole('radio', { name: 'Present' })
       .check();
-    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toBeVisible();
   });
 
   test('unlocks it for an account that may correct, sending the reason only with the changed mark', async ({
@@ -354,7 +354,7 @@ test.describe('a Sunday with a mark already recorded', () => {
     });
 
     await page.goto(SUNDAY);
-    await page.getByRole('button', { name: 'Change recorded marks' }).click();
+    await page.getByRole('button', { name: 'Edit marks' }).click();
 
     await page
       .getByRole('group', { name: RECORDED.name })
@@ -365,7 +365,7 @@ test.describe('a Sunday with a mark already recorded', () => {
       .getByRole('radio', { name: 'Present' })
       .check();
     await page.getByLabel('Why is this changing? (optional)').fill('Marked the wrong person');
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toEqual({
@@ -413,7 +413,7 @@ test.describe('a Sunday with a mark already recorded', () => {
       .getByRole('group', { name: UNRECORDED.name })
       .getByRole('radio', { name: 'Present' })
       .check();
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
     await expect(
       page.getByText(`${UNRECORDED.name}: the mark must be a boolean value.`),
@@ -510,7 +510,7 @@ test.describe('a DCC checklist in sections', () => {
     await expect(page.getByRole('heading', { name: 'Nestor Ilagan’s people', exact: true })).toBeVisible();
     await expect(page.getByText(/^3 of 5 marked$/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].records.map((record) => record.person_id).sort()).toEqual(
       [line(2, '', null), line(4, '', null), line(5, '', null)].map((entry) => entry.person_id).sort(),
@@ -631,7 +631,7 @@ test.describe('a long DCC checklist', () => {
       .getByRole('group', { name: 'Person 073' })
       .getByRole('radio', { name: 'Present' })
       .check();
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].records).toHaveLength(73);
@@ -1677,7 +1677,7 @@ test.describe('recording a Sunday for another leader (decision 0313)', () => {
       .getByRole('group', { name: 'Danilo Suarez' })
       .getByRole('radio', { name: 'Present' })
       .check();
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toEqual({
@@ -1705,7 +1705,7 @@ test.describe('recording a Sunday for another leader (decision 0313)', () => {
 /**
  * Record opens on four lists, one at a time (SKILL.md section 19, decision 0290).
  *
- * Four equal buttons choose the list, each carrying its count; a list read a page at a
+ * Four buttons sized to their words choose the list (decision 0329), each carrying its count; a list read a page at a
  * time counts what it has read and says there is more. Each list is a table from `lg`
  * and a card per row below it, and the two lists of people show everybody, fifty at a
  * time, with Show more.
@@ -1851,7 +1851,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
   }
 
-  test('opens on four equal buttons, each with its count, Awaiting a record chosen', async ({
+  test('opens on four buttons sized to their words, each with its count, Awaiting a record chosen', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1880,11 +1880,17 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await expect(lists.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
     }
 
-    // Equal: one row of four at lg, each the same width.
-    const widths = await lists
-      .getByRole('button')
-      .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().width)));
-    expect(new Set(widths).size).toBe(1);
+    // Sized to their words (decision 0329): one row of four, not stretched across the row.
+    const { row, used, tops } = await lists.evaluate((group) => {
+      const buttons = [...group.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
+      return {
+        row: group.getBoundingClientRect().width,
+        used: buttons.reduce((sum, rect) => sum + rect.width, 0),
+        tops: new Set(buttons.map((rect) => Math.round(rect.top))).size,
+      };
+    });
+    expect(tops).toBe(1);
+    expect(used).toBeLessThan(row - 40);
 
     // Only the chosen list is on the page.
     await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
@@ -1974,7 +1980,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await chooseList(page, /^Needs a new leader/);
     await expect(page.getByRole('heading', { name: 'Cells behind' })).toHaveCount(0);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous pastoral leader']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
     await expect(
       unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
     ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
@@ -2070,7 +2076,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await chooseList(page, /^Needs a new leader/);
     const unplaced = page.getByRole('table', { name: 'Needs a new leader' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous pastoral leader']);
+    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
     // The header row and the one row saying so.
     await expect(unplaced.getByRole('row')).toHaveCount(2);
     await expect(unplaced.getByRole('cell')).toHaveText(['Nobody you oversee is waiting for a new leader.']);
@@ -2132,7 +2138,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await expect(page.getByRole('table', { name: 'Needs a new leader' })).toBeHidden();
       await expect(
         page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Amihan Bacani' }) }),
-      ).toContainText(/Previous pastoral leader\s*Rogelio Mendoza/);
+      ).toContainText(/Previous Cell Leader\s*Rogelio Mendoza/);
 
       await chooseList(page, /^Not in a Cell/);
       await expect(page.getByRole('table', { name: 'Not in a Cell' })).toBeHidden();

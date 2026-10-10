@@ -10,7 +10,7 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -180,14 +180,7 @@ function CellsIndex() {
               setView(key);
               go({ view: key === 'CLOSED' ? 'CLOSED' : null });
             }}
-            className={cn(
-              'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
-              'text-xs font-bold tracking-[0.08em] uppercase',
-              'focus-visible:outline-2 focus-visible:-outline-offset-2',
-              view === key
-                ? 'bg-accent text-surface border-accent'
-                : 'border-line text-ink hover:bg-raised',
-            )}
+            className={tabClasses(view === key)}
           >
             {label}
           </button>

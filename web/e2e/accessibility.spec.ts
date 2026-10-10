@@ -282,7 +282,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Move to another Cell' }).click();
-      await expect(page.getByRole('dialog').getByLabel('Find a Cell')).toBeVisible();
+      await expect(page.getByRole('dialog').getByLabel('Search for a Cell')).toBeVisible();
     },
   },
   {
@@ -323,7 +323,7 @@ const SCANS = [
       await page.getByRole('radio', { name: 'Female' }).check();
       await page.getByRole('radio', { name: 'Married' }).check();
       await page.getByLabel('Search for a leader by name').fill('ann');
-      await page.getByRole('button', { name: 'Find' }).click();
+      await page.getByRole('button', { name: 'Search people' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await searchCells(page, 'CELL');
       await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
@@ -415,7 +415,7 @@ const SCANS = [
       await page.getByRole('radio', { name: 'Female' }).check();
       await page.getByRole('radio', { name: 'Married' }).check();
       await page.getByLabel('Search for a leader by name').fill('ann');
-      await page.getByRole('button', { name: 'Find' }).click();
+      await page.getByRole('button', { name: 'Search people' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
@@ -615,11 +615,11 @@ const SCANS = [
       await mockRecordedMeetingRoster(page, 'HELD');
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Edit this record' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit meeting' })).toBeVisible();
     },
   },
   {
-    // The same meeting once "Edit this record" is pressed: the reason field and the
+    // The same meeting once "Edit meeting" is pressed: the reason field and the
     // pinned Save bar appear.
     name: 'record a cell meeting, editing',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
@@ -630,7 +630,7 @@ const SCANS = [
       await mockRecordedMeetingRoster(page, 'HELD');
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Edit this record' }).click();
+      await page.getByRole('button', { name: 'Edit meeting' }).click();
       await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     },
   },
@@ -673,7 +673,7 @@ const SCANS = [
       await mockDccRoster(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Change recorded marks' }).click();
+      await page.getByRole('button', { name: 'Edit marks' }).click();
       await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     },
   },
@@ -879,7 +879,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-      await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
+      await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
     },
   },
   {
@@ -1032,7 +1032,7 @@ const SCANS = [
       await page.getByRole('button', { name: 'Add a member' }).click();
       const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
       await dialog.getByLabel('Search for a person by name').fill('Marilou');
-      await dialog.getByRole('button', { name: 'Find' }).click();
+      await dialog.getByRole('button', { name: 'Search people' }).click();
       await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
     },
   },
@@ -1492,7 +1492,7 @@ const SCANS = [
   },
   {
     // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
-    // its date with Change lessons, and a row the reader may not file for, which shows marks.
+    // its date with Edit lessons, and a row the reader may not file for, which shows marks.
     // Everyone, because the opening view leaves the graduated row out (decision 0287); the
     // opening view is the one "withdrawing a lesson" scans below.
     name: 'growth suynl',
@@ -1502,7 +1502,7 @@ const SCANS = [
       await mockSuynl(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Change lessons' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit lessons' })).toBeVisible();
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
@@ -1672,8 +1672,8 @@ const TARGET_SWEEP = [
   { name: 'people, before searching', route: '/people', settle: 'Search', minimum: 3 },
   // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
   // its Find button, and the submit button.
-  { name: 'add a person', route: '/people/new', settle: 'Find', minimum: 13 },
-  { name: 'new cell', route: '/cells/new', settle: 'Find', minimum: 10 },
+  { name: 'add a person', route: '/people/new', settle: 'Add this person', minimum: 13 },
+  { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10 },
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
@@ -1965,12 +1965,12 @@ const TARGET_SWEEP = [
   {
     // The two tabs, three cards, the search, Search and the filter, the line's Show only
     // those still to finish, four name links, twenty boxes across the two rows the reader
-    // may file for, Change lessons on the graduated row, and the two pager buttons. Settled
-    // on Change lessons, which renders from the data. Everyone, because the opening view
+    // may file for, Edit lessons on the graduated row, and the two pager buttons. Settled
+    // on Edit lessons, which renders from the data. Everyone, because the opening view
     // leaves the graduated row out (decision 0287).
     name: 'growth suynl',
     route: '/growth/suynl?all=1',
-    settle: 'Change lessons',
+    settle: 'Edit lessons',
     minimum: 36,
   },
   {
@@ -2153,7 +2153,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     name: 'dcc checklist, changing recorded marks',
     why:
       'The measured "dcc checklist" with its recorded mark unlocked: the same back link, radios ' +
-      'and Save, plus Stop editing, a Button, and the reason field, a two-row textarea.',
+      'and Save, plus Cancel, a Button, and the reason field, a two-row textarea.',
   },
   {
     name: 'add a person, cell refused',
@@ -2295,7 +2295,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'record a cell meeting, recorded',
     why:
-      'Beyond the back link its only control is "Edit this record", the same Button primitive ' +
+      'Beyond the back link its only control is "Edit meeting", the same Button primitive ' +
       'measured on every screen, and its radios are disabled. The sweep installs one roster mock ' +
       'for the whole run, the unrecorded one measured under "record a cell meeting".',
   },

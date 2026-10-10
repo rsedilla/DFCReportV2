@@ -193,7 +193,7 @@ test.describe('the SUYNL tab', () => {
     expect(traffic.submitted[0].key).toMatch(UUID);
   });
 
-  test('folds a graduated row to its date, and Change lessons opens the ten boxes', async ({
+  test('folds a graduated row to its date, and Edit lessons opens the ten boxes', async ({
     page,
   }) => {
     // The opening view leaves a graduated person out (decision 0287); everyone shows them
@@ -206,7 +206,7 @@ test.describe('the SUYNL tab', () => {
     await expect(row).toContainText('10 of 10');
     await expect(row.getByRole('button', { name: /^Close/ })).toHaveCount(0);
 
-    await row.getByRole('button', { name: 'Change lessons' }).click();
+    await row.getByRole('button', { name: 'Edit lessons' }).click();
 
     const boxes = page.getByRole('checkbox', { name: /, Lualhati Dizon$/ });
     await expect(boxes).toHaveCount(10);
@@ -220,7 +220,7 @@ test.describe('the SUYNL tab', () => {
     const traffic = await openSuynl(page, 'accepted', '/growth/suynl?all=1');
 
     const row = page.getByRole('row', { name: /Lualhati Dizon/ });
-    await row.getByRole('button', { name: 'Change lessons' }).click();
+    await row.getByRole('button', { name: 'Edit lessons' }).click();
     await row.getByRole('button', { name: 'Close, Lualhati Dizon' }).click();
 
     await expect(row.getByText('Graduated 14 August 2026')).toBeVisible();
@@ -232,7 +232,7 @@ test.describe('the SUYNL tab', () => {
     await openSuynl(page, 'accepted', '/growth/suynl?all=1');
 
     const row = page.getByRole('row', { name: /Lualhati Dizon/ });
-    await row.getByRole('button', { name: 'Change lessons' }).click();
+    await row.getByRole('button', { name: 'Edit lessons' }).click();
     await page.getByRole('checkbox', { name: /^Lesson 10, .*Lualhati Dizon$/ }).uncheck();
 
     await expect(row).toContainText('9 of 10');
@@ -492,7 +492,7 @@ test.describe('the SUYNL list opens on those still to finish (decision 0287)', (
   test('a search asks for no step, and the line goes while it is shown', async ({ page }) => {
     const traffic = await openSuynl(page);
 
-    await page.getByLabel('Find a name or Member ID').fill('Dizon');
+    await page.getByLabel('Search by name or Member ID').fill('Dizon');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
 
     await expect(page).toHaveURL(/[?&]q=Dizon\b/);
@@ -607,7 +607,7 @@ test.describe('the Training list opens on those still to finish (decision 0287)'
   test('a search asks for no step, and the line goes while it is shown', async ({ page }) => {
     const traffic = await openTraining(page);
 
-    await page.getByLabel('Find a name or Member ID').fill('Dizon');
+    await page.getByLabel('Search by name or Member ID').fill('Dizon');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
 
     await expect.poll(() => lastList(traffic.lists).get('q')).toBe('Dizon');

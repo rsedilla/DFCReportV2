@@ -43,7 +43,7 @@ test.describe('why a person has no pastoral leader (decision 0270)', () => {
   for (const [reason, words] of [
     ['OUTSIDE_TREE', 'Outside the pastoral tree'],
     ['ARCHIVED', 'Archived'],
-    [null, 'No pastoral leader yet'],
+    [null, 'No Cell Leader yet'],
   ] as const) {
     test(`says "${words}" where the server answers ${String(reason)}`, async ({ page }) => {
       await signedInWithPeople(page);
@@ -375,7 +375,7 @@ test.describe('who pastors a person', () => {
     await expect(dialog.getByText(`Pastored by ${PATH_LEADER.full_name} now.`)).toBeVisible();
 
     await dialog.getByLabel('Search for a leader by name').fill('ann');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
     await dialog.getByLabel('Why is this changing? (optional)').fill('Moved to a nearer leader');
     await dialog.getByRole('button', { name: `Move under ${PERSON_WITHHELD.full_name}` }).click();
@@ -459,7 +459,7 @@ test.describe('dialogs', () => {
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
+    await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
     const sheet = await dialog.boundingBox();
     expect(sheet).not.toBeNull();
     expect(sheet!.y + sheet!.height).toBeGreaterThanOrEqual(843);
@@ -470,7 +470,7 @@ test.describe('dialogs', () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
-    await expect(dialog.getByLabel('Find a Cell')).toBeVisible();
+    await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
     const centred = await dialog.boundingBox();
     expect(centred).not.toBeNull();
     expect(centred!.y + centred!.height).toBeLessThan(790);
@@ -1016,7 +1016,7 @@ test.describe('adding a person with a Cell', () => {
     await page.getByRole('radio', { name: 'Female' }).check();
     await page.getByRole('radio', { name: 'Married' }).check();
     await page.getByLabel('Search for a leader by name').fill('ann');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
   }
 

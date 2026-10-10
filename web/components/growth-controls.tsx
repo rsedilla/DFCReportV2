@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
@@ -53,15 +53,7 @@ export function GrowthTabs({
               key={tab.href}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={cn(
-                // px-3 below `sm`: three tabs fit a 320px phone with room for font differences.
-                'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
-                'text-xs font-bold tracking-[0.08em] uppercase',
-                'focus-visible:outline-2 focus-visible:-outline-offset-2',
-                active
-                  ? 'bg-accent text-surface border-accent'
-                  : 'border-line text-ink hover:bg-raised',
-              )}
+              className={tabClasses(active)}
             >
               {tab.label}
             </Link>
@@ -210,7 +202,7 @@ export function GrowthFilters({
       }}
     >
       <Field
-        label="Find a name or Member ID"
+        label="Search by name or Member ID"
         type="search"
         name="q"
         autoComplete="off"

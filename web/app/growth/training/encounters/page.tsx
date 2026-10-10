@@ -1,7 +1,6 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -24,6 +23,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * The Encounter seasons an administrator keeps (SKILL.md section 28, decision 0296), under
@@ -152,13 +152,8 @@ function EncounterSeasons() {
         <p className="text-muted text-sm">The Encounter God Weekends, set by an administrator.</p>
       </div>
       <GrowthTabs current="/growth/training">
-        <p className="mt-4 text-sm">
-          <Link
-            href="/growth/training"
-            className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Back to Training
-          </Link>
+        <p className="mt-4">
+          <TextLink href="/growth/training">Back to Training</TextLink>
         </p>
 
         <section className={`mt-2 ${FRAME}`} aria-labelledby="seasons-heading">
