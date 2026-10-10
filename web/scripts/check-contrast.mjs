@@ -94,6 +94,10 @@ const NON_TEXT_PAIRS = [
   // field may carry it, but the rule it has to meet is this one.
   ['field-invalid', 'surface'],
   ['field-invalid', 'raised'],
+  // The Trends lines are graphical objects needed to read the graph (1.4.11).
+  ['chart-green', 'surface'],
+  ['chart-blue', 'surface'],
+  ['chart-pink', 'surface'],
 ];
 
 const TEXT_MINIMUM = 4.5;

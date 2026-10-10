@@ -93,20 +93,16 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ]);
   });
 
-  test('a Senior Pastor keeps the five items too', async ({ page }) => {
+  // It said "keeps the five items" and passed only by matching the sidebar before `/auth/me`
+  // answered, when every account shows the default five; decision 0326 gives them three.
+  test('a Senior Pastor has Record, Reports and Trends', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'SENIOR_PASTOR');
     await mockPeople(page);
 
     await page.goto('/people');
 
-    await expect(mainNavigation(page).getByRole('link')).toHaveText([
-      'Record',
-      'Reports',
-      'People',
-      'Cells',
-      'Growth',
-    ]);
+    await expect(mainNavigation(page).getByRole('link')).toHaveText(['Record', 'Reports', 'Trends']);
   });
 
   async function mockRecord(page: Page) {
@@ -546,7 +542,8 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
   }
 
   function box(page: Page, label: string) {
-    return page.getByText(`${label} · Whole Church`, { exact: true }).locator('..');
+    // Each box's label stands alone under one Whole Church heading (decision 0327).
+    return page.getByText(label, { exact: true }).locator('..');
   }
 
   test('opens on Recording status, with Awaiting a record as the other tab', async ({ page }) => {
@@ -561,7 +558,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       'aria-pressed',
       'true',
     );
-    await expect(page.getByRole('heading', { name: 'Recording status' })).toBeVisible();
+    // No heading of its own: the tab names it (decision 0327).
+    await expect(page.getByRole('region', { name: 'Recording status' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toHaveCount(0);
     // None of the other lists of section 19, and no month figures.
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
@@ -570,7 +569,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
 
     await expect(page).toHaveURL(/list=awaiting/);
     await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Recording status' })).toHaveCount(0);
     // Their own work only: no Whose switch.
     await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'People I oversee' })).toHaveCount(0);
@@ -578,7 +577,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
 
     await tabs.getByRole('button', { name: 'Recording status' }).click();
     await expect(page).not.toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('heading', { name: 'Recording status' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Recording status' })).toBeVisible();
   });
 
   test('opens on the current week and asks for the period the Week and Month switch names', async ({
@@ -595,7 +594,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       'true',
     );
     await expect(page.getByText(/^5 Oct – 11 Oct 2026/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Next week' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
     await expect.poll(() => asked.length).toBeGreaterThan(0);
     expect(Object.fromEntries(asked[asked.length - 1])).toEqual({
       kind: 'WEEK',
@@ -603,7 +602,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       period: '2026-10-01',
     });
 
-    await page.getByRole('button', { name: 'Previous week' }).click();
+    await page.getByRole('button', { name: 'The period before' }).click();
     await expect(page.getByText(/^28 Sept? – 4 Oct 2026/)).toBeVisible();
     await expect
       .poll(() => Object.fromEntries(asked[asked.length - 1]))
@@ -622,9 +621,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
         start: '2026-10-01',
         period: '2026-10-01',
       });
-    await expect(page.getByRole('button', { name: 'Next month' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
 
-    await page.getByRole('button', { name: 'Previous month' }).click();
+    await page.getByRole('button', { name: 'The period before' }).click();
     await expect(page.getByText(/^September 2026/)).toBeVisible();
     await expect
       .poll(() => Object.fromEntries(asked[asked.length - 1]))
@@ -649,7 +648,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     const dcc = box(page, 'Recorded their DCC checklist');
     await expect(dcc).toContainText('9 of 13 leaders · 69%');
     await expect(dcc).toContainText('Last week: 8 of 11 leaders');
-    await expect(page.getByText('· still open')).toBeVisible();
+    await expect(page.getByText(/^Open until /)).toBeVisible();
   });
 
   test('a box reading 0 of 0 shows no percentage, and an open period before says so', async ({
@@ -687,14 +686,16 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
 
     // The Men's root first, as the server sends it, although his name sorts second.
     await expect(page.getByRole('heading', { level: 3 })).toHaveText([
-      'Ptr. Teodulo Villareal’s 3 leaders',
-      'Ptra. Amparo Lacson’s 2 leaders',
+      // The boxes' one heading (decision 0327).
+      'Whole Church',
+      'Ptr. Teodulo Villareal’s leaders',
+      'Ptra. Amparo Lacson’s leaders',
       'Others',
     ]);
 
-    const mens = page.getByRole('table', { name: 'Ptr. Teodulo Villareal’s 3 leaders' });
+    const mens = page.getByRole('table', { name: 'Ptr. Teodulo Villareal’s leaders' });
     await expect(mens.getByRole('columnheader')).toHaveText([
-      'Leader',
+      'Primaries',
       'Cell group recorded',
       'DCC checklist recorded',
       'Status',
@@ -731,7 +732,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       '/network?focus=3f1b7c6e-0000-4000-8000-000000000b02',
     );
 
-    const womens = page.getByRole('table', { name: 'Ptra. Amparo Lacson’s 2 leaders' });
+    const womens = page.getByRole('table', { name: 'Ptra. Amparo Lacson’s leaders' });
     await expect(
       womens
         .getByRole('row')
@@ -745,7 +746,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     }
   });
 
-  test('counts everybody in neither table on an Others line, and links to the Cells behind', async ({
+  test('counts everybody in neither table on an Others line, with no link to the Cells behind', async ({
     page,
   }) => {
     await page.clock.setFixedTime(OCTOBER_8);
@@ -765,10 +766,8 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       '1 leader still to record',
     ]);
 
-    await expect(page.getByRole('link', { name: 'See which Cells are behind' })).toHaveAttribute(
-      'href',
-      '/reports/filed?behind=1',
-    );
+    // Filed reports is not one of their tabs (decision 0327).
+    await expect(page.getByRole('link', { name: 'See which Cells are behind' })).toHaveCount(0);
   });
 
   test('keeps the boxes and says why where the server refuses the tables', async ({ page }) => {
@@ -800,9 +799,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
 
       const targets = page.locator('main button, main a[href], main input, main select');
       const count = await targets.count();
-      // Two tabs, Week and Month, Previous and Next, five leader names in each rendering
-      // (the hidden one counted, not measured), and the link at the foot.
-      expect(count).toBeGreaterThanOrEqual(17);
+      // Two tabs, Week and Month, the period before and after, and five leader names in each
+      // rendering (the hidden one counted, not measured).
+      expect(count).toBeGreaterThanOrEqual(16);
 
       const small: string[] = [];
       for (let index = 0; index < count; index += 1) {

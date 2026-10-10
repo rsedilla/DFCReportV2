@@ -190,6 +190,11 @@ export class CellTwelveDto extends CellMonthlyReportDto {
 
   @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
   start!: string;
+
+  /** The Senior Pastors' tables (decision 0326): each root's direct leaders as the rows. */
+  @IsOptional()
+  @IsIn(['ROOT_LEADERS'])
+  rows?: 'ROOT_LEADERS';
 }
 
 /**
@@ -203,6 +208,31 @@ export class DccTwelveDto extends DccMonthlyReportDto {
 
   @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
   start!: string;
+
+  /** The Senior Pastors' tables (decision 0326): each root's direct leaders as the rows. */
+  @IsOptional()
+  @IsIn(['ROOT_LEADERS'])
+  rows?: 'ROOT_LEADERS';
+}
+
+/** `GET /reports/church-counts`: the Senior Pastors' *Number of Cells* and *Number of people* (decision 0326). */
+export class ChurchCountsDto {
+  @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
+  period!: string;
+}
+
+/** The five figures *Trends* draws (decision 0326, point 4; Cell Leaders, owner 2026-10-09). */
+export const TREND_FIGURES = ['CG', 'DCC', 'CELLS', 'CELL_LEADERS', 'PEOPLE'] as const;
+export type TrendFigure = (typeof TREND_FIGURES)[number];
+
+/** `GET /reports/trends`: twelve months of one figure, for the church or one leader's branch. */
+export class TrendsDto {
+  @IsIn(TREND_FIGURES)
+  figure!: TrendFigure;
+
+  @IsOptional()
+  @IsUUID()
+  leader_id?: string;
 }
 
 /**

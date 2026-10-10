@@ -8,7 +8,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
-import { PeriodTabs, RangeNavigator, TwelveTable } from '@/components/my-twelve';
+import { PeriodTabs, RangeNavigator, RootLeadersTwelve, TwelveTable } from '@/components/my-twelve';
 import { YearTable } from '@/components/report-year';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -75,13 +75,18 @@ export function CellReport() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
+  // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
+  // server's screens and never by a role.
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
   // only, so they wait to know who is reading before asking for any.
   const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
   const finishedOnly = finishedKind !== null && me.data !== undefined && !wholeChurch;
   const latest = latestFinished(kind, today);
 
-  const own = wholeChurch
+  const own = seniorPastor
+    ? ({ kind: 'ROOT_LEADERS' } as const)
+    : wholeChurch
     ? ({ kind: 'WHOLE_CHURCH' } as const)
     : me.data
       ? ({ kind: 'LEADER', person_id: me.data.person_id } as const)
@@ -161,19 +166,22 @@ export function CellReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
-        <HowTheseAreCounted report="cells" />
+        {/* Not for the Senior Pastors (owner, 2026-10-09). */}
+        {seniorPastor ? null : <HowTheseAreCounted report="cells" />}
       </div>
       <ReportsTabs current="cells" month={guardMonth}>
-        <PeriodTabs
-          value={kind}
-          onChange={(value) =>
-            address({
-              period: value === 'MONTH' ? null : value.toLowerCase(),
-              start: null,
-              month: null,
-            })
-          }
-        />
+        {seniorPastor ? null : (
+          <PeriodTabs
+            value={kind}
+            onChange={(value) =>
+              address({
+                period: value === 'MONTH' ? null : value.toLowerCase(),
+                start: null,
+                month: null,
+              })
+            }
+          />
+        )}
 
         {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
           <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
@@ -181,6 +189,20 @@ export function CellReport() {
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
         <div className={`mt-6 ${CONTROL_BAR}`}>
+          {/* The Senior Pastors' controls in one row: period, month, Figures for (owner, 2026-10-09). */}
+          {seniorPastor ? (
+            <PeriodTabs
+              inBar
+              value={kind}
+              onChange={(value) =>
+                address({
+                  period: value === 'MONTH' ? null : value.toLowerCase(),
+                  start: null,
+                  month: null,
+                })
+              }
+            />
+          ) : null}
           {reach?.kind === 'none' ? null : (
             <RangeNavigator
               kind={kind}
@@ -188,6 +210,7 @@ export function CellReport() {
               current={reach?.kind === 'open' ? reach.latest : current}
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
+              quiet={seniorPastor}
               onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
             />
           )}
@@ -249,44 +272,56 @@ export function CellReport() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
-            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. */}
-            <p className="text-sm">
-              <span className="font-bold tabular-nums">
-                {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
-              </span>{' '}
-              meetings recorded {what}
-              {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
-                ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
-                : ''}
-              {kind === 'MONTH' ? (
-                <>
-                  {' · '}
-                  <Link
-                    href={`/reports/filed?${new URLSearchParams({
-                      month: guardMonth,
-                      ...(leader ? { leader, by: 'leader' } : {}),
-                    }).toString()}`}
-                    className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    see Filed reports
-                  </Link>
-                </>
-              ) : null}
-            </p>
+            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. The
+                Senior Pastors read it on Record's Recording status instead (owner, 2026-10-09). */}
+            {seniorPastor ? null : (
+              <p className="text-sm">
+                <span className="font-bold tabular-nums">
+                  {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
+                </span>{' '}
+                meetings recorded {what}
+                {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
+                  ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
+                  : ''}
+                {kind === 'MONTH' ? (
+                  <>
+                    {' · '}
+                    <Link
+                      href={`/reports/filed?${new URLSearchParams({
+                        month: guardMonth,
+                        ...(leader ? { leader, by: 'leader' } : {}),
+                      }).toString()}`}
+                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      see Filed reports
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            )}
 
-            <TwelveTable
-              twelve={twelve.data}
-              kind={kind}
-              subjectName={subjectName}
-              openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
-            />
+            {subject?.kind === 'ROOT_LEADERS' ? (
+              <RootLeadersTwelve
+                twelve={twelve.data}
+                kind={kind}
+                openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+              />
+            ) : (
+              <TwelveTable
+                twelve={twelve.data}
+                kind={kind}
+                subjectName={subjectName}
+                openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+              />
+            )}
 
-            {kind === 'YEAR' ? (
+            {/* Not the month-by-month table for the Senior Pastors (owner, 2026-10-09). */}
+            {kind === 'YEAR' && !seniorPastor ? (
               <YearTable
                 key={`${start}-${JSON.stringify(subject)}`}
                 report="cells"
                 year={Number(start.slice(0, 4))}
-                scope={subject}
+                scope={subject.kind === 'ROOT_LEADERS' ? { kind: 'WHOLE_CHURCH' } : subject}
               />
             ) : null}
           </div>

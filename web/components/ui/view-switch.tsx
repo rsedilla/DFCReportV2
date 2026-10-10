@@ -18,15 +18,26 @@ export function ViewSwitch<Key extends string>({
   value,
   onChange,
   className,
+  even = false,
 }: {
   label: string;
-  options: readonly { key: Key; label: string; count?: string | null }[];
+  /** `name` is what a screen reader says, where `label` is shorter than words (`#`). */
+  options: readonly { key: Key; label: string; name?: string; count?: string | null }[];
   value: Key;
   onChange: (key: Key) => void;
   className?: string;
+  /** Every button the same width (owner, 2026-10-09), for a switch whose words differ in length. */
+  even?: boolean;
 }) {
   return (
-    <div role="group" aria-label={label} className={cn('mt-4 flex flex-wrap', className)}>
+    <div
+      role="group"
+      aria-label={label}
+      className={cn(
+        even ? 'mt-4 grid w-full max-w-lg auto-cols-fr grid-flow-col' : 'mt-4 flex flex-wrap',
+        className,
+      )}
+    >
       {options.map((option) => {
         const pressed = option.key === value;
 
@@ -35,9 +46,11 @@ export function ViewSwitch<Key extends string>({
             key={option.key}
             type="button"
             aria-pressed={pressed}
+            aria-label={option.name}
             onClick={() => onChange(option.key)}
             className={cn(
               'inline-flex min-h-11 items-center gap-2 border px-3.5 text-sm',
+              even && 'min-w-0 justify-center px-2 text-center leading-tight',
               '-ml-px first:ml-0 first:rounded-l-md last:rounded-r-md',
               'focus-visible:outline-accent focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2',
               pressed

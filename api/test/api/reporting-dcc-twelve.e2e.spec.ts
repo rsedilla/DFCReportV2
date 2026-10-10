@@ -412,6 +412,44 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
       expect(body.elsewhere).toBe(0);
     });
 
+    it('gives the Senior Pastors both roots’ direct leaders as rows, grouped Men’s first (decision 0326)', async () => {
+      await present('2020-06-07', raymond, null);
+      await present('2020-06-07', carmelita, oriel);
+      await present('2020-06-07', anacleto, mark);
+      await present('2020-06-07', benigno, onofre);
+
+      const response = await twelve(`${WHOLE_JUNE}&rows=ROOT_LEADERS`, adminAccount);
+      expect(response.status).toBe(200);
+      const body = reconcile(response.body as Twelve);
+      const extra = response.body as {
+        rows: { leader: { id: string } | null; root_id: string }[];
+        roots: { id: string; network: string }[];
+      };
+
+      // Raymond's three by surname (Abella, Bautista, Zamora), then Oriel's one.
+      expect(extra.rows.map((row) => [row.leader?.id, row.root_id])).toEqual([
+        [onofre.id, raymond.id],
+        [manuel.id, raymond.id],
+        [pio.id, raymond.id],
+        [carmelita.id, oriel.id],
+      ]);
+      expect(extra.roots.map((root) => [root.id, root.network])).toEqual([
+        [raymond.id, 'MENS'],
+        [oriel.id, 'WOMENS'],
+      ]);
+      // Raymond himself is in no row, so he is the one counted elsewhere, once, under both.
+      expect(body.elsewhere).toBe(1);
+      expect(body.total.unique_people).toBe(4);
+    });
+
+    it('refuses the Senior Pastors’ rows with any scope but Whole Church', async () => {
+      const response = await twelve(`${juneOf(manuel)}&rows=ROOT_LEADERS`, adminAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(refusedFields(response.body)).toEqual(['rows']);
+    });
+
     it('counts, as elsewhere in the whole church, somebody under neither root', async () => {
       // A Person holding no pastoral assignment. Section 9 would refuse the record through the
       // route; it is written directly so the whole-church total is shown to count it and the

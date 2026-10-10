@@ -288,7 +288,7 @@ describe('Training (section 28)', () => {
     });
 
     it('refuses anybody filing for themselves, whatever their grant (decision 0280)', async () => {
-      for (const account of [markAccount, raymondAccount, admin]) {
+      for (const account of [markAccount, admin]) {
         const response = await submit(account, [graduate(account.personId, 'ENCOUNTER')]);
 
         expect(response.status).toBe(403);
@@ -311,9 +311,17 @@ describe('Training (section 28)', () => {
       expect(byLeader.status).toBe(403);
       expect(byLeader.body.error.code).toBe('SCOPE_DENIED');
 
-      const bySeniorPastor = await submit(raymondAccount, [graduate(grace.id, 'SOL_3')]);
-      expect(bySeniorPastor.status).toBe(201);
+      const byAdmin = await submit(admin, [graduate(grace.id, 'SOL_3')]);
+      expect(byAdmin.status).toBe(201);
       expect((await currentRow(grace.id, 'SOL_3')).confirmed_by).toBeNull();
+    });
+
+    it('refuses a Senior Pastor, who files nothing (decision 0326)', async () => {
+      const response = await submit(raymondAccount, [graduate(grace.id, 'SOL_3')]);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      expect(await allRows()).toHaveLength(0);
     });
   });
 

@@ -2005,6 +2005,48 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The Cells running at one instant, each with the category and the leader in force then,
+   * for the Senior Pastors' *Number of Cells* (decision 0326, point 3).
+   *
+   * **A Cell is running where a leadership row is in force at the instant**: creation opens
+   * one and closure ends it at the closure's date (sections 10 and 11), so this needs no
+   * reading of `cells.state`, which is current-state and would move a past month. Rows are
+   * half-open, `[started_at, ended_at)`, so on a handover's instant the incoming leader holds
+   * it. A Cell with no category in force carries none rather than being dropped, so the
+   * categories may add up to less than the Cells, never more.
+   */
+  async cellsInForceAt(
+    executor: Db | Transaction<Database>,
+    at: Date,
+  ): Promise<{ cellId: string; category: CellCategory | null; leaderId: string }[]> {
+    const result = await sql<{ cell_id: string; category: CellCategory | null; leader_id: string }>`
+      SELECT DISTINCT ON (held.cell_id)
+             held.cell_id,
+             category.category,
+             held.person_id AS leader_id
+        FROM cell_leaderships AS held
+        LEFT JOIN LATERAL (
+          SELECT kind.category
+            FROM cell_categories AS kind
+           WHERE kind.cell_id = held.cell_id
+             AND kind.started_at <= ${at}
+             AND (kind.ended_at IS NULL OR kind.ended_at > ${at})
+           ORDER BY kind.started_at DESC, kind.id DESC
+           LIMIT 1
+        ) AS category ON TRUE
+       WHERE held.started_at <= ${at}
+         AND (held.ended_at IS NULL OR held.ended_at > ${at})
+       ORDER BY held.cell_id, held.started_at DESC, held.id DESC
+    `.execute(executor);
+
+    return result.rows.map((row) => ({
+      cellId: canonicalId(row.cell_id),
+      category: row.category,
+      leaderId: canonicalId(row.leader_id),
+    }));
+  }
+
+  /**
    * The scheduled meetings of each Cell whose Manila day has begun, by date — the meetings
    * **due** so far (decision 0267).
    *

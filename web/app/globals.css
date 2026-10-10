@@ -62,6 +62,9 @@
   --color-accent: var(--accent);
   --color-accent-tint: var(--accent-tint);
   --color-field-invalid: var(--field-invalid);
+  --color-chart-green: var(--chart-green);
+  --color-chart-blue: var(--chart-blue);
+  --color-chart-pink: var(--chart-pink);
 
   /*
    * `--font-archivo` is minted by `next/font` in `app/layout.tsx` and self-hosted
@@ -92,7 +95,8 @@
   --raised: #f7f7f7;
   --ink: #111111;
   --muted: #6b6b6b;
-  --line: #d6d6d6;
+  /* Darkened from #d6d6d6 so boxes and rules are plain to see (owner, 2026-10-09). */
+  --line: #9a9a9a;
   --edge: #111111;
   /*
    * A step darker than the design's `#e4002b`, chosen by the owner on 2026-09-15.
@@ -103,6 +107,14 @@
   /* Behind the current sidebar item, under `accent` text (owner's choice, 2026-09-22). */
   --accent-tint: #fdecef;
   --field-invalid: #a2001e;
+  /*
+   * The three Trends lines: the whole church, the Men's root's branch and the Women's
+   * (owner, 2026-10-09). Named for the colour, not for what they mark, and never the only
+   * way the lines are told apart: weight, dash, a key and a table carry the same (1.4.1).
+   */
+  --chart-green: #1e7a3c;
+  --chart-blue: #1f5fa8;
+  --chart-pink: #c2185b;
 }
 
 /*
@@ -117,11 +129,14 @@
     --raised: #1c1c1c;
     --ink: #f2f2f2;
     --muted: #a6a6a6;
-    --line: #303030;
+    --line: #666666;
     --edge: #9a9a9a;
     --accent: #ff6b80;
     --accent-tint: #3a1219;
     --field-invalid: #ffb3be;
+    --chart-green: #5fd08a;
+    --chart-blue: #7fb2f0;
+    --chart-pink: #f48fb1;
   }
 }
 

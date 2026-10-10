@@ -442,6 +442,105 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
       expect(rowOf(body, raymond).unique_people).toBe(2);
       expect(body.total.unique_people).toBe(3);
     });
+
+    it('gives the Senior Pastors both roots’ direct leaders as rows, Men’s first, and reconciles with overlap and elsewhere both non-zero (decision 0326)', async () => {
+      // Oriel's one direct disciple, Carmelita, leads a Cell Felicidad attends.
+      await assignTo(db, carmelita.id, oriel.id);
+      const carmelitaCell = (await createCell(db, { leader: carmelita, createdAt: BEFORE })).id;
+      const felicidad = await createPerson(db, {
+        firstName: 'Felicidad',
+        lastName: 'Ibarra',
+        network: 'WOMENS',
+      });
+      await attend(await meeting(carmelitaCell, '2020-06-06', carmelita.id), felicidad);
+
+      // Anacleto is at Cells in two branches -- Manuel's (through Mark) and Onofre's -- so he
+      // is in both rows and once in the total: overlap 1.
+      await attend(await meeting(markCell, '2020-06-06', mark.id), anacleto);
+      await attend(await meeting(onofreCell, '2020-06-13', onofre.id), anacleto);
+
+      // Two people in the total and in no row. Benigno attends Raymond's own Cell: a root is
+      // not one of his own rows. Dionisio attends the Cell of Teodoro, who holds no pastoral
+      // assignment and so is under neither root.
+      const raymondCell = (await createCell(db, { leader: raymond, createdAt: BEFORE })).id;
+      await attend(await meeting(raymondCell, '2020-06-13', raymond.id), benigno);
+      const teodoro = await createPerson(db, {
+        firstName: 'Teodoro',
+        lastName: 'Ignacio',
+        network: 'MENS',
+      });
+      const teodoroCell = (await createCell(db, { leader: teodoro, createdAt: BEFORE })).id;
+      await attend(await meeting(teodoroCell, '2020-06-20', teodoro.id), dionisio);
+
+      const response = await twelve(
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=WHOLE_CHURCH&rows=ROOT_LEADERS`,
+        adminAccount,
+      );
+      expect(response.status).toBe(200);
+      // Section 20: every row's and the total's five stages sum to its unique people, and the
+      // rows less overlap plus elsewhere is the total (decision 0293).
+      const body = reconcile(response.body as Twelve);
+      const extra = response.body as {
+        rows: { leader: { id: string } | null; root_id: string }[];
+        roots: { id: string; network: string }[];
+      };
+
+      // Raymond's three by surname (Abella, Bautista, Zamora), then Oriel's one. Neither root
+      // is a row.
+      expect(extra.rows.map((row) => [row.leader?.id, row.root_id])).toEqual([
+        [onofre.id, raymond.id],
+        [manuel.id, raymond.id],
+        [pio.id, raymond.id],
+        [carmelita.id, oriel.id],
+      ]);
+      expect(extra.roots.map((root) => [root.id, root.network])).toEqual([
+        [raymond.id, 'MENS'],
+        [oriel.id, 'WOMENS'],
+      ]);
+      expect(body.own).toBeNull();
+
+      expect(rowOf(body, onofre).unique_people).toBe(1);
+      expect(rowOf(body, manuel).unique_people).toBe(1);
+      expect(rowOf(body, pio).unique_people).toBe(0);
+      expect(rowOf(body, carmelita).unique_people).toBe(1);
+      expect(body.overlap).toBe(1);
+      expect(body.elsewhere).toBe(2);
+      expect(body.total.unique_people).toBe(4);
+      // Stated outright as well as through `reconcile`, so the case names what it is about.
+      const rows = body.rows.reduce((sum, row) => sum + row.unique_people, 0);
+      expect(rows - body.overlap + body.elsewhere).toBe(body.total.unique_people);
+      for (const row of body.rows) {
+        expect(bucketSum(row)).toBe(row.unique_people);
+      }
+
+      // The total is Whole Church's, the same figure the plain whole-church table carries.
+      const whole = await ok(
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=WHOLE_CHURCH`,
+        adminAccount,
+      );
+      expect(body.total).toEqual(whole.total);
+    });
+
+    it('refuses the Senior Pastors’ rows with any scope but Whole Church', async () => {
+      for (const query of [
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=LEADER&leader_id=${raymond.id}`,
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=LEADER&leader_id=${manuel.id}`,
+      ]) {
+        const response = await twelve(`${query}&rows=ROOT_LEADERS`, adminAccount);
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(refusedFields(response.body)).toEqual(['rows']);
+      }
+
+      // CELL is refused before `rows` is read, as a Cell has no 12; still VALIDATION_FAILED.
+      const cell = await twelve(
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=CELL&cell_id=${markCell}&rows=ROOT_LEADERS`,
+        adminAccount,
+      );
+      expect(cell.status).toBe(422);
+      expect(cell.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   // ---------------------------------------------------------------------------------------

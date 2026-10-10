@@ -182,6 +182,14 @@
       "screen": "web/components/recording-status.tsx"
     },
     {
+      "route": "GET /api/v1/reports/church-counts",
+      "screen": "web/components/church-counts.tsx"
+    },
+    {
+      "route": "GET /api/v1/reports/trends",
+      "screen": "web/app/trends/page.tsx"
+    },
+    {
       "route": "GET /api/v1/dcc/owed",
       "screen": "web/app/dashboard/page.tsx"
     },

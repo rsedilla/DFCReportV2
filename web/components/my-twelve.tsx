@@ -37,14 +37,19 @@ const WHAT: Record<RangeKind, string> = {
 export function PeriodTabs({
   value,
   onChange,
+  inBar = false,
 }: {
   value: RangeKind;
   onChange: (value: RangeKind) => void;
+  /** Inside the control bar, beside the period it chooses (the Senior Pastors, owner 2026-10-09). */
+  inBar?: boolean;
 }) {
   return (
     <ViewSwitch
       label="Report period"
       options={PERIODS.map(([key, label]) => ({ key, label }))}
+      even
+      className={inBar ? 'mt-0 w-auto' : undefined}
       value={value}
       onChange={onChange}
     />
@@ -62,6 +67,7 @@ export function RangeNavigator({
   earliest,
   open,
   onChange,
+  quiet = false,
 }: {
   kind: RangeKind;
   start: string;
@@ -70,6 +76,12 @@ export function RangeNavigator({
   earliest?: string;
   open: boolean | undefined;
   onChange: (start: string) => void;
+  /**
+   * An open period says *so far* in plain words rather than the window's date in a tag, and a
+   * closed one says nothing (the Senior Pastors, owner 2026-10-09). Still the open flag
+   * sections 17 and 19 ask for; they do not record, so the window's last day is not theirs.
+   */
+  quiet?: boolean;
 }) {
   const button =
     'border-line focus-visible:outline-accent inline-flex min-h-11 min-w-11 items-center justify-center border text-lg focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40';
@@ -95,7 +107,9 @@ export function RangeNavigator({
         ›
       </button>
       <span className="text-accent text-sm font-bold">{rangeLabel(kind, start)}</span>
-      {open === undefined ? null : (
+      {quiet ? (
+        open ? <span className="text-muted text-sm">· so far</span> : null
+      ) : open === undefined ? null : (
         <span className="border-edge border px-2 py-0.5 text-xs font-bold tracking-[0.07em] uppercase">
           {open ? openUntilLabel(rangeGuardMonth(kind, start, todayInManila())) : 'Closed'}
         </span>
@@ -264,6 +278,130 @@ export function TwelveTable({
           {kind === 'WEEK' ? 'weeks counts once in the month' : 'months counts once here'}.
         </p>
       )}
+    </section>
+  );
+}
+
+/**
+ * The two Senior Pastors' My 12 (decision 0326, point 3): the whole church's figures as cards,
+ * then one table for each root's direct leaders, the Men's root first, each headed by the
+ * root's title and name. Each Senior Pastor sees both tables in full.
+ *
+ * **Decision 0293's two lines sit once, under both tables**: somebody at Cells in two branches
+ * is in both rows, so one line takes off each count beyond a person's first and another adds
+ * those in no row, the roots among them, and the Total column adds up to the total.
+ *
+ * **Total comes first and there is no People column** (owner, 2026-10-09): a row's Total is
+ * its unique people, which is VIP through Regular added, everyone being in one stage.
+ */
+export function RootLeadersTwelve({
+  twelve,
+  openHref,
+}: {
+  twelve: Omit<CellTwelve, 'own' | 'coverage'>;
+  kind: RangeKind;
+  openHref: (leaderId: string) => string;
+  where?: string;
+}) {
+  const cell = 'px-3 py-3 text-right tabular-nums';
+  const roots = twelve.roots ?? [];
+
+  return (
+    // Unframed, so the tables take the whole width, and headed in two words (owner, 2026-10-09).
+    // The period's open tag, beside the period above, says when a figure is *so far* (section 17).
+    <section aria-labelledby="root-leaders-heading">
+      <h2 id="root-leaders-heading" className="field-label">
+        Whole Church
+      </h2>
+
+      <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
+        <div className="border-line border p-2">
+          <dt className="text-ink text-sm font-bold">Total</dt>
+          <dd className="text-xl font-bold tabular-nums">{twelve.total.unique_people}</dd>
+        </div>
+        {STAGES.map(([key, label]) => (
+          <div key={key} className="border-line border p-2">
+            <dt className="text-ink text-sm font-bold">{label}</dt>
+            <dd className="text-xl font-bold tabular-nums">{twelve.total.classification[key]}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {roots.map((root) => {
+        const rows = twelve.rows.filter((row) => row.root_id === root.id);
+        // No count in the heading (owner, 2026-10-09): the rows are there to see.
+        const heading = `${root.full_name ?? 'A Network root'}’s leaders`;
+
+        return (
+          <div key={root.id} className="mt-5">
+            <h3 className="text-base font-bold tracking-tight">{heading}</h3>
+            <Table caption={heading} className="mt-2">
+              <thead>
+                <tr>
+                  <HeaderCell style={{ width: '34%' }}>Primaries</HeaderCell>
+                  {/* The six figures share the rest of the row equally (owner, 2026-10-09). */}
+                  <HeaderCell className="text-right" style={{ width: '11%' }}>
+                    Total
+                  </HeaderCell>
+                  {STAGES.map(([key, label]) => (
+                    <HeaderCell key={key} className="text-right" style={{ width: '11%' }}>
+                      {label}
+                    </HeaderCell>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
+                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
+                    <td className="px-3 py-3">
+                      {row.leader === null ? (
+                        <span className="text-muted">A leader you don’t oversee</span>
+                      ) : (
+                        <Link
+                          href={openHref(row.leader.id)}
+                          className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {row.leader.full_name}
+                        </Link>
+                      )}
+                    </td>
+                    <td className={`${cell} font-bold`}>{row.unique_people}</td>
+                    {STAGES.map(([key]) => (
+                      <td key={key} className={cell}>
+                        {row.classification[key]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        );
+      })}
+
+      <Table caption="Under both tables" className="mt-5">
+        <tbody>
+          {twelve.overlap === 0 ? null : (
+            <tr className={rowClasses}>
+              <td className="text-muted px-3 py-3 italic">Counted under more than one leader</td>
+              <td className={`${cell} text-muted italic`}>−{twelve.overlap}</td>
+            </tr>
+          )}
+          {twelve.elsewhere === 0 ? null : (
+            <tr className={rowClasses}>
+              <td className="text-muted px-3 py-3 italic">
+                Under none of these leaders, the two Network roots among them
+              </td>
+              <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
+            </tr>
+          )}
+          <tr className="border-edge border-t-2 font-bold">
+            <td className="px-3 py-3">Total</td>
+            <td className={cell}>{twelve.total.unique_people}</td>
+          </tr>
+        </tbody>
+      </Table>
     </section>
   );
 }
