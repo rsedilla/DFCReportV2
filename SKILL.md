@@ -316,7 +316,7 @@ The header contributes nothing. It is fixed, and a file whose header differs is 
   - `WIDOWED`
 - Mobile Number — required when a Person is added, unless *Not given yet* is ticked (decision 0328)
 
-**Both are asked for every time a Person is added, and either may be left blank by ticking *Not given yet*** (ruling of 2026-10-10, decision 0328). Nothing about the tick is stored. It exists for the reason this section gives for email: a mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because two of the three Tier 1 rules below read it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
+**Both are asked for every time a Person is added through the application, and either may be left blank by ticking *Not given yet*** (ruling of 2026-10-10, decision 0328). Nothing about the tick is stored. It exists for the reason this section gives for email: a mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because two of the three Tier 1 rules below read it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
 
 Two situations produce a Person with no birthday, and the second is why this is a rule rather than a convenience. A leader meeting somebody for the first time may not know it. And **somebody may decline to give it** — a first conversation is not the moment to press for personal information, and a church that insists serves least the people most guarded about their details.
 
@@ -338,7 +338,7 @@ Two situations produce a Person with no birthday, and the second is why this is 
 
 **This section defines adding one and does not define removing one.** An edit that sends `birth_date` explicitly as null is refused as malformed input (`VALIDATION_FAILED`, Section 22) rather than permitted by omission — any explicit null, whether or not a birthday is recorded, since the refusal reads the request and never the stored row. Omitting the field entirely is unaffected and means what it always meant: leave it alone. Making the column nullable was a decision about what may be *recorded at first contact*, and it must not silently become a decision that a recorded birthday may be erased. Whether removal should ever be possible is a separate question, and is not answered here.
 
-**Nothing else requires one.** An edit does not, so a name can be corrected on a record that has no birthday, and the initial leadership-tree import does not (Section 2). A Person recorded without one before decision 0328 stays valid. The requirement is a question asked at first contact, and the tick is what keeps it from becoming a fabrication.
+**Nothing else requires one.** An edit does not, so a name can be corrected on a record that has no birthday, and neither the initial leadership-tree import (Section 2) nor the first Admin account (Section 6) does. A Person recorded without one before decision 0328 stays valid. The requirement is a question asked at first contact, and the tick is what keeps it from becoming a fabrication.
 
 ```text
 persons
@@ -368,7 +368,7 @@ Keeping the two apart also closes an escalation path. Every leader holds `people
 
 **No messaging handles.** Do not store Messenger, Viber, WhatsApp, or similar identifiers. They change often, they are held inconsistently, and a mobile number already reaches the same person. Following someone up is the leader's pastoral responsibility, and the system's job is to hold the number, not the conversation.
 
-**Optional, not required.** A first-time visitor may decline to give a number, and a required field would be satisfied with a fabricated one. Prompt for it clearly when a Person is created, particularly when adding a DCC VIP (Section 9), and leave it empty when it is genuinely not given.
+**Asked for, and never fabricated.** A first-time visitor may decline to give a number, and a field that must be filled would be satisfied with a fabricated one. It is required when a Person is added, particularly a DCC VIP (Section 9), and *Not given yet* is ticked when it is genuinely not given (decision 0328).
 
 Store a normalized form suitable for dialling alongside the value as entered. Validate loosely: family abroad, visitors, and landlines all produce numbers that do not match a local mobile pattern, and rejecting them loses real contact detail for no benefit.
 

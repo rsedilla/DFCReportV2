@@ -10,7 +10,8 @@ fields are optional, Section 9's registration steps 4 and 5, and the sentences i
 them ticks *Not given yet*.** `POST /api/v1/people` refuses a request that leaves either field
 blank without its tick, as `VALIDATION_FAILED` naming the field. The ticks travel as
 `birth_date_not_given` and `mobile_number_not_given`, both booleans, both optional, both on
-that route alone. A value sent together with its tick is refused the same way, because the
+that route alone. A field is blank when its key is absent, `null`, or a string with nothing but
+spaces. A value sent together with its tick is refused the same way, because the
 request then says two things about one field.
 
 **2. Nothing is stored about the tick.** A Person added with *Not given yet* is recorded with
@@ -38,9 +39,8 @@ them optional still holds: a field that must be filled gets filled with a guess,
 carrying one guessed birthday block each other at Tier 1. The tick keeps the honest answer
 available, so asking is required and inventing is still never needed.
 
-The route is narrowed rather than versioned. Section 22 versions a change that breaks a client,
-and the only client of `/api/v1` today is the web application, which ships the screen change
-with it; no native client exists yet (Section 2).
+More recorded numbers means more relatives on one household number matching at Tier 1 and
+Tier 2 (Section 3). The matching rules are unchanged.
 
 Decision 0328, indexed in [CLAUDE.md](../../CLAUDE.md).
 
