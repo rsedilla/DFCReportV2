@@ -1,7 +1,6 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -23,6 +22,7 @@ import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * A leader's DCC checklist for one Sunday (SKILL.md sections 9, 13, 14 and 22;
@@ -182,12 +182,7 @@ function DccChecklist() {
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
-        <Link
-          href="/dcc"
-          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to your month
-        </Link>
+        <TextLink href="/dcc">Back to your month</TextLink>
       </p>
 
       {/* Red for the reason the Cell meeting screen gives. */}
@@ -208,12 +203,7 @@ function DccChecklist() {
               : '.'}
           </p>
           <p className="mt-2">
-            <Link
-              href={`/dcc/${params.id}`}
-              className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Back to your own checklist
-            </Link>
+            <TextLink href={`/dcc/${params.id}`}>Back to your own checklist</TextLink>
           </p>
         </div>
       ) : null}
@@ -257,12 +247,7 @@ function DccChecklist() {
           {save.isSuccess ? (
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <Link
-                href="/dashboard"
-                className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center font-normal underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Back to what&rsquo;s awaiting a record
-              </Link>
+              <TextLink inline href="/dashboard">Back to what&rsquo;s awaiting a record</TextLink>
             </p>
           ) : null}
 
@@ -276,8 +261,8 @@ function DccChecklist() {
                   <p className="text-muted mt-1 text-sm leading-relaxed">
                     Saving replaces the marks you change.
                   </p>
-                  <Button variant="quiet" className="mt-3" onClick={stopEditing}>
-                    Stop editing
+                  <Button variant="secondary" className="mt-3" onClick={stopEditing}>
+                    Cancel
                   </Button>
                 </>
               ) : (
@@ -291,7 +276,7 @@ function DccChecklist() {
                   {me.data ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
-                        Change recorded marks
+                        Edit marks
                       </Button>
                     ) : (
                       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -397,7 +382,7 @@ function DccChecklist() {
                   onClick={() => save.mutate()}
                   disabled={save.isPending}
                 >
-                  {save.isPending ? 'Saving…' : 'Save'}
+                  {save.isPending ? 'Saving…' : 'Save marks'}
                 </Button>
               ) : null}
             </div>

@@ -67,9 +67,7 @@ function NewCellForm() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
-      <TextLink href="/cells" className="text-sm">
-        ‹ Back to Cells
-      </TextLink>
+      <TextLink href="/cells">Back to Cells</TextLink>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">New Cell</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         For setting up the church&rsquo;s Cells. It gets a Cell ID when you create it, and its

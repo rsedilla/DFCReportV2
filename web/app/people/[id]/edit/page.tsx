@@ -246,7 +246,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             entry (section 5), so it is its own action on the profile and never part of Save.
           */}
           <div className="flex flex-col gap-1.5">
-            <p className="field-label">Pastoral leader</p>
+            <p className="field-label">Cell Leader</p>
             <p className="text-sm">
               {path.isPending
                 ? 'Loading…'
@@ -283,8 +283,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             onChange={(next) => edit('civil_status', next)}
           />
 
+          {/* Optional on an edit; only adding a person requires them (decision 0328). */}
           <Field
-            label="Birthday"
+            label="Birthday (optional)"
             type="date"
             name="birth_date"
             autoComplete="off"
@@ -294,18 +295,17 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             description={
               person.birth_date
                 ? 'A recorded birthday cannot be removed here — only corrected.'
-                : 'Optional. Leave it blank rather than guessing.'
+                : undefined
             }
           />
           <Field
-            label="Mobile number"
+            label="Mobile number (optional)"
             type="tel"
             name="mobile_number"
             autoComplete="off"
             value={values.mobile_number}
             error={fieldErrors.mobile_number}
             onChange={(event) => edit('mobile_number', event.target.value)}
-            description="Optional."
           />
 
           <div className="flex flex-wrap gap-3">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -26,6 +25,7 @@ import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * Recording one Cell meeting (SKILL.md sections 12, 13, 14 and 22; decisions 0127,
@@ -61,7 +61,7 @@ import { dayLabel, todayInManila } from '@/lib/reporting-month';
  * **A recorded meeting is shown as it stands, and correcting it is a deliberate step.**
  * Section 7 guards amending a submitted
  * record with `cell.correct_subtree`, separately from `cell.take_attendance`, so
- * "Edit this record" is offered to an account holding that capability and the marks
+ * "Edit meeting" is offered to an account holding that capability and the marks
  * are read-only until it is pressed. That is a courtesy and never the control: the API
  * resolves the capability against this meeting (section 1, principle 4).
  *
@@ -334,12 +334,9 @@ function RecordMeeting() {
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
-        <Link
-          href={`/cells/${params.id}/meetings`}
-          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
+        <TextLink href={`/cells/${params.id}/meetings`}>
           Back to this Cell&rsquo;s meetings
-        </Link>
+        </TextLink>
       </p>
 
       {/*
@@ -412,12 +409,7 @@ function RecordMeeting() {
             // Polite, because it is the result of the reader's own action.
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <Link
-                href="/dashboard"
-                className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center font-normal underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Back to what&rsquo;s awaiting a record
-              </Link>
+              <TextLink inline href="/dashboard">Back to what&rsquo;s awaiting a record</TextLink>
             </p>
           ) : null}
 
@@ -431,8 +423,8 @@ function RecordMeeting() {
                       ? 'Saving replaces what is recorded. If whether it met was recorded wrongly, change the answer below and say why: the first report is kept in the meeting’s history.'
                       : 'Saving replaces the marks already recorded.'}
                   </p>
-                  <Button variant="quiet" className="mt-3" onClick={stopEditing}>
-                    Stop editing
+                  <Button variant="secondary" className="mt-3" onClick={stopEditing}>
+                    Cancel
                   </Button>
                 </>
               ) : (
@@ -460,7 +452,7 @@ function RecordMeeting() {
                   {me.data && !followOnly ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
-                        Edit this record
+                        Edit meeting
                       </Button>
                     ) : (
                       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -622,8 +614,8 @@ function RecordMeeting() {
                   {save.isPending
                     ? 'Saving…'
                     : correcting
-                      ? 'Save the correction'
-                      : 'Save this meeting'}
+                      ? 'Save correction'
+                      : 'Save meeting'}
                 </Button>
               </div>
             </div>

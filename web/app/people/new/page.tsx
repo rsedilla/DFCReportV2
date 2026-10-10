@@ -491,8 +491,8 @@ function NewPersonForm() {
           birthDate={notGiven.birth_date ? '' : values.birth_date}
           mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
         />        <PersonPicker
-          legend="Pastoral leader"
-          description="Who will pastor this person? Required, and it decides who can see and edit their details."
+          legend="Cell Leader"
+          description="Who leads this person? Required, and it decides who can see and edit their details."
           searchLabel="Search for a leader by name"
           selectedId={chosenLeaderId}
           selectedName={chosenLeaderName}
@@ -510,7 +510,7 @@ function NewPersonForm() {
 
         {/* It follows the leader field above, so changing the leader changes whose Cells come first. */}
         <CellPicker
-          label="Cell"
+          label="Cell Group Information"
           description={
             network === null
               ? 'Optional. A Cell you oversee. They can also be added to a Cell later, from their record.'

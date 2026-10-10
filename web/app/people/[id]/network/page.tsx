@@ -8,6 +8,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getPastoralPath } from '@/lib/hierarchy';
 import { describeFailure } from '@/lib/messages';
+import { TextLink } from '@/components/ui/text-link';
 
 /**
  * Where a person sits in the pastoral tree (SKILL.md sections 5 and 8; decision 0131).
@@ -43,12 +44,7 @@ function PastoralNetwork() {
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
-        <Link
-          href={`/people/${params.id}`}
-          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to this person
-        </Link>
+        <TextLink href={`/people/${params.id}`}>Back to this person</TextLink>
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">

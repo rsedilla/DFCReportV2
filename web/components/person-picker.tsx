@@ -165,12 +165,14 @@ export function PersonPicker({
           onChange={(event) => setTerm(event.target.value)}
           className="min-w-0 sm:flex-1"
         />
+        {/* Named apart from the Cell picker's Search, which can share the page (2.4.6). */}
         <Button
           variant="secondary"
+          aria-label="Search people"
           disabled={term.trim().length < minimum}
           onClick={() => setSubmitted(term)}
         >
-          Find
+          Search
         </Button>
       </div>
 

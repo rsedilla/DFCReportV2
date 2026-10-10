@@ -98,7 +98,7 @@ test.describe('which search each surface asks for', () => {
     // label and button differ from the People screen's, which is why they are named
     // rather than reused.
     await page.getByLabel('Search for a leader by name').fill('Bautista');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
 
     await expect
       .poll(() => searches.length, { message: 'the picker never searched' })
@@ -175,7 +175,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     ).toBeVisible();
 
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
 
     await expect
       .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'Marilou').length, {
@@ -219,7 +219,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
 
     await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
     expect(searches.length).toBeGreaterThan(0);
@@ -258,7 +258,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     ).toBeVisible();
 
     await dialog.getByLabel('Search for a leader by name').fill('ann');
-    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Search people' }).click();
 
     await expect
       .poll(() => searches.filter((u) => new URL(u).searchParams.get('q') === 'ann').length, {
@@ -281,7 +281,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     await page.goto(`/cells/${CELL_WITH_MEETINGS.id}/meetings/2026-06-27`);
     await page.getByRole('radio', { name: 'Someone else' }).check();
     await page.getByLabel('Search for a person by name').fill('Marilou');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
 
     await expect(page.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
     expect(searches.length).toBeGreaterThan(0);
@@ -396,7 +396,7 @@ test.describe('a church-wide picker is bounded (decision 0303)', () => {
 
     await page.goto('/people/new');
     const box = page.getByLabel('Search for a leader by name');
-    const find = page.getByRole('button', { name: 'Find' });
+    const find = page.getByRole('button', { name: 'Search people' });
 
     await box.fill('Cr');
     await expect(find).toBeDisabled();
@@ -449,7 +449,7 @@ test.describe('a church-wide picker is bounded (decision 0303)', () => {
 
     await page.goto('/people/new');
     await page.getByLabel('Search for a leader by name').fill('Cro');
-    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Search people' }).click();
     await expect(page.getByRole('button', { name: 'Choose' })).toHaveCount(20);
 
     await page.getByRole('button', { name: 'Show more' }).click();

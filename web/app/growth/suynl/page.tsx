@@ -41,7 +41,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  *
  * **Three cards that add up to everyone listed**, each narrowing the list to its people.
  * A person who has done all ten folds to one line with the day the tenth was filed, and
- * a Change lessons action that opens the ten boxes again, and Close to fold them back
+ * an Edit lessons action that opens the ten boxes again, and Close to fold them back
  * while nothing has changed.
  *
  * **A row the reader may not file for shows marks rather than boxes** (`may_file`),
@@ -484,14 +484,14 @@ function Graduated({ row, onCorrect }: { row: SuynlPerson; onCorrect: () => void
       <span>Graduated {row.graduated_on ? longDay(row.graduated_on) : ''}</span>
       {row.may_file ? (
         <Button variant="secondary" onClick={onCorrect}>
-          Change lessons
+          Edit lessons
         </Button>
       ) : null}
     </p>
   );
 }
 
-/** Opened with Change lessons and nothing changed yet: Close folds it again. */
+/** Opened with Edit lessons and nothing changed yet: Close folds it again. */
 function closable(
   row: SuynlPerson,
   opened: Set<string>,

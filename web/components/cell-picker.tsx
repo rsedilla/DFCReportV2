@@ -110,7 +110,7 @@ export function CellPicker({
       {leaders.length > 0 ? (
         <>
           <p className="text-muted mt-4 text-xs font-bold">
-            {leaders.length === 1 ? 'Their pastoral leader’s Cell' : 'Their pastoral leader’s Cells'}
+            {leaders.length === 1 ? 'Their Cell Leader’s Cell' : 'Their Cell Leader’s Cells'}
           </p>
           <CellList cells={leaders} onSelect={onSelect} />
         </>
@@ -118,7 +118,7 @@ export function CellPicker({
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field
-          label="Find a Cell"
+          label="Search for a Cell"
           description="A leader’s name or a Cell ID."
           type="search"
           name="cell_q"
@@ -129,6 +129,7 @@ export function CellPicker({
         />
         <Button
           variant="secondary"
+          aria-label="Search Cells"
           disabled={term.trim().length < 2}
           onClick={() => setSubmitted(term.trim())}
         >

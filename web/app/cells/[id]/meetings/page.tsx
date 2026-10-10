@@ -25,6 +25,7 @@ import {
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { TextLink } from '@/components/ui/text-link';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -82,9 +83,7 @@ function CellMeetings() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <p className="mb-4">
-        <Link href="/cells" className={`${LINK} text-accent text-sm font-medium`}>
-          Back to Cells
-        </Link>
+        <TextLink href="/cells">Back to Cells</TextLink>
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
