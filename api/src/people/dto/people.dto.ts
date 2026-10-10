@@ -9,9 +9,12 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   Min,
+  ValidateBy,
   ValidateIf,
+  type ValidationArguments,
 } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
@@ -52,6 +55,29 @@ const SEXES: Sex[] = ['MALE', 'FEMALE'];
 const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
 
 /**
+ * A *Not given yet* tick is refused beside a value for its field, because the request
+ * then says two things about one field (decision 0328). Blank is absent, null, or a
+ * string of nothing but spaces.
+ */
+function IsBlankWhenTicked(field: string) {
+  return ValidateBy({
+    name: 'isBlankWhenTicked',
+    validator: {
+      validate: (ticked: unknown, args?: ValidationArguments) => {
+        if (ticked !== true) return true;
+        const value = (args?.object as Record<string, unknown>)[field];
+        return (
+          value === undefined ||
+          value === null ||
+          (typeof value === 'string' && value.trim() === '')
+        );
+      },
+      defaultMessage: () => `${field} must be blank when it is marked not given`,
+    },
+  });
+}
+
+/**
  * Validation supports legitimate names containing spaces, hyphens, apostrophes
  * and Unicode (SKILL.md section 3, Name handling). There is deliberately no
  * "letters only" rule: it rejects real names and teaches encoders to invent
@@ -87,14 +113,19 @@ export class CreatePersonDto {
   /**
    * A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22).
    *
-   * Optional, per section 3. A leader registering somebody at first contact may
-   * not have asked, and somebody may decline to give it — and a mandatory field
-   * that people cannot fill is filled with fictions, which for this field means
-   * false Tier 1 matches that then block real people from being recorded.
+   * Required unless `birth_date_not_given` is true (section 3, decision 0328). The
+   * tick exists so that a birthday nobody gave is left blank rather than guessed: a
+   * guessed one makes false Tier 1 matches that block real people being recorded.
    */
-  @IsOptional()
+  @ValidateIf((body: CreatePersonDto) => body.birth_date_not_given !== true)
   @IsManilaCalendarDate()
   birth_date?: string;
+
+  /** *Not given yet* (decision 0328). Refused alongside a birthday. Nothing stores it. */
+  @IsOptional()
+  @IsBoolean()
+  @IsBlankWhenTicked('birth_date')
+  birth_date_not_given?: boolean;
 
   @IsIn(SEXES)
   sex!: Sex;
@@ -103,15 +134,22 @@ export class CreatePersonDto {
   civil_status!: CivilStatus;
 
   /**
-   * Optional, and loosely validated (section 3). A required contact field gets
-   * filled with fictions, and family abroad, visitors and landlines all produce
-   * numbers no local mobile pattern accepts.
+   * Required unless `mobile_number_not_given` is true (section 3, decision 0328), and
+   * loosely validated: family abroad, visitors and landlines all produce numbers no
+   * local mobile pattern accepts.
    */
-  @IsOptional()
+  @ValidateIf((body: CreatePersonDto) => body.mobile_number_not_given !== true)
   @IsString()
-  @Length(0, 40)
+  @Length(1, 40)
+  @Matches(/\S/, { message: 'mobile_number must not be blank' })
   @IsStorableText()
   mobile_number?: string | null;
+
+  /** *Not given yet* (decision 0328). Refused alongside a number. Nothing stores it. */
+  @IsOptional()
+  @IsBoolean()
+  @IsBlankWhenTicked('mobile_number')
+  mobile_number_not_given?: boolean;
 
   /**
    * Required here, though the service permits null. Section 9 captures the leader

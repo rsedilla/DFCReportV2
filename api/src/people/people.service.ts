@@ -498,8 +498,8 @@ export class PeopleService {
         first_name: input.firstName,
         middle_name: input.middleName,
         last_name: input.lastName,
-        // Section 3 makes a birthday optional and forbids inventing one. Nothing
-        // here knows it, and a bootstrap is the last place to guess.
+        // Section 3 requires a birthday only of `POST /people` (decision 0328) and
+        // forbids inventing one. Nothing here knows it.
         birth_date: null,
         sex: input.sex,
         civil_status: input.civilStatus,

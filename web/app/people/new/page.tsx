@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CellPicker } from '@/components/cell-picker';
@@ -52,18 +52,40 @@ import {
  * possible match — which is all section 3 needs, because the answer is to ask the
  * leader who holds them.
  *
- * **Birthday and mobile number are optional, and nothing here nags for them.**
- * The 2026-08-24 ruling made the birthday optional because a mandatory field
- * people cannot fill gets filled with fictions — and for this field a fiction is
- * worse than a blank, since two of the three Tier 1 rules read it and a false
- * match refuses a real person. Somebody may also decline, which is a decision
- * this form must not press on.
+ * **Birthday and mobile number are required, unless *Not given yet* is ticked**
+ * (decision 0328). The tick is what keeps a required field from being filled with a
+ * guess, which for a birthday would make false Tier 1 matches that refuse real people.
  */
 export default function NewPersonPage() {
   return (
     <AppShell>
       <NewPersonForm />
     </AppShell>
+  );
+}
+
+/** *Not given yet* under a required detail (decision 0328). A 24px box, so 2.5.8 holds. */
+function NotGivenTick({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="flex min-h-11 items-center gap-3">
+      <input
+        id={id}
+        type="checkbox"
+        className="accent-accent size-6 shrink-0"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <label htmlFor={id} className="text-sm">
+        Not given yet
+      </label>
+    </div>
   );
 }
 
@@ -186,6 +208,13 @@ function NewPersonForm() {
     beginNewWrite();
   }
 
+  const [notGiven, setNotGiven] = useState({ birth_date: false, mobile_number: false });
+
+  function tickNotGiven(key: keyof typeof notGiven, checked: boolean) {
+    setNotGiven((current) => ({ ...current, [key]: checked }));
+    beginNewWrite();
+  }
+
   // The pre-selected sex arrives after the page loads and changes the body, so it takes a new
   // key like any other change (see `writeKey`), adjusted during render rather than in an effect.
   const [keyedDefaultSex, setKeyedDefaultSex] = useState(defaultSex);
@@ -208,8 +237,10 @@ function NewPersonForm() {
           last_name: values.last_name.trim(),
           sex: sex as Sex,
           civil_status: values.civil_status as CivilStatus,
-          birth_date: values.birth_date || null,
-          mobile_number: values.mobile_number.trim() || null,
+          birth_date: notGiven.birth_date ? null : values.birth_date || null,
+          birth_date_not_given: notGiven.birth_date || undefined,
+          mobile_number: notGiven.mobile_number ? null : values.mobile_number.trim() || null,
+          mobile_number_not_given: notGiven.mobile_number || undefined,
           pastoral_leader_id: chosenLeaderId as string,
           acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
         },
@@ -242,7 +273,14 @@ function NewPersonForm() {
       }
 
       const next: Record<string, string | null> = {};
-      for (const field of ['first_name', 'last_name', 'birth_date', 'mobile_number']) {
+      for (const field of [
+        'first_name',
+        'last_name',
+        'birth_date',
+        'birth_date_not_given',
+        'mobile_number',
+        'mobile_number_not_given',
+      ]) {
         next[field] = fieldErrorFor(error, field);
       }
       setFieldErrors(next);
@@ -397,26 +435,44 @@ function NewPersonForm() {
           onChange={(next) => set('civil_status', next)}
         />
 
-        <Field
-          label="Birthday"
-          type="date"
-          name="birth_date"
-          autoComplete="off"
-          value={values.birth_date}
-          error={fieldErrors.birth_date}
-          onChange={(event) => set('birth_date', event.target.value)}
-          description="Optional. Leave it blank rather than guessing — an invented date can stop a real person being recorded later."
-        />
-        <Field
-          label="Mobile number"
-          type="tel"
-          name="mobile_number"
-          autoComplete="off"
-          value={values.mobile_number}
-          error={fieldErrors.mobile_number}
-          onChange={(event) => set('mobile_number', event.target.value)}
-          description="Optional."
-        />
+        {/* Both required unless Not given yet is ticked, and nothing stores the tick (decision 0328). */}
+        <div className="flex flex-col gap-2">
+          <Field
+            label="Birthday (required)"
+            type="date"
+            name="birth_date"
+            autoComplete="off"
+            value={notGiven.birth_date ? '' : values.birth_date}
+            disabled={notGiven.birth_date}
+            error={fieldErrors.birth_date ?? fieldErrors.birth_date_not_given}
+            onChange={(event) => set('birth_date', event.target.value)}
+          />
+          {/* Hidden once something is typed, so a value and a tick never show together. */}
+          {notGiven.birth_date || values.birth_date === '' ? (
+            <NotGivenTick
+              checked={notGiven.birth_date}
+              onChange={(checked) => tickNotGiven('birth_date', checked)}
+            />
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Field
+            label="Mobile number (required)"
+            type="tel"
+            name="mobile_number"
+            autoComplete="off"
+            value={notGiven.mobile_number ? '' : values.mobile_number}
+            disabled={notGiven.mobile_number}
+            error={fieldErrors.mobile_number ?? fieldErrors.mobile_number_not_given}
+            onChange={(event) => set('mobile_number', event.target.value)}
+          />
+          {notGiven.mobile_number || values.mobile_number.trim() === '' ? (
+            <NotGivenTick
+              checked={notGiven.mobile_number}
+              onChange={(checked) => tickNotGiven('mobile_number', checked)}
+            />
+          ) : null}
+        </div>
 
         {/*
           **The pre-flight lookup, which is why section 3 has that endpoint.**
@@ -432,8 +488,8 @@ function NewPersonForm() {
         <PossibleMatches
           firstName={values.first_name}
           lastName={values.last_name}
-          birthDate={values.birth_date}
-          mobileNumber={values.mobile_number}
+          birthDate={notGiven.birth_date ? '' : values.birth_date}
+          mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
         />        <PersonPicker
           legend="Pastoral leader"
           description="Who will pastor this person? Required, and it decides who can see and edit their details."

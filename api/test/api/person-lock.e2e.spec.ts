@@ -420,6 +420,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
           birth_date: '1990-04-11',
           sex: 'FEMALE',
           civil_status: 'SINGLE',
+          mobile_number_not_given: true,
           pastoral_leader_id: archived.id,
         }),
     );

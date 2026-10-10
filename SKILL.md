@@ -189,7 +189,7 @@ This corrects an earlier statement of this section, which said the tree "is know
 
 So the import loads the **spine**: the two Network roots, and each root's direct disciples. It carries names, sex, and each person's direct leader; Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
 
-**A birthday is not required, here or anywhere.** An earlier version of this section required one of the import, on the stated ground that "the central record already holds one for every leader" — which fails with the premise above. Section 3 governs instead, and its rule is the one that matters: **never fabricate one**. A required field that nobody can fill gets filled, and for a birthday the fabrication is worse than the gap, because two invented dates that collide match at Tier 1 and Tier 1 blocks creation. A birthday is added later by an ordinary edit under `people.edit_basic`, by the leader who holds the person or anyone upline.
+**A birthday is not required of the import.** An earlier version of this section required one of the import, on the stated ground that "the central record already holds one for every leader" — which fails with the premise above. Section 3 governs instead, and its rule is the one that matters: **never fabricate one**. A required field that nobody can fill gets filled, and for a birthday the fabrication is worse than the gap, because two invented dates that collide match at Tier 1 and Tier 1 blocks creation. A birthday is added later by an ordinary edit under `people.edit_basic`, by the leader who holds the person or anyone upline.
 
 **Everyone below the spine is encoded by the leader who holds them**, through the application, level by level. Each leader is given a Cell and an account (Section 6), encodes their own direct disciples, and each of those is then given a Cell and an account in turn.
 
@@ -306,7 +306,7 @@ The header contributes nothing. It is fixed, and a file whose header differs is 
 - First Name — required
 - Middle Name — optional
 - Last Name — required
-- Birthday / date of birth — optional, and prompted wherever a Person is created
+- Birthday / date of birth — required when a Person is added, unless *Not given yet* is ticked (decision 0328)
 - Sex — required, exactly:
   - `MALE`
   - `FEMALE`
@@ -314,11 +314,11 @@ The header contributes nothing. It is fixed, and a file whose header differs is 
   - `SINGLE`
   - `MARRIED`
   - `WIDOWED`
-- Mobile Number — optional
+- Mobile Number — required when a Person is added, unless *Not given yet* is ticked (decision 0328)
 
-**Birthday is optional, and the reason is the one this section already gives for email.** A mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because two of the three Tier 1 rules below read it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
+**Both are asked for every time a Person is added through the application, and either may be left blank by ticking *Not given yet*** (ruling of 2026-10-10, decision 0328). Nothing about the tick is stored. It exists for the reason this section gives for email: a mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because two of the three Tier 1 rules below read it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
 
-Two situations produce a Person with no birthday, and the second is why this is a rule rather than a convenience. A leader meeting somebody for the first time may simply not have asked. And **somebody may decline to give it** — a first conversation is not the moment to press for personal information, and a church that insists serves least the people most guarded about their details.
+Two situations produce a Person with no birthday, and the second is why this is a rule rather than a convenience. A leader meeting somebody for the first time may not know it. And **somebody may decline to give it** — a first conversation is not the moment to press for personal information, and a church that insists serves least the people most guarded about their details.
 
 **Never fabricate one.** A placeholder is indistinguishable from a fact afterwards, and it is the failure this rule exists to prevent rather than a shortcut around it.
 
@@ -338,7 +338,7 @@ Two situations produce a Person with no birthday, and the second is why this is 
 
 **This section defines adding one and does not define removing one.** An edit that sends `birth_date` explicitly as null is refused as malformed input (`VALIDATION_FAILED`, Section 22) rather than permitted by omission — any explicit null, whether or not a birthday is recorded, since the refusal reads the request and never the stored row. Omitting the field entirely is unaffected and means what it always meant: leave it alone. Making the column nullable was a decision about what may be *recorded at first contact*, and it must not silently become a decision that a recorded birthday may be erased. Whether removal should ever be possible is a separate question, and is not answered here.
 
-**Nothing requires a birthday, including the initial leadership-tree import.** Section 2 required one until it was found to rest on a central record that does not exist; it now follows the rule above like every other path. The absence of an exception is the point: a rule with one carve-out is a rule people look for a carve-out from, and this is the field where a fabricated value refuses to record a real person.
+**Nothing else requires one.** An edit does not, so a name can be corrected on a record that has no birthday, and neither the initial leadership-tree import (Section 2) nor the first Admin account (Section 6) does. A Person recorded without one before decision 0328 stays valid. The requirement is a question asked at first contact, and the tick is what keeps it from becoming a fabrication.
 
 ```text
 persons
@@ -368,7 +368,7 @@ Keeping the two apart also closes an escalation path. Every leader holds `people
 
 **No messaging handles.** Do not store Messenger, Viber, WhatsApp, or similar identifiers. They change often, they are held inconsistently, and a mobile number already reaches the same person. Following someone up is the leader's pastoral responsibility, and the system's job is to hold the number, not the conversation.
 
-**Optional, not required.** A first-time visitor may decline to give a number, and a required field would be satisfied with a fabricated one. Prompt for it clearly when a Person is created, particularly when adding a DCC VIP (Section 9), and leave it empty when it is genuinely not given.
+**Asked for, and never fabricated.** A first-time visitor may decline to give a number, and a field that must be filled would be satisfied with a fabricated one. It is required when a Person is added, particularly a DCC VIP (Section 9), and *Not given yet* is ticked when it is genuinely not given (decision 0328).
 
 Store a normalized form suitable for dialling alongside the value as entered. Validate loosely: family abroad, visitors, and landlines all produce numbers that do not match a local mobile pattern, and rejecting them loses real contact detail for no benefit.
 
@@ -2395,8 +2395,8 @@ When adding a VIP:
 1. Search existing People first.
 2. Reuse existing Person if matched.
 3. Otherwise create one Person record using the core personal fields, **including the pastoral leader they are being placed under**.
-4. Ask for a mobile number. It is optional (Section 3), but this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
-5. Ask for a birthday on the same footing. It is optional too (Section 3), it is asked here for the same reason, and it is the field most likely to be declined at a first conversation — so record what is given and never a placeholder. A leader adds it later under `people.edit_basic` once it is offered.
+4. Ask for a mobile number. It is required unless *Not given yet* is ticked (Section 3), and this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
+5. Ask for a birthday on the same footing. It is required on the same terms (Section 3), it is asked here for the same reason, and it is the field most likely to be declined at a first conversation — so record what is given, tick *Not given yet* for what is not, and never a placeholder. A leader adds it later under `people.edit_basic` once it is offered.
 6. Record DCC attendance only.
 7. Do not automatically create Cell attendance.
 
@@ -5051,6 +5051,8 @@ Sorting a leader's **own Cells** by those figures is permitted and useful — th
 
 Additive changes — a new optional field, a new endpoint — do not require a new version. Removing a field, renaming one, narrowing a type, or changing the meaning of an existing value does. When in doubt, add rather than change.
 
+**Until the first native client is released, `/api/v1` may be narrowed** where the web application ships the matching change in the same deployment (owner ruling of 2026-10-10, decision 0328). The rule above exists for installed builds that cannot be updated, and before one is released there are none. A browser tab still holding the previous page is refused until it reloads, which is the accepted cost. From the first native release the rule above applies without exception.
+
 Controllers/routes should delegate to authorization and application/domain services rather than containing SQL/business logic directly.
 
 ---
@@ -5543,7 +5545,7 @@ Five graduations: `ENCOUNTER`, `LIFE_CLASS`, `SOL_1`, `SOL_2`, `SOL_3`. Each is 
 
 **Nothing here is derived, and that is not an exception to Section 27's rule.** No enrolment, class, lesson or attendance record exists for these schools, so there is nothing to derive from. The rule refuses a tick that duplicates a record; where no record exists, a leader asking their people and recording the answer is the only source there is.
 
-**A graduation carries a date where the leader knows it and none where they do not.** This is Section 3's own reason for an optional birthday and mobile number: a mandatory field somebody cannot fill gets filled with a fiction, and leaders will be asking about graduations from years back. The consequence is stated on the screen rather than hidden — any figure counting graduations within a period counts only the dated rows.
+**A graduation carries a date where the leader knows it and none where they do not.** This is Section 3's own reason for its *Not given yet* tick: a mandatory field somebody cannot fill gets filled with a fiction, and leaders will be asking about graduations from years back. The consequence is stated on the screen rather than hidden — any figure counting graduations within a period counts only the dated rows.
 
 **A person who has not graduated has no row.**
 

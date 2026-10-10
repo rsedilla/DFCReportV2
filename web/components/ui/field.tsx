@@ -92,6 +92,8 @@ export function Field({
           'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
           'aria-[invalid=true]:border-field-invalid aria-[invalid=true]:border-2',
           'aria-[invalid=true]:px-[11px]',
+          // Disabled looks disabled, as a button and a radio tile do.
+          'disabled:bg-raised disabled:cursor-not-allowed disabled:opacity-60',
         )}
         {...props}
       />

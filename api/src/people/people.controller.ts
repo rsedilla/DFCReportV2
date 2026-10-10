@@ -113,10 +113,11 @@ export class PeopleController {
         firstName: body.first_name,
         middleName: body.middle_name ?? null,
         lastName: body.last_name,
-        birthDate: body.birth_date ?? null,
+        // A ticked field may arrive as "" (decision 0328); it is stored as no value.
+        birthDate: body.birth_date_not_given === true ? null : (body.birth_date ?? null),
         sex: body.sex,
         civilStatus: body.civil_status,
-        mobileNumber: body.mobile_number ?? null,
+        mobileNumber: body.mobile_number_not_given === true ? null : (body.mobile_number ?? null),
         // Always `UNDER`. The endpoint requires a leader, and section 5 makes who
         // holds a Network root a Network-level decision rather than something an
         // encoder does — so no request body can ask for one.
