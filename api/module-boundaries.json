@@ -71,13 +71,6 @@
       "reason": "Section 4 requires a Network-change refusal to name the disciples that must be moved first. Rooted in pastoral_assignments, which people does not own and cannot query, so the join cannot move to the owning module; returning identifiers would turn one query into one per row. Named in section 2."
     },
     {
-      "file": "src/hierarchy/hierarchy.service.ts",
-      "method": "directLeaderNameOf",
-      "table": "persons",
-      "kind": "join",
-      "reason": "Names one leader. Rooted in pastoral_assignments and returns at most one row. Named in section 2."
-    },
-    {
       "file": "src/people/people.read.service.ts",
       "method": "withoutACell",
       "table": "cell_memberships",

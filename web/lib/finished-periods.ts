@@ -6,10 +6,6 @@ import { rangeLabel, rangeStartOf, shiftRange, type RangeKind } from './report-r
  * year, none ending before the DCC calendar's first Sunday. The API answers any period that
  * has begun; this decides what the two report screens offer.
  */
-export function isFinishedOnlyKind(kind: RangeKind): boolean {
-  return kind === 'QUARTER' || kind === 'YEAR';
-}
-
 /** How many periods before the latest finished one a leader may step back to. */
 const BACK: Record<'QUARTER' | 'YEAR', number> = { QUARTER: 3, YEAR: 0 };
 
