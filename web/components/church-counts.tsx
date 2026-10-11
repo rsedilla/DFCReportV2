@@ -27,13 +27,13 @@ const COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
 };
 
 const LABEL: Record<Figure, string> = {
-  CELLS: 'Number of Cells',
+  CELLS: 'Number of Cell Groups',
   CELL_LEADERS: 'Number of Cell Leaders',
   PEOPLE: 'Number of people',
 };
 
 /**
- * The Senior Pastors' *Number of Cells*, *Number of Cell Leaders* or *Number of people*
+ * The Senior Pastors' *Number of Cell Groups*, *Number of Cell Leaders* or *Number of people*
  * (decision 0326, point 3).
  *
  * **A month at a time, with previous and next**: a month that has ended is counted on its last

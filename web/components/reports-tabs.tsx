@@ -14,7 +14,7 @@ const TABS = [
   { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
   { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
-  { key: 'filed', label: 'Filed reports', path: '/reports/filed' },
+  { key: 'filed', label: 'Filed Reports', path: '/reports/filed' },
 ] as const;
 
 /**
@@ -24,12 +24,12 @@ const TABS = [
  * "hash" (section 23).
  */
 const SENIOR_PASTOR_TABS = [
-  { key: 'cells', label: 'CG attendance', path: '/reports/cells' },
-  { key: 'dcc', label: 'DCC attendance', path: '/reports/dcc' },
+  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
+  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
   {
     key: 'number-of-cells',
-    label: '# of Cells',
-    name: 'Number of Cells',
+    label: '# of Cell Groups',
+    name: 'Number of Cell Groups',
     path: '/reports/number-of-cells',
   },
   {
@@ -40,7 +40,7 @@ const SENIOR_PASTOR_TABS = [
   },
   {
     key: 'number-of-people',
-    label: '# of people',
+    label: '# of People',
     name: 'Number of people',
     path: '/reports/number-of-people',
   },
@@ -118,7 +118,7 @@ export function ReportsTabs({
                 aria-label={tab.name}
                 className={cn(
                   'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                  'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
+                  'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
                   active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
                 )}
               >

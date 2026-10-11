@@ -722,7 +722,7 @@ const SCANS = [
       await mockTrends(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('region', { name: 'Number of Cells' }).getByRole('term').first()).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Number of Cell Groups' }).getByRole('term').first()).toBeVisible();
     },
   },
   {
@@ -777,7 +777,7 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
       // A Cell meeting's row, the half the screen opens on. A Sunday's row is behind
       // DCC and is scanned under "dashboard, own DCC checklist".
       await expect(
@@ -790,8 +790,8 @@ const SCANS = [
       // the scan waits for the last of the four buttons' counts too: without them
       // axe would scan buttons whose count boxes had not arrived.
       const lists = page.getByRole('group', { name: 'Outstanding work' });
-      await expect(lists.getByRole('button', { name: /^Needs a new leader\s*2$/ })).toBeVisible();
-      await expect(lists.getByRole('button', { name: /^Not in a Cell\s*2$/ })).toBeVisible();
+      await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2$/ })).toBeVisible();
+      await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2$/ })).toBeVisible();
     },
   },
   {
@@ -816,7 +816,7 @@ const SCANS = [
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
       await page
-        .getByRole('group', { name: 'Awaiting a record' })
+        .getByRole('group', { name: 'Update Record' })
         .getByRole('button', { name: /^DCC/ })
         .click();
       await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
@@ -829,8 +829,8 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Cells behind/);
-      await expect(page.getByRole('heading', { name: 'Cells behind' })).toBeVisible();
+      await chooseRecordList(page, /^Pending CG Reports/);
+      await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
     },
   },
@@ -840,7 +840,7 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Needs a new leader/);
+      await chooseRecordList(page, /^Awaiting Leader Assignment/);
       await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
     },
   },
@@ -850,7 +850,7 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Not in a Cell/);
+      await chooseRecordList(page, /^Awaiting CG Assignment/);
       await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
     },
   },
@@ -1131,7 +1131,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Show only Cells behind' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Show only pending CG reports' })).toBeVisible();
       await expect(page.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
     },
   },
@@ -1145,7 +1145,7 @@ const SCANS = [
       await mockCellReport(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Show only Cells behind' })).toHaveAttribute(
+      await expect(page.getByRole('button', { name: 'Show only pending CG reports' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
@@ -1875,7 +1875,7 @@ const TARGET_SWEEP = [
     // which renders only once the Cells have arrived.
     name: 'filed reports',
     route: '/reports/filed',
-    settle: 'Show only Cells behind',
+    settle: 'Show only pending CG reports',
     minimum: 17,
   },
   {

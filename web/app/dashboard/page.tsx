@@ -570,7 +570,7 @@ function Dashboard() {
   const tabs: readonly { key: RecordTab; label: string; count: string | null }[] = [
     {
       key: 'awaiting',
-      label: 'Awaiting a record',
+      label: 'Update Record',
       count:
         queuePending || queueFailed || owedPending || owedFailure
           ? null
@@ -578,7 +578,7 @@ function Dashboard() {
     },
     {
       key: 'behind',
-      label: 'Cells behind',
+      label: 'Pending CG Reports',
       count:
         behindPending || behindFailed
           ? null
@@ -586,12 +586,12 @@ function Dashboard() {
     },
     {
       key: 'leader',
-      label: 'Needs a new leader',
+      label: 'Awaiting Leader Assignment',
       count: unplaced.data ? `${unplaced.data.length}${unplacedPages.hasNextPage ? '+' : ''}` : null,
     },
     {
       key: 'nocell',
-      label: 'Not in a Cell',
+      label: 'Awaiting CG Assignment',
       count: withoutACell.data
         ? `${withoutACell.data.length}${withoutACellPages.hasNextPage ? '+' : ''}`
         : null,
@@ -627,10 +627,10 @@ function Dashboard() {
       {me.data === undefined || recordingOnly ? null : seniorPastor ? (
         <TabBar
           label="Record"
-          className={cn('mt-6 grid-cols-2', TAB_ROW)}
+          className={cn('mt-6', TAB_ROW)}
           tabs={[
-            { key: 'status', label: 'Recording status', count: null },
-            { key: 'awaiting', label: 'Awaiting a record', count: tabs[0].count },
+            { key: 'status', label: 'Recording Status', count: null },
+            { key: 'awaiting', label: 'Update Record', count: tabs[0].count },
           ]}
           current={spTab}
           onChoose={(next) => go({ list: next === 'status' ? null : 'awaiting' })}
@@ -638,7 +638,7 @@ function Dashboard() {
       ) : (
         <TabBar
           label="Outstanding work"
-          className={cn('mt-6 grid-cols-2', TAB_ROW)}
+          className={cn('mt-6', TAB_ROW)}
           tabs={tabs}
           current={tab}
           onChoose={(next) => go({ list: next === 'awaiting' ? null : next })}
@@ -652,7 +652,7 @@ function Dashboard() {
           <section aria-labelledby="awaiting-heading" className={LIST}>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
-                Awaiting a record
+                Update Record
               </h2>
               <p className="text-muted text-sm">
                 Still to record this month
@@ -661,7 +661,7 @@ function Dashboard() {
             </div>
 
             <ViewSwitch
-              label="Awaiting a record"
+              label="Update Record"
               options={[
                 {
                   key: 'CELLS',
@@ -682,6 +682,7 @@ function Dashboard() {
               ]}
               value={filter}
               onChange={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
+              even="content"
             />
 
             {mayOversee ? (
@@ -689,6 +690,7 @@ function Dashboard() {
               <RadioGroup
                 legend="Whose"
                 name="queue-whose"
+                even
                 value={shownWhose}
                 onChange={(next) => {
                   setWhose(next);
@@ -757,7 +759,7 @@ function Dashboard() {
                   ...group,
                   content: (
                     <QueueList
-                      caption={`Awaiting a record, ${group.title}`}
+                      caption={`Update Record, ${group.title}`}
                       items={group.items}
                       currentMonth={month}
                       today={today}
@@ -767,7 +769,7 @@ function Dashboard() {
               />
             ) : (
               <QueueList
-                caption="Awaiting a record"
+                caption="Update Record"
                 items={shown}
                 currentMonth={month}
                 today={today}
@@ -803,7 +805,7 @@ function Dashboard() {
           <section className={LIST} aria-labelledby="attention-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
-                Cells behind
+                Pending CG Reports
               </h2>
               <p className="text-muted text-sm">
                 {lastMonthRead
@@ -816,7 +818,7 @@ function Dashboard() {
             ) : behindFailed ? null : (
               <>
                 <ListTable
-                  caption="Cells behind"
+                  caption="Pending CG Reports"
                   columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
                   empty={
                     behindMore || behindMorePrevious
@@ -878,7 +880,7 @@ function Dashboard() {
           <section className={LIST} aria-labelledby="unplaced-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
-                Needs a new leader
+                Awaiting Leader Assignment
               </h2>
               <p className="text-muted text-sm">
                 People you oversee whose pastoral leader is not in the pastoral tree.
@@ -890,7 +892,7 @@ function Dashboard() {
               <>
                 {/* The action that resolves an entry is the reassignment (section 19). */}
                 <ListTable
-                  caption="Needs a new leader"
+                  caption="Awaiting Leader Assignment"
                   columns={['Name', 'Previous Cell Leader']}
                   empty="Nobody you oversee is waiting for a new leader."
                   rows={unplaced.data.map((person) => ({
@@ -918,7 +920,7 @@ function Dashboard() {
           <section className={LIST} aria-labelledby="without-cell-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
-                Not in a Cell
+                Awaiting CG Assignment
               </h2>
               <p className="text-muted text-sm">People you oversee who are not in a Cell or leading one.</p>
             </div>
@@ -927,7 +929,7 @@ function Dashboard() {
             ) : withoutACell.data ? (
               <>
                 <ListTable
-                  caption="Not in a Cell"
+                  caption="Awaiting CG Assignment"
                   columns={['Name']}
                   empty="Everybody you oversee is in a Cell."
                   rows={withoutACell.data.map((person) => ({
@@ -1088,13 +1090,11 @@ function TabBar<Key extends string>({
   onChoose: (key: Key) => void;
 }) {
   return (
-    // Sized to their words from `sm`, as every tab row is; a 2-by-2 grid on a phone, where
-    // four long labels in one wrapping row would leave ragged gaps (owner, 2026-10-10).
-    <div
-      role="group"
-      aria-label={label}
-      className={cn('border-line grid border-b sm:flex sm:flex-wrap', className)}
-    >
+    // **Every button one size, as wide as the longest label** (decision 0332): two to a row
+    // and filling it on a phone, two to a row at their own width from `sm`, and one row from
+    // `lg`. The outer row keeps the full-width rule the chosen tab joins.
+    <div role="group" aria-label={label} className={cn('border-line border-b', className)}>
+      <div className="grid grid-cols-2 sm:inline-grid lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -1111,6 +1111,7 @@ function TabBar<Key extends string>({
           )}
         </button>
       ))}
+      </div>
     </div>
   );
 }

@@ -3,8 +3,8 @@
 import { cn } from '@/lib/utils';
 
 /**
- * A small switch between views of one part of a screen (owner's choice of 2026-10-05): big
- * uppercase tabs choose the part, and this chooses how it is shown. Sentence case and only
+ * A small switch between views of one part of a screen (owner's choice of 2026-10-05): the
+ * tabs choose the part, and this chooses how it is shown. Sentence case and, unless `even`, only
  * as wide as its words, so it never reads as another row of tabs.
  *
  * Buttons pressed and unpressed rather than ARIA tabs, as the tab rows are: each view is the
@@ -26,15 +26,22 @@ export function ViewSwitch<Key extends string>({
   value: Key;
   onChange: (key: Key) => void;
   className?: string;
-  /** Every button the same width (owner, 2026-10-09), for a switch whose words differ in length. */
-  even?: boolean;
+  /**
+   * Every button the same width (owner, 2026-10-09), for a switch whose words differ in length:
+   * `true` fills the row, `'content'` is as wide as the longest label (decision 0332).
+   */
+  even?: boolean | 'content';
 }) {
   return (
     <div
       role="group"
       aria-label={label}
       className={cn(
-        even ? 'mt-4 grid w-full max-w-lg auto-cols-fr grid-flow-col' : 'mt-4 flex flex-wrap',
+        even === 'content'
+          ? 'mt-4 inline-grid auto-cols-fr grid-flow-col'
+          : even
+            ? 'mt-4 grid w-full max-w-lg auto-cols-fr grid-flow-col'
+            : 'mt-4 flex flex-wrap',
         className,
       )}
     >

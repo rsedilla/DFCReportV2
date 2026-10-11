@@ -124,14 +124,14 @@ test.describe('a Recording-only account (decision 0323)', () => {
     // An address naming another list still opens the one this account has.
     await page.goto('/dashboard?list=behind');
 
-    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
     await expect(page.getByText('What still needs a record.')).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
     ).toBeVisible();
 
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Cells behind' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
@@ -156,7 +156,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     // The branch view in the address is not honoured when the server withholds it.
     await page.goto('/dashboard?whose=branch');
 
-    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
     ).toBeVisible();
@@ -553,7 +553,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Record' });
-    await expect(tabs.getByRole('button')).toHaveText(['Recording status', /^Awaiting a record/]);
+    await expect(tabs.getByRole('button')).toHaveText(['Recording Status', /^Update Record/]);
     await expect(tabs.getByRole('button', { name: 'Recording status' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -561,14 +561,14 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     // No heading of its own: the tab names it (decision 0327).
     await expect(page.getByRole('region', { name: 'Recording status' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Update Record' })).toHaveCount(0);
     // None of the other lists of section 19, and no month figures.
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
 
-    await tabs.getByRole('button', { name: /^Awaiting a record/ }).click();
+    await tabs.getByRole('button', { name: /^Update Record/ }).click();
 
     await expect(page).toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Recording status' })).toHaveCount(0);
     // Their own work only: no Whose switch.
     await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);

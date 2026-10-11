@@ -19,16 +19,16 @@ import { useScreenAddress } from '@/lib/screen-address';
 
 /** The same five names as Reports (owner, 2026-10-09); a `#` label keeps its words as its name. */
 const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: string }[] = [
-  { key: 'CG', label: 'CG attendance', what: 'the different people who came to a Cell Group in the month' },
-  { key: 'DCC', label: 'DCC attendance', what: 'the different people who came to DCC in the month' },
-  { key: 'CELLS', label: '# of Cells', name: 'Number of Cells', what: 'the Cell Groups running on the month’s last day' },
+  { key: 'CG', label: 'CG Attendance', what: 'the different people who came to a Cell Group in the month' },
+  { key: 'DCC', label: 'DCC Attendance', what: 'the different people who came to DCC in the month' },
+  { key: 'CELLS', label: '# of Cell Groups', name: 'Number of Cell Groups', what: 'the Cell Groups running on the month’s last day' },
   {
     key: 'CELL_LEADERS',
     label: '# of Cell Leaders',
     name: 'Number of Cell Leaders',
     what: 'the people leading a Cell on the month’s last day',
   },
-  { key: 'PEOPLE', label: '# of people', name: 'Number of people', what: 'everyone in the branch on the month’s last day' },
+  { key: 'PEOPLE', label: '# of People', name: 'Number of people', what: 'everyone in the branch on the month’s last day' },
 ];
 
 /**
@@ -105,7 +105,7 @@ function TrendsScreen() {
               aria-label={entry.name}
               className={cn(
                 'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
+                'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
                 active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
               )}
             >
