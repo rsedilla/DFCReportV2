@@ -824,3 +824,39 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     });
   }
 });
+
+/**
+ * The sidebar names no items until the server says which screens the account has (owner,
+ * 2026-10-11). It used to show the five as a placeholder, so a Recording-only leader saw them
+ * flash on a reload before their four replaced them.
+ */
+test('a Recording-only account never sees the five items while the server answers', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+  await mockScreens(page, 'RECORDING');
+  await mockPeople(page);
+  let release: () => void = () => {};
+  const answered = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  // Registered last, so it runs first: holds `/auth/me` back, then lets the mock answer.
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await answered;
+    await route.fallback();
+  });
+
+  await page.goto('/people');
+  await expect(mainNavigation(page)).toBeAttached();
+  await expect(mainNavigation(page).getByRole('link')).toHaveCount(0);
+  // Nor the Branch tab, which this account does not have either.
+  await expect(page.getByRole('navigation', { name: 'People' })).toHaveCount(0);
+
+  release();
+  await expect(mainNavigation(page).getByRole('link')).toHaveText([
+    'Record',
+    'People',
+    'My Cell',
+    'SUYNL',
+  ]);
+});

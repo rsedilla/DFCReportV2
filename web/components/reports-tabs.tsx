@@ -83,45 +83,52 @@ export function ReportsTabs({
     ? SENIOR_PASTOR_TABS
     : TABS;
 
+  // No tabs until the server names the screens, so a Senior Pastor never sees a leader's six
+  // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
+  // the report inside is not remounted when the answer arrives.
+  const tabbed = !me.isPending;
+
   return (
     <>
-      <nav
-        aria-label="Which report"
-        className={cn(
-          'mt-6 grid grid-cols-2',
-          // The five shorter labels fit one row from a small screen up (owner, 2026-10-09).
-          seniorPastor ? 'sm:grid-cols-5' : 'sm:grid-cols-3 lg:grid-cols-6',
-          TAB_ROW,
-        )}
-      >
-        {tabs.map((tab) => {
-          const active = tab.key === current;
-          const dated =
-            tab.key === 'cells' ||
-            tab.key === 'dcc' ||
-            tab.key === 'filed' ||
-            tab.key === 'number-of-cells' ||
-            tab.key === 'number-of-cell-leaders' ||
-            tab.key === 'number-of-people';
+      {tabbed ? (
+        <nav
+          aria-label="Which report"
+          className={cn(
+            'mt-6 grid grid-cols-2',
+            // The five shorter labels fit one row from a small screen up (owner, 2026-10-09).
+            seniorPastor ? 'sm:grid-cols-5' : 'sm:grid-cols-3 lg:grid-cols-6',
+            TAB_ROW,
+          )}
+        >
+          {tabs.map((tab) => {
+            const active = tab.key === current;
+            const dated =
+              tab.key === 'cells' ||
+              tab.key === 'dcc' ||
+              tab.key === 'filed' ||
+              tab.key === 'number-of-cells' ||
+              tab.key === 'number-of-cell-leaders' ||
+              tab.key === 'number-of-people';
 
-          return (
-            <Link
-              key={tab.key}
-              href={month && dated ? `${tab.path}?month=${month}` : tab.path}
-              aria-current={active ? 'page' : undefined}
-              aria-label={tab.name}
-              className={cn(
-                'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
-                active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
-              )}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className={TAB_PANE}>{children}</div>
+            return (
+              <Link
+                key={tab.key}
+                href={month && dated ? `${tab.path}?month=${month}` : tab.path}
+                aria-current={active ? 'page' : undefined}
+                aria-label={tab.name}
+                className={cn(
+                  'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
+                  'text-xs font-bold tracking-[0.08em] uppercase focus-visible:outline-2 focus-visible:-outline-offset-2',
+                  active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
+                )}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
     </>
   );
 }
