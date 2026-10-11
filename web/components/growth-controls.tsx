@@ -38,29 +38,31 @@ export function GrowthTabs({
 
   // **On the recording screens SUYNL is an item of its own, with no tabs** (decision 0323):
   // Training and Conquest are refused to such an account.
-  if (me.data?.screens === 'RECORDING') {
-    return <div className="mt-6">{children}</div>;
-  }
+  // No tabs until the server names the screens either, so they never flash (owner, 2026-10-11).
+  // The pane stays where it is either way, so the screen inside is not remounted.
+  const tabbed = !me.isPending && me.data?.screens !== 'RECORDING';
 
   return (
     <>
-      <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
-        {TABS.map((tab) => {
-          const active = tab.href === current;
+      {tabbed ? (
+        <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
+          {TABS.map((tab) => {
+            const active = tab.href === current;
 
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              aria-current={active ? 'page' : undefined}
-              className={tabClasses(active)}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className={TAB_PANE}>{children}</div>
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? 'page' : undefined}
+                className={tabClasses(active)}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
     </>
   );
 }

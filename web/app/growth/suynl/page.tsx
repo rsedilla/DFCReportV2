@@ -219,7 +219,7 @@ function SuynlTab() {
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           {/* SUYNL is an item of its own on the recording screens (decision 0323). */}
-          {me.data?.screens === 'RECORDING' ? 'SUYNL' : 'Growth'}
+          {me.isPending ? null : me.data?.screens === 'RECORDING' ? 'SUYNL' : 'Growth'}
         </h1>
         <p className="text-muted text-sm">
           {counts.data

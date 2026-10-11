@@ -608,11 +608,13 @@ function Dashboard() {
           {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
         </h1>
         <p className="text-muted text-sm">
-          {recordingOnly
-            ? 'What still needs a record.'
-            : seniorPastor
-              ? 'Whether the church has recorded, and your own work.'
-              : 'What needs doing first, and this month’s figures at the foot.'}
+          {me.data === undefined
+            ? null
+            : recordingOnly
+              ? 'What still needs a record.'
+              : seniorPastor
+                ? 'Whether the church has recorded, and your own work.'
+                : 'What needs doing first, and this month’s figures at the foot.'}
         </p>
       </div>
 
@@ -620,8 +622,9 @@ function Dashboard() {
         <FailureNotice failure={failure} />
       </div>
 
-      {/* A Recording-only account has one list, so no tabs (decision 0323). */}
-      {recordingOnly ? null : seniorPastor ? (
+      {/* A Recording-only account has one list, so no tabs (decision 0323). None until the
+          server names the account's screens, so no account sees another's tabs flash. */}
+      {me.data === undefined || recordingOnly ? null : seniorPastor ? (
         <TabBar
           label="Record"
           className={cn('mt-6 grid-cols-2', TAB_ROW)}
