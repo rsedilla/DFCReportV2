@@ -1265,10 +1265,10 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('radio', { name: 'Mine' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Own ' })).toBeChecked();
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
 
-    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
 
     await expect.poll(() => whoseAsked).toContain('branch');
     // A downline leader's meeting the reader may record is under that leader's line, and
@@ -1329,7 +1329,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
   });
 
   // Decision 0311: one line per leader, name only, in surname order, closed until opened.
-  test('People I oversee is one line per leader, by surname, each opened to its meetings', async ({
+  test('Leaders Under Me is one line per leader, by surname, each opened to its meetings', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1373,7 +1373,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
       page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('June · open until 7 Jul').first(),
     ).toBeVisible();
 
-    await page.getByRole('radio', { name: 'Mine' }).check();
+    await page.getByRole('radio', { name: 'Own ' }).check();
     await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toHaveCount(0);
   });
 
@@ -1522,8 +1522,8 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
   });
 
-  // Decision 0301 reverses decision 0258's point 4: People I oversee lists DCC too.
-  test('People I oversee lists who still owes DCC, and opens a leader’s checklist', async ({
+  // Decision 0301 reverses decision 0258's point 4: Leaders Under Me lists DCC too.
+  test('Leaders Under Me lists who still owes DCC, and opens a leader’s checklist', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1534,7 +1534,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await chooseDcc(page);
     // Two choices in quick succession can race in the address (a checklist row records it).
     await expect(page).toHaveURL(/kind=dcc/);
-    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
 
     // One line per leader, by surname (decision 0311): Reader, then Reyes.
     const region = page.getByRole('region', { name: 'Update Record' });
@@ -1742,7 +1742,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page).not.toHaveURL(/list=/);
     await chooseDcc(page);
     await expect(page).toHaveURL(/kind=dcc/);
-    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
     await expect(page).toHaveURL(/whose=branch/);
 
     // Leaving the screen and coming back, which is what losing it looked like.
@@ -1751,10 +1751,10 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^DCC/ }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toBeChecked();
 
     await page.goBack();
-    await expect(page.getByRole('radio', { name: 'Mine' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Own ' })).toBeChecked();
     await page.goBack();
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Cell Group/ }),
@@ -1772,7 +1772,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.clock.setFixedTime(JUNE_20);
     await mockRecord(page);
     await page.goto('/dashboard');
-    await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toBeVisible();
 
     // Hold every navigation's server round trip until the second click has been made, so
     // it lands while the first is still on its way — which is what a quick reader on a
@@ -1790,7 +1790,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
 
     await chooseDcc(page);
-    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
     release();
 
     await expect(page).toHaveURL(/kind=dcc/);

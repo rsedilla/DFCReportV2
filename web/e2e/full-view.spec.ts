@@ -145,7 +145,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     expect(asked.filter((request) => request.includes('/api/v1/reports/'))).toEqual([]);
   });
 
-  test('Record offers no People I oversee while no leader with an account is beneath', async ({
+  test('Record offers no Leaders Under Me while no leader with an account is beneath', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -160,7 +160,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
     ).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'People I oversee' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toHaveCount(0);
 
     // The reader's own queue is the one asked for and shown: the branch view's downline row
     // (Ana Lim, in `mockMeetingsAwaiting`) is not on the page.
@@ -177,7 +177,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     expect(asked.filter((request) => request.includes('whose=branch'))).toEqual([]);
   });
 
-  test('Record offers People I oversee where the server says a leader with an account is beneath', async ({
+  test('Record offers Leaders Under Me where the server says a leader with an account is beneath', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -186,8 +186,11 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('radio', { name: 'People I oversee' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Mine' })).toBeChecked();
+    // Decision 0333: the second choice names what each half holds.
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Own Cell', exact: true })).toBeChecked();
+    await page.getByRole('button', { name: /^DCC/ }).click();
+    await expect(page.getByRole('radio', { name: 'Own 12', exact: true })).toBeChecked();
   });
 
   test('People has no Branch tab', async ({ page }) => {
@@ -572,7 +575,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     await expect(page.getByRole('region', { name: 'Recording status' })).toHaveCount(0);
     // Their own work only: no Whose switch.
     await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'People I oversee' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /^Record Young Pro · / }).first()).toBeVisible();
 
     await tabs.getByRole('button', { name: 'Recording status' }).click();

@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-11, the trigger being decision 0332: of 331 files, 330 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0332 each moved the first two and
+2026-10-11, the trigger being decision 0333: of 332 files, 331 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0333 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-11 and triggered by 0332, and was left stale by 0333 the same day. The one before that was dated
 2026-10-11 and triggered by 0331, and was left stale by 0332 the same day. The one before that was dated
 2026-10-11 and triggered by 0330, and was left stale by 0331 the same day. The one before that was dated
 2026-10-10 and triggered by 0329, and was left stale by 0330 the next day. The one before that was dated
@@ -705,6 +706,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-11 — [A Cell created in error is in no month's count](docs/decisions/0330-a-cell-created-in-error-is-in-no-months-count.md)
 - 2026-10-11 — [Every Senior Pastor tab lists the same Primaries](docs/decisions/0331-every-senior-pastor-tab-lists-the-same-primaries.md)
 - 2026-10-11 — [Record's lists renamed, and every tab row in title case](docs/decisions/0332-record-lists-renamed-and-tabs-in-title-case.md)
+- 2026-10-11 — [Record's Whose switch is renamed](docs/decisions/0333-the-whose-switch-is-renamed.md)
 
 ### Open — awaiting a ruling
 
@@ -890,7 +892,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **Which error code a rate-limited request answers.** **A Stop Condition.** Decision 0303 refuses a church-wide search past 30 a minute as a rate limit, and neither §22's code table nor §24 names the code. The API answers `RATE_LIMITED` with 429 (`api/src/common/errors/api-error.ts`), and its general limit of 120 a minute is stated nowhere in `SKILL.md`. Raised by `architecture-guardian` on decision 0303.
 - **Whether a leader’s checklist read to record on their behalf narrows by `dcc.submit_on_behalf`.** **A Stop Condition.** Decision 0313 narrows `GET /api/v1/dcc/events/{id}/leaders/{leaderId}/roster` by `dcc.take_attendance` alone (points 2 and 5), while the save checks `dcc.submit_on_behalf` for each person off the actor’s own checklist, so under one-sided grants the screen can list a person whose save is refused. Not reachable: only Admin holds `dcc.submit_on_behalf`, at the scope of its `dcc.take_attendance` (decision 0322), and no screen grants capabilities. Settle it if one-sided grants are ever offered. Raised by `architecture-guardian` on decision 0313’s build.
 - **What a request aborted by a deadlock between two changes that move stored months is answered.** **A Stop Condition.** Decision 0320 lets a change to a closed month or a Person Merge take a lock on `report_month_versions`, and two such changes can deadlock; PostgreSQL then aborts one. Section 22 names no outcome for it, and whether a client should retry is unstated. Not reachable until stored months are built, and rare after, since both changes correct history. Raised by `architecture-guardian` on decision 0320.
-- **Where an Admin steps in on DCC.** **A Stop Condition.** Decision 0322 makes recording on another leader's behalf an Admin's by default, and §14 puts decision 0313's Record button only on *People I oversee*, which walks the reader's own branch. An Admin outside the pastoral tree, which §6 allows, has no rows there, so the step-in has no screen for DCC; a Cell meeting is reachable through the Cells list. Raised by `architecture-guardian` on decision 0322.
+- **Where an Admin steps in on DCC.** **A Stop Condition.** Decision 0322 makes recording on another leader's behalf an Admin's by default, and §14 puts decision 0313's Record button only on *Leaders Under Me*, which walks the reader's own branch. An Admin outside the pastoral tree, which §6 allows, has no rows there, so the step-in has no screen for DCC; a Cell meeting is reachable through the Cells list. Raised by `architecture-guardian` on decision 0322.
 - **Whether a SUYNL lesson filed by a covering leader is on behalf.** **A Stop Condition.** Since decision 0322 `suynl.confirm` reaches the people of a leader beneath with no account, but those people are still that leader's disciples, and §28 and §21 do not say whether such a filing is recorded as on behalf, for `recorded_by` or for the audit entry. Raised by `architecture-guardian` on decision 0322.
 - **At which instant "whose DCC the actor records" is decided for SUYNL.** §9's submitter walk resolves as of each Sunday, while §28 reads as of now, and decision 0322 does not say which a SUYNL filing uses. Raised by `architecture-guardian` on decision 0322.
 - **Whether an explicit grant of a capability Full view withholds reaches a Leader without it.** **A Stop Condition.** §7 says such an account "holds no `reports.view_subtree` and no Training or Conquest capability", and also frames Full view as picking between two Leader default sets; the build withholds the defaults only, so a `capability_grants` row of one of the seven would be honoured. Not reachable: nothing writes `capability_grants`. Raised by `architecture-guardian` on decision 0323's build.

@@ -800,7 +800,7 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('radio', { name: 'People I oversee' }).check();
+      await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
       // Opened, so the scan reaches a leader's rows as well as the lines (decision 0311).
       await page.getByRole('button', { name: 'Ana Lim' }).click();
       await expect(
@@ -2084,7 +2084,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'dashboard, people I oversee',
     why:
-      'Reached by choosing People I oversee, which this sweep cannot do. Its controls are the ' +
+      'Reached by choosing Leaders Under Me, which this sweep cannot do. Its controls are the ' +
       'measured "dashboard" controls plus one more row button of the same Button primitive.',
   },
   {
