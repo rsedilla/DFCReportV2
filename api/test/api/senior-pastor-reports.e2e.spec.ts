@@ -377,6 +377,154 @@ describe('Senior Pastor reports (decision 0326)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // A Cell created in error (decision 0330, SKILL.md section 19)
+  // ---------------------------------------------------------------------------
+
+  describe('a Cell created in error is in no month’s count (decision 0330)', () => {
+    /**
+     *   Oriel (Men's root, leads a YOUNG_PRO Cell — closed now)
+     *     -> Ana Cruz (YOUTH)
+     *          -> Lito Mercado (COUPLE — closed now; his only Cell)
+     *          -> Dan Esguerra (YOUTH, and a COUPLE Cell — closed now)
+     *   Gemma (Women's root) -> Cara Flores (YOUNG_PRO)
+     *
+     * Every Cell has run since long before the months read. The three marked are closed at
+     * the moment the case runs, which is after every past month the case reads, so the
+     * closure itself never removes them from a past month: only its reason can.
+     */
+    let ana: TestPerson;
+    let dan: TestPerson;
+    let cara: TestPerson;
+
+    async function buildAndClose(reason: 'CREATED_IN_ERROR' | 'MEMBERS_DISPERSED'): Promise<void> {
+      ana = await leader('Ana', 'Cruz', oriel);
+      const lito = await leader('Lito', 'Mercado', ana);
+      dan = await leader('Dan', 'Esguerra', ana);
+      cara = await leader('Cara', 'Flores', gemma);
+
+      const rootCell = await cellOf(oriel, 'YOUNG_PRO');
+      await cellOf(ana, 'YOUTH');
+      const litoCell = await cellOf(lito, 'COUPLE');
+      await cellOf(dan, 'YOUTH');
+      const danSecond = await cellOf(dan, 'COUPLE');
+      await cellOf(cara, 'YOUNG_PRO');
+
+      // No `at`: closed now, in the current month, after every past month read below.
+      for (const cell of [rootCell, litoCell, danSecond]) {
+        await closeCellDirectly(db, cell.id, { reason });
+      }
+    }
+
+    /** What a past month reads with the three Cells left out. */
+    const WITHOUT_ERRONEOUS: Figures = {
+      cell_groups: 3,
+      youth: 2,
+      young_pro: 1,
+      couple: 0,
+      cell_leaders: 3,
+      people: 6,
+    };
+
+    it('leaves a Cell closed CREATED_IN_ERROR after a month out of that month’s counts, and still adds up', async () => {
+      await buildAndClose('CREATED_IN_ERROR');
+      const month = await currentMonth();
+
+      // Last month and the month before it: the months before the closure are included.
+      for (const period of [shiftMonth(month, -1), shiftMonth(month, -2)]) {
+        const body = (await counts(pastor, period).expect(200)).body as Counts;
+
+        expect({ period, figures: body.whole_church }).toEqual({
+          period,
+          figures: WITHOUT_ERRONEOUS,
+        });
+        // Ana's row: her own Cell and Dan's remaining one. Lito, whose only Cell was
+        // created in error, is no Cell Leader; Dan still is, by his other Cell.
+        expect(rowOf(body, ana)).toMatchObject({
+          cell_groups: 2,
+          youth: 2,
+          young_pro: 0,
+          couple: 0,
+          cell_leaders: 2,
+          people: 3,
+        });
+        expect(rowOf(body, cara)).toMatchObject({
+          cell_groups: 1,
+          young_pro: 1,
+          cell_leaders: 1,
+        });
+        // The root's own Cell, in Others, is gone too.
+        expect(body.others).toMatchObject({ cell_groups: 0, young_pro: 0, cell_leaders: 0 });
+
+        expectReconciles(body);
+      }
+    });
+
+    it('still counts, in the months it ran, a Cell closed afterwards for another reason', async () => {
+      await buildAndClose('MEMBERS_DISPERSED');
+      const last = shiftMonth(await currentMonth(), -1);
+
+      const body = (await counts(pastor, last).expect(200)).body as Counts;
+
+      expect(body.whole_church).toEqual({
+        cell_groups: 6,
+        youth: 2,
+        young_pro: 2,
+        couple: 2,
+        // Ana, Lito, Dan (once, for two Cells), Cara and Oriel.
+        cell_leaders: 5,
+        people: 6,
+      });
+      expect(rowOf(body, ana)).toMatchObject({
+        cell_groups: 4,
+        youth: 2,
+        couple: 2,
+        cell_leaders: 3,
+      });
+      expect(body.others).toMatchObject({ cell_groups: 1, young_pro: 1, cell_leaders: 1 });
+
+      expectReconciles(body);
+    });
+
+    it('draws Trends’ Cells and Cell Leaders without it, agreeing with the month’s counts', async () => {
+      await buildAndClose('CREATED_IN_ERROR');
+
+      interface Line {
+        leader: { id: string } | null;
+        values: (number | null)[];
+      }
+
+      const cells = (await trends(pastor, { figure: 'CELLS' }).expect(200)).body;
+      const leaders = (await trends(pastor, { figure: 'CELL_LEADERS' }).expect(200)).body;
+      const cellLines = cells.lines as Line[];
+      const leaderLines = leaders.lines as Line[];
+
+      for (const index of [9, 10]) {
+        const period = cells.months[index] as string;
+        expect(leaders.months[index]).toBe(period);
+        const month = (await counts(pastor, period).expect(200)).body as Counts;
+
+        // The church line: the figures case 1 pins.
+        expect({ period, cells: cellLines[0].values[index] }).toEqual({
+          period,
+          cells: WITHOUT_ERRONEOUS.cell_groups,
+        });
+        expect({ period, leaders: leaderLines[0].values[index] }).toEqual({
+          period,
+          leaders: WITHOUT_ERRONEOUS.cell_leaders,
+        });
+        expect(cellLines[0].values[index]).toBe(month.whole_church.cell_groups);
+        expect(leaderLines[0].values[index]).toBe(month.whole_church.cell_leaders);
+
+        // The Men's branch is Oriel and everyone beneath: Ana's and Dan's YOUTH Cells only.
+        expect({ period, cells: cellLines[1].values[index] }).toEqual({ period, cells: 2 });
+        expect({ period, leaders: leaderLines[1].values[index] }).toEqual({ period, leaders: 2 });
+        // The Women's branch is untouched.
+        expect({ period, cells: cellLines[2].values[index] }).toEqual({ period, cells: 1 });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Trends
   // ---------------------------------------------------------------------------
 

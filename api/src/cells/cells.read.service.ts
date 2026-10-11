@@ -2014,6 +2014,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * half-open, `[started_at, ended_at)`, so on a handover's instant the incoming leader holds
    * it. A Cell with no category in force carries none rather than being dropped, so the
    * categories may add up to less than the Cells, never more.
+   *
+   * **A Cell closed `CREATED_IN_ERROR` is left out at every instant** (decision 0330), the
+   * months before its closure included: the closure says it should never have existed.
    */
   async cellsInForceAt(
     executor: Db | Transaction<Database>,
@@ -2025,6 +2028,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
              category.category,
              held.person_id AS leader_id
         FROM cell_leaderships AS held
+        JOIN cells AS cell ON cell.id = held.cell_id
         LEFT JOIN LATERAL (
           SELECT kind.category
             FROM cell_categories AS kind
@@ -2036,6 +2040,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         ) AS category ON TRUE
        WHERE held.started_at <= ${at}
          AND (held.ended_at IS NULL OR held.ended_at > ${at})
+         AND cell.closure_reason IS DISTINCT FROM 'CREATED_IN_ERROR'
        ORDER BY held.cell_id, held.started_at DESC, held.id DESC
     `.execute(executor);
 
