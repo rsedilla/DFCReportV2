@@ -28,6 +28,7 @@ import {
   DccByLeaderDto,
   DccMonthlyReportDto,
   DccTwelveDto,
+  LeaderRecordingStatusDto,
   RecordingStatusDto,
   TrendsDto,
   type TrendFigure,
@@ -425,6 +426,149 @@ export class ReportingController {
                   .map((row) => ({ leader: person(row.leaderId), ...figures(row.figures) })),
               })),
       others: status.others === null ? null : figures(status.others),
+    };
+  }
+
+  /**
+   * A Full view leader's *Recording Status* (decision 0334): the Senior Pastors' tab for one
+   * branch. Boxes for everyone beneath the leader, then one row per direct leader counting
+   * that leader and everyone beneath them, in surname order.
+   *
+   * Placed by the guard as a My 12 table is, so `reports.view_subtree` over the leader at the
+   * period's instant. **A row is named only where the reader could open that leader as a
+   * selector** (decision 0254), asked after the report's transaction has closed (section 24);
+   * the rest are added into *Others*, which names nobody and is null when every row is named.
+   * **The period before is authorized as it would be if it were the period shown**, so a
+   * week answers alike in both places; it is null where the reader could not open that leader.
+   */
+  @Get('recording-status/leader')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    periodFrom: 'query.period',
+  })
+  async leaderRecordingStatus(
+    @Query() query: LeaderRecordingStatusDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    if (query.scope === 'WHOLE_CHURCH') {
+      throw new ValidationFailedError(
+        'The whole church’s Recording Status is GET /reports/recording-status.',
+        { field: 'scope', value: 'WHOLE_CHURCH' },
+      );
+    }
+    await this.assertNamesSomebody({ kind: 'LEADER', person_id: query.leader_id });
+    const status = await this.reporting.leaderRecordingStatus(
+      query.leader_id,
+      query.kind,
+      query.start,
+      query.period,
+    );
+
+    const box = (column: { recorded: number; owed: number }) => ({
+      ...column,
+      percent: column.owed === 0 ? null : Math.floor((column.recorded * 100) / column.owed),
+    });
+    const figures = (row: RecordingFigures) => ({
+      cell: row.cell,
+      dcc: row.dcc,
+      status:
+        row.status.kind === 'STILL_TO_RECORD'
+          ? { kind: row.status.kind, leaders: row.status.leaders }
+          : { kind: row.status.kind },
+    });
+
+    let rows: Record<string, unknown>[] | null = null;
+    let others: Record<string, unknown> | null = null;
+    if (status.rows !== null) {
+      const admitted = await this.authorization.coversEach(
+        actor,
+        Capability.ReportsViewSubtree,
+        status.rows.map((row) => ({
+          kind: 'report_scope' as const,
+          selector: { kind: 'LEADER' as const, personId: row.leaderId },
+          at: reportingPeriodBounds(query.period).end,
+        })),
+      );
+      const named = status.rows.filter((_, index) => admitted[index]);
+      const identities = await this.people.forDecisions(named.map((row) => row.leaderId));
+
+      rows = named
+        .flatMap((row) => {
+          const identity = identities.get(row.leaderId);
+          return identity === undefined ? [] : [{ identity, row }];
+        })
+        .sort((left, right) => compareKeys(keyOf(left.identity), keyOf(right.identity)))
+        .map(({ identity, row }) => ({
+          leader: { id: row.leaderId, member_id: identity.memberId, full_name: identity.fullName },
+          ...figures(row.figures),
+        }));
+
+      // The rows' people are disjoint, so the lines not shown add up as columns do.
+      const shown = new Set(rows.map((row) => canonicalId((row.leader as { id: string }).id)));
+      const rest = status.rows.filter((row) => !shown.has(canonicalId(row.leaderId)));
+      if (rest.length > 0) {
+        const sum = rest.reduce(
+          (total, row) => ({
+            cell: {
+              recorded: total.cell.recorded + row.figures.cell.recorded,
+              owed: total.cell.owed + row.figures.cell.owed,
+            },
+            dcc: {
+              recorded: total.dcc.recorded + row.figures.dcc.recorded,
+              owed: total.dcc.owed + row.figures.dcc.owed,
+            },
+            still:
+              total.still +
+              (row.figures.status.kind === 'STILL_TO_RECORD' ? row.figures.status.leaders : 0),
+          }),
+          { cell: { recorded: 0, owed: 0 }, dcc: { recorded: 0, owed: 0 }, still: 0 },
+        );
+        others = figures({
+          cell: sum.cell,
+          dcc: sum.dcc,
+          status:
+            sum.cell.owed === 0 && sum.dcc.owed === 0
+              ? { kind: 'NOTHING_OWED' }
+              : sum.still === 0
+                ? { kind: 'COMPLETED' }
+                : { kind: 'STILL_TO_RECORD', leaders: sum.still },
+        });
+      }
+    }
+
+    const [previousCovered] = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      [
+        {
+          kind: 'report_scope' as const,
+          selector: { kind: 'LEADER' as const, personId: query.leader_id },
+          at: reportingPeriodBounds(status.previous.guardMonth).end,
+        },
+      ],
+    );
+    const previous = previousCovered ? status.previous.figures : null;
+
+    return {
+      kind: status.kind,
+      start: status.start,
+      end: status.end,
+      open: status.open,
+      branch:
+        status.branch === null
+          ? null
+          : { cell: box(status.branch.cell), dcc: box(status.branch.dcc) },
+      previous: {
+        start: status.previous.start,
+        end: status.previous.end,
+        open: status.previous.open,
+        cell: previous?.cell ?? null,
+        dcc: previous?.dcc ?? null,
+      },
+      rows,
+      others,
     };
   }
 

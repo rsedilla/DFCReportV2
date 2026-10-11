@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { RecordingStatusPanel } from '@/components/recording-status';
+import { LeaderRecordingStatusPanel, RecordingStatusPanel } from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -224,8 +224,16 @@ function Dashboard() {
   // the month figures.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
-  const listTab: RecordTab = recordingOnly || seniorPastor ? 'awaiting' : tab;
   const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
+  // **Recording Status, last, for a reader who reads reports over their own branch**
+  // (decision 0334): a Full view leader, whose Leader default gives `reports.view_subtree` that scope.
+  const leaderStatus =
+    fullRecord &&
+    (me.data?.capabilities ?? []).some(
+      (grant) => grant.capability === 'reports.view_subtree' && grant.scope_type === 'OWN_SUBTREE',
+    );
+  const listTab: RecordTab =
+    recordingOnly || seniorPastor || (tab === 'status' && !leaderStatus) ? 'awaiting' : tab;
   const mayOversee = me.data?.people_i_oversee !== false;
   const shownWhose: Whose = mayOversee ? whose : 'mine';
   const branchView = shownWhose === 'branch';
@@ -596,6 +604,7 @@ function Dashboard() {
         ? `${withoutACell.data.length}${withoutACellPages.hasNextPage ? '+' : ''}`
         : null,
     },
+    ...(leaderStatus ? [{ key: 'status' as const, label: 'Recording Status', count: null }] : []),
   ];
 
   return (
@@ -648,6 +657,11 @@ function Dashboard() {
       {/* The chosen list's pane; the month's figures below it are the whole page's. */}
       <div className={recordingOnly ? 'mt-6' : TAB_PANE}>
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
+        {listTab === 'status' && me.data ? (
+          <div className={LIST}>
+            <LeaderRecordingStatusPanel leaderId={me.data.person_id} />
+          </div>
+        ) : null}
         {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
           <section aria-labelledby="awaiting-heading" className={LIST}>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -1054,7 +1068,7 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
 }
 
 /** Which of Record's four lists is open (decision 0290). */
-const RECORD_TABS = ['awaiting', 'behind', 'leader', 'nocell'] as const;
+const RECORD_TABS = ['awaiting', 'behind', 'leader', 'nocell', 'status'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
 

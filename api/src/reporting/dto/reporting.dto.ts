@@ -250,3 +250,16 @@ export class RecordingStatusDto {
   @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
   period!: string;
 }
+
+/** `GET /reports/recording-status/leader`: a Full view leader's Recording Status (decision 0334). */
+export class LeaderRecordingStatusDto extends RecordingStatusDto {
+  /**
+   * `LEADER`, so the guard places the request as it places a My 12 table. `WHOLE_CHURCH` is
+   * accepted because the guard declares it (section 22) and refused by the route.
+   */
+  @IsIn(['WHOLE_CHURCH', 'LEADER'])
+  scope!: 'WHOLE_CHURCH' | 'LEADER';
+
+  @IsUUID()
+  leader_id!: string;
+}

@@ -13,6 +13,7 @@ import { describeFailure } from '@/lib/messages';
 import { rangeGuardMonth, rangeStartOf } from '@/lib/report-range';
 import { todayInManila } from '@/lib/reporting-month';
 import {
+  getLeaderRecordingStatus,
   getRecordingStatus,
   type RecordingColumn,
   type RecordingRow,
@@ -145,6 +146,116 @@ export function RecordingStatusPanel() {
   );
 }
 
+/**
+ * A Full view leader's *Recording Status* (decision 0334): the Senior Pastors' tab one level
+ * down, for the reader's own branch. Boxes for everyone beneath them, then one row per leader
+ * of their 12, each counting that leader and everyone beneath. Week and Month, as above.
+ */
+export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
+  const today = todayInManila();
+  const [kind, setKind] = useState<Kind>('WEEK');
+  const current = rangeStartOf(kind, today);
+  const [start, setStart] = useState(current);
+  const shown = rangeStartOf(kind, start);
+
+  const status = useQuery({
+    queryKey: ['leader-recording-status', leaderId, kind, shown],
+    queryFn: ({ signal }) =>
+      getLeaderRecordingStatus(leaderId, kind, shown, rangeGuardMonth(kind, shown, today), signal),
+  });
+
+  const unit = kind === 'WEEK' ? 'week' : 'month';
+  const data = status.data;
+
+  return (
+    <section aria-label="Recording Status">
+      <p className="text-muted text-sm">How your 12 are recording this {unit}.</p>
+
+      <ViewSwitch
+        label="Period"
+        even
+        className="max-w-xs"
+        options={[
+          { key: 'WEEK', label: 'Week' },
+          { key: 'MONTH', label: 'Month' },
+        ]}
+        value={kind}
+        onChange={(next) => {
+          setKind(next);
+          setStart(rangeStartOf(next, today));
+        }}
+      />
+
+      <div className={`mt-4 ${CONTROL_BAR}`}>
+        <RangeNavigator
+          kind={kind}
+          start={shown}
+          current={current}
+          open={data?.open}
+          onChange={setStart}
+        />
+      </div>
+
+      <div className="mt-4">
+        <FailureNotice failure={status.isError ? describeFailure(status.error) : null} />
+      </div>
+
+      {status.isPending ? (
+        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+      ) : data ? (
+        data.branch === null || data.rows === null ? (
+          <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+            This {unit} cannot be shown: the pastoral tree it resolves holds a fault that needs
+            repair.
+          </p>
+        ) : (
+          <>
+            <h3 className="field-label mt-4">Leaders Under Me</h3>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <WholeChurchBox
+                label="Recorded their Cell group"
+                column={data.branch.cell}
+                previous={data.previous.cell}
+                previousName={previousName(kind, data.previous.open)}
+              />
+              <WholeChurchBox
+                label="Recorded their DCC checklist"
+                column={data.branch.dcc}
+                previous={data.previous.dcc}
+                previousName={previousName(kind, data.previous.open)}
+              />
+            </div>
+
+            {data.rows.length > 0 ? (
+              <LeaderTable heading="My 12" nameHeader="My 12" titled={false} rows={data.rows} />
+            ) : data.others ? null : (
+              <p className="text-muted mt-6 text-sm">Nobody is under you this {unit}.</p>
+            )}
+            {data.others ? (
+              <div className="mt-6">
+                <h3 className="text-base font-bold tracking-tight">Others</h3>
+                <p className="text-muted mt-1 max-w-2xl text-sm">
+                  Leaders counted in your branch for this {unit} who cannot be named here.
+                </p>
+                <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                  <dt className="text-muted">Cell group recorded</dt>
+                  <dd>{ofLeaders(data.others.cell)}</dd>
+                  <dt className="text-muted">DCC checklist recorded</dt>
+                  <dd>{ofLeaders(data.others.dcc)}</dd>
+                  <dt className="text-muted">Status</dt>
+                  <dd>
+                    <StatusLabel status={data.others.status} />
+                  </dd>
+                </dl>
+              </div>
+            ) : null}
+          </>
+        )
+      ) : null}
+    </section>
+  );
+}
+
 function previousName(kind: Kind, open: boolean): string {
   const name = kind === 'WEEK' ? 'Last week' : 'Last month';
 
@@ -164,7 +275,7 @@ function WholeChurchBox({
 }: {
   label: string;
   column: RecordingColumn & { percent: number | null };
-  previous: RecordingColumn;
+  previous: RecordingColumn | null;
   previousName: string;
 }) {
   return (
@@ -174,9 +285,11 @@ function WholeChurchBox({
         {ofLeaders(column)}
         {column.percent === null ? null : ` · ${column.percent}%`}
       </span>
-      <span className="text-muted mt-1 block text-xs">
-        {previousName}: {ofLeaders(previous)}
-      </span>
+      {previous === null ? null : (
+        <span className="text-muted mt-1 block text-xs">
+          {previousName}: {ofLeaders(previous)}
+        </span>
+      )}
     </div>
   );
 }
@@ -201,16 +314,27 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
 }
 
 /** One root's direct leaders, each opening that leader's branch (decision 0325, point 4). */
-function LeaderTable({ heading, rows }: { heading: string; rows: readonly RecordingRow[] }) {
+function LeaderTable({
+  heading,
+  rows,
+  nameHeader = 'Primaries',
+  titled = true,
+}: {
+  heading: string;
+  rows: readonly RecordingRow[];
+  nameHeader?: string;
+  /** False where the column heading already names the table (owner, 2026-10-12). */
+  titled?: boolean;
+}) {
   return (
     <div className="mt-6">
-      <h3 className="text-base font-bold tracking-tight">{heading}</h3>
+      {titled ? <h3 className="text-base font-bold tracking-tight">{heading}</h3> : null}
 
       <Table caption={heading} className="mt-2 hidden sm:block">
         <thead>
           <tr>
             {/* The roots' direct disciples are their Primaries (owner, 2026-10-09). */}
-            <HeaderCell>Primaries</HeaderCell>
+            <HeaderCell>{nameHeader}</HeaderCell>
             <HeaderCell>Cell group recorded</HeaderCell>
             <HeaderCell>DCC checklist recorded</HeaderCell>
             <HeaderCell>Status</HeaderCell>

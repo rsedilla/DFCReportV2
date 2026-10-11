@@ -341,6 +341,58 @@ export interface RecordingStatus {
   others: Omit<RecordingRow, 'leader'> | null;
 }
 
+/** A Full view leader's *Recording Status* (decision 0334): their branch and their 12. */
+export interface LeaderRecordingStatus {
+  kind: 'WEEK' | 'MONTH';
+  start: string;
+  end: string;
+  open: boolean;
+  /** Null where the placement graph is refused (section 20), and so are the rows. */
+  branch: {
+    cell: RecordingColumn & { percent: number | null };
+    dcc: RecordingColumn & { percent: number | null };
+  } | null;
+  previous: {
+    start: string;
+    end: string;
+    open: boolean;
+    cell: RecordingColumn | null;
+    dcc: RecordingColumn | null;
+  };
+  rows: RecordingRow[] | null;
+  others: Omit<RecordingRow, 'leader'> | null;
+}
+
+/** `GET /reports/recording-status/leader`, retried once with the guard month the API names. */
+export async function getLeaderRecordingStatus(
+  leaderId: string,
+  kind: 'WEEK' | 'MONTH',
+  start: string,
+  guardMonth: string,
+  signal?: AbortSignal,
+): Promise<LeaderRecordingStatus> {
+  const params = new URLSearchParams({
+    scope: 'LEADER',
+    leader_id: leaderId,
+    kind,
+    start,
+    period: guardMonth,
+  });
+  const path = () => `/api/v1/reports/recording-status/leader?${params.toString()}`;
+
+  try {
+    return await authenticatedRequest<LeaderRecordingStatus>(path(), { signal });
+  } catch (error) {
+    const expected = error instanceof ApiRequestError ? error.details.expected : undefined;
+    if (typeof expected !== 'string' || expected === guardMonth) {
+      throw error;
+    }
+    params.set('period', expected);
+
+    return authenticatedRequest<LeaderRecordingStatus>(path(), { signal });
+  }
+}
+
 /** `GET /reports/recording-status`, retried once with the guard month the API names. */
 export async function getRecordingStatus(
   kind: 'WEEK' | 'MONTH',

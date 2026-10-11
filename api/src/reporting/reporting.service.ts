@@ -125,6 +125,29 @@ export interface RecordingStatus {
   others: RecordingFigures | null;
 }
 
+/**
+ * A Full view leader's *Recording Status* (decision 0334): the Senior Pastors' tab one level
+ * down. `branch` counts everyone beneath the leader, and each row one of their direct leaders
+ * and everyone beneath that leader, so the rows add up to `branch`. Null where section 20
+ * refuses the graph the figures are placed on.
+ */
+export interface LeaderRecordingStatus {
+  kind: 'WEEK' | 'MONTH';
+  start: string;
+  end: string;
+  open: boolean;
+  branch: RecordingFigures | null;
+  /** `guardMonth` is the month this period resolves at when it is the one shown (decision 0293). */
+  previous: {
+    start: string;
+    end: string;
+    open: boolean;
+    guardMonth: string;
+    figures: RecordingFigures | null;
+  };
+  rows: { leaderId: string; figures: RecordingFigures }[] | null;
+}
+
 /** The Senior Pastors' *Number of Cells* and *Number of people* for one scope (decision 0326). */
 export interface ChurchCountFigures {
   cellGroups: number;
@@ -1151,6 +1174,70 @@ export class ReportingService {
         },
         tables,
         others,
+      };
+    });
+  }
+
+  /**
+   * A Full view leader's *Recording Status* for a week or a month (decision 0334): who
+   * beneath `leaderId` has recorded, counted as {@link recordingStatus} counts the church.
+   * The reader is not in their own boxes; each period is placed on its own graph.
+   *
+   * One `READ ONLY REPEATABLE READ` transaction, as every report (decision 0210).
+   */
+  async leaderRecordingStatus(
+    leaderId: string,
+    kind: 'WEEK' | 'MONTH',
+    start: string,
+    guardMonth: string,
+  ): Promise<LeaderRecordingStatus> {
+    assertReportRangeStart(kind, start);
+    const end = reportRangeEnd(kind, start);
+
+    return this.overPeriod(guardMonth, async (trx) => {
+      const today = await assertRangeReadable(trx, kind, start, guardMonth);
+      const now = await databaseNow(trx);
+
+      const owing = await this.owedBetween(trx, start, end < today ? end : today);
+      const previousStart =
+        kind === 'WEEK' ? shiftDays(start, -7) : reportingMonthOf(shiftDays(start, -1));
+      const previousEnd = reportRangeEnd(kind, previousStart);
+      const previous = await this.owedBetween(trx, previousStart, previousEnd);
+
+      const graph = await this.hierarchy.reportingGraph(
+        trx,
+        startOfManilaDay(start),
+        endOfManilaDay(end),
+      );
+      const previousGraph = await this.hierarchy.reportingGraph(
+        trx,
+        startOfManilaDay(previousStart),
+        endOfManilaDay(previousEnd),
+      );
+
+      // The leader's subtree less the leader, so a row's people are counted once.
+      const beneath = (placed: { subtree: (id: string) => string[] }) =>
+        placed.subtree(leaderId).slice(1);
+
+      return {
+        kind,
+        start,
+        end,
+        open: now.getTime() < windowClosesAt(reportingMonthOf(end)).getTime(),
+        branch: graph.refused ? null : figuresOf(owing, beneath(graph)),
+        previous: {
+          start: previousStart,
+          end: previousEnd,
+          open: now.getTime() < windowClosesAt(reportingMonthOf(previousEnd)).getTime(),
+          guardMonth: reportRangeGuardMonth(kind, previousStart, today),
+          figures: previousGraph.refused ? null : figuresOf(previous, beneath(previousGraph)),
+        },
+        rows: graph.refused
+          ? null
+          : graph.children(leaderId).map((id) => ({
+              leaderId: id,
+              figures: figuresOf(owing, graph.subtree(id)),
+            })),
       };
     });
   }
