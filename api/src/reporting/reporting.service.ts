@@ -659,6 +659,9 @@ export class ReportingService {
         classification: classify(people),
       });
 
+      // One read of the placement graph serves every row and the total (it was one per row).
+      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+
       // A whole-church reader disciples neither root, so each root row is labelled by its
       // Network rather than by name (decision 0293).
       const rowIds: { personId: string; network: NetworkName | null; root?: RootOfRow }[] =
@@ -667,11 +670,8 @@ export class ReportingService {
               (personId) => ({ personId, network: null }),
             )
           : subject.kind === 'ROOT_LEADERS'
-            ? await this.rootLeadersAsOf(trx, end)
+            ? await this.rootLeadersAsOf(trx, end, graph)
             : await this.hierarchy.rootSeatsAsOf(trx, end);
-
-      // One read of the placement graph serves every row and the total (it was one per row).
-      const graph = await this.hierarchy.reportingGraph(trx, start, end);
 
       // One read of the total's people, each with the leaders whose meetings they attended,
       // serves every row and the own row as well (it was one per row): a row is the people
@@ -816,6 +816,10 @@ export class ReportingService {
         classification: classify(people),
       });
 
+      // One read of the placement graph serves every row and the total (it was one per row),
+      // made only when a subtree is asked for: a Network subject asks for none.
+      let graph: Awaited<ReturnType<HierarchyService['reportingGraph']>> | null = null;
+
       const rowIds: { personId: string; network: NetworkName | null; root?: RootOfRow }[] =
         subject.kind === 'LEADER'
           ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
@@ -824,12 +828,12 @@ export class ReportingService {
           : subject.kind === 'NETWORK'
             ? []
             : subject.kind === 'ROOT_LEADERS'
-              ? await this.rootLeadersAsOf(trx, end)
+              ? await this.rootLeadersAsOf(
+                  trx,
+                  end,
+                  (graph ??= await this.hierarchy.reportingGraph(trx, start, end)),
+                )
               : await this.hierarchy.rootSeatsAsOf(trx, end);
-
-      // One read of the placement graph serves every row and the total (it was one per row),
-      // made only when a subtree is asked for: a Network subject asks for none.
-      let graph: Awaited<ReturnType<HierarchyService['reportingGraph']>> | null = null;
       const subtreeOf = async (leaderId: string) =>
         (graph ??= await this.hierarchy.reportingGraph(trx, start, end)).subtree(leaderId);
 
@@ -1152,16 +1156,20 @@ export class ReportingService {
   }
 
   /**
-   * Each root's direct leaders at an instant, for the Senior Pastors' My 12 tables (decision
-   * 0326, point 3), in the tree as it stood then, as a leader's own rows are.
+   * Each root's direct leaders for the Senior Pastors' attendance tables (decision 0326, point
+   * 3): the root's children on section 20's placement graph for the period asked, as the # tabs
+   * take them in {@link churchCounts}, so a monthly attendance table lists the same Primaries as
+   * the # tabs for that month (decision 0331). A Primary whose assignment ended within the
+   * period, for one, keeps their row for it.
    */
   private async rootLeadersAsOf(
     trx: Transaction<Database>,
     at: Date,
+    graph: { children: (leaderId: string) => string[] },
   ): Promise<{ personId: string; network: null; root: RootOfRow }[]> {
     const rows: { personId: string; network: null; root: RootOfRow }[] = [];
     for (const seat of await this.hierarchy.rootSeatsAsOf(trx, at)) {
-      for (const personId of await this.hierarchy.directChildrenAsOf(trx, seat.personId, at)) {
+      for (const personId of graph.children(seat.personId)) {
         rows.push({
           personId,
           network: null,

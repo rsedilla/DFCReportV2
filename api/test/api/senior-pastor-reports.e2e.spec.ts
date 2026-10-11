@@ -645,6 +645,308 @@ describe('Senior Pastor reports (decision 0326)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // One list of Primaries on every tab (decision 0331, SKILL.md sections 19 and 20)
+  // ---------------------------------------------------------------------------
+
+  describe('every Senior Pastor tab lists the same Primaries (decision 0331)', () => {
+    /**
+     *   Oriel (Men's root)
+     *     -> Manuel Bautista -> Mark Ilagan (leads a YOUTH Cell) -> Anacleto Reyes
+     *     -> Ana Cruz (leads a COUPLE Cell) -> Benigno Santos
+     *   Gemma (Women's root) -> Cara Flores
+     *
+     * `CLAUDE.md`'s `Raymond -> Manuel -> Mark`, with this suite's Oriel in Raymond's seat.
+     * Manuel's assignment closes on 15 June 2020 with no successor, and he is archived at the
+     * same instant, so he holds no assignment at June's end: the case decision 0331 is about.
+     * May 2020 is a month in which nothing changed. Both months are closed and fixed, so no
+     * case here reads the clock. Bautista sorts before Cruz, so Manuel is Oriel's first row.
+     */
+    const MAY = '2020-05-01';
+    const JUNE = '2020-06-01';
+    const CREATED = new Date('2020-01-04T12:00:00+08:00');
+    const MID_JUNE = new Date('2020-06-15T12:00:00+08:00');
+
+    let manuel: TestPerson;
+    let mark: TestPerson;
+    let anacleto: TestPerson;
+    let ana: TestPerson;
+    let benigno: TestPerson;
+    let cara: TestPerson;
+
+    interface Figure {
+      unique_people: number;
+      classification: Record<string, number>;
+    }
+    interface Twelve {
+      kind: string;
+      n?: number;
+      rows: (Figure & { leader: { id: string } | null; root_id: string })[];
+      roots: { id: string; network: string }[];
+      own: Figure | null;
+      overlap: number;
+      elsewhere: number;
+      total: Figure;
+      buckets?: { people: number }[] | null;
+    }
+
+    const twelve = (domain: 'cells' | 'dcc', month: string, rows: boolean): request.Test =>
+      request(app.getHttpServer())
+        .get(`/api/v1/reports/${domain}/twelve`)
+        .query({
+          kind: 'MONTH',
+          start: month,
+          period: month,
+          scope: 'WHOLE_CHURCH',
+          ...(rows ? { rows: 'ROOT_LEADERS' } : {}),
+        })
+        .set('Authorization', `Bearer ${pastor.accessToken}`);
+
+    const classified = (figure: Figure): number =>
+      Object.values(figure.classification).reduce((sum, count) => sum + count, 0);
+
+    /**
+     * Section 20 on an attendance table: every figure's buckets sum to its unique people,
+     * the rows less overlap plus elsewhere are the total, and for DCC the attendance buckets
+     * sum to the same total. A failure is a data-integrity defect, not a rounding issue.
+     */
+    const reconcileTwelve = (body: Twelve): Twelve => {
+      for (const figure of [...body.rows, ...(body.own === null ? [] : [body.own]), body.total]) {
+        expect(classified(figure)).toBe(figure.unique_people);
+      }
+      const rows = body.rows.reduce((sum, row) => sum + row.unique_people, 0);
+      const own = body.own?.unique_people ?? 0;
+      expect(rows + own - body.overlap + body.elsewhere).toBe(body.total.unique_people);
+      expect(body.overlap).toBeGreaterThanOrEqual(0);
+      expect(body.elsewhere).toBeGreaterThanOrEqual(0);
+      if (body.buckets !== undefined && body.buckets !== null && (body.n ?? 0) > 0) {
+        expect(body.buckets.reduce((sum, entry) => sum + entry.people, 0)).toBe(
+          body.total.unique_people,
+        );
+      }
+
+      return body;
+    };
+
+    const attendance = async (domain: 'cells' | 'dcc', month: string): Promise<Twelve> => {
+      const response = await twelve(domain, month, true);
+      expect({ domain, month, status: response.status }).toEqual({ domain, month, status: 200 });
+
+      return reconcileTwelve(response.body as Twelve);
+    };
+
+    /** `[leader, root]` pairs, sorted, so two surfaces' row sets compare as sets. */
+    const pairsOfTwelve = (body: Twelve): string[] =>
+      body.rows.map((row) => `${row.leader?.id}:${row.root_id}`).sort();
+    const pairsOfCounts = (body: Counts): string[] =>
+      body
+        .tables!.flatMap((table) => table.rows.map((row) => `${row.leader.id}:${table.root.id}`))
+        .sort();
+
+    const twelveRowOf = (body: Twelve, person: TestPerson) =>
+      body.rows.find((row) => row.leader?.id === person.id);
+
+    /** One HELD meeting, with the derived columns computed by the database. */
+    const meeting = async (cell: TestCell, date: string, leaderId: string): Promise<string> => {
+      const rows = await sql<{ id: string }>`
+        INSERT INTO cell_meetings (
+          cell_id, scheduled_date, scheduled_time, week_starting, reporting_month,
+          status, responsible_leader_id
+        )
+        VALUES (
+          ${cell.id}::uuid, ${date}::date, '19:00'::time,
+          ${date}::date - ((EXTRACT(ISODOW FROM ${date}::date)::integer) - 1),
+          date_trunc('month', ${date}::date)::date,
+          'HELD'::cell_meeting_status, ${leaderId}::uuid
+        )
+        RETURNING id
+      `.execute(db);
+
+      return rows.rows[0].id;
+    };
+
+    const attend = async (meetingId: string, person: TestPerson): Promise<void> => {
+      await db
+        .insertInto('cell_attendance')
+        .values({
+          cell_meeting_id: meetingId,
+          person_id: person.id,
+          present: true,
+          recorded_by: pastor.id,
+        })
+        .execute();
+    };
+
+    const present = async (
+      sunday: string,
+      person: TestPerson,
+      responsible: TestPerson,
+    ): Promise<void> => {
+      const event =
+        (await db
+          .selectFrom('dcc_events')
+          .select('id')
+          .where('event_date', '=', sunday)
+          .executeTakeFirst()) ??
+        (await db
+          .insertInto('dcc_events')
+          .values({ event_date: sunday })
+          .returning('id')
+          .executeTakeFirstOrThrow());
+      await db
+        .insertInto('dcc_attendance')
+        .values({
+          dcc_event_id: event.id,
+          person_id: person.id,
+          present: true,
+          responsible_leader_id: responsible.id,
+          recorded_by: pastor.id,
+        })
+        .execute();
+    };
+
+    beforeEach(async () => {
+      manuel = await leader('Manuel', 'Bautista', oriel);
+      mark = await leader('Mark', 'Ilagan', manuel);
+      anacleto = await leader('Anacleto', 'Reyes', mark);
+      ana = await leader('Ana', 'Cruz', oriel);
+      benigno = await leader('Benigno', 'Santos', ana);
+      cara = await leader('Cara', 'Flores', gemma);
+
+      const markCell = await cellOf(mark, 'YOUTH', CREATED);
+      const anaCell = await cellOf(ana, 'COUPLE', CREATED);
+
+      // May: nothing changes. Saturdays are Cell days, Sundays DCC.
+      await attend(await meeting(markCell, '2020-05-02', mark.id), anacleto);
+      await attend(await meeting(anaCell, '2020-05-02', ana.id), benigno);
+      await present('2020-05-03', anacleto, mark);
+      await present('2020-05-03', benigno, ana);
+
+      // June: Mark's and Ana's people attend, and then Manuel's assignment ends mid-month
+      // with no successor, and he is archived at the same instant.
+      await attend(await meeting(markCell, '2020-06-06', mark.id), anacleto);
+      await attend(await meeting(anaCell, '2020-06-06', ana.id), benigno);
+      await present('2020-06-07', anacleto, mark);
+      await present('2020-06-07', benigno, ana);
+
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: MID_JUNE })
+        .where('person_id', '=', manuel.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await archiveAt(manuel, MID_JUNE);
+    });
+
+    it('keeps a Primary whose assignment ended within the month as a row on CG and DCC attendance, carrying their branch, as on the # tabs', async () => {
+      // The premise: Manuel holds no assignment in force at June's end.
+      const open = await db
+        .selectFrom('pastoral_assignments')
+        .select('id')
+        .where('person_id', '=', manuel.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      expect(open).toEqual([]);
+
+      const counted = (await counts(pastor, JUNE).expect(200)).body as Counts;
+      expect(rowOf(counted, manuel)).toBeDefined();
+
+      for (const domain of ['cells', 'dcc'] as const) {
+        const body = await attendance(domain, JUNE);
+
+        // Oriel's two by surname (Bautista, Cruz), then Gemma's one.
+        expect({
+          domain,
+          rows: body.rows.map((row) => [row.leader?.id, row.root_id]),
+        }).toEqual({
+          domain,
+          rows: [
+            [manuel.id, oriel.id],
+            [ana.id, oriel.id],
+            [cara.id, gemma.id],
+          ],
+        });
+
+        // Manuel's row carries the person beneath him who attended, Anacleto.
+        expect({ domain, people: twelveRowOf(body, manuel)?.unique_people }).toEqual({
+          domain,
+          people: 1,
+        });
+        expect({ domain, people: twelveRowOf(body, ana)?.unique_people }).toEqual({
+          domain,
+          people: 1,
+        });
+        // Nobody falls into the line under the tables.
+        expect({ domain, elsewhere: body.elsewhere }).toEqual({ domain, elsewhere: 0 });
+
+        // The same Primaries, under the same roots, as # of Cells for the month.
+        expect({ domain, rows: pairsOfTwelve(body) }).toEqual({
+          domain,
+          rows: pairsOfCounts(counted),
+        });
+      }
+    });
+
+    it('still adds up to the whole-church total, rows and the lines under the tables', async () => {
+      for (const month of [MAY, JUNE]) {
+        const counted = (await counts(pastor, month).expect(200)).body as Counts;
+        expectReconciles(counted);
+
+        for (const domain of ['cells', 'dcc'] as const) {
+          const body = await attendance(domain, month);
+          const rows = body.rows.reduce((sum, row) => sum + row.unique_people, 0);
+          expect({ domain, month, sum: rows - body.overlap + body.elsewhere }).toEqual({
+            domain,
+            month,
+            sum: body.total.unique_people,
+          });
+
+          // The total is the plain Whole Church table's: the rows do not move it.
+          const plain = await twelve(domain, month, false).expect(200);
+          expect({ domain, month, total: body.total }).toEqual({
+            domain,
+            month,
+            total: (plain.body as Twelve).total,
+          });
+          expect({ domain, month, people: body.total.unique_people }).toEqual({
+            domain,
+            month,
+            people: 2,
+          });
+        }
+      }
+    });
+
+    it('lists the same rows as before for a month in which nothing changed', async () => {
+      const counted = (await counts(pastor, MAY).expect(200)).body as Counts;
+
+      for (const domain of ['cells', 'dcc'] as const) {
+        const body = await attendance(domain, MAY);
+
+        expect({
+          domain,
+          rows: body.rows.map((row) => [row.leader?.id, row.root_id]),
+        }).toEqual({
+          domain,
+          rows: [
+            [manuel.id, oriel.id],
+            [ana.id, oriel.id],
+            [cara.id, gemma.id],
+          ],
+        });
+        expect({ domain, people: twelveRowOf(body, manuel)?.unique_people }).toEqual({
+          domain,
+          people: 1,
+        });
+        expect({ domain, elsewhere: body.elsewhere }).toEqual({ domain, elsewhere: 0 });
+        expect({ domain, rows: pairsOfTwelve(body) }).toEqual({
+          domain,
+          rows: pairsOfCounts(counted),
+        });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Who may read them (SKILL.md section 7: the API is the sole authority)
   // ---------------------------------------------------------------------------
 
