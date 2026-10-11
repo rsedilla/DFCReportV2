@@ -16,6 +16,7 @@ import { reportingPeriodBounds } from '../common/time/reporting-period';
 import { manilaDayOf } from '../common/time/manila';
 import { reportingMonthOf } from '../common/time/submission-window';
 import { CellsReadService } from '../cells/cells.read.service';
+import { DatabaseClock } from '../database/database-clock';
 import type { NetworkName } from '../database/schema';
 import { PeopleReadService } from '../people/people.read.service';
 
@@ -85,6 +86,7 @@ export class ReportingController {
     private readonly authorization: AuthorizationService,
     private readonly people: PeopleReadService,
     private readonly cells: CellsReadService,
+    private readonly clock: DatabaseClock,
   ) {}
 
   /**
@@ -485,7 +487,7 @@ export class ReportingController {
   @Get('trends')
   @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
   async trends(@Query() query: TrendsDto): Promise<Record<string, unknown>> {
-    const current = reportingMonthOf(manilaDayOf(new Date()));
+    const current = reportingMonthOf(manilaDayOf(await this.clock.now()));
     const months = Array.from({ length: 12 }, (_, index) => shiftMonth(current, index - 11));
 
     let lines: { leaderId: string | null; network: NetworkName | null }[];
