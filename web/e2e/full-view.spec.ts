@@ -1,14 +1,25 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { PERSON_IN_SCOPE, mockGrants, mockPeople, mockScreens, mockSignedIn } from './mock-api';
+import {
+  PERSON_IN_SCOPE,
+  SIGNED_IN_PERSON_ID,
+  mockAwaitingReassignment,
+  mockGrants,
+  mockPeople,
+  mockPeopleWithoutACell,
+  mockScreens,
+  mockSignedIn,
+} from './mock-api';
 import {
   CELL_WITH_MEETINGS,
   CELL_WITH_NO_SCHEDULE,
   mockCellMeetings,
   mockCellMembers,
+  mockCellReport,
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
+  mockDccReport,
   mockDccRoster,
   mockMeetingsAwaiting,
   mockPastoralPath,
@@ -862,4 +873,95 @@ test('a Recording-only account never sees the five items while the server answer
     'My Cell',
     'SUYNL',
   ]);
+});
+
+/**
+ * A Full view leader's Recording Status (decision 0334): the last of Record's tabs, for a
+ * reader whose role reads reports over their own branch, and reading that branch.
+ */
+test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
+  const column = (recorded: number, owed: number) => ({ recorded, owed });
+
+  async function mockFullRecord(page: Page) {
+    await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, {});
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+  }
+
+  test('is the last tab, and reads the reader’s own branch', async ({ page }) => {
+    await mockFullRecord(page);
+    await mockGrants(page, ['reports.view_subtree']);
+    const asked: URLSearchParams[] = [];
+    await page.route('**/api/v1/reports/recording-status/leader?*', (route) => {
+      asked.push(new URL(route.request().url()).searchParams);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          kind: 'WEEK',
+          start: '2026-10-05',
+          end: '2026-10-11',
+          open: true,
+          branch: {
+            cell: { ...column(1, 2), percent: 50 },
+            dcc: { ...column(1, 1), percent: 100 },
+          },
+          previous: {
+            start: '2026-09-28',
+            end: '2026-10-04',
+            open: true,
+            cell: column(2, 2),
+            dcc: column(1, 1),
+          },
+          rows: [
+            {
+              leader: { id: PERSON_IN_SCOPE, member_id: 'M-000201', full_name: 'Ana Lim' },
+              cell: column(1, 2),
+              dcc: column(1, 1),
+              status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+            },
+          ],
+          others: null,
+        }),
+      });
+    });
+
+    await page.goto('/dashboard');
+
+    const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
+    await expect(tabs).toHaveCount(5);
+    await expect(tabs.last()).toHaveText('Recording Status');
+    await tabs.last().click();
+
+    await expect(page.getByText('How your 12 are recording this week.')).toBeVisible();
+    await expect(page.getByText(/^1 of 2 leaders . 50%$/)).toBeVisible();
+    const table = page.getByRole('table', { name: 'My 12' });
+    await expect(table.getByRole('link', { name: 'Ana Lim' })).toBeVisible();
+    // The column names the table, so no title stands above it (owner, 2026-10-12).
+    await expect(page.getByRole('heading', { name: 'My 12' })).toHaveCount(0);
+
+    expect(asked[0]?.get('scope')).toBe('LEADER');
+    expect(asked[0]?.get('leader_id')).toBe(SIGNED_IN_PERSON_ID);
+  });
+
+  test('is not offered to a reader whose reports reach beyond their own branch', async ({
+    page,
+  }) => {
+    // The shared account reads reports at Network scope, as an overseer granted one would.
+    await mockFullRecord(page);
+
+    await page.goto('/dashboard');
+
+    const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
+    await expect(tabs).toHaveCount(4);
+    await expect(page.getByRole('button', { name: 'Recording Status' })).toHaveCount(0);
+  });
 });

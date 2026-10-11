@@ -96,6 +96,16 @@ describe('Full view (decision 0323)', () => {
         kind: 'MONTH',
         start: period,
       }),
+      'GET /reports/recording-status/leader': get('reports/recording-status/leader', {
+        ...leaderScope,
+        kind: 'WEEK',
+        start: lastMonday(),
+        period: reportRangeGuardMonth(
+          'WEEK',
+          lastMonday(),
+          new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
+        ),
+      }),
       'GET /reports/recording-status': get('reports/recording-status', {
         kind: 'WEEK',
         start: lastMonday(),
