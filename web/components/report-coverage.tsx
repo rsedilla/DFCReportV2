@@ -122,7 +122,7 @@ export function CoverageByCell({
           }}
         >
           {/* A fixed label with `aria-pressed`, so a screen reader hears one state, once. */}
-          Show only Cells behind
+          Show only pending CG reports
         </Button>
       ) : null}
 

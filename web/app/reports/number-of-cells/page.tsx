@@ -8,7 +8,7 @@ import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
- * The Senior Pastors' *Number of Cells* (SKILL.md section 19, decision 0326): the Cells running
+ * The Senior Pastors' *Number of Cell Groups* (SKILL.md section 19, decision 0326): the Cells running
  * on a month's last day, by category, and the people leading them, for the whole church and
  * each root's direct leaders.
  */
@@ -25,7 +25,7 @@ function NumberOfCells() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="The Cells running, month by month." />
+      <ReportsHeading line="The Cell Groups running, month by month." />
       <ReportsTabs current="number-of-cells" month={monthFromQuery(month)}>
         <ChurchCountsPanel figure="CELLS" month={month} />
       </ReportsTabs>

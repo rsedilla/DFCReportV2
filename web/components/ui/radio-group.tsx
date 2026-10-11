@@ -41,6 +41,7 @@ export function RadioGroup<T extends string>({
   error,
   disabled = false,
   layout = 'stacked',
+  even = false,
 }: {
   legend: string;
   description?: string;
@@ -63,6 +64,8 @@ export function RadioGroup<T extends string>({
    * and a thicker border and bold label mark the choice without relying on colour.
    */
   layout?: 'stacked' | 'row';
+  /** Every choice the same width from `sm`, as wide as the longest (decision 0332). */
+  even?: boolean;
 }) {
   const id = useId();
   const row = layout === 'row';
@@ -94,7 +97,9 @@ export function RadioGroup<T extends string>({
         className={
           row
             ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
-            : 'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
+            : even
+              ? 'mt-1 flex flex-col gap-2 sm:inline-grid sm:auto-cols-fr sm:grid-flow-col'
+              : 'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
         }
       >
         {options.map((option) => {

@@ -76,7 +76,7 @@ const TABS = [
   { label: 'SUYNL', path: '/reports/suynl', dated: false },
   { label: 'Training', path: '/reports/training', dated: false },
   { label: 'Conquest', path: '/reports/conquest', dated: false },
-  { label: 'Filed reports', path: '/reports/filed', dated: true },
+  { label: 'Filed Reports', path: '/reports/filed', dated: true },
 ] as const;
 
 /** Every read the six reports make, answered, so any of them can be opened. */
@@ -158,14 +158,14 @@ test.describe('the Reports tabs (decision 0292)', () => {
     await page.goto('/reports/cells?month=2026-05-01');
     await page
       .getByRole('navigation', { name: 'Which report' })
-      .getByRole('link', { name: 'Filed reports', exact: true })
+      .getByRole('link', { name: 'Filed Reports', exact: true })
       .click();
 
     await expect(page).toHaveURL(/\/reports\/filed\?month=2026-05-01$/);
     await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
     await expect(
       page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-    ).toHaveText('Filed reports');
+    ).toHaveText('Filed Reports');
     await expect.poll(() => periods).toContain('2026-05-01');
     expect(periods.every((period) => period === '2026-05-01')).toBe(true);
   });
@@ -403,7 +403,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await page.goto('/reports/filed');
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    const behind = table.getByRole('button', { name: 'Show only Cells behind' });
+    const behind = table.getByRole('button', { name: 'Show only pending CG reports' });
     await expect(behind).toHaveAttribute('aria-pressed', 'false');
     await behind.click();
 
@@ -429,7 +429,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     await expect(page.getByRole('radio', { name: 'By Cell' })).toBeChecked();
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    await expect(table.getByRole('button', { name: 'Show only Cells behind' })).toHaveAttribute(
+    await expect(table.getByRole('button', { name: 'Show only pending CG reports' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -447,14 +447,14 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await page.goto('/reports/filed');
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    await table.getByRole('button', { name: 'Show only Cells behind' }).click();
+    await table.getByRole('button', { name: 'Show only pending CG reports' }).click();
     await expect(page).toHaveURL(/behind=1/);
 
     await page.goto('/cells');
     await page.goBack();
     const behind = page
       .getByRole('region', { name: 'Coverage by Cell' })
-      .getByRole('button', { name: 'Show only Cells behind' });
+      .getByRole('button', { name: 'Show only pending CG reports' });
     await expect(behind).toHaveAttribute('aria-pressed', 'true');
 
     await page.goBack();
@@ -540,7 +540,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
     await expect(region.getByText(/No Cell you oversee is behind/)).toHaveCount(0);
 
     // Without the filter the closed view is not used, so its failure is not reported.
-    await region.getByRole('button', { name: 'Show only Cells behind' }).click();
+    await region.getByRole('button', { name: 'Show only pending CG reports' }).click();
     await expect(region.getByRole('table', { name: 'Recording coverage for each Cell' })).toBeVisible();
     await expect(region.getByRole('alert')).toBeEmpty();
   });

@@ -43,17 +43,17 @@ test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
     await expect(tabs).toHaveText([
-      'CG attendance',
-      'DCC attendance',
-      '# of Cells',
+      'CG Attendance',
+      'DCC Attendance',
+      '# of Cell Groups',
       '# of Cell Leaders',
-      '# of people',
+      '# of People',
     ]);
     // A screen reader says `#` as "number sign", so each keeps its words as its name.
-    for (const name of ['Number of Cells', 'Number of Cell Leaders', 'Number of people']) {
+    for (const name of ['Number of Cell Groups', 'Number of Cell Leaders', 'Number of people']) {
       await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
     }
-    await expect(page.getByRole('link', { name: 'Number of Cells', exact: true })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Number of Cell Groups', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -73,7 +73,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
 
     await page.goto('/reports/number-of-cells');
 
-    const counts = page.getByRole('region', { name: 'Number of Cells' });
+    const counts = page.getByRole('region', { name: 'Number of Cell Groups' });
     await expect(counts.getByRole('term')).toHaveText(['Total', 'Youth', 'Young Pro', 'Couple']);
     await expect(counts.getByRole('definition')).toHaveText(['5', '1', '3', '1']);
 
@@ -243,11 +243,11 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which figure' }).getByRole('link');
     await expect(tabs).toHaveText([
-      'CG attendance',
-      'DCC attendance',
-      '# of Cells',
+      'CG Attendance',
+      'DCC Attendance',
+      '# of Cell Groups',
       '# of Cell Leaders',
-      '# of people',
+      '# of People',
     ]);
     await expect(page.getByRole('link', { name: 'Number of Cell Leaders', exact: true })).toHaveAttribute(
       'href',
@@ -398,7 +398,7 @@ for (const width of [390, 1280]) {
       if (route === '/trends') {
         await expect(page.getByRole('checkbox', { name: 'Whole Church' })).toBeVisible();
       } else {
-        await expect(page.getByRole('region', { name: 'Number of Cells' }).getByRole('term').first()).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Number of Cell Groups' }).getByRole('term').first()).toBeVisible();
       }
 
       const targets = page.locator('main button, main a[href], main input, main select, main summary');

@@ -50,7 +50,7 @@ export function RecordingStatusPanel() {
 
   return (
     // No heading of its own: the tab above names it (owner, 2026-10-09).
-    <section aria-label="Recording status">
+    <section aria-label="Recording Status">
 
       <ViewSwitch
         label="Period"
