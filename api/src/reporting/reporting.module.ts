@@ -4,6 +4,7 @@ import { SettingsModule } from '../admin/settings/settings.module';
 import { AttendanceModule } from '../attendance/attendance.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
+import { DatabaseClock } from '../database/database-clock';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
@@ -43,7 +44,8 @@ import { ReportingService } from './reporting.service';
     SettingsModule,
   ],
   controllers: [ReportingController],
-  providers: [ReportingService],
+  // Decision 0326's Trends names the current month on the database's clock.
+  providers: [ReportingService, DatabaseClock],
   exports: [ReportingService],
 })
 export class ReportingModule {}
