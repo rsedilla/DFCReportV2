@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { sql } from 'kysely';
 
+import { DatabaseClock } from '../../src/database/database-clock';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -590,6 +591,22 @@ describe('Senior Pastor reports (decision 0326)', () => {
       expect(lines[1].values[9]).toBe(2);
       expect(lines[1].values[10]).toBe(3);
       expect(lines[2].values[10]).toBe(1);
+    });
+
+    it('names the current month on the database’s clock, not the host’s', async () => {
+      // Three months back, so a month read off the host's clock cannot match it.
+      const month = shiftMonth(await currentMonth(), -3);
+      const clock = jest.spyOn(app.get(DatabaseClock), 'now').mockResolvedValue(midMonth(month));
+
+      try {
+        const response = await trends(pastor, { figure: 'CELLS' }).expect(200);
+
+        expect(response.body.current).toBe(month);
+        expect(response.body.months[11]).toBe(month);
+        expect(clock).toHaveBeenCalled();
+      } finally {
+        clock.mockRestore();
+      }
     });
 
     it('draws the church’s People as Number of people’s whole-church figure', async () => {
