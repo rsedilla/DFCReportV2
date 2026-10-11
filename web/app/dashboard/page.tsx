@@ -216,11 +216,11 @@ function Dashboard() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
-  // decision 0323): no other list, no month figures, and People I oversee only while the
+  // decision 0323): no other list, no month figures, and Leaders Under Me only while the
   // server says a leader holding an account sits directly beneath it.
   const recordingOnly = me.data?.screens === 'RECORDING';
   // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
-  // their own Awaiting a record with no People I oversee, and none of the other lists or
+  // their own Awaiting a record with no Leaders Under Me, and none of the other lists or
   // the month figures.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
@@ -375,7 +375,7 @@ function Dashboard() {
   });
 
   // **The branch's DCC records still owed** (decision 0301): one request per open month,
-  // read only while People I oversee is chosen. A closed month owes nothing and answers
+  // read only while Leaders Under Me is chosen. A closed month owes nothing and answers
   // empty, so last month is asked for in the close week alone.
   const owedNow = useQuery({
     queryKey: ['dcc-owed', month],
@@ -696,10 +696,10 @@ function Dashboard() {
                   setWhose(next);
                   go({ whose: next === 'branch' ? 'branch' : null });
                 }}
+                // Named by decision 0333; the second choice names what each half holds.
                 options={[
-                  { value: 'branch', label: 'People I oversee' },
-                  // One word for both lists (decision 0311).
-                  { value: 'mine', label: 'Mine' },
+                  { value: 'branch', label: 'Leaders Under Me' },
+                  { value: 'mine', label: filter === 'DCC' ? 'Own 12' : 'Own Cell' },
                 ]}
               />
             </div>
@@ -1576,7 +1576,7 @@ interface ChosenLeader {
 type OwedRow = DccOwed & { month: string };
 
 /**
- * The DCC half of People I oversee (decision 0301): one row per Sunday and leader in the
+ * The DCC half of Leaders Under Me (decision 0301): one row per Sunday and leader in the
  * reader's branch with no DCC record yet, oldest first and by name, never by how far behind.
  * The reader's own row records; another leader's carries Record, where the API says the reader
  * may record for them, beside See checklist, which opens their month below, read only

@@ -267,7 +267,7 @@ export interface DccOwed {
   may_record: boolean;
 }
 
-/** The Record page's People I oversee view for DCC: one request for the month. */
+/** The Record page's Leaders Under Me view for DCC: one request for the month. */
 export async function getDccOwed(
   month: string,
   signal?: AbortSignal,

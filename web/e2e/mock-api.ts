@@ -140,7 +140,7 @@ export async function mockAdministrator(page: Page): Promise<void> {
  * `RECORDING` is a Leader without Full view: it holds no `reports.view_subtree` (point 2), and
  * `peopleIOversee` is the server's answer for whether a leader with an account sits directly
  * beneath it. `SENIOR_PASTOR` reads reports at Whole Church, as section 7 gives the role, and
- * is never offered People I oversee (decision 0325, point 1).
+ * is never offered Leaders Under Me (decision 0325, point 1).
  */
 export async function mockScreens(
   page: Page,

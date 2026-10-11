@@ -40,7 +40,7 @@ export interface SessionDescription {
    * `roles` or the capabilities.
    */
   screens: Screens;
-  /** Whether `Record` offers *People I oversee* (section 19, decision 0323). */
+  /** Whether `Record` offers *Leaders Under Me* (section 19, decisions 0323 and 0333). */
   people_i_oversee: boolean;
   capabilities: GrantSummary[];
 }
