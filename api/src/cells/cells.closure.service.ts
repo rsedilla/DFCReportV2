@@ -162,6 +162,20 @@ export class CellsClosureService {
         'That Cell moved outside your authorized scope while this closure was being made.',
       );
 
+      // **`CREATED_IN_ERROR` is an Admin's reason** (section 10, decision 0330): it takes the
+      // Cell out of every past month's counts, and lowering already-reported figures is
+      // data correction, which is Admin's. Read here rather than handed in (section 7).
+      if (input.reason === 'CREATED_IN_ERROR') {
+        const roles = await this.authorization.honouredRolesWithin(trx, actor.accountId);
+        if (!roles.includes('ADMIN')) {
+          throw new CapabilityDeniedError(
+            'Only an Admin may close a Cell as created in error, because that takes it out of ' +
+              "every past month's counts (SKILL.md section 10). Ask an Admin to close it.",
+            { required_role: 'ADMIN' },
+          );
+        }
+      }
+
       const members = await this.assertDecisionsMatchMembershipWithin(trx, cellId, input.members);
 
       // ------------------------------------------------------------------

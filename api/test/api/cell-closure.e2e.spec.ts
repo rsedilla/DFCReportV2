@@ -532,7 +532,9 @@ describe('closing a Cell (section 10)', () => {
         roles: ['LEADER'],
       });
 
-      await close(leader, markCell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
+      // Not `CREATED_IN_ERROR`, which is an Admin's reason since decision 0330; the
+      // describe below pins that refusal.
+      await close(leader, markCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(200);
     });
 
     it('refuses a leader closing a Cell in a branch they do not oversee', async () => {
@@ -579,6 +581,110 @@ describe('closing a Cell (section 10)', () => {
       // Nothing was written: the closure is one transaction.
       expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
       expect(await openRows('cell_memberships', markCell.id)).toBe(1);
+    });
+  });
+
+  describe('only an Admin may close a Cell created in error (decision 0330)', () => {
+    // Section 10, *What closing does*: the closure route refuses `CREATED_IN_ERROR`
+    // from anyone without the `ADMIN` role as `CAPABILITY_DENIED`, and the Cell's
+    // leader and the leaders above them still close it for every other reason.
+
+    const closureEntries = () =>
+      db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('target_id', '=', markCell.id)
+        .where('action', 'in', ['cell.closed', 'cell_leadership.ended'])
+        .execute();
+
+    const expectRefusedAndUntouched = async (response: request.Response): Promise<void> => {
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      expect(response.body.error.details.required_role).toBe('ADMIN');
+
+      const cell = await cellRow(markCell.id);
+      expect(cell.state).toBe('ACTIVE');
+      expect(cell.closed_at).toBeNull();
+      expect(cell.closure_reason).toBeNull();
+      expect(await openRows('cell_leaderships', markCell.id)).toBe(1);
+      expect(await openRows('cell_memberships', markCell.id)).toBe(1);
+      expect(await openRows('cell_categories', markCell.id)).toBe(1);
+      expect(await openRows('cell_schedules', markCell.id)).toBe(1);
+      expect(await closureEntries()).toEqual([]);
+    };
+
+    it('refuses the Cell’s own leader', async () => {
+      await addMember(juan.id, markCell.id);
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      const response = await close(leader, markCell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [{ person_id: juan.id, destination_cell_id: null }],
+      });
+
+      await expectRefusedAndUntouched(response);
+    });
+
+    it('refuses a leader upline of the Cell’s leader, who has it in scope', async () => {
+      await addMember(juan.id, markCell.id);
+      // Oriel -> Mark: the Cell is inside Oriel's subtree, so the guard admits the
+      // request and the refusal is the reason's alone.
+      const upline = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+
+      const response = await close(upline, markCell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [{ person_id: juan.id, destination_cell_id: null }],
+      });
+
+      await expectRefusedAndUntouched(response);
+    });
+
+    it('still answers SCOPE_DENIED to a leader the Cell is out of scope for', async () => {
+      // Scope is decided first: an out-of-scope actor learns nothing about the reason
+      // rule. Ben is Mark's sibling, so Mark's Cell is outside Ben's subtree.
+      await addMember(juan.id, markCell.id);
+      const sibling = await createAccount(app, db, { person: ben, roles: ['LEADER'] });
+
+      const response = await close(sibling, markCell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [{ person_id: juan.id, destination_cell_id: null }],
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
+    });
+
+    it('lets an Admin close it as created in error', async () => {
+      await addMember(juan.id, markCell.id);
+
+      const response = await close(admin, markCell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [{ person_id: juan.id, destination_cell_id: null }],
+      }).expect(200);
+
+      expect(response.body).toMatchObject({ state: 'CLOSED', closure_reason: 'CREATED_IN_ERROR' });
+
+      const cell = await cellRow(markCell.id);
+      expect(cell.state).toBe('CLOSED');
+      expect(cell.closure_reason).toBe('CREATED_IN_ERROR');
+      expect((await closureEntries()).map((entry) => entry.action).sort()).toEqual([
+        'cell.closed',
+        'cell_leadership.ended',
+      ]);
+    });
+
+    it('still lets the Cell’s own leader close it for another reason', async () => {
+      await addMember(juan.id, markCell.id);
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      const response = await close(leader, markCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        members: [{ person_id: juan.id, destination_cell_id: null }],
+      }).expect(200);
+
+      expect(response.body).toMatchObject({ state: 'CLOSED', closure_reason: 'MEMBERS_DISPERSED' });
+      expect((await cellRow(markCell.id)).closure_reason).toBe('MEMBERS_DISPERSED');
     });
   });
 
@@ -796,7 +902,7 @@ describe('closing a Cell (section 10)', () => {
       const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
 
       const response = await close(leader, markCell.id, {
-        reason: 'CREATED_IN_ERROR',
+        reason: 'LEADER_STEPPED_DOWN',
         members: [],
         effective_date: manilaToday(),
       }).expect(409);
@@ -836,7 +942,7 @@ describe('closing a Cell (section 10)', () => {
         await holder.query('SELECT id FROM cells WHERE id = $1 FOR NO KEY UPDATE', [cell.id]);
 
         const closing = close(leader, cell.id, {
-          reason: 'CREATED_IN_ERROR',
+          reason: 'LEADER_STEPPED_DOWN',
           note: 'well before today',
           members: [],
           effective_date: '2026-03-02',
@@ -899,7 +1005,7 @@ describe('closing a Cell (section 10)', () => {
         .execute();
 
       const response = await close(leader, cell.id, {
-        reason: 'CREATED_IN_ERROR',
+        reason: 'LEADER_STEPPED_DOWN',
         note: 'well before today',
         members: [],
         effective_date: '2026-03-02',
@@ -1000,7 +1106,7 @@ describe('closing a Cell (section 10)', () => {
       const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
 
       const response = await close(leader, markCell.id, {
-        reason: 'CREATED_IN_ERROR',
+        reason: 'LEADER_STEPPED_DOWN',
         note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-01',
@@ -1009,7 +1115,7 @@ describe('closing a Cell (section 10)', () => {
       expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
 
       // The same leader may still close it today, so nothing is blocked.
-      await close(leader, markCell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
+      await close(leader, markCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(200);
     });
   });
 
