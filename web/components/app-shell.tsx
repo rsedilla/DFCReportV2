@@ -187,10 +187,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // **Which items, by the screens the server names** (decision 0323, replacing decision
-  // 0277's one order for every account). Until `/auth/me` answers, today's items, which is
-  // what every account but a Recording-only one sees.
-  const links =
-    me.data?.screens === 'RECORDING'
+  // 0277's one order for every account). **None until `/auth/me` answers**: showing one
+  // account's set as a placeholder flashed five items on a reload before a Recording-only
+  // leader's four replaced them (owner, 2026-10-11). An unanswered request still shows
+  // today's items rather than none.
+  const links = me.isPending
+    ? []
+    : me.data?.screens === 'RECORDING'
       ? [RECORD, PEOPLE, MY_CELL, SUYNL]
       : me.data?.screens === 'SENIOR_PASTOR'
         ? [RECORD, REPORTS, TRENDS]
