@@ -406,12 +406,20 @@ export async function mockMeetingsAwaiting(
 }
 
 export async function mockDccEvents(page: Page, { open = true } = {}): Promise<void> {
+  // A shut month's Sundays take no record, as the server says per event (decision 0335).
+  const shut = <E extends { recordable: boolean; not_recordable_reason: string | null }>(
+    event: E,
+  ) =>
+    open || !event.recordable
+      ? event
+      : { ...event, recordable: false, not_recordable_reason: 'MONTH_CLOSED' };
+
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(
       json({
         reporting_month: '2026-06-01',
         open,
-        data: [
+        data: ([
           {
             id: '3f1b7c6e-0000-4000-8000-000000000501',
             event_date: '2026-06-07',
@@ -450,7 +458,7 @@ export async function mockDccEvents(page: Page, { open = true } = {}): Promise<v
             removal_reason: null,
             coverage: null,
           },
-        ],
+        ]).map(shut),
       }),
     ),
   );

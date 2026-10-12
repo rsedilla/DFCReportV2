@@ -522,7 +522,7 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 
     const region = page.getByRole('region', { name: 'Coverage by Cell' });
     await expect(
-      region.getByText('No Cell you oversee is behind: every meeting that has come has a record.'),
+      region.getByText('No Cell you oversee is behind: every meeting still open for recording has a record.'),
     ).toBeVisible();
     await expect(region.getByText(/Closed /)).toHaveCount(0);
   });

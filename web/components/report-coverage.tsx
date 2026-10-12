@@ -107,7 +107,7 @@ export function CoverageByCell({
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Each Cell you oversee, ten at a time, in the order the Cells list gives them. The
         Cells are not added up here: the line at the top is the report&rsquo;s own figure. A
-        Cell is behind when a meeting whose day has come has no record. Showing only Cells
+        Cell is behind when a meeting whose day has come and whose week is still open has no record. Showing only Cells
         behind also lists, after them, a closed Cell still behind while the month is open.
       </p>
 
@@ -146,7 +146,7 @@ export function CoverageByCell({
         <p className="text-muted mt-4 text-sm">There are no Cells you oversee this month.</p>
       ) : cells.data && rows.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
-          No Cell you oversee is behind: every meeting that has come has a record.
+          No Cell you oversee is behind: every meeting still open for recording has a record.
         </p>
       ) : cells.data ? (
         <>

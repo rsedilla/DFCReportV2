@@ -86,10 +86,13 @@ function YourMonth() {
 
   const heldEvents = (events.data?.data ?? []).filter((event) => !event.removed);
 
-  // A closed month offers nothing to record: what was never recorded is shown without an action.
-  // Each half reads its own route's answer, and an answer not yet read counts as closed.
-  const cellsOpen = cells.data?.open === true;
-  const dccOpen = events.data?.open === true;
+  // A closed week offers nothing to record: what was never recorded is shown without an action
+  // (decision 0335). The server decides it per record: an unrecorded meeting is open while the
+  // recording queue lists it, and a Sunday while it is recordable. An answer not yet read
+  // counts as closed.
+  const awaitingKeys = new Set(
+    (awaiting.data?.meetings ?? []).map((meeting) => `${meeting.cell_id}|${meeting.scheduled_date}`),
+  );
 
   const checklists = useQueries({
     queries: heldEvents.map((event) => ({
@@ -103,6 +106,7 @@ function YourMonth() {
   (cells.data?.data ?? []).forEach((cell, index) => {
     for (const scheduled of meetings[index]?.data?.meetings ?? []) {
       const notYet = scheduled.meeting === null && scheduled.scheduled_date > today;
+      const open = awaitingKeys.has(`${cell.id}|${scheduled.scheduled_date}`);
 
       items.push({
         key: `cell-${cell.id}-${scheduled.scheduled_date}`,
@@ -112,11 +116,11 @@ function YourMonth() {
           ? 'Not yet'
           : scheduled.meeting !== null
             ? `Recorded · ${meetingStateLabel(scheduled.meeting).toLowerCase()}`
-            : cellsOpen
+            : open
               ? 'Awaiting a record'
-              : 'Not recorded · month closed',
+              : 'Not recorded · week closed',
         href:
-          notYet || (scheduled.meeting === null && !cellsOpen)
+          notYet || (scheduled.meeting === null && !open)
             ? null
             : `/cells/${cell.id}/meetings/${scheduled.scheduled_date}`,
       });
@@ -157,6 +161,7 @@ function YourMonth() {
 
     const unmarked = lines.filter((line) => line.record === null).length;
     const notYet = event.not_recordable_reason === 'NOT_YET_HELD';
+    const dccOpen = event.recordable;
 
     items.push({
       key: `dcc-${event.id}`,
@@ -168,7 +173,7 @@ function YourMonth() {
           ? 'Recorded'
           : dccOpen
             ? `Awaiting a record · ${unmarked} to mark`
-            : `Not recorded · month closed · ${unmarked} unmarked`,
+            : `Not recorded · week closed · ${unmarked} unmarked`,
       href: notYet || (unmarked > 0 && !dccOpen) ? null : `/dcc/${event.id}`,
     });
   }

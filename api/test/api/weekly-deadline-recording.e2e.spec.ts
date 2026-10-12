@@ -35,8 +35,8 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * only a test process reads, so every week read here is under it. **The week has to be
  * found rather than written down**: a closed week inside an open month exists on most days
  * but not every day (between a month's last week closing and the current month's first
- * week closing there is none), so each case asks for one and stops where there is none,
- * saying so. Every date comes from the database's day. Fixture names are invented.
+ * week closing there is none), so each case asks for one and passes without asserting where
+ * there is none. Every date comes from the database's day. Fixture names are invented.
  */
 describe('a closed week inside an open month (decision 0335)', () => {
   let app: INestApplication;
@@ -212,8 +212,9 @@ describe('a closed week inside an open month (decision 0335)', () => {
     await closeCellDirectly(db, markCell.id, { reason: 'LEADER_STEPPED_DOWN' });
     const body = { status: 'HELD', attendance: [{ person_id: one.id, present: true }] };
 
-    const late = await submitCell(markAccount, closed, body);
-    expect(late.status).not.toBe(201);
+    // The Cell has no leader to resolve through once the week has closed (section 7).
+    const late = await submitCell(markAccount, closed, body).expect(403);
+    expect(late.body.error.code).toBe('SCOPE_DENIED');
 
     await submitCell(markAccount, await openSaturday(), body).expect(201);
   });
@@ -292,5 +293,42 @@ describe('a closed week inside an open month (decision 0335)', () => {
     expect(response.body.open).toBe(true);
     // The closed week's meeting has no record and is not behind (owner, 2026-10-13).
     expect(row?.coverage.behind).toBe(expected);
+  });
+  /**
+   * The Branch screen's two figures, for the current month (decision 0252): behind only while
+   * the week is open. **Discriminating only once the month has a closed week**, from about
+   * the 19th to its end; before that every week of the month is open and both counts agree
+   * with the unbounded ones.
+   */
+  it('counts the Branch screen’s Cell meetings and DCC records behind only while the week is open', async () => {
+    const today = manilaDayOf(await databaseNow(db));
+    const now = (await databaseNow(db)).getTime();
+    const month = reportingMonthOf(today);
+    const disciple = await createPerson(db, { firstName: 'Timothy', network: 'MENS' });
+    await assignTo(db, disciple.id, mark.id);
+
+    let saturdays = 0;
+    let sundays = 0;
+    for (let day = month; day <= today && day.startsWith(month.slice(0, 7)); day = shift(day, 1)) {
+      const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+      const open = recordClosesAt(day).getTime() > now;
+      if (weekday === 6 && open) {
+        saturdays += 1;
+      }
+      if (weekday === 0) {
+        await createEvent(day);
+        sundays += open ? 1 : 0;
+      }
+    }
+
+    const read = (route: string) =>
+      request(app.getHttpServer())
+        .get(`/api/v1/leaders/${root.id}/${route}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+    expect((await read('cell-figures')).body.branch_meetings_behind).toBe(saturdays);
+    // Two obligations a Sunday: Oriel's for Mark's line and Mark's for Timothy's.
+    expect((await read('dcc-behind')).body.branch_behind).toBe(sundays * 2);
   });
 });

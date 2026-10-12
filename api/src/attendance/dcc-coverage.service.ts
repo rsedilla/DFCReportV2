@@ -545,7 +545,8 @@ export class DccCoverageService {
    * branch's figure is a plain sum over the leaders in it, with nothing counted twice.
    *
    * **Events nobody could yet have recorded owe nothing** (decision 0229), on the same
-   * `coverable` predicate the index uses. The leaders are the caller's — the Network
+   * `coverable` predicate the index uses, and a Sunday whose week has closed is behind on
+   * no surface (owner, 2026-10-13). The leaders are the caller's — the Network
    * screen passes a branch as it stands now — and each is measured at every event's own
    * instant, which is what makes a leader assigned mid-month owe from that date.
    */

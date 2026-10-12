@@ -64,7 +64,7 @@ export function notRecordableLabel(reason: NotRecordableReason): string {
     case 'NOT_YET_HELD':
       return 'Has not happened yet';
     case 'MONTH_CLOSED':
-      return 'The month is closed for submission';
+      return 'The week is closed for submission';
     default:
       return reason;
   }

@@ -17,7 +17,7 @@ export const ApiErrorCode = {
   VALIDATION_FAILED: 'VALIDATION_FAILED',
   /** The record changed since it was read (section 14). */
   VERSION_CONFLICT: 'VERSION_CONFLICT',
-  /** The reporting month is closed (section 13). */
+  /** The record's week is closed (section 13). */
   PERIOD_CLOSED: 'PERIOD_CLOSED',
   /** The key was already used for a different request. Never retry. */
   IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
