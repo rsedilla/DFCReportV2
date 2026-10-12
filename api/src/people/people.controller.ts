@@ -49,14 +49,14 @@ import { isStorableText } from '../common/text/storable-text';
  * that makes duplicate prevention possible — and for a person outside their
  * pastoral scope they see only enough to
  * recognise an existing record. Everything else is withheld, and `fullProfile`
- * and `minimalIdentity` are where that decision is made, so adding a field to
+ * and `identityOnly` are where that decision is made, so adding a field to
  * the full profile does not silently widen what the church can see.
  *
  * **One payload is assembled outside those two**, and it is worth naming rather
  * than leaving as an exception somebody discovers. A path node carries four
  * fields: the Member ID and the full name, which are two of the five section 8
  * permits church-wide; the identifier, which is a handle rather than a fact about
- * the person, exactly as `minimalIdentity` carries one; and `network_root`, which
+ * the person, exactly as `identityOnly` carries one; and `network_root`, which
  * section 8 declares for this endpoint because section 5 requires that
  * distinction be surfaced. A node is not a profile, which is why it has a shape
  * of its own rather than reusing a helper.
@@ -407,7 +407,7 @@ export class PeopleController {
    *
    * **Both the rows and the fields are scoped, and they are scoped separately.**
    * The fields have always been: a person outside the actor's pastoral scope comes
-   * back as `minimalIdentity`, five fields, and that is unchanged. The rows are new
+   * back as `identityOnly`, five fields, and that is unchanged. The rows are new
    * (ruling of 2026-09-13, decision 0244) — absent `church_wide`, the query returns
    * only people the actor's `people.view_subtree` grant reaches.
    *

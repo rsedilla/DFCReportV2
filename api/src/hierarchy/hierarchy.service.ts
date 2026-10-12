@@ -996,7 +996,7 @@ export class HierarchyService {
    * enforced in `networks`, which cannot read this table — so the evidence for it
    * is produced here.
    *
-   * The join to `persons` mirrors `directLeaderNameOf` below: a name is what makes
+   * The join to `persons` is the one section 2 names: a name is what makes
    * the refusal actionable, and returning bare identifiers would push the same
    * join into a module that owns neither table.
    */
@@ -1187,27 +1187,6 @@ export class HierarchyService {
     return new Map(
       rows.flatMap((row) => (row.leader_id === null ? [] : [[row.person_id, row.leader_id]])),
     );
-  }
-
-  /**
-   * The name of the person's current direct leader, or null.
-   *
-   * Section 8 permits this church-wide, for a person outside the viewer's own
-   * scope, as one of the five fields that let an encoder recognise an existing
-   * record.
-   */
-  async directLeaderNameOf(personId: string): Promise<string | null> {
-    const row = await this.db
-      .selectFrom('pastoral_assignments as pa')
-      .innerJoin('persons as leader', 'leader.id', 'pa.leader_id')
-      .select(['leader.title', 'leader.first_name', 'leader.last_name'])
-      .where('pa.person_id', '=', personId)
-      .where('pa.ended_at', 'is', null)
-      .executeTakeFirst();
-
-    return row === undefined
-      ? null
-      : [row.title, row.first_name, row.last_name].filter((part) => part !== null).join(' ');
   }
 
   /**

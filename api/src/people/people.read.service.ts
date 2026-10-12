@@ -611,7 +611,7 @@ export class PeopleReadService {
    *
    * **First and last only, which is what the callers render.** No middle name and no
    * Member ID: this answers "who is this" in a sentence, not an identity payload, and
-   * {@link minimalIdentity} below is the one that decides what a Person discloses.
+   * {@link identityOnly} below is the one that decides what a Person discloses.
    */
   async displayNameWithin(
     executor: Db | Transaction<Database>,
@@ -627,33 +627,7 @@ export class PeopleReadService {
   }
 
   /**
-   * The five fields section 8 permits for a person outside the viewer's pastoral
-   * scope — Member ID, full name, sex, current Network and the name of their
-   * current direct leader — plus two that are not about them.
-   *
-   * `id` is the handle the duplicate-acknowledgement flow needs to name a candidate
-   * back to the server, and `scope` tells a client it is looking at a withheld
-   * profile rather than an empty one. Section 8's list is about a person's
-   * *details*, and neither of these is one; they are named here rather than left
-   * for a reader to notice the count does not match.
-   *
-   * Written as a list of what is *included* rather than as a list of what is
-   * removed. A redaction that deletes named fields lets the next field added to
-   * the profile through by default, which is the wrong direction for a rule about
-   * what the church may see.
-   */
-  async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
-    const [network, leader] = await Promise.all([
-      this.networks.currentNetwork(this.db, person.id),
-      this.hierarchy.directLeaderNameOf(person.id),
-    ]);
-
-    return this.identityOnly(person, network, leader);
-  }
-
-  /**
-   * Each person's current direct leader's name, for a page at once: what
-   * `directLeaderNameOf` gives one person, composed the same way, in two queries.
+   * Each person's current direct leader's name, for a page at once, in two queries.
    */
   async directLeaderNamesOf(personIds: readonly string[]): Promise<Map<string, string>> {
     const leaders = await this.hierarchy.directLeaderIdsOf(personIds);
@@ -688,7 +662,23 @@ export class PeopleReadService {
     return this.networks.networksOf(this.db, personIds, new Date());
   }
 
-  /** {@link minimalIdentity} from values the caller has already read for a whole page. */
+  /**
+   * The five fields section 8 permits for a person outside the viewer's pastoral
+   * scope — Member ID, full name, sex, current Network and the name of their
+   * current direct leader — plus two that are not about them.
+   *
+   * `id` is the handle the duplicate-acknowledgement flow needs to name a candidate
+   * back to the server, and `scope` tells a client it is looking at a withheld
+   * profile rather than an empty one. Section 8's list is about a person's
+   * *details*, and neither of these is one; they are named here rather than left
+   * for a reader to notice the count does not match.
+   *
+   * Written as a list of what is *included* rather than as a list of what is
+   * removed. A redaction that deletes named fields lets the next field added to
+   * the profile through by default, which is the wrong direction for a rule about
+   * what the church may see. The caller reads the Network and the leader's name, for a
+   * whole page at once.
+   */
   identityOnly(
     person: PersonRecord,
     network: NetworkName | null,
