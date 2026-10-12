@@ -2,7 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
-import { databaseNow, monthClosesAt, reportingMonthOf } from '../common/time/submission-window';
+import {
+  databaseNow,
+  monthClosesAt,
+  recordClosesAt,
+  reportingMonthOf,
+} from '../common/time/submission-window';
 import { CellsReadService } from '../cells/cells.read.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -62,7 +67,7 @@ export class BranchFiguresService {
 
   /** `GET /api/v1/leaders/{id}/cell-figures`. */
   async cellFigures(personId: string): Promise<Record<string, unknown>> {
-    const { reportingMonth, open, today } = await this.currentMonth();
+    const { reportingMonth, open, today, now } = await this.currentMonth();
     const branch = await this.branchOf(personId);
 
     // Only the branch's Cells and leaders, rather than the church's kept down to the
@@ -85,6 +90,8 @@ export class BranchFiguresService {
       if (
         meeting.leaderId === null ||
         meeting.scheduledDate > today ||
+        // Behind only while its week is open (owner, 2026-10-13, decision 0335).
+        now.getTime() >= recordClosesAt(meeting.scheduledDate).getTime() ||
         recorded.has(`${meeting.cellId}|${meeting.scheduledDate}`)
       ) {
         continue;
@@ -108,7 +115,12 @@ export class BranchFiguresService {
     };
   }
 
-  private async currentMonth(): Promise<{ reportingMonth: string; open: boolean; today: string }> {
+  private async currentMonth(): Promise<{
+    reportingMonth: string;
+    open: boolean;
+    today: string;
+    now: Date;
+  }> {
     const now = await databaseNow(this.db);
     const today = manilaDayOf(now);
     const reportingMonth = reportingMonthOf(today);
@@ -116,6 +128,7 @@ export class BranchFiguresService {
     return {
       reportingMonth,
       today,
+      now,
       open: now.getTime() < monthClosesAt(reportingMonth).getTime(),
     };
   }

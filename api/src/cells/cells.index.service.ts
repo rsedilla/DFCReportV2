@@ -9,7 +9,12 @@ import { Capability } from '../auth/authorization/capabilities';
 import { canonicalId, sameId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
-import { databaseNow, monthClosesAt, reportingMonthOf } from '../common/time/submission-window';
+import {
+  databaseNow,
+  monthClosesAt,
+  recordClosesAt,
+  reportingMonthOf,
+} from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
@@ -232,7 +237,7 @@ export class CellsIndexService {
           coverage: {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
-            behind: behindIn(dueDays, recordedDates, row.id),
+            behind: behindIn(dueDays, recordedDates, row.id, now),
           },
         };
       }),
@@ -311,7 +316,7 @@ export class CellsIndexService {
           coverage: {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
-            behind: behindIn(dueDays, recordedDates, row.id),
+            behind: behindIn(dueDays, recordedDates, row.id, now),
           },
           closed_on: manilaDayOf(row.closedAt),
           closure_reason: row.closureReason,
@@ -451,7 +456,12 @@ function behindIn(
   dueDays: Map<string, string[]>,
   recordedDates: Map<string, Set<string>>,
   cellId: string,
+  now: Date,
 ): number {
   const recorded = recordedDates.get(cellId);
-  return (dueDays.get(cellId) ?? []).filter((day) => !recorded?.has(day)).length;
+  // Only a meeting whose week is still open: one only an Admin can still record is behind
+  // on no surface (owner, 2026-10-13, decision 0335).
+  return (dueDays.get(cellId) ?? []).filter(
+    (day) => !recorded?.has(day) && now.getTime() < recordClosesAt(day).getTime(),
+  ).length;
 }

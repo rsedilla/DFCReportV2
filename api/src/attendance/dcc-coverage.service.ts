@@ -573,7 +573,8 @@ export class DccCoverageService {
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
 
-      if (!coverable(event)) {
+      // Behind only while the Sunday's week is open (owner, 2026-10-13, decision 0335).
+      if (!coverable(event) || event.notRecordable === 'MONTH_CLOSED') {
         continue;
       }
 

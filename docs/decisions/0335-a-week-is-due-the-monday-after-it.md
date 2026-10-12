@@ -29,10 +29,12 @@ Saturday 7 November.
 week is the one holding its last day, which always closes last, so October 2026 is final at
 12:00 on Monday 16 November and a month after it between the 15th and the 21st of the next. Every
 rule that reads "the month is open" or "closed" for a figure (Sections 17 and 20, the stored
-figures of decision 0320, Pending CG Reports carrying last month of decision 0315) reads this.
+figures of decision 0320, and whether Pending CG Reports asks about last month at all, decision
+0315) reads this.
 **Every rule that reads it to allow a recording reads the record's week** (points 1 to 4): a
 closed Cell's meetings (Section 7), which also bounds where they are listed (Sections 15 and
-19), a reschedule's target date (decision 0195), and the DCC calendar, which neither adds nor
+19), what is behind (owner, 2026-10-13: a meeting or Sunday whose week has closed is behind on
+no surface, Pending CG Reports and the Branch screen included), a reschedule's target date (decision 0195), and the DCC calendar, which neither adds nor
 removes a Sunday whose week has closed.
 
 **6. Recording Status counts on time first, late beside it** (decisions 0325 and 0334). A

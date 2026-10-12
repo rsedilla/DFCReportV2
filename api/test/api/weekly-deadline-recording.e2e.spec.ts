@@ -260,4 +260,37 @@ describe('a closed week inside an open month (decision 0335)', () => {
       expect(recordClosesAt(day).getTime()).toBeGreaterThan(now);
     }
   });
+  it('counts a meeting as behind only while its week is open', async () => {
+    const closed = await closedSaturdayInOpenMonth();
+    if (closed === null) {
+      return;
+    }
+    const month = reportingMonthOf(closed);
+    const now = (await databaseNow(db)).getTime();
+    const today = manilaDayOf(await databaseNow(db));
+    // Every Saturday of that month that has begun and has no record, and still open.
+    let expected = 0;
+    for (
+      let day = `${month.slice(0, 8)}01`;
+      day.startsWith(month.slice(0, 7));
+      day = shift(day, 1)
+    ) {
+      if (new Date(`${day}T00:00:00Z`).getUTCDay() === 6 && day <= today) {
+        expected += recordClosesAt(day).getTime() > now ? 1 : 0;
+      }
+    }
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/cells')
+      .query({ month })
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    const row = (response.body.data as { id: string; coverage: { behind: number } }[]).find(
+      (cell) => cell.id === markCell.id,
+    );
+
+    expect(response.body.open).toBe(true);
+    // The closed week's meeting has no record and is not behind (owner, 2026-10-13).
+    expect(row?.coverage.behind).toBe(expected);
+  });
 });
