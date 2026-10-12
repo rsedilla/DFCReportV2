@@ -68,6 +68,8 @@ interface LiveRecord {
 }
 
 /** Why an event takes no record. Null where it takes one. */
+// `MONTH_CLOSED` names the record's **week** closing since decision 0335; the value is kept
+// because section 22 lets a response change only additively.
 export type NotRecordable = 'REMOVED' | 'NOT_YET_HELD' | 'MONTH_CLOSED';
 
 interface EventForRecording {
@@ -1624,7 +1626,7 @@ function refusalFor(event: EventForRecording): ApiError {
       // an Admin may amend it (sections 13 and 20).
       return new ApiError(
         ApiErrorCode.PERIOD_CLOSED,
-        'This month is closed. Only an Admin may amend it, with a reason (SKILL.md sections 13 ' +
+        'This week is closed. Only an Admin may amend it, with a reason (SKILL.md sections 13 ' +
           'and 20).',
         { event_id: event.id, event_date: event.eventDate },
       );

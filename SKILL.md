@@ -3306,7 +3306,7 @@ paragraph claimed it would.*
 names three **viewing** capabilities that resolve a Cell meeting through the Cell's leader
 **as of the period being viewed**, and resolves it through the current leader under every
 other capability — except against a **closed** Cell, where it resolves through whoever led
-it on the meeting's date, this rule's instant, while the month's window is open.
+it on the meeting's date, this rule's instant, while the meeting's week is open.
 
 *Three and everything else, rather than two lists of capabilities: this sentence carried
 the two-list form for one commit after Section 7 stopped using it, which is the shape
@@ -3432,7 +3432,7 @@ Facilitating is never leadership. It does not touch `cell_leaderships`, never ma
 
 **A month is open while any of its weeks is, and closed when its last week closes**, the one holding its last day, which always closes last: between the 15th and the 21st of the following month, October 2026 at 12:00 on 16 November. Wherever this specification reads a month as open or closed for a figure, it means this; wherever it reads "the window" to allow a recording, it means the record's week.
 
-**A meeting whose Manila day has not begun takes no record** (ruling of 2026-09-11). The window above states when a month shuts and not when it opens, so a scheduled date later this month sits inside an open window — and a record against it would be a `HELD` meeting nobody has attended, advancing Section 12's unique-people total and a lifetime classification in a period nobody has reported. This is Section 9's rule for a DCC event, in the domain that had no counterpart, and it is the day's **beginning** rather than its end: a leader filing on the night of the meeting is who this section is written for.
+**A meeting whose Manila day has not begun takes no record** (ruling of 2026-09-11). The window above states when a week closes and not when it opens, so a scheduled date later this week sits inside an open one — and a record against it would be a `HELD` meeting nobody has attended, advancing Section 12's unique-people total and a lifetime classification in a period nobody has reported. This is Section 9's rule for a DCC event, in the domain that had no counterpart, and it is the day's **beginning** rather than its end: a leader filing on the night of the meeting is who this section is written for.
 
 **The whole of the 7th, and earlier drafts of this sentence said "at 23:59".** Read to the letter that shut the window at 23:59:00 and left the last sixty seconds of the 7th closed — a gap nobody wrote, and one no leader could discover: refused at 23:59:30 they are told the month closed, and every published rule says it closes at 23:59 on the 7th, which has not passed. `23:59` is how a person writes the end of a day on a clock with no seconds hand, and the cost of reading it that way is sixty seconds of grace a month on a boundary chosen for pastoral rather than technical reasons.
 
@@ -4881,7 +4881,7 @@ One envelope, always:
 | `SCOPE_DENIED` | 403 | The actor holds the capability but not over this target |
 | `VALIDATION_FAILED` | 422 | Malformed or missing input |
 | `VERSION_CONFLICT` | 409 | The record changed since it was read (below) |
-| `PERIOD_CLOSED` | 409 | The reporting month is closed (Section 13) |
+| `PERIOD_CLOSED` | 409 | The record's week is closed (Section 13) |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
 | `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
@@ -5562,7 +5562,7 @@ SOL 3 is called Leadership and graduating it makes nobody a leader. Section 11 i
 
 **Stating a past graduation date does not require `records.backdate_effective_date`, and a leader may state one** (owner ruling, the second of 2026-09-16). The same answer reaches Section 27's pre-encoding `reached_on`.
 
-**It is a ruling and not a deduction, which is stated because two attempts to derive it failed.** Section 7 lists what that capability reaches and says the list is "not a rule from which the next item can be derived"; and one item on it — amending attendance after a month has closed — carries no effective date at all, so the capability's reach is not bounded by what an effective date is either. So the specification settles neither that a graduation date falls inside the capability nor that it falls outside, and **whether that list is a rule or an enumeration is recorded as open in `CLAUDE.md`**. What the owner ruled is that the confirming leader states the date: leaders are being asked about graduations from years back, and the alternative leaves the church's own history unrecordable by the people who know it.
+**It is a ruling and not a deduction, which is stated because two attempts to derive it failed.** Section 7 lists what that capability reaches and says the list is "not a rule from which the next item can be derived"; and one item on it — amending attendance after its week has closed — carries no effective date at all, so the capability's reach is not bounded by what an effective date is either. So the specification settles neither that a graduation date falls inside the capability nor that it falls outside, and **whether that list is a rule or an enumeration is recorded as open in `CLAUDE.md`**. What the owner ruled is that the confirming leader states the date: leaders are being asked about graduations from years back, and the alternative leaves the church's own history unrecordable by the people who know it.
 
 **The ruling carries a condition, and the condition is a trigger.** It holds only while no report counts these by period. The first report that does moves such a date into the class Section 3 protects — one that rewrites totals already reported — and who may state one is open again. That is recorded as a Stop Condition.
 
