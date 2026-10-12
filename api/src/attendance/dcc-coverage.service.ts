@@ -12,7 +12,13 @@ import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { startOfManilaDay } from '../common/time/manila';
 import { assertReportingMonth } from '../common/time/reporting-period';
-import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
+import {
+  databaseNow,
+  monthClosesAt,
+  recordClosesAt,
+  recordDueAt,
+  reportingMonthOf,
+} from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import type { NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -174,12 +180,16 @@ export class DccCoverageService {
       reporting_month: reportingMonth,
       // Section 17: a view must say whether the period it shows is open, because an open
       // month's coverage figure is still changing.
-      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      open: now.getTime() < monthClosesAt(reportingMonth).getTime(),
       data: rendered.map(({ event, coverage }) => ({
         id: event.id,
         event_date: event.eventDate,
         recordable: event.notRecordable === null,
         not_recordable_reason: event.notRecordable,
+        // When the Sunday is due, null before the weekly rule, and when its week closes to
+        // leaders (decision 0335).
+        due_at: recordDueAt(event.eventDate)?.toISOString() ?? null,
+        closes_at: recordClosesAt(event.eventDate).toISOString(),
         removed: event.removedAt !== null,
         removal_reason: event.removalReason,
         // Two figures, never divided (section 9, section 13).
@@ -702,10 +712,12 @@ export class DccCoverageService {
 
     return {
       reporting_month: reportingMonth,
-      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      open: now.getTime() < monthClosesAt(reportingMonth).getTime(),
       data: lines.map((line) => ({
         event_id: line.event.id,
         event_date: line.event.eventDate,
+        due_at: recordDueAt(line.event.eventDate)?.toISOString() ?? null,
+        closes_at: recordClosesAt(line.event.eventDate).toISOString(),
         leader: {
           person_id: line.leaderId,
           member_id: line.memberId,
@@ -743,7 +755,7 @@ export class DccCoverageService {
     executor: Db,
     from: string,
     to: string,
-  ): Promise<Map<string, { owed: number; unrecorded: number }>> {
+  ): Promise<Map<string, { owed: number; unrecorded: number; late: number }>> {
     const now = await databaseNow(executor);
     const rows = await executor
       .selectFrom('dcc_events')
@@ -753,7 +765,7 @@ export class DccCoverageService {
       .orderBy('event_date')
       .execute();
 
-    const result = new Map<string, { owed: number; unrecorded: number }>();
+    const result = new Map<string, { owed: number; unrecorded: number; late: number }>();
 
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
@@ -765,21 +777,34 @@ export class DccCoverageService {
       // Accounts as they stood on the Sunday, so a later account moves no past period
       // (decision 0325, owner 2026-10-08).
       const submitters = await this.submittersOf(event, [...owed], executor, true);
-      const recordedBy = new Map<string, boolean>();
+      const firstAt = await this.firstRecordedFor(executor, event.id);
+      const due = recordDueAt(event.eventDate);
+      // Per submitter, the earliest first record among the lines that count the Sunday as
+      // recorded, null while none does.
+      const recordedBy = new Map<string, Date | null>();
 
       for (const leaderId of owed) {
         const submitter = submitters.get(canonicalId(leaderId));
         if (submitter === undefined) {
           continue;
         }
-        const met = !owing.has(leaderId);
-        recordedBy.set(submitter, (recordedBy.get(submitter) ?? false) || met);
+        const first = owing.has(leaderId) ? null : (firstAt.get(canonicalId(leaderId)) ?? null);
+        const earlier = recordedBy.get(submitter) ?? null;
+        recordedBy.set(
+          submitter,
+          first === null || (earlier !== null && earlier.getTime() <= first.getTime())
+            ? earlier
+            : first,
+        );
       }
 
-      for (const [submitter, recorded] of recordedBy) {
-        const entry = result.get(submitter) ?? { owed: 0, unrecorded: 0 };
+      for (const [submitter, first] of recordedBy) {
+        const entry = result.get(submitter) ?? { owed: 0, unrecorded: 0, late: 0 };
         entry.owed += 1;
-        entry.unrecorded += recorded ? 0 : 1;
+        entry.unrecorded += first === null ? 1 : 0;
+        // **Late when the first record that counts the Sunday came after its deadline**
+        // (decision 0335, owner 2026-10-12); a correction never moves it.
+        entry.late += first !== null && due !== null && first.getTime() > due.getTime() ? 1 : 0;
         result.set(submitter, entry);
       }
     }
@@ -1073,6 +1098,25 @@ export class DccCoverageService {
   }
 
   /**
+   * When each responsible leader's line for an event was first written, by leader: the
+   * earliest version, superseded or not, since a correction writes a new row and keeps the
+   * old one (section 9). What decision 0335 measures Late by.
+   */
+  private async firstRecordedFor(executor: Db, eventId: string): Promise<Map<string, Date>> {
+    const rows = await executor
+      .selectFrom('dcc_attendance')
+      .select((eb) => ['responsible_leader_id', eb.fn.min('recorded_at').as('first_at')])
+      .where('dcc_event_id', '=', eventId)
+      .where('responsible_leader_id', 'is not', null)
+      .groupBy('responsible_leader_id')
+      .execute();
+
+    return new Map(
+      rows.map((row) => [canonicalId(row.responsible_leader_id as string), new Date(row.first_at)]),
+    );
+  }
+
+  /**
    * An event row as both routes read it, including why it takes no record.
    *
    * **The same three reasons `DccAttendanceService.recordability` gives, in the same
@@ -1098,7 +1142,7 @@ export class DccCoverageService {
           ? 'REMOVED'
           : now.getTime() < startOfManilaDay(eventDate).getTime()
             ? 'NOT_YET_HELD'
-            : now.getTime() >= windowClosesAt(reportingMonthOf(eventDate)).getTime()
+            : now.getTime() >= recordClosesAt(eventDate).getTime()
               ? 'MONTH_CLOSED'
               : null,
     };

@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 
-import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import { databaseNow, isRecordOpen, reportingMonthOf } from '../common/time/submission-window';
 
 /**
  * How far ahead a run generates, and the floor it is kept clear of.
@@ -101,14 +101,15 @@ export class DccCalendarService {
 
       const missing = sundays.filter((day) => !present.has(day));
 
-      // Split by whether the month is still open. Only the open ones are filled.
+      // Split by whether the Sunday's week is still open (decision 0335). Only the open
+      // ones are filled; a closed one is reported by its month.
       const creatable: string[] = [];
       const closedShort = new Set<string>();
 
       for (const day of missing) {
         const month = reportingMonthOf(day);
 
-        if (await isMonthOpen(trx, month)) {
+        if (await isRecordOpen(trx, day)) {
           creatable.push(day);
         } else {
           closedShort.add(month);

@@ -36,7 +36,13 @@ describe('Recording status (decision 0325)', () => {
   /** An instant long before any week read here, for Cells that have always existed. */
   const LONG_AGO = new Date('2024-01-03T12:00:00+08:00');
 
+  // **These cases count who recorded, not when**, and their fixtures write records now: a
+  // weekly deadline in force would make the count depend on the day the suite runs. The
+  // deadline has its own suite, `weekly-deadline.e2e.spec.ts` (decision 0335).
+  const deadlineFrom = process.env.WEEKLY_DEADLINE_FROM;
+
   beforeAll(async () => {
+    process.env.WEEKLY_DEADLINE_FROM = '2100-01-04';
     db = createTestDb();
     app = await createTestApp();
   });
@@ -68,6 +74,11 @@ describe('Recording status (decision 0325)', () => {
   }
 
   afterAll(async () => {
+    if (deadlineFrom === undefined) {
+      delete process.env.WEEKLY_DEADLINE_FROM;
+    } else {
+      process.env.WEEKLY_DEADLINE_FROM = deadlineFrom;
+    }
     await app.close();
     await db.destroy();
   });
@@ -200,11 +211,23 @@ describe('Recording status (decision 0325)', () => {
 
     await recordMeeting(first, day(2), ana.id);
     const partly = await status(pastor, 'WEEK', monday).expect(200);
-    expect(partly.body.whole_church.cell).toEqual({ recorded: 0, owed: 1, percent: 0 });
+    expect(partly.body.whole_church.cell).toEqual({
+      recorded: 0,
+      owed: 1,
+      late: 0,
+      on_time: 0,
+      percent: 0,
+    });
 
     await recordMeeting(second, day(3), ana.id);
     const wholly = await status(pastor, 'WEEK', monday).expect(200);
-    expect(wholly.body.whole_church.cell).toEqual({ recorded: 1, owed: 1, percent: 100 });
+    expect(wholly.body.whole_church.cell).toEqual({
+      recorded: 1,
+      owed: 1,
+      late: 0,
+      on_time: 1,
+      percent: 100,
+    });
   });
 
   it('does not count a meeting whose day has not begun', async () => {
@@ -220,7 +243,13 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(response.body.whole_church.cell).toEqual({ recorded: 0, owed: 0, percent: null });
+    expect(response.body.whole_church.cell).toEqual({
+      recorded: 0,
+      owed: 0,
+      late: 0,
+      on_time: 0,
+      percent: null,
+    });
   });
 
   it('counts a leader with no account, and one whose account is not active', async () => {
@@ -238,7 +267,13 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(response.body.whole_church.cell).toEqual({ recorded: 0, owed: 2, percent: 0 });
+    expect(response.body.whole_church.cell).toEqual({
+      recorded: 0,
+      owed: 2,
+      late: 0,
+      on_time: 0,
+      percent: 0,
+    });
   });
 
   it('gives a meeting to the leader on its day, after a handover and on the handover’s day', async () => {
@@ -269,7 +304,7 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(rowOf(response.body, ana)?.cell).toEqual({ recorded: 0, owed: 1 });
+    expect(rowOf(response.body, ana)?.cell).toEqual({ recorded: 0, owed: 1, late: 0 });
     expect(rowOf(response.body, ben)?.status).toEqual({ kind: 'NOTHING_OWED' });
   });
 
@@ -296,7 +331,13 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(response.body.whole_church.cell).toEqual({ recorded: 1, owed: 1, percent: 100 });
+    expect(response.body.whole_church.cell).toEqual({
+      recorded: 1,
+      owed: 1,
+      late: 0,
+      on_time: 1,
+      percent: 100,
+    });
   });
 
   it('gives a recorded meeting to its frozen leader, whoever leads the Cell on the date', async () => {
@@ -308,7 +349,7 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(rowOf(response.body, ben)?.cell).toEqual({ recorded: 1, owed: 1 });
+    expect(rowOf(response.body, ben)?.cell).toEqual({ recorded: 1, owed: 1, late: 0 });
     expect(rowOf(response.body, ana)?.status).toEqual({ kind: 'NOTHING_OWED' });
   });
 
@@ -322,8 +363,14 @@ describe('Recording status (decision 0325)', () => {
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
-    expect(response.body.whole_church.dcc).toEqual({ recorded: 0, owed: 1, percent: 0 });
-    expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 0 });
+    expect(response.body.whole_church.dcc).toEqual({
+      recorded: 0,
+      owed: 1,
+      late: 0,
+      on_time: 0,
+      percent: 0,
+    });
+    expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 0, late: 0 });
   });
 
   it('counts a DCC submitter whose account is awaiting activation', async () => {
@@ -342,8 +389,14 @@ describe('Recording status (decision 0325)', () => {
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
     // Oriel owes Ana's line, and Ana owes Dan's.
-    expect(response.body.whole_church.dcc).toEqual({ recorded: 0, owed: 2, percent: 0 });
-    expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 1 });
+    expect(response.body.whole_church.dcc).toEqual({
+      recorded: 0,
+      owed: 2,
+      late: 0,
+      on_time: 0,
+      percent: 0,
+    });
+    expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 1, late: 0 });
   });
 
   // -------------------------------------------------------------------------
@@ -381,8 +434,20 @@ describe('Recording status (decision 0325)', () => {
     const response = await status(pastor, 'WEEK', monday).expect(200);
     const body = response.body;
 
-    expect(body.whole_church.cell).toEqual({ recorded: 2, owed: 4, percent: 50 });
-    expect(body.whole_church.dcc).toEqual({ recorded: 1, owed: 3, percent: 33 });
+    expect(body.whole_church.cell).toEqual({
+      recorded: 2,
+      owed: 4,
+      late: 0,
+      on_time: 2,
+      percent: 50,
+    });
+    expect(body.whole_church.dcc).toEqual({
+      recorded: 1,
+      owed: 3,
+      late: 0,
+      on_time: 1,
+      percent: 33,
+    });
 
     // One table per root, the Men's first whatever the names (owner, 2026-10-08): Oriel sorts
     // after Gemma by surname and still comes first. Rows in surname order.
@@ -395,21 +460,21 @@ describe('Recording status (decision 0325)', () => {
 
     // Ana's row counts Ana and Dan. Ana is missing both columns and is counted once.
     expect(rowOf(body, ana)).toMatchObject({
-      cell: { recorded: 1, owed: 2 },
-      dcc: { recorded: 0, owed: 1 },
+      cell: { recorded: 1, owed: 2, late: 0 },
+      dcc: { recorded: 0, owed: 1, late: 0 },
       status: { kind: 'STILL_TO_RECORD', leaders: 1 },
     });
     expect(rowOf(body, ben)?.status).toEqual({ kind: 'NOTHING_OWED' });
     expect(rowOf(body, cara)).toMatchObject({
-      cell: { recorded: 1, owed: 1 },
-      dcc: { recorded: 0, owed: 0 },
+      cell: { recorded: 1, owed: 1, late: 0 },
+      dcc: { recorded: 0, owed: 0, late: 0 },
       status: { kind: 'COMPLETED' },
     });
 
     // Others: the two roots and Xavier, who is in no table.
     expect(body.others).toEqual({
-      cell: { recorded: 0, owed: 1 },
-      dcc: { recorded: 1, owed: 2 },
+      cell: { recorded: 0, owed: 1, late: 0 },
+      dcc: { recorded: 1, owed: 2, late: 0 },
       status: { kind: 'STILL_TO_RECORD', leaders: 2 },
     });
 
@@ -448,7 +513,13 @@ describe('Recording status (decision 0325)', () => {
 
     expect(response.body.tables).toBeNull();
     expect(response.body.others).toBeNull();
-    expect(response.body.whole_church.cell).toEqual({ recorded: 0, owed: 1, percent: 0 });
+    expect(response.body.whole_church.cell).toEqual({
+      recorded: 0,
+      owed: 1,
+      late: 0,
+      on_time: 0,
+      percent: 0,
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -468,7 +539,7 @@ describe('Recording status (decision 0325)', () => {
     expect(typeof week.body.open).toBe('boolean');
     // The period before has its own open flag, and no percentage (point 3).
     expect(typeof week.body.previous.open).toBe('boolean');
-    expect(Object.keys(week.body.previous.cell).sort()).toEqual(['owed', 'recorded']);
+    expect(Object.keys(week.body.previous.cell).sort()).toEqual(['late', 'owed', 'recorded']);
 
     const month = `${monday.slice(0, 7)}-01`;
     const byMonth = await status(pastor, 'MONTH', month).expect(200);

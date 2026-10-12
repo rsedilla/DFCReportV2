@@ -30,7 +30,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { recordingInstant } from './recording-instant';
-import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
+import { databaseNow, recordClosesAt, reportingMonthOf } from '../common/time/submission-window';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -620,7 +620,8 @@ export class DccAttendanceService {
     // instant: two reads a few microseconds apart cannot disagree usefully, and a
     // rule decided on one clock reading and enforced on another is the shape this
     // project keeps finding defects in.
-    if (now.getTime() >= windowClosesAt(reportingMonthOf(eventDate)).getTime()) {
+    // The Sunday's week, not its month, since decision 0335.
+    if (now.getTime() >= recordClosesAt(eventDate).getTime()) {
       return 'MONTH_CLOSED';
     }
 

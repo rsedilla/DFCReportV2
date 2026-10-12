@@ -180,7 +180,7 @@ for (const each of TABS) {
 
       await page.goto(`/reports/${each.tab}?period=quarter`);
       await expect(label(page, 'Q4 2026 · Oct–Dec')).toBeVisible();
-      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/)).toBeVisible();
+      await expect(page.getByText(/^Open until Mon \d+ [A-Z][a-z]{2}, 12NN$/)).toBeVisible();
       await expect(before(page)).toBeEnabled();
       await expect(page.getByText(/opens on/)).toHaveCount(0);
 

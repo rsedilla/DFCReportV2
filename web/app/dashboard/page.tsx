@@ -46,6 +46,7 @@ import {
   todayInManila,
 } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { deadlineLabel, mayStillBeOpen, monthOpenUntilLabel } from '@/lib/weekly-deadline';
 import { cn } from '@/lib/utils';
 
 /**
@@ -115,8 +116,19 @@ type QueueItem =
       leaderMemberId: string | null;
       isActor: boolean;
       mayRecord: boolean;
+      dueAt?: string | null;
+      closesAt?: string;
     }
-  | { kind: 'dcc'; month: string; date: string; eventId: string; marked: number; total: number };
+  | {
+      kind: 'dcc';
+      month: string;
+      date: string;
+      eventId: string;
+      marked: number;
+      total: number;
+      dueAt?: string | null;
+      closesAt?: string;
+    };
 
 /**
  * A month's Cell meetings still awaiting a record from this leader.
@@ -145,6 +157,8 @@ function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
     leaderMemberId: entry.leader.member_id,
     isActor: entry.leader.is_actor,
     mayRecord: entry.may_record,
+    dueAt: entry.due_at,
+    closesAt: entry.closes_at,
   }));
 }
 
@@ -180,6 +194,8 @@ function dccEntries(
             eventId: event.id,
             marked,
             total: lines.length,
+            dueAt: event.due_at,
+            closesAt: event.closes_at,
           },
         ];
   });
@@ -190,12 +206,12 @@ function Dashboard() {
   const today = todayInManila();
   const previousMonth = shiftMonth(month, -1);
 
-  // **The first seven days of a month, while last month may still be open** (section
-  // 13, decision 0170). Section 13 has every leader see their own outstanding work
-  // "always", and last month's is still outstanding until its window closes on the 7th
-  // (owner's choice of 2026-09-15). The browser's clock only decides whether to ask; the
-  // server's `open` flag and each Sunday's `recordable` decide what is shown.
-  const inCloseWeek = Number(today.slice(8, 10)) <= 7;
+  // **While last month may still be open**: until its last week closes, between the 15th
+  // and the 21st (section 13, decision 0335), or the 7th for a month before the weekly
+  // rule. Section 13 has every leader see their own outstanding work "always" (owner's
+  // choice of 2026-09-15). The browser's clock only decides whether to ask; the server's
+  // `open` flag and each row's own week decide what is shown.
+  const inCloseWeek = mayStillBeOpen(previousMonth, today);
 
   // Which list, which kind and whose are in the address, so Back from a meeting or a
   // checklist returns to the list it was opened from. The defaults drop out of it.
@@ -232,8 +248,13 @@ function Dashboard() {
     (me.data?.capabilities ?? []).some(
       (grant) => grant.capability === 'reports.view_subtree' && grant.scope_type === 'OWN_SUBTREE',
     );
+  // **An Admin's Record carries the church-wide one, last** (decision 0335): the reader who
+  // amends a closed week sees what went late. Keyed on the capability, never on the role.
+  const churchStatus = fullRecord && holdsWholeChurch(me.data, 'reports.view_subtree');
   const listTab: RecordTab =
-    recordingOnly || seniorPastor || (tab === 'status' && !leaderStatus) ? 'awaiting' : tab;
+    recordingOnly || seniorPastor || (tab === 'status' && !leaderStatus && !churchStatus)
+      ? 'awaiting'
+      : tab;
   const mayOversee = me.data?.people_i_oversee !== false;
   const shownWhose: Whose = mayOversee ? whose : 'mine';
   const branchView = shownWhose === 'branch';
@@ -466,7 +487,7 @@ function Dashboard() {
     enabled: fullRecord && listsAnswered,
   });
 
-  // Section 19: an open period says so, and last month is open until its 7th.
+  // Section 19: an open period says so, and last month is open until its last week closes.
   const previousName = monthLabel(previousMonth).split(' ')[0];
   const previousLabel = (open: boolean | undefined) =>
     `${previousName}${open ? ' (still open)' : ''}`;
@@ -604,7 +625,9 @@ function Dashboard() {
         ? `${withoutACell.data.length}${withoutACellPages.hasNextPage ? '+' : ''}`
         : null,
     },
-    ...(leaderStatus ? [{ key: 'status' as const, label: 'Recording Status', count: null }] : []),
+    ...(leaderStatus || churchStatus
+      ? [{ key: 'status' as const, label: 'Recording Status', count: null }]
+      : []),
   ];
 
   return (
@@ -659,7 +682,11 @@ function Dashboard() {
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
-            <LeaderRecordingStatusPanel leaderId={me.data.person_id} />
+            {churchStatus ? (
+              <RecordingStatusPanel />
+            ) : (
+              <LeaderRecordingStatusPanel leaderId={me.data.person_id} />
+            )}
           </div>
         ) : null}
         {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
@@ -728,8 +755,9 @@ function Dashboard() {
               ? shown.some((item) => item.month === previousMonth)
               : owedRows.some((row) => row.month === previousMonth)) ? (
               <p className="mt-4 text-sm">
-                {monthLabel(previousMonth).split(' ')[0]} is open until the end of{' '}
-                {dayLabel(`${month.slice(0, 8)}07`)}.
+                {monthOpenUntilLabel(previousMonth).endsWith('12NN')
+                  ? `${monthLabel(previousMonth).split(' ')[0]} is ${monthOpenUntilLabel(previousMonth).replace(/^Open/, 'open')}.`
+                  : `${monthLabel(previousMonth).split(' ')[0]} is open until the end of ${dayLabel(`${month.slice(0, 8)}07`)}.`}
               </p>
             ) : null}
 
@@ -739,7 +767,6 @@ function Dashboard() {
               ) : (
                 <DccBranchQueue
                   rows={owedRows}
-                  currentMonth={month}
                   today={today}
                   chosenId={chosenLeader?.id ?? null}
                   onChoose={setChosenLeader}
@@ -775,7 +802,6 @@ function Dashboard() {
                     <QueueList
                       caption={`Update Record, ${group.title}`}
                       items={group.items}
-                      currentMonth={month}
                       today={today}
                     />
                   ),
@@ -785,7 +811,6 @@ function Dashboard() {
               <QueueList
                 caption="Update Record"
                 items={shown}
-                currentMonth={month}
                 today={today}
               />
             )}
@@ -856,7 +881,7 @@ function Dashboard() {
                       (cell.state === 'CLOSED' && cell.closed_on
                         ? `Closed ${closedOnLabel(cell.closed_on)}`
                         : 'Open') +
-                        (cellMonth === month ? '' : ` · ${openUntilLabel(cellMonth, month)}`),
+                        (cellMonth === month ? '' : ` · ${openUntilLabel(cellMonth)}`),
                     ],
                   }))}
                 />
@@ -1048,23 +1073,16 @@ function periodLabel(month: string, open: boolean | undefined): string {
 }
 
 /**
- * "September · open until 7 Oct": the month an entry belongs to and the day it closes.
- *
- * A period being open is a neutral fact, so it is the solid tag (`docs/DESIGN_RECONCILIATION.md`),
- * set beside the outlined word for what is missing. The close is the 7th of the month
- * after (section 13, decision 0170).
+ * "September · open until Mon 19 Oct, 12NN": the month a Cell's figure belongs to and when
+ * it closes, which is when its last week closes (section 13, decision 0335).
  */
-function openUntilLabel(itemMonth: string, currentMonth: string): string {
+function openUntilLabel(itemMonth: string): string {
   const [year, month] = itemMonth.split('-').map(Number);
-  const [nextYear, nextMonth] = currentMonth.split('-').map(Number);
   const name = new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(
     new Date(Date.UTC(year, month - 1, 15)),
   );
-  const closes = new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(
-    new Date(Date.UTC(nextYear, nextMonth - 1, 15)),
-  );
 
-  return `${name} · open until 7 ${closes}`;
+  return `${name} · ${monthOpenUntilLabel(itemMonth).replace(/^Open/, 'open')}`;
 }
 
 /** Which of Record's four lists is open (decision 0290). */
@@ -1223,7 +1241,7 @@ function ShowMore({
 }
 
 /** What an awaiting entry is, who records it and how long it has waited, in words. */
-function describeQueueItem(item: QueueItem, currentMonth: string, today: string) {
+function describeQueueItem(item: QueueItem, today: string) {
   const isCell = item.kind === 'cell';
   const what = isCell
     ? `${cellShortName({
@@ -1236,7 +1254,8 @@ function describeQueueItem(item: QueueItem, currentMonth: string, today: string)
     : `DCC · ${item.marked} of ${item.total} marked`;
   const leader = isCell ? (item.isActor ? 'You' : (item.leaderName ?? 'Its leader')) : 'You';
   const waiting = daysAgoLabel(item.date, today);
-  const open = item.month === currentMonth ? null : openUntilLabel(item.month, currentMonth);
+  // When it is due, or once late when it closes (decision 0335), on every row.
+  const open = deadlineLabel({ due_at: item.dueAt, closes_at: item.closesAt })?.text ?? null;
   const href = isCell ? `/cells/${item.cellId}/meetings/${item.date}` : `/dcc/${item.eventId}`;
   // Another leader's meeting is followed up rather than recorded (decision 0322): the API
   // says per row whether this reader may record it.
@@ -1249,12 +1268,10 @@ function describeQueueItem(item: QueueItem, currentMonth: string, today: string)
 function QueueList({
   caption,
   items,
-  currentMonth,
   today,
 }: {
   caption: string;
   items: readonly QueueItem[];
-  currentMonth: string;
   today: string;
 }) {
   return (
@@ -1273,13 +1290,13 @@ function QueueList({
         </thead>
         <tbody>
           {items.map((item) => (
-            <QueueTableRow key={queueKey(item)} item={item} currentMonth={currentMonth} today={today} />
+            <QueueTableRow key={queueKey(item)} item={item} today={today} />
           ))}
         </tbody>
       </Table>
       <ul className="mt-4 flex flex-col gap-3 lg:hidden">
         {items.map((item) => (
-          <QueueCard key={queueKey(item)} item={item} currentMonth={currentMonth} today={today} />
+          <QueueCard key={queueKey(item)} item={item} today={today} />
         ))}
       </ul>
     </>
@@ -1388,16 +1405,13 @@ function LeaderGroups({
 
 function QueueTableRow({
   item,
-  currentMonth,
   today,
 }: {
   item: QueueItem;
-  currentMonth: string;
   today: string;
 }) {
   const { what, leader, waiting, open, href, action } = describeQueueItem(
     item,
-    currentMonth,
     today,
   );
 
@@ -1426,16 +1440,13 @@ function QueueTableRow({
 /** The same entry as a card below `lg`, with Record always in view. */
 function QueueCard({
   item,
-  currentMonth,
   today,
 }: {
   item: QueueItem;
-  currentMonth: string;
   today: string;
 }) {
   const { what, leader, waiting, open, href, action } = describeQueueItem(
     item,
-    currentMonth,
     today,
   );
 
@@ -1598,13 +1609,11 @@ type OwedRow = DccOwed & { month: string };
  */
 function DccBranchQueue({
   rows,
-  currentMonth,
   today,
   chosenId,
   onChoose,
 }: {
   rows: readonly OwedRow[];
-  currentMonth: string;
   today: string;
   chosenId: string | null;
   onChoose: (leader: ChosenLeader) => void;
@@ -1620,7 +1629,7 @@ function DccBranchQueue({
   const describe = (row: OwedRow) => ({
     leader: row.leader.is_actor ? 'You' : row.leader.full_name,
     waiting: daysAgoLabel(row.event_date, today),
-    open: row.month === currentMonth ? null : openUntilLabel(row.month, currentMonth),
+    open: deadlineLabel(row)?.text ?? null,
   });
 
   const own = (row: OwedRow) => row.leader.is_actor || row.leader.recorded_by_you;

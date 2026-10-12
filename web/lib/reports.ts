@@ -305,6 +305,8 @@ export async function getCellTwelve(
 export interface RecordingColumn {
   recorded: number;
   owed: number;
+  /** Of `recorded`, those who recorded all of it but some after its deadline (decision 0335). */
+  late?: number;
 }
 
 export type RecordingRowStatus =
@@ -325,11 +327,20 @@ export interface RecordingStatus {
   start: string;
   end: string;
   open: boolean;
+  /** Whether the period has a deadline in it, so counts are on time (decision 0335). */
+  deadline?: boolean;
   whole_church: {
     cell: RecordingColumn & { percent: number | null };
     dcc: RecordingColumn & { percent: number | null };
   };
-  previous: { start: string; end: string; open: boolean; cell: RecordingColumn; dcc: RecordingColumn };
+  previous: {
+    start: string;
+    end: string;
+    open: boolean;
+    deadline?: boolean;
+    cell: RecordingColumn;
+    dcc: RecordingColumn;
+  };
   /** Null where the placement graph is refused (section 20); the boxes stand. */
   tables:
     | {
@@ -347,6 +358,7 @@ export interface LeaderRecordingStatus {
   start: string;
   end: string;
   open: boolean;
+  deadline?: boolean;
   /** Null where the placement graph is refused (section 20), and so are the rows. */
   branch: {
     cell: RecordingColumn & { percent: number | null };
@@ -356,6 +368,7 @@ export interface LeaderRecordingStatus {
     start: string;
     end: string;
     open: boolean;
+    deadline?: boolean;
     cell: RecordingColumn | null;
     dcc: RecordingColumn | null;
   };

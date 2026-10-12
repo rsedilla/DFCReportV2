@@ -712,8 +712,9 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
     await chooseDcc(page);
 
+    // Every row says when it closes (decision 0335); the DCC mock's Sundays are June's.
     await expect(
-      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+      page.getByText('Closes end of Tue 7 Jul').filter({ visible: true }).first(),
     ).toBeVisible();
   });
 
@@ -721,13 +722,19 @@ test.describe('the Record queue', () => {
     // 10:00 on 8 October in Manila.
     await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
     await mockRecordScreen(page, {});
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/v1/dcc/events?')) {
+        asked.push(request.url());
+      }
+    });
 
     await page.goto('/dashboard');
     await chooseDcc(page);
 
     // This month's rows have arrived, so an absence below is not a page still loading.
     await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
-    await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
+    expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
   });
 
   // The Cell half of the same rule. The month the route is asked about is the month it
@@ -745,7 +752,7 @@ test.describe('the Record queue', () => {
 
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(
-      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+      page.getByText('Closes end of Wed 7 Oct').filter({ visible: true }).first(),
     ).toBeVisible();
   });
 
@@ -793,7 +800,8 @@ test.describe('the Record queue', () => {
       'Saturday 3 October',
       'Youth · Sat · Cell closed Sunday 20 September',
       'You',
-      'today',
+      // The row's close beside how long it has waited (decision 0335).
+      'todayCloses end of Sat 7 Nov',
       /^Record/,
     ]);
     await expect(
@@ -863,7 +871,8 @@ test.describe('the Record queue', () => {
       'Saturday 3 October',
       'Young Pro · Sat',
       'You',
-      'today',
+      // The row's close beside how long it has waited (decision 0335).
+      'todayCloses end of Sat 7 Nov',
       /^Record/,
     ]);
   });
@@ -1370,7 +1379,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toBeVisible();
     await page.getByRole('button', { name: 'Ana Lim' }).click();
     await expect(
-      page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('June · open until 7 Jul').first(),
+      page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('Closes end of Tue 7 Jul').first(),
     ).toBeVisible();
 
     await page.getByRole('radio', { name: 'Own ' }).check();
@@ -1385,7 +1394,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     const row = awaitingTable(page).getByRole('row').filter({ hasText: 'Young Pro · Sat' });
     await expect(row.getByRole('cell').nth(1)).toHaveText('Young Pro · Sat');
-    await expect(row.getByRole('cell').nth(3)).toHaveText('7 days ago');
+    await expect(row.getByRole('cell').nth(3)).toHaveText('7 days agoCloses end of Tue 7 Jul');
   });
 
   // Decision 0290: Awaiting a record is split into Cell Group and DCC,

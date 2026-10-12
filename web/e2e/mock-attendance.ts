@@ -255,6 +255,19 @@ export interface AwaitingRow {
     is_actor: boolean;
   };
   may_record: boolean;
+  due_at?: string | null;
+  closes_at?: string;
+}
+
+/**
+ * The deadline fields the API sends on a row (decision 0335), for a date before the weekly
+ * rule, which every mock date is: no deadline, closing at the end of the 7th of the month
+ * after, which is 16:00Z on the 7th.
+ */
+export function deadlineOf(date: string): { due_at: null; closes_at: string } {
+  const [year, month] = date.split('-').map(Number);
+
+  return { due_at: null, closes_at: new Date(Date.UTC(year, month, 7, 16)).toISOString() };
 }
 
 /** ISO weekday of a `YYYY-MM-DD` date, 1 = Monday. */
@@ -288,6 +301,7 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
     member_count: 5,
     leader: OWN,
     may_record: true,
+    ...deadlineOf(date),
   };
 }
 
@@ -310,6 +324,7 @@ export function awaitingClosedRow(date: string, month: string, closedOn: string)
     member_count: 4,
     leader: OWN,
     may_record: true,
+    ...deadlineOf(date),
   };
 }
 
@@ -402,6 +417,7 @@ export async function mockDccEvents(page: Page, { open = true } = {}): Promise<v
             event_date: '2026-06-07',
             recordable: true,
             not_recordable_reason: null,
+            ...deadlineOf('2026-06-07'),
             removed: false,
             removal_reason: null,
             coverage: { met: 5, owed: 8 },
@@ -420,6 +436,7 @@ export async function mockDccEvents(page: Page, { open = true } = {}): Promise<v
             event_date: '2026-06-21',
             recordable: true,
             not_recordable_reason: null,
+            ...deadlineOf('2026-06-21'),
             removed: false,
             removal_reason: null,
             coverage: { met: 8, owed: 8 },

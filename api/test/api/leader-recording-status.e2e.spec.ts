@@ -40,12 +40,23 @@ describe('A leader’s Recording Status (decision 0334)', () => {
 
   const LONG_AGO = new Date('2024-01-03T12:00:00+08:00');
 
+  // **These cases count who recorded, not when**, and their fixtures write records now: a
+  // weekly deadline in force would make the count depend on the day the suite runs. The
+  // deadline has its own suite, `weekly-deadline.e2e.spec.ts` (decision 0335).
+  const deadlineFrom = process.env.WEEKLY_DEADLINE_FROM;
+
   beforeAll(async () => {
+    process.env.WEEKLY_DEADLINE_FROM = '2100-01-04';
     db = createTestDb();
     app = await createTestApp();
   });
 
   afterAll(async () => {
+    if (deadlineFrom === undefined) {
+      delete process.env.WEEKLY_DEADLINE_FROM;
+    } else {
+      process.env.WEEKLY_DEADLINE_FROM = deadlineFrom;
+    }
     await app.close();
     await db.destroy();
   });
@@ -181,12 +192,12 @@ describe('A leader’s Recording Status (decision 0334)', () => {
       others: unknown;
     };
 
-    expect(body.branch.cell).toEqual({ recorded: 2, owed: 3, percent: 66 });
+    expect(body.branch.cell).toEqual({ recorded: 2, owed: 3, late: 0, on_time: 2, percent: 66 });
     expect(body.rows.map((row) => row.leader.id)).toEqual([ana.id, ben.id]);
     const [anaRow, benRow] = body.rows;
-    expect(anaRow.cell).toEqual({ recorded: 1, owed: 2 });
+    expect(anaRow.cell).toEqual({ recorded: 1, owed: 2, late: 0 });
     expect(anaRow.status).toEqual({ kind: 'STILL_TO_RECORD', leaders: 1 });
-    expect(benRow.cell).toEqual({ recorded: 1, owed: 1 });
+    expect(benRow.cell).toEqual({ recorded: 1, owed: 1, late: 0 });
     expect(benRow.status).toEqual({ kind: 'COMPLETED' });
     expect(body.others).toBeNull();
     // The reader oversaw this branch the week before as well, so its figure is shown.
@@ -250,7 +261,7 @@ describe('A leader’s Recording Status (decision 0334)', () => {
     };
 
     expect(body.rows.map((row) => row.leader.id)).not.toContain(dan.id);
-    expect(body.others?.cell).toEqual({ recorded: 0, owed: 1 });
+    expect(body.others?.cell).toEqual({ recorded: 0, owed: 1, late: 0 });
     const named = body.rows.reduce((total, row) => total + row.cell.owed, 0);
     expect(named + (body.others?.cell.owed ?? 0)).toBe(body.branch.cell.owed);
   });

@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
-import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
+import { databaseNow, monthClosesAt, reportingMonthOf } from '../common/time/submission-window';
 import { CellsReadService } from '../cells/cells.read.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -116,7 +116,7 @@ export class BranchFiguresService {
     return {
       reportingMonth,
       today,
-      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      open: now.getTime() < monthClosesAt(reportingMonth).getTime(),
     };
   }
 

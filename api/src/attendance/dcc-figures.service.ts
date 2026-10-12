@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
-import { windowClosesAt } from '../common/time/submission-window';
+import { monthClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
 
 /**
@@ -181,7 +181,7 @@ export class DccFiguresService {
                    ORDER BY event_date) FILTER (WHERE removed_at IS NOT NULL),
                  NULL
                ) AS removed,
-               (now() < ${windowClosesAt(reportingMonth)}) AS open
+               (now() < ${monthClosesAt(reportingMonth)}) AS open
           FROM calendar
       )
       SELECT month_meta.n,

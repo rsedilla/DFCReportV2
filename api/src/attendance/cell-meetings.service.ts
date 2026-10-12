@@ -19,7 +19,14 @@ import {
 } from '../common/errors/postgres-errors';
 import { DATABASE, type Db } from '../database/database.module';
 
-import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import {
+  databaseNow,
+  isMonthOpen,
+  isRecordOpen,
+  recordClosesAt,
+  recordDueAt,
+  reportingMonthOf,
+} from '../common/time/submission-window';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 
 import { AccountsRepository } from '../auth/accounts.repository';
@@ -536,8 +543,10 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       whose === 'branch'
         ? await this.authorization.scopeMembership(actor, Capability.CellViewSubtree)
         : null;
+    const now = await databaseNow(this.db);
     const outstanding = scheduled.filter(
       (entry) =>
+        now.getTime() < recordClosesAt(entry.scheduledDate).getTime() &&
         !recorded.has(`${entry.cellId}|${entry.scheduledDate}`) &&
         (isActor(entry.leaderPersonId) ||
           (cellView !== null && covers(cellView, entry.leaderPersonId))),
@@ -579,6 +588,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         scheduled_time: entry.scheduledTime,
         day_of_week: entry.dayOfWeek,
         reporting_month: reportingMonth,
+        // When it is due, null for a week before the weekly rule, and when its week
+        // closes to leaders (decision 0335). Late is a word the client derives from
+        // the first having passed, never only a colour.
+        due_at: recordDueAt(entry.scheduledDate)?.toISOString() ?? null,
+        closes_at: recordClosesAt(entry.scheduledDate).toISOString(),
         // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
         // what a leader needs is why it is no longer in their Cells list, and sections
         // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
@@ -1082,11 +1096,12 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // two claims and are deliberately told apart.
       const amendment = body.amendment ?? undefined;
 
-      if (!(await isMonthOpen(trx, reportingMonth))) {
+      // The meeting's week, not its month, since decision 0335.
+      if (!(await isRecordOpen(trx, meetingId))) {
         if (amendment === undefined) {
           throw new ApiError(
             ApiErrorCode.PERIOD_CLOSED,
-            'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
+            'This week is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
               'sections 13 and 20).',
             { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
           );
@@ -1103,7 +1118,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // later.
       else if (amendment !== undefined) {
         throw new InvariantViolationError(
-          'This month is still open, so there is nothing to amend. Submit without the ' +
+          'This week is still open, so there is nothing to amend. Submit without the ' +
             'amendment (SKILL.md section 13).',
           { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
         );
@@ -1839,11 +1854,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     if (
       operation.kind === 'reschedule' &&
       params.amendment === undefined &&
-      !(await isMonthOpen(trx, reportingMonthOf(operation.actualDate)))
+      !(await isRecordOpen(trx, operation.actualDate))
     ) {
       throw new ApiError(
         ApiErrorCode.PERIOD_CLOSED,
-        'That month is closed, so a meeting cannot be moved into it (SKILL.md sections ' +
+        'That week is closed, so a meeting cannot be moved into it (SKILL.md sections ' +
           '13 and 20).',
         {
           cell_id: cellId,

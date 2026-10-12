@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
-import { windowClosesAt } from '../common/time/submission-window';
+import { monthClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
 
 import type { Database } from '../database/schema';
@@ -190,16 +190,17 @@ export class CellFiguresService {
    * The frozen responsible leader of every meeting scheduled in the range that has a record,
    * keyed `cell_id|scheduled_date`, for the Senior Pastors' *Recording status* (decision 0325,
    * point 2): a recorded meeting is owed by its frozen leader (decision 0163), whatever its
-   * status.
+   * status. With when it was first reported, which is when its row was written (decision
+   * 0162), and what decision 0335 measures Late by.
    */
   async recordedLeadersBetween(
     executor: Db | Transaction<Database>,
     from: string,
     to: string,
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, { leaderId: string; firstAt: Date }>> {
     const rows = await executor
       .selectFrom('cell_meetings')
-      .select(['cell_id', 'scheduled_date', 'responsible_leader_id'])
+      .select(['cell_id', 'scheduled_date', 'responsible_leader_id', 'created_at'])
       .where('scheduled_date', '>=', from)
       .where('scheduled_date', '<=', to)
       .execute();
@@ -207,7 +208,7 @@ export class CellFiguresService {
     return new Map(
       rows.map((row) => [
         `${row.cell_id}|${String(row.scheduled_date)}`,
-        row.responsible_leader_id,
+        { leaderId: row.responsible_leader_id, firstAt: new Date(row.created_at) },
       ]),
     );
   }
@@ -419,7 +420,7 @@ export class CellFiguresService {
       ),
       month_meta AS (
         SELECT (SELECT count(*) FROM scoped)::text AS n,
-               (now() < ${windowClosesAt(reportingMonth)}) AS open
+               (now() < ${monthClosesAt(reportingMonth)}) AS open
       )
       SELECT month_meta.n,
              month_meta.open,

@@ -9,7 +9,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import { canonicalId, sameId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
-import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
+import { databaseNow, monthClosesAt, reportingMonthOf } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
@@ -197,7 +197,7 @@ export class CellsIndexService {
       ),
     ]);
 
-    const open = now.getTime() < windowClosesAt(reportingMonth).getTime();
+    const open = now.getTime() < monthClosesAt(reportingMonth).getTime();
 
     const last = visible.at(-1);
 
@@ -292,7 +292,7 @@ export class CellsIndexService {
 
     return {
       reporting_month: reportingMonth,
-      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      open: now.getTime() < monthClosesAt(reportingMonth).getTime(),
       data: visible.map((row) => {
         const leader = leaders.get(row.leaderId);
 

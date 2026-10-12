@@ -92,6 +92,93 @@ export function windowClosesAt(reportingMonth: string): Date {
   );
 }
 
+/**
+ * The Monday of the first week with a deadline (decision 0335). A record dated before it
+ * keeps the monthly close and is never Late.
+ *
+ * **Movable in the test suite alone**, because no real clock reaches a closed week of the
+ * new rule before 16 November 2026: `WEEKLY_DEADLINE_FROM` is read only where `NODE_ENV`
+ * is `test`, and refused if it is not a Monday that exists.
+ */
+export function weeklyDeadlineFrom(): string {
+  const override = process.env.WEEKLY_DEADLINE_FROM;
+  if (process.env.NODE_ENV === 'test' && override !== undefined && override !== '') {
+    if (!isCalendarDate(override) || weekStartOf(override) !== override) {
+      throw new Error(`WEEKLY_DEADLINE_FROM "${override}" is not a Monday.`);
+    }
+    return override;
+  }
+
+  return '2026-10-26';
+}
+
+/** The Monday of the Monday-to-Sunday week a day falls in (decision 0054). */
+export function weekStartOf(day: string): string {
+  if (!isCalendarDate(day)) {
+    throw new ValidationFailedError(`"${day}" is not a date that exists.`, { field: 'date' });
+  }
+  const [year, month, date] = day.split('-').map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, date));
+  // getUTCDay: Sunday 0 … Saturday 6, so Monday is six days back from a Sunday.
+  const back = (probe.getUTCDay() + 6) % 7;
+
+  return new Date(Date.UTC(year, month - 1, date - back)).toISOString().slice(0, 10);
+}
+
+function plusDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+/** 12:00 Asia/Manila on a day. The zone keeps no daylight saving (section 20). */
+function noonOf(day: string): Date {
+  return new Date(startOfManilaDay(day).getTime() + 12 * 60 * 60 * 1000);
+}
+
+/**
+ * When the record dated `day` is due: 12 noon on the Monday after its week (decision
+ * 0335). Null for a week before {@link weeklyDeadlineFrom}, which had no deadline.
+ */
+export function recordDueAt(day: string): Date | null {
+  const week = weekStartOf(day);
+
+  return week < weeklyDeadlineFrom() ? null : noonOf(plusDays(week, 7));
+}
+
+/**
+ * The first instant no leader may record or correct the record dated `day`: two Mondays
+ * after its deadline at 12 noon, or for a week before the weekly rule the end of the
+ * 7th of the month after its own (decision 0335).
+ */
+export function recordClosesAt(day: string): Date {
+  const week = weekStartOf(day);
+
+  return week < weeklyDeadlineFrom()
+    ? windowClosesAt(reportingMonthOf(day))
+    : noonOf(plusDays(week, 21));
+}
+
+/**
+ * The instant a month closes: when its last week closes, the week holding its last day,
+ * which always closes last (decision 0335). Every "open" flag on a month reads this.
+ */
+export function monthClosesAt(reportingMonth: string): Date {
+  const first = reportingMonthOf(reportingMonth);
+  const [year, month] = first.split('-').map(Number);
+  const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+  return recordClosesAt(last);
+}
+
+/** Whether a leader may still record the record dated `day`, on the database's clock. */
+export async function isRecordOpen(
+  executor: Db | Transaction<Database>,
+  day: string,
+): Promise<boolean> {
+  return (await databaseNow(executor)).getTime() < recordClosesAt(day).getTime();
+}
+
 /** The instant the database is at. Every window decision is made against this. */
 export async function databaseNow(executor: Db | Transaction<Database>): Promise<Date> {
   const result = await sql<{ at: Date }>`SELECT clock_timestamp() AS at`.execute(executor);
@@ -100,17 +187,15 @@ export async function databaseNow(executor: Db | Transaction<Database>): Promise
 }
 
 /**
- * Whether a reporting month is still open, decided on the database's clock.
- *
- * The month a record belongs to is the one whose window governs it — for a Cell
- * meeting that is `reporting_month`, which a reschedule never moves (section 13),
- * and for DCC it is the month of the event date.
+ * Whether a reporting month is still open, decided on the database's clock: until its
+ * last week closes (decision 0335). This is the month as a figure; whether a record may
+ * still be written is {@link isRecordOpen}, by the record's week.
  */
 export async function isMonthOpen(
   executor: Db | Transaction<Database>,
   reportingMonth: string,
 ): Promise<boolean> {
-  return (await databaseNow(executor)).getTime() < windowClosesAt(reportingMonth).getTime();
+  return (await databaseNow(executor)).getTime() < monthClosesAt(reportingMonth).getTime();
 }
 
 /** The reporting month of the day the database is currently in. */
