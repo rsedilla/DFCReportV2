@@ -1165,6 +1165,31 @@ export class HierarchyService {
   }
 
   /**
+   * Of these people, those holding a pastoral assignment that had started by `at`, open or
+   * closed since: the other half of "outside the pastoral tree" judged at an instant
+   * (decision 0339). An empty input answers empty without querying.
+   */
+  async everAssignedByWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+    at: Date,
+  ): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .distinct()
+      .where('person_id', 'in', [...personIds])
+      .where('started_at', '<=', at)
+      .execute();
+
+    return new Set(rows.map((row) => canonicalId(row.person_id)));
+  }
+
+  /**
    * Each person's current direct leader, by identifier, for a page of people at once.
    *
    * A person with no open assignment, or a root, is absent from the map. Identifiers only,

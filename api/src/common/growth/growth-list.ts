@@ -70,12 +70,18 @@ export async function growthPage(
     restrictTo = intersect(restrictTo, narrowing.include);
   }
 
+  // Nobody outside the pastoral tree is listed, as nobody is counted (decision 0339).
+  const exclude = new Set([
+    ...(narrowing.exclude ?? []),
+    ...(await deps.people.outsideTreeAt(executor, now)),
+  ]);
+
   const { rows, nextCursor } = await deps.people.searchByName(
     query.q ?? null,
     query.limit ?? 50,
     decodeCursor(query.cursor),
     restrictTo,
-    { memberId: true, currentOnly: true, exclude: narrowing.exclude },
+    { memberId: true, currentOnly: true, exclude },
   );
 
   return { rows, nextCursor: encodeCursor(nextCursor) };

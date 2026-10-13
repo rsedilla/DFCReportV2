@@ -369,6 +369,74 @@ describe('Senior Pastor reports (decision 0326)', () => {
       expectReconciles(later);
     });
 
+    /** An `ADMIN` account for a person, its role granted at an instant of the case's choosing. */
+    async function adminAccount(person: TestPerson, grantedAt: Date): Promise<void> {
+      const account = await createAccount(app, db, { person, roles: ['ADMIN'] });
+      await db
+        .updateTable('account_roles')
+        .set({ granted_at: grantedAt })
+        .where('account_id', '=', account.id)
+        .execute();
+    }
+
+    // Decision 0339: a Person outside the pastoral tree is in no month's # of People.
+    it('leaves a Person outside the pastoral tree out of # of People, and counts a leader who holds ADMIN', async () => {
+      const system = await createPerson(db, {
+        firstName: 'Sysad',
+        lastName: 'Admin',
+        network: 'MENS',
+      });
+      await adminAccount(system, LONG_AGO);
+      const ana = await leader('Ana', 'Cruz', oriel);
+      await adminAccount(ana, LONG_AGO);
+      const last = shiftMonth(await currentMonth(), -1);
+
+      const body = (await counts(pastor, last).expect(200)).body as Counts;
+
+      // Oriel, Gemma and Ana: the administrator outside the tree is not one of them.
+      expect(body.whole_church.people).toBe(3);
+      expect(rowOf(body, ana)).toMatchObject({ people: 1 });
+      // Others is the two roots alone.
+      expect(body.others!.people).toBe(2);
+      expectReconciles(body);
+    });
+
+    it('judges outside the tree at each month’s end', async () => {
+      const month = await currentMonth();
+      const last = shiftMonth(month, -1);
+      const before = shiftMonth(month, -2);
+      const during = midMonth(last);
+
+      // An administrator placed in the tree during last month.
+      const placed = await createPerson(db, {
+        firstName: 'Placed',
+        lastName: 'Later',
+        network: 'MENS',
+      });
+      await adminAccount(placed, LONG_AGO);
+      await assignTo(db, placed.id, oriel.id, during);
+      // A person given ADMIN during last month, never placed in the tree.
+      const granted = await createPerson(db, {
+        firstName: 'Granted',
+        lastName: 'Later',
+        network: 'MENS',
+      });
+      await adminAccount(granted, during);
+
+      const earlier = (await counts(pastor, before).expect(200)).body as Counts;
+      const later = (await counts(pastor, last).expect(200)).body as Counts;
+
+      // Two months ago: Placed was outside the tree, Granted held no ADMIN yet.
+      expect(earlier.whole_church.people).toBe(3);
+      expect(earlier.others!.people).toBe(3);
+      // Last month: Placed is in the tree under Oriel, and Granted is outside it.
+      expect(later.whole_church.people).toBe(3);
+      expect(rowOf(later, placed)).toMatchObject({ people: 1 });
+      expect(later.others!.people).toBe(2);
+      expectReconciles(earlier);
+      expectReconciles(later);
+    });
+
     it('refuses a month that has not begun', async () => {
       const next = shiftMonth(await currentMonth(), 1);
 

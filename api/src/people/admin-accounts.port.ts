@@ -36,4 +36,10 @@ export interface AdminAccountsPort {
     executor: Db | Transaction<Database>,
     personIds: readonly string[],
   ): Promise<Set<string>>;
+
+  /**
+   * Every Person holding an `ADMIN` role at one instant: granted by then and not revoked by
+   * then. For decision 0339, which judges a month at its own end.
+   */
+  personsHoldingAdminAtWithin(executor: Db | Transaction<Database>, at: Date): Promise<Set<string>>;
 }

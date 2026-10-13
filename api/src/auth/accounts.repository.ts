@@ -169,6 +169,23 @@ export class AccountsRepository {
     return new Set(rows.map((row) => row.person_id));
   }
 
+  /** `AdminAccountsPort`. Every Person holding an `ADMIN` role at `at` (decision 0339). */
+  async personsHoldingAdminAtWithin(
+    executor: Db | Transaction<Database>,
+    at: Date,
+  ): Promise<Set<string>> {
+    const rows = await executor
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select('account.person_id as person_id')
+      .where('role.role', '=', 'ADMIN')
+      .where('role.granted_at', '<=', at)
+      .where((eb) => eb.or([eb('role.revoked_at', 'is', null), eb('role.revoked_at', '>', at)]))
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
+  }
+
   /**
    * Which of these people hold an account, whatever state it is in.
    *

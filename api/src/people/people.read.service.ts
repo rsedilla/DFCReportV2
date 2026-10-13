@@ -262,6 +262,30 @@ export class PeopleReadService {
     return admins.has(personId) && !everAssigned ? 'OUTSIDE_TREE' : null;
   }
 
+  /**
+   * Everyone outside the pastoral tree at `at` (section 5, decision 0270): holding `ADMIN`
+   * then, with no pastoral assignment started by then. Decision 0339 leaves them out of every
+   * count of people; a month is judged at its own end. Refuses when the port is unbound,
+   * like {@link noLeaderReason}, rather than counting an administrator in.
+   */
+  async outsideTreeAt(executor: Db | Transaction<Database>, at: Date): Promise<Set<string>> {
+    const adminAccounts = this.adminAccounts;
+
+    if (!adminAccounts) {
+      throw new Error(
+        'Cannot say who is outside the pastoral tree: ADMIN_ACCOUNTS_PORT is not bound. ' +
+          'This is a deployment fault.',
+      );
+    }
+
+    const admins = [...(await adminAccounts.personsHoldingAdminAtWithin(executor, at))].map(
+      canonicalId,
+    );
+    const assigned = await this.hierarchy.everAssignedByWithin(executor, admins, at);
+
+    return new Set(admins.filter((id) => !assigned.has(id)));
+  }
+
   /** {@link forDecisionsWithin} on the pooled connection, for a caller holding no transaction. */
   async forDecisions(personIds: readonly string[]): Promise<Map<string, PersonForDecision>> {
     return this.forDecisionsWithin(this.db, personIds);
@@ -523,19 +547,23 @@ export class PeopleReadService {
   }
 
   /**
-   * How many current Persons a scope holds: neither archived nor absorbed by a merge
-   * (decision 0279). `null` is no restriction, as in {@link searchByName}.
+   * How many current Persons a scope holds for a Growth tab: neither archived nor absorbed by
+   * a merge (decision 0279), nor outside the pastoral tree now (decision 0339). `null` is no
+   * restriction, as in {@link searchByName}.
    */
   async countCurrent(restrictTo: ReadonlySet<string> | null): Promise<number> {
     if (restrictTo !== null && restrictTo.size === 0) {
       return 0;
     }
 
+    const outside = await this.outsideTreeAt(this.db, await databaseNow(this.db));
+
     const row = await this.db
       .selectFrom('persons')
       .select((eb) => eb.fn.countAll<string>().as('count'))
       .where('merged_into_id', 'is', null)
       .$if(restrictTo !== null, (qb) => qb.where('id', 'in', [...(restrictTo ?? [])]))
+      .$if(outside.size > 0, (qb) => qb.where('id', 'not in', [...outside]))
       .where((eb) =>
         eb.not(
           eb.exists(
@@ -1049,6 +1077,9 @@ export class PeopleReadService {
       return { rows: [], nextCursor: null };
     }
 
+    // Nobody places a Person outside the pastoral tree in a Cell (decision 0339).
+    const outside = await this.outsideTreeAt(this.db, await databaseNow(this.db));
+
     let query = this.db
       .selectFrom('persons as person')
       .select([
@@ -1099,6 +1130,7 @@ export class PeopleReadService {
           ),
         ),
       )
+      .$if(outside.size > 0, (qb) => qb.where('person.id', 'not in', [...outside]))
       .orderBy('person.last_name')
       .orderBy('person.first_name')
       // The Member ID rather than the identifier, so this reuses `RosterCursor`
