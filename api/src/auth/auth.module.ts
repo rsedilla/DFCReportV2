@@ -21,6 +21,7 @@ import { AccessTokenGuard } from './authorization/access-token.guard';
 import { PasswordService } from './password.service';
 import { SecondStepService } from './second-step.service';
 import { TokensService } from './tokens.service';
+import { UsernamesService } from './usernames.service';
 
 /**
  * The `auth` module: accounts, tokens, sessions, and the capability and scope
@@ -59,6 +60,7 @@ import { TokensService } from './tokens.service';
     PasswordService,
     SecondStepService,
     TokensService,
+    UsernamesService,
     AccessTokenGuard,
   ],
   // AccessTokenGuard and CapabilityGuard are registered as global guards in

@@ -123,6 +123,29 @@ export class AccountTokensService {
 
     return claimed ? { accountId: claimed.account_id } : null;
   }
+
+  /**
+   * The account a token would redeem for, without redeeming it, or null where it is
+   * expired, used or never issued: what activation's username suggestion reads before the
+   * holder has chosen a password (decision 0337). The same predicate as {@link redeemWithin}.
+   * A read, in the caller's transaction like every other method here.
+   */
+  async accountForLiveTokenWithin(
+    trx: Transaction<Database>,
+    token: string,
+    purpose: AccountTokenPurpose,
+  ): Promise<string | null> {
+    const row = await trx
+      .selectFrom('account_tokens')
+      .select('account_id')
+      .where('token_hash', '=', hashToken(token))
+      .where('purpose', '=', purpose)
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', new Date())
+      .executeTakeFirst();
+
+    return row?.account_id ?? null;
+  }
 }
 
 /**

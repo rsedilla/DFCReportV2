@@ -135,7 +135,7 @@ const SCANS = [
     route: '/sign-in',
     async arrange(page: import('@playwright/test').Page) {
       await mockSignInRefused(page);
-      await page.getByLabel('Email address').fill('nobody@example.invalid');
+      await page.getByLabel('Email or username').fill('nobody@example.invalid');
       await page.getByLabel('Password').fill('not the right password');
       await page.getByRole('button', { name: 'Sign in' }).click();
       // Scoped to the form: Next renders its own route announcer as a
@@ -150,7 +150,7 @@ const SCANS = [
     route: '/sign-in',
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'CODE');
-      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Email or username').fill('admin@example.invalid');
       await page.getByLabel('Password').fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.getByLabel('Code').fill('000000');
@@ -163,7 +163,7 @@ const SCANS = [
     route: '/sign-in',
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'SETUP');
-      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Email or username').fill('admin@example.invalid');
       await page.getByLabel('Password').fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
@@ -174,7 +174,7 @@ const SCANS = [
     route: '/sign-in',
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'SETUP');
-      await page.getByLabel('Email address').fill('admin@example.invalid');
+      await page.getByLabel('Email or username').fill('admin@example.invalid');
       await page.getByLabel('Password').fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.getByRole('button', { name: 'Next' }).click();

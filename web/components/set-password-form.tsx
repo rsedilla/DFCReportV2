@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -10,6 +11,7 @@ import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
+import { suggestActivationUsername, usernameHint } from '@/lib/username';
 import { cn } from '@/lib/utils';
 
 /**
@@ -60,6 +62,17 @@ export function SetPasswordForm({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // Activation asks for a username too, filled with a suggestion (decision 0337).
+  const activation = path === '/api/v1/auth/activate';
+  const [username, setUsername] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const suggestion = useQuery({
+    queryKey: ['activation-username-suggestion', token],
+    queryFn: () => suggestActivationUsername(token ?? ''),
+    enabled: activation && Boolean(token),
+    retry: false,
+  });
+  const shownUsername = username ?? suggestion.data?.username ?? '';
 
   if (done) {
     return (
@@ -119,12 +132,23 @@ export function SetPasswordForm({
     event.preventDefault();
     setFailure(null);
     setPasswordError(null);
+    setUsernameError(null);
     setSubmitting(true);
 
     try {
-      await apiRequest<void>(path, { method: 'POST', body: { token, password } });
+      const name = shownUsername.trim();
+      await apiRequest<void>(path, {
+        method: 'POST',
+        body: activation && name !== '' ? { token, password, username: name } : { token, password },
+      });
       setDone(true);
     } catch (cause) {
+      const onUsername = fieldErrorFor(cause, 'username');
+      if (onUsername !== null) {
+        setUsernameError(onUsername);
+        setSubmitting(false);
+        return;
+      }
       // **A refusal the API attached to the password goes on the password.**
       // That is the one case section 23 settles `field-invalid` for, and the
       // only one this form can produce: section 6's length rule answers
@@ -144,6 +168,21 @@ export function SetPasswordForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
       <FailureNotice failure={failure} />
+
+      {activation ? (
+        <Field
+          label="Username"
+          type="text"
+          name="username"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={shownUsername}
+          error={usernameError}
+          onChange={(event) => setUsername(event.target.value)}
+          description={usernameHint(suggestion.data?.taken ?? null)}
+        />
+      ) : null}
 
       <Field
         label="New password"

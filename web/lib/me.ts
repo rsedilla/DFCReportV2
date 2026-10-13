@@ -25,6 +25,8 @@ export interface SessionDescription {
   account_id: string;
   person_id: string;
   email: string | null;
+  /** Null until the holder sets one (decision 0337). */
+  username: string | null;
   first_name: string | null;
   /**
    * The roles the server honours for this account (decision 0263).

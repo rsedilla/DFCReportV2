@@ -11,6 +11,8 @@ export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
 export interface PersonAccount {
   id: string;
   email: string;
+  /** Set only by the holder; shown here so an administrator can tell them (decision 0337). */
+  username: string | null;
   status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
   roles: AccountRole[];
   created_at: string;

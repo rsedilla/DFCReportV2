@@ -872,7 +872,7 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Sign in');
 
   whoAmI = 'Oriel';
-  await page.getByLabel('Email address').fill('oriel@example.invalid');
+  await page.getByLabel('Email or username').fill('oriel@example.invalid');
   await page.getByLabel('Password').fill('a-password-nobody-uses');
   await page.getByRole('button', { name: 'Sign in' }).click();
 

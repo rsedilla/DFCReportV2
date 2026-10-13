@@ -69,7 +69,9 @@ export default function SignInPage() {
       // than "your session ended".
       setFailure(
         describeFailure(cause, {
-          credentialRefusal: 'That email address and password do not match an account.',
+          credentialRefusal: email.includes('@')
+            ? 'That email address and password do not match an account.'
+            : 'That username and password do not match an account.',
         }),
       );
       setSubmitting(false);
@@ -100,12 +102,14 @@ export default function SignInPage() {
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         <FailureNotice failure={failure} />
 
+        {/* Either one signs in (decision 0337); `username` so a password manager fills it. */}
         <Field
-          label="Email address"
-          type="email"
+          label="Email or username"
+          type="text"
           name="email"
           autoComplete="username"
-          inputMode="email"
+          autoCapitalize="none"
+          spellCheck={false}
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}

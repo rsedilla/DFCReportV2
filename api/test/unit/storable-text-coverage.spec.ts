@@ -103,6 +103,11 @@ describe('storable text is refused at the edge, on every field that takes text',
     'LoginDto.password',
     'SetPasswordDto.password',
     'SetPasswordDto.token',
+    // Activation's own DTOs (decision 0337) carry the same two fields, on the same ground:
+    // the token is compared as a sha256 hash and the password is hashed.
+    'ActivateDto.password',
+    'ActivateDto.token',
+    'ActivationTokenDto.token',
     // The second sign-in step (decision 0302): the ticket and a recovery code are compared
     // as sha256 hashes computed in the application, and a code is compared in memory
     // against one the application computes, so none reaches a statement as sent.

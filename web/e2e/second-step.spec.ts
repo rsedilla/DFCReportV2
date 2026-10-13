@@ -9,7 +9,7 @@ import { RECOVERY_CODES, SECOND_STEP_CODE, mockSecondStep } from './mock-api';
 
 async function signInWithPassword(page: Page) {
   await page.goto('/sign-in');
-  await page.getByLabel('Email address').fill('admin@example.invalid');
+  await page.getByLabel('Email or username').fill('admin@example.invalid');
   await page.getByLabel('Password').fill('a-password-for-this-test');
   await page.getByRole('button', { name: 'Sign in' }).click();
 }

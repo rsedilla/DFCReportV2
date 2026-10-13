@@ -1,16 +1,18 @@
 'use client';
 
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { Field } from '@/components/ui/field';
 import { describeGrants } from '@/lib/capability-labels';
 import { getMe, roleLabel } from '@/lib/me';
 import { getPerson } from '@/lib/people';
-import { describeFailure } from '@/lib/messages';
+import { describeFailure, fieldErrorFor } from '@/lib/messages';
+import { getUsernameSuggestion, setOwnUsername, usernameHint } from '@/lib/username';
 import {
   forgetSession,
   isHalted,
@@ -171,6 +173,8 @@ function SessionDetail() {
             </dd>
           </dl>
 
+          <UsernameSection current={session.data.username ?? null} />
+
           {/*
             The account's grants in plain words, grouped by how far each reaches (audit of
             2026-10-06). The server checks every action; nothing here grants anything.
@@ -280,5 +284,115 @@ function SessionDetail() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * The holder's own username (decision 0337): optional, filled with a suggestion, and
+ * changeable. Nobody is asked to set one; the section waits here for whoever wants it.
+ */
+function UsernameSection({ current }: { current: string | null }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // One key per body (decision 0127): a retry of the same name replays, another is new.
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const open = current === null || editing;
+
+  const suggestion = useQuery({
+    queryKey: ['username-suggestion'],
+    queryFn: ({ signal }) => getUsernameSuggestion(signal),
+    enabled: current === null,
+  });
+  const shown = value ?? (editing ? (current ?? '') : (suggestion.data?.username ?? ''));
+
+  const save = useMutation({
+    mutationFn: () => setOwnUsername(shown.trim(), key),
+    onSuccess: async () => {
+      setEditing(false);
+      setValue(null);
+      setKey(crypto.randomUUID());
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+    onError: (cause) => setError(fieldErrorFor(cause, 'username') ?? describeFailure(cause).message),
+  });
+
+  return (
+    <section aria-labelledby="username-heading" className="border-line mt-8 max-w-xl border p-5">
+      <h2 id="username-heading" className="text-lg font-bold tracking-tight">
+        Username
+      </h2>
+      {open ? (
+        <form
+          className="mt-1 flex flex-col gap-4"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            save.mutate();
+          }}
+        >
+          <p className="text-muted text-sm">
+            {current === null
+              ? 'Optional. Sign in with it or with your email address.'
+              : 'Your old username stops working, and anyone may then take it.'}
+          </p>
+          <Field
+            label="Username"
+            type="text"
+            name="username"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={shown}
+            error={error}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setKey(crypto.randomUUID());
+            }}
+            description={
+              current === null
+                ? usernameHint(suggestion.data?.taken ?? null)
+                : '3 to 30 letters and numbers, starting with a letter.'
+            }
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={save.isPending || shown.trim() === ''}>
+              {save.isPending ? 'Saving…' : 'Save username'}
+            </Button>
+            {current !== null ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditing(false);
+                  setValue(null);
+                  setError(null);
+                }}
+              >
+                Keep {current}
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="mt-2 text-xl font-bold">{current}</p>
+          <p className="text-muted mt-1 text-sm">Sign in with it or with your email address.</p>
+          <Button
+            className="mt-4"
+            variant="secondary"
+            onClick={() => {
+              setEditing(true);
+              setError(null);
+            }}
+          >
+            Change username
+          </Button>
+        </>
+      )}
+    </section>
   );
 }

@@ -123,7 +123,10 @@ export function PersonAccount({
       ) : account.isError ? null : current ? (
         <div className="mt-2">
           <p className="text-muted text-sm">
-            {current.email} · {current.roles.map(roleLabel).join(', ') || 'No role'} · created{' '}
+            {current.email}
+            {/* Shown so an administrator can tell its holder, who alone sets it (decision 0337). */}
+            {current.username ? ` · username ${current.username}` : ''} ·{' '}
+            {current.roles.map(roleLabel).join(', ') || 'No role'} · created{' '}
             {new Date(current.created_at).toLocaleDateString('en-PH', {
               day: 'numeric',
               month: 'short',

@@ -31,6 +31,18 @@
       "screen": "web/app/activate/page.tsx"
     },
     {
+      "route": "POST /api/v1/auth/activate/username-suggestion",
+      "screen": "web/app/activate/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/auth/username-suggestion",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/username",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
       "route": "POST /api/v1/auth/forgot-password",
       "screen": "web/app/forgot-password/page.tsx"
     },

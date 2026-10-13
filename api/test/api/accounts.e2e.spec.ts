@@ -98,6 +98,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(read.body.account).toEqual({
         id: expect.any(String),
         email: 'ester@example.test',
+        // None until the holder sets one (decision 0337).
+        username: null,
         status: 'PENDING_ACTIVATION',
         roles: ['ADMIN'],
         created_at: expect.any(String),
