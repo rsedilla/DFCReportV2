@@ -97,10 +97,6 @@ export async function setFullView(
   });
 }
 
-export function roleLabel(role: AccountRole): string {
-  return role === 'ADMIN' ? 'Admin' : role === 'SENIOR_PASTOR' ? 'Senior Pastor' : 'Leader';
-}
-
 export function accountStatusLabel(status: PersonAccount['status']): string {
   return status === 'PENDING_ACTIVATION'
     ? 'Waiting for activation'

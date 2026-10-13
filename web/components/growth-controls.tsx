@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
+import { MINIMUM_SEARCH_LENGTH } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
 /**
@@ -190,7 +191,7 @@ export function GrowthFilters({
   }
 
   const trimmed = term.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < 2;
+  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
 
   return (
     <form

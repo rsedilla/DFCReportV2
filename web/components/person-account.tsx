@@ -16,12 +16,12 @@ import {
   provisionAccount,
   resendActivation,
   resetSecondStep,
-  roleLabel,
   setAccountAccess,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
 } from '@/lib/accounts';
+import { roleLabel } from '@/lib/me';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
 
 /**

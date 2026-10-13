@@ -28,7 +28,6 @@ export function CoverageFigure({
   recorded,
   scheduled,
   unit,
-  nothingOwed,
   headline = false,
 }: {
   /** The two figures at the size of a report's other headline figures. */
@@ -37,11 +36,9 @@ export function CoverageFigure({
   scheduled: number | null;
   /** What is being counted — "meetings recorded", "leaders have recorded". */
   unit: string;
-  /** What to say when nobody owes a record yet. Required when either figure is null. */
-  nothingOwed?: string;
 }) {
   if (recorded === null || scheduled === null) {
-    return <span className="text-muted text-sm">{nothingOwed ?? 'Nothing owed yet'}</span>;
+    return <span className="text-muted text-sm">Nothing owed yet</span>;
   }
 
   return (
