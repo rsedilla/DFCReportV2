@@ -1,16 +1,21 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
-import { PeriodTabs, RangeNavigator, RootLeadersTwelve, TwelveTable } from '@/components/my-twelve';
+import {
+  BranchTwelve,
+  PeriodTabs,
+  RangeNavigator,
+  RootLeadersTwelve,
+  TwelveTable,
+} from '@/components/my-twelve';
 import { YearTable } from '@/components/report-year';
-import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
+import { isBranchReader, ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -37,7 +42,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  *
  * **Coverage leads, as one line** (decision 0202): meetings recorded over meetings due,
  * above the table, because it is the one figure that recording less makes worse rather than
- * better. The rows behind it are under Filed reports (decision 0292).
+ * better. Who is behind is on Record's Recording Status (decision 0340).
  *
  * **My 12 is the reader's direct disciples, then their own Cell groups, then the total**,
  * in surname order, never numbered, sorted by a figure or coloured (section 13). Opening a
@@ -78,6 +83,8 @@ export function CellReport() {
   // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
   // server's screens and never by a role.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
+  const branchReader = isBranchReader(me.data);
   // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
   // only, so they wait to know who is reading before asking for any.
   const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
@@ -272,8 +279,8 @@ export function CellReport() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
-            {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. The
-                Senior Pastors read it on Record's Recording status instead (owner, 2026-10-09). */}
+            {/* Coverage leads, as one line (decision 0202); who is behind is on Record's Recording
+                Status (decision 0340). The Senior Pastors read it there instead (owner, 2026-10-09). */}
             {seniorPastor ? null : (
               <p className="text-sm">
                 <span className="font-bold tabular-nums">
@@ -283,20 +290,6 @@ export function CellReport() {
                 {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
                   ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
                   : ''}
-                {kind === 'MONTH' ? (
-                  <>
-                    {' · '}
-                    <Link
-                      href={`/reports/filed?${new URLSearchParams({
-                        month: guardMonth,
-                        ...(leader ? { leader, by: 'leader' } : {}),
-                      }).toString()}`}
-                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      see Filed reports
-                    </Link>
-                  </>
-                ) : null}
               </p>
             )}
 
@@ -304,6 +297,13 @@ export function CellReport() {
               <RootLeadersTwelve
                 twelve={twelve.data}
                 kind={kind}
+                openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+              />
+            ) : branchReader ? (
+              <BranchTwelve
+                twelve={twelve.data}
+                kind={kind}
+                subjectName={subjectName}
                 openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
               />
             ) : (

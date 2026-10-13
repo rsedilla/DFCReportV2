@@ -11,7 +11,9 @@ import { mockCellReport, mockCellTwelve, TWELVE } from './mock-attendance';
  * This pins what the screen does with them: which period it asks for, what the address
  * holds, where the navigator stops, and that the table keeps section 13's four conditions --
  * surname order as the API sends it, no row numbers, each name opening that leader's 12, and
- * the People column adding up in plain sight.
+ * the total adding up in plain sight. A Full view leader -- the shared account, which reads
+ * reports over one Network -- reads their branch's cards and their 12 with Total second
+ * (decision 0340); a whole-church reader keeps the table decision 0293 gave them.
  *
  * The clock is fixed at 10:00 on Saturday 20 June 2026 in Manila, so the current week runs
  * from Monday 15 June, the current quarter is Q2 and May's window has closed (on the 7th).
@@ -252,30 +254,45 @@ test.describe('the navigator', () => {
 });
 
 test.describe('My 12', () => {
-  test('lists the reader’s 12 as the API sends them, with no row numbers, then You, the two lines and the Total', async ({
+  test('a Full view leader reads their branch: the cards, then their 12 with Total second, You, the two lines and the Total (decision 0340)', async ({
     page,
   }) => {
     await arrange(page);
     await page.goto('/reports/cells');
 
-    await expect(
-      page.getByRole('heading', { name: 'My 12 · their journey' }),
-    ).toBeVisible();
-    const table = twelveTable(page);
-    await expect(table.getByRole('columnheader')).toHaveText([
-      'Leader',
+    await expect(page.getByRole('heading', { name: 'Your branch', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your 12', level: 3 })).toBeVisible();
+    // Not the whole-church reader's table (decision 0293), which carries this heading.
+    await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
+
+    // The branch's figures as cards, in order, equal to the Total row below.
+    const cards = page.getByRole('region', { name: 'Your branch' }).locator('dl');
+    await expect(cards.getByRole('term')).toHaveText([
+      'Total',
       'VIP',
       '2nd Timer',
       '3rd Timer',
       '4th Timer',
       'Regular',
-      'People',
     ]);
+    await expect(cards.getByRole('definition')).toHaveText(['10', '2', '2', '1', '1', '4']);
+
+    const table = twelveTable(page);
+    await expect(table.getByRole('columnheader')).toHaveText([
+      'Leader',
+      'Total',
+      'VIP',
+      '2nd Timer',
+      '3rd Timer',
+      '4th Timer',
+      'Regular',
+    ]);
+    await expect(table.getByRole('columnheader', { name: 'People' })).toHaveCount(0);
 
     const rows = table.locator('tbody tr');
     await expect(rows).toHaveCount(7);
 
-    // Surname order as sent, which is 3, 4, 0 by People: neither ascending nor descending.
+    // Surname order as sent, which is 3, 4, 0 by Total: neither ascending nor descending.
     const names = [TWELVE.teresita, TWELVE.consuelo, TWELVE.efren];
     for (const [index, leader] of names.entries()) {
       const row = rows.nth(index);
@@ -286,55 +303,44 @@ test.describe('My 12', () => {
         `/reports/cells?month=2026-06-01&leader=${leader.id}`,
       );
     }
-    expect(await cellsOf(rows.nth(0))).toEqual([
-      'Teresita Alcantara',
-      '1',
-      '0',
-      '1',
-      '0',
-      '1',
-      '3',
-    ]);
-    expect(await cellsOf(rows.nth(1))).toEqual(['Consuelo Bautista', '1', '1', '0', '1', '1', '4']);
-    expect(await cellsOf(rows.nth(2))).toEqual([
-      'Efren Dimaculangan',
-      '0',
-      '0',
-      '0',
-      '0',
-      '0',
-      '0',
-    ]);
+    expect(await cellsOf(rows.nth(0))).toEqual(['Teresita Alcantara', '3', '1', '0', '1', '0', '1']);
+    expect(await cellsOf(rows.nth(1))).toEqual(['Consuelo Bautista', '4', '1', '1', '0', '1', '1']);
+    expect(await cellsOf(rows.nth(2))).toEqual(['Efren Dimaculangan', '0', '0', '0', '0', '0', '0']);
     expect(await cellsOf(rows.nth(3))).toEqual([
       'You · your own Cell Groups (2)',
-      '0',
-      '1',
-      '0',
-      '0',
-      '1',
       '2',
+      '0',
+      '1',
+      '0',
+      '0',
+      '1',
     ]);
-    expect(await cellsOf(rows.nth(4))).toEqual(['Counted under more than one leader', '−1']);
-    expect(await cellsOf(rows.nth(5))).toEqual(['Elsewhere in this branch', '+2']);
-    expect(await cellsOf(rows.nth(6))).toEqual(['Total', '2', '2', '1', '1', '4', '10']);
+    expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual([
+      'Counted under more than one leader',
+      '−1',
+    ]);
+    expect((await cellsOf(rows.nth(5))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
+    const totalRow = await cellsOf(rows.nth(6));
+    expect(totalRow).toEqual(['Total', '10', '2', '2', '1', '1', '4']);
 
-    // The People column adds up in plain sight (section 20): 3 + 4 + 0 + 2 − 1 + 2 = 10.
-    const people = await Promise.all(
-      [0, 1, 2, 3].map(async (index) => Number((await cellsOf(rows.nth(index))).at(-1))),
-    );
+    // The cards are the Total row's figures, so the two cannot disagree.
+    expect(await cards.getByRole('definition').allTextContents()).toEqual(totalRow.slice(1));
+
+    // The Total column adds up in plain sight (section 20): 3 + 4 + 0 + 2 − 1 + 2 = 10.
     const signed = async (index: number) =>
-      Number((await cellsOf(rows.nth(index))).at(-1)!.replace('−', '-'));
-    const total = Number((await cellsOf(rows.nth(6))).at(-1));
-    expect(
-      people.reduce((sum, count) => sum + count, 0) + (await signed(4)) + (await signed(5)),
-    ).toBe(total);
+      Number((await cellsOf(rows.nth(index)))[1].replace('−', '-'));
+    let sum = 0;
+    for (const index of [0, 1, 2, 3, 4, 5]) {
+      sum += await signed(index);
+    }
+    expect(sum).toBe(Number(totalRow[1]));
 
     // Section 13: no proportion, no rank.
     await expect(table).not.toContainText('%');
     await expect(table.getByRole('columnheader', { name: /^(#|No\.?|Rank)$/ })).toHaveCount(0);
   });
 
-  test('opening a name shows that leader’s 12, and their own row carries no numbers when they lead no Cell', async ({
+  test('opening a name shows that leader’s branch and 12, and their own row carries no numbers when they lead no Cell', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -346,10 +352,20 @@ test.describe('My 12', () => {
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(
-      page.getByRole('heading', {
-        name: 'Consuelo Bautista’s 12 · their journey',
-      }),
+      page.getByRole('heading', { name: 'Consuelo Bautista’s branch', level: 2 }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Consuelo Bautista’s 12', level: 3 }),
+    ).toBeVisible();
+    const branch = page.getByRole('region', { name: 'Consuelo Bautista’s branch' });
+    await expect(branch.locator('dl').getByRole('definition')).toHaveText([
+      '4',
+      '1',
+      '1',
+      '0',
+      '1',
+      '1',
+    ]);
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0).getByRole('link', { name: TWELVE.lourdes.full_name })).toHaveAttribute(
@@ -366,9 +382,26 @@ test.describe('My 12', () => {
       twelveTable(page).getByText('Counted under more than one leader', { exact: true }),
     ).toHaveCount(0);
     await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
-    expect(await cellsOf(rows.nth(2))).toEqual(['Total', '1', '1', '0', '1', '1', '4']);
+    expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
 
     await expect(page.getByLabel('Figures for')).toHaveValue(TWELVE.consuelo.id);
+  });
+
+  test('says on every period but Monthly that periods are never added together', async ({
+    page,
+  }) => {
+    await arrange(page);
+    const note = page.getByText(/^Periods are never added together/);
+
+    await page.goto('/reports/cells');
+    await expect(page.getByRole('heading', { name: 'Your 12' })).toBeVisible();
+    await expect(note).toHaveCount(0);
+
+    await page.goto('/reports/cells?period=week');
+    await expect(page.getByRole('heading', { name: 'Your 12' })).toBeVisible();
+    await expect(note).toHaveText(
+      'Periods are never added together: somebody who came in three weeks counts once in the month.',
+    );
   });
 
   test('a name opens the same period it was read in', async ({ page }) => {
@@ -473,38 +506,29 @@ test.describe('Figures for', () => {
 
 test.describe('the coverage line', () => {
   for (const each of PERIODS) {
-    test(`${each.button}: one line, linking to Filed reports on Monthly alone`, async ({
-      page,
-    }) => {
+    test(`${each.button}: one line, linking nowhere (decision 0340)`, async ({ page }) => {
       await arrange(page, { church: each.kind === 'QUARTER' || each.kind === 'YEAR' });
       await page.goto(`/reports/cells?${each.address}`);
 
       // Year 2026 is due through the end of June, the current month; the week, the month and
       // Q2 all end by then, so they say nothing more.
       const due = each.kind === 'YEAR' ? ', due through 30 June' : '';
-      await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveText(
-        `6 of 8 meetings recorded ${each.what}${due}${each.kind === 'MONTH' ? ' · see Filed reports' : ''}`,
-      );
-      if (each.kind === 'MONTH') {
-        await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-          'href',
-          '/reports/filed?month=2026-06-01',
-        );
-      } else {
-        await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveCount(0);
-      }
+      const line = page.locator('main p').filter({ hasText: /meetings recorded/ });
+      await expect(line).toHaveText(`6 of 8 meetings recorded ${each.what}${due}`);
+      // Filed Reports is withdrawn, and the line's link with it.
+      await expect(line.getByRole('link')).toHaveCount(0);
+      await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
     });
   }
 
-  test('a past month links to that month, and a closed year says nothing about due', async ({
+  test('a past month reads that month, and a closed year says nothing about due', async ({
     page,
   }) => {
     await arrange(page);
 
     await page.goto('/reports/cells?month=2026-05-01');
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      '/reports/filed?month=2026-05-01',
+    await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveText(
+      '6 of 8 meetings recorded in the month',
     );
 
     await page.goto('/reports/cells?period=year&start=2025-01-01');
@@ -518,7 +542,8 @@ test.describe('the sentence under My 12', () => {
   test('names the period, and says so far while it is open and by its end once closed', async ({
     page,
   }) => {
-    await arrange(page);
+    // The sentence belongs to the whole-church reader's table (decision 0293).
+    await arrange(page, { church: true });
     const sentence = page.locator('main p').filter({ hasText: /^Everyone who came/ });
 
     await page.goto('/reports/cells?period=week');
@@ -573,7 +598,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockCellTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/cells?period=week');
 
-    await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
     await expect(periodLabel(page, '29 Jun – 5 Jul 2026')).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
@@ -638,12 +663,10 @@ test.describe('Year', () => {
 });
 
 test.describe('what decision 0293 took off this page', () => {
-  test('no Month/Year radio, no Cell choices, no stages frame and no figure cards', async ({
-    page,
-  }) => {
+  test('no Month/Year radio, no Cell choices and no stages frame', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/cells');
-    await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
 
     await expect(page.getByRole('radiogroup', { name: 'Report period' })).toHaveCount(0);
     await expect(
@@ -669,7 +692,7 @@ test.describe('at a phone, a tablet and a desktop', () => {
 
       for (const each of PERIODS) {
         await page.goto(`/reports/cells?${each.address}`);
-        await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
         await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
 

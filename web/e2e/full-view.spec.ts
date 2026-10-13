@@ -781,8 +781,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       '1 leader still to record',
     ]);
 
-    // Filed reports is not one of their tabs (decision 0327).
+    // Filed Reports is withdrawn for every account (decision 0340), so nothing leads there.
     await expect(page.getByRole('link', { name: 'See which Cells are behind' })).toHaveCount(0);
+    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
   });
 
   test('keeps the boxes and says why where the server refuses the tables', async ({ page }) => {

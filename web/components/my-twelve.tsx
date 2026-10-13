@@ -162,18 +162,7 @@ export function TwelveTable({
   const byRoot = twelve.rows.length > 0 && twelve.rows.every((row) => row.network);
   const title =
     heading ?? (subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'Whole Church' : 'My 12');
-  const ownLabel =
-    own === null
-      ? null
-      : own.cells === undefined
-        ? (subjectName ?? 'You')
-        : `${subjectName === null ? 'You' : subjectName} · ${
-          own.cells === 0
-            ? `no Cell of ${subjectName === null ? 'your' : 'their'} own`
-            : own.cells === 1
-              ? `${subjectName === null ? 'your' : 'their'} own Cell Group`
-              : `${subjectName === null ? 'your' : 'their'} own Cell Groups (${own.cells})`
-        }`;
+  const ownLabel = ownLabelOf(own, subjectName);
 
   return (
     <section aria-labelledby="twelve-heading" className={FRAME}>
@@ -271,6 +260,163 @@ export function TwelveTable({
           </tr>
         </tbody>
       </Table>
+
+      {kind === 'MONTH' ? null : (
+        <p className="text-muted mt-3 text-sm">
+          Periods are never added together: somebody who came in three{' '}
+          {kind === 'WEEK' ? 'weeks counts once in the month' : 'months counts once here'}.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** The own row's label: the subject, and for Cell Groups how many Cells of their own. */
+function ownLabelOf(
+  own: { cells?: number } | null,
+  subjectName: string | null,
+): string | null {
+  if (own === null) {
+    return null;
+  }
+  if (own.cells === undefined) {
+    return subjectName ?? 'You';
+  }
+  const whose = subjectName === null ? 'your' : 'their';
+  return `${subjectName === null ? 'You' : subjectName} · ${
+    own.cells === 0
+      ? `no Cell of ${whose} own`
+      : own.cells === 1
+        ? `${whose} own Cell Group`
+        : `${whose} own Cell Groups (${own.cells})`
+  }`;
+}
+
+/**
+ * A Full view leader's My 12 (decision 0340), laid out as the Senior Pastors' for one branch:
+ * the branch's figures as cards, then the leader's 12 with Total first and their own row.
+ *
+ * **Decision 0293's two lines stay, under the rows**: somebody in two branches is in both
+ * rows, so one line takes off each count beyond a person's first and another adds those in no
+ * row, and Total adds up in plain sight, which a branch's cards alone would not show.
+ */
+export function BranchTwelve({
+  twelve,
+  kind,
+  subjectName,
+  openHref,
+}: {
+  twelve: Omit<CellTwelve, 'own' | 'coverage'> & {
+    own: (TwelveFigure & { cells?: number }) | null;
+  };
+  kind: RangeKind;
+  /** Null for the reader's own branch; the leader's name when one was opened. */
+  subjectName: string | null;
+  openHref: (leaderId: string) => string;
+}) {
+  const cell = 'px-3 py-3 text-right tabular-nums';
+  const own = twelve.own;
+  const ownLabel = ownLabelOf(own, subjectName);
+  const heading = subjectName === null ? 'Your 12' : `${subjectName}’s 12`;
+  const figures = (figure: TwelveFigure) => (
+    <>
+      <td className={`${cell} font-bold`}>{figure.unique_people}</td>
+      {STAGES.map(([key]) => (
+        <td key={key} className={cell}>
+          {figure.classification[key]}
+        </td>
+      ))}
+    </>
+  );
+
+  return (
+    <section aria-labelledby="branch-heading">
+      <h2 id="branch-heading" className="field-label">
+        {subjectName === null ? 'Your branch' : `${subjectName}’s branch`}
+      </h2>
+
+      <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
+        <div className="border-line border p-2">
+          <dt className="text-ink text-sm font-bold">Total</dt>
+          <dd className="text-xl font-bold tabular-nums">{twelve.total.unique_people}</dd>
+        </div>
+        {STAGES.map(([key, label]) => (
+          <div key={key} className="border-line border p-2">
+            <dt className="text-ink text-sm font-bold">{label}</dt>
+            <dd className="text-xl font-bold tabular-nums">{twelve.total.classification[key]}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-5">
+        <h3 className="text-base font-bold tracking-tight">{heading}</h3>
+        <Table caption={heading} className="mt-2">
+          <thead>
+            <tr>
+              <HeaderCell style={{ width: '34%' }}>Leader</HeaderCell>
+              <HeaderCell className="text-right" style={{ width: '11%' }}>
+                Total
+              </HeaderCell>
+              {STAGES.map(([key, label]) => (
+                <HeaderCell key={key} className="text-right" style={{ width: '11%' }}>
+                  {label}
+                </HeaderCell>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {twelve.rows.map((row, index) => (
+              <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
+                <td className="px-3 py-3">
+                  {row.leader === null ? (
+                    <span className="text-muted">A leader you don’t oversee</span>
+                  ) : (
+                    <Link
+                      href={openHref(row.leader.id)}
+                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      {row.leader.full_name}
+                    </Link>
+                  )}
+                </td>
+                {figures(row)}
+              </tr>
+            ))}
+
+            {own === null ? null : (
+              <tr className={rowClasses}>
+                <td className="px-3 py-3">{ownLabel}</td>
+                {own.cells === 0 ? (
+                  <td className="text-muted px-3 py-3" colSpan={STAGES.length + 1} />
+                ) : (
+                  figures(own)
+                )}
+              </tr>
+            )}
+
+            {twelve.overlap === 0 ? null : (
+              <tr className={rowClasses}>
+                <td className="text-muted px-3 py-3 italic">Counted under more than one leader</td>
+                <td className={`${cell} text-muted italic`}>−{twelve.overlap}</td>
+                <td colSpan={STAGES.length} />
+              </tr>
+            )}
+
+            {twelve.elsewhere === 0 ? null : (
+              <tr className={rowClasses}>
+                <td className="text-muted px-3 py-3 italic">Elsewhere in this branch</td>
+                <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
+                <td colSpan={STAGES.length} />
+              </tr>
+            )}
+
+            <tr className="border-edge border-t-2 font-bold">
+              <td className="px-3 py-3">Total</td>
+              {figures(twelve.total)}
+            </tr>
+          </tbody>
+        </Table>
+      </div>
 
       {kind === 'MONTH' ? null : (
         <p className="text-muted mt-3 text-sm">

@@ -190,7 +190,8 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
 
     await expect(page.getByText(/meetings recorded/)).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveCount(0);
+    // Filed Reports is withdrawn for every account (decision 0340).
+    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /How these are counted/i })).toHaveCount(0);
   });
 

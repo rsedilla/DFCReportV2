@@ -854,28 +854,6 @@ export async function mockCellReport(page: Page): Promise<void> {
   );
 }
 
-/** One Cell, which is the only scope section 12 permits buckets at. */
-export async function mockCellReportForOneCell(page: Page): Promise<void> {
-  await page.route('**/api/v1/reports/cells/monthly*', (route) =>
-    route.fulfill(
-      json({
-        scope: { kind: 'CELL', cell_id: '3f1b7c6e-0000-4000-8000-000000000101' },
-        period: '2026-06-01',
-        open: false,
-        n: 3,
-        unique_people: 4,
-        classification: { vip: 1, second_timer: 1, third_timer: 0, fourth_timer: 0, regular: 2 },
-        buckets: [
-          { times: 1, people: 1, completed: false },
-          { times: 2, people: 2, completed: false },
-          { times: 3, people: 1, completed: true },
-        ],
-        coverage: { recorded: 3, scheduled: 4 },
-      }),
-    ),
-  );
-}
-
 export async function mockDccReport(page: Page): Promise<void> {
   await page.route('**/api/v1/reports/dcc/monthly*', (route) =>
     route.fulfill(
@@ -1150,9 +1128,10 @@ export async function mockNetworkTree(page: Page): Promise<void> {
  * The signed-in leader as the Network screen needs them: reading DCC and Cell figures and
  * holding the reassignment capability, so the figures and the Move controls render.
  *
- * **`reports` adds `reports.view_subtree` at the scope named**, which is what turns each Still
- * to record figure above zero into a link to Filed reports (decision 0298). Left out, the
- * reader holds no reporting grant and the figures stay plain, as they were before that ruling.
+ * **`reports` adds `reports.view_subtree` at the scope named.** It once turned each Still to
+ * record figure above zero into a link to Filed reports (decision 0298); since Filed Reports
+ * was withdrawn (decision 0340) the figures are plain whatever the reader holds, and the
+ * option is what lets a case show that for each scope.
  */
 export async function mockNetworkReader(
   page: Page,
@@ -1196,42 +1175,6 @@ export async function mockNetworkReader(
       }),
     ),
   );
-}
-
-/**
- * A report's coverage by leader, for either report (decision 0254). Two named rows — the
- * reader first — and the unnamed line, adding up to the total. Invented names.
- */
-export async function mockCoverageByLeader(page: Page): Promise<void> {
-  const body = {
-    period: '2026-06-01',
-    open: true,
-    data: [
-      {
-        leader: {
-          id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
-          member_id: 'M-000042',
-          full_name: 'Marilou Reyes Santos',
-        },
-        filed: 4,
-        owed: 4,
-      },
-      {
-        leader: {
-          id: '3f1b7c6e-0000-4000-8000-000000000701',
-          member_id: 'M-000801',
-          full_name: 'Consuelo Bautista',
-        },
-        filed: 5,
-        owed: 8,
-      },
-    ],
-    others: { filed: 3, owed: 6 },
-    total: { filed: 12, owed: 18 },
-    next_cursor: null,
-  };
-
-  await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => route.fulfill(json(body)));
 }
 
 /** A closed Cell a restart may be asked for (decisions 0264 to 0266). */

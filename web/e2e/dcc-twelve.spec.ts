@@ -10,7 +10,9 @@ import { mockDccReport, mockDccTwelve, TWELVE } from './mock-attendance';
  * `api/test/api/reporting-dcc-twelve.e2e.spec.ts` pins the figures and who may read them.
  * This pins what the screen does with them: which period it asks for, the coverage line and
  * the Sundays under it, the table with the reader alone as their own row, "How often people
- * came" on Monthly only, and Year's month-by-month table.
+ * came" on Monthly only, and Year's month-by-month table. The shared account is a Full view
+ * leader, who reads their branch's cards and their 12 with Total second (decision 0340); a
+ * whole-church reader keeps the table decision 0294 gave them.
  *
  * `my-twelve.spec.ts` pins the navigator and the table's shared behaviour on Cell Groups; the
  * two pages share those components, so this file does not repeat them.
@@ -161,31 +163,24 @@ test.describe('the four periods (decision 0294)', () => {
 
 test.describe('the coverage line and the Sundays under it', () => {
   for (const each of PERIODS) {
-    test(`${each.button}: one line, linking to Filed reports on Monthly alone`, async ({
+    test(`${each.button}: one line, linking nowhere, above the branch (decision 0340)`, async ({
       page,
     }) => {
       await arrange(page);
       await page.goto(`/reports/dcc?${each.address}`);
 
-      await expect(coverageLine(page)).toHaveText(
-        `12 of 18 records filed ${each.what}${each.kind === 'MONTH' ? ' · see Filed reports' : ''}`,
-      );
-      if (each.kind === 'MONTH') {
-        await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-          'href',
-          '/reports/filed?month=2026-06-01&kind=dcc',
-        );
-      } else {
-        await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveCount(0);
-      }
+      await expect(coverageLine(page)).toHaveText(`12 of 18 records filed ${each.what}`);
+      // Filed Reports is withdrawn, and the line's link with it.
+      await expect(coverageLine(page).getByRole('link')).toHaveCount(0);
+      await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
 
-      // The coverage line leads: it sits above the table.
-      const heading = page.getByRole('heading', { name: /^My 12 · / });
-      const [line, table] = await Promise.all([
+      // The coverage line leads: it sits above the branch's figures (section 12).
+      const heading = page.getByRole('heading', { name: 'Your branch' });
+      const [line, branch] = await Promise.all([
         coverageLine(page).boundingBox(),
         heading.boundingBox(),
       ]);
-      expect(line!.y, 'the coverage line sits above My 12').toBeLessThan(table!.y);
+      expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(branch!.y);
     });
   }
 
@@ -203,46 +198,50 @@ test.describe('the coverage line and the Sundays under it', () => {
     await expect(sundaysLine(page)).toHaveText('0 Sundays counted · no service on Sunday 14 June');
   });
 
-  test('a leader opened carries into Filed reports, By leader', async ({ page }) => {
+  test('a leader opened has their own coverage line, linking nowhere', async ({ page }) => {
     await arrange(page);
     await page.goto(`/reports/dcc?month=2026-06-01&leader=${TWELVE.consuelo.id}`);
 
-    await expect(coverageLine(page)).toHaveText(
-      '2 of 3 records filed in the month · see Filed reports',
-    );
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      `/reports/filed?month=2026-06-01&kind=dcc&leader=${TWELVE.consuelo.id}&by=leader`,
-    );
+    await expect(coverageLine(page)).toHaveText('2 of 3 records filed in the month');
+    await expect(coverageLine(page).getByRole('link')).toHaveCount(0);
   });
 });
 
 test.describe('My 12 on DCC', () => {
-  test('lists the reader’s 12, then You, alone, then Elsewhere and the Total', async ({ page }) => {
+  test('a Full view leader reads their branch: the cards, then their 12 with Total second, You alone, Elsewhere and the Total (decision 0340)', async ({
+    page,
+  }) => {
     await arrange(page);
     await page.goto('/reports/dcc');
 
     await expect(
       page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: 'My 12 · their journey' }),
-    ).toBeVisible();
-    await expect(
-      page.locator('main p').filter({ hasText: /^Everyone who came/ }),
-    ).toHaveText(
-      'Everyone who came to DCC in the month, counted once, at their stage so far. Open a name to see their 12.',
-    );
+    await expect(page.getByRole('heading', { name: 'Your branch', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your 12', level: 3 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
 
-    const table = twelveTable(page);
-    await expect(table.getByRole('columnheader')).toHaveText([
-      'Leader',
+    // The branch's figures as cards, equal to the Total row below.
+    const cards = page.getByRole('region', { name: 'Your branch' }).locator('dl');
+    await expect(cards.getByRole('term')).toHaveText([
+      'Total',
       'VIP',
       '2nd Timer',
       '3rd Timer',
       '4th Timer',
       'Regular',
-      'People',
+    ]);
+    await expect(cards.getByRole('definition')).toHaveText(['10', '3', '2', '1', '1', '3']);
+
+    const table = twelveTable(page);
+    await expect(table.getByRole('columnheader')).toHaveText([
+      'Leader',
+      'Total',
+      'VIP',
+      '2nd Timer',
+      '3rd Timer',
+      '4th Timer',
+      'Regular',
     ]);
     const rows = table.locator('tbody tr');
     await expect(rows).toHaveCount(6);
@@ -255,22 +254,24 @@ test.describe('My 12 on DCC', () => {
       );
     }
     // The reader alone, labelled "You" with no Cell count: nobody records their own DCC.
-    expect(await cellsOf(rows.nth(3))).toEqual(['You', '0', '1', '0', '0', '0', '1']);
-    expect(await cellsOf(rows.nth(4))).toEqual(['Elsewhere in this branch', '+2']);
-    expect(await cellsOf(rows.nth(5))).toEqual(['Total', '3', '2', '1', '1', '3', '10']);
+    expect(await cellsOf(rows.nth(3))).toEqual(['You', '1', '0', '1', '0', '0', '0']);
+    expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
+    const totalRow = await cellsOf(rows.nth(5));
+    expect(totalRow).toEqual(['Total', '10', '3', '2', '1', '1', '3']);
+    expect(await cards.getByRole('definition').allTextContents()).toEqual(totalRow.slice(1));
     await expect(table.getByText('Counted under more than one leader', { exact: true })).toHaveCount(0);
     await expect(table.getByText(/Cell [Gg]roup|no Cell of/)).toHaveCount(0);
 
-    // The People column adds up in plain sight (section 20): 3 + 4 + 0 + 1 + 2 = 10.
-    const people = await Promise.all(
-      [0, 1, 2, 3].map(async (index) => Number((await cellsOf(rows.nth(index))).at(-1))),
+    // The Total column adds up in plain sight (section 20): 3 + 4 + 0 + 1 + 2 = 10.
+    const totals = await Promise.all(
+      [0, 1, 2, 3].map(async (index) => Number((await cellsOf(rows.nth(index)))[1])),
     );
-    expect(people.reduce((sum, count) => sum + count, 0) + 2).toBe(10);
+    expect(totals.reduce((sum, count) => sum + count, 0) + 2).toBe(Number(totalRow[1]));
 
     await expect(table).not.toContainText('%');
   });
 
-  test('opening a name shows that leader’s 12, with their own row named and its zeros shown', async ({
+  test('opening a name shows that leader’s branch and 12, with their own row named and its zeros shown', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -281,9 +282,10 @@ test.describe('My 12 on DCC', () => {
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(
-      page.getByRole('heading', {
-        name: 'Consuelo Bautista’s 12 · their journey',
-      }),
+      page.getByRole('heading', { name: 'Consuelo Bautista’s branch', level: 2 }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Consuelo Bautista’s 12', level: 3 }),
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(3);
@@ -293,7 +295,7 @@ test.describe('My 12 on DCC', () => {
     );
     // She did not come, and the row says 0 rather than leaving the numbers out.
     expect(await cellsOf(rows.nth(1))).toEqual(['Consuelo Bautista', '0', '0', '0', '0', '0', '0']);
-    expect(await cellsOf(rows.nth(2))).toEqual(['Total', '1', '1', '0', '1', '1', '4']);
+    expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
     await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveAttribute(
       'href',
       '/reports/dcc?month=2026-06-01',
@@ -351,7 +353,7 @@ test.describe('My 12 on DCC', () => {
     await expect(page).not.toHaveURL(/[?&]network=/);
   });
 
-  test('a Network chosen shows its own total alone, by membership, and carries into Filed reports', async ({
+  test('a Network chosen shows its own total alone, by membership, with its own coverage line', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -380,13 +382,8 @@ test.describe('My 12 on DCC', () => {
       'Everyone who came to DCC in the month, counted once, at their stage so far.',
     );
 
-    await expect(coverageLine(page)).toHaveText(
-      '10 of 12 records filed in the month · see Filed reports',
-    );
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      '/reports/filed?month=2026-06-01&kind=dcc&network=MENS',
-    );
+    await expect(coverageLine(page)).toHaveText('10 of 12 records filed in the month');
+    await expect(coverageLine(page).getByRole('link')).toHaveCount(0);
     // How often people came follows the Network's figure too.
     await expect(
       page.getByRole('region', { name: 'How often people came' }).getByRole('definition').last(),
@@ -402,7 +399,7 @@ test.describe('My 12 on DCC', () => {
     const asked = await arrange(page);
     await page.goto('/reports/dcc?network=MENS');
 
-    await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
     await expectAsked(asked, { scope: 'LEADER', leader_id: READER });
     expect(asked.some((query) => query.get('scope') === 'NETWORK')).toBe(false);
     await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
@@ -441,7 +438,7 @@ test.describe('How often people came, and Year', () => {
 
     for (const each of PERIODS.filter((period) => period.kind !== 'MONTH')) {
       await page.goto(`/reports/dcc?${each.address}`);
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
     }
   });
@@ -496,7 +493,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockDccTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/dcc?period=week');
 
-    await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
     expect(new Set(mine.map((query) => query.get('period')))).toEqual(

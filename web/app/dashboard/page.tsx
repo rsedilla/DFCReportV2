@@ -20,7 +20,7 @@ import {
   cellShortName,
   behindOf,
   closedOnLabel,
-  listCells,
+  listEveryCell,
   listMeetingsAwaiting,
   type CellCategory,
   peopleWithoutACell,
@@ -351,31 +351,32 @@ function Dashboard() {
     enabled: whoseKnown,
   });
 
+  // **The whole branch, every page** (decision 0340), so Pending CG Reports names every Cell
+  // behind: Filed Reports, which used to hold the rest, is withdrawn.
   const scoped = useQuery({
-    queryKey: ['cells', month, false],
-    queryFn: ({ signal }) => listCells({ month }, signal),
+    queryKey: ['cells-every', month],
+    queryFn: ({ signal }) => listEveryCell({ month }, signal),
     enabled: fullRecord,
   });
 
   // **Section 15's attention list includes a closed Cell while its month is open**, and
-  // the running view cannot carry one. The closed view (decision 0266) can. What a page
-  // bound owes this list is recorded as open in `CLAUDE.md`.
+  // the running view cannot carry one. The closed view (decision 0266) can.
   const scopedClosed = useQuery({
-    queryKey: ['cells', month, false, 'CLOSED'],
-    queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
+    queryKey: ['cells-every', month, 'CLOSED'],
+    queryFn: ({ signal }) => listEveryCell({ month, state: 'CLOSED' }, signal),
     enabled: fullRecord,
   });
 
   // **Last month's Cells behind while that month is open** (section 15, decision 0315),
   // read only in the close week. A month that has shut answers `open: false`.
   const scopedPrevious = useQuery({
-    queryKey: ['cells', previousMonth, false],
-    queryFn: ({ signal }) => listCells({ month: previousMonth }, signal),
+    queryKey: ['cells-every', previousMonth],
+    queryFn: ({ signal }) => listEveryCell({ month: previousMonth }, signal),
     enabled: fullRecord && inCloseWeek,
   });
   const scopedClosedPrevious = useQuery({
-    queryKey: ['cells', previousMonth, false, 'CLOSED'],
-    queryFn: ({ signal }) => listCells({ month: previousMonth, state: 'CLOSED' }, signal),
+    queryKey: ['cells-every', previousMonth, 'CLOSED'],
+    queryFn: ({ signal }) => listEveryCell({ month: previousMonth, state: 'CLOSED' }, signal),
     enabled: fullRecord && inCloseWeek,
   });
 
@@ -616,13 +617,6 @@ function Dashboard() {
                         ? describeFailure(me.error)
                         : null;
 
-  // The tab counts. A list read fifty at a time says "50+" rather than a figure it has
-  // not read; section 22 returns no total to ask for instead.
-  const behindMore = scoped.data?.next_cursor != null || scopedClosed.data?.next_cursor != null;
-  const behindMorePrevious =
-    inCloseWeek &&
-    ((scopedPrevious.data?.open && scopedPrevious.data.next_cursor != null) ||
-      (scopedClosedPrevious.data?.open && scopedClosedPrevious.data.next_cursor != null));
   // The DCC count follows Whose, as the Cell count does: the branch's owed records, or the
   // reader's own Sundays with somebody unmarked.
   const dccCount = branchView
@@ -643,7 +637,7 @@ function Dashboard() {
       count:
         behindPending || behindFailed
           ? null
-          : `${needingAttention.length}${behindMore || behindMorePrevious ? '+' : ''}`,
+          : String(needingAttention.length),
     },
     {
       key: 'dcc',
@@ -890,11 +884,7 @@ function Dashboard() {
                 <ListTable
                   caption="Pending CG Reports"
                   columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
-                  empty={
-                    behindMore || behindMorePrevious
-                      ? `None of the first 50 Cells you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
-                      : `No Cell you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`
-                  }
+                  empty={`No Cell you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`}
                   rows={needingAttention.map(({ cell, month: cellMonth }) => ({
                     key: `${cell.id}|${cellMonth}`,
                     cells: [
@@ -916,27 +906,6 @@ function Dashboard() {
                     ],
                   }))}
                 />
-                {/* Only the first page of each view is read; say so where there is more. */}
-                {behindMore ? (
-                  <p className="mt-4">
-                    <Link
-                      href={`/reports/filed?${new URLSearchParams({ month, behind: '1' }).toString()}`}
-                      className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      See every Cell behind{lastMonthRead ? ` for ${monthLabel(month).split(' ')[0]}` : ''} in Reports
-                    </Link>
-                  </p>
-                ) : null}
-                {behindMorePrevious ? (
-                  <p className="mt-2">
-                    <Link
-                      href={`/reports/filed?${new URLSearchParams({ month: previousMonth, behind: '1' }).toString()}`}
-                      className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      See every Cell behind for {previousName} in Reports
-                    </Link>
-                  </p>
-                ) : null}
               </>
             )}
           </section>

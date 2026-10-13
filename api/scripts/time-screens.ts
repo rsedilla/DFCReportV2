@@ -109,8 +109,9 @@ const SCREENS: Screen[] = [
         '/api/v1/people/awaiting-reassignment?limit=50',
         '/api/v1/cells/people-without-a-cell?limit=50',
         `/api/v1/cells/meetings/awaiting?month=${M}&whose=mine`,
-        `/api/v1/cells?month=${M}`,
-        `/api/v1/cells?month=${M}&state=CLOSED`,
+        // Pending CG Reports reads the whole branch (decision 0340).
+        paged(`/api/v1/cells?month=${M}&limit=200`),
+        paged(`/api/v1/cells?month=${M}&state=CLOSED&limit=200`),
         `/api/v1/dcc/events?month=${M}`,
         paged('/api/v1/cells/leadership-requests/sent'),
         '/api/v1/dcc/pending-leaders',
@@ -204,23 +205,6 @@ const SCREENS: Screen[] = [
         `/api/v1/reports/dcc/twelve?kind=YEAR&start=${YEAR_MONTHS[0]}&period=${M}&${scope(p)}`,
       ],
       (p) => YEAR_MONTHS.map((month) => `/api/v1/reports/dcc/monthly?period=${month}&${scope(p)}`),
-    ],
-  },
-  {
-    name: 'Reports › Filed, by Cell',
-    stages: [
-      () => ['/api/v1/auth/me', paged(`/api/v1/cells?month=${M}`)],
-      (p) => [`/api/v1/reports/cells/monthly?period=${M}&${scope(p)}`],
-    ],
-  },
-  {
-    name: 'Reports › Filed, by leader',
-    stages: [
-      () => ['/api/v1/auth/me'],
-      (p) => [
-        `/api/v1/reports/cells/monthly?period=${M}&${scope(p)}`,
-        `/api/v1/reports/cells/monthly/by-leader?period=${M}&${scope(p)}&limit=10`,
-      ],
     ],
   },
   {
@@ -482,15 +466,6 @@ const BUTTONS: Screen[] = [
     stages: [
       (p) => [
         `/api/v1/reports/cells/twelve?kind=MONTH&start=${PREVIOUS}&period=${PREVIOUS}&${scope(p)}`,
-      ],
-    ],
-  },
-  {
-    name: 'Month › Filed by Cell, last month',
-    stages: [
-      (p) => [
-        `/api/v1/reports/cells/monthly?period=${PREVIOUS}&${scope(p)}`,
-        paged(`/api/v1/cells?month=${PREVIOUS}&limit=200`),
       ],
     ],
   },

@@ -202,8 +202,6 @@ function NetworkScreen() {
   const month = dcc.data?.reporting_month ?? cells.data?.reporting_month ?? null;
   const open = dcc.data?.open ?? cells.data?.open ?? true;
   const mayMove = holds(me.data, 'people.manage_pastoral_assignment');
-  // Filed reports is read under its own capability, so a reader without it keeps plain figures.
-  const readsReports = holds(me.data, 'reports.view_subtree');
   const isMe = person !== undefined && person.id === me.data?.person_id;
 
   const failure = me.isError
@@ -281,17 +279,9 @@ function NetworkScreen() {
                 label="Still to record"
                 value={
                   <>
-                    <FiledLink
-                      count={dcc.data?.branch_behind}
-                      href={readsReports ? filedHref('dcc', person.id, month) : null}
-                      unit="DCC"
-                    />
+                    <StillToRecord count={dcc.data?.branch_behind} unit="DCC" />
                     <span className="text-muted mx-2 text-sm font-normal">·</span>
-                    <FiledLink
-                      count={cells.data?.branch_meetings_behind}
-                      href={readsReports ? filedHref('cells', person.id, month) : null}
-                      unit="Cell"
-                    />
+                    <StillToRecord count={cells.data?.branch_meetings_behind} unit="Cell" />
                   </>
                 }
               />
@@ -581,40 +571,15 @@ function figure(value: number | null): string {
 }
 
 /**
- * Filed reports By leader for this person's branch and month (decision 0298): the rows behind a
- * Still to record figure. Always scoped to the person, the reader included, so a whole-church
- * reader looking at their own branch does not land on the whole church.
+ * One Still to record figure, a plain number: Filed Reports, which it used to open, is
+ * withdrawn (decision 0340).
  */
-function filedHref(kind: 'dcc' | 'cells', personId: string, month: string | null): string {
-  return `/reports/filed?${new URLSearchParams({
-    ...(kind === 'dcc' ? { kind } : {}),
-    leader: personId,
-    ...(month === null ? {} : { month }),
-  }).toString()}`;
-}
-
-/** One Still to record figure: a link where there is something to open, plain text otherwise. */
-function FiledLink({
-  count,
-  href,
-  unit,
-}: {
-  count: number | undefined;
-  href: string | null;
-  unit: string;
-}) {
-  const text = (
-    <>
+function StillToRecord({ count, unit }: { count: number | undefined; unit: string }) {
+  return (
+    <span>
       {count === undefined ? '—' : count}
       <span className="text-muted ml-1 text-sm font-normal">{unit}</span>
-    </>
-  );
-  return count === undefined || count === 0 || href === null ? (
-    <span>{text}</span>
-  ) : (
-    <Link href={href} className={LINK} aria-label={`${count} ${unit} still to record: see Filed reports`}>
-      {text}
-    </Link>
+    </span>
   );
 }
 

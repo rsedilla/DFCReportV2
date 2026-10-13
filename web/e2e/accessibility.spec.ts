@@ -30,7 +30,6 @@ import {
   mockCellMeetings,
   mockMeetingsAwaiting,
   mockCells,
-  mockCellsAtScale,
   mockCellsEmpty,
   mockDccEvents,
   mockCellMembers,
@@ -39,7 +38,6 @@ import {
   mockPastoralPathAtRoot,
   mockNetworkTree,
   mockNetworkReader,
-  mockCoverageByLeader,
   mockCellMembersEmpty,
   mockCellReport,
   mockCellTwelve,
@@ -917,8 +915,8 @@ const SCANS = [
   {
     // The branch as a leader opens it (decision 0252): the focus block, four cards, rows
     // by name with both figures, Move and Open on each, and `Show 20 more` because the
-    // first page carries a cursor. The reader reads reports, so the two Still to record
-    // figures are links to Filed reports (decision 0298); one generation down keeps them plain.
+    // first page carries a cursor. The reader reads reports, and the two Still to record
+    // figures are plain numbers all the same: Filed Reports is withdrawn (decision 0340).
     name: 'network',
     route: '/network',
     async before(page: import('@playwright/test').Page) {
@@ -929,12 +927,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
-      await expect(
-        page.getByRole('link', { name: '4 DCC still to record: see Filed reports' }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole('link', { name: '1 Cell still to record: see Filed reports' }),
-      ).toBeVisible();
+      await expect(page.getByRole('term').filter({ hasText: /^Still to record$/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /still to record/ })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Move Efren Dimaculangan' }).first()).toBeVisible();
       await expect(page.getByRole('button', { name: 'Show 20 more' })).toBeVisible();
     },
@@ -1041,8 +1035,9 @@ const SCANS = [
     },
   },
   {
-    // My 12 over a month (decision 0293): the coverage line, then the reader's direct 12,
-    // their own Cell groups, both conditional lines and the Total.
+    // A Full view leader's CG Attendance over a month (decision 0340): the coverage line, the
+    // branch's cards, then the reader's direct 12, their own Cell groups, both conditional
+    // lines and the Total.
     name: 'cell attendance report',
     route: '/reports/cells',
     async before(page: import('@playwright/test').Page) {
@@ -1050,15 +1045,14 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      // Coverage leads as one line, then My 12 (decision 0293), and the six tabs.
+      // Coverage leads as one line, then the branch (decision 0340), and the four tabs.
       await expect(page.getByText(/^6 of 8 meetings recorded/)).toBeVisible();
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByText('Counted under more than one leader', { exact: true })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-      ).toHaveText('Cell Groups');
-      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
+      ).toHaveText('CG Attendance');
     },
   },
   {
@@ -1073,7 +1067,7 @@ const SCANS = [
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1089,7 +1083,7 @@ const SCANS = [
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1121,99 +1115,6 @@ const SCANS = [
       await expect(
         page.getByRole('dialog', { name: 'How these are counted' }).getByText('An open month'),
       ).toBeVisible();
-    },
-  },
-  {
-    // Filed reports (decision 0292), Cell Groups: the coverage figure, then By Cell — a row
-    // per Cell in the table and the cards, and the Cells-behind filter.
-    name: 'filed reports',
-    route: '/reports/filed',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellReport(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Show only pending CG reports' })).toBeVisible();
-      await expect(page.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
-    },
-  },
-  {
-    // Opened from the Record screen's Cells behind link: the filter already pressed.
-    name: 'filed reports, cells behind',
-    route: '/reports/filed?month=2026-06-01&behind=1',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCellsAtScale(page);
-      await mockCellReport(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Show only pending CG reports' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-      // The last of the eleven, which share one name (decision 0306).
-      await expect(page.locator('a[href*="0120/meetings"]').filter({ visible: true })).toBeVisible();
-    },
-  },
-  {
-    // Filed reports, DCC: the coverage figure, then By Sunday, a removed Sunday in its place.
-    name: 'filed reports, dcc',
-    route: '/reports/filed?kind=dcc',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('12 of 18 records filed')).toBeVisible();
-      await expect(page.getByText('5 of 8 records filed').filter({ visible: true })).toBeVisible();
-    },
-  },
-  {
-    // The By leader table (decision 0254): the reader first, one other leader, the unnamed
-    // line and the total. It moved from the DCC report to Filed reports (decision 0292).
-    name: 'filed reports, by leader',
-    route: '/reports/filed?kind=dcc&by=leader',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
-      await mockCoverageByLeader(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
-      await expect(page.getByText('Leaders you don’t oversee')).toBeVisible();
-    },
-  },
-  {
-    // One leader opened from that table: no By Cell, the leader's table and a way back.
-    name: 'filed reports, one leader',
-    route: '/reports/filed?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701&by=leader',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCellReport(page);
-      await mockCoverageByLeader(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-    },
-  },
-  {
-    // One Network carried from the DCC report: the line naming it, and By leader alone.
-    name: 'filed reports, one network',
-    route: '/reports/filed?month=2026-06-01&kind=dcc&network=WOMENS',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockWholeChurchReader(page);
-      await mockDccReport(page);
-      await mockCoverageByLeader(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('Figures for the Women’s Network.')).toBeVisible();
-      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
     },
   },
   {
@@ -1405,7 +1306,7 @@ const SCANS = [
       await mockDccTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1422,7 +1323,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       // My 12 over the year, and its month-by-month table beneath (decisions 0257, 0293).
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1440,9 +1341,8 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       // That leader's 12, with no Cell of their own: the row carries no numbers.
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /’s 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /’s branch$/ })).toBeVisible();
       await expect(page.getByText(/no Cell of (your|their) own/)).toBeVisible();
-      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
     },
   },
   {
@@ -1459,9 +1359,8 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
       await expect(page.getByText('12 of 18 records filed in the month')).toBeVisible();
       await expect(page.getByText(/no service on Sunday 14 June/)).toBeVisible();
-      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
     },
   },
   {
@@ -1825,112 +1724,75 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // The six report tabs (decision 0292), How these are counted, the four period buttons,
-    // the navigator's two, the Figures for select, the link to Filed reports and the three
-    // names of My 12 (decision 0293): **eighteen**.
+    // A Full view leader's four report tabs (decision 0340), How these are counted, the four
+    // period buttons, the navigator's two, the Figures for select and the three names of
+    // their 12 (decision 0293): **fifteen**. Settled on the last name, which renders from
+    // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'link' as const,
-    settle: 'see Filed reports',
-    minimum: 18,
+    settle: 'Efren Dimaculangan',
+    minimum: 15,
   },
   {
-    // "dcc figures report" less the Filed reports link, which is offered on Monthly alone:
-    // **seventeen** (decision 0294). The month-by-month table holds no control.
+    // The same controls as "dcc figures report": **fifteen** (decision 0294). The
+    // month-by-month table holds no control.
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 17,
+    minimum: 15,
   },
   {
-    // "cell attendance report" less the Filed reports link, which is offered on Monthly alone:
-    // **seventeen**. The month-by-month table holds no control.
+    // The same controls as "cell attendance report": **fifteen**. The month-by-month table
+    // holds no control.
     name: 'cell attendance report, year',
     route: '/reports/cells?period=year',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 17,
+    minimum: 15,
   },
   {
-    // The six report tabs, How these are counted, the four period buttons, the navigator's
-    // two, the Figures for select, the Back link, the link to Filed reports and the one name
-    // in that leader's 12: **seventeen**.
+    // The four report tabs, How these are counted, the four period buttons, the navigator's
+    // two, the Figures for select, the Back link and the one name in that leader's 12:
+    // **fourteen**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 17,
-  },
-  {
-    // The six report tabs, How these are counted, the four period buttons, the navigator's
-    // two, the Figures for select, the link to Filed reports and the three names of My 12
-    // (decision 0294): **eighteen**, as Cell Groups.
-    name: 'dcc figures report',
-    route: '/reports/dcc',
-    settleRole: 'link' as const,
-    settle: 'see Filed reports',
-    minimum: 18,
-  },
-  {
-    // The six report tabs, the two Which records buttons, two month controls, the By Cell and
-    // By leader radios, Show only Cells behind, and a link per Cell in Coverage by Cell — two
-    // Cells, counted in the table and the cards alike: **seventeen**. Settled on the filter,
-    // which renders only once the Cells have arrived.
-    name: 'filed reports',
-    route: '/reports/filed',
-    settle: 'Show only pending CG reports',
-    minimum: 17,
-  },
-  {
-    // The six report tabs, the two Which records buttons, two month controls, the By Sunday
-    // and By leader radios, then four Sunday links and the one "who still has to record"
-    // link, in the table and the cards alike: **twenty-two**.
-    name: 'filed reports, dcc',
-    route: '/reports/filed?kind=dcc',
-    settleRole: 'heading' as const,
-    settle: 'Coverage by Sunday',
-    minimum: 22,
-  },
-  {
-    // The six report tabs, the two Which records buttons, two month controls, the two
-    // radios, and a name link per leader across the fixture's two: **fourteen**.
-    name: 'filed reports, by leader',
-    route: '/reports/filed?kind=dcc&by=leader',
-    settleRole: 'link' as const,
-    settle: 'Consuelo Bautista',
     minimum: 14,
   },
   {
-    // The six report tabs, the two Which records buttons, two month controls, the Back link
-    // and a name link per leader: **thirteen**. No radios: By Cell is not offered for
-    // somebody else's branch.
-    name: 'filed reports, one leader',
-    route: '/reports/filed?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701&by=leader',
+    // The four report tabs, How these are counted, the four period buttons, the navigator's
+    // two, the Figures for select and the three names of the reader's 12 (decision 0294):
+    // **fifteen**, as CG Attendance.
+    name: 'dcc figures report',
+    route: '/reports/dcc',
     settleRole: 'link' as const,
-    settle: 'Back to your report',
-    minimum: 13,
+    settle: 'Efren Dimaculangan',
+    minimum: 15,
   },
   {
-    // The six report tabs, the Next Encounter card's link to the seasons and the link to
-    // Growth (decision 0296), then the readiness table's three name buttons and the two
-    // "their 12" links, one per row whose leader leads anybody (decision 0297): **thirteen**.
+    // A Full view leader's four report tabs (decision 0340), the Next Encounter card's link
+    // to the seasons and the link to Growth (decision 0296), then the readiness table's three
+    // name buttons and the two "their 12" links, one per row whose leader leads anybody
+    // (decision 0297): **eleven**.
     // The cards are figures, not controls.
     name: 'suynl report',
     route: '/reports/suynl',
     settleRole: 'link' as const,
     settle: 'Tick lessons in Growth',
-    minimum: 13,
+    minimum: 11,
   },
   {
-    // The six report tabs, the card's link, Back to your report, the one row's name button
-    // and its "their 12" link, and the link to Growth: **eleven**. Settled on the table's own
+    // The four report tabs, the card's link, Back to your report, the one row's name button
+    // and its "their 12" link, and the link to Growth: **nine**. Settled on the table's own
     // way back, which renders from the address, and then on every section loading.
     name: 'suynl report, one leader',
     route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 11,
+    minimum: 9,
   },
   {
     // The three Growth tabs and Back to Training, the sweep's account being no
@@ -1942,18 +1804,21 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
+    // A Full view leader's four report tabs, which carry no Training (decision 0340), and
+    // the link to Growth: **five**. The page is still reachable by its address.
     name: 'training report',
     route: '/reports/training',
     settleRole: 'link' as const,
     settle: 'Record graduations in Growth',
-    minimum: 7,
+    minimum: 5,
   },
   {
+    // A Full view leader's four report tabs (decision 0340) and the link to Growth: **five**.
     name: 'conquest report',
     route: '/reports/conquest',
     settleRole: 'link' as const,
     settle: 'See each person in Growth',
-    minimum: 7,
+    minimum: 5,
   },
   {
     // Back link and two radios per person across two people. No Save: it appears once
@@ -2119,20 +1984,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       '"dashboard, needs a new leader": a min-h-6 name link per person and Show more.',
   },
   {
-    name: 'filed reports, one network',
-    why:
-      'The measured "filed reports, one leader" controls less the Back link: the tabs, the ' +
-      'Which records buttons, the month controls and the leader links, plus one line of text. ' +
-      'Measuring it would need the whole-church /auth/me mock the sweep does not install.',
-  },
-  {
-    name: 'filed reports, cells behind',
-    why:
-      'The measured "filed reports" with Show only Cells behind already pressed: the same tabs, ' +
-      'buttons, month controls and radios, and fewer of the same Cell links. Its own fixture is ' +
-      'eleven Cells, which would need a second Cells mock on the route the sweep already mocks.',
-  },
-  {
     name: 'person profile, moving to another cell',
     why:
       'Opens the Move dialog over the measured "person profile". Its controls are the Cell ' +
@@ -2266,13 +2117,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     name: 'cell attendance report, week',
     why:
       'The same controls as the measured "cell attendance report" -- the four period buttons, ' +
-      'the navigator, Figures for and the My 12 links -- with Weekly pressed rather than Monthly and no Filed reports link.',
+      'the navigator, Figures for and the My 12 links -- with Weekly pressed rather than Monthly.',
   },
   {
     name: 'cell attendance report, quarter',
     why:
-      'The controls of the measured "cell attendance report" less its Filed reports link, with ' +
-      'Quarterly pressed. ' +
+      'The controls of the measured "cell attendance report", with Quarterly pressed. ' +
       'Measuring it would re-measure controls already covered.',
   },
   {
@@ -2390,7 +2240,6 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
   await mockPendingDcc(page);
-  await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockEncounterSeasons(page, { shows: 'MENS' });
   await mockTraining(page);
