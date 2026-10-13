@@ -40,6 +40,6 @@ export async function setOwnUsername(
 /** What the field says under a suggestion (decision 0337, point 4). */
 export function usernameHint(taken: string | null): string {
   return taken === null
-    ? 'Suggested from your name. You can change it. Sign in with it or with your email address.'
+    ? 'Suggested from your name. You can change it.'
     : `Suggested from your name. ${taken} is already taken, so a number was added. You can change it.`;
 }
