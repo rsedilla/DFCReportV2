@@ -151,7 +151,7 @@ function PeopleList() {
           />
           <div className="flex gap-3">
             <Button type="submit" disabled={tooShort}>
-              {trimmed.length === 0 && submitted !== '' ? 'Show everyone' : 'Search'}
+              {trimmed.length === 0 && submitted !== '' ? 'Clear search' : 'Search'}
             </Button>
             <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
               Add a person

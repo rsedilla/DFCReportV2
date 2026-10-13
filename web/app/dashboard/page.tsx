@@ -1855,7 +1855,7 @@ function PendingDccFilters({
           className="min-w-0 sm:flex-1"
         />
         <Button type="submit" disabled={tooShort}>
-          {trimmed === '' && value.q !== '' ? 'Show all' : 'Search'}
+          {trimmed === '' && value.q !== '' ? 'Clear search' : 'Search'}
         </Button>
       </form>
       {wholeChurch ? (

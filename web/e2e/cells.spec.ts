@@ -247,6 +247,23 @@ test.describe('the Cells totals (decision 0289)', () => {
     await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // The button that brings the whole list back reads Clear search on every list (owner,
+  // 2026-10-13).
+  test('an emptied box offers Clear search, which brings the whole list back', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellTotals(page);
+    await page.goto('/cells');
+
+    await page.getByLabel('Search by Cell ID or leader').fill('youth');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page).toHaveURL(/q=youth/);
+
+    await page.getByLabel('Search by Cell ID or leader').fill('');
+    await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+  });
+
   test('the header puts People without a Cell beside New Cell, and the line beside the heading', async ({
     page,
   }) => {

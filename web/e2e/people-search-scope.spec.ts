@@ -309,6 +309,23 @@ test.describe('the browser Back button on the People screen', () => {
     await expect(page).not.toHaveURL(/q=mar/);
     await expect(page.getByLabel('Search by name or Member ID')).toHaveValue('');
   });
+
+  // The button that brings the whole list back reads Clear search on every list (owner,
+  // 2026-10-13).
+  test('an emptied box offers Clear search, which brings the whole list back', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await page.goto('/people');
+
+    await page.getByLabel('Search by name or Member ID').fill('mar');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page).toHaveURL(/q=mar/);
+
+    await page.getByLabel('Search by name or Member ID').fill('');
+    await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+  });
 });
 
 test.describe('what the People screen says when it finds nobody', () => {
