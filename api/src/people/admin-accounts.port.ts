@@ -3,15 +3,16 @@ import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
- * Which of these Persons hold a live `ADMIN` account (SKILL.md sections 2, 5 and 6;
- * ruling of 2026-09-11).
+ * Who holds a live `ADMIN` account (SKILL.md sections 2, 5 and 6; ruling of 2026-09-11),
+ * now or at an instant. The instant-dated read is decision 0339's, which leaves a Person
+ * outside the pastoral tree out of every count of people, a month judged at its own end.
  *
  * **Declared here and implemented in `auth`, because the direction is a cycle.** Section 2
  * reserves a port for that case "and only there": `auth` imports `PeopleModule`, so
  * `people` cannot import `auth` back and call it the ordinary way, which is what the other
  * three reads that ruling re-homed were able to do.
  *
- * **What it is for** is Section 5's remedy applied one relationship over. An administrator
+ * **What `personsHoldingAdminWithin` is for** is Section 5's remedy applied one relationship over. An administrator
  * outside the pastoral structure holds no assignment of their own and is in the correct and
  * permanent state, so their disciples are not waiting for a reassignment and do not belong
  * on Section 20's attention list.
