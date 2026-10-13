@@ -2,7 +2,7 @@ import { authenticatedRequest } from './session';
 
 /**
  * The DCC calendar as this client sees it (SKILL.md sections 9, 13, 15 and 19;
- * decisions 0224, 0227, 0228 and 0229).
+ * decisions 0224, 0227 and 0229).
  *
  * **A removed Sunday is shown in its place, never skipped.** Section 9 is
  * emphatic that a removal "always means a row that records a decision" while a
@@ -203,46 +203,6 @@ export async function submitDccAttendance(
     body: { records },
     idempotencyKey,
   });
-}
-
-/** One leader who owes a record for an event and has not filed one (decision 0228). */
-export interface CoverageGap {
-  person_id: string;
-  member_id: string;
-  full_name: string;
-}
-
-export interface CoverageGaps {
-  event: DccEvent;
-  data: CoverageGap[];
-  next_cursor: string | null;
-}
-
-/**
- * Who still owes a record for one event, within the actor's scope.
- *
- * **An attention list on section 15's terms, which is what makes naming leaders
- * defensible rather than a leaderboard**: filtered to the actor's own scope,
- * ordered by name, never by how far behind anybody is, and carrying no grade.
- * Section 19 is why it exists — "a dashboard of counts tells a leader nothing to
- * act on" — and section 14 is the act it enables, since an upline may record on
- * behalf of a downline leader within their subtree.
- *
- * Decision 0228 makes the **scope** the whole of the constraint: the same data
- * shown church-wide and ordered by how many records are missing is the leaderboard
- * section 13 exists to prevent.
- */
-export async function getCoverageGaps(
-  eventId: string,
-  cursor?: string | null,
-  signal?: AbortSignal,
-): Promise<CoverageGaps> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-
-  return authenticatedRequest<CoverageGaps>(
-    `/api/v1/dcc/events/${eventId}/coverage-gaps${query}`,
-    { signal },
-  );
 }
 
 /** One DCC record still owed in the reader's branch: a Sunday and its leader (decision 0301). */

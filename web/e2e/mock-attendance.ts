@@ -944,38 +944,6 @@ export async function mockCellMembersEmpty(page: Page): Promise<void> {
   );
 }
 
-/** Who still owes a record for one Sunday (decision 0228). */
-export async function mockCoverageGaps(page: Page): Promise<void> {
-  await page.route('**/api/v1/dcc/events/*/coverage-gaps*', (route) =>
-    route.fulfill(
-      json({
-        event: {
-          id: '3f1b7c6e-0000-4000-8000-000000000501',
-          event_date: '2026-06-07',
-          recordable: true,
-          not_recordable_reason: null,
-          removed: false,
-          removal_reason: null,
-          coverage: { met: 5, owed: 8 },
-        },
-        data: [
-          {
-            person_id: '3f1b7c6e-0000-4000-8000-000000000801',
-            member_id: 'M-000901',
-            full_name: 'Consuelo Bautista',
-          },
-          {
-            person_id: '3f1b7c6e-0000-4000-8000-000000000802',
-            member_id: 'M-000902',
-            full_name: 'Ferdinand Salazar',
-          },
-        ],
-        next_cursor: null,
-      }),
-    ),
-  );
-}
-
 /**
  * A pastoral path that reaches a Network root.
  *

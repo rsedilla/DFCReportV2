@@ -24,23 +24,18 @@ import { cn } from '@/lib/utils';
  * table too wide for its column. And the rule under the header is an inset shadow at `lg`
  * rather than a border, because a collapsed table border stays behind when its cell sticks.
  * Below `lg` these tables are cards, and a table shown there keeps its sideways scroll.
- *
- * `pinHeader={false}` keeps the frame scrolling at every width, for a table that must still
- * scroll sideways on a desktop.
  */
 export function Table({
   caption,
   className,
-  pinHeader = true,
   children,
 }: {
   caption: string;
   className?: string;
-  pinHeader?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={cn('overflow-x-auto', pinHeader && 'lg:overflow-visible', className)}>
+    <div className={cn('overflow-x-auto lg:overflow-visible', className)}>
       <table className="w-full border-collapse text-left text-sm">
         <caption className="sr-only">{caption}</caption>
         {children}

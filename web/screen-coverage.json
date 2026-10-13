@@ -242,8 +242,8 @@
     },
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
-      "reason": "The attention list behind each event's coverage figure (decision 0228, §15), reached from Reports, DCC, By Sunday.",
-      "screen": "web/app/dcc/[id]/gaps/page.tsx"
+      "no_screen_owed": true,
+      "reason": "Its one screen, a Sunday's still-to-record page (decision 0228), is withdrawn (decision 0342): Record's Pending DCC Reports names those leaders for every open Sunday. The route stays."
     },
     {
       "route": "GET /api/v1/cells/:id/members",

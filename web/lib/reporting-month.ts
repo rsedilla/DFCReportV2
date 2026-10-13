@@ -110,6 +110,7 @@ export function dayLabel(date: string): string {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 

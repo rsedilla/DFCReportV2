@@ -23,8 +23,7 @@ import { useScreenAddress } from '@/lib/screen-address';
 /**
  * The reader's month: every date they owe a record, their own Cells' meetings and their own
  * DCC checklist together (the owner's design, adjusted to the rules; owner's choice of
- * 2026-09-19). It replaces a list of the month's Sundays with a scope-wide figure each, which
- * Reports → DCC → By Sunday already carries.
+ * 2026-09-19).
  *
  * **States are words, never colour** (sections 13, 17 and 19): Recorded, Not recorded,
  * Not yet, and Not recorded · week closed, which opens nothing. A Sunday with no service is shown in its place with its reason (section 9).
@@ -80,8 +79,9 @@ function YourMonth() {
   });
 
   const events = useQuery({
-    queryKey: ['dcc-events', month],
-    queryFn: ({ signal }) => listDccEvents(month, signal),
+    // The calendar shows no coverage, so the server is not asked to count it.
+    queryKey: ['dcc-events', month, 'sundays-only'],
+    queryFn: ({ signal }) => listDccEvents(month, signal, { coverage: false }),
   });
 
   const heldEvents = (events.data?.data ?? []).filter((event) => !event.removed);
