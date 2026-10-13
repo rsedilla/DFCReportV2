@@ -285,7 +285,13 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
                 {open === key ? (
                   <tr>
                     <td colSpan={COLUMNS.length + 2} className="bg-raised px-3 py-3 text-sm">
-                      {row.leader === null ? null : <RowPeople leader={row.leader.id} />}
+                      {row.leader === null ? null : row.people === 0 ? (
+                        // A row counting nobody asks the server nothing: there is nobody to read,
+                        // and a reader holding only the other Network's grant would be refused.
+                        <People members={[]} />
+                      ) : (
+                        <RowPeople leader={row.leader.id} />
+                      )}
                     </td>
                   </tr>
                 ) : null}

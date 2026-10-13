@@ -12,6 +12,7 @@ import {
 import {
   CONQUEST_COUNTS,
   READINESS_ARTURO_ID,
+  READINESS_GREGORIA_ID,
   READINESS_LEADER,
   READINESS_MENS_ROOT_ID,
   READINESS_WOMENS_ROOT_ID,
@@ -877,6 +878,17 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     ]);
   });
 
+  // Checklist row later-suynl-empty-row-open: a row that counts nobody asks the server
+  // nothing, so a reader whose read of that leader would be refused sees no error.
+  test('a row counting nobody says so when opened, and asks the server nothing', async ({ page }) => {
+    const traffic = await mockSuynlReadiness(page);
+    await page.goto('/reports/suynl');
+
+    await page.getByRole('button', { name: 'Gregoria Navarro', exact: true }).click();
+    await expect(table(page, 'My 12').getByText('Nobody in this branch is counted.')).toBeVisible();
+    expect(traffic.asked.some((path) => path.includes(READINESS_GREGORIA_ID))).toBe(false);
+  });
+
   // Checklist row perf-suynl-readiness: the table comes without the people behind its rows,
   // and a row's people are asked for when its name is first opened, once.
   test("the table comes without names, and a row's people are read when it is first opened", async ({
@@ -912,13 +924,6 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
       '1–6 lessons: Amparo Abella (3) · Florante Mendoza (5)',
     ]);
-  });
-
-  test('a row counting nobody says so when opened', async ({ page }) => {
-    await page.goto('/reports/suynl');
-
-    await page.getByRole('button', { name: 'Gregoria Navarro', exact: true }).click();
-    await expect(page.getByText('Nobody in this branch is counted.')).toBeVisible();
   });
 
   test("the whole church: the two pastors' branches, no You row, and the line for neither", async ({

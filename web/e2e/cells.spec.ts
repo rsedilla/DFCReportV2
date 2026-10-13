@@ -310,6 +310,9 @@ test.describe('the browser Back button on the Cells list', () => {
     await page.reload();
     await expect(page.getByRole('button', { name: 'Closed Cells' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('youth');
+    // Settled before Back: this failed once in a full run and never alone (checklist row
+    // test-flaky-cells-back), and Back pressed while the reloaded page still reads is the race.
+    await page.waitForLoadState('networkidle');
 
     await page.goBack();
     await expect(page).not.toHaveURL(/view=CLOSED/);
