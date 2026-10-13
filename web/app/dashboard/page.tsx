@@ -813,13 +813,7 @@ function Dashboard() {
               <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-                {filter === 'CELLS'
-                  ? shownWhose === 'mine'
-                    ? 'No Cell meeting of yours is awaiting a record.'
-                    : 'No Cell meeting in your branch is awaiting a record.'
-                  : shownWhose === 'mine'
-                    ? 'Nobody on your DCC checklist is awaiting a record.'
-                    : 'No DCC record is owed in your branch.'}
+                Nothing to record.
               </p>
             ) : branchView ? (
               <LeaderGroups
@@ -1697,7 +1691,7 @@ function DccBranchQueue({
   if (rows.length === 0) {
     return (
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        No DCC record is owed in your branch.
+        Nothing to record.
       </p>
     );
   }

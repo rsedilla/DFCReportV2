@@ -3206,6 +3206,8 @@ No job, deadline, or process may convert an unreported meeting into `NOT_HELD`. 
 
 An unreported meeting is therefore not a status at all. It is an outstanding task, shown to the responsible leader as a meeting awaiting a record, and reflected in reports only through the coverage figure (Section 12).
 
+**Where its state is shown, it reads *Not recorded***, in words and never a colour (ruling of 2026-10-13, decision 0338). It was *Awaiting a record*.
+
 ### Reasons for NOT_HELD
 
 Exactly:

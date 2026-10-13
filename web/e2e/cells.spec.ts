@@ -359,7 +359,7 @@ test.describe('New Cell', () => {
 });
 
 test.describe('a Cell’s meetings', () => {
-  test('a meeting whose day has not come reads Not yet rather than awaiting a record', async ({
+  test('a meeting whose day has not come reads Not yet rather than Not recorded', async ({
     page,
   }) => {
     // 10:00 on 24 June in Manila: the 27 June meeting has no record and its day has not come.
@@ -370,7 +370,7 @@ test.describe('a Cell’s meetings', () => {
 
     const row = page.getByRole('row').filter({ hasText: 'Saturday 27 June' });
     await expect(row.getByText('Not yet')).toBeVisible();
-    await expect(page.getByText('Awaiting a record').filter({ visible: true })).toHaveCount(0);
+    await expect(page.getByText('Not recorded').filter({ visible: true })).toHaveCount(0);
   });
 
   test('changes when it meets from the next month, and says so once saved', async ({ page }) => {

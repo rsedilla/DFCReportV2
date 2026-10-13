@@ -40,8 +40,8 @@ const LINK =
  * and an absent record is the absence of a report. Every state is an outlined word
  * and never a colour.
  *
- * **A meeting whose day has not come reads "Not yet"** rather than "Awaiting a
- * record", as on the meeting&rsquo;s own screen: decision 0238 refuses a record before
+ * **A meeting whose day has not come reads "Not yet"** rather than "Not
+ * recorded", as on the meeting&rsquo;s own screen: decision 0238 refuses a record before
  * the day begins in Manila, so nothing is awaited yet.
  *
  * **`NOT_HELD` is a record and is never shown as a failure.** Section 13 makes

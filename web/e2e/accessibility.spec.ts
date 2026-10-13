@@ -545,7 +545,9 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       // Filtered to what is visible: the rows render as a table from `lg` and as cards
       // below it, so each word is in the page twice and one copy is hidden.
-      await expect(page.getByText('Awaiting a record').filter({ visible: true })).toBeVisible();
+      await expect(
+        page.getByText('Not recorded', { exact: true }).filter({ visible: true }),
+      ).toBeVisible();
       await expect(
         page.getByText('Did not meet', { exact: true }).filter({ visible: true }),
       ).toBeVisible();
