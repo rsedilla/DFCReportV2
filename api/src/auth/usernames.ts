@@ -78,7 +78,8 @@ export async function nextFreeUsername(
   for (let number = 2; ; number += 1) {
     const suffix = String(number);
     const candidate = `${base.slice(0, 30 - suffix.length)}${suffix}`;
-    if (!taken.has(candidate)) {
+    // A one-letter base needs a two-digit number to reach three characters (`a10`).
+    if (candidate.length >= 3 && !taken.has(candidate)) {
       return candidate;
     }
   }

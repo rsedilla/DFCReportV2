@@ -1274,7 +1274,7 @@ is 3 to 30 lowercase letters and numbers starting with a letter, stored and comp
 and no two accounts share one; the database enforces both. A name typed that is taken or
 malformed is refused. **A taken name shows that an account exists, and that is accepted**
 (owner, 2026-10-13): only somebody signed in, or holding their own activation link, can try one,
-and sign-in and forgot password still never tell; setting one's own username and reading its suggestion are limited to ten a minute for each account (owner, 2026-10-13). **A disabled account keeps its username**,
+and sign-in and forgot password still never tell; setting one's own username and reading its suggestion are each limited to ten a minute for each account (owner, 2026-10-13), and at activation, as activation itself is, to ten a minute from each address. **A disabled account keeps its username**,
 whatever disabled it, so one name never stands for two people; only the holder frees a name, by
 changing it. An Admin sees it on the person page and cannot set it. Everything else about
 signing in is unchanged, and email remains how the system reaches the holder.

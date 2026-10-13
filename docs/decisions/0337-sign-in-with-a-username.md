@@ -44,8 +44,9 @@ name is reserved.
 built from a name, and names are church-wide (Section 8), so trying one tells whoever tries
 whether that person holds an account. Only somebody signed in, or holding their own activation
 link, can try, and sign-in and forgot password still never tell. **Setting one's own username
-and reading its suggestion are limited to ten a minute for each account** (owner, Q7), so that
-trying names in bulk is slow.
+and reading its suggestion are each limited to ten a minute for each account** (owner, Q7), so
+that trying names in bulk is slow; at activation, as activation itself is, to ten a minute from
+each address.
 
 **A disabled account keeps its username** (owner, Q6), whether an Admin disabled it or its Person
 was archived or merged, and it works again if the account is re-enabled. Nobody else can take it

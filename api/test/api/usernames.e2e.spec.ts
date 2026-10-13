@@ -220,6 +220,18 @@ describe('usernames (decision 0337)', () => {
       expect(await usernameOf(second.accountId)).toBeNull();
     });
 
+    it('gives a one-letter suggestion a number long enough to make three characters', async () => {
+      // First name `A`, and a surname with no letter a to z.
+      const person = await createPerson(db, { firstName: 'A', lastName: '王', network: 'MENS' });
+      const { token } = await pending(person);
+
+      const suggestion = await server()
+        .post('/api/v1/auth/activate/username-suggestion')
+        .send({ token });
+
+      expect(suggestion.body).toEqual({ username: 'a10', taken: null });
+    });
+
     it('checks a name cut to make room for its number against the names already held', async () => {
       // A 30-letter suggestion: `l` + 29 letters of surname.
       const surname = 'Abcdefghijklmnopqrstuvwxyzabc';
