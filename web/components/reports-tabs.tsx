@@ -5,16 +5,27 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
+/** A whole-church reader's five (decision 0292; Filed Reports withdrawn, decision 0340). */
 const TABS = [
   { key: 'cells', label: 'Cell Groups', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC', path: '/reports/dcc' },
   { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
   { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
-  { key: 'filed', label: 'Filed Reports', path: '/reports/filed' },
+] as const;
+
+/**
+ * A Full view leader's four (decision 0340): the first two under the names the Senior Pastors'
+ * carry, laid out as theirs for the leader's own branch, and no Training.
+ */
+const BRANCH_TABS = [
+  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
+  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
+  { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
+  { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
 ] as const;
 
 /**
@@ -53,13 +64,14 @@ export type ReportTab =
 /**
  * Which report is on screen, and the way to the others (SKILL.md section 19; decision 0292).
  *
- * **Six links, or five for the two Senior Pastors (decision 0326), not ARIA tabs.** Each report keeps an address of its own, so the landing page
+ * **Five links for a whole-church reader, the Senior Pastors' five (decision 0326), or a Full
+ * view leader's four (decision 0340), not ARIA tabs.** Each report keeps an address of its own, so the landing page
  * decision 0245 gives a whole-church reader, the sidebar and a saved link all still work, and
  * something that navigates is announced as a link. Equal widths in the Record screen's style
- * (decision 0290): six in a row from `lg`, three below it and two on a phone.
+ * (decision 0290): one row from a small screen up, and two on a phone.
  *
  * **The month travels** to the reports that have one, so switching from the DCC figures for
- * June to Filed reports opens June rather than the current month. The three Growth reports
+ * June to the Cell figures opens June rather than the current month. The Growth reports
  * are as of now and take none.
  *
  * **The current report is a filled block, not a colour alone** (1.4.1), and carries
@@ -78,10 +90,9 @@ export function ReportsTabs({
   // Which tabs follow the screens the server names (decision 0323, point 5), never a role.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  const branch = isBranchReader(me.data);
   const tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] =
-    seniorPastor
-    ? SENIOR_PASTOR_TABS
-    : TABS;
+    seniorPastor ? SENIOR_PASTOR_TABS : branch ? BRANCH_TABS : TABS;
 
   // No tabs until the server names the screens, so a Senior Pastor never sees a leader's six
   // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
@@ -95,8 +106,8 @@ export function ReportsTabs({
           aria-label="Which report"
           className={cn(
             'mt-6 grid grid-cols-2',
-            // The five shorter labels fit one row from a small screen up (owner, 2026-10-09).
-            seniorPastor ? 'sm:grid-cols-5' : 'sm:grid-cols-3 lg:grid-cols-6',
+            // The labels fit one row from a small screen up (owner, 2026-10-09).
+            branch ? 'sm:grid-cols-4' : 'sm:grid-cols-5',
             TAB_ROW,
           )}
         >
@@ -105,7 +116,6 @@ export function ReportsTabs({
             const dated =
               tab.key === 'cells' ||
               tab.key === 'dcc' ||
-              tab.key === 'filed' ||
               tab.key === 'number-of-cells' ||
               tab.key === 'number-of-cell-leaders' ||
               tab.key === 'number-of-people';
@@ -130,6 +140,20 @@ export function ReportsTabs({
       ) : null}
       <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
     </>
+  );
+}
+
+/**
+ * A reader of their own branch's reports, a Full view leader (decision 0340): holding
+ * `reports.view_subtree`, short of Whole Church, whose screens are not the Senior Pastors'.
+ * Keyed on the capability and the server's screens, never on a role (decision 0323, point 5).
+ */
+export function isBranchReader(me: Parameters<typeof holdsWholeChurch>[0]): boolean {
+  return (
+    me !== undefined &&
+    me.screens !== 'SENIOR_PASTOR' &&
+    me.capabilities.some((grant) => grant.capability === 'reports.view_subtree') &&
+    !holdsWholeChurch(me, 'reports.view_subtree')
   );
 }
 

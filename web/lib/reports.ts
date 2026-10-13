@@ -145,51 +145,6 @@ export async function getDccMonthlyReport(
   );
 }
 
-/** One named row of a report's coverage by leader (decision 0254). */
-export interface ByLeaderRow {
-  leader: { id: string; member_id: string; full_name: string };
-  filed: number;
-  owed: number;
-}
-
-/**
- * A page of a report's coverage by leader (decision 0254). Each row counts that leader's own
- * obligations; `others` is every leader the reader could not open, named nobody, null when
- * it counts nothing; `total` is the report's own coverage, which the rows and `others` add
- * up to.
- */
-export interface ByLeaderPage {
-  period: string;
-  open: boolean;
-  data: ByLeaderRow[];
-  others: { filed: number; owed: number } | null;
-  total: { filed: number; owed: number };
-  next_cursor: string | null;
-}
-
-/** Ten at a time, as the design pages the table. */
-const BY_LEADER_PAGE = '10';
-
-export async function getCoverageByLeader(
-  report: 'dcc' | 'cells',
-  period: string,
-  scope: ReportScope,
-  cursor: string | null,
-  signal?: AbortSignal,
-  limit: string = BY_LEADER_PAGE,
-): Promise<ByLeaderPage> {
-  const params = new URLSearchParams(query(period, scope));
-  params.set('limit', limit);
-  if (cursor) {
-    params.set('cursor', cursor);
-  }
-
-  return authenticatedRequest<ByLeaderPage>(
-    `/api/v1/reports/${report}/monthly/by-leader?${params.toString()}`,
-    { signal },
-  );
-}
-
 /** One row of My 12: people, once each, and the stage each had reached (decision 0293). */
 export interface TwelveFigure {
   unique_people: number;

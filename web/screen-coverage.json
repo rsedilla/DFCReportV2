@@ -12,7 +12,8 @@
     "needs goes in `note`. A directory, `.` and `../..` all satisfied mere existence.",
     "A `waived_to` must name one of the `stages` declared below -- without that the naming",
     "requirement is satisfied by any non-empty string. `no_screen_owed` is for a route no",
-    "person ever reaches. The latter two carry a reason, because nothing can check either.",
+    "person ever reaches, or one whose screen a ruling withdrew with no stage owing another.",
+    "The latter two carry a reason, because nothing can check either.",
     "",
     "The check prints the three counts on every run, so read them there rather than here:",
     "a number written in this comment is one nobody updates. It said thirteen of thirty-five",
@@ -139,13 +140,13 @@
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly/by-leader",
-      "reason": "The DCC report's By leader table: each leader's own records filed and owed, the rows adding up to the report's coverage (decision 0254).",
-      "screen": "web/app/reports/dcc/page.tsx"
+      "no_screen_owed": true,
+      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Status says who is behind. The route stays."
     },
     {
       "route": "GET /api/v1/reports/cells/monthly/by-leader",
-      "reason": "The Cell report's By leader table: each leader's own meetings recorded and scheduled, the rows adding up to the report's coverage (decision 0254).",
-      "screen": "web/app/reports/cells/page.tsx"
+      "no_screen_owed": true,
+      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Status says who is behind. The route stays."
     },
     {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
@@ -349,12 +350,11 @@
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly",
-      "screen": "web/app/reports/filed/page.tsx"
+      "screen": "web/app/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/cells/monthly",
-      "reason": "Cell classification, and the monthly-attendance buckets §12 puts at Cell scope only. Cell Attendance is the screen in that block which shows them, and it does not exist yet. The screen owes more than this route returns: §12 requires the coverage line beside the buckets, and coverage is its own slice — so this waiver is not discharged by a screen that renders the buckets alone.",
-      "screen": "web/app/reports/filed/page.tsx"
+      "screen": "web/app/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/cells/twelve",

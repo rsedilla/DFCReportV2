@@ -2,16 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
-  CELL_WITH_NO_SCHEDULE,
-  CLOSED_CELL,
-  closedAsked,
   mockCellReport,
-  mockCellReportForOneCell,
   mockCellTwelve,
   mockCells,
-  mockCellsAtScale,
-  mockCellsWithClosed,
-  mockCoverageByLeader,
   mockDccEvents,
   mockDccReport,
   mockDccTwelve,
@@ -43,7 +36,7 @@ import {
 /** 10:00 on 20 June 2026 in Manila, so June is the current month and July has not begun. */
 const NOW = new Date('2026-06-20T02:00:00Z');
 
-/** A leader opened from the By leader table: Consuelo Bautista in `mockCoverageByLeader`. */
+/** A leader opened from My 12: Consuelo Bautista in `mockCellTwelve` and `mockDccTwelve`. */
 const LEADER = '3f1b7c6e-0000-4000-8000-000000000701';
 
 /**
@@ -69,53 +62,93 @@ async function expectReadOnly(page: Page) {
   await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
 }
 
-/** The six tabs, in order, and the address each opens (SKILL.md section 19; decision 0292). */
+/**
+ * A whole-church reader's five tabs, in order, and the address each opens (SKILL.md section
+ * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340).
+ */
 const TABS = [
   { label: 'Cell Groups', path: '/reports/cells', dated: true },
   { label: 'DCC', path: '/reports/dcc', dated: true },
   { label: 'SUYNL', path: '/reports/suynl', dated: false },
   { label: 'Training', path: '/reports/training', dated: false },
   { label: 'Conquest', path: '/reports/conquest', dated: false },
-  { label: 'Filed Reports', path: '/reports/filed', dated: true },
 ] as const;
 
-/** Every read the six reports make, answered, so any of them can be opened. */
-async function mockEveryReport(page: Page) {
+/**
+ * A Full view leader's four (decision 0340): the shared account, which reads reports over one
+ * Network. No Training, and the first two named as the Senior Pastors' are.
+ */
+const BRANCH_TABS = [
+  { label: 'CG Attendance', path: '/reports/cells', dated: true },
+  { label: 'DCC Attendance', path: '/reports/dcc', dated: true },
+  { label: 'SUYNL', path: '/reports/suynl', dated: false },
+  { label: 'Conquest', path: '/reports/conquest', dated: false },
+] as const;
+
+/** Each reader, with the tabs they are shown. */
+const READERS = [
+  { reader: 'a whole-church reader', church: true, tabs: TABS },
+  { reader: 'a Full view leader', church: false, tabs: BRANCH_TABS },
+] as const;
+
+/** Every read the reports make, answered, so any of them can be opened. */
+async function mockEveryReport(page: Page, { church = false }: { church?: boolean } = {}) {
   await mockSignedIn(page);
+  if (church) {
+    await mockWholeChurchReader(page);
+  }
   await mockCells(page);
   await mockCellReport(page);
   await mockCellTwelve(page, { today: '2026-06-20' });
   await mockDccEvents(page);
   await mockDccReport(page);
   await mockDccTwelve(page, { today: '2026-06-20' });
-  await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockEncounterSeasons(page);
   await mockTraining(page);
   await mockConquest(page);
 }
 
-test.describe('the Reports tabs (decision 0292)', () => {
-  for (const tab of TABS) {
-    test(`${tab.label} carries all six tabs and is the one marked current`, async ({ page }) => {
-      await page.clock.setFixedTime(NOW);
-      await mockEveryReport(page);
-      await page.goto(tab.path);
+test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
+  for (const { reader, church, tabs } of READERS) {
+    for (const tab of tabs) {
+      test(`for ${reader}, ${tab.label} carries exactly the ${tabs.length} tabs and is the one marked current`, async ({
+        page,
+      }) => {
+        await page.clock.setFixedTime(NOW);
+        await mockEveryReport(page, { church });
+        await page.goto(tab.path);
 
-      await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
-      const which = page.getByRole('navigation', { name: 'Which report' });
-      await expect(which.getByRole('link')).toHaveText(TABS.map((each) => each.label));
+        await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+        const which = page.getByRole('navigation', { name: 'Which report' });
+        await expect(which.getByRole('link')).toHaveText(tabs.map((each) => each.label));
 
-      const current = which.locator('a[aria-current="page"]');
-      await expect(current, 'exactly one report is marked as the current page').toHaveCount(1);
-      await expect(current).toHaveText(tab.label);
+        const current = which.locator('a[aria-current="page"]');
+        await expect(current, 'exactly one report is marked as the current page').toHaveCount(1);
+        await expect(current).toHaveText(tab.label);
 
-      // The old two-link switch is gone rather than kept beside the tabs.
-      await expect(page.getByRole('list', { name: 'Which report' })).toHaveCount(0);
-    });
+        // Filed Reports is withdrawn for every account (decision 0340).
+        await expect(which.getByRole('link', { name: /Filed/ })).toHaveCount(0);
+        await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
+
+        // The old two-link switch is gone rather than kept beside the tabs.
+        await expect(page.getByRole('list', { name: 'Which report' })).toHaveCount(0);
+      });
+    }
   }
 
-  test('the month travels to Cell Groups, DCC and Filed reports, and never to the Growth three', async ({
+  test('a Full view leader is offered no Training tab (decision 0340)', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page);
+    await page.goto('/reports/cells');
+
+    const which = page.getByRole('navigation', { name: 'Which report' });
+    await expect(which.getByRole('link')).toHaveCount(4);
+    await expect(which.getByRole('link', { name: 'Training' })).toHaveCount(0);
+    await expect(which.locator('a[href^="/reports/training"]')).toHaveCount(0);
+  });
+
+  test('the month travels to CG Attendance and DCC Attendance, and never to SUYNL or Conquest', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
@@ -132,7 +165,8 @@ test.describe('the Reports tabs (decision 0292)', () => {
     await page.goto('/reports/dcc?month=2026-05-01');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    for (const tab of TABS) {
+    await expect(which.getByRole('link')).toHaveCount(BRANCH_TABS.length);
+    for (const tab of BRANCH_TABS) {
       await expect(which.getByRole('link', { name: tab.label, exact: true })).toHaveAttribute(
         'href',
         tab.dated ? `${tab.path}?month=2026-05-01` : tab.path,
@@ -142,32 +176,32 @@ test.describe('the Reports tabs (decision 0292)', () => {
     await expect.poll(() => periods).toContain('2026-05-01');
   });
 
-  test('following Filed reports from a past month opens that month there', async ({ page }) => {
+  test('for a whole-church reader the month travels to Cell Groups and DCC, and never to the Growth three', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
+    await mockWholeChurchReader(page);
+    await mockDccTwelve(page, { today: '2026-06-20' });
+    await page.goto('/reports/dcc?month=2026-05-01');
 
-    const periods: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/reports/cells/monthly')) {
-        periods.push(new URL(request.url()).searchParams.get('period') ?? '');
-      }
-    });
+    const which = page.getByRole('navigation', { name: 'Which report' });
+    await expect(which.getByRole('link')).toHaveCount(TABS.length);
+    for (const tab of TABS) {
+      await expect(which.getByRole('link', { name: tab.label, exact: true })).toHaveAttribute(
+        'href',
+        tab.dated ? `${tab.path}?month=2026-05-01` : tab.path,
+      );
+    }
+  });
 
-    await page.goto('/reports/cells?month=2026-05-01');
-    await page
-      .getByRole('navigation', { name: 'Which report' })
-      .getByRole('link', { name: 'Filed Reports', exact: true })
-      .click();
+  test('Filed Reports has no page of its own any more (decision 0340)', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page, { church: true });
 
-    await expect(page).toHaveURL(/\/reports\/filed\?month=2026-05-01$/);
-    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
-    await expect(
-      page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-    ).toHaveText('Filed Reports');
-    await expect.poll(() => periods).toContain('2026-05-01');
-    expect(periods.every((period) => period === '2026-05-01')).toBe(true);
+    const response = await page.goto('/reports/filed?month=2026-06-01');
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);
   });
 
   test('a month in the address that is not a month, or has not begun, opens the current one', async ({
@@ -270,13 +304,14 @@ test.describe('the report figures', () => {
     await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc');
 
-    // The fixture: My 12's Total is 3 + 2 + 1 + 1 + 3 = 10 people, and the buckets are
-    // 4 + 4 + 2 = 10 (section 20: the two views sum to the same people).
+    // The fixture: Your 12's Total is 3 + 2 + 1 + 1 + 3 = 10 people, and the buckets are
+    // 4 + 4 + 2 = 10 (section 20: the two views sum to the same people). A Full view leader's
+    // table carries Total second (decision 0340).
     const total = page
       .getByRole('table')
       .filter({ has: page.getByRole('columnheader', { name: 'Leader' }) })
       .getByRole('row', { name: /^Total/ });
-    await expect(total.getByRole('cell')).toHaveText(['Total', '3', '2', '1', '1', '3', '10']);
+    await expect(total.getByRole('cell')).toHaveText(['Total', '10', '3', '2', '1', '1', '3']);
 
     const often = page.getByRole('region', { name: 'How often people came' });
     await expect(often.getByRole('term').last()).toHaveText('Total');
@@ -319,15 +354,15 @@ test.describe('the table header', () => {
   // Both halves are needed for the row to stay pinned: sticky cells, and a frame that
   // is not itself a scroll container at this width.
   test('stays pinned to the top of the window on a desktop', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
+    await mockCellTwelve(page, { today: '2026-06-20' });
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/reports/filed');
+    await page.goto('/reports/cells');
 
     const header = page
-      .getByRole('region', { name: 'Coverage by Cell' })
-      .getByRole('columnheader', { name: 'Cell' });
+      .getByRole('table', { name: 'Your 12' })
+      .getByRole('columnheader', { name: 'Leader' });
     await expect(header).toBeVisible();
 
     expect(await header.evaluate((cell) => getComputedStyle(cell).position)).toBe('sticky');
@@ -339,237 +374,7 @@ test.describe('the table header', () => {
   });
 });
 
-test.describe('the coverage tables, under Filed reports (decision 0292)', () => {
-  test('Coverage by Cell lists each Cell with its figure, and no total', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await page.goto('/reports/filed');
-
-    const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    // Table from `lg`, cards below it: whichever this viewport shows.
-    await expect(table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true })).toHaveAttribute(
-      'href',
-      '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings?month=2026-06-01',
-    );
-    await expect(table.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
-    // Decision 0225: the Cell that scheduled nothing is shown, not dropped.
-    await expect(table.getByText('0 of 0 meetings recorded').filter({ visible: true })).toBeVisible();
-    await expect(table.getByText('Total')).toHaveCount(0);
-  });
-
-  test('the coverage table pages at ten, and a ranked table would not look like this', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsAtScale(page);
-    await mockCellReport(page);
-    await page.goto('/reports/filed');
-
-    const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    // The eleven share one name (decision 0306), so each is told apart by its address.
-    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
-
-    // Ten of the eleven, in the order the index returned them. The two that have
-    // recorded least are the last two, so a table ordered worst-first would open with
-    // them and this one closes with them (sections 13 and 17).
-    await expect(rows).toHaveCount(10);
-    await expect(rows.first()).toHaveAttribute('href', /0110\/meetings/);
-    await expect(rows.nth(9)).toHaveAttribute('href', /0119\/meetings/);
-    await expect(table.getByRole('button', { name: 'Previous' })).toHaveCount(0);
-
-    await table.getByRole('button', { name: 'Next' }).click();
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toHaveAttribute('href', /0120\/meetings/);
-
-    // The count of Cells behind is over every page and by decision 0267's predicate — two
-    // of the eleven have a meeting that came with no record — and it is in words beside
-    // its complement, never a share.
-    await expect(table.getByText('2 behind · 9 not behind')).toBeVisible();
-  });
-
-  test('the behind filter keeps the Cells a meeting that came is missing from, in their order', async ({
-    page,
-  }) => {
-    // Decision 0267: behind is meetings due so far minus meetings recorded. The filter was
-    // built and removed on 2026-09-20 because it compared with the whole month's schedule,
-    // which counts meetings that have not happened (decision 0239).
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsAtScale(page);
-    await mockCellReport(page);
-    await page.goto('/reports/filed');
-
-    const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    const behind = table.getByRole('button', { name: 'Show only pending CG reports' });
-    await expect(behind).toHaveAttribute('aria-pressed', 'false');
-    await behind.click();
-
-    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
-    await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toHaveAttribute('href', /0119\/meetings/);
-    await expect(rows.nth(1)).toHaveAttribute('href', /0120\/meetings/);
-    await expect(behind).toHaveAttribute('aria-pressed', 'true');
-    const grid = table.getByRole('table', { name: 'Recording coverage for each Cell' });
-    const rowOf = (id: string) => grid.getByRole('row').filter({ has: page.locator(`a[href*="${id}/"]`) });
-    await expect(rowOf('0119')).toContainText('3 behind');
-    await expect(rowOf('0120')).toContainText('4 behind');
-  });
-
-  test('?behind=1, the Record screen’s link, opens By Cell already filtered to the Cells behind', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsAtScale(page);
-    await mockCellReport(page);
-    await page.goto('/reports/filed?month=2026-06-01&behind=1');
-
-    await expect(page.getByRole('radio', { name: 'By Cell' })).toBeChecked();
-    const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    await expect(table.getByRole('button', { name: 'Show only pending CG reports' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    const rows = table.getByRole('link', { name: 'Youth · Sat' }).filter({ visible: true });
-    await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toHaveAttribute('href', /0119\/meetings/);
-    await expect(rows.nth(1)).toHaveAttribute('href', /0120\/meetings/);
-  });
-
-  test('keeps the behind filter in the address, so Back returns to it', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsAtScale(page);
-    await mockCellReport(page);
-    await page.goto('/reports/filed');
-
-    const table = page.getByRole('region', { name: 'Coverage by Cell' });
-    await table.getByRole('button', { name: 'Show only pending CG reports' }).click();
-    await expect(page).toHaveURL(/behind=1/);
-
-    await page.goto('/cells');
-    await page.goBack();
-    const behind = page
-      .getByRole('region', { name: 'Coverage by Cell' })
-      .getByRole('button', { name: 'Show only pending CG reports' });
-    await expect(behind).toHaveAttribute('aria-pressed', 'true');
-
-    await page.goBack();
-    await expect(behind).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  // Record's Cells behind carries a closed Cell still behind while its month is open (decision
-  // 0314), so the list "See every Cell behind" opens carries the same Cells -- and only there:
-  // every other count of Cells means running Cells (section 15).
-  for (const [open, behind] of [
-    [true, true],
-    [false, true],
-    [true, false],
-  ] as const) {
-    test(`a closed Cell is ${open && behind ? '' : 'not '}listed with the month ${open ? 'open' : 'shut'} and Cells behind ${behind ? 'shown' : 'not chosen'}`, async ({
-      page,
-    }) => {
-      await page.clock.setFixedTime(NOW);
-      await mockSignedIn(page);
-      await mockCellsWithClosed(page, { open });
-      await mockCellReport(page);
-      await page.goto(`/reports/filed?month=2026-06-01${behind ? '&behind=1' : ''}`);
-
-      const region = page.getByRole('region', { name: 'Coverage by Cell' });
-      const table = region.getByRole('table', { name: 'Recording coverage for each Cell' });
-      await expect(table.getByRole('row').first()).toBeVisible();
-      const closedRows = table.getByRole('row').filter({ hasText: /Closed / });
-      if (open && behind) {
-        await expect(closedRows).toHaveCount(3);
-        await expect(closedRows.first()).toContainText('Paolo Reyes');
-        await expect(region.getByText(/and 3 closed Cells still behind/)).toBeVisible();
-      } else {
-        await expect(closedRows).toHaveCount(0);
-        await expect(region.getByText(/closed Cells? still behind$/)).toHaveCount(0);
-      }
-    });
-  }
-
-  /** The Cells index: these running Cells, and these closed ones or a failure for the closed view. */
-  async function mockCellViews(page: Page, running: unknown[], closed: unknown[] | 'fails') {
-    await page.route('**/api/v1/cells?*', (route) =>
-      closedAsked(route.request().url()) && closed === 'fails'
-        ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
-        : route.fulfill({
-            contentType: 'application/json',
-            body: JSON.stringify({
-              reporting_month: '2026-06-01',
-              open: true,
-              data: closedAsked(route.request().url()) ? closed : running,
-              next_cursor: null,
-            }),
-          }),
-    );
-  }
-
-  test('a closed Cell that is not behind is not listed', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsWithClosed(page, { open: true });
-    await mockCellViews(page, [CELL_WITH_NO_SCHEDULE], [
-      { ...CLOSED_CELL, coverage: { recorded: 2, scheduled: 2, behind: 0 } },
-    ]);
-    await mockCellReport(page);
-    await page.goto('/reports/filed?month=2026-06-01&behind=1');
-
-    const region = page.getByRole('region', { name: 'Coverage by Cell' });
-    await expect(
-      region.getByText('No Cell you oversee is behind: every meeting still open for recording has a record.'),
-    ).toBeVisible();
-    await expect(region.getByText(/Closed /)).toHaveCount(0);
-  });
-
-  test('a failed read of the closed Cells never says that nothing is behind', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellsWithClosed(page, { open: true });
-    await mockCellViews(page, [CELL_WITH_NO_SCHEDULE], 'fails');
-    await mockCellReport(page);
-    await page.goto('/reports/filed?month=2026-06-01&behind=1');
-
-    const region = page.getByRole('region', { name: 'Coverage by Cell' });
-    await expect(region.getByRole('alert')).not.toBeEmpty();
-    await expect(region.getByText(/No Cell you oversee is behind/)).toHaveCount(0);
-
-    // Without the filter the closed view is not used, so its failure is not reported.
-    await region.getByRole('button', { name: 'Show only pending CG reports' }).click();
-    await expect(region.getByRole('table', { name: 'Recording coverage for each Cell' })).toBeVisible();
-    await expect(region.getByRole('alert')).toBeEmpty();
-  });
-
-  test('Coverage by Sunday keeps a removed Sunday in its place', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockWholeChurchReader(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    await page.goto('/reports/filed?kind=dcc');
-
-    const table = page.getByRole('region', { name: 'Coverage by Sunday' });
-    const visible = (text: string) => table.getByText(text).filter({ visible: true });
-
-    await expect(table.getByRole('link', { name: /June/ }).filter({ visible: true })).toHaveCount(4);
-    await expect(visible('5 of 8 records filed')).toBeVisible();
-    await expect(visible('No records owed — no service')).toBeVisible();
-    await expect(visible('No service was held. The church held a combined regional service.')).toBeVisible();
-    await expect(visible('Not counted this month.')).toBeVisible();
-    await expect(visible('No records owed yet')).toBeVisible();
-    // Only the Sunday with records still owed links to who has to record.
-    await expect(
-      table.getByRole('link', { name: 'See who still has to record' }).filter({ visible: true }),
-    ).toHaveAttribute('href', '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps');
-  });
-});
-
-test.describe('Cell Groups and DCC keep coverage first, and send the rows to Filed reports', () => {
+test.describe('Cell Groups and DCC keep coverage first, as one line linking nowhere (decision 0340)', () => {
   test('Cell Groups opens on recording coverage as one line, with no row-by-row table of its own', async ({
     page,
   }) => {
@@ -583,20 +388,19 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
     // and decision 0293 makes it one line above My 12.
     const coverage = page.getByText('6 of 8 meetings recorded in the month');
     await expect(coverage).toBeVisible();
-    const twelve = page.getByRole('heading', { name: /^My 12 · / });
-    await expect(twelve).toBeVisible();
-    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
-    expect(line!.y, 'the coverage line sits above My 12').toBeLessThan(heading!.y);
+    const branch = page.getByRole('heading', { name: 'Your branch' });
+    await expect(branch).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), branch.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(heading!.y);
 
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
 
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      '/reports/filed?month=2026-05-01',
-    );
+    // Filed Reports is withdrawn (decision 0340): the line keeps its count and links nowhere.
+    await expect(page.getByText('6 of 8 meetings recorded in the month').getByRole('link')).toHaveCount(0);
+    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
   });
 
   test('DCC opens on recording coverage as one line, with no row-by-row table of its own', async ({
@@ -613,449 +417,51 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
     // Coverage is the first figure, and decision 0294 makes it one line above My 12.
     const coverage = page.getByText('12 of 18 records filed in the month');
     await expect(coverage).toBeVisible();
-    const twelve = page.getByRole('heading', { name: /^My 12 · / });
-    await expect(twelve).toBeVisible();
-    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
-    expect(line!.y, 'the coverage line sits above My 12').toBeLessThan(heading!.y);
+    const branch = page.getByRole('heading', { name: 'Your branch' });
+    await expect(branch).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), branch.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(heading!.y);
 
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
 
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      '/reports/filed?month=2026-05-01&kind=dcc',
-    );
+    await expect(page.getByText('12 of 18 records filed in the month').getByRole('link')).toHaveCount(0);
+    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
   });
 
-  test('a leader opened from By leader carries into Filed reports, By leader', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCellTwelve(page, { today: '2026-06-20' });
-    await mockDccTwelve(page, { today: '2026-06-20' });
-    await mockCoverageByLeader(page);
+  for (const { reader, church } of READERS) {
+    test(`for ${reader}, no period and no leader opened offers a way to Filed Reports`, async ({
+      page,
+    }) => {
+      test.setTimeout(60_000);
+      await page.clock.setFixedTime(NOW);
+      await mockSignedIn(page);
+      if (church) {
+        await mockWholeChurchReader(page);
+      }
+      await mockCellReport(page);
+      await mockDccReport(page);
+      await mockCellTwelve(page, { today: '2026-06-20' });
+      await mockDccTwelve(page, { today: '2026-06-20' });
 
-    await page.goto(`/reports/cells?month=2026-06-01&leader=${LEADER}`);
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      `/reports/filed?month=2026-06-01&leader=${LEADER}&by=leader`,
-    );
-
-    await page.goto(`/reports/dcc?month=2026-06-01&leader=${LEADER}`);
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
-      'href',
-      `/reports/filed?month=2026-06-01&kind=dcc&leader=${LEADER}&by=leader`,
-    );
-  });
-});
-
-test.describe('Filed reports (decision 0292)', () => {
-  test('switches between Cell Groups and DCC, each with its own coverage figure', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-
-    const asked: string[] = [];
-    page.on('request', (request) => {
-      const match = /\/api\/v1\/reports\/(cells|dcc)\/monthly\?/.exec(request.url());
-      if (match) {
-        asked.push(match[1]);
+      for (const report of ['cells', 'dcc']) {
+        for (const query of [
+          'month=2026-06-01',
+          'month=2026-05-01',
+          `month=2026-06-01&leader=${LEADER}`,
+          'period=week',
+        ]) {
+          await page.goto(`/reports/${report}?${query}`);
+          await expect(page.getByRole('heading', { name: /(Your|’s) branch$|· their journey$/ })).toBeVisible();
+          await expect(page.getByText(/^\d+ of \d+ (meetings recorded|records filed)/)).toBeVisible();
+          await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
+          await expect(page.getByRole('link', { name: /Filed/ })).toHaveCount(0);
+        }
       }
     });
-
-    await page.goto('/reports/filed?month=2026-06-01');
-    await expect(page.getByText('What has been filed, and by whom.')).toBeVisible();
-
-    const which = page.getByRole('group', { name: 'Which records' });
-    await expect(which.getByRole('button')).toHaveText(['Cell meetings', 'DCC Sundays']);
-    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(which.getByRole('button', { name: 'DCC Sundays' })).toHaveAttribute('aria-pressed', 'false');
-
-    // Coverage first here too, and the rows beneath it.
-    await expect(page.locator('main h2').filter({ visible: true }).first()).toHaveText('Recording coverage');
-    await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'By Cell' })).toBeChecked();
-    await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toBeVisible();
-    await expect.poll(() => asked).toContain('cells');
-    expect(asked).not.toContain('dcc');
-
-    await which.getByRole('button', { name: 'DCC Sundays' }).click();
-    await expect(page).toHaveURL(/[?&]kind=dcc/);
-    await expect(page).toHaveURL(/[?&]month=2026-06-01/);
-    await expect(which.getByRole('button', { name: 'DCC Sundays' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByText('12 of 18 records filed')).toBeVisible();
-    await expect(page.getByText('6 of 8 meetings recorded')).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
-    await expect(page.getByRole('radio', { name: 'By Cell' })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-    await expect.poll(() => asked).toContain('dcc');
-
-    // Back returns to Cell Groups, because the choice is in the address.
-    await page.goBack();
-    await expect(page).not.toHaveURL(/kind=dcc/);
-    await expect(which.getByRole('button', { name: 'Cell meetings' })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  test('By Cell or By Sunday against By leader, kept in the address', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    await mockCoverageByLeader(page);
-
-    const byLeader: string[] = [];
-    page.on('request', (request) => {
-      const match = /\/api\/v1\/reports\/(cells|dcc)\/monthly\/by-leader/.exec(request.url());
-      if (match) {
-        byLeader.push(match[1]);
-      }
-    });
-
-    await page.goto('/reports/filed?month=2026-06-01');
-    const by = page.getByRole('radiogroup', { name: 'Group coverage by' });
-    await expect(by.getByRole('radio')).toHaveCount(2);
-    await expect(by.getByRole('radio', { name: 'By Cell' })).toBeChecked();
-
-    await by.getByText('By leader', { exact: true }).click();
-    await expect(page).toHaveURL(/[?&]by=leader/);
-    await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
-    await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-    await expect.poll(() => byLeader).toContain('cells');
-
-    // The choice survives the switch to DCC, and the table asks the DCC figures.
-    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC Sundays' }).click();
-    await expect(page).toHaveURL(/[?&]kind=dcc/);
-    await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
-    await expect(by.getByRole('radio', { name: 'By Sunday' })).not.toBeChecked();
-    await expect.poll(() => byLeader).toContain('dcc');
-
-    await by.getByText('By Sunday', { exact: true }).click();
-    await expect(page).not.toHaveURL(/by=leader/);
-    await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toBeVisible();
-
-    // A reload opens what was chosen.
-    await page.goto('/reports/filed?month=2026-06-01&kind=dcc&by=leader');
-    await expect(by.getByRole('radio', { name: 'By leader' })).toBeChecked();
-  });
-
-  // Checklist row perf-filed-by-leader: every request works out the whole month and checks
-  // every leader, so the table reads 200 at a time and pages ten from what it read.
-  test('By leader reads 200 leaders at once and pages ten at a time without asking again', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-
-    const leaders = Array.from({ length: 205 }, (_, index) => ({
-      leader: {
-        id: `3f1b7c6e-0000-4000-8000-000000008${String(index).padStart(3, '0')}`,
-        member_id: `M-08${String(index).padStart(4, '0')}`,
-        full_name: `Leader ${String(index + 1).padStart(3, '0')}`,
-      },
-      filed: 1,
-      owed: 2,
-    }));
-    const asked: URL[] = [];
-    await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => {
-      const url = new URL(route.request().url());
-      asked.push(url);
-      const start = Number(url.searchParams.get('cursor') ?? '0');
-      const end = start + Number(url.searchParams.get('limit'));
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          period: '2026-06-01',
-          open: true,
-          data: leaders.slice(start, end),
-          others: null,
-          total: { filed: 205, owed: 410 },
-          next_cursor: end < leaders.length ? String(end) : null,
-        }),
-      });
-    });
-
-    await page.goto('/reports/filed?month=2026-06-01&by=leader');
-    const next = page.getByRole('button', { name: 'Next' });
-    const previous = page.getByRole('button', { name: 'Previous' });
-
-    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Leader \d+$/ })).toHaveCount(10);
-    await next.click();
-    await expect(page.getByRole('link', { name: 'Leader 011' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Leader 001' })).toHaveCount(0);
-    await previous.click();
-    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
-    expect(asked).toHaveLength(1);
-    expect(asked[0].searchParams.get('limit')).toBe('200');
-
-    // Through to the 200th, then the 201st asks for the rest, once.
-    for (let shown = 2; shown <= 21; shown += 1) {
-      await next.click();
-    }
-    await expect(page.getByRole('link', { name: 'Leader 205' })).toBeVisible();
-    await expect(next).toBeDisabled();
-    expect(asked.map((url) => url.searchParams.get('cursor'))).toEqual([null, '200']);
-  });
-
-  test('By leader keeps the last ten on screen when the next 200 cannot be read', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-
-    const leaders = Array.from({ length: 205 }, (_, index) => ({
-      leader: {
-        id: `3f1b7c6e-0000-4000-8000-000000009${String(index).padStart(3, '0')}`,
-        member_id: `M-09${String(index).padStart(4, '0')}`,
-        full_name: `Leader ${String(index + 1).padStart(3, '0')}`,
-      },
-      filed: 1,
-      owed: 2,
-    }));
-    await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => {
-      const url = new URL(route.request().url());
-      if (url.searchParams.get('cursor') !== null) {
-        return route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
-          }),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          period: '2026-06-01',
-          open: true,
-          data: leaders.slice(0, 200),
-          others: null,
-          total: { filed: 205, owed: 410 },
-          next_cursor: '200',
-        }),
-      });
-    });
-
-    await page.goto('/reports/filed?month=2026-06-01&by=leader');
-    const next = page.getByRole('button', { name: 'Next' });
-    await expect(page.getByRole('link', { name: 'Leader 001' })).toBeVisible();
-    for (let shown = 2; shown <= 21; shown += 1) {
-      await next.click();
-    }
-
-    // Not "Loading…" beside the failure: the ten before it, and a way back.
-    await expect(page.getByText('Outside your scope.')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Leader 200' })).toBeVisible();
-    await expect(page.getByText('Loading…')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Previous' })).toBeEnabled();
-  });
-
-  test('one leader opened from By leader offers no By Cell or By Sunday, and returns to your report', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    await mockCoverageByLeader(page);
-
-    const scopes: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/monthly/by-leader')) {
-        scopes.push(new URL(request.url()).search);
-      }
-    });
-
-    for (const kind of ['cells', 'dcc'] as const) {
-      await page.goto(
-        `/reports/filed?month=2026-06-01${kind === 'dcc' ? '&kind=dcc' : ''}&leader=${LEADER}&by=leader`,
-      );
-
-      await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveAttribute(
-        'href',
-        `/reports/${kind}?month=2026-06-01`,
-      );
-      // By Cell and By Sunday list the reader's own Cells and calendar, so they are not
-      // offered once the scope is somebody else's.
-      await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-      await expect(page.getByRole('radio', { name: 'By Cell' })).toHaveCount(0);
-      await expect(page.getByRole('radio', { name: 'By Sunday' })).toHaveCount(0);
-      await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-      await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
-    }
-
-    // Without `by=leader` in the address a leader still opens By leader.
-    await page.goto(`/reports/filed?month=2026-06-01&leader=${LEADER}`);
-    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-
-    await expect.poll(() => scopes.length).toBeGreaterThan(0);
-    expect(scopes.every((search) => search.includes(LEADER))).toBe(true);
-  });
-});
-
-test.describe('Filed reports keeps the narrower scope its report had', () => {
-  /** Every monthly and by-leader request's scope, as `<report> <query>` without the period. */
-  function recordScopes(page: Page): string[] {
-    const scopes: string[] = [];
-    page.on('request', (request) => {
-      const url = new URL(request.url());
-      const match = /^\/api\/v1\/reports\/(cells|dcc)\/monthly(\/by-leader)?$/.exec(url.pathname);
-      if (match) {
-        const params = new URLSearchParams(url.search);
-        params.delete('period');
-        params.delete('limit');
-        params.delete('cursor');
-        scopes.push(`${match[1]}${match[2] ?? ''} ${params.toString()}`);
-      }
-    });
-    return scopes;
   }
-
-  const CELL = '3f1b7c6e-0000-4000-8000-000000000101';
-
-  /**
-   * **Cell Groups no longer offers a Cell** (decision 0293 took the Cell choices out of its
-   * Figures for), so this state is reached by its address alone. The sentence it shows still
-   * no longer says the Cell was "chosen on Cell Groups", which nothing there can now do.
-   */
-  test('one Cell in the address stays chosen, and only By leader is offered', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReportForOneCell(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    await mockCoverageByLeader(page);
-    const scopes = recordScopes(page);
-
-    await page.goto(`/reports/filed?month=2026-06-01&cell=${CELL}`);
-
-    await expect(page).toHaveURL(/\/reports\/filed\?/);
-    await expect(page.getByText(/^Figures for one Cell/)).toBeVisible();
-    // The one-Cell fixture's own figure, not the reader's whole branch.
-    await expect(page.getByText('3 of 4 meetings recorded')).toBeVisible();
-    await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
-    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-    await expect.poll(() => scopes).toContain(`cells scope=CELL&cell_id=${CELL}`);
-    await expect.poll(() => scopes).toContain(`cells/by-leader scope=CELL&cell_id=${CELL}`);
-
-    // DCC has no Cell scope, so switching drops it and the reader's own figures return.
-    await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC Sundays' }).click();
-    await expect(page).toHaveURL(/[?&]kind=dcc/);
-    await expect(page).not.toHaveURL(/[?&]cell=/);
-    await expect(page.getByText(/^Figures for one Cell/)).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
-    await expect(page.getByText('12 of 18 records filed')).toBeVisible();
-    expect(scopes.filter((scope) => scope.startsWith('dcc')).every((scope) => !scope.includes('cell_id'))).toBe(
-      true,
-    );
-  });
-
-  test('a Network chosen on DCC stays chosen, and only By leader is offered', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockWholeChurchReader(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    await mockDccTwelve(page, { today: '2026-06-20' });
-    await mockCoverageByLeader(page);
-    const scopes = recordScopes(page);
-
-    await page.goto('/reports/dcc');
-    await page.getByLabel('Figures for').selectOption({ label: "Men's Network" });
-    const link = page.getByRole('link', { name: 'see Filed reports' });
-    await expect(link).toHaveAttribute(
-      'href',
-      '/reports/filed?month=2026-06-01&kind=dcc&network=MENS',
-    );
-    await link.click();
-
-    await expect(page).toHaveURL(/\/reports\/filed\?/);
-    await expect(page.getByText('Figures for the Men’s Network.')).toBeVisible();
-    await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
-    await expect(page.getByRole('cell', { name: 'Total', exact: true })).toBeVisible();
-    await expect.poll(() => scopes).toContain('dcc scope=NETWORK&network=MENS');
-    await expect.poll(() => scopes).toContain('dcc/by-leader scope=NETWORK&network=MENS');
-
-    // Cell Groups has no Network scope, so switching drops it.
-    await page
-      .getByRole('group', { name: 'Which records' })
-      .getByRole('button', { name: 'Cell meetings' })
-      .click();
-    await expect(page).not.toHaveURL(/[?&]network=/);
-    await expect(page.getByText('Figures for the Men’s Network.')).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'By Cell' })).toBeChecked();
-    await expect.poll(() => scopes).toContain('cells scope=WHOLE_CHURCH');
-  });
-
-  test('a Cell in the address is ignored for DCC, and a Network for Cell Groups', async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockWholeChurchReader(page);
-    await mockCells(page);
-    await mockCellReport(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    const scopes = recordScopes(page);
-
-    await page.goto(`/reports/filed?month=2026-06-01&kind=dcc&cell=${CELL}`);
-    await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
-    await expect(page.getByText(/^Figures for one Cell/)).toHaveCount(0);
-    await expect.poll(() => scopes).toContain('dcc scope=WHOLE_CHURCH');
-
-    await page.goto('/reports/filed?month=2026-06-01&network=MENS');
-    await expect(page.getByRole('radio', { name: 'By Cell' })).toBeChecked();
-    await expect(page.getByText('Figures for the Men’s Network.')).toHaveCount(0);
-    await expect.poll(() => scopes).toContain('cells scope=WHOLE_CHURCH');
-    expect(scopes.some((scope) => scope.includes('NETWORK') || scope.includes('CELL'))).toBe(false);
-  });
-
-  test('a Network in the address does not narrow, or claim to narrow, a reader without a whole-church grant', async ({
-    page,
-  }) => {
-    // Only a whole-church reader is offered a Network on DCC, so for anybody else the
-    // figures stay their own branch, and a line naming a Network would misstate their scope
-    // (sections 17 and 19: a figure says what it counts).
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    await mockDccEvents(page);
-    await mockDccReport(page);
-    const scopes = recordScopes(page);
-
-    await page.goto('/reports/filed?month=2026-06-01&kind=dcc&network=MENS');
-    await expect(page.getByText('12 of 18 records filed')).toBeVisible();
-    await expect.poll(() => scopes.length).toBeGreaterThan(0);
-    expect(scopes.some((scope) => scope.includes('NETWORK'))).toBe(false);
-    await expect(page.getByText('Figures for the Men’s Network.')).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
-  });
 });
 
 test.describe('the Growth reports: counts only, as of now (decision 0292)', () => {
@@ -1215,63 +621,73 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 });
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
-  /** Two across on a phone, three from `sm`, six from `lg` (decision 0292). */
+  /**
+   * Two across on a phone and one row from `sm`: a whole-church reader's five (decision 0292)
+   * and a Full view leader's four (decision 0340).
+   */
   const LAYOUTS = [
-    { width: 375, height: 812, columns: 2, rows: 3 },
-    { width: 768, height: 1024, columns: 3, rows: 2 },
-    { width: 1280, height: 800, columns: 6, rows: 1 },
+    { width: 375, height: 812, columns: { five: 2, four: 2 }, rows: { five: 3, four: 2 } },
+    { width: 768, height: 1024, columns: { five: 5, four: 4 }, rows: { five: 1, four: 1 } },
+    { width: 1280, height: 800, columns: { five: 5, four: 4 }, rows: { five: 1, four: 1 } },
   ] as const;
 
-  for (const layout of LAYOUTS) {
-    test(`at ${layout.width}px the six tabs sit ${layout.columns} across, and no report scrolls sideways`, async ({
-      page,
-    }) => {
-      test.setTimeout(60_000);
-      await page.clock.setFixedTime(NOW);
-      await page.setViewportSize({ width: layout.width, height: layout.height });
-      await mockEveryReport(page);
+  for (const { reader, church, tabs } of READERS) {
+    const count = tabs.length === 5 ? 'five' : 'four';
+    for (const layout of LAYOUTS) {
+      test(`for ${reader}, at ${layout.width}px the ${count} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
+        page,
+      }) => {
+        test.setTimeout(60_000);
+        await page.clock.setFixedTime(NOW);
+        await page.setViewportSize({ width: layout.width, height: layout.height });
+        await mockEveryReport(page, { church });
 
-      for (const tab of TABS) {
-        await page.goto(tab.path);
-        const which = page.getByRole('navigation', { name: 'Which report' });
-        await expect(which.getByRole('link')).toHaveCount(6);
-        await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
-        await page.evaluate(() => document.fonts.ready);
+        for (const tab of tabs) {
+          await page.goto(tab.path);
+          const which = page.getByRole('navigation', { name: 'Which report' });
+          await expect(which.getByRole('link')).toHaveCount(tabs.length);
+          await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
+          await page.evaluate(() => document.fonts.ready);
 
-        const boxes = await which.getByRole('link').evaluateAll((links) =>
-          links.map((link) => {
-            const box = link.getBoundingClientRect();
-            return {
-              text: link.textContent,
-              left: Math.round(box.left),
-              top: Math.round(box.top),
-              width: box.width,
-              height: box.height,
-              scroll: link.scrollWidth,
-              client: link.clientWidth,
-            };
-          }),
-        );
+          const boxes = await which.getByRole('link').evaluateAll((links) =>
+            links.map((link) => {
+              const box = link.getBoundingClientRect();
+              return {
+                text: link.textContent,
+                left: Math.round(box.left),
+                top: Math.round(box.top),
+                width: box.width,
+                height: box.height,
+                scroll: link.scrollWidth,
+                client: link.clientWidth,
+              };
+            }),
+          );
 
-        expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(layout.columns);
-        expect(new Set(boxes.map((box) => box.top)).size, `${tab.path}: rows`).toBe(layout.rows);
-        for (const box of boxes) {
-          expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
-          expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
+          expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(
+            layout.columns[count],
+          );
+          expect(new Set(boxes.map((box) => box.top)).size, `${tab.path}: rows`).toBe(
+            layout.rows[count],
+          );
+          for (const box of boxes) {
+            expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
+            expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
+          }
+          // Equal buttons: every tab as wide as the others, within a pixel.
+          const widths = boxes.map((box) => box.width);
+          expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
+
+          const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+            scrollWidth: document.documentElement.scrollWidth,
+            clientWidth: document.documentElement.clientWidth,
+          }));
+          expect(scrollWidth, `${tab.path} scrolls sideways at ${layout.width}px`).toBeLessThanOrEqual(
+            clientWidth,
+          );
         }
-        // Equal buttons: every tab as wide as the others, within a pixel.
-        const widths = boxes.map((box) => box.width);
-        expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
-
-        const { scrollWidth, clientWidth } = await page.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-        }));
-        expect(scrollWidth, `${tab.path} scrolls sideways at ${layout.width}px`).toBeLessThanOrEqual(
-          clientWidth,
-        );
-      }
-    });
+      });
+    }
   }
 });
 

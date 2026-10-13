@@ -11,6 +11,7 @@ import {
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
+  CLOSED_CELL as CLOSED_CELL_ROW,
   awaitingClosedRow,
   awaitingRow,
   closedAsked,
@@ -1175,38 +1176,57 @@ test.describe('the Record queue', () => {
   });
 
   /**
-   * A list read a page at a time counts what it has read and says there is more
-   * (section 19, decision 0290). With every Cell read and none behind, the count is 0 and
-   * nothing points elsewhere; with a further page unread, the count is "0+" and Reports
-   * is where the rest are.
-   *
-   * The empty row claims the whole scope only when every Cell was read, and names the
-   * limit otherwise (walkthrough of 2026-09-21): "this page of your scope" was our word.
+   * Pending CG Reports reads every page of both views of the Cells index, following
+   * `next_cursor` 200 at a time, so it names every Cell behind and its count is exact
+   * (decision 0340): no "+", no "None of the first 50", and no link to Filed Reports, which
+   * is withdrawn. Each view here is two pages, and the Cells behind are on the second.
    */
-  test('counts the Cells behind that it read, and says there is more when there is', async ({
+  test('reads every page of the Cells, counts every Cell behind exactly, and points nowhere else', async ({
     page,
   }) => {
-    // Mid-month, so last month is not read too (decision 0315).
+    // Mid-month, so last month is not read too (decision 0315), and June is open, so the
+    // closed view is read as well (decision 0266).
     await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
     await mockRecordScreen(page, {});
-    const notBehind = (url: string, nextCursor: string | null) =>
-      JSON.stringify({
-        reporting_month: '2026-06-01',
-        open: true,
-        data:
-          new URL(url).searchParams.get('state') === 'CLOSED'
-            ? []
-            : [{ ...CELL_WITH_MEETINGS, coverage: { recorded: 4, scheduled: 4, behind: 0 } }],
-        next_cursor: nextCursor,
-      });
 
-    await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({
+    const caughtUp = { coverage: { recorded: 4, scheduled: 4, behind: 0 } };
+    const secondRunning = {
+      ...CELL_WITH_MEETINGS,
+      id: '3f1b7c6e-0000-4000-8000-000000000119',
+      cell_id: 'CELL-000019',
+      leader: {
+        person_id: '3f1b7c6e-0000-4000-8000-000000000219',
+        member_id: 'M-000519',
+        full_name: 'Gregoria Malabanan',
+      },
+    };
+    let behind = false;
+    const asked: URLSearchParams[] = [];
+    await page.route('**/api/v1/cells?*', (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      asked.push(params);
+      const closed = params.get('state') === 'CLOSED';
+      const second = params.get('cursor') === (closed ? 'closed-two' : 'running-two');
+      const data = closed
+        ? second
+          ? [behind ? CLOSED_CELL_ROW : { ...CLOSED_CELL_ROW, ...caughtUp }]
+          : []
+        : second
+          ? [behind ? secondRunning : { ...secondRunning, ...caughtUp }]
+          : [{ ...CELL_WITH_MEETINGS, ...caughtUp }];
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: notBehind(route.request().url(), null),
-      }),
-    );
+        body: JSON.stringify({
+          reporting_month: '2026-06-01',
+          open: true,
+          data,
+          next_cursor: second ? null : closed ? 'closed-two' : 'running-two',
+        }),
+      });
+    });
+
+    // Nobody behind on either page of either view: 0, and the whole scope is claimed.
     await page.goto('/dashboard');
     await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*0$/ })).toBeVisible();
     await chooseList(page, /^Pending CG Reports/);
@@ -1214,31 +1234,30 @@ test.describe('the Record queue', () => {
     await expect(
       attention.getByRole('cell', { name: 'No Cell you oversee is behind this month.' }),
     ).toBeVisible();
-    await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveCount(0);
-    await expect(attention.getByText(/None of the first 50/)).toHaveCount(0);
+    await expect(attention.getByText(/None of the first/)).toHaveCount(0);
+    for (const [state, cursor] of [
+      [null, 'running-two'],
+      ['CLOSED', 'closed-two'],
+    ] as const) {
+      expect(
+        asked.some((query) => query.get('state') === state && query.get('cursor') === cursor),
+        `the ${state ?? 'running'} view's second page was not read`,
+      ).toBe(true);
+    }
+    // Two hundred at a time, the API's most.
+    expect(asked.every((query) => query.get('limit') === '200')).toBe(true);
 
-    await page.unroute('**/api/v1/cells?*');
-    await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: notBehind(route.request().url(), 'more'),
-      }),
-    );
+    // One Cell behind on each view's second page: both are named, and the count is exact.
+    behind = true;
     await page.reload();
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*0\+$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*2$/ })).toBeVisible();
     await chooseList(page, /^Pending CG Reports/);
-    await expect(
-      attention.getByRole('cell', {
-        name: 'None of the first 50 Cells you oversee is behind this month.',
-      }),
-    ).toBeVisible();
-    await expect(attention.getByText('No Cell you oversee is behind this month.')).toHaveCount(0);
-    await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveAttribute(
-      'href',
-      // Decision 0292: the rows behind the Cell figure are under Filed reports.
-      /\/reports\/filed\?month=\d{4}-\d{2}-01&behind=1$/,
-    );
+    const rows = page.getByRole('table', { name: 'Pending CG Reports' }).locator('tbody tr');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: 'Gregoria Malabanan' })).toHaveCount(1);
+    await expect(rows.filter({ hasText: 'Paolo Reyes' })).toHaveCount(1);
+    await expect(attention.getByRole('link', { name: /^See every Cell behind/ })).toHaveCount(0);
+    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
   });
 });
 
@@ -1993,7 +2012,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect.poll(() => asked.some((query) => query.includes('q=reyes'))).toBe(true);
   });
 
-  test('a list with a further page unread counts what it read and says there is more', async ({
+  test('a list with a further page unread counts what it read and says there is more, and Pending CG Reports reads every page', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -2013,23 +2032,33 @@ test.describe('Record’s four lists (decision 0290)', () => {
       [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
       [person(13, 'Soledad Aquino')],
     );
-    await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({
+    // The running view is two pages, a Cell behind on each (decision 0340).
+    await page.route('**/api/v1/cells?*', (route) => {
+      const url = route.request().url();
+      const second = new URL(url).searchParams.get('cursor') === 'more-cells';
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           reporting_month: '2026-06-01',
           open: false,
-          data: closedAsked(route.request().url()) ? [] : [CELL_WITH_MEETINGS],
-          next_cursor: closedAsked(route.request().url()) ? null : 'more-cells',
+          data: closedAsked(url)
+            ? []
+            : [
+                second
+                  ? { ...CELL_WITH_MEETINGS, id: '3f1b7c6e-0000-4000-8000-000000000119', cell_id: 'CELL-000019' }
+                  : CELL_WITH_MEETINGS,
+              ],
+          next_cursor: closedAsked(url) || second ? null : 'more-cells',
         }),
-      }),
-    );
+      });
+    });
 
     await page.goto('/dashboard');
 
     const lists = recordLists(page);
-    await expect(lists.getByRole('button', { name: /^Pending CG Reports\s*1\+$/ })).toBeVisible();
+    // Every page is read, so the count is exact and carries no "+".
+    await expect(lists.getByRole('button', { name: /^Pending CG Reports\s*2$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
     // The queue is read whole, so its count carries no "+".

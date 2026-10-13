@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -9,9 +8,15 @@ import { AttendanceBuckets } from '@/components/attendance-figures';
 import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
-import { PeriodTabs, RangeNavigator, RootLeadersTwelve, TwelveTable } from '@/components/my-twelve';
+import {
+  BranchTwelve,
+  PeriodTabs,
+  RangeNavigator,
+  RootLeadersTwelve,
+  TwelveTable,
+} from '@/components/my-twelve';
 import { YearTable } from '@/components/report-year';
-import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
+import { isBranchReader, ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -82,6 +87,8 @@ export function DccReport() {
   // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
   // server's screens and never by a role.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
+  const branchReader = isBranchReader(me.data);
   // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
   // only, so they wait to know who is reading before asking for any.
   const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
@@ -291,9 +298,9 @@ export function DccReport() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
-            {/* Coverage leads, as one line (decision 0224); its rows are under Filed reports. The
-                Senior Pastors read it on Record's Recording status instead (owner, 2026-10-09), and
-                see only a Sunday with no service, which section 9 names. */}
+            {/* Coverage leads, as one line (decision 0224); who is behind is on Record's Recording
+                Status (decision 0340). The Senior Pastors read it there instead (owner,
+                2026-10-09), and see only a Sunday with no service, which section 9 names. */}
             <div className="text-sm">
               {seniorPastor ? null : (
                 <p>
@@ -301,22 +308,6 @@ export function DccReport() {
                     {twelve.data.coverage.met} of {twelve.data.coverage.owed}
                   </span>{' '}
                   records filed {what}
-                  {kind === 'MONTH' ? (
-                    <>
-                      {' · '}
-                      <Link
-                        href={`/reports/filed?${new URLSearchParams({
-                          month: guardMonth,
-                          kind: 'dcc',
-                          ...(leader ? { leader, by: 'leader' } : {}),
-                          ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
-                        }).toString()}`}
-                        className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                      >
-                        see Filed reports
-                      </Link>
-                    </>
-                  ) : null}
                 </p>
               )}
               {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
@@ -351,6 +342,13 @@ export function DccReport() {
                 twelve={twelve.data}
                 kind={kind}
                 where="DCC"
+                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+              />
+            ) : branchReader ? (
+              <BranchTwelve
+                twelve={twelve.data}
+                kind={kind}
+                subjectName={subjectName}
                 openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
               />
             ) : (
