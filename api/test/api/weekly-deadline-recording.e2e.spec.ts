@@ -261,6 +261,7 @@ describe('a closed week inside an open month (decision 0335)', () => {
       expect(recordClosesAt(day).getTime()).toBeGreaterThan(now);
     }
   });
+
   it('counts a meeting as behind only while its week is open', async () => {
     const closed = await closedSaturdayInOpenMonth();
     if (closed === null) {
@@ -294,6 +295,7 @@ describe('a closed week inside an open month (decision 0335)', () => {
     // The closed week's meeting has no record and is not behind (owner, 2026-10-13).
     expect(row?.coverage.behind).toBe(expected);
   });
+
   /**
    * The Branch screen's two figures, for the current month (decision 0252): behind only while
    * the week is open. **Discriminating only once the month has a closed week**, from about

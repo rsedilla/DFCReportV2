@@ -27,7 +27,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  * Reports → DCC → By Sunday already carries.
  *
  * **States are words, never colour** (sections 13, 17 and 19): Recorded, Awaiting a record,
- * Not yet, and Not recorded · month closed, which opens nothing. A Sunday with no service is shown in its place with its reason (section 9).
+ * Not yet, and Not recorded · week closed, which opens nothing. A Sunday with no service is shown in its place with its reason (section 9).
  *
  * **Monday first** (decision 0054). On a phone the grid becomes a list of the same dates.
  */
