@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-13, the trigger being decision 0336: of 335 files, 334 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0336 each moved the first two and
+2026-10-13, the trigger being decision 0337: of 336 files, 335 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0337 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-13 and triggered by 0336, and was left stale by 0337 the same day. The one before that was dated
 2026-10-12 and triggered by 0335, and was left stale by 0336 the next day. The one before that was dated
 2026-10-12 and triggered by 0334, and was left stale by 0335 the same day. The one before that was dated
 2026-10-11 and triggered by 0333, and was left stale by 0334 the next day. The one before that was dated
@@ -713,6 +714,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-12 — [A Full view leader has Recording Status](docs/decisions/0334-a-full-view-leader-has-recording-status.md)
 - 2026-10-12 — [A week is due the Monday after it, and closes two Mondays later](docs/decisions/0335-a-week-is-due-the-monday-after-it.md)
 - 2026-10-13 — [Pending DCC Reports](docs/decisions/0336-pending-dcc-reports.md)
+- 2026-10-13 — [Sign in with a username or an email address](docs/decisions/0337-sign-in-with-a-username.md)
 
 ### Open — awaiting a ruling
 

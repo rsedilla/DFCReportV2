@@ -11,6 +11,7 @@ import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
+import { UsernamesService, assertUsernameShape } from './usernames.service';
 
 /** Section 6 gives a reset token "a short expiration (e.g. 30 minutes)". */
 const RESET_LIFETIME_MS = 30 * 60 * 1000;
@@ -35,6 +36,7 @@ export class CredentialsService {
     private readonly sessions: TokensService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
+    private readonly usernames: UsernamesService,
   ) {}
 
   /**
@@ -101,9 +103,14 @@ export class CredentialsService {
     }
   }
 
-  /** Redeems an activation token and sets the first password. */
-  async activate(token: string, password: string): Promise<void> {
-    await this.setPassword('ACTIVATION', token, password);
+  /**
+   * Redeems an activation token and sets the first password, and the username where one is
+   * sent (decision 0337). A name another account holds refuses the whole activation, so the
+   * token is not spent on a request that changed nothing.
+   */
+  async activate(token: string, password: string, username?: string): Promise<void> {
+    const name = username === undefined ? null : assertUsernameShape(username);
+    await this.setPassword('ACTIVATION', token, password, name);
   }
 
   /** Redeems a reset token and replaces the password. */
@@ -115,6 +122,7 @@ export class CredentialsService {
     purpose: 'ACTIVATION' | 'PASSWORD_RESET',
     token: string,
     password: string,
+    username: string | null = null,
   ): Promise<void> {
     assertPasswordIsAcceptable(password);
 
@@ -180,6 +188,10 @@ export class CredentialsService {
         })
         .where('id', '=', claimed.accountId)
         .execute();
+
+      if (username !== null) {
+        await this.usernames.setWithin(trx, claimed.accountId, username);
+      }
 
       // **Every existing session dies**, and through the one implementation that
       // gets the ordering right. Section 6 requires the marker to be stamped

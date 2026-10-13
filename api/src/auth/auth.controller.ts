@@ -20,7 +20,18 @@ import {
   type SecondStepChallenge,
   type SecondStepSetup,
 } from './second-step.service';
-import { ForgotPasswordDto, SetPasswordDto } from './dto/credentials.dto';
+import {
+  ActivateDto,
+  ActivationTokenDto,
+  ForgotPasswordDto,
+  SetPasswordDto,
+  SetUsernameDto,
+} from './dto/credentials.dto';
+import { UsernamesService, type Suggestion } from './usernames.service';
+import {
+  CurrentIdempotency,
+  type CurrentClaim,
+} from '../common/idempotency/current-idempotency.decorator';
 
 import type { Actor } from './authorization/authorization.service';
 
@@ -30,6 +41,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly credentials: CredentialsService,
     private readonly secondSteps: SecondStepService,
+    private readonly usernames: UsernamesService,
   ) {}
 
   /**
@@ -44,8 +56,45 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @Public('The activation token is the credential; the holder has no session yet.')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async activate(@Body() body: SetPasswordDto): Promise<void> {
-    await this.credentials.activate(body.token, body.password);
+  async activate(@Body() body: ActivateDto): Promise<void> {
+    // A null username is an omitted one (decision 0199).
+    await this.credentials.activate(body.token, body.password, body.username ?? undefined);
+  }
+
+  /**
+   * The suggested username for an activation token, without using the token up (decision
+   * 0337). Part of activation on section 7's unauthenticated list; the token is the credential,
+   * and an unusable one is answered as activation answers it.
+   */
+  @Post('activate/username-suggestion')
+  @HttpCode(HttpStatus.OK)
+  @Public('Part of activation; the activation token is the credential.')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async activationUsernameSuggestion(@Body() body: ActivationTokenDto): Promise<Suggestion> {
+    return this.usernames.suggestionForActivation(body.token);
+  }
+
+  /** The caller's own suggested username (decision 0337). */
+  @Get('username-suggestion')
+  // Ten a minute per account (owner, Q7): each answer reads which names are held.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @AuthenticatedOnly('Suggests a username for the caller’s own account, from their own name.')
+  async usernameSuggestion(@CurrentActor() actor: Actor): Promise<Suggestion> {
+    return this.usernames.suggestionFor(actor);
+  }
+
+  /** Sets or changes the caller's own username (decision 0337). */
+  @Post('username')
+  @HttpCode(HttpStatus.OK)
+  // Ten a minute per account (owner, Q7): a "taken" refusal shows an account exists.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @AuthenticatedOnly('Sets the username of the caller’s own account, not anything of the church.')
+  async setUsername(
+    @CurrentActor() actor: Actor,
+    @Body() body: SetUsernameDto,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<{ username: string }> {
+    return this.usernames.setOwn(actor, body.username, claim);
   }
 
   /**
@@ -82,7 +131,18 @@ export class AuthController {
   @Public('Sign-in is how a session begins; there is no token to present yet.')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async login(@Body() body: LoginDto): Promise<SessionTokens | SecondStepChallenge> {
-    return this.auth.login(body.email, body.password, body.device_label ?? null);
+    // One or the other (decision 0337). An explicit null means what omitting the key
+    // means (decision 0199): `@IsOptional()` lets null past every validator.
+    const email = body.email ?? undefined;
+    const username = body.username ?? undefined;
+    if ((email === undefined) === (username === undefined)) {
+      throw new ValidationFailedError('Send either an email address or a username.');
+    }
+    return this.auth.login(
+      email !== undefined ? { email } : { username: username as string },
+      body.password,
+      body.device_label ?? null,
+    );
   }
 
   /**

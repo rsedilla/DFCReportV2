@@ -96,6 +96,8 @@ export class AccountProvisioningService {
     account: {
       id: string;
       email: string;
+      /** Shown to an administrator, who cannot set it (decision 0337). */
+      username: string | null;
       status: string;
       roles: AccountRole[];
       created_at: string;
@@ -113,7 +115,7 @@ export class AccountProvisioningService {
 
     const account = await this.db
       .selectFrom('accounts')
-      .select(['id', 'email', 'status', 'created_at', 'full_view'])
+      .select(['id', 'email', 'username', 'status', 'created_at', 'full_view'])
       .where('person_id', '=', personId)
       .executeTakeFirst();
 
@@ -133,6 +135,7 @@ export class AccountProvisioningService {
       account: {
         id: account.id,
         email: account.email,
+        username: account.username,
         status: account.status,
         roles: roles.map((row) => row.role),
         created_at: new Date(account.created_at).toISOString(),

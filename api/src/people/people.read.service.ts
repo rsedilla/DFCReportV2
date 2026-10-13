@@ -61,6 +61,8 @@ export interface PersonForDecision {
    * between them and a generational suffix lives inside this one (section 3).
    */
   lastName: string;
+  /** For a suggested username's middle initial (decision 0337); null where there is none. */
+  middleName: string | null;
   mergedIntoId: string | null;
   isArchived: boolean;
 }
@@ -150,6 +152,7 @@ export class PeopleReadService {
       fullName: composeName(person),
       firstName: person.first_name,
       lastName: person.last_name,
+      middleName: person.middle_name,
       mergedIntoId: person.merged_into_id,
       isArchived: person.state === 'ARCHIVED',
     };
@@ -205,6 +208,7 @@ export class PeopleReadService {
           fullName: composeName(row),
           firstName: row.first_name,
           lastName: row.last_name,
+          middleName: row.middle_name,
           mergedIntoId: row.merged_into_id,
           isArchived: row.state === 'ARCHIVED',
         },

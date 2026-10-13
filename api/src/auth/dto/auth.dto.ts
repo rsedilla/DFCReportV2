@@ -2,10 +2,23 @@ import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsEmailAddress } from '../../common/text/is-email-address';
 
+/** Sign-in takes the email address or the username, one or the other (decision 0337). */
 export class LoginDto {
+  @IsOptional()
   @IsEmailAddress({ message: 'Enter a valid email address.' })
   @MaxLength(320)
-  email!: string;
+  email?: string;
+
+  /**
+   * Any text up to 100 characters: a name that cannot be a username is answered as a wrong
+   * one is, so the shape of an answer says nothing about which names exist.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Enter your email address or username.' })
+  @MaxLength(100)
+  @IsStorableText()
+  username?: string;
 
   @IsString()
   @MinLength(1, { message: 'Enter your password.' })

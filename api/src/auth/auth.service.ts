@@ -47,17 +47,24 @@ export class AuthService {
    * with a session (section 6, decision 0302); every other account, as before.
    */
   async login(
-    email: string,
+    who: { email: string } | { username: string },
     password: string,
     deviceLabel: string | null,
   ): Promise<SessionTokens | SecondStepChallenge> {
-    const account = await this.accounts.findByEmail(email);
+    const account =
+      'email' in who
+        ? await this.accounts.findByEmail(who.email)
+        : await this.accounts.findByUsername(who.username);
     const correct = await this.passwords.verify(account?.password_hash ?? null, password);
 
     // One response for every failure: wrong password, no such account, an account
-    // awaiting activation, and a disabled one are indistinguishable from outside.
+    // awaiting activation, and a disabled one are indistinguishable from outside. The
+    // same words for a username as for an address (decision 0337).
     if (!account || !correct || account.status !== 'ACTIVE') {
-      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Email or password is incorrect.');
+      throw new ApiError(
+        ApiErrorCode.UNAUTHENTICATED,
+        'email' in who ? 'Email or password is incorrect.' : 'Username or password is incorrect.',
+      );
     }
 
     if (account.owes_second_step) {
@@ -291,6 +298,8 @@ export class AuthService {
       account_id: actor.accountId,
       person_id: actor.personId,
       email: account?.email ?? null,
+      // Null until the holder sets one (decision 0337).
+      username: account?.username ?? null,
       // **The caller's own first name, and only theirs.** A client greets the
       // person it just signed in, and had no way to learn what to call them
       // short of fetching their Person record — a second request, needing a

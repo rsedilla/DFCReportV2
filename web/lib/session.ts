@@ -387,13 +387,17 @@ export interface SecondStepChallenge {
  * session is adopted only once there is one.
  */
 export async function signIn(
-  email: string,
+  emailOrUsername: string,
   password: string,
   deviceLabel: string | null,
 ): Promise<SecondStepChallenge | null> {
+  // A username never contains `@`, so whatever does is an address (decision 0337).
+  const who = emailOrUsername.includes('@')
+    ? { email: emailOrUsername }
+    : { username: emailOrUsername };
   const answer = await apiRequest<SessionTokens | SecondStepChallenge>('/api/v1/auth/login', {
     method: 'POST',
-    body: { email, password, device_label: deviceLabel ?? undefined },
+    body: { ...who, password, device_label: deviceLabel ?? undefined },
   });
 
   if ('second_step' in answer) {

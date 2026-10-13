@@ -9,6 +9,8 @@ export interface AccountRecord {
   id: string;
   person_id: string;
   email: string;
+  /** Null until the holder sets one (decision 0337). */
+  username: string | null;
   password_hash: string | null;
   status: AccountStatus;
   sessions_revoked_at: Date | null;
@@ -65,6 +67,15 @@ export class AccountsRepository {
     return row ?? null;
   }
 
+  /** By username, compared lowercase (decision 0337). */
+  async findByUsername(username: string): Promise<AccountRecord | null> {
+    const row = await this.selectAccount()
+      .where('accounts.username', '=', username.trim().toLowerCase())
+      .executeTakeFirst();
+
+    return row ?? null;
+  }
+
   /**
    * One statement, because the access-token guard runs it on every request: the
    * account, whether it owes the second step, and when its live step was set up.
@@ -74,6 +85,7 @@ export class AccountsRepository {
       'accounts.id',
       'accounts.person_id',
       'accounts.email',
+      'accounts.username',
       'accounts.password_hash',
       'accounts.status',
       'accounts.sessions_revoked_at',

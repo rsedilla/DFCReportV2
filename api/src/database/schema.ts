@@ -102,6 +102,11 @@ export interface AccountsTable {
    * account holding `roles.manage`.
    */
   full_view: Generated<boolean>;
+  /**
+   * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
+   * and numbers, unique; both are database constraints. Set only by its holder.
+   */
+  username: string | null;
   created_at: ServerTimestamp;
   updated_at: ServerTimestamp;
 }
@@ -228,6 +233,9 @@ export type AuditAction =
   // Full view ticked or cleared (section 7, decision 0323), with its previous and new
   // value, by an administrator. Targets the account.
   | 'account.full_view_changed'
+  // A username set or changed by its holder, with the old and the new (decision 0337).
+  // Targets the account.
+  | 'account.username_set'
   // Section 21 lists "Second sign-in step set up or reset, and a recovery code used".
   // Each targets the account.
   | 'second_step.set_up'

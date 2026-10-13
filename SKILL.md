@@ -1145,6 +1145,7 @@ Exceptions with explicit system access:
 
 - person_id
 - email — required for accounts and unique after normalization
+- username — optional, unique, lowercase (decision 0337)
 - password_hash
 - account status — exactly:
   - `PENDING_ACTIVATION` — created, activation email sent, no password set
@@ -1236,6 +1237,7 @@ accounts
 - id
 - person_id
 - email               unique after normalization
+- username            nullable, unique, lowercase letters and numbers (decision 0337)
 - password_hash       nullable until activated
 - status              PENDING_ACTIVATION | ACTIVE | DISABLED
 - sessions_revoked_at nullable, the account-wide revocation marker
@@ -1250,7 +1252,7 @@ One Person has at most one Account, whatever number of Cells they lead (above). 
 
 Include:
 
-- Login with email + password
+- Login with email or username + password
 - Logout
 - Forgot Password
 - Password Reset via email
@@ -1258,6 +1260,24 @@ Include:
 - Change Password
 - Secure token handling
 - A second sign-in step for `ADMIN` and `SENIOR_PASTOR` accounts (below)
+
+### Usernames
+
+**An account may carry a username, and sign-in takes it or the email address, with the
+password** (ruling of 2026-10-13, decision 0337). Activation asks for one beside the password;
+an existing account may set one, optionally, on its Account page, and its holder may change it
+there, freeing the old one at once. Either screen fills in a suggestion: the first letter of the
+first name, of the middle name where there is one, and the surname, lowercase, marks removed,
+spaces, hyphens and apostrophes dropped and a trailing `Jr`, `Sr`, `II`, `III` or `IV` left out;
+where that is taken, the next free name with 2, then 3, added, and the screen says so. A username
+is 3 to 30 lowercase letters and numbers starting with a letter, stored and compared lowercase,
+and no two accounts share one; the database enforces both. A name typed that is taken or
+malformed is refused. **A taken name shows that an account exists, and that is accepted**
+(owner, 2026-10-13): only somebody signed in, or holding their own activation link, can try one,
+and sign-in and forgot password still never tell; setting one's own username and reading its suggestion are each limited to ten a minute for each account (owner, 2026-10-13), and at activation, as activation itself is, to ten a minute from each address. **A disabled account keeps its username**,
+whatever disabled it, so one name never stands for two people; only the holder frees a name, by
+changing it. An Admin sees it on the person page and cannot set it. Everything else about
+signing in is unchanged, and email remains how the system reaches the holder.
 
 ### The second sign-in step
 
@@ -1958,10 +1978,10 @@ capability_grants
 
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
-- an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
-- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions. **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
+- an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows (activation's username suggestion included, decision 0337), and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
 
-Beyond those requests, which carry what their sender asked and the decision on it, neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
+Beyond those requests, which carry what their sender asked and the decision on it, and the username suggestion and the refusal of a taken name, signed in or at activation, which read which names other accounts hold and nothing more about them (decision 0337, which accepts that a taken name shows an account exists), neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -4498,6 +4518,7 @@ Audit important actions, including:
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
+- A username set or changed, with the old and the new (decision 0337)
 - Second sign-in step set up or reset, and a recovery code used
 - Role/permission changes
 - Attendance submission on behalf
@@ -4603,13 +4624,16 @@ Recommended REST areas:
 Examples:
 
 ```text
-POST /api/v1/auth/login
+POST /api/v1/auth/login                  email or username, and the password (decision 0337)
 POST /api/v1/auth/forgot-password
 POST /api/v1/auth/reset-password
-POST /api/v1/auth/activate               sets the first password (Section 6)
+POST /api/v1/auth/activate               sets the first password, and a username (Section 6)
+POST /api/v1/auth/activate/username-suggestion  the suggested username for an activation token (decision 0337)
+GET  /api/v1/auth/username-suggestion    the caller's suggested username (decision 0337)
+POST /api/v1/auth/username               sets or changes the caller's own username (decision 0337)
 GET  /api/v1/auth/me
 
-GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles and email; `accounts.manage` (decision 0276)
+GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles, email and username; `accounts.manage` (decisions 0276 and 0337)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)

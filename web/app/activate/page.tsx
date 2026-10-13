@@ -19,14 +19,14 @@ export default function ActivatePage() {
   return (
     <AuthCard
       title="Activate your account"
-      intro="Choose a password. Nobody else, including an administrator, will know it."
+      intro="Choose a username and a password. Nobody else, including an administrator, will know the password."
     >
       <Suspense fallback={<p className="text-muted text-sm">Loading…</p>}>
         <SetPasswordForm
           path="/api/v1/auth/activate"
           submitLabel="Activate account"
           successTitle="Your account is active"
-          successBody="Sign in with your email address and the password you just set."
+          successBody="Sign in with your username or your email address, and the password you just set."
         />
       </Suspense>
     </AuthCard>

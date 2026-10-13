@@ -1,7 +1,16 @@
-import { IsBoolean, IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 import type { AccountRole } from '../../database/schema';
 import { IsEmailAddress } from '../../common/text/is-email-address';
+import { IsStorableText } from '../../common/text/is-storable-text';
 
 /**
  * The roles a provisioning request may name today (SKILL.md section 6).
@@ -78,4 +87,33 @@ export class SetPasswordDto {
 
   @IsString()
   password!: string;
+}
+
+/**
+ * Activation: the first password, and a username (decision 0337). Optional, so a client
+ * that predates the username still activates (section 22). Its shape is checked by the
+ * service, which lowercases it first, so capitals are not refused here.
+ */
+export class ActivateDto extends SetPasswordDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @IsStorableText()
+  username?: string;
+}
+
+/** Activation's username suggestion: the activation token is the credential (decision 0337). */
+export class ActivationTokenDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  token!: string;
+}
+
+/** The caller's own username (decision 0337), checked and lowercased by the service. */
+export class SetUsernameDto {
+  @IsString()
+  @MaxLength(100)
+  @IsStorableText()
+  username!: string;
 }
