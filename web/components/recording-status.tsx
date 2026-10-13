@@ -12,6 +12,7 @@ import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
 import { rangeGuardMonth, rangeStartOf } from '@/lib/report-range';
 import { todayInManila } from '@/lib/reporting-month';
+import { weekDueLabel } from '@/lib/weekly-deadline';
 import {
   getLeaderRecordingStatus,
   getRecordingStatus,
@@ -37,7 +38,7 @@ export function RecordingStatusPanel() {
   const today = todayInManila();
   const [kind, setKind] = useState<Kind>('WEEK');
   const current = rangeStartOf(kind, today);
-  const [start, setStart] = useState(current);
+  const [start, setStart] = useState(() => openingWeek(new Date()) ?? current);
   const shown = rangeStartOf(kind, start);
 
   const status = useQuery({
@@ -77,6 +78,9 @@ export function RecordingStatusPanel() {
           open={data?.open}
           onChange={setStart}
         />
+        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
+          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -92,13 +96,17 @@ export function RecordingStatusPanel() {
             <WholeChurchBox
               label="Recorded their Cell group"
               column={data.whole_church.cell}
+              deadline={data.deadline === true}
               previous={data.previous.cell}
+              previousDeadline={data.previous.deadline === true}
               previousName={previousName(kind, data.previous.open)}
             />
             <WholeChurchBox
               label="Recorded their DCC checklist"
               column={data.whole_church.dcc}
+              deadline={data.deadline === true}
               previous={data.previous.dcc}
+              previousDeadline={data.previous.deadline === true}
               previousName={previousName(kind, data.previous.open)}
             />
           </div>
@@ -116,6 +124,7 @@ export function RecordingStatusPanel() {
                   // No count in the heading (owner, 2026-10-09).
                   heading={`${table.root.full_name ?? 'A Network root'}’s leaders`}
                   rows={table.rows}
+                  deadline={data.deadline === true}
                 />
               ))}
               {data.others ? (
@@ -127,9 +136,9 @@ export function RecordingStatusPanel() {
                   </p>
                   <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                     <dt className="text-muted">Cell group recorded</dt>
-                    <dd>{ofLeaders(data.others.cell)}</dd>
+                    <dd>{rowFigure(data.others.cell, data.deadline === true)}</dd>
                     <dt className="text-muted">DCC checklist recorded</dt>
-                    <dd>{ofLeaders(data.others.dcc)}</dd>
+                    <dd>{rowFigure(data.others.dcc, data.deadline === true)}</dd>
                     <dt className="text-muted">Status</dt>
                     <dd>
                       <StatusLabel status={data.others.status} />
@@ -155,7 +164,7 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
   const today = todayInManila();
   const [kind, setKind] = useState<Kind>('WEEK');
   const current = rangeStartOf(kind, today);
-  const [start, setStart] = useState(current);
+  const [start, setStart] = useState(() => openingWeek(new Date()) ?? current);
   const shown = rangeStartOf(kind, start);
 
   const status = useQuery({
@@ -194,6 +203,9 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
           open={data?.open}
           onChange={setStart}
         />
+        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
+          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -215,19 +227,29 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
               <WholeChurchBox
                 label="Recorded their Cell group"
                 column={data.branch.cell}
+                deadline={data.deadline === true}
                 previous={data.previous.cell}
+                previousDeadline={data.previous.deadline === true}
                 previousName={previousName(kind, data.previous.open)}
               />
               <WholeChurchBox
                 label="Recorded their DCC checklist"
                 column={data.branch.dcc}
+                deadline={data.deadline === true}
                 previous={data.previous.dcc}
+                previousDeadline={data.previous.deadline === true}
                 previousName={previousName(kind, data.previous.open)}
               />
             </div>
 
             {data.rows.length > 0 ? (
-              <LeaderTable heading="My 12" nameHeader="My 12" titled={false} rows={data.rows} />
+              <LeaderTable
+                heading="My 12"
+                nameHeader="My 12"
+                titled={false}
+                rows={data.rows}
+                deadline={data.deadline === true}
+              />
             ) : data.others ? null : (
               <p className="text-muted mt-6 text-sm">Nobody is under you this {unit}.</p>
             )}
@@ -239,9 +261,9 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
                 </p>
                 <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                   <dt className="text-muted">Cell group recorded</dt>
-                  <dd>{ofLeaders(data.others.cell)}</dd>
+                  <dd>{rowFigure(data.others.cell, data.deadline === true)}</dd>
                   <dt className="text-muted">DCC checklist recorded</dt>
-                  <dd>{ofLeaders(data.others.dcc)}</dd>
+                  <dd>{rowFigure(data.others.dcc, data.deadline === true)}</dd>
                   <dt className="text-muted">Status</dt>
                   <dd>
                     <StatusLabel status={data.others.status} />
@@ -266,28 +288,81 @@ function ofLeaders(column: RecordingColumn): string {
   return `${column.recorded} of ${column.owed} ${column.owed === 1 ? 'leader' : 'leaders'}`;
 }
 
+/**
+ * A box's figure: on time first where the period has a deadline, "3 of 5 leaders on time"
+ * (decision 0335), and recorded where it has none.
+ */
+function boxFigure(column: RecordingColumn, deadline: boolean): string {
+  if (!deadline) {
+    return ofLeaders(column);
+  }
+  const onTime = column.recorded - (column.late ?? 0);
+
+  return `${onTime} of ${column.owed} ${column.owed === 1 ? 'leader' : 'leaders'} on time`;
+}
+
+/** A row's figure: "2 of 3 on time, 1 late", or "2 of 3" with no deadline. */
+function rowFigure(column: RecordingColumn, deadline: boolean): string {
+  // Nothing owed is not "on time" (decision 0335).
+  if (!deadline || column.owed === 0) {
+    return ofLeaders(column);
+  }
+  const late = column.late ?? 0;
+
+  return `${column.recorded - late} of ${column.owed} on time${late > 0 ? `, ${late} late` : ''}`;
+}
+
+/**
+ * The week a Recording Status opens on: the one whose deadline last passed, 12 noon on the
+ * Monday after it (decision 0335). Null before the first deadline, 2 November 2026, so the
+ * screen opens on the current week as it did.
+ */
+function openingWeek(now: Date): string | null {
+  const today = todayInManila(now);
+  const monday = rangeStartOf('WEEK', today);
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', hourCycle: 'h23' }).format(now),
+  );
+  const back = today === monday && hour < 12 ? 14 : 7;
+  const [year, month, day] = monday.split('-').map(Number);
+  const week = new Date(Date.UTC(year, month - 1, day - back)).toISOString().slice(0, 10);
+
+  return week < '2026-10-26' ? null : week;
+}
+
 /** A Whole Church box: X of Y leaders, the server's percentage, and the period before. */
 function WholeChurchBox({
   label,
   column,
+  deadline,
   previous,
+  previousDeadline,
   previousName,
 }: {
   label: string;
   column: RecordingColumn & { percent: number | null };
+  deadline: boolean;
   previous: RecordingColumn | null;
+  previousDeadline: boolean;
   previousName: string;
 }) {
+  const late = column.late ?? 0;
+
   return (
     <div className="border-line border p-3">
       <span className="text-ink block text-sm font-bold">{label}</span>
       <span className="mt-1 block text-xl font-bold tabular-nums">
-        {ofLeaders(column)}
+        {boxFigure(column, deadline)}
         {column.percent === null ? null : ` · ${column.percent}%`}
       </span>
+      {deadline && late > 0 ? (
+        <span className="mt-1 block text-sm tabular-nums">
+          {late} more recorded late
+        </span>
+      ) : null}
       {previous === null ? null : (
         <span className="text-muted mt-1 block text-xs">
-          {previousName}: {ofLeaders(previous)}
+          {previousName}: {boxFigure(previous, previousDeadline)}
         </span>
       )}
     </div>
@@ -317,11 +392,13 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
 function LeaderTable({
   heading,
   rows,
+  deadline,
   nameHeader = 'Primaries',
   titled = true,
 }: {
   heading: string;
   rows: readonly RecordingRow[];
+  deadline: boolean;
   nameHeader?: string;
   /** False where the column heading already names the table (owner, 2026-10-12). */
   titled?: boolean;
@@ -347,8 +424,8 @@ function LeaderTable({
               <td className="px-3 py-3 align-top">
                 <BranchLink row={row} />
               </td>
-              <td className="px-3 py-3 align-top tabular-nums">{ofLeaders(row.cell)}</td>
-              <td className="px-3 py-3 align-top tabular-nums">{ofLeaders(row.dcc)}</td>
+              <td className="px-3 py-3 align-top tabular-nums">{rowFigure(row.cell, deadline)}</td>
+              <td className="px-3 py-3 align-top tabular-nums">{rowFigure(row.dcc, deadline)}</td>
               <td className="px-3 py-3 align-top">
                 <StatusLabel status={row.status} />
               </td>
@@ -362,8 +439,12 @@ function LeaderTable({
         {rows.map((row) => (
           <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
             <BranchLink row={row} />
-            <p className="text-muted text-sm">Cell group recorded: {ofLeaders(row.cell)}</p>
-            <p className="text-muted text-sm">DCC checklist recorded: {ofLeaders(row.dcc)}</p>
+            <p className="text-muted text-sm">
+              Cell group recorded: {rowFigure(row.cell, deadline)}
+            </p>
+            <p className="text-muted text-sm">
+              DCC checklist recorded: {rowFigure(row.dcc, deadline)}
+            </p>
             <p className="mt-1 text-sm">
               <StatusLabel status={row.status} />
             </p>

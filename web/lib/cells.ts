@@ -201,6 +201,9 @@ export interface AwaitingMeeting {
     member_id: string | null;
     is_actor: boolean;
   };
+  /** When it is due, null before the weekly rule, and when its week closes (decision 0335). */
+  due_at?: string | null;
+  closes_at?: string;
   /** Whether this actor may record it: their own, or on the leader's behalf (§14). */
   may_record: boolean;
 }

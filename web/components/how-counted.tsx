@@ -19,7 +19,7 @@ import { Dialog } from '@/components/ui/dialog';
  * journey is the ladder in sections 9 and 12, evaluated at the end of the month; "all of
  * them" is the highest bucket, whose N is the meetings held and recorded for a Cell and the
  * Sundays that carried a service for DCC; the open month is the submission window, which
- * runs through the 7th.
+ * closes week by week (decision 0335).
  *
  * **Text, not a table** (owner's choice): there is nothing to compare across columns, and a
  * second column of sentences is a thin strip on a phone.
@@ -30,7 +30,7 @@ type Term = { term: string; definition: string };
 const OPEN_MONTH: Term = {
   term: 'An open month',
   definition:
-    'Records can be added until the 7th of the next month, so the figures can still change until then.',
+    'Each week can be recorded until two Mondays after it is due, at 12 noon, so the figures can still change until the month’s last week closes.',
 };
 
 const TEXT: Record<'cells' | 'dcc', Term[]> = {

@@ -255,6 +255,19 @@ export interface AwaitingRow {
     is_actor: boolean;
   };
   may_record: boolean;
+  due_at?: string | null;
+  closes_at?: string;
+}
+
+/**
+ * The deadline fields the API sends on a row (decision 0335), for a date before the weekly
+ * rule, which every mock date is: no deadline, closing at the end of the 7th of the month
+ * after, which is 16:00Z on the 7th.
+ */
+export function deadlineOf(date: string): { due_at: null; closes_at: string } {
+  const [year, month] = date.split('-').map(Number);
+
+  return { due_at: null, closes_at: new Date(Date.UTC(year, month, 7, 16)).toISOString() };
 }
 
 /** ISO weekday of a `YYYY-MM-DD` date, 1 = Monday. */
@@ -288,6 +301,7 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
     member_count: 5,
     leader: OWN,
     may_record: true,
+    ...deadlineOf(date),
   };
 }
 
@@ -310,6 +324,7 @@ export function awaitingClosedRow(date: string, month: string, closedOn: string)
     member_count: 4,
     leader: OWN,
     may_record: true,
+    ...deadlineOf(date),
   };
 }
 
@@ -391,17 +406,26 @@ export async function mockMeetingsAwaiting(
 }
 
 export async function mockDccEvents(page: Page, { open = true } = {}): Promise<void> {
+  // A shut month's Sundays take no record, as the server says per event (decision 0335).
+  const shut = <E extends { recordable: boolean; not_recordable_reason: string | null }>(
+    event: E,
+  ) =>
+    open || !event.recordable
+      ? event
+      : { ...event, recordable: false, not_recordable_reason: 'MONTH_CLOSED' };
+
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(
       json({
         reporting_month: '2026-06-01',
         open,
-        data: [
+        data: ([
           {
             id: '3f1b7c6e-0000-4000-8000-000000000501',
             event_date: '2026-06-07',
             recordable: true,
             not_recordable_reason: null,
+            ...deadlineOf('2026-06-07'),
             removed: false,
             removal_reason: null,
             coverage: { met: 5, owed: 8 },
@@ -420,6 +444,7 @@ export async function mockDccEvents(page: Page, { open = true } = {}): Promise<v
             event_date: '2026-06-21',
             recordable: true,
             not_recordable_reason: null,
+            ...deadlineOf('2026-06-21'),
             removed: false,
             removal_reason: null,
             coverage: { met: 8, owed: 8 },
@@ -433,7 +458,7 @@ export async function mockDccEvents(page: Page, { open = true } = {}): Promise<v
             removal_reason: null,
             coverage: null,
           },
-        ],
+        ]).map(shut),
       }),
     ),
   );

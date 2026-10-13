@@ -231,7 +231,7 @@ test.describe('the navigator', () => {
       await expect(periodLabel(page, each.label)).toBeVisible();
       await expect(after).toBeDisabled();
       await expect(before).toBeEnabled();
-      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/).first()).toBeVisible();
+      await expect(page.getByText(/^Open until (7 [A-Z][a-z]+|Mon \d+ [A-Z][a-z]{2}, 12NN)$/).first()).toBeVisible();
 
       await before.click();
       const previous = BEFORE[each.kind];

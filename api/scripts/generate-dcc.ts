@@ -57,7 +57,7 @@ async function main(): Promise<number> {
     // decision somebody takes with the facts in front of them.
     if (run.closedMonthsShort.length > 0) {
       console.error(
-        `\nthese closed months are short a Sunday and were NOT filled: ${run.closedMonthsShort.join(', ')}\n` +
+        `\nthese months are short a Sunday whose week has closed, and were NOT filled: ${run.closedMonthsShort.join(', ')}\n` +
           'A closed month is not repaired by this command: an event nobody could submit against\n' +
           'reads as every leader having failed to record for it (SKILL.md section 9). Decide what\n' +
           'to do about it deliberately.',

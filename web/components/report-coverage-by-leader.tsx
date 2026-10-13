@@ -154,8 +154,8 @@ export function CoverageByLeader({
                 its link lands (decisions 0239 and 0298 point 4; owner, 2026-10-05).
               */}
               {report === 'cells'
-                ? ' Owed is the whole month’s schedule, meetings still to come included. The Branch screen’s Still to record counts only meetings whose day has come and have no record, and counts the branch as it stands today, so the two can differ.'
-                : ' The Branch screen’s Still to record counts the branch as it stands today, so it can differ from this table where somebody changed leader during the month.'}
+                ? ' Owed is the whole month’s schedule, meetings still to come included. The Branch screen’s Still to record counts only meetings whose day has come, whose week is still open and that have no record, and counts the branch as it stands today, so the two can differ.'
+                : ' The Branch screen’s Still to record counts the branch as it stands today, and only Sundays whose week is still open, so it can differ from this table, as where somebody changed leader during the month.'}
             </p>
 
             {shownPage > 0 || hasNext ? (

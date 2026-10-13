@@ -18,6 +18,7 @@ import {
 } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, shiftMonth } from '@/lib/reporting-month';
+import { monthOpenUntilLabel } from '@/lib/weekly-deadline';
 
 /**
  * A person's DCC stage and the Sundays it is made from (SKILL.md section 9; decision 0247).
@@ -160,9 +161,9 @@ function monthName(month: string): string {
   return monthLabel(month).split(' ')[0];
 }
 
-/** "Open until 7 October": the 7th of the month after (section 13, decision 0170). */
+/** "Open until Mon 16 Nov, 12NN": when the month's last week closes (decision 0335). */
 function openUntil(month: string): string {
-  return `Open until 7 ${monthName(shiftMonth(month, 1))}`;
+  return monthOpenUntilLabel(month);
 }
 
 function sundaysAttended(attended: number): string {

@@ -14,7 +14,7 @@ import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { reportingPeriodBounds } from '../common/time/reporting-period';
 import { manilaDayOf } from '../common/time/manila';
-import { reportingMonthOf } from '../common/time/submission-window';
+import { recordDueAt, reportingMonthOf } from '../common/time/submission-window';
 import { CellsReadService } from '../cells/cells.read.service';
 import { DatabaseClock } from '../database/database-clock';
 import type { NetworkName } from '../database/schema';
@@ -42,6 +42,7 @@ import {
   type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
+  type RecordingColumn,
   type RecordingFigures,
 } from './reporting.service';
 
@@ -377,9 +378,18 @@ export class ReportingController {
             ? 1
             : left.localeCompare(right);
     };
-    const box = (column: { recorded: number; owed: number }) => ({
+    // On time first (decision 0335): the percentage is of leaders on time where the period
+    // has a deadline, of leaders who recorded where it has none.
+    const deadline = recordDueAt(status.end) !== null;
+    const box = (column: RecordingColumn) => ({
       ...column,
-      percent: column.owed === 0 ? null : Math.floor((column.recorded * 100) / column.owed),
+      on_time: column.recorded - column.late,
+      percent:
+        column.owed === 0
+          ? null
+          : Math.floor(
+              ((deadline ? column.recorded - column.late : column.recorded) * 100) / column.owed,
+            ),
     });
     const figures = (row: RecordingFigures) => ({
       cell: row.cell,
@@ -395,6 +405,7 @@ export class ReportingController {
       start: status.start,
       end: status.end,
       open: status.open,
+      deadline,
       whole_church: {
         cell: box(status.wholeChurch.cell),
         dcc: box(status.wholeChurch.dcc),
@@ -404,6 +415,7 @@ export class ReportingController {
         start: status.previous.start,
         end: status.previous.end,
         open: status.previous.open,
+        deadline: recordDueAt(status.previous.end) !== null,
         cell: status.previous.figures.cell,
         dcc: status.previous.figures.dcc,
       },
@@ -466,9 +478,18 @@ export class ReportingController {
       query.period,
     );
 
-    const box = (column: { recorded: number; owed: number }) => ({
+    // On time first (decision 0335): the percentage is of leaders on time where the period
+    // has a deadline, of leaders who recorded where it has none.
+    const deadline = recordDueAt(status.end) !== null;
+    const box = (column: RecordingColumn) => ({
       ...column,
-      percent: column.owed === 0 ? null : Math.floor((column.recorded * 100) / column.owed),
+      on_time: column.recorded - column.late,
+      percent:
+        column.owed === 0
+          ? null
+          : Math.floor(
+              ((deadline ? column.recorded - column.late : column.recorded) * 100) / column.owed,
+            ),
     });
     const figures = (row: RecordingFigures) => ({
       cell: row.cell,
@@ -514,16 +535,22 @@ export class ReportingController {
             cell: {
               recorded: total.cell.recorded + row.figures.cell.recorded,
               owed: total.cell.owed + row.figures.cell.owed,
+              late: total.cell.late + row.figures.cell.late,
             },
             dcc: {
               recorded: total.dcc.recorded + row.figures.dcc.recorded,
               owed: total.dcc.owed + row.figures.dcc.owed,
+              late: total.dcc.late + row.figures.dcc.late,
             },
             still:
               total.still +
               (row.figures.status.kind === 'STILL_TO_RECORD' ? row.figures.status.leaders : 0),
           }),
-          { cell: { recorded: 0, owed: 0 }, dcc: { recorded: 0, owed: 0 }, still: 0 },
+          {
+            cell: { recorded: 0, owed: 0, late: 0 },
+            dcc: { recorded: 0, owed: 0, late: 0 },
+            still: 0,
+          },
         );
         others = figures({
           cell: sum.cell,
@@ -556,6 +583,7 @@ export class ReportingController {
       start: status.start,
       end: status.end,
       open: status.open,
+      deadline,
       branch:
         status.branch === null
           ? null
@@ -564,6 +592,7 @@ export class ReportingController {
         start: status.previous.start,
         end: status.previous.end,
         open: status.previous.open,
+        deadline: recordDueAt(status.previous.end) !== null,
         cell: previous?.cell ?? null,
         dcc: previous?.dcc ?? null,
       },

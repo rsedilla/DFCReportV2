@@ -712,8 +712,9 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
     await chooseDcc(page);
 
+    // Every row says when it closes (decision 0335); the DCC mock's Sundays are June's.
     await expect(
-      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+      page.getByText('Closes end of Tue 7 Jul').filter({ visible: true }).first(),
     ).toBeVisible();
   });
 
@@ -721,13 +722,19 @@ test.describe('the Record queue', () => {
     // 10:00 on 8 October in Manila.
     await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
     await mockRecordScreen(page, {});
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/v1/dcc/events?')) {
+        asked.push(request.url());
+      }
+    });
 
     await page.goto('/dashboard');
     await chooseDcc(page);
 
     // This month's rows have arrived, so an absence below is not a page still loading.
     await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
-    await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
+    expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
   });
 
   // The Cell half of the same rule. The month the route is asked about is the month it
@@ -745,7 +752,7 @@ test.describe('the Record queue', () => {
 
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(
-      page.getByText('September · open until 7 Oct').filter({ visible: true }).first(),
+      page.getByText('Closes end of Wed 7 Oct').filter({ visible: true }).first(),
     ).toBeVisible();
   });
 
@@ -793,7 +800,8 @@ test.describe('the Record queue', () => {
       'Saturday 3 October',
       'Youth · Sat · Cell closed Sunday 20 September',
       'You',
-      'today',
+      // The row's close beside how long it has waited (decision 0335).
+      'todayCloses end of Sat 7 Nov',
       /^Record/,
     ]);
     await expect(
@@ -863,7 +871,8 @@ test.describe('the Record queue', () => {
       'Saturday 3 October',
       'Young Pro · Sat',
       'You',
-      'today',
+      // The row's close beside how long it has waited (decision 0335).
+      'todayCloses end of Sat 7 Nov',
       /^Record/,
     ]);
   });
@@ -1370,7 +1379,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toBeVisible();
     await page.getByRole('button', { name: 'Ana Lim' }).click();
     await expect(
-      page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('June · open until 7 Jul').first(),
+      page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('Closes end of Tue 7 Jul').first(),
     ).toBeVisible();
 
     await page.getByRole('radio', { name: 'Own ' }).check();
@@ -1385,7 +1394,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     const row = awaitingTable(page).getByRole('row').filter({ hasText: 'Young Pro · Sat' });
     await expect(row.getByRole('cell').nth(1)).toHaveText('Young Pro · Sat');
-    await expect(row.getByRole('cell').nth(3)).toHaveText('7 days ago');
+    await expect(row.getByRole('cell').nth(3)).toHaveText('7 days agoCloses end of Tue 7 Jul');
   });
 
   // Decision 0290: Awaiting a record is split into Cell Group and DCC,
@@ -2266,13 +2275,86 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await page.goto('/dcc');
 
     const grid = page.getByRole('table', { name: 'Every date you owe a record this month' });
-    await expect(grid.getByText('Not recorded · month closed · 1 unmarked').first()).toBeVisible();
+    await expect(grid.getByText('Not recorded · week closed · 1 unmarked').first()).toBeVisible();
     await expect(grid.getByText(/Awaiting a record/)).toHaveCount(0);
     await expect(
-      grid.locator('td', { hasText: 'month closed' }).locator('a[href^="/dcc/"]'),
+      grid.locator('td', { hasText: 'week closed' }).locator('a[href^="/dcc/"]'),
     ).toHaveCount(0);
   });
 
+  // Decision 0335: inside an open month a week can close, and each row reads its own week,
+  // from the server: a meeting is open while the recording queue lists it, a Sunday while it
+  // is recordable. The month-level flag would offer both closed rows here.
+  test('an open month shows a closed week as closed, with nothing to open', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+    const unrecorded = (day: string, week: string) => ({
+      scheduled_date: day,
+      scheduled_time: '19:00',
+      week_starting: week,
+      reporting_month: '2026-06-01',
+      meeting: null,
+    });
+    await page.route('**/api/v1/cells/*/meetings?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          category: 'YOUTH',
+          day_of_week: 6,
+          scheduled_time: '19:00',
+          leader: { id: '3f1b7c6e-0000-4000-8000-000000000201', full_name: 'Teofilo Ramos' },
+          member_count: 2,
+          cell_closed_on: null,
+          reporting_month: '2026-06-01',
+          scheduled_count: 2,
+          recorded_count: 0,
+          meetings: [unrecorded('2026-06-06', '2026-06-01'), unrecorded('2026-06-13', '2026-06-08')],
+        }),
+      }),
+    );
+    // The queue lists the 13th alone: the week of the 6th has closed.
+    await mockMeetingsAwaiting(page, {
+      '2026-06-01': { meetings: [awaitingRow('2026-06-13', '2026-06-01')] },
+    });
+    await page.route('**/api/v1/dcc/events?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: '2026-06-01',
+          open: true,
+          data: [
+            {
+              id: '3f1b7c6e-0000-4000-8000-000000000501',
+              event_date: '2026-06-07',
+              recordable: false,
+              not_recordable_reason: 'MONTH_CLOSED',
+              removed: false,
+              removal_reason: null,
+              coverage: null,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto('/dcc');
+
+    const grid = page.getByRole('table', { name: 'Every date you owe a record this month' });
+    // A calendar: each day is a cell, and every Cell the reader leads gets this month's mock.
+    const day = (n: number) => grid.getByRole('cell').filter({ hasText: new RegExp(`^${n}(?!\\d)`) });
+    await expect(day(6)).toContainText('Not recorded · week closed');
+    await expect(day(6).getByRole('link')).toHaveCount(0);
+    await expect(day(13).getByRole('link', { name: /Saturday 13 June/ })).toHaveAttribute(
+      'href',
+      `/cells/${CELL_WITH_MEETINGS.id}/meetings/2026-06-13`,
+    );
+    await expect(day(13)).toContainText('Awaiting a record');
+    await expect(day(7)).toContainText('Not recorded · week closed · 1 unmarked');
+    await expect(day(7).getByRole('link')).toHaveCount(0);
+  });
   test('a month that has not begun shows its Sundays and says why no meeting is there', async ({
     page,
   }) => {

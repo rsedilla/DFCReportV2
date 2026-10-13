@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { type CellMeetingScopePort } from '../auth/authorization/cell-meeting-scope.port';
 import { CellsReadService } from '../cells/cells.read.service';
-import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import { isRecordOpen } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 
 import type { Database } from '../database/schema';
@@ -89,7 +89,7 @@ export class CellMeetingsScopeService implements CellMeetingScopePort {
       return this.cells.leaderForScopeWithin(executor, cellId);
     }
 
-    if (!(await isMonthOpen(executor, reportingMonthOf(on)))) {
+    if (!(await isRecordOpen(executor, on))) {
       return null;
     }
 

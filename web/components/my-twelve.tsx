@@ -4,8 +4,8 @@ import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
-import { rangeGuardMonth, rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
-import { openUntilLabel, todayInManila } from '@/lib/reporting-month';
+import { rangeEndOf, rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
+import { periodOpenUntilLabel } from '@/lib/weekly-deadline';
 
 const STAGES: readonly [keyof Classification, string][] = [
   ['vip', 'VIP'],
@@ -111,7 +111,7 @@ export function RangeNavigator({
         open ? <span className="text-muted text-sm">· so far</span> : null
       ) : open === undefined ? null : (
         <span className="border-edge border px-2 py-0.5 text-xs font-bold tracking-[0.07em] uppercase">
-          {open ? openUntilLabel(rangeGuardMonth(kind, start, todayInManila())) : 'Closed'}
+          {open ? periodOpenUntilLabel(rangeEndOf(kind, start)) : 'Closed'}
         </span>
       )}
     </div>

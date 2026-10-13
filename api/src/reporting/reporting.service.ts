@@ -15,8 +15,10 @@ import {
 import {
   databaseNow,
   isMonthOpen,
+  isRecordOpen,
+  recordClosesAt,
+  recordDueAt,
   reportingMonthOf,
-  windowClosesAt,
 } from '../common/time/submission-window';
 import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
@@ -92,6 +94,9 @@ export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
 export interface RecordingColumn {
   recorded: number;
   owed: number;
+  /** Of \
+ecorded\, those who recorded all of it but some after its deadline (decision 0335). */
+  late: number;
 }
 
 /** A row's status: everyone recorded, how many still to, or nobody owed anything. */
@@ -182,7 +187,7 @@ export interface ChurchCounts {
 }
 
 /** Per leader, how many records they owed in a run of days and how many have none. */
-type OwedByLeader = Map<string, { owed: number; unrecorded: number }>;
+type OwedByLeader = Map<string, { owed: number; unrecorded: number; late: number }>;
 
 /**
  * The five classification buckets, in the order sections 9 and 12 list them.
@@ -758,7 +763,7 @@ export class ReportingService {
       const elsewhere = totalPeople.filter((p) => !union.has(canonicalId(p.personId))).length;
 
       return {
-        open: await isMonthOpen(trx, `${to.slice(0, 7)}-01`),
+        open: await isRecordOpen(trx, to),
         from,
         to,
         at: endOfManilaDay(to < today ? to : today),
@@ -900,7 +905,7 @@ export class ReportingService {
       }
 
       return {
-        open: await isMonthOpen(trx, `${to.slice(0, 7)}-01`),
+        open: await isRecordOpen(trx, to),
         from,
         to,
         at: endOfManilaDay(to < today ? to : today),
@@ -1164,12 +1169,12 @@ export class ReportingService {
         kind,
         start,
         end,
-        open: now.getTime() < windowClosesAt(reportingMonthOf(end)).getTime(),
+        open: now.getTime() < recordClosesAt(end).getTime(),
         wholeChurch: figuresOf(owing, [...everyone(owing)]),
         previous: {
           start: previousStart,
           end: previousEnd,
-          open: now.getTime() < windowClosesAt(reportingMonthOf(previousEnd)).getTime(),
+          open: now.getTime() < recordClosesAt(previousEnd).getTime(),
           figures: figuresOf(previous, [...everyone(previous)]),
         },
         tables,
@@ -1223,12 +1228,12 @@ export class ReportingService {
         kind,
         start,
         end,
-        open: now.getTime() < windowClosesAt(reportingMonthOf(end)).getTime(),
+        open: now.getTime() < recordClosesAt(end).getTime(),
         branch: graph.refused ? null : figuresOf(owing, beneath(graph)),
         previous: {
           start: previousStart,
           end: previousEnd,
-          open: now.getTime() < windowClosesAt(reportingMonthOf(previousEnd)).getTime(),
+          open: now.getTime() < recordClosesAt(previousEnd).getTime(),
           guardMonth: reportRangeGuardMonth(kind, previousStart, today),
           figures: previousGraph.refused ? null : figuresOf(previous, beneath(previousGraph)),
         },
@@ -1374,14 +1379,18 @@ export class ReportingService {
 
     for (const pair of pairs) {
       const frozen = recorded.get(`${pair.cellId}|${pair.scheduledDate}`);
-      const leaderId = frozen ?? pair.leaderId;
+      const leaderId = frozen?.leaderId ?? pair.leaderId;
       if (leaderId === null) {
         continue;
       }
       const key = canonicalId(leaderId);
-      const entry = cell.get(key) ?? { owed: 0, unrecorded: 0 };
+      const entry = cell.get(key) ?? { owed: 0, unrecorded: 0, late: 0 };
+      const due = recordDueAt(pair.scheduledDate);
       entry.owed += 1;
       entry.unrecorded += frozen === undefined ? 1 : 0;
+      // First reported after its week's deadline (decision 0335).
+      entry.late +=
+        frozen !== undefined && due !== null && frozen.firstAt.getTime() > due.getTime() ? 1 : 0;
       cell.set(key, entry);
     }
 
@@ -1676,8 +1685,10 @@ function figuresOf(
 ): RecordingFigures {
   let cellOwed = 0;
   let cellRecorded = 0;
+  let cellLate = 0;
   let dccOwed = 0;
   let dccRecorded = 0;
+  let dccLate = 0;
   let still = 0;
 
   for (const id of new Set(leaders.map((leader) => canonicalId(leader)))) {
@@ -1686,10 +1697,12 @@ function figuresOf(
     if (cell !== undefined) {
       cellOwed += 1;
       cellRecorded += cell.unrecorded === 0 ? 1 : 0;
+      cellLate += cell.unrecorded === 0 && cell.late > 0 ? 1 : 0;
     }
     if (dcc !== undefined) {
       dccOwed += 1;
       dccRecorded += dcc.unrecorded === 0 ? 1 : 0;
+      dccLate += dcc.unrecorded === 0 && dcc.late > 0 ? 1 : 0;
     }
     if ((cell?.unrecorded ?? 0) > 0 || (dcc?.unrecorded ?? 0) > 0) {
       still += 1;
@@ -1697,8 +1710,8 @@ function figuresOf(
   }
 
   return {
-    cell: { recorded: cellRecorded, owed: cellOwed },
-    dcc: { recorded: dccRecorded, owed: dccOwed },
+    cell: { recorded: cellRecorded, owed: cellOwed, late: cellLate },
+    dcc: { recorded: dccRecorded, owed: dccOwed, late: dccLate },
     status:
       cellOwed === 0 && dccOwed === 0
         ? { kind: 'NOTHING_OWED' }

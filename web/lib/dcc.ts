@@ -34,6 +34,9 @@ export interface DccEvent {
   event_date: string;
   recordable: boolean;
   not_recordable_reason: NotRecordableReason | null;
+  /** When it is due, null before the weekly rule, and when its week closes (decision 0335). */
+  due_at?: string | null;
+  closes_at?: string;
   removed: boolean;
   removal_reason: string | null;
   /** `null` where nobody owes a record yet — not a zero (decision 0229). */
@@ -61,7 +64,7 @@ export function notRecordableLabel(reason: NotRecordableReason): string {
     case 'NOT_YET_HELD':
       return 'Has not happened yet';
     case 'MONTH_CLOSED':
-      return 'The month is closed for submission';
+      return 'The week is closed for submission';
     default:
       return reason;
   }
@@ -246,6 +249,9 @@ export async function getCoverageGaps(
 export interface DccOwed {
   event_id: string;
   event_date: string;
+  /** When it is due, null before the weekly rule, and when its week closes (decision 0335). */
+  due_at?: string | null;
+  closes_at?: string;
   leader: {
     person_id: string;
     member_id: string;

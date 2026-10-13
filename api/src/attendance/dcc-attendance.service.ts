@@ -30,7 +30,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { recordingInstant } from './recording-instant';
-import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
+import { databaseNow, recordClosesAt, reportingMonthOf } from '../common/time/submission-window';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -68,6 +68,8 @@ interface LiveRecord {
 }
 
 /** Why an event takes no record. Null where it takes one. */
+// `MONTH_CLOSED` names the record's **week** closing since decision 0335; the value is kept
+// because section 22 lets a response change only additively.
 export type NotRecordable = 'REMOVED' | 'NOT_YET_HELD' | 'MONTH_CLOSED';
 
 interface EventForRecording {
@@ -620,7 +622,8 @@ export class DccAttendanceService {
     // instant: two reads a few microseconds apart cannot disagree usefully, and a
     // rule decided on one clock reading and enforced on another is the shape this
     // project keeps finding defects in.
-    if (now.getTime() >= windowClosesAt(reportingMonthOf(eventDate)).getTime()) {
+    // The Sunday's week, not its month, since decision 0335.
+    if (now.getTime() >= recordClosesAt(eventDate).getTime()) {
       return 'MONTH_CLOSED';
     }
 
@@ -1623,7 +1626,7 @@ function refusalFor(event: EventForRecording): ApiError {
       // an Admin may amend it (sections 13 and 20).
       return new ApiError(
         ApiErrorCode.PERIOD_CLOSED,
-        'This month is closed. Only an Admin may amend it, with a reason (SKILL.md sections 13 ' +
+        'This week is closed. Only an Admin may amend it, with a reason (SKILL.md sections 13 ' +
           'and 20).',
         { event_id: event.id, event_date: event.eventDate },
       );

@@ -254,6 +254,8 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
             'scheduled_date',
             'scheduled_time',
             'reporting_month',
+            'due_at',
+            'closes_at',
             'cell_closed_on',
             'day_of_week',
             'category',

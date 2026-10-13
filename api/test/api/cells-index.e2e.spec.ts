@@ -4,7 +4,7 @@ import { sql } from 'kysely';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
-import { databaseNow } from '../../src/common/time/submission-window';
+import { databaseNow, recordClosesAt } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -743,23 +743,47 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
         })
         .execute();
 
+    /**
+     * Of these Saturdays, those whose week is still open: a meeting only an Admin can still
+     * record is behind on no surface (owner, 2026-10-13, decision 0335).
+     */
+    const stillOpen = async (days: readonly string[]): Promise<number> => {
+      const now = (await databaseNow(db)).getTime();
+      return days.filter((day) => recordClosesAt(day).getTime() > now).length;
+    };
+
+    const saturdaysOf = (month: string, through: string): string[] => {
+      const days: string[] = [];
+      for (let at = firstSaturdayOf(month); at.startsWith(month.slice(0, 7)) && at <= through;) {
+        days.push(at);
+        const [y, m, d] = at.split('-').map(Number);
+        at = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
+      }
+      return days;
+    };
+
     it('counts only the meetings whose day has begun, never the rest of the month', async () => {
       // Every fixture Cell meets on Saturdays. Nothing is recorded, so every Saturday that
-      // has come is behind and every one still to come is not (section 17).
+      // has come is behind while its week is open, and every one still to come is not
+      // (section 17).
       const coverage = coverageOf(await list(manuelAccount), markCell.id);
+      const now = await today();
 
-      expect(coverage.behind).toBe(saturdaysUpTo(await today()));
+      expect(coverage.behind).toBe(await stillOpen(saturdaysOf(await thisMonth(), now)));
+      expect(saturdaysOf(await thisMonth(), now)).toHaveLength(saturdaysUpTo(now));
       expect(coverage.behind).toBeLessThanOrEqual(coverage.scheduled);
     });
 
-    it('is every unrecorded meeting of a month that is over', async () => {
+    it('is every unrecorded meeting of a month that is over, while its week is open', async () => {
       const previous = await previousMonth();
       await record(markCell.id, mark.id, markAccount.id, firstSaturdayOf(previous));
 
       const coverage = coverageOf(await list(manuelAccount, { month: previous }), markCell.id);
+      const unrecorded = saturdaysOf(previous, '9999-12-31').slice(1);
 
       expect(coverage.recorded).toBe(1);
-      expect(coverage.behind).toBe(coverage.scheduled - 1);
+      expect(unrecorded).toHaveLength(coverage.scheduled - 1);
+      expect(coverage.behind).toBe(await stillOpen(unrecorded));
     });
 
     it('is not offset by a record a backdated closure left outside the schedule', async () => {
@@ -789,7 +813,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
       expect(coverage.recorded).toBe(1);
       expect(coverage.scheduled).toBe(2);
-      expect(coverage.behind).toBe(2);
+      // Both earlier Saturdays, each while its week is open (decision 0335).
+      expect(coverage.behind).toBe(await stillOpen([first, second]));
     });
   });
 
