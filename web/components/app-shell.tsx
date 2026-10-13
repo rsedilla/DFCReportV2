@@ -69,12 +69,12 @@ const REPORTS: NavEntry = {
   icon: ChartColumn,
   matches: ['/reports'],
 };
-/** People and Network, one item with a tab each (decision 0288). */
+/** People, Network and Family Tree, one item with a tab each (decisions 0288 and 0341). */
 const PEOPLE: NavEntry = {
   href: '/people',
   label: 'People',
   icon: Users,
-  matches: ['/people', '/network'],
+  matches: ['/people', '/network', '/family-tree'],
 };
 const CELLS: NavEntry = { href: '/cells', label: 'Cells', icon: LayoutGrid, matches: ['/cells'] };
 /** SUYNL and Training, one item with a tab each (SKILL.md sections 19 and 28). */

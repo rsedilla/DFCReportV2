@@ -9,14 +9,15 @@ import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
 /**
- * The two tabs of the People item, People and Branch (decisions 0288 and 0318). Each is its own
- * address, so Back, a reload and every existing link keep working; the two screens are
- * otherwise as they were. The chosen tab opens into the pane that holds everything of it
+ * The tabs of the People item, People and Branch (decisions 0288 and 0318), and Family Tree on
+ * Full view screens alone (decision 0341). Each is its own address, so Back, a reload and every
+ * existing link keep working. The chosen tab opens into the pane that holds everything of it
  * (owner's choice of 2026-10-05).
  */
 const TABS = [
-  { href: '/people', label: 'People' },
-  { href: '/network', label: 'Branch' },
+  { href: '/people', label: 'People', fullOnly: false },
+  { href: '/network', label: 'Branch', fullOnly: false },
+  { href: '/family-tree', label: 'Family Tree', fullOnly: true },
 ] as const;
 
 export function PeopleTabs({
@@ -38,7 +39,7 @@ export function PeopleTabs({
     <>
       {tabbed ? (
         <nav aria-label="People" className={cn('mt-6 flex', TAB_ROW)}>
-          {TABS.map((tab) => {
+          {TABS.filter((tab) => !tab.fullOnly || me.data?.screens === 'FULL').map((tab) => {
             const active = tab.href === current;
 
             return (
