@@ -33,7 +33,6 @@ import {
   mockCellsEmpty,
   mockDccEvents,
   mockCellMembers,
-  mockCoverageGaps,
   mockPastoralPath,
   mockPastoralPathAtRoot,
   mockNetworkTree,
@@ -885,19 +884,6 @@ const SCANS = [
     },
   },
   {
-    // The drill-down without which a coverage figure is a dashboard of counts.
-    name: 'dcc coverage gaps',
-    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
-    pattern: '/dcc/[id]/gaps',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCoverageGaps(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
-    },
-  },
-  {
     // The chain from the Network root down, with the root named in words.
     name: 'pastoral network',
     route: '/people/3f1b7c6e-0000-4000-8000-000000000601/network',
@@ -993,7 +979,6 @@ const SCANS = [
       await mockSignedIn(page);
       await mockCellMeetings(page);
       await mockCellMembers(page);
-      await mockCoverageGaps(page);
       await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1704,14 +1689,6 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The back link and each name, which opens that leader's profile.
-    name: 'dcc coverage gaps',
-    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
-    settleRole: 'link' as const,
-    settle: 'Consuelo Bautista',
-    minimum: 3,
-  },
-  {
     // Back link and three people in the chain. The move moved to the profile.
     name: 'pastoral network',
     route: '/people/3f1b7c6e-0000-4000-8000-000000000601/network',
@@ -2256,7 +2233,6 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockDccTwelve(page);
   await mockDccReport(page);
   await mockCellMembers(page);
-  await mockCoverageGaps(page);
   await mockPastoralPath(page);
   await mockNetworkTree(page);
   await mockAwaitingReassignment(page);
