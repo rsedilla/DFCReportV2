@@ -198,6 +198,10 @@
       "screen": "web/app/dashboard/page.tsx"
     },
     {
+      "route": "GET /api/v1/dcc/pending-leaders",
+      "screen": "web/app/dashboard/page.tsx"
+    },
+    {
       "route": "GET /api/v1/dcc/leaders/:id/checklist",
       "screen": "web/app/dashboard/page.tsx"
     },

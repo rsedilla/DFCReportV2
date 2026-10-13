@@ -283,6 +283,40 @@ export async function getDccOwed(
   });
 }
 
+/** One leader on Record's Pending DCC Reports, with each Sunday still open (decision 0336). */
+export interface PendingDccLeader {
+  leader: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+    last_name: string;
+    first_name: string;
+    is_actor: boolean;
+    /** False shows "Has no account" (decision 0336). */
+    has_account: boolean;
+  };
+  /** Who records it, named only where the reader's scope covers them. */
+  recorded_by: { person_id: string; full_name: string } | null;
+  recorded_by_you: boolean;
+  /** Oldest first; the recorder, Record and See checklist follow the first. */
+  sundays: { event_id: string; event_date: string; due_at: string | null; closes_at: string }[];
+  record_for: string | null;
+  may_record: boolean;
+}
+
+export async function getPendingDccLeaders(
+  options: { cursor?: string | null; q?: string; network?: 'MENS' | 'WOMENS' | null },
+  signal?: AbortSignal,
+): Promise<{ data: PendingDccLeader[]; next_cursor: string | null }> {
+  const query = new URLSearchParams();
+  if (options.cursor) query.set('cursor', options.cursor);
+  if (options.q) query.set('q', options.q);
+  if (options.network) query.set('network', options.network);
+  const text = query.toString();
+
+  return authenticatedRequest(`/api/v1/dcc/pending-leaders${text ? `?${text}` : ''}`, { signal });
+}
+
 /** A leader's DCC checklist across a month, read only (decision 0301). */
 export interface LeaderChecklist {
   reporting_month: string;

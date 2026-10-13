@@ -16,6 +16,7 @@ import { DccPersonAttendanceService } from './dcc-person-attendance.service';
 import {
   DccCoverageGapsDto,
   DccEventsQueryDto,
+  DccPendingLeadersDto,
   DccPersonAttendanceDto,
   DccRosterDto,
   SubmitDccAttendanceDto,
@@ -218,6 +219,21 @@ export class DccController {
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
     return this.coverage.owedInBranch(actor, query.month);
+  }
+
+  /**
+   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Reports* (decision 0336): the
+   * leaders in the actor's scope whose 12 are unrecorded for a Sunday whose week is open,
+   * one row each. Under `dcc.view_subtree` against the actor, narrowed to that scope in the
+   * service. It names no period, so it asks about now (section 7).
+   */
+  @Get('pending-leaders')
+  @RequiresCapability(Capability.DccViewSubtree, { kind: 'actor' })
+  async pendingLeaders(
+    @Query() query: DccPendingLeadersDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.coverage.pendingLeaders(actor, query);
   }
 
   /**

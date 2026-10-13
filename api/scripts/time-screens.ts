@@ -113,6 +113,7 @@ const SCREENS: Screen[] = [
         `/api/v1/cells?month=${M}&state=CLOSED`,
         `/api/v1/dcc/events?month=${M}`,
         paged('/api/v1/cells/leadership-requests/sent'),
+        '/api/v1/dcc/pending-leaders',
       ],
       (p, [, , , , , , events]) => [
         `/api/v1/reports/cells/monthly?period=${M}&${scope(p)}`,
@@ -143,6 +144,11 @@ const SCREENS: Screen[] = [
           .map((event) => paged(`/api/v1/dcc/events/${event.id}/roster`)),
       ],
     ],
+  },
+  {
+    // Every page, as Show more reads it (decision 0336).
+    name: 'Record › Pending DCC Reports, every page',
+    stages: [() => [paged('/api/v1/dcc/pending-leaders')]],
   },
   {
     name: 'DCC checklist (one Sunday)',
