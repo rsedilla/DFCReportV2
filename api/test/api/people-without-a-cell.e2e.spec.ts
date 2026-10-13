@@ -120,10 +120,23 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
     const response = await list(admin);
 
     expect(response.status).toBe(200);
-    expect(idsOf(response)).toEqual(
-      [raymond.id, manuel.id, mark.id, nathan.id, admin.personId].sort(),
-    );
+    // Adele, the administrator, is outside the pastoral tree and is not listed (decision 0339).
+    expect(idsOf(response)).toEqual([raymond.id, manuel.id, mark.id, nathan.id].sort());
     expect(response.body.data[0]).toMatchObject({ full_name: expect.any(String) });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Outside the pastoral tree (decision 0339)
+  // ---------------------------------------------------------------------------
+
+  it('does not list a Person outside the pastoral tree, whom nobody places in a Cell', async () => {
+    expect(idsOf(await list(admin))).not.toContain(admin.personId);
+  });
+
+  it('lists a leader in the tree who also holds ADMIN', async () => {
+    await createAccount(app, db, { person: manuel, roles: ['ADMIN'] });
+
+    expect(idsOf(await list(admin))).toContain(manuel.id);
   });
 
   it('does not list somebody who holds an open membership', async () => {

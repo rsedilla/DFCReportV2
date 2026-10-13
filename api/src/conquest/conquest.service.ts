@@ -108,7 +108,10 @@ export class ConquestService {
     };
   }
 
-  /** The current people in the population who have reached each goal. */
+  /**
+   * The current people in the population who have reached each goal, leaving out anyone
+   * outside the pastoral tree, as the list does (decision 0339).
+   */
   private async reachedBy(
     population: ReadonlySet<string> | null,
     now: Date,
@@ -138,10 +141,14 @@ export class ConquestService {
     );
     const identities = keyed(await this.people.forDecisions([...goals.keys()]));
     const listed = population === null ? null : new Set([...population].map(canonicalId));
+    const outside = await this.people.outsideTreeAt(this.db, now);
 
     for (const [personId, own] of goals) {
       const identity = identities.get(personId);
       if (identity === undefined || identity.isArchived || identity.mergedIntoId !== null) {
+        continue;
+      }
+      if (outside.has(personId)) {
         continue;
       }
       if (listed !== null && !listed.has(personId)) {

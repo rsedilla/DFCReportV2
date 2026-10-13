@@ -144,9 +144,9 @@ export class AccountsRepository {
    * this module back (SKILL.md section 2, ruling of 2026-09-11).
    *
    * An empty input answers empty without querying, because `IN ()` is not valid SQL.
-   * **Its only caller today cannot reach it** — `awaitingReassignment` returns before
-   * asking whenever the broken-edge set is empty — so the guard is for the next caller
-   * rather than for that one. Stated rather than dressed up as a live case: a guard given
+   * **No caller today reaches it** — `awaitingReassignment` returns before asking whenever
+   * the broken-edge set is empty, and `noLeaderReason` asks about one person — so the guard
+   * is for the next caller. Stated rather than dressed up as a live case: a guard given
    * a reason that cannot occur is how the reason survives the caller changing.
    */
   async personsHoldingAdminWithin(
@@ -164,6 +164,23 @@ export class AccountsRepository {
       .where('account.person_id', 'in', [...personIds])
       .where('role.role', '=', 'ADMIN')
       .where('role.revoked_at', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
+  }
+
+  /** `AdminAccountsPort`. Every Person holding an `ADMIN` role at `at` (decision 0339). */
+  async personsHoldingAdminAtWithin(
+    executor: Db | Transaction<Database>,
+    at: Date,
+  ): Promise<Set<string>> {
+    const rows = await executor
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select('account.person_id as person_id')
+      .where('role.role', '=', 'ADMIN')
+      .where('role.granted_at', '<=', at)
+      .where((eb) => eb.or([eb('role.revoked_at', 'is', null), eb('role.revoked_at', '>', at)]))
       .execute();
 
     return new Set(rows.map((row) => row.person_id));

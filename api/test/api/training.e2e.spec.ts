@@ -709,6 +709,15 @@ describe('Training (section 28)', () => {
       );
     });
 
+    // Decision 0339: Adele, the administrator, is outside the pastoral tree.
+    it('neither lists nor counts a Person outside the pastoral tree', async () => {
+      const { people } = (await get(admin, 'counts')).body;
+      const listed = await allPages(admin, 'limit=200');
+
+      expect(idsOf(listed)).not.toContain(admin.personId);
+      expect(listed).toHaveLength(people);
+    });
+
     it('puts a person back, and all_five down, once one of their five is withdrawn', async () => {
       const row = await currentRow(timothy.id, 'SOL_3');
       const response = await submit(markAccount, [

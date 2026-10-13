@@ -716,6 +716,15 @@ describe('SUYNL (section 28)', () => {
       expect(idsOf(listed)).not.toContain(silas.id);
     });
 
+    // Decision 0339: Adele, the administrator, is outside the pastoral tree.
+    it('neither lists nor counts a Person outside the pastoral tree', async () => {
+      const { people } = (await get(admin, 'counts')).body;
+      const listed = await allPages(admin, 'limit=200');
+
+      expect(idsOf(listed)).not.toContain(admin.personId);
+      expect(listed).toHaveLength(people);
+    });
+
     it('each card narrows the list to exactly its count', async () => {
       const counts = (await get(manuelAccount, 'counts')).body;
 

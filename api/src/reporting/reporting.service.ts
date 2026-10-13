@@ -1295,7 +1295,9 @@ export class ReportingService {
       const at = current ? now : bounds.end;
 
       const cells = await this.cells.cellsInForceAt(trx, at);
-      const people = await this.people.currentIdsAt(trx, at);
+      // Nobody outside the pastoral tree at the month's instant is counted (decision 0339).
+      const outside = await this.people.outsideTreeAt(trx, at);
+      const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
 
       const figuresOf = (members: ReadonlySet<string> | null): ChurchCountFigures => {
         const counted = cells.filter((cell) => members === null || members.has(cell.leaderId));

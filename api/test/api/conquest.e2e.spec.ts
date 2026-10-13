@@ -795,6 +795,24 @@ describe('Conquest (section 27)', () => {
       });
     }
 
+    // Decision 0339: Adele, the administrator, is outside the pastoral tree.
+    it('neither lists nor counts a Person outside the pastoral tree', async () => {
+      const counts = (await get(admin, 'counts')).body;
+      const listed = await allPages(admin);
+
+      expect(idsOf(listed)).not.toContain(admin.personId);
+      expect(listed).toHaveLength(counts.people);
+    });
+
+    it('leaves a goal reached outside the pastoral tree off the card as off the list', async () => {
+      const before = (await get(admin, 'counts')).body.open_a_cell;
+      const adele: TestPerson = { id: admin.personId, firstName: 'Adele', network: 'WOMENS' };
+      await createCell(db, { leader: adele, createdAt: onDay(5) });
+
+      expect((await get(admin, 'counts')).body.open_a_cell).toBe(before);
+      expect(idsOf(await allPages(admin, 'goal=OPEN_A_CELL'))).not.toContain(admin.personId);
+    });
+
     it('neither lists nor counts an archived person who reached a goal (decision 0279)', async () => {
       for (const reader of [manuelAccount, admin]) {
         expect(idsOf(await allPages(reader, 'goal=OPEN_A_CELL'))).not.toContain(silas.id);
