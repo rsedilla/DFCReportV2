@@ -216,7 +216,7 @@ function DccChecklist() {
           : lines.length === 1
             ? 'The 1 person you are responsible for.'
             : `The ${lines.length} people you are responsible for.`}
-        {recordable && awaitingCount > 0 ? ` Awaiting a record · ${awaitingCount} to mark.` : ''}
+        {recordable && awaitingCount > 0 ? ` Not recorded · ${awaitingCount} to mark.` : ''}
       </p>
 
       <div className="mt-8">
@@ -248,7 +248,7 @@ function DccChecklist() {
           {save.isSuccess ? (
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <TextLink inline href="/dashboard">Back to what&rsquo;s awaiting a record</TextLink>
+              <TextLink inline href="/dashboard?list=awaiting&kind=dcc">Back to Update Record</TextLink>
             </p>
           ) : null}
 

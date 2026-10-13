@@ -374,7 +374,7 @@ export function categoryLabel(category: CellCategory): string {
  */
 export function meetingStateLabel(meeting: RecordedMeeting | null): string {
   if (meeting === null) {
-    return 'Awaiting a record';
+    return 'Not recorded';
   }
 
   switch (meeting.status) {

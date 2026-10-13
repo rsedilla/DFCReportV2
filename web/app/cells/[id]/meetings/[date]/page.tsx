@@ -357,7 +357,7 @@ function RecordMeeting() {
         <p className="mt-2">
           {/*
             An outlined word for what was reported. A meeting with no record carries
-            no tag here: "awaiting a record" is the absence of a report rather than a
+            no tag here: "Not recorded" is the absence of a report rather than a
             status beside the three a leader reports (`lib/cells.ts`).
           */}
           <Tag appearance="outline">{meetingStateLabel(recorded)}</Tag>
@@ -409,7 +409,7 @@ function RecordMeeting() {
             // Polite, because it is the result of the reader's own action.
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <TextLink inline href="/dashboard">Back to what&rsquo;s awaiting a record</TextLink>
+              <TextLink inline href="/dashboard?list=awaiting">Back to Update Record</TextLink>
             </p>
           ) : null}
 

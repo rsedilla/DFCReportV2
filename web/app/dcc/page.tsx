@@ -26,7 +26,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  * 2026-09-19). It replaces a list of the month's Sundays with a scope-wide figure each, which
  * Reports → DCC → By Sunday already carries.
  *
- * **States are words, never colour** (sections 13, 17 and 19): Recorded, Awaiting a record,
+ * **States are words, never colour** (sections 13, 17 and 19): Recorded, Not recorded,
  * Not yet, and Not recorded · week closed, which opens nothing. A Sunday with no service is shown in its place with its reason (section 9).
  *
  * **Monday first** (decision 0054). On a phone the grid becomes a list of the same dates.
@@ -117,7 +117,7 @@ function YourMonth() {
           : scheduled.meeting !== null
             ? `Recorded · ${meetingStateLabel(scheduled.meeting).toLowerCase()}`
             : open
-              ? 'Awaiting a record'
+              ? 'Not recorded'
               : 'Not recorded · week closed',
         href:
           notYet || (scheduled.meeting === null && !open)
@@ -134,7 +134,7 @@ function YourMonth() {
         key: `closed-${meeting.cell_id}-${meeting.scheduled_date}`,
         date: meeting.scheduled_date,
         label: `${meeting.category ? `${categoryLabel(meeting.category)} · ` : ''}${timeLabel(meeting.scheduled_time)}`,
-        state: 'Awaiting a record · Cell closed',
+        state: 'Not recorded · Cell closed',
         href: `/cells/${meeting.cell_id}/meetings/${meeting.scheduled_date}`,
       });
     }
@@ -172,7 +172,7 @@ function YourMonth() {
         : unmarked === 0
           ? 'Recorded'
           : dccOpen
-            ? `Awaiting a record · ${unmarked} to mark`
+            ? `Not recorded · ${unmarked} to mark`
             : `Not recorded · week closed · ${unmarked} unmarked`,
       href: notYet || (unmarked > 0 && !dccOpen) ? null : `/dcc/${event.id}`,
     });

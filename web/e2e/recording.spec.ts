@@ -383,6 +383,32 @@ test.describe('a Sunday with a mark already recorded', () => {
     });
   });
 
+  // Decision 0338: the Sunday says what is left in Not recorded's words, and once saved its
+  // link back opens Update Record on DCC, the half just recorded.
+  test('says what is left to mark, and links back to Update Record on DCC once saved', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+
+    await page.goto(SUNDAY);
+    await expect(page.getByText(/Not recorded · 1 to mark\./)).toBeVisible();
+
+    await page
+      .getByRole('group', { name: UNRECORDED.name })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+
+    await expect(page.getByRole('link', { name: 'Back to Update Record' })).toHaveAttribute(
+      'href',
+      '/dashboard?list=awaiting&kind=dcc',
+    );
+  });
+
   // Decision 0275: a refusal inside the records names its path, and the screen names the
   // person on that line.
   test('names the person whose line was refused', async ({ page }) => {
@@ -882,7 +908,7 @@ test.describe('the Record queue', () => {
 
   // The queue is empty when the route says it is, and says so in a sentence rather
   // than by rendering nothing.
-  test('says no Cell meeting is awaiting a record when the route returns none', async ({
+  test('says there is nothing to record when the route returns none', async ({
     page,
   }) => {
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
@@ -890,7 +916,7 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
 
-    await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toBeVisible();
+    await expect(page.getByText('Nothing to record.')).toBeVisible();
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Cell Group\s*0$/ }),
     ).toBeVisible();
@@ -903,7 +929,7 @@ test.describe('the Record queue', () => {
    * now **one** request, so one refusal empties it completely — where before a failure
    * cost one Cell's rows. A refusal is not retried, so it arrives at once.
    */
-  test('says nothing is awaiting a record only when the queue was actually read', async ({
+  test('says there is nothing to record only when the queue was actually read', async ({
     page,
   }) => {
     await mockRecordScreen(page, {});
@@ -920,7 +946,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toHaveCount(0);
+    await expect(page.getByText('Nothing to record.')).toHaveCount(0);
 
     // Nor does a count: a queue that was not read is not a queue of 0, and the Sundays
     // alone are not the whole of it. Each button's whole name is its label.
@@ -990,9 +1016,9 @@ test.describe('the Record queue', () => {
     // The roster mock answers `meeting: null` on every read, so a saved meeting does
     // not read back as recorded; the submission having been made is what to wait for.
     await expect.poll(() => submitted).toBe(1);
-    await expect(page.getByRole('link', { name: 'Back to what’s awaiting a record' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Back to Update Record' })).toHaveAttribute(
       'href',
-      '/dashboard',
+      '/dashboard?list=awaiting',
     );
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Record' }).click();
@@ -2316,7 +2342,7 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     ).toBeVisible();
     await expect(grid.getByText('Recorded · met').first()).toBeVisible();
     // A Sunday with somebody still unmarked, which opens that checklist.
-    await expect(grid.getByText('Awaiting a record · 1 to mark').first()).toBeVisible();
+    await expect(grid.getByText('Not recorded · 1 to mark').first()).toBeVisible();
     // A Sunday with no service, in its place and with its reason (section 9).
     await expect(
       grid.getByText('No service: The church held a combined regional service.'),
@@ -2336,7 +2362,8 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
 
     const grid = page.getByRole('table', { name: 'Every date you owe a record this month' });
     await expect(grid.getByText('Not recorded · week closed · 1 unmarked').first()).toBeVisible();
-    await expect(grid.getByText(/Awaiting a record/)).toHaveCount(0);
+    await expect(grid.getByText('Not recorded', { exact: true })).toHaveCount(0);
+    await expect(grid.getByText(/to mark/)).toHaveCount(0);
     await expect(
       grid.locator('td', { hasText: 'week closed' }).locator('a[href^="/dcc/"]'),
     ).toHaveCount(0);
@@ -2411,7 +2438,7 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
       'href',
       `/cells/${CELL_WITH_MEETINGS.id}/meetings/2026-06-13`,
     );
-    await expect(day(13)).toContainText('Awaiting a record');
+    await expect(day(13).getByText('Not recorded', { exact: true })).toBeVisible();
     await expect(day(7)).toContainText('Not recorded · week closed · 1 unmarked');
     await expect(day(7).getByRole('link')).toHaveCount(0);
   });
