@@ -7,10 +7,10 @@ import {
   type ScopeMembership,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
-import { NotFoundError } from '../common/errors/api-error';
+import { NotFoundError, ValidationFailedError } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
-import { startOfManilaDay } from '../common/time/manila';
+import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { assertReportingMonth } from '../common/time/reporting-period';
 import {
   databaseNow,
@@ -23,6 +23,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import type { NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
+import { normalizeName } from '../people/duplicate-matching';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { type NotRecordable } from './dcc-attendance.service';
@@ -743,6 +744,182 @@ export class DccCoverageService {
   }
 
   /**
+   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Reports* (decision 0336): one
+   * row per leader in the reader's `dcc.view_subtree` scope now who owes a record for a
+   * Sunday whose week is still open, with each such Sunday.
+   *
+   * **Owes is coverage's unit** (decision 0224), as on *Leaders Under Me*, so a checklist
+   * with anybody on it marked is not listed. **The scope is the grant's, not a walk of the
+   * tree**: a Full view leader's whole branch and an Admin's whole church, never stopping two
+   * levels down (decision 0324 is *Leaders Under Me*'s).
+   *
+   * **The recorder, Record and See checklist follow the row's oldest Sunday**, and who holds
+   * an account is read now, as the recording route reads it (section 9). The recorder is
+   * named only where the reader's scope covers them (owner, 2026-10-13), and a row without
+   * Record never names the leader whose screen it would open (decision 0313, point 14).
+   *
+   * Ordered by name and paged by the roster cursor; never by how much is owed (decision 0009).
+   */
+  async pendingLeaders(
+    actor: Actor,
+    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName },
+  ): Promise<Record<string, unknown>> {
+    const after = decodeRosterCursor(query.cursor);
+    const term = query.q === undefined ? null : normalizeName(query.q);
+
+    // Counted on the term as it is searched, as the Cells list counts it (decision 0261).
+    if (term !== null && term.replace(/\s+/g, '').length < 2) {
+      throw new ValidationFailedError('Enter at least two letters of a name or Member ID.', {
+        field: 'q',
+      });
+    }
+
+    const now = await databaseNow(this.db);
+    // A Sunday still open is in this month or the last: a week closes about three weeks after
+    // it, and a Sunday before the weekly rule at the end of the next month's 7th (decision 0335).
+    const rows = await this.db
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', previousMonth(reportingMonthOf(manilaDayOf(now))))
+      .orderBy('event_date')
+      .execute();
+    const events = rows
+      .map((row) => this.describe(String(row.event_date), row, now))
+      .filter((event) => event.notRecordable === null);
+
+    const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    const covered =
+      membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : new Set([...membership.personIds].map((id) => canonicalId(id)));
+
+    // Each leader's open Sundays, from one read of the edges and one of the records.
+    const edgesAt = await this.hierarchy.edgesAsOfEach(
+      this.db,
+      events.map((event) => event.at),
+    );
+    const recorded =
+      events.length === 0
+        ? new Map<string, Set<string>>()
+        : await this.recordedLeadersOf(
+            this.db,
+            events.map((event) => event.id),
+          );
+    const sundaysOf = new Map<string, EventRow[]>();
+
+    events.forEach((event, index) => {
+      const met = recorded.get(canonicalId(event.id)) ?? new Set<string>();
+      const owing = new Set(edgesAt[index].map((edge) => canonicalId(edge.leaderId)));
+
+      for (const leader of owing) {
+        if (met.has(leader) || (covered !== null && !covered.has(leader))) {
+          continue;
+        }
+        sundaysOf.set(leader, [...(sundaysOf.get(leader) ?? []), event]);
+      }
+    });
+
+    const owingLeaders = [...sundaysOf.keys()];
+    const identities = await this.people.forDecisionsWithin(this.db, owingLeaders);
+    const inNetwork =
+      query.network === undefined
+        ? null
+        : new Set(
+            [...(await this.networks.networksOf(this.db, owingLeaders, now))]
+              .filter(([, network]) => network === query.network)
+              .map(([id]) => canonicalId(id)),
+          );
+
+    const matching = owingLeaders
+      .map((leaderId) => {
+        const identity = identities.get(leaderId);
+
+        return {
+          leaderId,
+          memberId: identity?.memberId ?? '',
+          fullName: identity?.fullName ?? '',
+          lastName: identity?.lastName ?? '',
+          firstName: identity?.firstName ?? '',
+        };
+      })
+      .filter(
+        (line) =>
+          (inNetwork === null || inNetwork.has(line.leaderId)) &&
+          (term === null ||
+            // The name fields alone, never the title (section 3, decision 0271).
+            containsInOrder(normalizeName(`${line.firstName} ${line.lastName}`), term) ||
+            line.memberId.toUpperCase().includes((query.q ?? '').trim().toUpperCase())),
+      )
+      .sort((left, right) => compareKeys(keyOf(left), keyOf(right)))
+      .filter((line) => after === null || compareKeys(keyOf(line), after) > 0);
+
+    const limit = query.limit ?? DEFAULT_PAGE;
+    const page = matching.slice(0, limit);
+    const more = matching.length > limit;
+
+    // The recorder of each row's oldest Sunday, read for this page only.
+    const recorderOf = new Map<string, string | null>();
+    const byOldest = new Map<string, { event: EventRow; leaders: string[] }>();
+    for (const line of page) {
+      const oldest = (sundaysOf.get(line.leaderId) ?? [])[0];
+      const entry = byOldest.get(oldest.id) ?? { event: oldest, leaders: [] };
+      entry.leaders.push(line.leaderId);
+      byOldest.set(oldest.id, entry);
+    }
+    for (const { event, leaders } of byOldest.values()) {
+      const submitters = await this.submittersOf(event, leaders);
+      for (const leader of leaders) {
+        recorderOf.set(leader, submitters.get(leader) ?? null);
+      }
+    }
+
+    const recorders = [
+      ...new Set([...recorderOf.values()].filter((id): id is string => id !== null)),
+    ];
+    const recordable = await this.recordableBy(actor, recorders);
+    const recorderNames = await this.people.forDecisionsWithin(this.db, recorders);
+    const me = canonicalId(actor.personId);
+    const last = page.at(-1);
+
+    return {
+      data: page.map((line) => {
+        const recorder = recorderOf.get(line.leaderId) ?? null;
+        const ownAccount = recorder === line.leaderId;
+        const byActor = recorder !== null && recorder === me;
+        const mayRecord = recorder !== null && (byActor || recordable.has(recorder));
+        // Named only where the reader's scope covers them (owner, 2026-10-13).
+        const named =
+          recorder !== null && !ownAccount && (covered === null || covered.has(recorder));
+
+        return {
+          leader: {
+            person_id: line.leaderId,
+            member_id: line.memberId,
+            full_name: line.fullName,
+            last_name: line.lastName,
+            first_name: line.firstName,
+            is_actor: line.leaderId === me,
+            has_account: ownAccount,
+          },
+          recorded_by: named
+            ? { person_id: recorder, full_name: recorderNames.get(recorder)?.fullName ?? '' }
+            : null,
+          recorded_by_you: byActor && !ownAccount,
+          sundays: (sundaysOf.get(line.leaderId) ?? []).map((event) => ({
+            event_id: event.id,
+            event_date: event.eventDate,
+            due_at: recordDueAt(event.eventDate)?.toISOString() ?? null,
+            closes_at: recordClosesAt(event.eventDate).toISOString(),
+          })),
+          record_for: mayRecord ? recorder : null,
+          may_record: mayRecord,
+        };
+      }),
+      next_cursor: more && last !== undefined ? encodeRosterCursor(keyOf(last)) : null,
+    };
+  }
+
+  /**
    * For the Senior Pastors' *Recording status* (decision 0325, point 2): each leader who owed
    * a DCC record in the run of days, with how many of its Sundays they owed and how many of
    * those have none.
@@ -1202,6 +1379,31 @@ function leadersOf(membership: ScopeMembership): readonly string[] | null {
   return membership.kind === 'WHOLE_CHURCH' ? null : [...membership.personIds];
 }
 
+/**
+ * Whether each word of the term appears in the name, in order: a space in the term matches
+ * anything, as the People and Cells searches read one (`dave paz` finds Dave Dela Paz).
+ */
+function containsInOrder(name: string, term: string): boolean {
+  let from = 0;
+  for (const word of term.split(' ')) {
+    const at = name.indexOf(word, from);
+    if (at === -1) {
+      return false;
+    }
+    from = at + word.length;
+  }
+  return true;
+}
+
+/** The first of the month before this one, as a `YYYY-MM-01` Manila date. */
+function previousMonth(reportingMonth: string): string {
+  const [year, month] = reportingMonth.split('-').map(Number);
+
+  return month === 1
+    ? `${String(year - 1).padStart(4, '0')}-12-01`
+    : `${String(year).padStart(4, '0')}-${String(month - 1).padStart(2, '0')}-01`;
+}
+
 /** The first of the month after this one, as a `YYYY-MM-01` Manila date. */
 function nextMonth(reportingMonth: string): string {
   const [year, month] = reportingMonth.split('-').map(Number);
@@ -1211,15 +1413,7 @@ function nextMonth(reportingMonth: string): string {
     : `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-01`;
 }
 
-interface GapLine {
-  personId: string;
-  memberId: string;
-  fullName: string;
-  lastName: string;
-  firstName: string;
-}
-
-function keyOf(line: GapLine): RosterCursor {
+function keyOf(line: RosterCursor): RosterCursor {
   return { lastName: line.lastName, firstName: line.firstName, memberId: line.memberId };
 }
 

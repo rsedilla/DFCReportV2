@@ -28,6 +28,8 @@ import {
   mockMeetingRoster,
   mockMeetingsAwaiting,
   mockRecordedMeetingRoster,
+  mockPendingDcc,
+  PENDING_DCC_ROWS,
 } from './mock-attendance';
 
 /**
@@ -697,6 +699,7 @@ test.describe('the Record queue', () => {
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
   }
 
   // Section 13 keeps a month open through its 7th and has every leader see their own
@@ -1227,6 +1230,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
 
     const whoseAsked: string[] = [];
     await page.route('**/api/v1/cells/meetings/awaiting?*', (route) => {
@@ -1734,6 +1738,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
     await mockDccOwed(page);
   }
 
@@ -1860,7 +1865,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
   }
 
-  test('opens on four buttons of one size, each with its count, Update Record chosen', async ({
+  test('opens on five buttons of one size, each with its count, Update Record chosen', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1870,12 +1875,13 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.goto('/dashboard');
 
     const lists = recordLists(page);
-    await expect(lists.getByRole('button')).toHaveCount(4);
-    // Two meetings of the reader's own and two Sundays; one Cell behind; two people on each
-    // of the people lists.
+    await expect(lists.getByRole('button')).toHaveCount(5);
+    // Two meetings of the reader's own and two Sundays; one Cell behind; no leader behind on
+    // DCC; two people on each of the people lists.
     for (const name of [
       /^Update Record\s*4$/,
       /^Pending CG Reports\s*1$/,
+      /^Pending DCC Reports\s*0$/,
       /^Awaiting Leader Assignment\s*2$/,
       /^Awaiting CG Assignment\s*2$/,
     ]) {
@@ -1885,11 +1891,16 @@ test.describe('Record’s four lists (decision 0290)', () => {
       'aria-pressed',
       'true',
     );
-    for (const name of [/^Pending CG Reports/, /^Awaiting Leader Assignment/, /^Awaiting CG Assignment/]) {
+    for (const name of [
+      /^Pending CG Reports/,
+      /^Pending DCC Reports/,
+      /^Awaiting Leader Assignment/,
+      /^Awaiting CG Assignment/,
+    ]) {
       await expect(lists.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
     }
 
-    // One size, as wide as the longest label (decision 0332): one row of four, all equal.
+    // One size, as wide as the longest label (decision 0332): one row of five, all equal.
     const { widths, tops } = await lists.evaluate((group) => {
       const buttons = [...group.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
       return {
@@ -1902,9 +1913,58 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     // Only the chosen list is on the page.
     await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
-    for (const name of ['Pending CG Reports', 'Awaiting Leader Assignment', 'Awaiting CG Assignment']) {
+    for (const name of [
+      'Pending CG Reports',
+      'Pending DCC Reports',
+      'Awaiting Leader Assignment',
+      'Awaiting CG Assignment',
+    ]) {
       await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(0);
     }
+  });
+
+  test('Pending DCC Reports lists each leader once, with each open Sunday and who records it (decision 0336)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    const asked = await mockPendingDcc(page, PENDING_DCC_ROWS);
+    await mockDccOwed(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard?list=dcc');
+
+    await expect(recordLists(page).getByRole('button', { name: /^Pending DCC Reports\s*2$/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const table = page.getByRole('table', { name: 'Pending DCC Reports' });
+    await expect(table.getByRole('columnheader')).toHaveText(['Leader', 'Sundays still to record', 'Action']);
+
+    // The reader's own row records; Late is a word, never a colour.
+    const own = table.getByRole('row').filter({ hasText: 'You' });
+    await expect(own).toContainText('Late · closes');
+    await expect(own.getByRole('link', { name: /^Record/ })).toHaveAttribute(
+      'href',
+      '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    );
+
+    // A leader with no account: who records it, each Sunday on its own line, and See
+    // checklist alone, since the reader may not record there.
+    const carlo = table.getByRole('row').filter({ hasText: 'Carlo Reyes' });
+    await expect(carlo).toContainText('Has no account · Recorded by Jose Santos');
+    await expect(carlo.getByRole('listitem')).toHaveCount(2);
+    await expect(carlo.getByRole('link', { name: /^Record/ })).toHaveCount(0);
+    await carlo.getByRole('button', { name: /^See checklist/ }).click();
+    await expect(page.getByRole('heading', { name: 'Carlo Reyes’s DCC checklist' })).toBeVisible();
+
+    // A search goes to the server; a one-letter term is not sent.
+    const search = page.getByLabel('Search a leader by name or Member ID');
+    await search.fill('r');
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
+    await search.fill('reyes');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect.poll(() => asked.some((query) => query.includes('q=reyes'))).toBe(true);
   });
 
   test('a list with a further page unread counts what it read and says there is more', async ({
@@ -2374,6 +2434,7 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await mockDccReport(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
 
     await page.goto('/dashboard');
 
@@ -2403,6 +2464,7 @@ test.describe('a DCC checklist longer than one page', () => {
     await mockDccEvents(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
 
     const line = (n: number, marked: boolean) => ({
       person_id: `3f1b7c6e-0000-4000-8000-0000000071${String(n).padStart(2, '0')}`,
@@ -2460,6 +2522,7 @@ test.describe('a DCC checklist longer than one page', () => {
     await mockDccEvents(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
 
     const lines = Array.from({ length: 120 }, (_, index) => ({
       person_id: `3f1b7c6e-0000-4000-8000-000000072${String(index).padStart(3, '0')}`,
@@ -2534,6 +2597,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
     await mockDccOwed(page);
     await mockCellsByMonth(page, { septemberOpen });
   }

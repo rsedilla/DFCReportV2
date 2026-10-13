@@ -24,6 +24,7 @@ import {
   mockMeetingsAwaiting,
   mockPastoralPath,
   recordingStatus,
+  mockPendingDcc,
 } from './mock-attendance';
 import { mockSuynl } from './mock-growth';
 
@@ -894,6 +895,7 @@ test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
   }
 
   test('is the last tab, and reads the reader’s own branch', async ({ page }) => {
@@ -937,7 +939,7 @@ test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
-    await expect(tabs).toHaveCount(5);
+    await expect(tabs).toHaveCount(6);
     await expect(tabs.last()).toHaveText('Recording Status');
     await tabs.last().click();
 
@@ -961,7 +963,7 @@ test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
-    await expect(tabs).toHaveCount(4);
+    await expect(tabs).toHaveCount(5);
     await expect(page.getByRole('button', { name: 'Recording Status' })).toHaveCount(0);
   });
 });

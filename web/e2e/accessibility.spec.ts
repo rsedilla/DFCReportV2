@@ -50,6 +50,7 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
   mockRecordingStatus,
+  mockPendingDcc,
 } from './mock-attendance';
 import {
   READINESS_ARTURO_ID,
@@ -104,6 +105,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
   await mockDccRoster(page);
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
+  await mockPendingDcc(page);
 }
 
 /**
@@ -2385,6 +2387,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockNetworkTree(page);
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
+  await mockPendingDcc(page);
   await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockEncounterSeasons(page, { shows: 'MENS' });

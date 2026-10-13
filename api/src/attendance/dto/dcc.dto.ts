@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
@@ -16,7 +17,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
+import type { NetworkName } from '../../database/schema';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 import { ClosedMonthAmendmentDto } from './cell-meeting-submit.dto';
 import { IsStorableText } from '../../common/text/is-storable-text';
@@ -214,6 +216,41 @@ export class DccEventsQueryDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   coverage?: boolean;
+}
+
+/**
+ * `GET /api/v1/dcc/pending-leaders` (SKILL.md section 19; decision 0336): the leaders in the
+ * reader's scope whose 12 are unrecorded for a Sunday whose week is open, paged by name.
+ */
+export class DccPendingLeadersDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /** The `next_cursor` of the previous page, passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+
+  /**
+   * Narrows the list to leaders whose name, normalized, or Member ID contains the term. Two
+   * characters minimum, counted again by the service on the term as searched (decision 0261).
+   */
+  @IsOptional()
+  @IsString()
+  @Length(2, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
+  q?: string;
+
+  /** Narrows the list to the leaders of one Network now. */
+  @IsOptional()
+  @IsIn(['MENS', 'WOMENS'], { message: 'network accepts MENS or WOMENS (SKILL.md section 22).' })
+  network?: NetworkName;
 }
 
 /**

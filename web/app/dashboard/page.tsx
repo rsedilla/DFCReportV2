@@ -9,8 +9,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { LeaderRecordingStatusPanel, RecordingStatusPanel } from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
-import { buttonClasses } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { Field } from '@/components/ui/field';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -28,15 +29,17 @@ import {
 import {
   getDccOwed,
   getLeaderChecklist,
+  getPendingDccLeaders,
   getWholeDccRoster,
   listDccEvents,
   type DccEvent,
   type DccOwed,
   type DccRosterLine,
+  type PendingDccLeader,
 } from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { awaitingReassignment } from '@/lib/people';
+import { awaitingReassignment, MINIMUM_SEARCH_LENGTH } from '@/lib/people';
 import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import {
   dayLabel,
@@ -54,9 +57,10 @@ import { cn } from '@/lib/utils';
  *
  * **Outstanding work comes above the numbers, and that is the whole design.**
  * Section 19 is blunt about it: "A dashboard of counts tells a leader nothing to
- * act on." So the screen opens on four lists of outstanding work, one at a time, each
- * with its count (decision 0290): what awaits a record, the Cells behind, the people
- * needing a new leader and the people not in a Cell. The figures are at the foot.
+ * act on." So the screen opens on five lists of outstanding work, one at a time, each
+ * with its count (decisions 0290 and 0336): what awaits a record, the Cells behind, the
+ * leaders behind on DCC, the people needing a new leader and the people not in a Cell. The
+ * figures are at the foot.
  *
  * **The queue shows the leader's own work by default, and their branch's on request**
  * (decision 0258, reversing the owner's choice of 2026-09-15).
@@ -264,6 +268,8 @@ function Dashboard() {
   // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
   // when the list or the view changes, so a list switched away from does not come back open.
   const [chosenLeader, setChosenLeader] = useState<ChosenLeader | null>(null);
+  // The leader whose checklist is open under Pending DCC Reports (decision 0336).
+  const [pendingChosen, setPendingChosen] = useState<ChosenLeader | null>(null);
   const [chosenFor, setChosenFor] = useState(`${filter}|${whose}`);
   if (chosenFor !== `${filter}|${whose}`) {
     setChosenFor(`${filter}|${whose}`);
@@ -306,6 +312,30 @@ function Dashboard() {
     error: withoutACellPages.error,
     data: withoutACellPages.data?.pages.flatMap((page) => page.data),
   };
+
+  // **Pending DCC Reports** (decision 0336): the leaders in the reader's whole scope whose 12
+  // are unrecorded for a Sunday whose week is open, fifty at a time, searched and filtered on
+  // the server. Undated: it asks about now.
+  const [pendingFilter, setPendingFilter] = useState<{
+    q: string;
+    network: 'MENS' | 'WOMENS' | null;
+  }>({ q: '', network: null });
+  const pendingDccPages = useInfiniteQuery({
+    queryKey: ['dcc-pending-leaders', pendingFilter.q, pendingFilter.network],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      getPendingDccLeaders(
+        {
+          cursor: pageParam,
+          q: pendingFilter.q === '' ? undefined : pendingFilter.q,
+          network: pendingFilter.network,
+        },
+        signal,
+      ),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: fullRecord,
+  });
+  const pendingDcc = pendingDccPages.data?.pages.flatMap((page) => page.data);
 
   // **One request per open month**, replacing two index calls and one per Cell. The
   // key is the month and whose view is shown (decision 0258).
@@ -574,6 +604,8 @@ function Dashboard() {
               ? describeFailure(behindFailed.error)
               : unplaced.isError
                 ? describeFailure(unplaced.error)
+              : pendingDccPages.isError
+                ? describeFailure(pendingDccPages.error)
                 : cellFigures.isError
                   ? describeFailure(cellFigures.error)
                   : dccFigures.isError
@@ -612,6 +644,11 @@ function Dashboard() {
         behindPending || behindFailed
           ? null
           : `${needingAttention.length}${behindMore || behindMorePrevious ? '+' : ''}`,
+    },
+    {
+      key: 'dcc',
+      label: 'Pending DCC Reports',
+      count: pendingDcc ? `${pendingDcc.length}${pendingDccPages.hasNextPage ? '+' : ''}` : null,
     },
     {
       key: 'leader',
@@ -911,6 +948,45 @@ function Dashboard() {
           </section>
         ) : null}
 
+        {listTab === 'dcc' ? (
+          <section className={LIST} aria-labelledby="pending-dcc-heading">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 id="pending-dcc-heading" className="text-lg font-bold tracking-tight">
+                Pending DCC Reports
+              </h2>
+              <p className="text-muted text-sm">
+                Leaders you oversee whose 12 have no DCC record for a Sunday still open, by
+                surname.
+              </p>
+            </div>
+            <PendingDccFilters
+              wholeChurch={holdsWholeChurch(me.data, 'dcc.view_subtree')}
+              value={pendingFilter}
+              onChange={setPendingFilter}
+            />
+            {pendingDccPages.isPending ? (
+              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+            ) : pendingDcc ? (
+              <>
+                <PendingDccList
+                  rows={pendingDcc}
+                  empty={
+                    pendingFilter.q !== '' || pendingFilter.network !== null
+                      ? 'No leader matching this is behind on DCC.'
+                      : 'No leader you oversee is behind on DCC.'
+                  }
+                  chosenId={pendingChosen?.id ?? null}
+                  onChoose={setPendingChosen}
+                />
+                <ShowMore pages={pendingDccPages} />
+                {pendingChosen !== null ? (
+                  <LeaderChecklistGrid leader={pendingChosen} onBack={() => setPendingChosen(null)} />
+                ) : null}
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
         {/*
           Section 19's fifth outstanding-work entry, and section 20 requires the list
           behind it (decision 0232). Undated: it asks about now.
@@ -1085,12 +1161,12 @@ function openUntilLabel(itemMonth: string): string {
   return `${name} · ${monthOpenUntilLabel(itemMonth).replace(/^Open/, 'open')}`;
 }
 
-/** Which of Record's four lists is open (decision 0290). */
-const RECORD_TABS = ['awaiting', 'behind', 'leader', 'nocell', 'status'] as const;
+/** Which of Record's lists, or Recording Status, is open (decisions 0290 and 0336). */
+const RECORD_TABS = ['awaiting', 'behind', 'dcc', 'leader', 'nocell', 'status'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
 
-/** One of the four lists, inside the pane its button opens. */
+/** One of the five lists, inside the pane its button opens. */
 const LIST = 'min-w-0 pt-5';
 
 /** A name that opens its record: 24px tall at least, which 2.5.8 measures. */
@@ -1772,6 +1848,216 @@ function OwedList({
             </li>
           );
         })}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * Pending DCC Reports' search, and its Network filter for a whole-church reader (decision
+ * 0336). The search narrows on the server and never reorders (decision 0009).
+ */
+function PendingDccFilters({
+  wholeChurch,
+  value,
+  onChange,
+}: {
+  wholeChurch: boolean;
+  value: { q: string; network: 'MENS' | 'WOMENS' | null };
+  onChange: (next: { q: string; network: 'MENS' | 'WOMENS' | null }) => void;
+}) {
+  const [term, setTerm] = useState(value.q);
+  const trimmed = term.trim();
+  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
+
+  return (
+    <div className={`mt-4 ${CONTROL_BAR}`}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!tooShort) {
+            onChange({ ...value, q: trimmed });
+          }
+        }}
+        className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
+        noValidate
+      >
+        <Field
+          label="Search a leader by name or Member ID"
+          type="search"
+          name="q"
+          autoComplete="off"
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          className="min-w-0 sm:flex-1"
+        />
+        <Button type="submit" disabled={tooShort}>
+          {trimmed === '' && value.q !== '' ? 'Show all' : 'Search'}
+        </Button>
+      </form>
+      {wholeChurch ? (
+        <RadioGroup
+          legend="Network"
+          name="pending-dcc-network"
+          value={value.network ?? 'ALL'}
+          onChange={(next) =>
+            onChange({ ...value, network: next === 'ALL' ? null : (next as 'MENS' | 'WOMENS') })
+          }
+          options={[
+            { value: 'ALL', label: 'All' },
+            { value: 'MENS', label: 'Men’s' },
+            { value: 'WOMENS', label: 'Women’s' },
+          ]}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Pending DCC Reports (decision 0336): one row per leader, by surname, each open Sunday on a
+ * line of its own with Update Record's label. The recorder named, Record and See checklist
+ * follow the oldest Sunday; Record is offered where the API says the reader may record there.
+ */
+function PendingDccList({
+  rows,
+  empty,
+  chosenId,
+  onChoose,
+}: {
+  rows: readonly PendingDccLeader[];
+  empty: string;
+  chosenId: string | null;
+  onChoose: (leader: ChosenLeader) => void;
+}) {
+  const name = (row: PendingDccLeader) =>
+    row.leader.is_actor ? (
+      'You'
+    ) : (
+      <Link href={`/people/${row.leader.person_id}`} className={NAME_LINK}>
+        {row.leader.full_name}
+      </Link>
+    );
+
+  const account = (row: PendingDccLeader) =>
+    row.leader.has_account
+      ? null
+      : row.recorded_by_you
+        ? 'Has no account · Recorded by you'
+        : row.recorded_by !== null
+          ? `Has no account · Recorded by ${row.recorded_by.full_name}`
+          : 'Has no account';
+
+  const sundays = (row: PendingDccLeader) => (
+    <ul className="flex flex-col gap-1">
+      {row.sundays.map((sunday) => (
+        <li key={sunday.event_id}>
+          <span className="text-ink whitespace-nowrap">{dayLabel(sunday.event_date)}</span>
+          {' · '}
+          {deadlineLabel(sunday)?.text}
+        </li>
+      ))}
+    </ul>
+  );
+
+  const actions = (row: PendingDccLeader) => {
+    const oldest = row.sundays[0];
+    const own = row.leader.is_actor || row.recorded_by_you;
+    const record = row.may_record ? (
+      <Link
+        href={
+          own || row.record_for === null
+            ? `/dcc/${oldest.event_id}`
+            : `/dcc/${oldest.event_id}?leader=${row.record_for}`
+        }
+        className={buttonClasses('primary')}
+      >
+        Record
+        <span className="sr-only">
+          {' '}
+          DCC, {dayLabel(oldest.event_date)}
+          {row.leader.is_actor ? '' : `, for ${row.leader.full_name}`}
+        </span>
+      </Link>
+    ) : null;
+
+    return own ? (
+      record
+    ) : (
+      <span className="inline-flex flex-wrap gap-2">
+        {record}
+        <button
+          type="button"
+          data-see-checklist={row.leader.person_id}
+          aria-pressed={chosenId === row.leader.person_id}
+          onClick={() =>
+            onChoose({
+              id: row.leader.person_id,
+              name: row.leader.full_name,
+              month: `${oldest.event_date.slice(0, 7)}-01`,
+            })
+          }
+          className={buttonClasses('secondary')}
+        >
+          See checklist
+          <span className="sr-only"> of {row.leader.full_name}</span>
+        </button>
+      </span>
+    );
+  };
+
+  return (
+    <>
+      <Table caption="Pending DCC Reports" className="mt-4 hidden lg:block">
+        <thead>
+          <tr>
+            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell>Sundays still to record</HeaderCell>
+            <HeaderCell>
+              <span className="sr-only">Action</span>
+            </HeaderCell>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="text-muted px-3 py-3">
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.leader.person_id} className={rowClasses}>
+                <td className="px-3 py-3 align-top">
+                  {name(row)}
+                  {account(row) === null ? null : (
+                    <span className="text-muted block text-xs">{account(row)}</span>
+                  )}
+                </td>
+                <td className="text-muted px-3 py-3 align-top text-sm">{sundays(row)}</td>
+                <td className="px-3 py-3 text-right align-top">{actions(row)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </Table>
+      <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+        {rows.length === 0 ? (
+          <li className="border-line text-muted border p-4 text-sm">{empty}</li>
+        ) : (
+          rows.map((row) => (
+            <li key={row.leader.person_id} className="border-line flex flex-col gap-2 border p-4">
+              <div className="min-w-0">
+                <p className="text-base font-medium">{name(row)}</p>
+                {account(row) === null ? null : (
+                  <p className="text-muted text-sm">{account(row)}</p>
+                )}
+              </div>
+              <div className="text-muted text-sm">{sundays(row)}</div>
+              <div>{actions(row)}</div>
+            </li>
+          ))
+        )}
       </ul>
     </>
   );

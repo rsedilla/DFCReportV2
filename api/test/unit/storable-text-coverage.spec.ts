@@ -80,6 +80,9 @@ describe('storable text is refused at the edge, on every field that takes text',
    * `lastName`, `firstName` and `memberId` only where `isStorableText` holds of each, and
    * refuses anything else as unresolvable. The keys are compared in memory by the
    * controller and never reach the database at all.*
+   *
+   * *The one added with decision 0336 was checked the same way. `DccPendingLeadersDto.cursor`
+   * is decoded by `decodeRosterCursor` and its keys are compared in memory by the service.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
@@ -94,6 +97,7 @@ describe('storable text is refused at the edge, on every field that takes text',
     'AwaitingReassignmentDto.cursor',
     'DccByLeaderDto.cursor',
     'CellByLeaderDto.cursor',
+    'DccPendingLeadersDto.cursor',
     'RefreshDto.refresh_token',
     'LogoutDto.refresh_token',
     'LoginDto.password',

@@ -592,6 +592,78 @@ export async function mockLeaderDccRoster(
   );
 }
 
+/**
+ * Record's Pending DCC Reports (decision 0336). Empty unless rows are given; every screen
+ * test that opens Record registers it, because the tab's count is read on arrival.
+ * Returns the query strings asked for.
+ */
+export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<string[]> {
+  const asked: string[] = [];
+
+  await page.route('**/api/v1/dcc/pending-leaders*', (route) => {
+    asked.push(new URL(route.request().url()).search);
+    return route.fulfill(json({ data: rows, next_cursor: null }));
+  });
+
+  return asked;
+}
+
+/** Two rows for Pending DCC Reports: the reader's own, and a leader with no account. */
+export const PENDING_DCC_ROWS = [
+  {
+    leader: {
+      person_id: LEADER_ID,
+      member_id: 'M-000700',
+      full_name: 'The reader',
+      last_name: 'Reader',
+      first_name: 'The',
+      is_actor: true,
+      has_account: true,
+    },
+    recorded_by: null,
+    recorded_by_you: false,
+    sundays: [
+      {
+        event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+        event_date: '2026-06-07',
+        due_at: '2026-06-08T04:00:00.000Z',
+        closes_at: '2026-06-22T04:00:00.000Z',
+      },
+    ],
+    record_for: LEADER_ID,
+    may_record: true,
+  },
+  {
+    leader: {
+      person_id: '3f1b7c6e-0000-4000-8000-000000000611',
+      member_id: 'M-000711',
+      full_name: 'Carlo Reyes',
+      last_name: 'Reyes',
+      first_name: 'Carlo',
+      is_actor: false,
+      has_account: false,
+    },
+    recorded_by: { person_id: SUBMITTER_ID, full_name: 'Jose Santos' },
+    recorded_by_you: false,
+    sundays: [
+      {
+        event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+        event_date: '2026-06-07',
+        due_at: '2026-06-08T04:00:00.000Z',
+        closes_at: '2026-06-22T04:00:00.000Z',
+      },
+      {
+        event_id: '3f1b7c6e-0000-4000-8000-000000000502',
+        event_date: '2026-06-14',
+        due_at: '2026-06-15T04:00:00.000Z',
+        closes_at: '2026-06-29T04:00:00.000Z',
+      },
+    ],
+    record_for: null,
+    may_record: false,
+  },
+];
+
 /** A downline leader in the DCC branch view (decision 0301). Invented name. */
 export const OWED_LEADER_ID = '3f1b7c6e-0000-4000-8000-000000000611';
 
