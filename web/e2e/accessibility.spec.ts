@@ -934,6 +934,20 @@ const SCANS = [
     },
   },
   {
+    // The Family Tree tab (decision 0341), the reader's line open and one disciple's opened,
+    // so the nested outline and both states of the disclosure button are checked.
+    name: 'family tree',
+    route: '/family-tree',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockNetworkTree(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Show Consuelo Bautista’s disciples' }).click();
+      await expect(page.getByRole('link', { name: 'Teresita Alcantara' })).toBeVisible();
+    },
+  },
+  {
     // A reader holding neither figure capability: the tree without the figures, shown as
     // dashes rather than zeros, no Move, and the line that says why there is none.
     name: 'network, without figures',
@@ -1712,6 +1726,14 @@ const TARGET_SWEEP = [
     route: '/network',
     settle: 'Show 20 more',
     minimum: 4,
+  },
+  {
+    // The three People tabs, the open and closed disclosure buttons, each name link and Show
+    // more. Settled on Show more, which renders only once the first generation has arrived.
+    name: 'family tree',
+    route: '/family-tree',
+    settle: 'Show more',
+    minimum: 6,
   },
   {
     // The back link, Add a member, and a name link and a Remove per member. Settled on a
@@ -2536,15 +2558,18 @@ test('only the most specific navigation entry is marked as the current page', as
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Branch');
 });
 
-/** People carries two tabs, People and Branch, each marked on its own screen (decisions 0288 and 0318). */
-test('the People item carries a People tab and a Branch tab', async ({ page }) => {
+/**
+ * People carries People and Branch, each marked on its own screen (decisions 0288 and 0318),
+ * and on Full view screens Family Tree (decision 0341).
+ */
+test('the People item carries People, Branch and Family Tree tabs', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['People', 'Branch']);
+  await expect(tabs.getByRole('link')).toHaveText(['People', 'Branch', 'Family Tree']);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('People');
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveAttribute(
     'href',

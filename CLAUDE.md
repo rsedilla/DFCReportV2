@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-13, the trigger being decision 0340: of 339 files, 338 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0340 each moved the first two and
+2026-10-13, the trigger being decision 0341: of 340 files, 339 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0341 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-13 and triggered by 0340, and was left stale by 0341 the same day. The one before that was dated
 2026-10-13 and triggered by 0339, and was left stale by 0340 the same day. The one before that was dated
 2026-10-13 and triggered by 0338, and was left stale by 0339 the same day. The one before that was dated
 2026-10-13 and triggered by 0337, and was left stale by 0338 the same day. The one before that was dated
@@ -721,6 +722,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-13 — [Not recorded](docs/decisions/0338-not-recorded.md)
 - 2026-10-13 — [The System Administrator is in no count of people](docs/decisions/0339-the-system-administrator-is-in-no-count.md)
 - 2026-10-13 — [A Full view leader's attendance tabs, and Filed Reports withdrawn](docs/decisions/0340-a-full-view-leaders-attendance-tabs.md)
+- 2026-10-13 — [The Family Tree tab](docs/decisions/0341-the-family-tree-tab.md)
 
 ### Open — awaiting a ruling
 
