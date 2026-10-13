@@ -2010,6 +2010,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await search.fill('reyes');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect.poll(() => asked.some((query) => query.includes('q=reyes'))).toBe(true);
+
+    // Emptied, the box offers Clear search, as every list does (owner, 2026-10-13).
+    await search.fill('');
+    await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
   test('a list with a further page unread counts what it read and says there is more, and Pending CG Reports reads every page', async ({

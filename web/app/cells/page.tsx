@@ -215,7 +215,7 @@ function CellsIndex() {
             className="min-w-0 sm:flex-1"
           />
           <Button type="submit" disabled={tooShort}>
-            {trimmed === '' && submitted !== '' ? 'Show all' : 'Search'}
+            {trimmed === '' && submitted !== '' ? 'Clear search' : 'Search'}
           </Button>
         </form>
 
