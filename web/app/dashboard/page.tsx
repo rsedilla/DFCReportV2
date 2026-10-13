@@ -2141,7 +2141,7 @@ function LeaderChecklistGrid({
 function shortDayLabel(date: string): string {
   const [year, month, day] = date.split('-').map(Number);
 
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
     new Date(Date.UTC(year, month - 1, day)),
   );
 }
