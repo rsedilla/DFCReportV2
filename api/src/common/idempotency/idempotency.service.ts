@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
@@ -6,6 +6,7 @@ import { sql } from 'kysely';
 import { ApiError, ApiErrorCode } from '../errors/api-error';
 import { assertWithinDepth } from '../identifiers';
 
+import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 import { DATABASE, type Db } from '../../database/database.module';
 
 import type { Database, Json } from '../../database/schema';
@@ -56,9 +57,31 @@ export type ClaimResult =
   /** The first request with this key has not finished. Retry after a delay. */
   | { outcome: 'in_flight' };
 
+/**
+ * Body fields holding a password, which the fingerprint takes keyed rather than plain
+ * (decision 0351). A plain hash over a body holding a password is a password hash anyone
+ * with a copy of the database can guess at; keyed by a secret held in the environment, it
+ * is not. Two bodies still fingerprint alike only where their passwords are equal.
+ */
+const SECRET_FIELDS = new Set(['current_password', 'new_password']);
+
 @Injectable()
 export class IdempotencyService {
-  constructor(@Inject(DATABASE) private readonly db: Db) {}
+  /**
+   * Derived from the token-signing secret, so no new variable is needed and neither is reused
+   * raw. Rotating that secret therefore also changes these fingerprints: a password change
+   * claimed before a rotation and retried after it is answered `IDEMPOTENCY_KEY_REUSED`.
+   */
+  private readonly secretFieldKey: Buffer;
+
+  constructor(
+    @Inject(DATABASE) private readonly db: Db,
+    @Inject(APP_CONFIG) config: Pick<AppConfig, 'jwtSecret'>,
+  ) {
+    this.secretFieldKey = createHash('sha256')
+      .update(`idempotency-fingerprint\0${config.jwtSecret}`)
+      .digest();
+  }
 
   /**
    * A hash of method, path and body (section 22), which is what makes the
@@ -72,8 +95,29 @@ export class IdempotencyService {
    */
   fingerprint(method: string, path: string, body: unknown): string {
     return createHash('sha256')
-      .update(`${method.toUpperCase()} ${path}\n${canonicalize(body)}`)
+      .update(`${method.toUpperCase()} ${path}\n${canonicalize(this.keyedSecrets(body))}`)
       .digest('hex');
+  }
+
+  /** The body with each top-level password field replaced by its keyed digest. */
+  private keyedSecrets(body: unknown): unknown {
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return body;
+    }
+    const entries = Object.entries(body as Record<string, unknown>);
+    if (!entries.some(([name]) => SECRET_FIELDS.has(name))) {
+      return body;
+    }
+    return Object.fromEntries(
+      entries.map(([name, value]) =>
+        SECRET_FIELDS.has(name)
+          ? [
+              name,
+              createHmac('sha256', this.secretFieldKey).update(canonicalize(value)).digest('hex'),
+            ]
+          : [name, value],
+      ),
+    );
   }
 
   /**

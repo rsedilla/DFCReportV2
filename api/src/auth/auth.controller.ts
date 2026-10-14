@@ -23,6 +23,7 @@ import {
 import {
   ActivateDto,
   ActivationTokenDto,
+  ChangePasswordDto,
   ForgotPasswordDto,
   SetPasswordDto,
   SetUsernameDto,
@@ -95,6 +96,31 @@ export class AuthController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<{ username: string }> {
     return this.usernames.setOwn(actor, body.username, claim);
+  }
+
+  /**
+   * Changes the caller's own password, asking the current one (section 6, decision 0351).
+   * Every other session ends; this device's, named by its refresh token, is kept.
+   */
+  @Post('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  // Ten a minute per account: each wrong current password is a guess.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @AuthenticatedOnly(
+    'Changes the password of the caller’s own account, not anything of the church.',
+  )
+  async changePassword(
+    @CurrentActor() actor: Actor,
+    @Body() body: ChangePasswordDto,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<void> {
+    await this.credentials.changePassword(
+      actor,
+      body.current_password,
+      body.new_password,
+      body.refresh_token,
+      claim,
+    );
   }
 
   /**

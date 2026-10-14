@@ -160,6 +160,8 @@ export class AuthService {
    */
   private async lostResponseRetryFor(row: {
     id: string;
+    account_id: string;
+    issued_at: Date;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   }): Promise<{ id: string; account_id: string; issued_at: Date; expires_at: Date } | null> {
@@ -168,6 +170,15 @@ export class AuthService {
     }
 
     if (row.revoked_at.getTime() + REFRESH_RETRY_GRACE_SECONDS * 1000 <= Date.now()) {
+      return null;
+    }
+
+    // **A token issued before a revocation is never a retry**, whatever its replacement's
+    // date says. A password change keeps one session by dating its row after the marker
+    // (decision 0351), so without this a copy of the token that session replaced, presented
+    // within the window, would be served that session and outlive the change.
+    const account = await this.accounts.findById(row.account_id);
+    if (account?.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
       return null;
     }
 
