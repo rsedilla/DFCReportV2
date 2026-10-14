@@ -597,18 +597,23 @@ export async function changeOwnPassword(
   const token = accessToken ?? (await refreshSession());
 
   await withSessionLock(async () => {
-    const send = (access: string) =>
-      apiRequest<void>('/api/v1/auth/password', {
+    const send = (access: string) => {
+      const refreshToken = currentRefreshToken();
+      if (refreshToken === null) {
+        throw new Error('No stored session.');
+      }
+      return apiRequest<void>('/api/v1/auth/password', {
         method: 'POST',
         body: {
           current_password: currentPassword,
           new_password: newPassword,
-          refresh_token: currentRefreshToken() ?? '',
+          refresh_token: refreshToken,
         },
         accessToken: access,
         idempotencyKey,
         signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
       });
+    };
 
     try {
       await send(token);
@@ -621,7 +626,10 @@ export async function changeOwnPassword(
     }
 
     accessToken = null;
-    await refreshWithinLock();
+    // The password has changed whatever happens next, so a renewal that fails is not
+    // reported as the change failing: the next request finds no session and asks for a
+    // sign-in, with the new password.
+    await refreshWithinLock().catch(() => undefined);
   });
 }
 

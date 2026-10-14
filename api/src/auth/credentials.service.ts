@@ -9,7 +9,11 @@ import { EMAIL_PORT, type EmailPort } from '../email/email.port';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountTokensService } from './account-tokens.service';
-import { normalizeEmail } from './accounts.repository';
+import {
+  AccountsRepository,
+  normalizeEmail,
+  sessionPredatesSecondStep,
+} from './accounts.repository';
 import { PasswordService } from './password.service';
 import { TokensService, hashToken } from './tokens.service';
 import { UsernamesService, assertUsernameShape } from './usernames.service';
@@ -42,6 +46,7 @@ export class CredentialsService {
     private readonly audit: AuditService,
     private readonly usernames: UsernamesService,
     private readonly idempotency: IdempotencyService,
+    private readonly accounts: AccountsRepository,
   ) {}
 
   /**
@@ -173,16 +178,29 @@ export class CredentialsService {
         .where('id', '=', account.id)
         .execute();
 
-      const kept = await trx
+      const presented = await trx
         .selectFrom('refresh_tokens')
-        .select('id')
+        .select(['id', 'issued_at'])
         .where('token_hash', '=', hashToken(refreshToken))
         .where('account_id', '=', account.id)
         .where('revoked_at', 'is', null)
         .where('expires_at', '>', changedAt)
         .executeTakeFirst();
 
-      await this.sessions.revokeAllSessionsWithin(trx, account.id, kept?.id ?? null);
+      // Only a session a refresh would still renew is kept: one an earlier revocation
+      // already ended, or one from before the second step the account owes, is not
+      // brought back by being dated past this change (decision 0302). Read under the
+      // account lock taken above, so no revocation lands between this and the change.
+      const record = await this.accounts.findById(account.id);
+      const kept =
+        presented !== undefined &&
+        record !== null &&
+        !(record.sessions_revoked_at && presented.issued_at <= record.sessions_revoked_at) &&
+        !sessionPredatesSecondStep(record, presented.issued_at)
+          ? presented.id
+          : null;
+
+      await this.sessions.revokeAllSessionsWithin(trx, account.id, kept);
 
       await this.audit.writeWithin(trx, {
         actorId: account.id,
@@ -195,21 +213,29 @@ export class CredentialsService {
       await this.idempotency.completeWithin(trx, { ...claim, status: 204, body: null });
     });
 
-    // After the commit and not awaited, as a reset's mail is: the change stands whether
-    // or not the notice is delivered, and a failure is logged.
-    const person = await this.people.forDecision(account.person_id);
-    this.email
-      .send({
+    // After the commit, and nothing here may fail the request: the completion is already
+    // recorded, so a failure would answer an error while every retry replays the success
+    // (CLAUDE.md, Write endpoints). The change stands whether or not the notice goes out.
+    void this.sendPasswordChanged(account, changedAt);
+  }
+
+  private async sendPasswordChanged(
+    account: { id: string; person_id: string; email: string },
+    changedAt: Date,
+  ): Promise<void> {
+    try {
+      const person = await this.people.forDecision(account.person_id);
+      await this.email.send({
         kind: 'PASSWORD_CHANGED',
         to: { email: account.email, name: person?.fullName ?? '' },
         changedAt,
-      })
-      .catch((error: unknown) => {
-        this.logger.error(
-          `Could not send a password-changed notice for account ${account.id}.`,
-          error instanceof Error ? error.stack : undefined,
-        );
       });
+    } catch (error) {
+      this.logger.error(
+        `Could not send a password-changed notice for account ${account.id}.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   private async setPassword(

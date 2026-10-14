@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { PasswordService } from '../../src/auth/password.service';
+import { TokensService } from '../../src/auth/tokens.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   createAccount,
@@ -194,6 +195,34 @@ describe('changing one’s own password (decision 0351)', () => {
 
     expect((await refresh(here.refresh)).status).toBe(401);
     await signIn(NEW);
+  });
+
+  it('does not serve a copy of the token the kept session replaced as a retry', async () => {
+    const before = await signIn();
+    // This device renews, so `before.refresh` is spent and its replacement is never used
+    // until the change keeps it: the retry window's signature, held by a copy.
+    const renewed = await refresh(before.refresh);
+    const here = { access: renewed.body.access_token, refresh: renewed.body.refresh_token };
+
+    await change(here).expect(204);
+
+    expect((await refresh(before.refresh)).status).toBe(401);
+  });
+
+  it('does not keep a session an earlier revocation already ended', async () => {
+    const stale = await signIn();
+    // The sign-in race of decision 0079: a row still live, issued before the marker.
+    await db
+      .updateTable('accounts')
+      .set({ sessions_revoked_at: new Date(Date.now() + 5) })
+      .where('id', '=', account.id)
+      .execute();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const access = app.get(TokensService).issueAccessToken(account.id, account.personId);
+
+    await change({ access, refresh: stale.refresh }).expect(204);
+
+    expect((await refresh(stale.refresh)).status).toBe(401);
   });
 
   it('does not keep another account’s session', async () => {

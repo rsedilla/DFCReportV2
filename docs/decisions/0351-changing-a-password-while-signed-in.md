@@ -34,6 +34,22 @@ returning a new session. Every write's response is stored against its `Idempoten
 (Section 22), so a session in the response would be a credential at rest in the database.
 The client renews from the session it already holds, at once, under its session lock.
 
+## Three things the review settled
+
+**Only a session a refresh would still renew is kept**: this account's, live, issued
+after any earlier revocation, and not from before a second step the account owes. Dating
+any other past the marker would bring back a session that had already ended.
+
+**A token issued before the change is never served as a retry.** The kept session may
+have replaced a token moments earlier, and the 60-second retry window would otherwise
+hand a copy of that token the kept session. A token issued at or before the revocation
+marker is refused as reuse, whatever its replacement's date.
+
+**The passwords enter the idempotency fingerprint keyed**, under a secret held in the
+environment. A first version relied on the refresh token's randomness in the same body,
+which held only when the client sent a real one, and the fingerprint is taken before the
+body is validated.
+
 ## Why
 
 The current password stops somebody holding an unlocked phone from taking the account; the
