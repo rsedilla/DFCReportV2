@@ -2748,6 +2748,8 @@ cell_leadership_requests
 
 **A request records what the Cell it names was called when it was sent** (ruling of 2026-10-14, decision 0346). A handover and a restart name a Cell by its identifier, and the sender reads their requests back with no capability because that list returns only what their own account created (Section 7). So the list names such a Cell by the category and day the request recorded at sending, never by the Cell's present ones, which would show a sender a Cell's details after it has left their branch. Both are set together or not at all, only on a request that names a Cell, and never rewritten. A request sent before they existed recorded nothing and is named by its Cell ID.
 
+**The Cell a restart became is named as it was opened** (ruling of 2026-10-14, decision 0347). Where the closed Cells list says what resumed a closed Cell, it names the new Cell by the category and day of the approved request that minted it, which approval created it from and which is never rewritten, rather than by the new Cell's present ones. So the name does not follow the new Cell after it changes or is handed outside the reader's branch. A Cell with no such request is named by its Cell ID.
+
 `kind` is a **closed enumeration**. A third value is an amendment to this section, not a convenience.
 
 `cell_id` is required where the kind is `HANDOVER`, as a check constraint rather than as a note: the per-Cell uniqueness rule below is a partial unique index, and a null does not conflict in one, so a `HANDOVER` row with no Cell would escape the rule entirely.

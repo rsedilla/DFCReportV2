@@ -321,7 +321,7 @@ export class CellsIndexService {
           closed_on: manilaDayOf(row.closedAt),
           closure_reason: row.closureReason,
           restarted_as: row.restartedAs,
-          // That Cell's category and day, to name it without its code (decision 0306).
+          // The category and day that Cell opened with, to name it without its code (decisions 0306, 0347).
           restarted_as_category: row.restartedAsCategory,
           restarted_as_day_of_week: row.restartedAsDayOfWeek,
           may_restart:
