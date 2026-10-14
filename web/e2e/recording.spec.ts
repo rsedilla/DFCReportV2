@@ -1116,7 +1116,7 @@ test.describe('the Record queue', () => {
         decided_at: null,
         prospective_leader: { person_id: 'p1', full_name: 'Paolo Reyes' },
         cell: null,
-        restart_of: { id: 'c14', cell_id: 'CELL-000014', category: 'YOUTH', day_of_week: 6 },
+        restart_of: { id: 'c14', cell_id: 'CELL-000014' },
         decline_reason: null,
         note: null,
       },
@@ -1139,7 +1139,7 @@ test.describe('the Record queue', () => {
         requested_at: '2026-06-01T02:00:00Z',
         decided_at: '2026-06-03T02:00:00Z',
         prospective_leader: { person_id: 'p3', full_name: 'Lorna Cruz' },
-        cell: { id: 'c9', cell_id: 'CELL-000009', category: 'YOUNG_PRO', day_of_week: 5 },
+        cell: { id: 'c9', cell_id: 'CELL-000009', category: null, day_of_week: null },
         restart_of: null,
         decline_reason: 'TIMING_DEFERRED',
         note: 'Moving to another city.',
@@ -1159,16 +1159,16 @@ test.describe('the Record queue', () => {
     const block = page.getByRole('region', { name: 'Your requests' });
     const rows = block.getByRole('listitem');
     await expect(rows).toHaveCount(3);
-    // Each Cell is named by category and day, never by its code (decision 0306).
-    await expect(block).not.toContainText('CELL-');
-    await expect(rows.nth(0)).toContainText('Restart Youth · Sat with Paolo Reyes');
+    // A new Cell is named by what its request asked for (decision 0306); a Cell the sender's
+    // record names nothing else of is named by its code.
+    await expect(rows.nth(0)).toContainText('Restart CELL-000014 with Paolo Reyes');
     await expect(rows.nth(0)).toContainText('Waiting for approval');
     await expect(rows.nth(1)).toContainText('New Cell led by Ramon Diaz');
     await expect(rows.nth(1).getByRole('link', { name: 'Couple · Wed' })).toHaveAttribute(
       'href',
       '/cells/c21/meetings',
     );
-    await expect(rows.nth(2)).toContainText('Hand Young Pro · Fri to Lorna Cruz');
+    await expect(rows.nth(2)).toContainText('Hand CELL-000009 to Lorna Cruz');
     await expect(rows.nth(2)).toContainText('The timing is deferred: Moving to another city.');
 
     answer = [];

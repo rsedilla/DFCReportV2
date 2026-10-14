@@ -485,8 +485,12 @@ export async function listMeetingsAwaiting(
 export interface SentRequestCell {
   id: string;
   cell_id: string | null;
-  category: CellCategory | null;
-  day_of_week: number | null;
+  /**
+   * What an approved new-Cell request asked for, the sender's own record (decisions 0269 and
+   * 0306). A handover's Cell carries null, and a restarted one neither field.
+   */
+  category?: CellCategory | null;
+  day_of_week?: number | null;
 }
 
 /** A Cell leadership request as its sender reads it back (decision 0269). */
@@ -497,7 +501,6 @@ export interface SentRequest {
   requested_at: string;
   decided_at: string | null;
   prospective_leader: { person_id: string; full_name: string };
-  /** Each with its category and day, to name it without its code (decision 0306). */
   cell: SentRequestCell | null;
   restart_of: SentRequestCell | null;
   decline_reason:

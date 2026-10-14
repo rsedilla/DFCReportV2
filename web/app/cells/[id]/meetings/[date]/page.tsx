@@ -78,7 +78,7 @@ import { TextLink } from '@/components/ui/text-link';
  * Cell submission is one leader's account of one meeting, so the version read is
  * sent once and covers the roster.
  *
- * **Marks not yet saved are kept** (owner's choice of 2026-10-14): leaving asks first, and
+ * **Marks not yet saved are kept** (decision 0345): leaving asks first, and
  * the marks stay on this device and are offered back, with a Discard, if the screen opens
  * again before they are saved (`lib/mark-draft.ts`). A draft made against another version
  * of the meeting than the one stored now is not offered, because the marks it changed have
@@ -482,7 +482,10 @@ function RecordMeeting() {
 
           {draft.restoredAt && unsaved ? (
             <div className="border-edge mt-6 border p-4">
-              <p className="text-sm leading-relaxed">{restoredNote(draft.restoredAt)}</p>
+              <p className="text-sm leading-relaxed">
+                {restoredNote(draft.restoredAt)}
+                {askRanBy ? ' Who ran it is not kept, so choose it again if it was someone else.' : ''}
+              </p>
               <Button
                 variant="secondary"
                 className="mt-3"

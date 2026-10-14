@@ -61,8 +61,8 @@ import { TextLink } from '@/components/ui/text-link';
  * The optional reason travels only on recorded lines whose mark actually changed, because
  * the API refuses a correction reason on a person's first record.
  *
- * **Marks not yet saved are kept**, as on the Cell meeting screen (owner's choice of
- * 2026-10-14, `lib/mark-draft.ts`). Each kept mark carries the version its line was read at,
+ * **Marks not yet saved are kept**, as on the Cell meeting screen (decision 0345,
+ * `lib/mark-draft.ts`). Each kept mark carries the version its line was read at,
  * so a draft offered back never overwrites a line somebody has recorded since.
  */
 export default function DccRosterPage() {

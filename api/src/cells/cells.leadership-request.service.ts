@@ -824,29 +824,24 @@ export class CellsLeadershipRequestService {
           full_name: names.get(row.prospective_leader_id)?.fullName ?? '',
         },
         // A handover's Cell, or the Cell an approved new-Cell request minted.
-        // Each carries its category and day, so a screen can name it without its code
-        // (decision 0306).
+        // A Cell an approved new-Cell request minted carries the category and day the
+        // request asked for, so a screen can name it without its code (decision 0306). That
+        // is the sender's own record (decision 0269); a handover asks for no configuration,
+        // so its Cell carries none, and neither does a restarted one.
         cell:
           row.cell_id === null
             ? null
             : {
                 id: row.cell_id,
                 cell_id: row.cell_handle,
-                category: row.cell_category,
-                day_of_week: row.cell_day_of_week === null ? null : Number(row.cell_day_of_week),
+                category: row.request_category,
+                day_of_week:
+                  row.request_day_of_week === null ? null : Number(row.request_day_of_week),
               },
         restart_of:
           row.restart_of_cell_id === null
             ? null
-            : {
-                id: row.restart_of_cell_id,
-                cell_id: row.restart_of_cell_handle,
-                category: row.restart_of_cell_category,
-                day_of_week:
-                  row.restart_of_cell_day_of_week === null
-                    ? null
-                    : Number(row.restart_of_cell_day_of_week),
-              },
+            : { id: row.restart_of_cell_id, cell_id: row.restart_of_cell_handle },
         decline_reason: row.decline_reason,
         note: row.note,
       })),

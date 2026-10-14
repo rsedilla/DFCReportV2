@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Attendance marks a leader has made and not saved (owner's choice of 2026-10-14, option C).
+ * Attendance marks a leader has made and not saved (decision 0345).
  *
  * **Two things, because each covers what the other cannot.** Leaving by an in-app link, or
  * closing or reloading the tab, asks first. But a phone kills a background tab without asking
@@ -11,10 +11,11 @@ import { useCallback, useEffect, useState } from 'react';
  * kept on this device and offered back, with a note and a Discard, the next time the same
  * screen opens for the same person. Saving deletes the draft.
  *
- * **Only marks are kept**, never a note or a reason, and each draft is keyed on the screen and
- * on the person signed in, so a draft is never offered to somebody else on a shared phone.
- * Signing out deletes every draft (`clearMarkDrafts`), and one older than three weeks is
- * dropped unread: by then the week it was for has closed (decision 0335).
+ * **Only marks are kept**, never a note, a reason or who ran a meeting, and each draft is keyed
+ * on the screen and on the person signed in, so a draft is never offered to somebody else on a
+ * shared phone. The session ending on this device deletes every draft (`clearMarkDrafts`), and
+ * one older than three weeks is dropped unread: by then the week it was for has closed
+ * (decision 0335).
  */
 
 const PREFIX = 'dfc.marks:';
@@ -59,7 +60,7 @@ function write<T>(key: string, value: T | null): void {
   }
 }
 
-/** Every draft on this device, deleted when somebody signs out. */
+/** Every draft on this device, deleted when the session on it ends. */
 export function clearMarkDrafts(): void {
   try {
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {

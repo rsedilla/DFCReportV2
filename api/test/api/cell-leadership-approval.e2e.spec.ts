@@ -498,20 +498,27 @@ describe('Cell leadership approval (section 10)', () => {
       expect(row?.restart_of_cell_uuid).toBe(markCell.id);
     });
 
-    it('names both Cells to the sender by category and day (decision 0306)', async () => {
-      // The restart asks for a different category and day from the Cell it resumes, so
-      // each figure can only have come from its own Cell's rows.
+    it('names the Cell a restart minted by what the request asked for (decisions 0269, 0306)', async () => {
       const submitted = await restart(admin, { category: 'COUPLE', day_of_week: 3 });
-      await approve(approver, submitted.body.id as string).expect(200);
+      const approved = await approve(approver, submitted.body.id as string).expect(200);
+
+      // The Cell's own schedule then changes, which the sender's record does not.
+      await db
+        .updateTable('cell_schedules')
+        .set({ day_of_week: 5 })
+        .where('cell_id', '=', approved.body.cell_uuid as string)
+        .execute();
 
       const response = await request(app.getHttpServer())
         .get('/api/v1/cells/leadership-requests/sent')
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .expect(200);
 
-      expect(response.body.data[0]).toMatchObject({
-        cell: { category: 'COUPLE', day_of_week: 3 },
-        restart_of: { id: markCell.id, category: 'YOUTH', day_of_week: 6 },
+      expect(response.body.data[0].cell).toMatchObject({ category: 'COUPLE', day_of_week: 3 });
+      // The Cell it resumes is named by its code: the request holds nothing else of it.
+      expect(response.body.data[0].restart_of).toEqual({
+        id: markCell.id,
+        cell_id: markCell.cellId,
       });
     });
 
@@ -1280,7 +1287,8 @@ describe('Cell leadership approval (section 10)', () => {
         kind: 'HANDOVER',
         state: 'DECLINED',
         decline_reason: 'TIMING_DEFERRED',
-        cell: { id: markCell.id, cell_id: markCell.cellId, category: 'YOUTH', day_of_week: 6 },
+        // A handover asks for no configuration, so the sender's record names none.
+        cell: { id: markCell.id, cell_id: markCell.cellId, category: null, day_of_week: null },
       });
       expect(response.body.next_cursor).toBeNull();
 

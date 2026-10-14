@@ -99,7 +99,11 @@ function title(request: SentRequest): string {
  * one is chosen (decision 0306), and only where there is no category or day to name it by.
  */
 function nameOf(cell: SentRequestCell): string {
-  return cellShortName({ ...cell, cell_id: cell.cell_id ?? 'a Cell' });
+  return cellShortName({
+    cell_id: cell.cell_id ?? 'a Cell',
+    category: cell.category ?? null,
+    day_of_week: cell.day_of_week ?? null,
+  });
 }
 
 function subline(request: SentRequest): string {

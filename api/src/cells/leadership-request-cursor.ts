@@ -130,13 +130,11 @@ export interface SentLeadershipRequestRow {
   note: string | null;
   cell_id: string | null;
   cell_handle: string | null;
-  /** The Cell's category and day, to name it without its code (decision 0306). */
-  cell_category: CellCategory | null;
-  cell_day_of_week: number | null;
+  /** What a new-Cell request asked for; null on a handover, which asks for none. */
+  request_category: CellCategory | null;
+  request_day_of_week: number | null;
   restart_of_cell_id: string | null;
   restart_of_cell_handle: string | null;
-  restart_of_cell_category: CellCategory | null;
-  restart_of_cell_day_of_week: number | null;
   requested_at_key: string;
 }
 

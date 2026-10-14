@@ -318,6 +318,8 @@ export function forgetSession(): void {
   writeHaltedToken(null);
   writeSent(null);
   writeStoredRefreshToken(null);
+  // Attendance marks kept and not saved go with the session (decision 0345).
+  clearMarkDrafts();
   announce();
 }
 
@@ -713,8 +715,7 @@ export function onAcceptedWrite(listener: () => void): () => void {
  *
  * The tokens are forgotten whatever the API answers. A failed sign-out that
  * leaves the user apparently signed in is the worse outcome of the two on a
- * shared phone. For the same reason any attendance marks kept on the device and
- * not yet saved are deleted with them (`lib/mark-draft.ts`).
+ * shared phone.
  */
 export async function signOut(): Promise<void> {
   try {
@@ -752,7 +753,6 @@ export async function signOut(): Promise<void> {
     });
   } finally {
     forgetSession();
-    clearMarkDrafts();
   }
 }
 
@@ -789,6 +789,5 @@ export async function signOutEverywhere(): Promise<void> {
     });
   } finally {
     forgetSession();
-    clearMarkDrafts();
   }
 }
