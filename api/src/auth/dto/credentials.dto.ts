@@ -110,6 +110,26 @@ export class ActivationTokenDto {
   token!: string;
 }
 
+/**
+ * Changing one's own password while signed in (decision 0351). Lengths are the service's,
+ * as `SetPasswordDto` explains; the bounds here only refuse a body no password fits.
+ * `refresh_token` names the session to keep, the one this device holds.
+ */
+export class ChangePasswordDto {
+  @IsString()
+  @MaxLength(1024)
+  current_password!: string;
+
+  @IsString()
+  @MaxLength(1024)
+  new_password!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  refresh_token!: string;
+}
+
 /** The caller's own username (decision 0337), checked and lowercased by the service. */
 export class SetUsernameDto {
   @IsString()

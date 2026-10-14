@@ -579,6 +579,59 @@ async function retry(stored: string, firstAttemptAt: number): Promise<string> {
   }
 }
 
+/**
+ * Changes this account's password, asking the current one, and keeps this device signed in
+ * (section 6, decision 0351).
+ *
+ * **Inside the session lock**, so the refresh token named as the session to keep is the one
+ * this device holds, and no other tab rotates it while the request is out. The server ends
+ * every access token issued before the change, this device's included, and dates the kept
+ * session after it, so the session is renewed straight away, under the same lock. Sent with
+ * no session to keep it would end this device too.
+ */
+export async function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+  idempotencyKey: string,
+): Promise<void> {
+  const token = accessToken ?? (await refreshSession());
+
+  await withSessionLock(async () => {
+    const send = (access: string) => {
+      const refreshToken = currentRefreshToken();
+      if (refreshToken === null) {
+        throw new Error('No stored session.');
+      }
+      return apiRequest<void>('/api/v1/auth/password', {
+        method: 'POST',
+        body: {
+          current_password: currentPassword,
+          new_password: newPassword,
+          refresh_token: refreshToken,
+        },
+        accessToken: access,
+        idempotencyKey,
+        signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
+      });
+    };
+
+    try {
+      await send(token);
+    } catch (cause) {
+      if (!(cause instanceof ApiRequestError) || cause.status !== 401) {
+        throw cause;
+      }
+      // The access token lapsed, and the lock is held, so the lock-free body renews it.
+      await send(await refreshWithinLock());
+    }
+
+    accessToken = null;
+    // The password has changed whatever happens next, so a renewal that fails is not
+    // reported as the change failing.
+    await refreshWithinLock().catch(() => undefined);
+  });
+}
+
 function halt(stored: string, cause: unknown): never {
   writeHaltedToken(stored);
   announce();
