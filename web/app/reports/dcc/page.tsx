@@ -97,7 +97,6 @@ export function DccReport() {
     enabled: leader !== null,
   });
 
-
   const options = (ownTwelve.data?.rows ?? []).filter((row) => row.leader !== null);
   const subjectName = leader ? (opened.data?.person.full_name ?? 'This leader') : null;
   const what = { WEEK: 'in the week', MONTH: 'in the month', QUARTER: 'in the quarter', YEAR: 'in the year' }[kind];
@@ -110,7 +109,6 @@ export function DccReport() {
           <PeriodTabs
             value={kind}
             onChange={period.choosePeriodKind}
-
           />
         )}
 
@@ -126,7 +124,6 @@ export function DccReport() {
               inBar
               value={kind}
               onChange={period.choosePeriodKind}
-
             />
           ) : null}
           {reach?.kind === 'none' ? null : (

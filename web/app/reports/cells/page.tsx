@@ -95,7 +95,6 @@ export function CellReport() {
           <PeriodTabs
             value={kind}
             onChange={period.choosePeriodKind}
-
           />
         )}
 
@@ -111,7 +110,6 @@ export function CellReport() {
               inBar
               value={kind}
               onChange={period.choosePeriodKind}
-
             />
           ) : null}
           {reach?.kind === 'none' ? null : (
