@@ -3,7 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
-import { listSentRequests, type SentRequest } from '@/lib/cells';
+import {
+  cellShortName,
+  listSentRequests,
+  type SentRequest,
+  type SentRequestCell,
+} from '@/lib/cells';
 import { todayInManila } from '@/lib/reporting-month';
 
 const LINK =
@@ -65,7 +70,7 @@ export function SentRequests() {
                 <>
                   {' · '}
                   <Link href={`/cells/${request.cell.id}/meetings`} className={LINK}>
-                    {request.cell.cell_id}
+                    {nameOf(request.cell)}
                   </Link>
                 </>
               ) : null}
@@ -81,12 +86,20 @@ function title(request: SentRequest): string {
   const name = request.prospective_leader.full_name;
 
   if (request.kind === 'HANDOVER') {
-    return `Hand ${request.cell?.cell_id ?? 'a Cell'} to ${name}`;
+    return `Hand ${request.cell ? nameOf(request.cell) : 'a Cell'} to ${name}`;
   }
 
   return request.restart_of
-    ? `Restart ${request.restart_of.cell_id ?? 'a closed Cell'} with ${name}`
+    ? `Restart ${nameOf(request.restart_of)} with ${name}`
     : `New Cell led by ${name}`;
+}
+
+/**
+ * "Young Pro · Sat", the way a list names a Cell; its code is shown on its own page and where
+ * one is chosen (decision 0306), and only where there is no category or day to name it by.
+ */
+function nameOf(cell: SentRequestCell): string {
+  return cellShortName({ ...cell, cell_id: cell.cell_id ?? 'a Cell' });
 }
 
 function subline(request: SentRequest): string {

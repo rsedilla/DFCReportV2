@@ -1173,6 +1173,8 @@ const CLOSED_CELLS_WITHOUT_RESTART = [
     cell_id: 'CELL-000009',
     closure_reason: 'LEADER_STEPPED_DOWN',
     restarted_as: 'CELL-000021',
+    restarted_as_category: 'COUPLE',
+    restarted_as_day_of_week: 3,
     may_restart: false,
   },
   {

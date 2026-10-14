@@ -498,6 +498,23 @@ describe('Cell leadership approval (section 10)', () => {
       expect(row?.restart_of_cell_uuid).toBe(markCell.id);
     });
 
+    it('names both Cells to the sender by category and day (decision 0306)', async () => {
+      // The restart asks for a different category and day from the Cell it resumes, so
+      // each figure can only have come from its own Cell's rows.
+      const submitted = await restart(admin, { category: 'COUPLE', day_of_week: 3 });
+      await approve(approver, submitted.body.id as string).expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/cells/leadership-requests/sent')
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data[0]).toMatchObject({
+        cell: { category: 'COUPLE', day_of_week: 3 },
+        restart_of: { id: markCell.id, category: 'YOUTH', day_of_week: 6 },
+      });
+    });
+
     it('refuses a Cell that is still running', async () => {
       // Ben oversees Carlo, and Carlo leads this Cell — so the scope check and the
       // last-leader check both pass, and the state refusal is the only one that can
@@ -1263,7 +1280,7 @@ describe('Cell leadership approval (section 10)', () => {
         kind: 'HANDOVER',
         state: 'DECLINED',
         decline_reason: 'TIMING_DEFERRED',
-        cell: { id: markCell.id, cell_id: markCell.cellId },
+        cell: { id: markCell.id, cell_id: markCell.cellId, category: 'YOUTH', day_of_week: 6 },
       });
       expect(response.body.next_cursor).toBeNull();
 

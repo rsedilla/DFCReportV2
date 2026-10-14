@@ -836,6 +836,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       closed_on: string;
       closure_reason: string;
       restarted_as: string | null;
+      restarted_as_category: string | null;
+      restarted_as_day_of_week: number | null;
       may_restart: boolean;
     };
 
@@ -855,6 +857,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
         closed_on: await today(),
         closure_reason: 'MEMBERS_DISPERSED',
         restarted_as: null,
+        restarted_as_category: null,
+        restarted_as_day_of_week: null,
         may_restart: true,
       });
       expect(cellIdsOf(running)).toEqual([manuelCell.id, nathanCell.id].sort());
@@ -887,6 +891,9 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       expect(byId.get(markCell.id)?.may_restart).toBe(false);
       expect(byId.get(nathanCell.id)).toMatchObject({
         restarted_as: manuelCell.cellId,
+        // Named by category and day where its code is not shown (decision 0306).
+        restarted_as_category: manuelCell.category,
+        restarted_as_day_of_week: 6,
         may_restart: false,
       });
     });

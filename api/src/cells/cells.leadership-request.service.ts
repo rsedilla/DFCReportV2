@@ -824,11 +824,29 @@ export class CellsLeadershipRequestService {
           full_name: names.get(row.prospective_leader_id)?.fullName ?? '',
         },
         // A handover's Cell, or the Cell an approved new-Cell request minted.
-        cell: row.cell_id === null ? null : { id: row.cell_id, cell_id: row.cell_handle },
+        // Each carries its category and day, so a screen can name it without its code
+        // (decision 0306).
+        cell:
+          row.cell_id === null
+            ? null
+            : {
+                id: row.cell_id,
+                cell_id: row.cell_handle,
+                category: row.cell_category,
+                day_of_week: row.cell_day_of_week === null ? null : Number(row.cell_day_of_week),
+              },
         restart_of:
           row.restart_of_cell_id === null
             ? null
-            : { id: row.restart_of_cell_id, cell_id: row.restart_of_cell_handle },
+            : {
+                id: row.restart_of_cell_id,
+                cell_id: row.restart_of_cell_handle,
+                category: row.restart_of_cell_category,
+                day_of_week:
+                  row.restart_of_cell_day_of_week === null
+                    ? null
+                    : Number(row.restart_of_cell_day_of_week),
+              },
         decline_reason: row.decline_reason,
         note: row.note,
       })),

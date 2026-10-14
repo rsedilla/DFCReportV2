@@ -515,7 +515,16 @@ function RestartAction({
   onRestart: () => void;
 }) {
   if (cell.restarted_as) {
-    return <span className="text-muted text-sm">Restarted as {cell.restarted_as}</span>;
+    return (
+      <span className="text-muted text-sm">
+        Restarted as{' '}
+        {cellShortName({
+          cell_id: cell.restarted_as,
+          category: cell.restarted_as_category ?? null,
+          day_of_week: cell.restarted_as_day_of_week ?? null,
+        })}
+      </span>
+    );
   }
   if (sent) {
     return <span className="text-muted text-sm">Sent for approval</span>;

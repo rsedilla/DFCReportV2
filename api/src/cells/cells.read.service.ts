@@ -19,6 +19,31 @@ import type { Transaction } from 'kysely';
 import { ACCENTED, UNACCENTED, escapeLike } from '../people/people.shared';
 import { normalizeName } from '../people/duplicate-matching';
 
+/**
+ * The category of the last category row a Cell held that was ever in force, as
+ * `closedCellsInScope` takes it: a zero-length row is excluded, and so is one that has
+ * not started, so an `ACTIVE` Cell with a change queued for next month is named as it
+ * stands. Used to name a Cell by category and day where its code is not shown.
+ */
+function lastCategoryOf(cell: 'c.id' | 'rc.id' | 'restart.id') {
+  return sql<CellCategory | null>`(SELECT k.category FROM cell_categories AS k
+    WHERE k.cell_id = ${sql.ref(cell)}
+      AND k.ended_at IS DISTINCT FROM k.started_at
+      AND k.started_at <= now()
+    ORDER BY k.started_at DESC, k.ended_at DESC NULLS FIRST, k.id DESC
+    LIMIT 1)`;
+}
+
+/** The day of the last schedule row a Cell held that was ever in force, as above. */
+function lastDayOf(cell: 'c.id' | 'rc.id' | 'restart.id') {
+  return sql<number | null>`(SELECT s.day_of_week FROM cell_schedules AS s
+    WHERE s.cell_id = ${sql.ref(cell)}
+      AND s.ended_at IS DISTINCT FROM s.started_at
+      AND s.started_at <= now()
+    ORDER BY s.started_at DESC, s.ended_at DESC NULLS FIRST, s.id DESC
+    LIMIT 1)`;
+}
+
 /** A person's open membership, with its Cell's current leader, and the Cells they lead. */
 export interface PersonCells {
   membership: (NamedCell & { leaderId: string | null }) | null;
@@ -788,8 +813,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'r.note',
         'r.cell_id',
         'c.cell_id as cell_handle',
+        lastCategoryOf('c.id').as('cell_category'),
+        lastDayOf('c.id').as('cell_day_of_week'),
         'r.restart_of_cell_id',
         'rc.cell_id as restart_of_cell_handle',
+        lastCategoryOf('rc.id').as('restart_of_cell_category'),
+        lastDayOf('rc.id').as('restart_of_cell_day_of_week'),
         // The same key, and the same reason, as the queue above.
         sql<string>`to_char(r.requested_at at time zone 'UTC', ${sql.lit(CURSOR_INSTANT_FORMAT)})`.as(
           'requested_at_key',
@@ -1556,6 +1585,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       closedAt: Date;
       closureReason: string;
       restartedAs: string | null;
+      restartedAsCategory: CellCategory | null;
+      restartedAsDayOfWeek: number | null;
     }[]
   > {
     const after = page.after ?? null;
@@ -1614,6 +1645,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'cells.closed_at as closed_at',
         'cells.closure_reason as closure_reason',
         'restart.cell_id as restarted_as',
+        lastCategoryOf('restart.id').as('restarted_as_category'),
+        lastDayOf('restart.id').as('restarted_as_day_of_week'),
       ])
       .where('cells.state', '=', 'CLOSED')
       .$if(leaderIds !== null, (query) =>
@@ -1657,6 +1690,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       closedAt: row.closed_at as Date,
       closureReason: row.closure_reason as string,
       restartedAs: row.restarted_as ?? null,
+      restartedAsCategory: row.restarted_as_category ?? null,
+      restartedAsDayOfWeek:
+        row.restarted_as_day_of_week == null ? null : Number(row.restarted_as_day_of_week),
     }));
   }
 
