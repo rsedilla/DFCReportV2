@@ -17,17 +17,10 @@ import { YearTable } from '@/components/report-year';
 import { isBranchReader, ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
-import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
-import { choosePeriod, latestFinished } from '@/lib/finished-periods';
 import { getCellTwelve } from '@/lib/reports';
-import {
-  rangeGuardMonth,
-  rangeStartOf,
-  type RangeKind,
-} from '@/lib/report-range';
-import { monthFromQuery, todayInManila } from '@/lib/reporting-month';
+import { useReportPeriod } from '@/lib/report-period';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
@@ -60,83 +53,18 @@ export default function CellReportPage() {
   );
 }
 
-const PERIOD_PARAM: Record<string, RangeKind> = {
-  week: 'WEEK',
-  quarter: 'QUARTER',
-  year: 'YEAR',
-};
-
 export function CellReport() {
   const search = useSearchParams();
   // Every control lives in the address, so Back steps back through the period, the leader
   // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
-  const today = todayInManila();
-
-  const kind: RangeKind = PERIOD_PARAM[search.get('period') ?? ''] ?? 'MONTH';
-  const current = rangeStartOf(kind, today);
+  const period = useReportPeriod('cell-twelve', getCellTwelve);
+  const { kind, current, me, wholeChurch, seniorPastor, finishedKind, chosen, reach } = period;
+  const { periodReady, start, guardMonth, own, probe, periodParams } = period;
   const leader = search.get('leader');
-
-  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
-  // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
-  // server's screens and never by a role.
-  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
   const branchReader = isBranchReader(me.data);
-  // Decision 0310: without Reports at Whole Church, Quarterly and Year offer finished periods
-  // only, so they wait to know who is reading before asking for any.
-  const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
-  const finishedOnly = finishedKind !== null && me.data !== undefined && !wholeChurch;
-  const latest = latestFinished(kind, today);
-
-  const own = seniorPastor
-    ? ({ kind: 'ROOT_LEADERS' } as const)
-    : wholeChurch
-    ? ({ kind: 'WHOLE_CHURCH' } as const)
-    : me.data
-      ? ({ kind: 'LEADER', person_id: me.data.person_id } as const)
-      : null;
   const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
-
-  // The calendar's first Sunday, which every report answer carries, is read from the reader's
-  // own last finished period: a leader they opened may have left their branch since (decisions
-  // 0207 and 0214).
-  const probe = useQuery({
-    queryKey: ['cell-twelve', kind, latest, own],
-    queryFn: ({ signal }) =>
-      getCellTwelve(kind, latest, rangeGuardMonth(kind, latest, today), own!, signal),
-    enabled: finishedOnly && own !== null,
-  });
-  const chosen =
-    finishedKind === null
-      ? null
-      : me.data === undefined
-        ? ({ ready: false } as const)
-        : choosePeriod(
-            finishedKind,
-            today,
-            search.get('start'),
-            finishedOnly,
-            finishedOnly ? probe.data?.calendar_start : null,
-          );
-  const reach = chosen?.ready ? chosen.reach : null;
-  const periodReady = chosen === null || (chosen.ready && chosen.start !== null);
-  const asked =
-    kind === 'MONTH'
-      ? monthFromQuery(search.get('month'))
-      : rangeStartOf(kind, search.get('start') ?? current);
-  // A period that has not begun is not reported (decision 0216), so an address naming one
-  // opens the current period instead.
-  const start =
-    chosen === null
-      ? asked > current
-        ? current
-        : asked
-      : chosen.ready && chosen.start !== null
-        ? chosen.start
-        : latest;
-  const guardMonth = rangeGuardMonth(kind, start, today);
 
   const twelve = useQuery({
     queryKey: ['cell-twelve', kind, start, subject],
@@ -155,15 +83,6 @@ export function CellReport() {
     enabled: leader !== null,
   });
 
-  const address = (changes: Record<string, string | null>) => go(changes);
-  const periodParams = (extra: Record<string, string>) =>
-    new URLSearchParams({
-      ...(kind === 'MONTH'
-        ? { month: start }
-        : { period: kind.toLowerCase(), start }),
-      ...extra,
-    }).toString();
-
   const options = (ownTwelve.data?.rows ?? []).filter((row) => row.leader !== null);
   const subjectName = leader ? (opened.data?.person.full_name ?? 'This leader') : null;
   const what = { WEEK: 'in the week', MONTH: 'in the month', QUARTER: 'in the quarter', YEAR: 'in the year' }[kind];
@@ -175,13 +94,8 @@ export function CellReport() {
         {seniorPastor ? null : (
           <PeriodTabs
             value={kind}
-            onChange={(value) =>
-              address({
-                period: value === 'MONTH' ? null : value.toLowerCase(),
-                start: null,
-                month: null,
-              })
-            }
+            onChange={period.choosePeriodKind}
+
           />
         )}
 
@@ -196,13 +110,8 @@ export function CellReport() {
             <PeriodTabs
               inBar
               value={kind}
-              onChange={(value) =>
-                address({
-                  period: value === 'MONTH' ? null : value.toLowerCase(),
-                  start: null,
-                  month: null,
-                })
-              }
+              onChange={period.choosePeriodKind}
+
             />
           ) : null}
           {reach?.kind === 'none' ? null : (
@@ -213,7 +122,7 @@ export function CellReport() {
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
               quiet={seniorPastor}
-              onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
+              onChange={period.choosePeriodStart}
             />
           )}
           <div>
@@ -223,7 +132,7 @@ export function CellReport() {
             <select
               id="cell-scope"
               value={leader ?? ''}
-              onChange={(event) => address({ leader: event.target.value === '' ? null : event.target.value })}
+              onChange={(event) => go({ leader: event.target.value === '' ? null : event.target.value })}
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <option value="">{wholeChurch ? 'Whole Church' : 'People you oversee'}</option>
