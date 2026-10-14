@@ -266,7 +266,7 @@ for (const retryAnswer of ['success', 'lost'] as const) {
       return route.abort('failed');
     });
 
-    await page.goto('/people');
+    await page.goto('/people?q=Marilou');
     await expect.poll(() => presented.length).toBe(1);
 
     await page.reload();
@@ -310,7 +310,7 @@ test('a stored record of the retry already sent halts with no request at all', a
     }
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(haltBanner(page)).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(4_000);
   expect(requested, 'a token recorded as already retried was presented again').toBe(0);
@@ -340,7 +340,7 @@ test('a stored first presentation older than the retry limit halts with no reque
     }
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(haltBanner(page)).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(4_000);
   expect(requested, 'a retry was sent after its window had closed').toBe(0);
@@ -368,7 +368,7 @@ test('a stored first presentation within the limit gets exactly one retry, then 
     return route.fulfill(tokens('access-1', 'refresh-1'));
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(
     page.getByText('Marilou Reyes Santos').filter({ visible: true }).first(),
   ).toBeVisible({ timeout: 15_000 });
@@ -387,7 +387,7 @@ test('a refresh answered first time leaves no sent record', async ({ page }) => 
   await mockSignedIn(page);
   await mockPeople(page);
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(
     page.getByText('Marilou Reyes Santos').filter({ visible: true }).first(),
   ).toBeVisible();
@@ -470,7 +470,7 @@ test('a refresh lost in transit is retried once and the session carries on', asy
       : route.fulfill(tokens('access-1', 'refresh-1'));
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(
     page.getByText('Marilou Reyes Santos').filter({ visible: true }).first(),
   ).toBeVisible({ timeout: 15_000 });
@@ -501,7 +501,7 @@ test('a halted session shows the banner, never presents the token a third time, 
     return route.abort('failed');
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
 
   const banner = haltBanner(page);
   await expect(banner).toBeVisible({ timeout: 15_000 });
@@ -514,7 +514,7 @@ test('a halted session shows the banner, never presents the token a third time, 
   await expect(page).toHaveURL(/\/cells$/);
   await expect(banner).toBeVisible();
   await page.waitForTimeout(2_000);
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect(banner).toBeVisible();
   await page.waitForTimeout(4_000);
 
@@ -567,7 +567,7 @@ test('offline, the one retry waits for the connection and then succeeds', async 
     return route.fulfill(tokens('access-1', 'refresh-1'));
   });
 
-  await page.goto('/people');
+  await page.goto('/people?q=Marilou');
   await expect.poll(() => presented.length).toBe(1);
 
   // Longer than the online pause: nothing is sent while the device is offline.
@@ -615,7 +615,7 @@ for (const refusal of [
       });
     });
 
-    await page.goto('/people');
+    await page.goto('/people?q=Marilou');
     await page.waitForURL('**/sign-in', { timeout: 15_000 });
 
     await expect(page.getByText(HALT_SENTENCE)).toHaveCount(0);
@@ -658,7 +658,7 @@ for (const answer of [
       });
     });
 
-    await page.goto('/people');
+    await page.goto('/people?q=Marilou');
     await expect(haltBanner(page)).toBeVisible({ timeout: 15_000 });
 
     // The query layer retries a 5xx; that must reach the halt, not the network.

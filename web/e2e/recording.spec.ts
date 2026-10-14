@@ -1235,9 +1235,10 @@ test.describe('the Record queue', () => {
       });
     });
 
-    // Nobody behind on either page of either view: 0, and the whole scope is claimed.
+    // Nobody behind on either page of either view, and the whole scope is claimed. A count of 0
+    // is left off the button (decision 0349).
     await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*0$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports$/ })).toBeVisible();
     await chooseList(page, /^Pending CG Reports/);
     const attention = page.getByRole('region', { name: 'Pending CG Reports' });
     await expect(
@@ -1880,7 +1881,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     for (const name of [
       /^Update Record\s*4$/,
       /^Pending CG Reports\s*1$/,
-      /^Pending DCC Reports\s*0$/,
+      // A count of 0 is left off (decision 0349).
+      /^Pending DCC Reports$/,
       /^Awaiting Leader Assignment\s*2$/,
       /^Awaiting CG Assignment\s*2$/,
     ]) {
@@ -2153,8 +2155,9 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
     await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting Leader Assignment\s*0$/ })).toBeVisible();
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment\s*0$/ })).toBeVisible();
+    // A count of 0 is left off (decision 0349).
+    await expect(recordLists(page).getByRole('button', { name: /^Awaiting Leader Assignment$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment$/ })).toBeVisible();
 
     await chooseList(page, /^Awaiting Leader Assignment/);
     const unplaced = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
