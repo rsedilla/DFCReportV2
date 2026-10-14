@@ -655,16 +655,42 @@ export async function authenticatedRequest<T>(
 ): Promise<T> {
   const token = accessToken ?? (await refreshSession());
 
+  let answer: T;
   try {
-    return await apiRequest<T>(path, { ...options, accessToken: token });
+    answer = await apiRequest<T>(path, { ...options, accessToken: token });
   } catch (cause) {
     if (!(cause instanceof ApiRequestError) || cause.status !== 401) {
       throw cause;
     }
 
     const renewed = await refreshSession();
-    return apiRequest<T>(path, { ...options, accessToken: renewed });
+    answer = await apiRequest<T>(path, { ...options, accessToken: renewed });
   }
+
+  // Signing out everywhere ends the session it would refresh for.
+  if ((options.method ?? 'GET') !== 'GET' && path !== '/api/v1/auth/logout-all') {
+    for (const listener of writeListeners) {
+      listener();
+    }
+  }
+
+  return answer;
+}
+
+const writeListeners = new Set<() => void>();
+
+/**
+ * Called after every write the server accepted (owner's choice of 2026-10-14, option A), so
+ * that every figure and list read before it is read again. **One rule where every write
+ * passes**, rather than each screen naming the reads its save moves: a screen that forgot
+ * one left a figure saying what was true before the save, and nothing could fail on the
+ * omission. Returns the unsubscribe.
+ */
+export function onAcceptedWrite(listener: () => void): () => void {
+  writeListeners.add(listener);
+  return () => {
+    writeListeners.delete(listener);
+  };
 }
 
 /**
