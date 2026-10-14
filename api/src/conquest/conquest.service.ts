@@ -4,6 +4,7 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
+import { uniqueIds } from '../common/growth/growth-submit';
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow } from '../common/time/submission-window';
@@ -134,7 +135,7 @@ export class ConquestService {
 
     // Every leader and opener is inside the scope, so the edges just read are all theirs.
     const goals = await this.goalsOf(
-      unique([...edges.map((edge) => edge.leaderId), ...openers]),
+      uniqueIds([...edges.map((edge) => edge.leaderId), ...openers]),
       now,
       edges,
       population === null,
@@ -187,7 +188,7 @@ export class ConquestService {
       known === undefined
         ? await this.hierarchy.edgeHistoryOf(this.db, personIds)
         : known.filter((edge) => asked.has(canonicalId(edge.leaderId)));
-    const disciples = everyone ? null : unique(edges.map((edge) => edge.personId));
+    const disciples = everyone ? null : uniqueIds(edges.map((edge) => edge.personId));
     const thirdLessons = keyed(await this.suynl.thirdLessonInstantsOf(disciples));
     const leading = new Map<string, Period[]>();
     for (const entry of await this.cells.leadershipPeriodsOf(disciples)) {
@@ -269,8 +270,4 @@ function add(target: Map<string, Period[]>, key: string, periods: (Period | null
 
 function keyed<T>(map: ReadonlyMap<string, T>): Map<string, T> {
   return new Map([...map].map(([key, value]) => [canonicalId(key), value]));
-}
-
-function unique(ids: readonly string[]): string[] {
-  return [...new Map(ids.map((id) => [canonicalId(id), id])).values()];
 }
