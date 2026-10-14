@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { PERSON_IN_SCOPE, mockGrants, mockPeople, mockSignedIn } from './mock-api';
+import {
+  PERSON_IN_SCOPE,
+  mockAdministrator,
+  mockGrants,
+  mockPeople,
+  mockScreens,
+  mockSignedIn,
+} from './mock-api';
 import {
   CELL_WITH_MEETINGS,
   mockCellMeetings,
@@ -51,7 +58,9 @@ test.describe('which search each surface asks for', () => {
   test('the People screen opens on everyone, with each leader and Cell (decision 0259)', async ({
     page,
   }) => {
+    // A leader without Full view, on the Recording screens, keeps the list (decision 0348).
     await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
     await mockPeople(page);
     const searches = await recordSearches(page);
 
@@ -70,6 +79,37 @@ test.describe('which search each surface asks for', () => {
     expect(searches[0]).not.toContain('church_wide');
   });
 
+  // Decision 0348: an Admin, a Senior Pastor and a Full view leader oversee too many people to
+  // browse, so the tab opens on the search and asks for nobody until something is searched.
+  for (const [who, arrange] of [
+    ['a Full view leader', async () => undefined],
+    ['a Senior Pastor', async (page: import('@playwright/test').Page) => mockScreens(page, 'SENIOR_PASTOR')],
+    ['an Admin', async (page: import('@playwright/test').Page) => mockAdministrator(page)],
+  ] as const) {
+    test(`the People screen opens on the search alone for ${who}`, async ({ page }) => {
+      await mockSignedIn(page);
+      await arrange(page);
+      await mockPeople(page);
+      const searches = await recordSearches(page);
+
+      await page.goto('/people');
+
+      await expect(page.getByText('Search by name or Member ID to find someone.')).toBeVisible();
+      await expect(page.getByRole('table', { name: 'People you oversee' })).toHaveCount(0);
+      expect(searches).toEqual([]);
+
+      await page.getByLabel('Search by name').fill('Marilou');
+      await page.getByRole('button', { name: 'Search' }).click();
+
+      await expect(
+        page.getByRole('table', { name: 'People you oversee' }).getByRole('row', {
+          name: /Marilou Reyes Santos/,
+        }),
+      ).toBeVisible();
+      expect(searches).toHaveLength(1);
+      expect(searches[0]).toContain('q=Marilou');
+    });
+  }
   test('the People screen asks for its own scope', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
@@ -312,7 +352,7 @@ test.describe('the browser Back button on the People screen', () => {
 
   // The button that brings the whole list back reads Clear search on every list (owner,
   // 2026-10-13).
-  test('an emptied box offers Clear search, which brings the whole list back', async ({ page }) => {
+  test('an emptied box offers Clear search, which clears the search from the address', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
     await page.goto('/people');

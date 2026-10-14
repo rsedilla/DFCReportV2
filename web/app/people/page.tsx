@@ -14,6 +14,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
   MINIMUM_SEARCH_LENGTH,
@@ -55,7 +56,11 @@ import { cn } from '@/lib/utils';
  * token for form fields.
  *
  * **It opens on everyone the searcher oversees, ten a page, A to Z by surname** (decision
- * 0259, the owner's design adjusted). Each row names the person's pastoral
+ * 0259, the owner's design adjusted), **for an account on the Recording screens alone**. An
+ * Admin, a Senior Pastor and a Full view leader oversee too many people to browse ten at a
+ * time, so their tab opens on the search and lists only what a search finds (decision 0348).
+ * Which screens an account has is the server's answer (decision 0323, point 5); a Full view
+ * leader browses their branch by its structure on the Family Tree tab instead. Each row names the person's pastoral
  * leader and Cell; a search narrows it by name or Member ID. The design's journey stage
  * and "Last recorded" columns are not here: each needs a ruling first.
  *
@@ -96,9 +101,15 @@ function PeopleList() {
     setPage(0);
   }
 
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const searchOnly = me.data !== undefined && me.data.screens !== 'RECORDING';
+  // Nothing is listed until a search, for an account that opens on one (decision 0348).
+  const awaitingSearch = searchOnly && submitted === '';
+
   const results = useQuery({
     queryKey: ['people', submitted, cursors[page], PAGE_SIZE],
     queryFn: ({ signal }) => searchPeople(submitted, cursors[page], signal, { limit: PAGE_SIZE }),
+    enabled: me.data !== undefined && !awaitingSearch,
   });
 
   const rows = results.data?.data ?? [];
@@ -128,7 +139,11 @@ function PeopleList() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-        <p className="text-muted text-sm">Everyone you oversee, you included.</p>
+        <p className="text-muted text-sm">
+          {searchOnly
+            ? 'Find someone by name or Member ID.'
+            : 'Everyone you oversee, you included.'}
+        </p>
       </div>
 
       <PeopleTabs current="/people">
@@ -161,11 +176,22 @@ function PeopleList() {
 
         {/* Mounted always, per `FailureNotice`'s own rule. */}
         <div className="mt-8">
-          <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+          {/* The account read decides whether the list opens, so its failure is said too. */}
+          <FailureNotice
+            failure={
+              results.isError
+                ? describeFailure(results.error)
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null
+            }
+          />
         </div>
 
         <div className="mt-4">
-          {results.isPending ? (
+          {me.isError ? null : awaitingSearch ? (
+            <p className="text-muted text-sm">Search by name or Member ID to find someone.</p>
+          ) : results.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>
           ) : results.isError ? null : rows.length === 0 ? (
             submitted === '' ? (

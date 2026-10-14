@@ -987,7 +987,8 @@ function queueKey(item: QueueItem): string {
  * (owner's choices of 2026-09-25). Buttons pressed and unpressed rather than ARIA tabs:
  * the lists are sections of one page, and a screen reader meets each by its heading.
  * The count box is the same on every button whatever the number, because colour never
- * marks a figure as behind (sections 13 and 19).
+ * marks a figure as behind (sections 13 and 19), and a list with nothing in it shows no box
+ * at all (decision 0349). A count still being read shows none either.
  */
 function TabBar<Key extends string>({
   label,
@@ -1017,7 +1018,8 @@ function TabBar<Key extends string>({
           className={cn(tabClasses(tab.key === current), 'justify-center py-2 text-center')}
         >
           {tab.label}
-          {tab.count === null ? null : (
+          {/* A count of 0 is left off (decision 0349): a row of zeros hid the lists with work. */}
+          {tab.count === null || tab.count === '0' ? null : (
             <span className="inline-block min-w-5 border border-current px-1 text-center leading-4 tabular-nums">
               {tab.count}
             </span>
