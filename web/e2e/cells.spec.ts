@@ -1,13 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  CELL_CHOICES,
   CREATED_CELL,
   PERSON_IN_SCOPE,
   mockCellApprover,
+  mockCellChoices,
   mockCellCreated,
   mockMembershipAdd,
   mockPeople,
-  mockPeopleWithoutACell,
+  mockPersonCells,
   mockSignedIn,
   searchCells,
 } from './mock-api';
@@ -35,7 +37,7 @@ const MEETINGS = `/cells/${CELL_WITH_MEETINGS.id}/meetings`;
 const MEMBERS = `/cells/${CELL_WITH_MEETINGS.id}/members`;
 
 test.describe('the Cells list', () => {
-  test('is a table on a laptop and cards on a phone, with a way to people without a Cell', async ({
+  test('is a table on a laptop and cards on a phone', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -54,11 +56,8 @@ test.describe('the Cells list', () => {
     // The Cell is named rather than coded (decisions 0261 and 0306).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
     await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
-    // A link styled as a button in the header (decision 0289), and still a link.
-    await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveAttribute(
-      'href',
-      '/cells/people-without-a-cell',
-    );
+    // Record's Awaiting CG Assignment is where that list lives (decision 0343).
+    await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveCount(0);
     await expect(page.getByText('Your Cells and this month’s meetings.')).toBeVisible();
     await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toHaveCount(0);
 
@@ -264,7 +263,7 @@ test.describe('the Cells totals (decision 0289)', () => {
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
-  test('the header puts People without a Cell beside New Cell, and the line beside the heading', async ({
+  test('the header carries New Cell alone, and the line beside the heading', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -274,11 +273,7 @@ test.describe('the Cells totals (decision 0289)', () => {
 
     const header = page.locator('main > div').first();
     await expect(header.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
-    await expect(header.getByRole('link')).toHaveText(['People without a Cell', 'New Cell']);
-    await expect(header.getByRole('link', { name: 'People without a Cell' })).toHaveAttribute(
-      'href',
-      '/cells/people-without-a-cell',
-    );
+    await expect(header.getByRole('link')).toHaveText(['New Cell']);
     await expect(header.getByRole('link', { name: 'New Cell' })).toHaveAttribute(
       'href',
       '/cells/new',
@@ -533,46 +528,6 @@ test.describe('a Cell’s members', () => {
   });
 });
 
-test.describe('people without a Cell', () => {
-  test('places a person from the list in one request, and asks for the list again', async ({
-    page,
-  }) => {
-    await mockSignedIn(page);
-    await mockPeopleWithoutACell(page);
-    await mockCells(page);
-    const sent = await mockMembershipAdd(page, 'accepted');
-
-    let listReads = 0;
-    page.on('request', (request) => {
-      if (request.method() === 'GET' && request.url().includes('/cells/people-without-a-cell')) {
-        listReads += 1;
-      }
-    });
-
-    await page.goto('/cells/people-without-a-cell');
-    await expect(page.getByRole('heading', { name: 'Bituin Carreon' })).toBeVisible();
-    // **Counted from here, not from page load.** Loading the page can read the list more than
-    // once, so "more than one read" held with no refresh at all, and a mutant removing the
-    // refresh passed this case.
-    const readsBeforeAdding = listReads;
-    await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
-
-    const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-    await searchCells(dialog, CELL_WITH_NO_SCHEDULE.cell_id);
-    await dialog.getByRole('button', { name: `Choose ${CELL_WITH_NO_SCHEDULE.cell_id}` }).click();
-    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
-
-    await expect(dialog).toBeHidden();
-    expect(sent).toEqual([
-      {
-        path: `/api/v1/cells/${CELL_WITH_NO_SCHEDULE.id}/members`,
-        body: { person_id: '3f1b7c6e-0000-4000-8000-000000000921' },
-      },
-    ]);
-    await expect.poll(() => listReads).toBeGreaterThan(readsBeforeAdding);
-  });
-});
-
 test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
   test('lists closed Cells in their own view, and sends a restart for approval', async ({
     page,
@@ -655,10 +610,13 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
   test('lists the person’s pastoral leader’s Cell first, and finds the rest by search', async ({
     page,
   }) => {
+    // Opened from the person's page, which is where a person is added to a Cell (decision
+    // 0343). Every Cell in `CELL_CHOICES` is in the person's own Network.
     await mockSignedIn(page);
-    await mockPeopleWithoutACell(page);
-    await mockCells(page);
-    // Bituin's pastoral leader leads CELL-000011, the second Cell in the API's order.
+    await mockPeople(page);
+    await mockPersonCells(page, { membership: null, leads: [] });
+    await mockCellChoices(page);
+    const leaderCell = CELL_CHOICES[1];
     await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
       route.fulfill({
         status: 200,
@@ -672,15 +630,15 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
               network_root: true,
             },
             {
-              id: CELL_WITH_NO_SCHEDULE.leader.person_id,
-              member_id: CELL_WITH_NO_SCHEDULE.leader.member_id,
-              full_name: CELL_WITH_NO_SCHEDULE.leader.full_name,
+              id: leaderCell.leader.person_id,
+              member_id: leaderCell.leader.member_id,
+              full_name: leaderCell.leader.full_name,
               network_root: false,
             },
             {
-              id: '3f1b7c6e-0000-4000-8000-000000000921',
-              member_id: 'M-000921',
-              full_name: 'Bituin Carreon',
+              id: PERSON_IN_SCOPE.id,
+              member_id: PERSON_IN_SCOPE.member_id,
+              full_name: PERSON_IN_SCOPE.full_name,
               network_root: false,
             },
           ],
@@ -689,20 +647,20 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
       }),
     );
 
-    await page.goto('/cells/people-without-a-cell');
-    await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
+    await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
+    await page.getByRole('button', { name: 'Add to a Cell' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
+    const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
     await expect(dialog.getByText('Their Cell Leader’s Cell', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(1);
-    await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` })).toBeVisible();
     // Nothing is chosen for them: the leader still picks.
     await expect(dialog.getByRole('button', { name: 'Choose another Cell' })).toHaveCount(0);
 
     // A search finds the rest, and does not list the leader's Cell twice.
     await searchCells(dialog, 'CELL');
-    await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(2);
+    await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(3);
     await expect(dialog.getByRole('button', { name: 'Choose CELL-000007' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Choose CELL-000011' })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` })).toHaveCount(1);
   });
 });

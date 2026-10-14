@@ -1485,80 +1485,25 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('radio', { name: 'All', exact: true })).toHaveCount(0);
   });
 
-  test('the month’s cards are a row at the foot, each with last month’s figure', async ({
-    page,
-  }) => {
+  // Decision 0343: Record carries no month figures, so it asks for no report; the Sundays are
+  // still read without the coverage figure nothing here shows (checklist row perf-record-load).
+  test('carries no month figures and asks for no report', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockQueue(page);
-
-    await page.goto('/dashboard');
-
-    const cards = page.getByRole('complementary', { name: 'June so far' });
-    await expect(cards.getByRole('link', { name: /Cell meetings recorded\s*6 of 8\s*May: 6 of 8/ })).toBeVisible();
-    await expect(cards.getByRole('link', { name: /DCC records filed\s*12 of 18\s*May: 12 of 18/ })).toBeVisible();
-
-    // Below the work, not beside it (decision 0290).
-    const queue = await page.getByRole('region', { name: 'Update Record' }).boundingBox();
-    const foot = await cards.boundingBox();
-    expect(foot!.y).toBeGreaterThan(queue!.y + queue!.height);
-  });
-
-  test('the month’s figures keep the whole scope whichever list Whose shows (decision 0316)', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(JUNE_20);
-    await mockQueue(page);
-    const scopes: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/api/v1/reports/cells/monthly?')) scopes.push(new URL(request.url()).search);
-    });
-
-    for (const address of ['/dashboard', '/dashboard?whose=branch']) {
-      await page.goto(address);
-      const cards = page.getByRole('complementary', { name: 'June so far' });
-      await expect(cards.getByText(/· People you oversee, whichever list is shown above$/)).toBeVisible();
-      await expect(cards.getByRole('link', { name: /Cell meetings recorded\s*6 of 8/ })).toBeVisible();
-    }
-    expect(new Set(scopes.filter((search) => search.includes('2026-06-01'))).size).toBe(1);
-  });
-
-  // Checklist row perf-record-load: the lists are the work, so the four reports wait for
-  // them, and the Sundays are read without the coverage figure nothing here shows.
-  test('asks for the month figures only once every list has answered', async ({ page }) => {
-    await page.clock.setFixedTime(JUNE_20);
-    await mockQueue(page);
-    const LISTS = [
-      '/api/v1/cells/meetings/awaiting',
-      '/api/v1/cells',
-      '/api/v1/people/awaiting-reassignment',
-      '/api/v1/cells/people-without-a-cell',
-      '/roster',
-    ];
-    const events: string[] = [];
+    const reports: string[] = [];
     const coverageAsked: (string | null)[] = [];
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.pathname.startsWith('/api/v1/reports/')) events.push(`asked ${url.pathname}`);
+      if (url.pathname.startsWith('/api/v1/reports/')) reports.push(url.pathname);
       if (url.pathname === '/api/v1/dcc/events') coverageAsked.push(url.searchParams.get('coverage'));
-    });
-    page.on('requestfinished', (request) => {
-      const path = new URL(request.url()).pathname;
-      const list = LISTS.find((suffix) => path.endsWith(suffix));
-      if (list !== undefined) events.push(`answered ${list}`);
     });
 
     await page.goto('/dashboard');
-    await expect(
-      page.getByRole('complementary', { name: 'June so far' }).getByRole('link', { name: /DCC records filed\s*12 of 18\s*May: 12 of 18/ }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first()).toBeVisible();
 
-    const firstReport = events.findIndex((event) => event.startsWith('asked'));
-    expect(firstReport).toBeGreaterThan(-1);
-    for (const list of LISTS) {
-      const answered = events.indexOf(`answered ${list}`);
-      expect(answered, list).toBeGreaterThan(-1);
-      expect(answered, list).toBeLessThan(firstReport);
-    }
+    await expect(page.getByRole('complementary', { name: 'June so far' })).toHaveCount(0);
+    await expect(page.getByText('Cell meetings recorded')).toHaveCount(0);
+    expect(reports).toEqual([]);
     expect(coverageAsked.length).toBeGreaterThan(0);
     expect(coverageAsked.every((value) => value === 'false')).toBe(true);
   });

@@ -322,7 +322,7 @@ test.describe('the report figures', () => {
 });
 
 test.describe('how these are counted', () => {
-  test('each report explains its own counting, in words', async ({ page }) => {
+  test('neither attendance report offers the explainer any more (decision 0343)', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
     await mockCellReport(page);
@@ -331,23 +331,12 @@ test.describe('how these are counted', () => {
     await mockDccTwelve(page);
 
     await page.goto('/reports/cells');
-    await page.getByRole('button', { name: 'How these are counted' }).click();
-    const cells = page.getByRole('dialog', { name: 'How these are counted' });
-    await expect(cells.getByText(/^Meetings with a record, out of the meetings/)).toBeVisible();
-    await expect(cells.getByText(/^Records filed, out of records owed/)).toHaveCount(0);
-    await cells.getByRole('button', { name: 'Close' }).click();
-    await expect(cells).toBeHidden();
+    await expect(page.getByText('Who came to a Cell, and where they are in their journey.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'How these are counted' })).toHaveCount(0);
 
     await page.goto('/reports/dcc');
-    await page.getByRole('button', { name: 'How these are counted' }).click();
-    const dcc = page.getByRole('dialog', { name: 'How these are counted' });
-    await expect(dcc.getByText(/^Records filed, out of records owed/)).toBeVisible();
-    await expect(dcc.getByText(/Cell’s schedule/)).toHaveCount(0);
-    // Decision 0294: DCC describes My 12, and its buckets as a month's alone.
-    await expect(dcc.getByText('My 12', { exact: true })).toBeVisible();
-    await expect(dcc.getByText(/^Monthly only\./)).toBeVisible();
-    await expect(dcc.getByText('People who attended', { exact: true })).toHaveCount(0);
-    await expect(dcc.getByText('A Network', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Who came to DCC/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'How these are counted' })).toHaveCount(0);
   });
 });
 

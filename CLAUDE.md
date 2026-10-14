@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-14, the trigger being decision 0342: of 341 files, 340 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0342 each moved the first two and
+2026-10-14, the trigger being decision 0343: of 342 files, 341 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0343 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-14 and triggered by 0342, and was left stale by 0343 the same day. The one before that was dated
 2026-10-13 and triggered by 0341, and was left stale by 0342 the next day. The one before that was dated
 2026-10-13 and triggered by 0340, and was left stale by 0341 the same day. The one before that was dated
 2026-10-13 and triggered by 0339, and was left stale by 0340 the same day. The one before that was dated
@@ -725,6 +726,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-13 — [A Full view leader's attendance tabs, and Filed Reports withdrawn](docs/decisions/0340-a-full-view-leaders-attendance-tabs.md)
 - 2026-10-13 — [The Family Tree tab](docs/decisions/0341-the-family-tree-tab.md)
 - 2026-10-14 — [A Sunday's still-to-record page is withdrawn](docs/decisions/0342-a-sundays-still-to-record-page-withdrawn.md)
+- 2026-10-14 — [Three things shown twice are removed](docs/decisions/0343-three-things-shown-twice-are-removed.md)
 
 ### Open — awaiting a ruling
 

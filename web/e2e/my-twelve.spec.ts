@@ -558,20 +558,13 @@ test.describe('the sentence under My 12', () => {
     );
   });
 
-  test('the heading line and How these are counted describe My 12', async ({ page }) => {
+  test('the heading line describes the report', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/cells');
 
     await expect(
       page.getByText('Who came to a Cell, and where they are in their journey.'),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'How these are counted' }).click();
-    const dialog = page.getByRole('dialog', { name: 'How these are counted' });
-    await expect(dialog.getByText('My 12', { exact: true })).toBeVisible();
-    await expect(
-      dialog.getByText(/\(if you see the Whole Church, the two pastors at the top of each Network\)/),
-    ).toBeVisible();
-    await expect(dialog.getByText('People who attended', { exact: true })).toHaveCount(0);
   });
 });
 
@@ -673,9 +666,7 @@ test.describe('what decision 0293 took off this page', () => {
       page.getByRole('region', { name: 'Where people are in their journey', exact: true }),
     ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
-    // Visible text only: the closed How these are counted dialog is in the page and still
-    // carries the old terms.
-    await expect(page.getByText('People who attended').filter({ visible: true })).toHaveCount(0);
+    await expect(page.getByText('People who attended')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
     await expect(page.getByLabel('Figures for').locator('option')).toHaveCount(4);
   });

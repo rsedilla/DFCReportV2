@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
-import { HowTheseAreCounted } from '@/components/how-counted';
 import { LeaderDrill } from '@/components/leader-drill';
 import {
   BranchTwelve,
@@ -171,11 +170,7 @@ export function CellReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
-        {/* Not for the Senior Pastors (owner, 2026-10-09). */}
-        {seniorPastor ? null : <HowTheseAreCounted report="cells" />}
-      </div>
+      <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
       <ReportsTabs current="cells" month={guardMonth}>
         {seniorPastor ? null : (
           <PeriodTabs

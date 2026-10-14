@@ -784,11 +784,7 @@ const SCANS = [
       await expect(
         page.getByRole('link', { name: /^Record Young Pro · Sat,/ }),
       ).toBeVisible();
-      // A tile carries its scope and its period, which section 19 requires of
-      // every one of them.
-      await expect(page.getByText(/· People you oversee/).first()).toBeVisible();
-      // **The heading and the scope label render before any query resolves**, so
-      // the scan waits for the last of the four buttons' counts too: without them
+      // **The heading renders before any query resolves**, so the scan waits for the last of the four buttons' counts too: without them
       // axe would scan buttons whose count boxes had not arrived.
       const lists = page.getByRole('group', { name: 'Outstanding work' });
       await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2$/ })).toBeVisible();
@@ -853,34 +849,6 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await chooseRecordList(page, /^Awaiting CG Assignment/);
       await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
-    },
-  },
-  {
-    // Section 15's people-without-a-Cell list, which section 10's closure flow fills
-    // (decision 0233).
-    name: 'people without a cell',
-    route: '/cells/people-without-a-cell',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockPeopleWithoutACell(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Bituin Carreon' })).toBeVisible();
-    },
-  },
-  {
-    // Add to a Cell from the list: the profile's dialog, over the Cells of the viewer's scope.
-    name: 'people without a cell, adding to a cell',
-    route: '/cells/people-without-a-cell',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockPeopleWithoutACell(page);
-      await mockCells(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
-      const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
-      await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
     },
   },
   {
@@ -1099,21 +1067,6 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: "Aurora Dizon · Women's" })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
-    },
-  },
-  {
-    // How these are counted: a dialog of terms and sentences over the report.
-    name: 'cell attendance report, how these are counted',
-    route: '/reports/cells',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCellTwelve(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'How these are counted' }).click();
-      await expect(
-        page.getByRole('dialog', { name: 'How these are counted' }).getByText('An open month'),
-      ).toBeVisible();
     },
   },
   {
@@ -1598,11 +1551,11 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // The link to people without a Cell, the two totals (decision 0289), the search box
+    // The two totals (decision 0289), the search box
     // and its button, the two view radios, two month controls, a link per Cell in both
     // the table and the cards (the hidden rendering is counted too), and the pager's two
-    // buttons: **fifteen**, since the totals became the running view's only "my Cells"
-    // filter on 2026-10-05. The
+    // buttons: **fourteen**, since the totals became the running view's only "my Cells"
+    // filter on 2026-10-05 and the people-without-a-Cell link went (decision 0343). The
     // month controls are icon-only and are the reason this state is measured rather than
     // exempted: an icon button is where a 24px target goes wrong. The totals are the
     // other reason: each is a button carrying a figure, sized by its own padding.
@@ -1610,7 +1563,7 @@ const TARGET_SWEEP = [
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 15,
+    minimum: 14,
   },
   {
     // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
@@ -1673,20 +1626,11 @@ const TARGET_SWEEP = [
     // the two Cell Group / DCC buttons, the two "Whose" radios, the
     // two Cell rows' Record buttons twice over (the table and the cards are both in the
     // page, one of them hidden, and a hidden one is counted and not measured), See the
-    // whole month, and the four month cards: **seventeen**.
+    // whole month, and the four month cards: **seventeen**. The cards went with decision 0343,
+    // so **thirteen**.
     settleRole: 'link' as const,
     settle: 'Record Young Pro · Sat',
-    minimum: 17,
-  },
-  {
-    // The back link, a name link and an Add to a Cell button per person, and the pager's two
-    // buttons (decision 0261). Settled on a person rather than the page heading, which
-    // renders before the list arrives.
-    name: 'people without a cell',
-    route: '/cells/people-without-a-cell',
-    settleRole: 'heading' as const,
-    settle: 'Bituin Carreon',
-    minimum: 5,
+    minimum: 13,
   },
   {
     // Back link and three people in the chain. The move moved to the profile.
@@ -1723,53 +1667,53 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's four report tabs (decision 0340), How these are counted, the four
+    // A Full view leader's four report tabs (decision 0340), the four
     // period buttons, the navigator's two, the Figures for select and the three names of
-    // their 12 (decision 0293): **fifteen**. Settled on the last name, which renders from
+    // their 12 (decision 0293): **fourteen**. Settled on the last name, which renders from
     // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'link' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 15,
+    minimum: 14,
   },
   {
-    // The same controls as "dcc figures report": **fifteen** (decision 0294). The
+    // The same controls as "dcc figures report": **fourteen** (decision 0294). The
     // month-by-month table holds no control.
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 15,
+    minimum: 14,
   },
   {
-    // The same controls as "cell attendance report": **fifteen**. The month-by-month table
+    // The same controls as "cell attendance report": **fourteen**. The month-by-month table
     // holds no control.
     name: 'cell attendance report, year',
     route: '/reports/cells?period=year',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 15,
+    minimum: 14,
   },
   {
-    // The four report tabs, How these are counted, the four period buttons, the navigator's
+    // The four report tabs, the four period buttons, the navigator's
     // two, the Figures for select, the Back link and the one name in that leader's 12:
-    // **fourteen**.
+    // **thirteen**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 14,
+    minimum: 13,
   },
   {
-    // The four report tabs, How these are counted, the four period buttons, the navigator's
+    // The four report tabs, the four period buttons, the navigator's
     // two, the Figures for select and the three names of the reader's 12 (decision 0294):
-    // **fifteen**, as CG Attendance.
+    // **fourteen**, as CG Attendance.
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'link' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 15,
+    minimum: 14,
   },
   {
     // A Full view leader's four report tabs (decision 0340), the Next Encounter card's link
@@ -1998,12 +1942,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the primitive measured on every screen.',
   },
   {
-    name: 'cell attendance report, how these are counted',
-    why:
-      'Opens the How these are counted dialog over the measured "cell attendance report", ' +
-      'where the button opening it is counted. Its only control is Close, a Button.',
-  },
-  {
     name: 'dcc checklist, changing recorded marks',
     why:
       'The measured "dcc checklist" with its recorded mark unlocked: the same back link, radios ' +
@@ -2105,12 +2043,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'Opens the Add a member dialog over the measured "cell members". Its controls are the ' +
       'PersonPicker measured under "pastoral network" and two Buttons, the measured primitive.',
-  },
-  {
-    name: 'people without a cell, adding to a cell',
-    why:
-      'Opens the dialog already exempted under "person profile, moving to another cell" over ' +
-      'the measured "people without a cell": the Cell picker and two Buttons.',
   },
   {
     name: 'cell attendance report, week',

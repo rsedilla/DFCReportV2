@@ -40,7 +40,6 @@ import {
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment, MINIMUM_SEARCH_LENGTH } from '@/lib/people';
-import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import {
   dayLabel,
   monthLabel,
@@ -55,33 +54,14 @@ import { cn } from '@/lib/utils';
 /**
  * Where a signed-in leader lands (SKILL.md section 19).
  *
- * **Outstanding work comes above the numbers, and that is the whole design.**
- * Section 19 is blunt about it: "A dashboard of counts tells a leader nothing to
- * act on." So the screen opens on five lists of outstanding work, one at a time, each
- * with its count (decisions 0290 and 0336): what awaits a record, the Cells behind, the
- * leaders behind on DCC, the people needing a new leader and the people not in a Cell. The
- * figures are at the foot.
+ * **Outstanding work, and that is the whole design.** Section 19 is blunt about it:
+ * "A dashboard of counts tells a leader nothing to act on." So the screen opens on five
+ * lists of outstanding work, one at a time, each with its count (decisions 0290 and 0336):
+ * what awaits a record, the Cells behind, the leaders behind on DCC, the people needing a
+ * new leader and the people not in a Cell. It carries no month figures (decision 0343).
  *
  * **The queue shows the leader's own work by default, and their branch's on request**
  * (decision 0258, reversing the owner's choice of 2026-09-15).
- *
- * **Every tile carries what it counts, its value, its scope and its period**
- * (section 19). A tile reading `12` and a tile reading `11,480` are the same tile
- * for two different people, and a figure without its scope "cannot be discussed,
- * screenshotted, or compared". The figures are words and numbers; last month's figure sits
- * under each (owner's choice of 2026-09-19) and there are no progress bars, because a bar that reads as empty is coverage encoded as a
- * graphic, which is the thing sections 13 and 17 forbid by another route.
- *
- * **Current-state and period-based figures are in separate sections and never
- * interleaved.** Section 3 draws that line and section 19 says a dashboard is
- * where it is most easily lost.
- *
- * **An open month says so**, because the same tile on the 5th and the 31st shows
- * very different numbers with nothing having happened (sections 17 and 19).
- *
- * **Attendance counts unique people and never occurrences** (section 19, principle
- * 10). Both figures here come from the reporting routes, which count distinct
- * people; nothing on this screen sums attendances.
  *
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The queue is
  * in date order, oldest first, and says so; the other lists are filtered rather than
@@ -236,12 +216,11 @@ function Dashboard() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
-  // decision 0323): no other list, no month figures, and Leaders Under Me only while the
+  // decision 0323): no other list, and Leaders Under Me only while the
   // server says a leader holding an account sits directly beneath it.
   const recordingOnly = me.data?.screens === 'RECORDING';
   // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
-  // their own Awaiting a record with no Leaders Under Me, and none of the other lists or
-  // the month figures.
+  // their own Awaiting a record with no Leaders Under Me, and none of the other lists.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
   const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
@@ -277,7 +256,7 @@ function Dashboard() {
   }
 
   // Section 20's attention list (decision 0232). It takes no month: the list asks
-  // about now, so it is deliberately not keyed on the period the figures below use.
+  // about now.
   //
   // The whole list, fifty at a time, with Show more in place of a link to another
   // screen (decision 0290).
@@ -471,63 +450,8 @@ function Dashboard() {
     (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
     checklistsPrevious.some((query) => query.isPending);
 
-  // The month figures wait for the lists above them, which are the work a leader acts on,
-  // so the lists do not queue behind four reports (checklist row perf-record-load). A list
-  // that failed has answered, so it holds nothing back.
-  const listsAnswered =
-    !queuePending &&
-    !scoped.isPending &&
-    !scopedClosed.isPending &&
-    !unplacedPages.isPending &&
-    !withoutACellPages.isPending;
-
-  /**
-   * The scope the figures are read at, and why it is not always the actor.
-   *
-   * **A Whole Church grant is read as Whole Church.** Keying every tile on the
-   * signed-in person's own subtree is right for a leader and wrong for anybody
-   * holding a church-wide grant who is not themselves in the pastoral tree —
-   * section 5 permits exactly that for an administrator, and section 20 then
-   * places them in no subtree at all. The tiles read `0` while the attention
-   * list above them showed real Cells, which is the disagreement this fixes.
-   */
-  const reportScope = holdsWholeChurch(me.data, 'reports.view_subtree')
-    ? ({ kind: 'WHOLE_CHURCH' } as const)
-    : ({ kind: 'LEADER', person_id: me.data?.person_id ?? '' } as const);
-
-  const scopeLabel = holdsWholeChurch(me.data, 'reports.view_subtree')
-    ? 'Whole Church'
-    : 'People you oversee';
-
-  const cellFigures = useQuery({
-    queryKey: ['cell-report', month, reportScope],
-    queryFn: ({ signal }) => getCellMonthlyReport(month, reportScope, signal),
-    enabled: fullRecord && listsAnswered,
-  });
-
-  const dccFigures = useQuery({
-    queryKey: ['dcc-report', month, reportScope],
-    queryFn: ({ signal }) => getDccMonthlyReport(month, reportScope, signal),
-    enabled: fullRecord && listsAnswered,
-  });
-
-  // Last month's figures, shown under this month's on each card and named by month.
-  const cellFiguresPrevious = useQuery({
-    queryKey: ['cell-report', previousMonth, reportScope],
-    queryFn: ({ signal }) => getCellMonthlyReport(previousMonth, reportScope, signal),
-    enabled: fullRecord && listsAnswered,
-  });
-
-  // Section 19: an open period says so, and last month is open until its last week closes.
+  // Last month by name, for the rows and notes that carry it.
   const previousName = monthLabel(previousMonth).split(' ')[0];
-  const previousLabel = (open: boolean | undefined) =>
-    `${previousName}${open ? ' (still open)' : ''}`;
-
-  const dccFiguresPrevious = useQuery({
-    queryKey: ['dcc-report', previousMonth, reportScope],
-    queryFn: ({ signal }) => getDccMonthlyReport(previousMonth, reportScope, signal),
-    enabled: fullRecord && listsAnswered,
-  });
 
   // **Oldest first, and the page says so.** Date order is the one order that ranks
   // nobody, and it puts last month's entries before this month's. A Cell meeting and a
@@ -585,7 +509,7 @@ function Dashboard() {
   ].find((query) => query.isError);
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
-  // outstanding work above the figures precisely so a leader can trust it, and a
+  // outstanding work here precisely so a leader can trust it, and a
   // failed load that renders as an empty queue says "nothing to do" on this screen's
   // authority. The queue's own reads matter most and come first: without them it is
   // empty, which is the opposite of the truth.
@@ -607,10 +531,6 @@ function Dashboard() {
                 ? describeFailure(unplaced.error)
               : pendingDccPages.isError
                 ? describeFailure(pendingDccPages.error)
-                : cellFigures.isError
-                  ? describeFailure(cellFigures.error)
-                  : dccFigures.isError
-                    ? describeFailure(dccFigures.error)
                     : withoutACell.isError
                       ? describeFailure(withoutACell.error)
                       : me.isError
@@ -677,7 +597,7 @@ function Dashboard() {
               ? 'What still needs a record.'
               : seniorPastor
                 ? 'Whether the church has recorded, and your own work.'
-                : 'What needs doing first, and this month’s figures at the foot.'}
+                : 'What needs doing first.'}
         </p>
       </div>
 
@@ -708,7 +628,7 @@ function Dashboard() {
         />
       )}
 
-      {/* The chosen list's pane; the month's figures below it are the whole page's. */}
+      {/* The chosen list's pane. */}
       <div className={recordingOnly ? 'mt-6' : TAB_PANE}>
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
         {listTab === 'status' && me.data ? (
@@ -1029,86 +949,8 @@ function Dashboard() {
       {/* The reader's own requests, below their own work (decision 0269); on the recording
           screens they are on My Cell, beside asking for one (decision 0323). */}
       {recordingOnly || seniorPastor ? null : <SentRequests />}
-
-      {recordingOnly || seniorPastor ? null : (
-      <>
-      {/*
-        This month so far, as a row at the foot (decision 0290). Each figure carries last
-        month's, named by its month; no bars, because coverage is two figures and never a
-        fraction (decision 0224).
-      */}
-      <aside aria-labelledby="period-heading" className="border-line mt-10 border-t pt-6">
-        <h2 id="period-heading" className="text-lg font-bold tracking-tight">
-          {monthLabel(month).split(' ')[0]} so far
-        </h2>
-        <p className="text-muted mt-1 text-sm">
-          {/* Whose changes the list above and never these figures (decision 0316). */}
-          {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}, whichever list is shown above
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MonthCard
-            label="Cell meetings recorded"
-            value={
-              cellFigures.data
-                ? `${cellFigures.data.coverage.recorded} of ${cellFigures.data.coverage.scheduled}`
-                : '—'
-            }
-            previous={
-              cellFiguresPrevious.data
-                ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.coverage.recorded} of ${cellFiguresPrevious.data.coverage.scheduled}`
-                : null
-            }
-            href="/reports/cells"
-          />
-          <MonthCard
-            label="DCC records filed"
-            value={
-              dccFigures.data
-                ? `${dccFigures.data.coverage.met} of ${dccFigures.data.coverage.owed}`
-                : '—'
-            }
-            previous={
-              dccFiguresPrevious.data
-                ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.coverage.met} of ${dccFiguresPrevious.data.coverage.owed}`
-                : null
-            }
-            href="/reports/dcc"
-          />
-          <MonthCard
-            label="People at a Cell"
-            value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
-            previous={
-              cellFiguresPrevious.data
-                ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.unique_people}`
-                : null
-            }
-            href="/reports/cells"
-          />
-          <MonthCard
-            label="People at DCC"
-            value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
-            previous={
-              dccFiguresPrevious.data
-                ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.unique_people}`
-                : null
-            }
-            href="/reports/dcc"
-          />
-        </div>
-      </aside>
-      </>
-      )}
     </main>
   );
-}
-
-/** Section 17: a period still open for submission is still changing. */
-function periodLabel(month: string, open: boolean | undefined): string {
-  if (open === undefined) {
-    return monthLabel(month);
-  }
-
-  return open ? `${monthLabel(month)} · still open` : `${monthLabel(month)} · closed`;
 }
 
 /**
@@ -1517,33 +1359,6 @@ function daysAgoLabel(date: string, today: string): string {
   );
 
   return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
-}
-
-/**
- * One of the month's figures beside the queue: this month's, and last month's named by its
- * month. No bar and no arrow: a figure is not a score (sections 13 and 19).
- */
-function MonthCard({
-  label,
-  value,
-  previous,
-  href,
-}: {
-  label: string;
-  value: string;
-  previous: string | null;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="border-line focus-visible:outline-accent block border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
-    >
-      <span className="text-muted block text-sm">{label}</span>
-      <span className="mt-1 block text-xl font-bold tabular-nums">{value}</span>
-      {previous === null ? null : <span className="text-muted mt-1 block text-xs">{previous}</span>}
-    </Link>
-  );
 }
 
 /**
