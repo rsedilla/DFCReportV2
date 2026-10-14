@@ -11,7 +11,14 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
-import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
+import {
+  compareRosterKeys,
+  decodeRosterCursor,
+  encodeRosterCursor,
+  rosterKeyOf,
+  rosterStart,
+  type RosterCursor,
+} from '../common/roster-cursor';
 import { reportingPeriodBounds } from '../common/time/reporting-period';
 import { manilaDayOf } from '../common/time/manila';
 import { recordDueAt, reportingMonthOf } from '../common/time/submission-window';
@@ -371,7 +378,7 @@ export class ReportingController {
 
       // An unnamed identity sorts last, then by identifier, so the order is total.
       return a !== undefined && b !== undefined
-        ? compareKeys(keyOf(a), keyOf(b))
+        ? compareRosterKeys(a, b)
         : a !== undefined
           ? -1
           : b !== undefined
@@ -520,7 +527,7 @@ export class ReportingController {
           const identity = identities.get(row.leaderId);
           return identity === undefined ? [] : [{ identity, row }];
         })
-        .sort((left, right) => compareKeys(keyOf(left.identity), keyOf(right.identity)))
+        .sort((left, right) => compareRosterKeys(left.identity, right.identity))
         .map(({ identity, row }) => ({
           leader: { id: row.leaderId, member_id: identity.memberId, full_name: identity.fullName },
           ...figures(row.figures),
@@ -772,7 +779,7 @@ export class ReportingController {
 
         // An unnamed identity sorts last, then by identifier, so the order is total.
         return a !== undefined && b !== undefined
-          ? compareKeys(keyOf(a), keyOf(b))
+          ? compareRosterKeys(a, b)
           : a !== undefined
             ? -1
             : b !== undefined
@@ -843,7 +850,7 @@ export class ReportingController {
           const identity = admitted[index] ? identities.get(row.leader_id) : undefined;
 
           return {
-            key: identity === undefined ? null : keyOf(identity),
+            key: identity === undefined ? null : rosterKeyOf(identity),
             network: row.network,
             rootNetwork: row.root_network ?? null,
             row: {
@@ -875,7 +882,7 @@ export class ReportingController {
                 ? -1
                 : left.network !== null && right.network !== null
                   ? left.network.localeCompare(right.network)
-                  : compareKeys(left.key, right.key),
+                  : compareRosterKeys(left.key, right.key),
         )
         .map((entry) => entry.row)
     );
@@ -963,7 +970,7 @@ export class ReportingController {
         ? []
         : [
             {
-              key: keyOf(identity),
+              key: rosterKeyOf(identity),
               isReader: canonicalId(line.leaderId) === canonicalId(actor.personId),
               row: {
                 leader: {
@@ -988,13 +995,11 @@ export class ReportingController {
     const reader = rows.find((entry) => entry.isReader);
     const rest = rows
       .filter((entry) => !entry.isReader)
-      .sort((left, right) => compareKeys(left.key, right.key));
+      .sort((left, right) => compareRosterKeys(left.key, right.key));
 
     const after = decodeRosterCursor(page.cursor);
     const limit = page.limit ?? 50;
-    const beyond =
-      after === null ? 0 : rest.findIndex((entry) => compareKeys(entry.key, after) > 0);
-    const start = beyond === -1 ? rest.length : beyond;
+    const start = rosterStart(rest, (entry) => entry.key, after);
     const first = after === null && reader !== undefined;
     // The reader's row takes a place on the first page, so every page holds `limit` rows.
     const room = first ? limit - 1 : limit;
@@ -1017,26 +1022,9 @@ export class ReportingController {
 
 const BEFORE_EVERY_KEY: RosterCursor = { lastName: '', firstName: '', memberId: '' };
 
-function keyOf(identity: { lastName: string; firstName: string; memberId: string }): RosterCursor {
-  return {
-    lastName: identity.lastName,
-    firstName: identity.firstName,
-    memberId: identity.memberId,
-  };
-}
-
 /** Men's before Women's, and a root with no seat last. */
 function networkOrder(network: NetworkName | null): number {
   return network === 'MENS' ? 0 : network === 'WOMENS' ? 1 : 2;
-}
-
-/** The roster order: last name, first name, Member ID, so the sort and the cursor agree. */
-function compareKeys(left: RosterCursor, right: RosterCursor): number {
-  return (
-    left.lastName.localeCompare(right.lastName) ||
-    left.firstName.localeCompare(right.firstName) ||
-    left.memberId.localeCompare(right.memberId)
-  );
 }
 
 /**
