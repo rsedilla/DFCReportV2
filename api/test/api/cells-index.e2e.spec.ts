@@ -891,10 +891,48 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       expect(byId.get(markCell.id)?.may_restart).toBe(false);
       expect(byId.get(nathanCell.id)).toMatchObject({
         restarted_as: manuelCell.cellId,
-        // Named by category and day where its code is not shown (decision 0306).
-        restarted_as_category: manuelCell.category,
-        restarted_as_day_of_week: 6,
+        // No approved request minted this fixture's Cell, so it has no opening name and
+        // is named by its code (decision 0347).
+        restarted_as_category: null,
+        restarted_as_day_of_week: null,
         may_restart: false,
+      });
+    });
+
+    it('names the Cell a restart became as it was opened, never as it is now (decision 0347)', async () => {
+      await closeCellDirectly(db, nathanCell.id, { reason: 'LEADER_STEPPED_DOWN' });
+      await db
+        .updateTable('cells')
+        .set({ restarted_from_cell_id: nathanCell.id })
+        .where('id', '=', manuelCell.id)
+        .execute();
+      // The approved request that minted it asked for a Couple Cell on Wednesday, while the
+      // Cell itself is a Youth Cell meeting on Saturday, so each figure can only have come
+      // from one of the two.
+      await db
+        .insertInto('cell_leadership_requests')
+        .values({
+          kind: 'NEW_CELL',
+          prospective_leader_id: manuel.id,
+          requested_by: manuelAccount.id,
+          category: 'COUPLE',
+          day_of_week: 3,
+          time_of_day: '19:00',
+          restart_of_cell_id: nathanCell.id,
+          state: 'APPROVED',
+          decided_by: admin.id,
+          decided_at: new Date(),
+          cell_id: manuelCell.id,
+        })
+        .execute();
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const row = rowsOf(response).find((entry) => entry.id === nathanCell.id);
+
+      expect(row).toMatchObject({
+        restarted_as: manuelCell.cellId,
+        restarted_as_category: 'COUPLE',
+        restarted_as_day_of_week: 3,
       });
     });
 
