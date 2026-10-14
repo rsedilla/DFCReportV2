@@ -6,10 +6,10 @@ screenshots.
 ## The ruling
 
 **The People tab offers *Add a person* only to an account holding `people.create`.** A Senior
-Pastor holds none (decision 0326), so the button led them to a page that refused them. With
-the button gone, so is the sentence suggesting they add the person when a search finds
+Pastor holds none (decision 0326), so the button led them to a form whose save is refused.
+With the button gone, so is the sentence suggesting they add the person when a search finds
 nobody. What an account holds is the server's answer, read from `GET /auth/me`; the API
-still refuses the page to anybody without the capability.
+still refuses the save to anybody without the capability.
 
 **The Cell Group and DCC buttons under *Update Record* show no box for a count of 0**, as
 the Record tabs above them do since decision 0349. A count above 0 keeps its box.
