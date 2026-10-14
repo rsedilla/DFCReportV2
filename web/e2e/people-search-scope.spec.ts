@@ -110,6 +110,22 @@ test.describe('which search each surface asks for', () => {
       expect(searches[0]).toContain('q=Marilou');
     });
   }
+
+  // Decision 0350: Add a person is offered only to an account holding `people.create`, so a
+  // Senior Pastor, who holds none (decision 0326), is not offered it.
+  test('Add a person is offered to a holder of people.create and not to a Senior Pastor', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await page.goto('/people');
+    await expect(page.getByRole('link', { name: 'Add a person' })).toBeVisible();
+
+    await mockScreens(page, 'SENIOR_PASTOR');
+    await page.reload();
+    await expect(page.getByText('Search by name or Member ID to find someone.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Add a person' })).toHaveCount(0);
+  });
   test('the People screen asks for its own scope', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
@@ -350,8 +366,7 @@ test.describe('the browser Back button on the People screen', () => {
     await expect(page.getByLabel('Search by name or Member ID')).toHaveValue('');
   });
 
-  // The button that brings the whole list back reads Clear search on every list (owner,
-  // 2026-10-13).
+  // An emptied box's button reads Clear search on every list (owner, 2026-10-13).
   test('an emptied box offers Clear search, which clears the search from the address', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);

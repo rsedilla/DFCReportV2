@@ -658,10 +658,11 @@ function Dashboard() {
                 {
                   key: 'CELLS',
                   label: 'Cell Group',
+                  // A 0 shows no box, as on the tabs above (decision 0350).
                   count:
                     queuePending || queueFailed
                       ? null
-                      : String(queue.filter((item) => item.kind === 'cell').length),
+                      : shownCount(queue.filter((item) => item.kind === 'cell').length),
                 },
                 {
                   key: 'DCC',
@@ -669,7 +670,7 @@ function Dashboard() {
                   count:
                     queuePending || queueFailed || owedPending || owedFailure
                       ? null
-                      : String(dccCount),
+                      : shownCount(dccCount),
                 },
               ]}
               value={filter}
@@ -980,6 +981,11 @@ const NAME_LINK =
 
 function queueKey(item: QueueItem): string {
   return `${item.month}-${item.kind}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`;
+}
+
+/** A count for a switch button under a tab, left off at 0 as the tabs' are (decision 0350). */
+function shownCount(count: number): string | null {
+  return count === 0 ? null : String(count);
 }
 
 /**

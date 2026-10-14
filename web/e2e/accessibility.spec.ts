@@ -1522,9 +1522,16 @@ const TARGET_SWEEP = [
     minimum: 2,
   },
   { name: 'session', route: '/session', settle: 'Sign out on every device', minimum: 2 },
-  // The search box, the Search button and the "Add a person" link. The nav lives
-  // in the header, outside `<main>`, and is counted on no route.
-  { name: 'people, before searching', route: '/people', settle: 'Search', minimum: 3 },
+  // The search box, the Search button and the "Add a person" link, settled on the link because
+  // it waits for the account read (decision 0350). The nav lives in the header, outside
+  // `<main>`, and is counted on no route.
+  {
+    name: 'people, before searching',
+    route: '/people',
+    settleRole: 'link' as const,
+    settle: 'Add a person',
+    minimum: 3,
+  },
   // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
   // its Find button, and the submit button.
   { name: 'add a person', route: '/people/new', settle: 'Add this person', minimum: 13 },
