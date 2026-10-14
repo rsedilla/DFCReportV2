@@ -233,7 +233,8 @@
     },
     {
       "route": "GET /api/v1/cells/people-without-a-cell",
-      "screen": "web/app/cells/people-without-a-cell/page.tsx"
+      "screen": "web/app/dashboard/page.tsx",
+      "note": "Record's Awaiting CG Assignment; the page of its own is withdrawn (decision 0343)."
     },
     {
       "route": "GET /api/v1/dcc/events",
