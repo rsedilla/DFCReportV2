@@ -918,8 +918,9 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.getByText('Nothing to record.')).toBeVisible();
+    // A 0 shows no box (decision 0350).
     await expect(
-      awaitingHalves(page).getByRole('button', { name: /^Cell Group\s*0$/ }),
+      awaitingHalves(page).getByRole('button', { name: /^Cell Group$/ }),
     ).toBeVisible();
   });
 

@@ -105,6 +105,8 @@ function PeopleList() {
   const searchOnly = me.data !== undefined && me.data.screens !== 'RECORDING';
   // Nothing is listed until a search, for an account that opens on one (decision 0348).
   const awaitingSearch = searchOnly && submitted === '';
+  // Offered only to an account holding `people.create`, a Senior Pastor holding none (decision 0350).
+  const mayAdd = (me.data?.capabilities ?? []).some((grant) => grant.capability === 'people.create');
 
   const results = useQuery({
     queryKey: ['people', submitted, cursors[page], PAGE_SIZE],
@@ -168,9 +170,11 @@ function PeopleList() {
             <Button type="submit" disabled={tooShort}>
               {trimmed.length === 0 && submitted !== '' ? 'Clear search' : 'Search'}
             </Button>
-            <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
-              Add a person
-            </Link>
+            {mayAdd ? (
+              <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
+                Add a person
+              </Link>
+            ) : null}
           </div>
         </form>
 
@@ -181,7 +185,7 @@ function PeopleList() {
             failure={
               results.isError
                 ? describeFailure(results.error)
-                : me.isError
+                : me.isError && me.data === undefined
                   ? describeFailure(me.error)
                   : null
             }
@@ -189,7 +193,7 @@ function PeopleList() {
         </div>
 
         <div className="mt-4">
-          {me.isError ? null : awaitingSearch ? (
+          {me.isError && me.data === undefined ? null : awaitingSearch ? (
             <p className="text-muted text-sm">Search by name or Member ID to find someone.</p>
           ) : results.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>
@@ -199,10 +203,12 @@ function PeopleList() {
             ) : (
               <div>
                 <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  They may still be elsewhere in the church. Adding a person searches every branch
-                  as you type, so start there rather than assuming they are new.
-                </p>
+                {mayAdd ? (
+                  <p className="text-muted mt-2 text-sm leading-relaxed">
+                    They may still be elsewhere in the church. Adding a person searches every branch
+                    as you type, so start there rather than assuming they are new.
+                  </p>
+                ) : null}
               </div>
             )
           ) : (

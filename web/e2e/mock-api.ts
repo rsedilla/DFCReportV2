@@ -150,11 +150,14 @@ export async function mockScreens(
   const capabilities =
     screens === 'RECORDING'
       ? CAPABILITIES.filter((grant) => grant.capability !== 'reports.view_subtree')
-      : CAPABILITIES.map((grant) =>
-          grant.capability === 'reports.view_subtree'
-            ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
-            : grant,
-        );
+      : CAPABILITIES
+          // A Senior Pastor holds no `people.create` (decision 0326).
+          .filter((grant) => grant.capability !== 'people.create')
+          .map((grant) =>
+            grant.capability === 'reports.view_subtree'
+              ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
+              : grant,
+          );
 
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill(

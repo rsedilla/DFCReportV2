@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-14, the trigger being decisions 0348 and 0349: of 348 files, 347 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0349 each moved the first two and
+2026-10-14, the trigger being decision 0350: of 349 files, 348 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0350 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-14 and triggered by 0348 and 0349, and was left stale by 0350 the same day. The one before that was dated
 2026-10-14 and triggered by 0347, and was left stale by 0348 the same day. The one before that was dated
 2026-10-14 and triggered by 0346, and was left stale by 0347 the same day. The one before that was dated
 2026-10-14 and triggered by 0345, and was left stale by 0346 the same day. The one before that was dated
@@ -738,6 +739,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-14 — [The Cell a restart became is named as it was opened](docs/decisions/0347-the-cell-a-restart-became-is-named-as-it-was-opened.md)
 - 2026-10-14 — [The People tab opens on the search for those who oversee many](docs/decisions/0348-the-people-tab-opens-on-the-search-for-those-who-oversee-many.md)
 - 2026-10-14 — [A Record tab with nothing in it shows no count](docs/decisions/0349-a-record-tab-with-nothing-in-it-shows-no-count.md)
+- 2026-10-14 — [Add a person for those who may, and no 0 on Record's switch](docs/decisions/0350-add-a-person-for-those-who-may-and-no-0-on-the-switch.md)
 
 ### Open — awaiting a ruling
 
