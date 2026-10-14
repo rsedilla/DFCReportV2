@@ -944,3 +944,21 @@ test('the Account page names permissions in plain words, never as codes (audit o
     await expect(main).not.toContainText(code);
   }
 });
+
+// The reset email is delivered in production (2026-10-14), so the Account screen points to the
+// reset page rather than saying no link is sent.
+test('the Account screen links to the reset page for a new password', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.goto('/session');
+
+  const main = page.locator('main');
+  await expect(main.getByRole('link', { name: 'Email me a reset link' })).toHaveAttribute(
+    'href',
+    '/forgot-password',
+  );
+  await expect(main).not.toContainText('no email provider');
+
+  await main.getByRole('link', { name: 'Email me a reset link' }).click();
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  await expect(page.getByRole('button', { name: 'Email me a link' })).toBeVisible();
+});
