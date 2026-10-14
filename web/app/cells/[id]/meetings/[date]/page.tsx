@@ -22,6 +22,7 @@ import {
   type RosterMember,
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
@@ -76,6 +77,12 @@ import { TextLink } from '@/components/ui/text-link';
  * **One version for the meeting, not one per person** (section 14, decision 0164). A
  * Cell submission is one leader's account of one meeting, so the version read is
  * sent once and covers the roster.
+ *
+ * **Marks not yet saved are kept** (owner's choice of 2026-10-14): leaving asks first, and
+ * the marks stay on this device and are offered back, with a Discard, if the screen opens
+ * again before they are saved (`lib/mark-draft.ts`). A draft made against another version
+ * of the meeting than the one stored now is not offered, because the marks it changed have
+ * since changed themselves.
  *
  * **The idempotency key changes when the body does** (decision 0127). It is derived
  * from what will be sent, so pressing Save twice writes once, and a retry after a
@@ -262,6 +269,65 @@ function RecordMeeting() {
     [submission, params.id, params.date],
   );
 
+  // The body the server last accepted. Until the fresh roster arrives the marks still differ
+  // from what the old one says, and they are saved all the same.
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
+  // The marks that differ from what is stored: what leaving would lose.
+  const unsaved = useMemo(() => {
+    if (idempotencyKey !== null && idempotencyKey === savedKey) {
+      return null;
+    }
+    const changed = Object.entries(edits).filter(([personId, mark]) => {
+      const member = members.find((entry) => entry.person_id === personId);
+
+      return (
+        member !== undefined &&
+        (member.record === null || (mark === 'present') !== member.record.present)
+      );
+    });
+
+    return changed.length === 0 || status === 'NOT_HELD'
+      ? null
+      : { version: recorded?.version ?? null, marks: Object.fromEntries(changed) };
+  }, [edits, members, recorded, status, idempotencyKey, savedKey]);
+
+  const draft = useMarkDraft<{ version: number | null; marks: Record<string, Mark> }>({
+    key:
+      me.data && roster.data && !followOnly && !notYet
+        ? `cell:${params.id}:${params.date}:${me.data.person_id}`
+        : null,
+    draft: unsaved,
+    restore: (stored) => {
+      // Made against the meeting as it is stored now, and still changeable by this reader.
+      if (stored.version !== (recorded?.version ?? null) || recordedNotHeld) {
+        return false;
+      }
+      if (recorded !== null && !canCorrect) {
+        return false;
+      }
+      const marks = Object.fromEntries(
+        Object.entries(stored.marks ?? {}).filter(([personId, mark]) => {
+          const member = members.find((entry) => entry.person_id === personId);
+
+          return (
+            member !== undefined &&
+            (mark === 'present' || mark === 'absent') &&
+            (member.record === null || (mark === 'present') !== member.record.present)
+          );
+        }),
+      );
+      if (Object.keys(marks).length === 0) {
+        return false;
+      }
+      setEdits(marks);
+      if (recorded !== null) {
+        setEditing(true);
+      }
+      return true;
+    },
+  });
+
   function resetForm() {
     setEditing(false);
     setEdits({});
@@ -282,6 +348,7 @@ function RecordMeeting() {
       return submitMeeting(params.id, params.date, submission, idempotencyKey);
     },
     onSuccess: async () => {
+      setSavedKey(idempotencyKey);
       // **The form is cleared after the fresh roster arrives, not before.** Clearing
       // first showed the old marks under "Saved." after a correction, and everybody
       // unmarked with Save enabled after a first record, until the refetch landed.
@@ -411,6 +478,22 @@ function RecordMeeting() {
               Saved.{' '}
               <TextLink inline href="/dashboard?list=awaiting">Back to Update Record</TextLink>
             </p>
+          ) : null}
+
+          {draft.restoredAt && unsaved ? (
+            <div className="border-edge mt-6 border p-4">
+              <p className="text-sm leading-relaxed">{restoredNote(draft.restoredAt)}</p>
+              <Button
+                variant="secondary"
+                className="mt-3"
+                onClick={() => {
+                  draft.discard();
+                  stopEditing();
+                }}
+              >
+                Discard
+              </Button>
+            </div>
           ) : null}
 
           {correcting ? (

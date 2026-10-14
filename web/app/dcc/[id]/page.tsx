@@ -19,6 +19,7 @@ import {
   type LeaderDccRoster,
 } from '@/lib/dcc';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
@@ -59,6 +60,10 @@ import { TextLink } from '@/components/ui/text-link';
  * account without that capability is told before it presses Save rather than after.
  * The optional reason travels only on recorded lines whose mark actually changed, because
  * the API refuses a correction reason on a person's first record.
+ *
+ * **Marks not yet saved are kept**, as on the Cell meeting screen (owner's choice of
+ * 2026-10-14, `lib/mark-draft.ts`). Each kept mark carries the version its line was read at,
+ * so a draft offered back never overwrites a line somebody has recorded since.
  */
 export default function DccRosterPage() {
   return (
@@ -150,9 +155,12 @@ function DccChecklist() {
 
   const idempotencyKey = useMemo(() => idempotencyKeyFor(params.id, records), [params.id, records]);
 
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
   const save = useMutation({
     mutationFn: () => submitDccAttendance(params.id, records, idempotencyKey),
     onSuccess: async () => {
+      setSavedKey(idempotencyKey);
       setEditing(false);
       setCorrectionReason('');
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster', params.id] });
@@ -178,6 +186,55 @@ function DccChecklist() {
     const edit = edits[line.person_id];
 
     return edit !== undefined && (line.record === null || (edit === 'present') !== line.record.present);
+  });
+
+  // The marks that differ from what is stored, each with the version its line was read at.
+  // Nothing is unsaved once the server has accepted this very body, though the fresh
+  // checklist may not have arrived yet.
+  const unsaved = useMemo(() => {
+    if (idempotencyKey === savedKey) {
+      return null;
+    }
+    const kept = lines.flatMap((line) => {
+      const edit = edits[line.person_id];
+
+      return edit !== undefined &&
+        (line.record === null || (edit === 'present') !== line.record.present)
+        ? [[line.person_id, { mark: edit, version: line.record?.version ?? null }] as const]
+        : [];
+    });
+
+    return kept.length === 0 ? null : Object.fromEntries(kept);
+  }, [lines, edits, idempotencyKey, savedKey]);
+
+  const draft = useMarkDraft<Record<string, { mark: Mark; version: number | null }>>({
+    key:
+      me.data && roster.data && recordable
+        ? `dcc:${params.id}:${leaderId ?? 'own'}:${me.data.person_id}`
+        : null,
+    draft: unsaved,
+    restore: (stored) => {
+      const restored = lines.filter((line) => {
+        const entry = stored[line.person_id];
+
+        return (
+          entry !== undefined &&
+          (entry.mark === 'present' || entry.mark === 'absent') &&
+          entry.version === (line.record?.version ?? null) &&
+          (line.record === null || (canCorrect && (entry.mark === 'present') !== line.record.present))
+        );
+      });
+      if (restored.length === 0) {
+        return false;
+      }
+      setEdits(
+        Object.fromEntries(restored.map((line) => [line.person_id, stored[line.person_id].mark])),
+      );
+      if (restored.some((line) => line.record !== null)) {
+        setEditing(true);
+      }
+      return true;
+    },
   });
 
   return (
@@ -250,6 +307,24 @@ function DccChecklist() {
               Saved.{' '}
               <TextLink inline href="/dashboard?list=awaiting&kind=dcc">Back to Update Record</TextLink>
             </p>
+          ) : null}
+
+          {draft.restoredAt && unsaved ? (
+            <div className="border-edge mt-6 border p-4">
+              <p className="text-sm leading-relaxed">{restoredNote(draft.restoredAt)}</p>
+              <Button
+                variant="secondary"
+                className="mt-3"
+                onClick={() => {
+                  draft.discard();
+                  setEdits({});
+                  setCorrectionReason('');
+                  setEditing(false);
+                }}
+              >
+                Discard
+              </Button>
+            </div>
           ) : null}
 
           {/* The checklist and what is already recorded, in one frame (owner's choice, 2026-09-22). */}
