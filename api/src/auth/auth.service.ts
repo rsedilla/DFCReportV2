@@ -22,7 +22,8 @@ export interface SessionTokens {
  * retry rather than as reuse (SKILL.md section 6).
  *
  * A retry follows its failed request by seconds — it is a client discovering
- * that a response never arrived — so this is seconds rather than minutes. The
+ * that a response never arrived — so this is a minute, which section 6 states and a
+ * client may rely on (decision 0344). The
  * bound is what stops the allowance weakening theft detection over time: with no
  * window, a token stolen from a device long afterwards, whose owner never came
  * back, would find an unused replacement waiting and be served.

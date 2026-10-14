@@ -62,6 +62,9 @@ export interface CellSummary {
   closure_reason?: CellClosureReason;
   /** The closed view only: the Cell that resumed it, where one has (decision 0264). */
   restarted_as?: string | null;
+  /** That Cell's category and day, to name it without its code (decision 0306). */
+  restarted_as_category?: CellCategory | null;
+  restarted_as_day_of_week?: number | null;
   /**
    * The closed view only: whether this reader may ask for it to restart. The server's
    * answer, never derived here (section 7).
@@ -479,6 +482,17 @@ export async function listMeetingsAwaiting(
   );
 }
 
+export interface SentRequestCell {
+  id: string;
+  cell_id: string | null;
+  /**
+   * What an approved new-Cell request asked for, the sender's own record (decisions 0269 and
+   * 0306). A handover's Cell carries null, and a restarted one neither field.
+   */
+  category?: CellCategory | null;
+  day_of_week?: number | null;
+}
+
 /** A Cell leadership request as its sender reads it back (decision 0269). */
 export interface SentRequest {
   id: string;
@@ -487,8 +501,8 @@ export interface SentRequest {
   requested_at: string;
   decided_at: string | null;
   prospective_leader: { person_id: string; full_name: string };
-  cell: { id: string; cell_id: string | null } | null;
-  restart_of: { id: string; cell_id: string | null } | null;
+  cell: SentRequestCell | null;
+  restart_of: SentRequestCell | null;
   decline_reason:
     | 'LEADER_DEVELOPMENT_CONTINUING'
     | 'TIMING_DEFERRED'

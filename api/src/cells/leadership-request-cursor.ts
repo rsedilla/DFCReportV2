@@ -1,6 +1,11 @@
 import { unresolvableCursor } from '../common/cursor';
 
-import type { CellDeclineReason, CellRequestKind, CellRequestState } from '../database/schema';
+import type {
+  CellCategory,
+  CellDeclineReason,
+  CellRequestKind,
+  CellRequestState,
+} from '../database/schema';
 import { isStorableText } from '../common/text/storable-text';
 
 /**
@@ -125,6 +130,9 @@ export interface SentLeadershipRequestRow {
   note: string | null;
   cell_id: string | null;
   cell_handle: string | null;
+  /** What a new-Cell request asked for; null on a handover, which asks for none. */
+  request_category: CellCategory | null;
+  request_day_of_week: number | null;
   restart_of_cell_id: string | null;
   restart_of_cell_handle: string | null;
   requested_at_key: string;

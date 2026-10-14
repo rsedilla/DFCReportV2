@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiRequestError } from '@/lib/api-client';
-import { SessionHaltedError, hasStoredSession, subscribe } from '@/lib/session';
+import { SessionHaltedError, hasStoredSession, onAcceptedWrite, subscribe } from '@/lib/session';
 
 /**
  * Server state, and the one retry rule worth setting deliberately.
@@ -65,6 +65,21 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   useForgetCacheAcrossSessions(client);
+
+  // Every save the server accepts makes every cached read stale: those on screen are read
+  // again at once, the rest when next shown (`onAcceptedWrite`). A person picker's search is
+  // left alone: a church-wide one is audited and limited (decision 0303), and reading it
+  // again would record a search nobody made.
+  useEffect(
+    () =>
+      onAcceptedWrite(
+        () =>
+          void client.invalidateQueries({
+            predicate: (query) => query.queryKey[0] !== 'leader-search',
+          }),
+      ),
+    [client],
+  );
 
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

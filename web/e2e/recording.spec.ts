@@ -1127,7 +1127,7 @@ test.describe('the Record queue', () => {
         requested_at: '2026-06-02T02:00:00Z',
         decided_at: '2026-06-04T02:00:00Z',
         prospective_leader: { person_id: 'p2', full_name: 'Ramon Diaz' },
-        cell: { id: 'c21', cell_id: 'CELL-000021' },
+        cell: { id: 'c21', cell_id: 'CELL-000021', category: 'COUPLE', day_of_week: 3 },
         restart_of: null,
         decline_reason: null,
         note: null,
@@ -1139,7 +1139,7 @@ test.describe('the Record queue', () => {
         requested_at: '2026-06-01T02:00:00Z',
         decided_at: '2026-06-03T02:00:00Z',
         prospective_leader: { person_id: 'p3', full_name: 'Lorna Cruz' },
-        cell: { id: 'c9', cell_id: 'CELL-000009' },
+        cell: { id: 'c9', cell_id: 'CELL-000009', category: null, day_of_week: null },
         restart_of: null,
         decline_reason: 'TIMING_DEFERRED',
         note: 'Moving to another city.',
@@ -1159,10 +1159,12 @@ test.describe('the Record queue', () => {
     const block = page.getByRole('region', { name: 'Your requests' });
     const rows = block.getByRole('listitem');
     await expect(rows).toHaveCount(3);
+    // A new Cell is named by what its request asked for (decision 0306); a Cell the sender's
+    // record names nothing else of is named by its code.
     await expect(rows.nth(0)).toContainText('Restart CELL-000014 with Paolo Reyes');
     await expect(rows.nth(0)).toContainText('Waiting for approval');
     await expect(rows.nth(1)).toContainText('New Cell led by Ramon Diaz');
-    await expect(rows.nth(1).getByRole('link', { name: 'CELL-000021' })).toHaveAttribute(
+    await expect(rows.nth(1).getByRole('link', { name: 'Couple · Wed' })).toHaveAttribute(
       'href',
       '/cells/c21/meetings',
     );

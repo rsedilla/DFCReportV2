@@ -596,8 +596,10 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await page.getByRole('button', { name: 'Closed Cells' }).click();
 
     const table = page.getByRole('table', { name: 'Closed Cells you oversee' });
-    const restarted = table.getByRole('row', { name: /Restarted as CELL-000021/ });
-    await expect(restarted).toContainText('Restarted as CELL-000021');
+    // The Cell that resumed it is named by category and day, not by its code (decision 0306).
+    const restarted = table.getByRole('row', { name: /Restarted as Couple · Wed/ });
+    await expect(restarted).toContainText('Restarted as Couple · Wed');
+    await expect(restarted).not.toContainText('CELL-000021');
     await expect(restarted.getByRole('button')).toHaveCount(0);
 
     const inError = table.getByRole('row', { name: /Created in error/ });
