@@ -921,6 +921,20 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
           restart_of_cell_id: nathanCell.id,
           state: 'APPROVED',
           decided_by: admin.id,
+          decided_at: new Date(Date.now() - 60_000),
+          cell_id: manuelCell.id,
+        })
+        .execute();
+      // A later handover of the new Cell names it too and asks for no category or day, so
+      // only the approved new-Cell request can supply the name.
+      await db
+        .insertInto('cell_leadership_requests')
+        .values({
+          kind: 'HANDOVER',
+          prospective_leader_id: mark.id,
+          requested_by: manuelAccount.id,
+          state: 'APPROVED',
+          decided_by: admin.id,
           decided_at: new Date(),
           cell_id: manuelCell.id,
         })

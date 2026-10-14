@@ -62,7 +62,7 @@ export interface CellSummary {
   closure_reason?: CellClosureReason;
   /** The closed view only: the Cell that resumed it, where one has (decision 0264). */
   restarted_as?: string | null;
-  /** That Cell's category and day, to name it without its code (decision 0306). */
+  /** The category and day that Cell opened with, to name it without its code (decision 0347). */
   restarted_as_category?: CellCategory | null;
   restarted_as_day_of_week?: number | null;
   /**
