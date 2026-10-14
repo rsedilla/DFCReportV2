@@ -344,6 +344,7 @@ Two situations produce a Person with no birthday, and the second is why this is 
 persons
 - id                  UUID, may be client-generated (Two identifiers, below)
 - member_id           M-000000, server-assigned, immutable, never reused
+- title               nullable; Bishop, Pastora and the like, shown before the name and never compared (decision 0271)
 - first_name
 - middle_name         nullable
 - last_name
@@ -1203,7 +1204,7 @@ This exists because a client cannot always know whether its own request succeede
 
 **The two cases are separable because theft forks the chain and a lost response does not.** An attacker presents the old token while the real client has moved on to the replacement, so two chains advance from one token, and the replacement is used. A client that never received the replacement cannot ever have used it. So "replacement never used" is the signature of a lost response, and "replacement used" is the signature of a copy in circulation. This is a statement about what the rows show, not about intent.
 
-**The window is what keeps the allowance from weakening the signal.** A retry follows its failed request by seconds. With no bound, a token stolen from a device long afterwards — whose owner never returned, so the replacement sits unused — would find that replacement waiting and be served. The window is measured from the rotation, and is a small number of seconds rather than minutes.
+**The window is what keeps the allowance from weakening the signal.** A retry follows its failed request by seconds. With no bound, a token stolen from a device long afterwards — whose owner never returned, so the replacement sits unused — would find that replacement waiting and be served. The window is measured from the rotation, and is sixty seconds. A client may rely on that figure (decision 0344).
 
 Two consequences are accepted rather than glossed. An attacker who steals a token and presents it *before* the real client retries is served, and is then detected one step later, when the client's own retry finds the chain advanced — the same shape as the simultaneous case above. And nothing is served twice: the retry advances the chain and revokes what it advanced from, so only one party ever holds the newest token.
 
@@ -4914,6 +4915,7 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
+| `RATE_LIMITED` | 429 | Too many requests within a minute (Section 24). Refused before any idempotency key is claimed: retry after a short delay, with the same key |
 | `RESOURCE_BUSY` | 503 | The write could not be serialized against another operation and reached no decision: the wait timed out, the database chose this transaction as a deadlock victim (Section 5), or a premise read before a lock no longer held under it (below). Transient: retry after a short delay, **with the same key** |
 
 **A stale premise is placed by one question: could this same body, resubmitted unchanged, succeed?** A write that reads a value, takes a lock, and finds the value different underneath it has taken its lock cleanly — so it is neither of the first two conditions above, and it needed a home.
@@ -5034,7 +5036,7 @@ idempotency_keys
 - **A claim and a response are bounded separately.** `expires_at` retains the answer; `claimed_at` bounds the attempt. A request whose process dies leaves its row `IN_FLIGHT`, and another request may take the claim over once it is older than a short lease — a minute, longer than any request this API should serve. Without the second bound the row sat unfinished for the whole retention, and every retry was told `REQUEST_IN_FLIGHT`, which this section defines as "retry after a short delay". A day is not a short delay, and the caller never learned the outcome.
 - **A 4xx is stored against the key; a 5xx releases it.** A domain refusal is this request's outcome, decided by the rules, and a repeat of the same body is entitled to the same answer. An unexpected failure carries no decision and rolls back, so nothing was recorded and a retry cannot double-apply, while storing it would pin a transient failure to the key for the whole retention with no way past it.
 
-  **The status is therefore load-bearing, and a new code is placed by which side of that split it belongs on.** A transient condition that reached no decision — contention on a lock, in `RESOURCE_BUSY` (Section 5) — must be a 5xx, or every later retry of that key replays it. Adding a retryable condition below 500 would require the store/release rule to grow an exception, and an exception each new code has to remember is exactly what this section avoids elsewhere.
+  **The status is therefore load-bearing, and a new code is placed by which side of that split it belongs on.** A transient condition that reached no decision — contention on a lock, in `RESOURCE_BUSY` (Section 5) — must be a 5xx, or every later retry of that key replays it. Adding a retryable condition below 500 would require the store/release rule to grow an exception, and an exception each new code has to remember is exactly what this section avoids elsewhere. `RATE_LIMITED` (429) is not one: the limit is applied before any key is claimed, so there is no claim to store it against.
 - **The fingerprint is taken over a canonicalized body**: object keys sorted, arrays left in order, because order is meaning in an array. Nothing forbids a client reordering object keys on a retry and several JSON libraries do, and treating that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which this section makes permanent and says must never be retried, turning an ordinary retry into a dead end.
 - **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.
 - **A replay reproduces the status and the body, and nothing else.** Headers are not stored and are not reproduced, so **no state-changing endpoint may put meaning in a response header** — a `Location` or an `ETag` that a client needs would not survive a retry. Stated as a constraint on endpoints rather than as a limitation of the store, because that is the direction it binds.
@@ -5164,7 +5166,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Database not publicly exposed
 - Input validation
 - Parameterized queries / safe ORM usage
-- Rate limiting for authentication and sensitive endpoints
+- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
 - CORS restrictions
 - Secure secrets/environment handling
 - Automated backups, daily at minimum, with at least 30 days of retention
