@@ -251,6 +251,8 @@ export type AuditAction =
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.
   | 'password.reset'
+  // The holder changing it while signed in (decision 0351).
+  | 'password.changed'
   | 'role.granted'
   // Section 21's convention, `<noun>.<past-tense verb>`. Two entries rather than
   // one, on the same reasoning as the account pair above: creating a Cell and

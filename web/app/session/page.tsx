@@ -15,6 +15,7 @@ import { getPerson } from '@/lib/people';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
 import { getUsernameSuggestion, setOwnUsername, usernameHint } from '@/lib/username';
 import {
+  changeOwnPassword,
   forgetSession,
   isHalted,
   signOut,
@@ -202,19 +203,7 @@ function SessionDetail() {
         </>
       )}
 
-      <h2 className="mt-10 text-base font-medium">Your password</h2>
-      {/*
-        The reset email is delivered in production (proven 2026-10-14), so the reset page is
-        the way to a new password until a change-password screen exists. It opens while
-        signed in, and a used link signs out every device (section 6).
-      */}
-      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-        There is no change-password screen yet. To set a new password, use{' '}
-        <TextLink href="/forgot-password">Email me a reset link</TextLink>, the same page the
-        sign-in screen offers as &ldquo;I have forgotten my password&rdquo;. The link goes to
-        your account&rsquo;s email address and lasts 30 minutes. Using it signs out every device
-        on this account, this one included.
-      </p>
+      <PasswordSection />
 
       <h2 className="border-line mt-12 border-t pt-8 text-base font-medium">Sign out</h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -281,6 +270,106 @@ function SessionDetail() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * Changing the holder's own password (decision 0351): the current one first, then the new
+ * one. Every other device is signed out, this one stays signed in, and the holder is emailed
+ * that it changed. A forgotten password still goes through the reset page.
+ */
+function PasswordSection() {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [failure, setFailure] = useState<unknown>(null);
+  const [changed, setChanged] = useState(false);
+  // One key per body (decision 0127): a retry of the same passwords replays, others are new.
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
+  const save = useMutation({
+    mutationFn: () => changeOwnPassword(current, next, key),
+    onSuccess: () => {
+      setCurrent('');
+      setNext('');
+      setFailure(null);
+      setChanged(true);
+      setKey(crypto.randomUUID());
+    },
+    onError: (cause) => setFailure(cause),
+  });
+
+  const currentError = fieldErrorFor(failure, 'current_password');
+  const nextError = fieldErrorFor(failure, 'new_password');
+
+  return (
+    <section aria-labelledby="password-heading" className="border-line mt-10 max-w-xl border p-5">
+      <h2 id="password-heading" className="text-lg font-bold tracking-tight">
+        Your password
+      </h2>
+      <form
+        className="mt-1 flex flex-col gap-4"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFailure(null);
+          setChanged(false);
+          save.mutate();
+        }}
+      >
+        <p className="text-muted text-sm leading-relaxed">
+          At least 12 characters, no other rules. Saving signs out your other devices; this one
+          stays signed in, and we email you to say it changed.
+        </p>
+        <Field
+          label="Current password"
+          type="password"
+          name="current_password"
+          autoComplete="current-password"
+          value={current}
+          error={currentError}
+          onChange={(event) => {
+            setCurrent(event.target.value);
+            setKey(crypto.randomUUID());
+          }}
+        />
+        <Field
+          label="New password"
+          type="password"
+          name="new_password"
+          autoComplete="new-password"
+          value={next}
+          error={nextError}
+          description="At least 12 characters."
+          onChange={(event) => {
+            setNext(event.target.value);
+            setKey(crypto.randomUUID());
+          }}
+        />
+        {/* Mounted always, per `FailureNotice`'s own rule; a field's refusal is shown on it. */}
+        <FailureNotice
+          failure={
+            failure !== null && currentError === null && nextError === null
+              ? describeFailure(failure)
+              : null
+          }
+        />
+        <div aria-live="polite">
+          {changed ? (
+            <p className="text-sm">Your password is changed. Your other devices are signed out.</p>
+          ) : null}
+        </div>
+        <div>
+          <Button type="submit" disabled={save.isPending || current === '' || next === ''}>
+            {save.isPending ? 'Saving…' : 'Save new password'}
+          </Button>
+        </div>
+      </form>
+      <p className="text-muted mt-4 text-sm leading-relaxed">
+        Forgotten it? Use <TextLink href="/forgot-password">Email me a reset link</TextLink>{' '}
+        instead. The link goes to your account&rsquo;s email address and lasts 30 minutes, and
+        using it signs out every device, this one included.
+      </p>
+    </section>
   );
 }
 

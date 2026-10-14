@@ -67,7 +67,7 @@ export class AccessTokenGuard implements CanActivate {
       throw new UnauthenticatedError('Your session has ended. Sign in again.');
     }
 
-    if (isRevoked(account.sessions_revoked_at, claims.iat)) {
+    if (isRevoked(account.sessions_revoked_at, claims.iat_ms ?? claims.iat * 1000)) {
       throw new UnauthenticatedError('Your session has ended. Sign in again.');
     }
 
@@ -97,16 +97,16 @@ export function bearerToken(header: string | undefined): string | null {
 }
 
 /**
- * `iat` is whole seconds, while `sessions_revoked_at` has sub-second precision,
- * so a token minted in the same second as a revocation cannot be ordered against
- * it. The comparison is inclusive, which rejects that token: erring towards
- * ending a session the holder can restart by signing in, rather than towards
- * honouring one an administrator has just revoked.
+ * A token carries its issue instant in milliseconds (`iat_ms`, decision 0351), and one
+ * issued before that claim existed is read by `iat`, whole seconds, so it cannot be
+ * ordered against a revocation in its own second. The comparison is inclusive, which
+ * rejects such a token: erring towards ending a session the holder can restart by
+ * signing in, rather than towards honouring one an administrator has just revoked.
  */
-function isRevoked(revokedAt: Date | null, issuedAtSeconds: number): boolean {
+function isRevoked(revokedAt: Date | null, issuedAtMs: number): boolean {
   if (revokedAt === null) {
     return false;
   }
 
-  return issuedAtSeconds * 1000 <= revokedAt.getTime();
+  return issuedAtMs <= revokedAt.getTime();
 }

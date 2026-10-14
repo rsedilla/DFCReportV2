@@ -945,6 +945,89 @@ test('the Account page names permissions in plain words, never as codes (audit o
   }
 });
 
+/**
+ * **Changing the password names this device's session to keep, and renews it at once**
+ * (decision 0351). The server ends every access token issued before the change, this
+ * device's included, so a client that waited for a 401 would spend a request on it; and it
+ * keeps the session whose refresh token is sent, so sending a stale one signs this device
+ * out too.
+ */
+test('changing the password sends the session to keep, then renews it', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
+  });
+
+  let refreshes = 0;
+  const presentedForRefresh: string[] = [];
+  await page.route('**/api/v1/auth/refresh', (route) => {
+    presentedForRefresh.push(
+      (route.request().postDataJSON() as { refresh_token: string }).refresh_token,
+    );
+    refreshes += 1;
+    route.fulfill(tokens(`access-${refreshes}`, `refresh-${refreshes}`));
+  });
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SESSION) }),
+  );
+
+  const changes: { body: Record<string, string>; key: string | null; auth: string | null }[] = [];
+  await page.route('**/api/v1/auth/password', (route) => {
+    changes.push({
+      body: route.request().postDataJSON() as Record<string, string>,
+      key: route.request().headers()['idempotency-key'] ?? null,
+      auth: route.request().headers()['authorization'] ?? null,
+    });
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/session');
+  const main = page.locator('main');
+  await main.getByLabel('Current password').fill('the first long passphrase');
+  await main.getByLabel('New password').fill('a second long passphrase');
+  await main.getByRole('button', { name: 'Save new password' }).click();
+
+  await expect(
+    main.getByText('Your password is changed. Your other devices are signed out.'),
+  ).toBeVisible();
+  expect(changes).toHaveLength(1);
+  expect(changes[0].body).toEqual({
+    current_password: 'the first long passphrase',
+    new_password: 'a second long passphrase',
+    refresh_token: 'refresh-1',
+  });
+  expect(changes[0].key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(changes[0].auth).toBe('Bearer access-1');
+  // Renewed straight after, from the session the change kept.
+  expect(presentedForRefresh).toEqual(['refresh-0', 'refresh-1']);
+  await expect(main.getByLabel('Current password')).toHaveValue('');
+});
+
+test('a wrong current password is said on its field', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.route('**/api/v1/auth/password', (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'That is not your current password.',
+          details: { field: 'current_password' },
+        },
+      }),
+    }),
+  );
+
+  await page.goto('/session');
+  const main = page.locator('main');
+  await main.getByLabel('Current password').fill('not the password');
+  await main.getByLabel('New password').fill('a second long passphrase');
+  await main.getByRole('button', { name: 'Save new password' }).click();
+
+  await expect(main.getByText('That is not your current password.')).toBeVisible();
+  await expect(main.getByText('Your password is changed.')).toHaveCount(0);
+});
+
 // The reset email is delivered in production (2026-10-14), so the Account screen points to the
 // reset page rather than saying no link is sent.
 test('the Account screen links to the reset page for a new password', async ({ page }) => {
