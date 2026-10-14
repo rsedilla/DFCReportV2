@@ -787,7 +787,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   /**
    * A Cell's category and day as it stands, from the last rows of each that were ever
    * in force (`lastCategoryOf`): what a request naming the Cell records when it is
-   * sent (decision 0346). Null where the Cell has neither, which no Cell created
+   * sent (decision 0346). Null where the Cell lacks either, which no Cell created
    * through section 10 can be.
    */
   async nameOfWithin(

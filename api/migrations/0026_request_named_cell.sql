@@ -68,6 +68,9 @@ CREATE TRIGGER cell_leadership_requests_named_cell_fixed
 
 -- migrate:down
 
+-- Loses every recorded name. Reapplied, the columns come back empty, and the list names
+-- each such Cell by its Cell ID, which is the fallback above, so nothing false is shown.
+
 DROP TRIGGER cell_leadership_requests_named_cell_fixed ON cell_leadership_requests;
 
 DROP FUNCTION cell_leadership_request_named_cell_is_fixed();
