@@ -141,7 +141,7 @@ function PeopleList() {
         <h1 className="text-2xl font-semibold tracking-tight">People</h1>
         <p className="text-muted text-sm">
           {searchOnly
-            ? 'Search everyone you oversee by name or Member ID.'
+            ? 'Find someone by name or Member ID.'
             : 'Everyone you oversee, you included.'}
         </p>
       </div>
@@ -176,11 +176,20 @@ function PeopleList() {
 
         {/* Mounted always, per `FailureNotice`'s own rule. */}
         <div className="mt-8">
-          <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+          {/* The account read decides whether the list opens, so its failure is said too. */}
+          <FailureNotice
+            failure={
+              results.isError
+                ? describeFailure(results.error)
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null
+            }
+          />
         </div>
 
         <div className="mt-4">
-          {awaitingSearch ? (
+          {me.isError ? null : awaitingSearch ? (
             <p className="text-muted text-sm">Search by name or Member ID to find someone.</p>
           ) : results.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>

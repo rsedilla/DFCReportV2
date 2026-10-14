@@ -352,7 +352,7 @@ test.describe('the browser Back button on the People screen', () => {
 
   // The button that brings the whole list back reads Clear search on every list (owner,
   // 2026-10-13).
-  test('an emptied box offers Clear search, which brings the whole list back', async ({ page }) => {
+  test('an emptied box offers Clear search, which clears the search from the address', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
     await page.goto('/people');

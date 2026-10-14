@@ -8,7 +8,7 @@ tab to find one person. The owner chose this on 14 Oct from real screenshots.
 ## The ruling
 
 **For an account on the Full view or Senior Pastor screens, the People tab opens on the search
-alone**: the search box and Add a Person, with "Search by name or Member ID to find someone."
+alone**, with "Search by name or Member ID to find someone."
 Nothing is listed, and nothing is asked of the server, until a search. The table then shows
 what the search finds, as before. That is an Admin, a Senior Pastor, and a Leader with Full
 view, Bishop Oriel's direct 12 among them.
