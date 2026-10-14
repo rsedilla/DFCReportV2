@@ -15,7 +15,7 @@ import type { PersonForDecision } from '../../people/people.read.service';
  * how its conflict reads. Until 2026-10-14 these were written out in both.
  */
 
-/** The identifiers once each, compared canonically, in the order first named. */
+/** The identifiers once each, compared canonically, in first-named order. */
 export function uniqueIds(ids: readonly string[]): string[] {
   return [...new Map(ids.map((id) => [canonicalId(id), id])).values()];
 }
