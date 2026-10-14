@@ -8,6 +8,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { TextLink } from '@/components/ui/text-link';
 import { describeGrants } from '@/lib/capability-labels';
 import { getMe, roleLabel } from '@/lib/me';
 import { getPerson } from '@/lib/people';
@@ -203,20 +204,16 @@ function SessionDetail() {
 
       <h2 className="mt-10 text-base font-medium">Your password</h2>
       {/*
-        **What is true of this deployment, rather than of the flow that exists.** The
-        sign-in screen's reset does send a link, and no email provider is configured: the
-        two transports that exist write to a log or to a development outbox, and section 6
-        deliberately withholds a reset token from that outbox (ruling of 2026-09-11). A
-        reset token is stored as a digest, so nobody can read one out of the database
-        either. Saying "use the reset link" would send a leader to a dead end, and telling
-        them to sign out first would cost them a working session on the way.
+        The reset email is delivered in production (proven 2026-10-14), so the reset page is
+        the way to a new password until a change-password screen exists. It opens while
+        signed in, and a used link signs out every device (section 6).
       */}
       <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-        There is no change-password screen. The sign-in screen offers &ldquo;I have forgotten
-        my password&rdquo;, which sends a reset link by email and, once used, signs out every
-        device on the account &mdash; but no email provider is configured yet, so that link
-        is not delivered. Until one is, a forgotten password cannot be reset from inside the
-        product.
+        There is no change-password screen yet. To set a new password, use{' '}
+        <TextLink href="/forgot-password">Email me a reset link</TextLink>, the same page the
+        sign-in screen offers as &ldquo;I have forgotten my password&rdquo;. The link goes to
+        your account&rsquo;s email address and lasts 30 minutes. Using it signs out every device
+        on this account, this one included.
       </p>
 
       <h2 className="border-line mt-12 border-t pt-8 text-base font-medium">Sign out</h2>
