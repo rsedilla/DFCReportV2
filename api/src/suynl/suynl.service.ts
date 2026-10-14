@@ -22,6 +22,7 @@ import {
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { compareRosterKeys } from '../common/roster-cursor';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
@@ -246,7 +247,7 @@ export class SuynlService {
             ? []
             : [{ identity, lessons: entry.count }];
         })
-        .sort((left, right) => compareNames(left.identity, right.identity));
+        .sort((left, right) => compareRosterKeys(left.identity, right.identity));
 
       return {
         completed: people.filter((person) => person.lessons >= 10).length,
@@ -289,7 +290,7 @@ export class SuynlService {
             ? left.row.network.localeCompare(right.row.network)
             : left.identity === undefined || right.identity === undefined
               ? Number(left.identity === undefined) - Number(right.identity === undefined)
-              : compareNames(left.identity, right.identity),
+              : compareRosterKeys(left.identity, right.identity),
         )
         .map(({ row, identity }) => ({
           leader:
@@ -761,18 +762,6 @@ function branchesOf(
       (childrenOf.get(canonicalId(rootId)) ?? []).map((childId) => [childId, collect(childId)]),
     ),
   };
-}
-
-/** The roster order: last name, first name, Member ID (decision 0293). */
-function compareNames(
-  left: { lastName: string; firstName: string; memberId: string },
-  right: { lastName: string; firstName: string; memberId: string },
-): number {
-  return (
-    left.lastName.localeCompare(right.lastName) ||
-    left.firstName.localeCompare(right.firstName) ||
-    left.memberId.localeCompare(right.memberId)
-  );
 }
 
 function latest(lessons: readonly Lesson[]): Date {

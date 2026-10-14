@@ -23,7 +23,7 @@ import { VersionConflictError } from '../common/errors/version-conflict';
 import { sameId } from '../common/identifiers';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
-import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
+import { compareRosterKeys, pageByRosterKey, rosterKeyOf } from '../common/roster-cursor';
 import { startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -761,7 +761,7 @@ export class DccAttendanceService {
     // `(last_name, first_name, member_id)`, which is section 8's directory order and
     // the key `GET /cells/{id}/members` already pages by. Total: two people
     // legitimately share a name, so the Member ID breaks the tie (sections 3 and 22).
-    lines.sort((left, right) => compareKeys(keyOf(left), keyOf(right)));
+    lines.sort(compareRosterKeys);
 
     return lines;
   }
@@ -1453,25 +1453,6 @@ const DEFAULT_PAGE = 50;
  */
 const ONE_LIVE_INDEX = 'dcc_attendance_one_live';
 
-function keyOf(line: RosterLine): RosterCursor {
-  return { lastName: line.lastName, firstName: line.firstName, memberId: line.memberId };
-}
-
-/**
- * Lexicographic over the three keys, in order.
- *
- * `localeCompare` deliberately, matching how the lines are sorted — a comparison that
- * ordered differently from the sort would put the page boundary somewhere the sort
- * never placed it, and rows either side of it would be skipped or repeated.
- */
-function compareKeys(left: RosterCursor, right: RosterCursor): number {
-  return (
-    left.lastName.localeCompare(right.lastName) ||
-    left.firstName.localeCompare(right.firstName) ||
-    left.memberId.localeCompare(right.memberId)
-  );
-}
-
 function renderLine(line: RosterLine): Record<string, unknown> {
   return {
     person_id: line.personId,
@@ -1553,25 +1534,17 @@ function pageOfLines(
   lines: readonly RosterLine[],
   page: { limit?: number; cursor?: string },
 ): { data: Record<string, unknown>[]; next_cursor: string | null } {
-  const after = decodeRosterCursor(page.cursor);
-  const limit = page.limit ?? DEFAULT_PAGE;
-
-  const beyond =
-    after === null ? 0 : lines.findIndex((line) => compareKeys(keyOf(line), after) > 0);
-  // `-1` means the cursor is past every line, which is the last page rather than the
-  // first: slicing from it would restart the collection, which is the silent behaviour
-  // section 22 refuses a cursor over.
-  const start = beyond === -1 ? lines.length : beyond;
-
-  const window = lines.slice(start, start + limit);
-  const more = start + limit < lines.length;
+  const { window, next_cursor } = pageByRosterKey(lines, rosterKeyOf, {
+    cursor: page.cursor,
+    limit: page.limit ?? DEFAULT_PAGE,
+  });
 
   return {
     // `data`, which is the envelope every other collection in this API answers in. This
     // route answered `people` until decision 0174; one shape, or a client writes a special
     // case for one route.
     data: window.map(renderLine),
-    next_cursor: more ? encodeRosterCursor(keyOf(window[window.length - 1])) : null,
+    next_cursor,
   };
 }
 
