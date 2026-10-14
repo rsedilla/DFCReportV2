@@ -577,6 +577,13 @@ export interface CellLeadershipRequestsTable {
   cell_id: string | null;
   /** The closed Cell a `NEW_CELL` request asks to resume, where it is one (decision 0264). */
   restart_of_cell_id: string | null;
+  /**
+   * The category and day of the Cell a handover or a restart names, as they stood when
+   * the request was sent (decision 0346). Null on a plain new-Cell request, and on one
+   * sent before migration 0026; never rewritten.
+   */
+  named_cell_category: CellCategory | null;
+  named_cell_day_of_week: IsoDayOfWeek | null;
   requested_at: ServerTimestamp;
   decided_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }

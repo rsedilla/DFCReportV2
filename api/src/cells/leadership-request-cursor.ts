@@ -135,6 +135,9 @@ export interface SentLeadershipRequestRow {
   request_day_of_week: number | null;
   restart_of_cell_id: string | null;
   restart_of_cell_handle: string | null;
+  /** The named Cell's category and day when the request was sent (decision 0346). */
+  named_cell_category: CellCategory | null;
+  named_cell_day_of_week: number | null;
   requested_at_key: string;
 }
 

@@ -2739,9 +2739,14 @@ cell_leadership_requests
 - note                    nullable, required where the reason is OTHER
 - decided_by              nullable
 - cell_id                 required where kind is HANDOVER; for NEW_CELL, null until approval sets it
+- restart_of_cell_id      nullable; the closed Cell a NEW_CELL request restarts
+- named_cell_category     nullable; the category of the Cell a handover or a restart names, when sent
+- named_cell_day_of_week  nullable; that Cell's meeting day, when sent
 - requested_at
 - decided_at              nullable
 ```
+
+**A request records what the Cell it names was called when it was sent** (ruling of 2026-10-14, decision 0346). A handover and a restart name a Cell by its identifier, and the sender reads their requests back with no capability because that list returns only what their own account created (Section 7). So the list names such a Cell by the category and day the request recorded at sending, never by the Cell's present ones, which would show a sender a Cell's details after it has left their branch. Both are set together or not at all, only on a request that names a Cell, and never rewritten. A request sent before they existed recorded nothing and is named by its Cell ID.
 
 `kind` is a **closed enumeration**. A third value is an amendment to this section, not a convenience.
 

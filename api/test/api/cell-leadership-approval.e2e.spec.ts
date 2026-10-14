@@ -515,10 +515,14 @@ describe('Cell leadership approval (section 10)', () => {
         .expect(200);
 
       expect(response.body.data[0].cell).toMatchObject({ category: 'COUPLE', day_of_week: 3 });
-      // The Cell it resumes is named by its code: the request holds nothing else of it.
+      // The Cell it resumes is named by what the request recorded of it when it was sent,
+      // which is the closed Cell's last category and day rather than the new one's
+      // (decision 0346).
       expect(response.body.data[0].restart_of).toEqual({
         id: markCell.id,
         cell_id: markCell.cellId,
+        category: 'YOUTH',
+        day_of_week: 6,
       });
     });
 
@@ -1271,6 +1275,14 @@ describe('Cell leadership approval (section 10)', () => {
       await decline(admin, declinedId).expect(200);
       const bensId = await pendingNewCell(benAccount, pedro.id);
 
+      // The Cell's schedule changes after the handover was sent; the sender's record keeps
+      // the day it had then (decision 0346).
+      await db
+        .updateTable('cell_schedules')
+        .set({ day_of_week: 5 })
+        .where('cell_id', '=', markCell.id)
+        .execute();
+
       const response = await sent(markAccount).expect(200);
 
       expect(response.body.data.map((row: { id: string }) => row.id)).toEqual([
@@ -1287,14 +1299,35 @@ describe('Cell leadership approval (section 10)', () => {
         kind: 'HANDOVER',
         state: 'DECLINED',
         decline_reason: 'TIMING_DEFERRED',
-        // A handover asks for no configuration, so the sender's record names none.
-        cell: { id: markCell.id, cell_id: markCell.cellId, category: null, day_of_week: null },
+        cell: { id: markCell.id, cell_id: markCell.cellId, category: 'YOUTH', day_of_week: 6 },
       });
       expect(response.body.next_cursor).toBeNull();
 
       // Ben's own list holds his request and nobody else's.
       const bens = await sent(benAccount).expect(200);
       expect(bens.body.data.map((row: { id: string }) => row.id)).toEqual([bensId]);
+    });
+
+    it('names no Cell a request sent before its name was recorded', async () => {
+      // Written as a request from before migration 0026 is: no name of the Cell it names.
+      await db
+        .insertInto('cell_leadership_requests')
+        .values({
+          kind: 'HANDOVER',
+          prospective_leader_id: juan.id,
+          requested_by: markAccount.id,
+          cell_id: markCell.id,
+        })
+        .execute();
+
+      const response = await sent(markAccount).expect(200);
+
+      expect(response.body.data[0].cell).toEqual({
+        id: markCell.id,
+        cell_id: markCell.cellId,
+        category: null,
+        day_of_week: null,
+      });
     });
 
     it('needs no capability: an account holding none reads its own, empty, list', async () => {

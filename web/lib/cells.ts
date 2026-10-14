@@ -486,8 +486,9 @@ export interface SentRequestCell {
   id: string;
   cell_id: string | null;
   /**
-   * What an approved new-Cell request asked for, the sender's own record (decisions 0269 and
-   * 0306). A handover's Cell carries null, and a restarted one neither field.
+   * The sender's own record of the Cell (decisions 0269 and 0306): what an approved new-Cell
+   * request asked for, or what a handover or a restart recorded of the Cell it named when it
+   * was sent (decision 0346). Null on a request sent before that recorded nothing.
    */
   category?: CellCategory | null;
   day_of_week?: number | null;
