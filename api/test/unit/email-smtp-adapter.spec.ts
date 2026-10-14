@@ -88,4 +88,20 @@ describe('the SMTP email transport (section 6)', () => {
     expect(text).toContain('https://app.example.test/reset-password?token=tok');
     expect(text.startsWith('Hello,\n')).toBe(true);
   });
+
+  it('tells the holder a password changed, pointing at the reset page and carrying no token', () => {
+    const { subject, text } = compose(
+      {
+        kind: 'PASSWORD_CHANGED',
+        to: { email: 'a@example.test', name: 'Invented Person' },
+        changedAt: expiresAt,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(subject).toMatch(/password was changed/);
+    expect(text).toContain('https://app.example.test/forgot-password');
+    expect(text).not.toContain('token=');
+    expect(text).toMatch(/Sept? 23, 2026/);
+  });
 });

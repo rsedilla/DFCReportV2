@@ -1357,6 +1357,40 @@ A password below the minimum is refused with `VALIDATION_FAILED` (Section 22), o
 the request that sets it — activation, reset, or change. It is never refused at
 sign-in, where the stored password is whatever it was when it was set.
 
+### Changing a password while signed in
+
+**A signed-in holder changes their own password on their Account page** (ruling of
+2026-10-14, decision 0351), at `POST /api/v1/auth/password`. Nobody changes another
+person's this way.
+
+- **The current password is asked first**, so a device left unlocked is not enough to lock
+  its owner out. A wrong one is refused `VALIDATION_FAILED` on `current_password`; the new
+  one follows *What a password must be* and is refused on `new_password`.
+- **Every other session ends at once**, as a revocation does: every refresh token but one
+  is revoked and the account's revocation marker is stamped. The one kept is the session
+  whose refresh token the request sends, and only one a refresh would still renew: this
+  account's, live, issued after any earlier revocation, and not from before a second step
+  the account owes. Its row is dated a millisecond after the marker, so this device renews
+  its session rather than losing it. A request sending no such token ends every session,
+  this one included.
+- **A token issued before the change is never a retry.** The kept session may have
+  replaced a token moments earlier, and the retry window above would otherwise serve that
+  token the kept session; a token issued at or before the revocation marker is refused as
+  reuse instead, whatever its replacement's date.
+- **An access token carries its issue instant in milliseconds** (`iat_ms`), because `iat`
+  is whole seconds and the session kept is renewed in the second the marker was stamped. A
+  token issued before the claim existed is read by `iat`, as before.
+- **No second sign-in step is asked** of an `ADMIN` or `SENIOR_PASTOR` account: it passed
+  one to sign in, and the current password is asked.
+- **The holder is emailed that it changed**, at the account's address, with no token and
+  with the address of the reset page, after the change commits and without waiting for
+  delivery.
+- It is audited as `password.changed`, limited to ten a minute for each account, and
+  carries an `Idempotency-Key` like any write (Section 22). The key's fingerprint takes
+  `current_password` and `new_password` keyed by a secret held in the environment rather
+  than as written, so a copy of the database makes neither guessable, whatever else the
+  body carries.
+
 ### Password reset security
 
 - Generate cryptographically secure, single-use reset token
@@ -1980,7 +2014,7 @@ capability_grants
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
 - an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows (activation's username suggestion included, decision 0337), and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
-- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337), **and changing their own password, the current one asked** (ruling of 2026-10-14, decision 0351). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
 
 Beyond those requests, which carry what their sender asked, the decision on it, and the category and day of the Cell a handover or a restart named as they stood when it was sent (decision 0346), and the username suggestion and the refusal of a taken name, signed in or at activation, which read which names other accounts hold and nothing more about them (decision 0337, which accepts that a taken name shows an account exists), neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
@@ -4529,6 +4563,7 @@ Audit important actions, including:
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
 - A username set or changed, with the old and the new (decision 0337)
+- A password changed by its holder while signed in (decision 0351)
 - Second sign-in step set up or reset, and a recovery code used
 - Role/permission changes
 - Attendance submission on behalf
@@ -4641,6 +4676,7 @@ POST /api/v1/auth/activate               sets the first password, and a username
 POST /api/v1/auth/activate/username-suggestion  the suggested username for an activation token (decision 0337)
 GET  /api/v1/auth/username-suggestion    the caller's suggested username (decision 0337)
 POST /api/v1/auth/username               sets or changes the caller's own username (decision 0337)
+POST /api/v1/auth/password               changes the caller's own password (decision 0351)
 GET  /api/v1/auth/me
 
 GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles, email and username; `accounts.manage` (decisions 0276 and 0337)
@@ -5045,6 +5081,7 @@ idempotency_keys
 
   **The status is therefore load-bearing, and a new code is placed by which side of that split it belongs on.** A transient condition that reached no decision — contention on a lock, in `RESOURCE_BUSY` (Section 5) — must be a 5xx, or every later retry of that key replays it. Adding a retryable condition below 500 would require the store/release rule to grow an exception, and an exception each new code has to remember is exactly what this section avoids elsewhere. `RATE_LIMITED` (429) is not one: the limit is applied before any key is claimed, so there is no claim to store it against.
 - **The fingerprint is taken over a canonicalized body**: object keys sorted, arrays left in order, because order is meaning in an array. Nothing forbids a client reordering object keys on a retry and several JSON libraries do, and treating that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which this section makes permanent and says must never be retried, turning an ordinary retry into a dead end.
+- **A password in the body is fingerprinted keyed** (ruling of 2026-10-14, decision 0351): a top-level `current_password` or `new_password` enters the hash as a keyed digest under a secret held in the environment, so the stored fingerprint is not a plain hash of a password. Two bodies still fingerprint alike only where their passwords are equal.
 - **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.
 - **A replay reproduces the status and the body, and nothing else.** Headers are not stored and are not reproduced, so **no state-changing endpoint may put meaning in a response header** — a `Location` or an `ETag` that a client needs would not survive a retry. Stated as a constraint on endpoints rather than as a limitation of the store, because that is the direction it binds.
 - The server stores the key with the response it produced, for at least 24 hours.
