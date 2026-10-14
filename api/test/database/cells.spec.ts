@@ -1263,6 +1263,74 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
       ).rejects.toThrow(/restart_is_a_new_cell/);
     });
 
+    describe('the name of the Cell a request names (migration 0026, decision 0346)', () => {
+      const handover = (cellId: string, extra: Record<string, unknown> = {}) =>
+        db
+          .insertInto('cell_leadership_requests')
+          .values({
+            kind: 'HANDOVER',
+            prospective_leader_id: prospective.id,
+            requested_by: requester,
+            cell_id: cellId,
+            ...extra,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+
+      it('records a handover’s Cell name, and refuses half of one', async () => {
+        const cell = await createCell(db, { leader });
+
+        await expect(
+          handover(cell.id, { named_cell_category: 'YOUTH', named_cell_day_of_week: 6 }),
+        ).resolves.toBeDefined();
+        await expect(handover(cell.id, { named_cell_category: 'YOUTH' })).rejects.toThrow(
+          /named_cell_is_whole/,
+        );
+      });
+
+      it('refuses a day outside 1 to 7', async () => {
+        const cell = await createCell(db, { leader });
+
+        await expect(
+          handover(cell.id, { named_cell_category: 'YOUTH', named_cell_day_of_week: 8 }),
+        ).rejects.toThrow(/named_cell_day_iso/);
+      });
+
+      it('refuses a name on a plain new-Cell request, which names no Cell', async () => {
+        await expect(
+          db
+            .insertInto('cell_leadership_requests')
+            .values({
+              kind: 'NEW_CELL',
+              prospective_leader_id: prospective.id,
+              requested_by: requester,
+              category: 'YOUTH',
+              day_of_week: 6,
+              time_of_day: '19:00',
+              named_cell_category: 'COUPLE',
+              named_cell_day_of_week: 3,
+            })
+            .execute(),
+        ).rejects.toThrow(/named_cell_is_named/);
+      });
+
+      it('never rewrites the name, even on a pending request', async () => {
+        const cell = await createCell(db, { leader });
+        const { id } = await handover(cell.id, {
+          named_cell_category: 'YOUTH',
+          named_cell_day_of_week: 6,
+        });
+
+        await expect(
+          db
+            .updateTable('cell_leadership_requests')
+            .set({ named_cell_day_of_week: 5 })
+            .where('id', '=', id)
+            .execute(),
+        ).rejects.toThrow(/is not rewritten/);
+      });
+    });
+
     it('requires category, day and time on a new Cell', async () => {
       await expect(
         db

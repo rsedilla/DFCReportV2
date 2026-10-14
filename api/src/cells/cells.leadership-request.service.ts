@@ -232,6 +232,13 @@ export class CellsLeadershipRequestService {
       // neither check is itself the enforcement.
       await this.assertNoConflictingPendingWithin(trx, input);
 
+      // The Cell a handover or a restart names, as it stands now, kept on the request so
+      // the sender's list can name it later from their own record (decision 0346).
+      const namedCellId =
+        input.kind === 'HANDOVER' ? (input.cellId as string) : input.restartOfCellId;
+      const named =
+        namedCellId === undefined ? null : await this.cells.nameOfWithin(trx, namedCellId);
+
       const row = await trx
         .insertInto('cell_leadership_requests')
         .values({
@@ -243,6 +250,8 @@ export class CellsLeadershipRequestService {
           time_of_day: input.kind === 'NEW_CELL' ? (input.timeOfDay as string) : null,
           cell_id: input.kind === 'HANDOVER' ? (input.cellId as string) : null,
           restart_of_cell_id: input.restartOfCellId ?? null,
+          named_cell_category: named?.category ?? null,
+          named_cell_day_of_week: named?.dayOfWeek ?? null,
         })
         .returning(['id', 'state', 'requested_at'])
         .executeTakeFirstOrThrow();
@@ -823,25 +832,34 @@ export class CellsLeadershipRequestService {
           person_id: row.prospective_leader_id,
           full_name: names.get(row.prospective_leader_id)?.fullName ?? '',
         },
-        // A handover's Cell, or the Cell an approved new-Cell request minted.
-        // A Cell an approved new-Cell request minted carries the category and day the
-        // request asked for, so a screen can name it without its code (decision 0306). That
-        // is the sender's own record (decision 0269); a handover asks for no configuration,
-        // so its Cell carries none, and neither does a restarted one.
+        // A handover's Cell, or the Cell an approved new-Cell request minted, and the
+        // Cell a restart resumes, each with a category and day so a screen can name it
+        // without its code (decision 0306). Every one is the sender's own record
+        // (decision 0269): a minted Cell is named by what the request asked for, and a
+        // handover's or a restarted Cell by what the request recorded of it when it was
+        // sent (decision 0346). A request sent before that recorded nothing, so null.
         cell:
           row.cell_id === null
             ? null
-            : {
-                id: row.cell_id,
-                cell_id: row.cell_handle,
-                category: row.request_category,
-                day_of_week:
-                  row.request_day_of_week === null ? null : Number(row.request_day_of_week),
-              },
+            : row.kind === 'HANDOVER'
+              ? {
+                  id: row.cell_id,
+                  cell_id: row.cell_handle,
+                  ...nameFields(row.named_cell_category, row.named_cell_day_of_week),
+                }
+              : {
+                  id: row.cell_id,
+                  cell_id: row.cell_handle,
+                  ...nameFields(row.request_category, row.request_day_of_week),
+                },
         restart_of:
           row.restart_of_cell_id === null
             ? null
-            : { id: row.restart_of_cell_id, cell_id: row.restart_of_cell_handle },
+            : {
+                id: row.restart_of_cell_id,
+                cell_id: row.restart_of_cell_handle,
+                ...nameFields(row.named_cell_category, row.named_cell_day_of_week),
+              },
         decline_reason: row.decline_reason,
         note: row.note,
       })),
@@ -1619,4 +1637,14 @@ export class CellsLeadershipRequestService {
 
     return row.at;
   }
+}
+
+/** A category and day for a response, or both null where the record holds neither. */
+function nameFields(
+  category: CellCategory | null,
+  dayOfWeek: number | null,
+): { category: CellCategory | null; day_of_week: number | null } {
+  return category === null || dayOfWeek === null
+    ? { category: null, day_of_week: null }
+    : { category, day_of_week: Number(dayOfWeek) };
 }

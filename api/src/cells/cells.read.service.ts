@@ -785,6 +785,38 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * A Cell's category and day as it stands, from the last rows of each that were ever
+   * in force (`lastCategoryOf`): what a request naming the Cell records when it is
+   * sent (decision 0346). Null where the Cell lacks either, which no Cell created
+   * through section 10 can be.
+   */
+  async nameOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<{ category: CellCategory; dayOfWeek: number } | null> {
+    const { rows } = await sql<{ category: CellCategory | null; day_of_week: number | null }>`
+      SELECT
+        (SELECT k.category FROM cell_categories AS k
+          WHERE k.cell_id = ${cellId}
+            AND k.ended_at IS DISTINCT FROM k.started_at
+            AND k.started_at <= now()
+          ORDER BY k.started_at DESC, k.ended_at DESC NULLS FIRST, k.id DESC
+          LIMIT 1) AS category,
+        (SELECT s.day_of_week FROM cell_schedules AS s
+          WHERE s.cell_id = ${cellId}
+            AND s.ended_at IS DISTINCT FROM s.started_at
+            AND s.started_at <= now()
+          ORDER BY s.started_at DESC, s.ended_at DESC NULLS FIRST, s.id DESC
+          LIMIT 1) AS day_of_week
+    `.execute(executor);
+
+    const row = rows[0];
+    return row?.category == null || row.day_of_week == null
+      ? null
+      : { category: row.category, dayOfWeek: Number(row.day_of_week) };
+  }
+
+  /**
    * The Cell leadership requests one account sent, pending or decided at or after
    * `decidedSince`, oldest first (section 19's requester list, decision 0269). The
    * Cells a request names are resolved to their handles here, `cells` owning both
@@ -819,6 +851,10 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'r.day_of_week as request_day_of_week',
         'r.restart_of_cell_id',
         'rc.cell_id as restart_of_cell_handle',
+        // The handover's or the restarted Cell's name as it stood when this was sent,
+        // which the request itself recorded (decision 0346).
+        'r.named_cell_category',
+        'r.named_cell_day_of_week',
         // The same key, and the same reason, as the queue above.
         sql<string>`to_char(r.requested_at at time zone 'UTC', ${sql.lit(CURSOR_INSTANT_FORMAT)})`.as(
           'requested_at_key',
