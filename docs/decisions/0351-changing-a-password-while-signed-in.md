@@ -39,6 +39,8 @@ The client renews from the session it already holds, at once, under its session 
 **Only a session a refresh would still renew is kept**: this account's, live, issued
 after any earlier revocation, and not from before a second step the account owes. Dating
 any other past the marker would bring back a session that had already ended.
+`architecture-guardian` raised which session counts as "this device" as a Stop Condition;
+the owner ruled it on 14 Oct (answer A), together with the next paragraph.
 
 **A token issued before the change is never served as a retry.** The kept session may
 have replaced a token moments earlier, and the 60-second retry window would otherwise
