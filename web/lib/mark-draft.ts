@@ -13,9 +13,9 @@ import { useCallback, useEffect, useState } from 'react';
  *
  * **Only marks are kept**, never a note, a reason or who ran a meeting, and each draft is keyed
  * on the screen and on the person signed in, so a draft is never offered to somebody else on a
- * shared phone. The session ending on this device deletes every draft (`clearMarkDrafts`), and
- * one older than three weeks is dropped unread: by then the week it was for has closed
- * (decision 0335).
+ * shared phone. Signing out or in on this device, or the server ending the session, deletes
+ * every draft (`clearMarkDrafts`), and one older than three weeks is not offered back: by then
+ * the week it was for has closed (decision 0335).
  */
 
 const PREFIX = 'dfc.marks:';
@@ -60,7 +60,7 @@ function write<T>(key: string, value: T | null): void {
   }
 }
 
-/** Every draft on this device, deleted when the session on it ends. */
+/** Every draft on this device, deleted as the docblock above says. */
 export function clearMarkDrafts(): void {
   try {
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {

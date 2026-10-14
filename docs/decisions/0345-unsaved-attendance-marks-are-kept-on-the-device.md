@@ -15,8 +15,9 @@ time the same screen opens for the same person. They are never sent until the le
 
 **What is kept, and for how long.** Marks only: no note, reason or who ran a meeting. Each draft
 belongs to the person signed in and is never offered to another. It is deleted when it is
-saved or discarded, when the session ends on the device for any reason, and after three weeks.
-A mark made against a record that has changed since is not offered back.
+saved or discarded, when somebody signs out or signs in on the device, and when the server ends
+the session. It is not offered back after three weeks, and a mark made against a record that has
+changed since is not offered back.
 
 The rest of Section 23's deferred list stands.
 

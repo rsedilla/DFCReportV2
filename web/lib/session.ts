@@ -311,6 +311,15 @@ function adopt(tokens: SessionTokens): string {
   return tokens.access_token;
 }
 
+/**
+ * A sign-in, which may replace a session still stored here: whatever that session kept on
+ * the device goes with it, as it does in `forgetSession` (decision 0345).
+ */
+function beginSession(tokens: SessionTokens): void {
+  clearMarkDrafts();
+  adopt(tokens);
+}
+
 /** Forget this device's tokens without calling the API. */
 export function forgetSession(): void {
   accessToken = null;
@@ -407,7 +416,7 @@ export async function signIn(
     return answer;
   }
 
-  adopt(answer);
+  beginSession(answer);
   return null;
 }
 
@@ -422,7 +431,7 @@ export async function completeSecondStep(
     body: { challenge, ...answer, device_label: deviceLabel ?? undefined },
   });
 
-  adopt(tokens);
+  beginSession(tokens);
 }
 
 /** Setup, first half: the secret to add to an authenticator app. */
@@ -451,7 +460,7 @@ export async function confirmSecondStepSetup(
     body: { challenge, code, device_label: deviceLabel ?? undefined },
   });
 
-  adopt(tokens);
+  beginSession(tokens);
   return codes;
 }
 
