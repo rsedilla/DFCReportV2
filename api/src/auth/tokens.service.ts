@@ -25,6 +25,13 @@ export interface AccessTokenClaims {
   /** The account's Person. Scope resolves through pastoral position. */
   pid: string;
   iat: number;
+  /**
+   * The same instant in milliseconds (decision 0351). `iat` is whole seconds, so a token
+   * issued in the second a revocation was stamped could not be ordered against it; a
+   * session carried across a password change is issued in exactly that second. Absent on
+   * a token issued before it existed, which is then read by `iat` as before.
+   */
+  iat_ms?: number;
   exp: number;
 }
 
@@ -56,7 +63,7 @@ export class TokensService {
 
   issueAccessToken(accountId: string, personId: string): string {
     return this.jwt.sign(
-      { pid: personId },
+      { pid: personId, iat_ms: Date.now() },
       { subject: accountId, expiresIn: ACCESS_TOKEN_TTL_SECONDS },
     );
   }
@@ -285,7 +292,11 @@ export class TokensService {
    * neither is obvious from the outside, which is the argument for one
    * implementation rather than two.
    */
-  async revokeAllSessionsWithin(trx: Transaction<Database>, accountId: string): Promise<void> {
+  async revokeAllSessionsWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+    keep: string | null = null,
+  ): Promise<void> {
     await (async () => {
       // The account row first, and for the same reason rotation takes it first:
       // so that both paths take these two locks in the same order.
@@ -308,6 +319,7 @@ export class TokensService {
         .set({ revoked_at: new Date() })
         .where('account_id', '=', accountId)
         .where('revoked_at', 'is', null)
+        .$if(keep !== null, (query) => query.where('id', '!=', keep as string))
         .execute();
 
       // A sign-in paused between the password and the second step's code ends too
@@ -343,6 +355,19 @@ export class TokensService {
         .set({ sessions_revoked_at: revokedAt })
         .where('id', '=', accountId)
         .execute();
+
+      // The one session a password change keeps (decision 0351) is carried across the
+      // marker: its row is dated a millisecond after it, so its next refresh is a session
+      // the marker does not reach, while every access token issued before the change is.
+      if (keep !== null) {
+        await trx
+          .updateTable('refresh_tokens')
+          .set({ issued_at: new Date(revokedAt.getTime() + 1) })
+          .where('id', '=', keep)
+          .where('account_id', '=', accountId)
+          .where('revoked_at', 'is', null)
+          .execute();
+      }
     })();
   }
 }

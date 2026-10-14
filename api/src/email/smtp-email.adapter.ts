@@ -57,6 +57,30 @@ export function compose(
   message: OutboundEmail,
   linkOrigin: string,
 ): { subject: string; text: string } {
+  const greeting = message.to.name.trim() === '' ? 'Hello,' : `Hello ${message.to.name},`;
+
+  if (message.kind === 'PASSWORD_CHANGED') {
+    const changed = message.changedAt.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    return {
+      subject: 'Your DFC Reporting Management System password was changed',
+      text: [
+        greeting,
+        '',
+        `The password for your account was changed on ${changed} (Manila time), and your other devices were signed out.`,
+        '',
+        'If you did not change it, ask for a reset link straight away:',
+        '',
+        `${linkOrigin}/forgot-password`,
+        '',
+      ].join('\n'),
+    };
+  }
+
   const path = message.kind === 'ACTIVATION' ? '/activate' : '/reset-password';
   const link = `${linkOrigin}${path}?token=${encodeURIComponent(message.token)}`;
   const expires = message.expiresAt.toLocaleString('en-PH', {
@@ -64,7 +88,6 @@ export function compose(
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-  const greeting = message.to.name.trim() === '' ? 'Hello,' : `Hello ${message.to.name},`;
 
   if (message.kind === 'ACTIVATION') {
     return {

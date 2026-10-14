@@ -44,6 +44,10 @@
       "screen": "web/app/session/page.tsx"
     },
     {
+      "route": "POST /api/v1/auth/password",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
       "route": "POST /api/v1/auth/forgot-password",
       "screen": "web/app/forgot-password/page.tsx"
     },

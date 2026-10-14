@@ -239,7 +239,9 @@ describe('canonicalizing identifiers (section 7)', () => {
       // practice that refuses before this is entered \u2014 but `fingerprint` is a
       // public method and the ordering of its callers is not a property it can
       // rely on, which is how the unbounded version was reached at all.
-      const idempotency = new IdempotencyService(null as unknown as Db);
+      const idempotency = new IdempotencyService(null as unknown as Db, {
+        jwtSecret: 'a test secret of at least thirty-two characters',
+      });
       const fingerprint = (body: unknown): unknown =>
         idempotency.fingerprint('POST', '/api/v1/people', body);
 
@@ -262,7 +264,9 @@ describe('canonicalizing identifiers (section 7)', () => {
       // Client-visible arbitrariness, and it was introduced by the commit whose own
       // comment said sharing the constant meant one answer for one body. Both must
       // assert at the same point -- immediately before descending, never on a leaf.
-      const idempotency = new IdempotencyService(null as unknown as Db);
+      const idempotency = new IdempotencyService(null as unknown as Db, {
+        jwtSecret: 'a test secret of at least thirty-two characters',
+      });
 
       // **A container leaf brings its own level**, so the wrap count has to drop by
       // one for it to land on the boundary. Without that, `{ id: UPPER }` and `[]`

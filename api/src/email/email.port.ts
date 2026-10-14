@@ -58,7 +58,18 @@ export interface PasswordResetEmail {
   expiresAt: Date;
 }
 
-export type OutboundEmail = ActivationEmail | PasswordResetEmail;
+/**
+ * The holder changed their password while signed in (decision 0351). It carries no
+ * token: it tells somebody who did not make the change that it happened, and the
+ * remedy it points to is the reset they can ask for themselves.
+ */
+export interface PasswordChangedEmail {
+  kind: 'PASSWORD_CHANGED';
+  to: EmailRecipient;
+  changedAt: Date;
+}
+
+export type OutboundEmail = ActivationEmail | PasswordResetEmail | PasswordChangedEmail;
 
 export interface EmailPort {
   /**
