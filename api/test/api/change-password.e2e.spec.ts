@@ -225,6 +225,34 @@ describe('changing one’s own password (decision 0351)', () => {
     expect((await refresh(stale.refresh)).status).toBe(401);
   });
 
+  it('does not keep a session from before the second step the account owes', async () => {
+    const adminPerson = await createPerson(db, {
+      firstName: 'Leonora',
+      lastName: 'Bacolod',
+      network: 'WOMENS',
+    });
+    const admin = await createAccount(app, db, {
+      person: adminPerson,
+      roles: ['ADMIN'],
+      passwordHash: await app.get(PasswordService).hash(OLD),
+    });
+    const tokens = app.get(TokensService);
+    const early = await tokens.issueRefreshToken(admin.id, null);
+    // The step set up after that session was issued, so a refresh refuses it (decision 0302).
+    await db
+      .updateTable('second_steps')
+      .set({ set_up_at: new Date(Date.now() + 5) })
+      .where('account_id', '=', admin.id)
+      .execute();
+    // Into the next whole second, so the guard reads this access token as after the setup.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const access = tokens.issueAccessToken(admin.id, admin.personId);
+
+    await change({ access, refresh: early.token }).expect(204);
+
+    expect((await refresh(early.token)).status).toBe(401);
+  });
+
   it('does not keep another account’s session', async () => {
     const here = await signIn();
     const otherPerson = await createPerson(db, {

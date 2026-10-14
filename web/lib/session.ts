@@ -627,8 +627,8 @@ export async function changeOwnPassword(
 
     accessToken = null;
     // The password has changed whatever happens next, so a renewal that fails is not
-    // reported as the change failing: the next request finds no session and asks for a
-    // sign-in, with the new password.
+    // reported as the change failing. A refused renewal forgets the session and the next
+    // request asks for a sign-in; one lost in transit keeps the token, which the change kept.
     await refreshWithinLock().catch(() => undefined);
   });
 }

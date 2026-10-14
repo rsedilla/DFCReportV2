@@ -191,7 +191,7 @@ export class CredentialsService {
       // already ended, or one from before the second step the account owes, is not
       // brought back by being dated past this change (decision 0302). Read under the
       // account lock taken above, so no revocation lands between this and the change.
-      const record = await this.accounts.findById(account.id);
+      const record = await this.accounts.findByIdWithin(trx, account.id);
       const kept =
         presented !== undefined &&
         record !== null &&

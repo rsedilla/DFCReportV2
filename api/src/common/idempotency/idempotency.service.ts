@@ -67,7 +67,11 @@ const SECRET_FIELDS = new Set(['current_password', 'new_password']);
 
 @Injectable()
 export class IdempotencyService {
-  /** Derived from the token-signing secret, so no new variable is needed and neither is reused raw. */
+  /**
+   * Derived from the token-signing secret, so no new variable is needed and neither is reused
+   * raw. Rotating that secret therefore also changes these fingerprints: a password change
+   * claimed before a rotation and retried after it is answered `IDEMPOTENCY_KEY_REUSED`.
+   */
   private readonly secretFieldKey: Buffer;
 
   constructor(
@@ -107,7 +111,10 @@ export class IdempotencyService {
     return Object.fromEntries(
       entries.map(([name, value]) =>
         SECRET_FIELDS.has(name)
-          ? [name, createHmac('sha256', this.secretFieldKey).update(String(value)).digest('hex')]
+          ? [
+              name,
+              createHmac('sha256', this.secretFieldKey).update(canonicalize(value)).digest('hex'),
+            ]
           : [name, value],
       ),
     );
