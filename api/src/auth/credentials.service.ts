@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
 import { ValidationFailedError } from '../common/errors/api-error';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { EMAIL_PORT, type EmailPort } from '../email/email.port';
 
@@ -10,8 +11,11 @@ import { PeopleReadService } from '../people/people.read.service';
 import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { PasswordService } from './password.service';
-import { TokensService } from './tokens.service';
+import { TokensService, hashToken } from './tokens.service';
 import { UsernamesService, assertUsernameShape } from './usernames.service';
+
+import type { Actor } from './authorization/authorization.service';
+import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 
 /** Section 6 gives a reset token "a short expiration (e.g. 30 minutes)". */
 const RESET_LIFETIME_MS = 30 * 60 * 1000;
@@ -37,6 +41,7 @@ export class CredentialsService {
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
     private readonly usernames: UsernamesService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   /**
@@ -116,6 +121,95 @@ export class CredentialsService {
   /** Redeems a reset token and replaces the password. */
   async resetPassword(token: string, password: string): Promise<void> {
     await this.setPassword('PASSWORD_RESET', token, password);
+  }
+
+  /**
+   * The holder changes their own password while signed in (section 6, decision 0351).
+   *
+   * The current password is asked first, so an unlocked device is not enough to lock
+   * its owner out. Every other session ends at once; the session whose refresh token is
+   * presented is carried across, so this device stays signed in. A refresh token that is
+   * not this account's live one keeps nothing, and every session ends.
+   */
+  async changePassword(
+    actor: Actor,
+    currentPassword: string,
+    newPassword: string,
+    refreshToken: string,
+    claim: CurrentClaim,
+  ): Promise<void> {
+    assertPasswordIsAcceptable(newPassword, 'new_password');
+
+    const account = await this.db
+      .selectFrom('accounts')
+      .select(['id', 'person_id', 'email', 'password_hash'])
+      .where('id', '=', actor.accountId)
+      .executeTakeFirstOrThrow();
+
+    // Both hashes outside the transaction, for the reason `setPassword` gives.
+    if (!(await this.passwords.verify(account.password_hash, currentPassword))) {
+      throw wrongCurrentPassword();
+    }
+    const passwordHash = await this.passwords.hash(newPassword);
+    const changedAt = new Date();
+
+    await this.db.transaction().execute(async (trx) => {
+      const locked = await trx
+        .selectFrom('accounts')
+        .select('password_hash')
+        .where('id', '=', account.id)
+        .forNoKeyUpdate()
+        .executeTakeFirstOrThrow();
+
+      // Changed by another request since it was checked: the password typed is no
+      // longer the current one, so the same body sent again is refused the same way.
+      if (locked.password_hash !== account.password_hash) {
+        throw wrongCurrentPassword();
+      }
+
+      await trx
+        .updateTable('accounts')
+        .set({ password_hash: passwordHash, updated_at: changedAt })
+        .where('id', '=', account.id)
+        .execute();
+
+      const kept = await trx
+        .selectFrom('refresh_tokens')
+        .select('id')
+        .where('token_hash', '=', hashToken(refreshToken))
+        .where('account_id', '=', account.id)
+        .where('revoked_at', 'is', null)
+        .where('expires_at', '>', changedAt)
+        .executeTakeFirst();
+
+      await this.sessions.revokeAllSessionsWithin(trx, account.id, kept?.id ?? null);
+
+      await this.audit.writeWithin(trx, {
+        actorId: account.id,
+        action: 'password.changed',
+        targetType: 'account',
+        targetId: account.id,
+      });
+
+      // Last statement (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 204, body: null });
+    });
+
+    // After the commit and not awaited, as a reset's mail is: the change stands whether
+    // or not the notice is delivered, and a failure is logged.
+    const person = await this.people.forDecision(account.person_id);
+    this.email
+      .send({
+        kind: 'PASSWORD_CHANGED',
+        to: { email: account.email, name: person?.fullName ?? '' },
+        changedAt,
+      })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Could not send a password-changed notice for account ${account.id}.`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      });
   }
 
   private async setPassword(
@@ -231,20 +325,26 @@ export const PASSWORD_MAX_LENGTH = 128;
  * of the same visible length is refused, which is arbitrary from the holder's side.
  * The maximum is counted the same way, and the password is never truncated to fit.
  */
-export function assertPasswordIsAcceptable(password: string): void {
+export function assertPasswordIsAcceptable(password: string, field = 'password'): void {
   const length = [...password].length;
 
   if (length < PASSWORD_MIN_LENGTH) {
     throw new ValidationFailedError(
       `A password must be at least ${PASSWORD_MIN_LENGTH} characters. There is no requirement to include a digit, a symbol or a capital — length is what matters.`,
-      { field: 'password', min_length: PASSWORD_MIN_LENGTH },
+      { field, min_length: PASSWORD_MIN_LENGTH },
     );
   }
 
   if (length > PASSWORD_MAX_LENGTH) {
     throw new ValidationFailedError(
       `A password may be at most ${PASSWORD_MAX_LENGTH} characters.`,
-      { field: 'password', max_length: PASSWORD_MAX_LENGTH },
+      { field, max_length: PASSWORD_MAX_LENGTH },
     );
   }
+}
+
+function wrongCurrentPassword(): ValidationFailedError {
+  return new ValidationFailedError('That is not your current password.', {
+    field: 'current_password',
+  });
 }

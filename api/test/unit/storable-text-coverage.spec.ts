@@ -117,6 +117,13 @@ describe('storable text is refused at the edge, on every field that takes text',
     'SecondStepDto.challenge',
     'SecondStepDto.code',
     'SecondStepDto.recovery_code',
+    // Changing a password while signed in (decision 0351), on the same grounds as sign-in
+    // and reset: the current password is verified against its hash and the new one is
+    // hashed, both in the application, and the refresh token is compared as a sha256 hash.
+    // The idempotency fingerprint over the body is a hash too.
+    'ChangePasswordDto.current_password',
+    'ChangePasswordDto.new_password',
+    'ChangePasswordDto.refresh_token',
   ]);
 
   const HARMLESS = 'harmless';

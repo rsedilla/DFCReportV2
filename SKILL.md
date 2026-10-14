@@ -1357,6 +1357,34 @@ A password below the minimum is refused with `VALIDATION_FAILED` (Section 22), o
 the request that sets it — activation, reset, or change. It is never refused at
 sign-in, where the stored password is whatever it was when it was set.
 
+### Changing a password while signed in
+
+**A signed-in holder changes their own password on their Account page** (ruling of
+2026-10-14, decision 0351), at `POST /api/v1/auth/password`. Nobody changes another
+person's this way.
+
+- **The current password is asked first**, so a device left unlocked is not enough to lock
+  its owner out. A wrong one is refused `VALIDATION_FAILED` on `current_password`; the new
+  one follows *What a password must be* and is refused on `new_password`.
+- **Every other session ends at once**, as a revocation does: every refresh token but one
+  is revoked and the account's revocation marker is stamped. The one kept is the session
+  whose refresh token the request sends, which must be this account's and live; its row is
+  dated a millisecond after the marker, so this device renews its session rather than
+  losing it. A request sending no such token ends every session, this one included.
+- **An access token carries its issue instant in milliseconds** (`iat_ms`), because `iat`
+  is whole seconds and the session kept is renewed in the second the marker was stamped. A
+  token issued before the claim existed is read by `iat`, as before.
+- **No second sign-in step is asked** of an `ADMIN` or `SENIOR_PASTOR` account: it passed
+  one to sign in, and the current password is asked.
+- **The holder is emailed that it changed**, at the account's address, with no token and
+  with the address of the reset page, after the change commits and without waiting for
+  delivery.
+- It is audited as `password.changed`, limited to ten a minute for each account, and
+  carries an `Idempotency-Key` like any write (Section 22). The key's fingerprint is a plain
+  hash of a body holding both passwords; the refresh token in that body puts 256 random
+  bits beside them, so the fingerprint makes neither password guessable from a copy of the
+  database.
+
 ### Password reset security
 
 - Generate cryptographically secure, single-use reset token
@@ -4529,6 +4557,7 @@ Audit important actions, including:
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
 - A username set or changed, with the old and the new (decision 0337)
+- A password changed by its holder while signed in (decision 0351)
 - Second sign-in step set up or reset, and a recovery code used
 - Role/permission changes
 - Attendance submission on behalf
