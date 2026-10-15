@@ -54,7 +54,7 @@ export async function getPastoralPath(
   personId: string,
   signal?: AbortSignal,
 ): Promise<PastoralPath> {
-  return authenticatedRequest<PastoralPath>(`/api/v1/people/${personId}/pastoral-path`, {
+  return authenticatedRequest<PastoralPath>(`/api/v1/people/${encodeURIComponent(personId)}/pastoral-path`, {
     signal,
   });
 }
@@ -82,7 +82,7 @@ export async function reassignPastoralLeader(
   reason: string | undefined,
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/people/${personId}/pastoral-leader`, {
+  return authenticatedRequest<unknown>(`/api/v1/people/${encodeURIComponent(personId)}/pastoral-leader`, {
     method: 'PUT',
     body: { pastoral_leader_id: pastoralLeaderId, ...(reason ? { reason } : {}) },
     idempotencyKey,

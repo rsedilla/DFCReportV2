@@ -560,7 +560,7 @@ export async function listCellMeetings(
   const query = new URLSearchParams({ month });
 
   return authenticatedRequest<CellMeetings>(
-    `/api/v1/cells/${cellId}/meetings?${query.toString()}`,
+    `/api/v1/cells/${encodeURIComponent(cellId)}/meetings?${query.toString()}`,
     { signal },
   );
 }
@@ -625,7 +625,7 @@ export async function getMeetingRoster(
   signal?: AbortSignal,
 ): Promise<MeetingRoster> {
   return authenticatedRequest<MeetingRoster>(
-    `/api/v1/cells/${cellId}/meetings/${meetingId}/roster`,
+    `/api/v1/cells/${encodeURIComponent(cellId)}/meetings/${encodeURIComponent(meetingId)}/roster`,
     { signal },
   );
 }
@@ -646,7 +646,7 @@ export async function submitMeeting(
   idempotencyKey: string,
 ): Promise<RecordedMeeting> {
   return authenticatedRequest<RecordedMeeting>(
-    `/api/v1/cells/${cellId}/meetings/${meetingId}/submit`,
+    `/api/v1/cells/${encodeURIComponent(cellId)}/meetings/${encodeURIComponent(meetingId)}/submit`,
     { method: 'POST', body: submission, idempotencyKey },
   );
 }
@@ -676,7 +676,7 @@ export async function listCellMembers(
   }
   const suffix = query.toString() ? `?${query.toString()}` : '';
 
-  return authenticatedRequest<CellMemberPage>(`/api/v1/cells/${cellId}/members${suffix}`, {
+  return authenticatedRequest<CellMemberPage>(`/api/v1/cells/${encodeURIComponent(cellId)}/members${suffix}`, {
     signal,
   });
 }
@@ -697,7 +697,7 @@ export async function addCellMember(
   personId: string,
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/members`, {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${encodeURIComponent(cellId)}/members`, {
     method: 'POST',
     body: { person_id: personId },
     idempotencyKey,
@@ -717,7 +717,7 @@ export async function removeCellMember(
   personId: string,
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/members/${personId}`, {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${encodeURIComponent(cellId)}/members/${encodeURIComponent(personId)}`, {
     method: 'DELETE',
     idempotencyKey,
   });
@@ -738,7 +738,7 @@ export async function changeCellSchedule(
   schedule: { day_of_week: number; time_of_day: string },
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/schedule`, {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${encodeURIComponent(cellId)}/schedule`, {
     method: 'PUT',
     body: schedule,
     idempotencyKey,
@@ -771,7 +771,7 @@ export interface PersonCells {
 }
 
 export async function getPersonCells(personId: string, signal?: AbortSignal): Promise<PersonCells> {
-  return authenticatedRequest<PersonCells>(`/api/v1/cells/people/${personId}/membership`, {
+  return authenticatedRequest<PersonCells>(`/api/v1/cells/people/${encodeURIComponent(personId)}/membership`, {
     signal,
   });
 }

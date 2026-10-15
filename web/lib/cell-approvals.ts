@@ -74,7 +74,7 @@ export async function listApprovalRequests(signal?: AbortSignal): Promise<Approv
 }
 
 export async function approveRequest(id: string, idempotencyKey: string): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/cells/leadership-requests/${id}/approve`, {
+  return authenticatedRequest<unknown>(`/api/v1/cells/leadership-requests/${encodeURIComponent(id)}/approve`, {
     method: 'POST',
     body: {},
     idempotencyKey,
@@ -87,7 +87,7 @@ export async function declineRequest(
   note: string | null,
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/cells/leadership-requests/${id}/decline`, {
+  return authenticatedRequest<unknown>(`/api/v1/cells/leadership-requests/${encodeURIComponent(id)}/decline`, {
     method: 'POST',
     body: { reason, note: note ?? undefined },
     idempotencyKey,

@@ -37,9 +37,10 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     // An unexpected failure is logged in full and reported without detail. An
-    // error message is not a place to disclose the shape of the database.
+    // error message is not a place to disclose the shape of the database. The query
+    // string is left out of the log: it can carry a searched name (section 8).
     this.logger.error(
-      `Unhandled error on ${request.method} ${request.url}`,
+      `Unhandled error on ${request.method} ${request.path}`,
       exception instanceof Error ? exception.stack : String(exception),
     );
 
