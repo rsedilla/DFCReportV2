@@ -1,10 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  MEMBER_CHOICES,
   PERSON_IN_SCOPE,
   SIGNED_IN_PERSON_ID,
+  chooseThreeMembers,
   mockAwaitingReassignment,
   mockGrants,
+  mockMemberSearch,
   mockPeople,
   mockPeopleWithoutACell,
   mockScreens,
@@ -303,7 +306,7 @@ test.describe('My Cell (decision 0323)', () => {
 
     await expect(
       page.getByText(
-        'You do not lead a Cell. Ask for a new one, and an administrator approves it.',
+        'You do not lead a Cell. Ask for a new one, and it is sent for approval.',
       ),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ask for a new Cell' })).toBeVisible();
@@ -316,6 +319,7 @@ test.describe('My Cell (decision 0323)', () => {
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
     await mockPeople(page);
+    await mockMemberSearch(page);
 
     let sentRequests: unknown[] = [];
     await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>
@@ -362,12 +366,16 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(send).toBeDisabled();
 
     await dialog.getByLabel('Search for the leader by name').fill('Marilou');
-    await dialog.getByRole('button', { name: 'Search people' }).click();
+    // The leader's picker comes first; the three member pickers follow it (decision 0353).
+    await dialog.getByRole('button', { name: 'Search people' }).first().click();
     await dialog.getByRole('button', { name: 'Choose' }).first().click();
     await dialog.getByRole('radio', { name: 'Couple' }).check();
     await dialog.getByRole('radio', { name: 'Wednesday' }).check();
     await expect(send).toBeDisabled();
     await dialog.getByLabel('What time').fill('19:30');
+    // Three members besides the leader are needed before it can be sent (decision 0353).
+    await expect(send).toBeDisabled();
+    await chooseThreeMembers(dialog);
     await send.click();
 
     await expect(dialog).toBeHidden();
@@ -378,6 +386,7 @@ test.describe('My Cell (decision 0323)', () => {
         category: 'COUPLE',
         day_of_week: 3,
         time_of_day: '19:30',
+        members: MEMBER_CHOICES.map((member) => member.id),
       },
     ]);
     expect(posted[0].key).toBeTruthy();
@@ -500,6 +509,56 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     // Saved and read again, the box keeps the value the server holds.
     await expect(box).toBeEnabled();
     await expect(box).not.toBeChecked();
+  });
+
+  test('ticks Approves Cells beside Full view, sending it on its own route (decision 0352)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockGrants(page, ['accounts.manage', 'roles.manage']);
+    await mockPastoralPath(page);
+    let approvesCells = false;
+    await page.route(`**/api/v1/accounts/for-person/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill(
+        json({
+          account: {
+            id: ACCOUNT_ID,
+            email: 'marilou@example.test',
+            status: 'ACTIVE',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+            full_view: true,
+            approves_cells: approvesCells,
+          },
+        }),
+      ),
+    );
+    const sent: { path: string; body: unknown }[] = [];
+    await page.route('**/api/v1/accounts/*/approves-cells', (route) => {
+      const body = route.request().postDataJSON() as { approves_cells: boolean };
+      sent.push({ path: new URL(route.request().url()).pathname, body });
+      approvesCells = body.approves_cells;
+      return route.fulfill(json({ id: ACCOUNT_ID, approves_cells: body.approves_cells }));
+    });
+
+    await page.goto(PROFILE);
+
+    const box = page.getByRole('checkbox', { name: /^Approves Cells/ });
+    await expect(box).not.toBeChecked();
+    await expect(page.getByText('Marilou does not approve Cells; an administrator does.')).toBeVisible();
+
+    await box.click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent).toEqual([
+      { path: `/api/v1/accounts/${ACCOUNT_ID}/approves-cells`, body: { approves_cells: true } },
+    ]);
+    await expect(
+      page.getByText(
+        'Marilou approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.',
+      ),
+    ).toBeVisible();
   });
 
   test('is not offered to a reader without roles.manage', async ({ page }) => {

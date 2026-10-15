@@ -17,6 +17,7 @@ import {
   resendActivation,
   resetSecondStep,
   setAccountAccess,
+  setApprovesCells,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -221,12 +222,32 @@ export function PersonAccount({
             />
           ) : null}
           {mayTickFullView && current.roles.includes('LEADER') ? (
-            <FullViewRow
-              accountId={current.id}
-              personId={personId}
-              firstName={firstName}
-              fullView={current.full_view}
-            />
+            <>
+              <LeaderTickRow
+                personId={personId}
+                field="full_view"
+                label="Full view"
+                value={current.full_view}
+                save={(next) => setFullView(current.id, next, crypto.randomUUID())}
+                describe={(shown) =>
+                  shown
+                    ? `${firstName} sees Record, Reports, People, Cells and Growth over their branch.`
+                    : `${firstName} sees the recording screens: Record, People, My Cell and SUYNL.`
+                }
+              />
+              <LeaderTickRow
+                personId={personId}
+                field="approves_cells"
+                label="Approves Cells"
+                value={current.approves_cells}
+                save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
+                describe={(shown) =>
+                  shown
+                    ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
+                    : `${firstName} does not approve Cells; an administrator does.`
+                }
+              />
+            </>
           ) : null}
           <AccessRow
             accountId={current.id}
@@ -383,39 +404,45 @@ function AccessRow({
 }
 
 /**
- * Full view on a Leader account (SKILL.md sections 7 and 19, decision 0323): ticked, the
- * account has today's screens over its own branch; cleared, the recording screens, and the API
- * refuses it reports, Training and Conquest. Saved as soon as it is changed, and audit logged.
+ * A tick on a Leader account, under `roles.manage` (SKILL.md section 7): *Full view*
+ * (decision 0323), which gives today's screens over the account's branch where cleared gives the
+ * recording screens, or *Approves Cells* (decision 0352), which lets the account decide the Cell
+ * leadership requests of its branch. Saved as soon as it is changed, and audit logged.
  */
-function FullViewRow({
-  accountId,
+function LeaderTickRow({
   personId,
-  firstName,
-  fullView,
+  field,
+  label,
+  value,
+  save,
+  describe,
 }: {
-  accountId: string;
   personId: string;
-  firstName: string;
-  fullView: boolean;
+  field: 'full_view' | 'approves_cells';
+  label: string;
+  value: boolean;
+  save: (next: boolean) => Promise<Record<string, unknown>>;
+  describe: (shown: boolean) => string;
 }) {
   const queryClient = useQueryClient();
   const inputId = useId();
 
   const change = useMutation({
-    mutationFn: (next: boolean) => setFullView(accountId, next, crypto.randomUUID()),
+    mutationFn: save,
     onSuccess: async (saved) => {
       // The saved value at once, so the box does not show the old one while the account is
       // read again.
       queryClient.setQueryData<{ account: PersonAccountRecord | null }>(
         ['person-account', personId],
         (old) =>
-          old?.account ? { account: { ...old.account, full_view: saved.full_view } } : old,
+          old?.account ? { account: { ...old.account, [field]: saved[field] === true } } : old,
       );
       await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
     },
   });
 
-  const shown = change.isPending && change.variables !== undefined ? change.variables : fullView;
+  // Read as true only when the server says so, so a field an older answer lacks reads cleared.
+  const shown = change.isPending && change.variables !== undefined ? change.variables : value === true;
 
   return (
     <div className="mt-3">
@@ -430,12 +457,8 @@ function FullViewRow({
           onChange={(event) => change.mutate(event.target.checked)}
         />
         <label htmlFor={inputId} className="text-sm leading-relaxed">
-          <span className="font-bold">Full view</span>
-          <span className="text-muted block">
-            {shown
-              ? `${firstName} sees Record, Reports, People, Cells and Growth over their branch.`
-              : `${firstName} sees the recording screens: Record, People, My Cell and SUYNL.`}
-          </span>
+          <span className="font-bold">{label}</span>
+          <span className="text-muted block">{describe(shown)}</span>
         </label>
       </div>
     </div>

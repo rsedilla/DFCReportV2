@@ -361,6 +361,38 @@ export async function mockPeople(page: Page): Promise<void> {
   );
 }
 
+/** Three people a new-Cell request may name as members (decision 0353). */
+export const MEMBER_CHOICES = [
+  { scope: 'IDENTITY_ONLY', id: '11111111-2222-4333-8444-000000000701', member_id: 'M-000701', full_name: 'Ana Dela Cruz', sex: 'FEMALE', network: 'WOMENS' },
+  { scope: 'IDENTITY_ONLY', id: '11111111-2222-4333-8444-000000000702', member_id: 'M-000702', full_name: 'Bea Mendoza', sex: 'FEMALE', network: 'WOMENS' },
+  { scope: 'IDENTITY_ONLY', id: '11111111-2222-4333-8444-000000000703', member_id: 'M-000703', full_name: 'Carla Navarro', sex: 'FEMALE', network: 'WOMENS' },
+] as const;
+
+/**
+ * The church-wide search the three member pickers make (decisions 0353 and 0299), answering
+ * `MEMBER_CHOICES`; any other search falls through to the routes installed before it.
+ */
+export async function mockMemberSearch(page: Page): Promise<void> {
+  await page.route('**/api/v1/people?*', (route) =>
+    new URL(route.request().url()).searchParams.get('church_wide') === 'true'
+      ? route.fulfill(json({ data: MEMBER_CHOICES, next_cursor: null }))
+      : route.fallback(),
+  );
+}
+
+/**
+ * Chooses the three members in an open new-Cell or restart dialog, a different person in each
+ * picker: only one picker shows results at a time, so its nth Choose is the nth person.
+ */
+export async function chooseThreeMembers(dialog: Locator): Promise<void> {
+  for (const slot of [0, 1, 2]) {
+    await dialog.getByLabel(`Search for member ${slot + 1} by name`).fill('Santos');
+    // Earlier pickers have collapsed to their choice, so the first Search left is this one's.
+    await dialog.getByRole('button', { name: 'Search people' }).first().click();
+    await dialog.getByRole('button', { name: 'Choose', exact: true }).nth(slot).click();
+  }
+}
+
 /** A person's Cell answer (decision 0248). Installed after `mockPeople`, it overrides it. */
 export async function mockPersonCells(
   page: Page,

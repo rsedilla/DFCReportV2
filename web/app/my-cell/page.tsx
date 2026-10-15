@@ -7,6 +7,12 @@ import { useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { PersonPicker } from '@/components/person-picker';
 import { SentRequests } from '@/components/sent-requests';
+import {
+  membersReady,
+  NO_MEMBERS,
+  ThreeMembers,
+  type ChosenMember,
+} from '@/components/three-members';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -69,7 +75,7 @@ function MyCell() {
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : cells.data && cells.data.data.length === 0 ? (
         <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-          You do not lead a Cell. Ask for a new one, and an administrator approves it.
+          You do not lead a Cell. Ask for a new one, and it is sent for approval.
         </p>
       ) : (
         <ul className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -117,6 +123,8 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
   const [category, setCategory] = useState<CellCategory | ''>('');
   const [day, setDay] = useState('');
   const [time, setTime] = useState('');
+  // Three members besides the leader (decision 0353).
+  const [members, setMembers] = useState<ChosenMember[]>([...NO_MEMBERS]);
 
   const send = useMutation({
     mutationFn: () =>
@@ -126,8 +134,16 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
           category: category as CellCategory,
           day_of_week: Number(day),
           time_of_day: time,
+          members: members.map((member) => member?.id ?? ''),
         },
-        idempotencyKeyFor('new-cell', leader?.id ?? '', category, day, time),
+        idempotencyKeyFor(
+          'new-cell',
+          leader?.id ?? '',
+          category,
+          day,
+          time,
+          ...members.map((member) => member?.id ?? ''),
+        ),
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sent-requests'] });
@@ -141,11 +157,16 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
     setCategory('');
     setDay('');
     setTime('');
+    setMembers([...NO_MEMBERS]);
     onClose();
   }
 
   const ready =
-    leader !== null && category !== '' && day !== '' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+    leader !== null &&
+    category !== '' &&
+    day !== '' &&
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(time) &&
+    membersReady(members, leader.id);
 
   return (
     <Dialog open={open} onClose={close} title="Ask for a new Cell">
@@ -160,7 +181,8 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
         }}
       >
         <p className="text-sm leading-relaxed">
-          This asks an administrator to approve a new Cell, led by somebody you oversee.
+          This asks for a new Cell, led by somebody you oversee, with three members besides
+          its leader. An approver of your branch or an administrator decides it.
         </p>
 
         <PersonPicker
@@ -173,6 +195,15 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
           onSelect={(person) => {
             send.reset();
             setLeader(person);
+          }}
+        />
+
+        <ThreeMembers
+          leaderId={leader?.id ?? null}
+          members={members}
+          onChange={(next) => {
+            send.reset();
+            setMembers(next);
           }}
         />
 

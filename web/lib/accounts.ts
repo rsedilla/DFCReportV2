@@ -20,6 +20,8 @@ export interface PersonAccount {
   second_step: { required: boolean; set_up_at: string | null };
   /** Full view (decision 0323); meaningful on a Leader account only. */
   full_view: boolean;
+  /** Approves Cells (decision 0352); meaningful on a Leader account only. */
+  approves_cells: boolean;
 }
 
 export async function getAccountForPerson(
@@ -93,6 +95,19 @@ export async function setFullView(
   return authenticatedRequest(`/api/v1/accounts/${accountId}/full-view`, {
     method: 'POST',
     body: { full_view: fullView },
+    idempotencyKey,
+  });
+}
+
+/** Ticks or clears Approves Cells on a Leader account (decision 0352). Needs `roles.manage`. */
+export async function setApprovesCells(
+  accountId: string,
+  approvesCells: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; approves_cells: boolean }> {
+  return authenticatedRequest(`/api/v1/accounts/${accountId}/approves-cells`, {
+    method: 'POST',
+    body: { approves_cells: approvesCells },
     idempotencyKey,
   });
 }
