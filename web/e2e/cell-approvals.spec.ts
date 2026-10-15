@@ -52,7 +52,8 @@ async function mockQueue(page: Page): Promise<{ path: string; body: unknown }[]>
   const posted: { path: string; body: unknown }[] = [];
   let pending: unknown[] = [PENDING];
 
-  await page.route('**/api/v1/cells/leadership-requests', (route) =>
+  // Read every page, 200 at a time (decision 0352); one page here.
+  await page.route('**/api/v1/cells/leadership-requests?*', (route) =>
     route.request().method() === 'GET'
       ? route.fulfill(json({ data: pending, next_cursor: null }))
       : route.fallback(),

@@ -169,6 +169,14 @@ export class CellsIndexService {
     const now = await databaseNow(this.db);
 
     if (query.state === 'CLOSED') {
+      if (query.fewerThanThree) {
+        // Section 15's list is of running Cells (decision 0353); accepted and ignored here it
+        // would answer closed Cells to a question about small ones (section 22).
+        throw new ValidationFailedError(
+          'fewer_than_three lists running Cells and cannot be asked of the closed view.',
+          { field: 'fewer_than_three' },
+        );
+      }
       return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
     }
 

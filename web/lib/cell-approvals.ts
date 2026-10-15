@@ -52,13 +52,25 @@ export const DECLINE_REASONS: readonly { value: DeclineReason; label: string }[]
   { value: 'OTHER', label: 'Other (say why)' },
 ];
 
-/** The requests the reader may decide: their own branch, or the whole church for an Admin. */
+/**
+ * The requests the reader may decide: their own branch, or the whole church for an Admin.
+ * Every page, so the tab's count and its list never stop at the first 50 (decision 0352).
+ */
 export async function listApprovalRequests(signal?: AbortSignal): Promise<ApprovalRequest[]> {
-  const page = await authenticatedRequest<{ data: ApprovalRequest[] }>(
-    '/api/v1/cells/leadership-requests',
-    { signal },
-  );
-  return page.data;
+  const all: ApprovalRequest[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const query: string = cursor === null ? '?limit=200' : `?limit=200&cursor=${encodeURIComponent(cursor)}`;
+    const page: { data: ApprovalRequest[]; next_cursor: string | null } = await authenticatedRequest(
+      `/api/v1/cells/leadership-requests${query}`,
+      { signal },
+    );
+    all.push(...page.data);
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return all;
 }
 
 export async function approveRequest(id: string, idempotencyKey: string): Promise<unknown> {

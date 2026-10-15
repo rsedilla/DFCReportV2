@@ -386,6 +386,31 @@ export class AuthorizationService {
   }
 
   /**
+   * Throws unless the actor holds `capability` at some scope that covers anything: the
+   * guard's answer for a `held` route, whose module then narrows what it returns to what
+   * that scope reaches (decision 0352). Held only at a scope `grantCoversNothing` voids, it
+   * answers `SCOPE_DENIED`, as `authorize` does.
+   */
+  async assertHolds(actor: Actor, capability: Capability): Promise<void> {
+    const held = (await this.grantsFor(actor.accountId)).filter(
+      (grant) => grant.capability === capability,
+    );
+
+    if (held.length === 0) {
+      throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
+    }
+
+    // Held, but only at a scope that covers nothing: section 7 answers `SCOPE_DENIED` so an
+    // administrator is sent to the scope rather than to grant a capability already granted.
+    if (held.every((grant) => grantCoversNothing(capability, grant.scope.type, grant.source))) {
+      throw new ScopeDeniedError(
+        `Your grant of ${capability} is narrower than Whole Church, and covers nothing.`,
+        { capability },
+      );
+    }
+  }
+
+  /**
    * Throws unless the actor holds `capability` over `target`.
    *
    * `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because the
@@ -411,30 +436,6 @@ export class AuthorizationService {
    * **scope**, and `CAPABILITY_DENIED` would send them to add a capability they
    * had already granted.
    */
-  /**
-   * Throws unless the actor holds `capability` at some scope that covers anything: the
-   * guard's answer for a `held` route, whose module then narrows what it returns to what
-   * that scope reaches (decision 0352). A grant `grantCoversNothing` voids does not count.
-   */
-  async assertHolds(actor: Actor, capability: Capability): Promise<void> {
-    const held = (await this.grantsFor(actor.accountId)).filter(
-      (grant) => grant.capability === capability,
-    );
-
-    if (held.length === 0) {
-      throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
-    }
-
-    // Held, but only at a scope that covers nothing: section 7 answers `SCOPE_DENIED` so an
-    // administrator is sent to the scope rather than to grant a capability already granted.
-    if (held.every((grant) => grantCoversNothing(capability, grant.scope.type, grant.source))) {
-      throw new ScopeDeniedError(
-        `Your grant of ${capability} is narrower than Whole Church, and covers nothing.`,
-        { capability },
-      );
-    }
-  }
-
   async authorize(actor: Actor, capability: Capability, target: Target): Promise<void> {
     const grants = (await this.grantsFor(actor.accountId)).filter(
       (grant) => grant.capability === capability,

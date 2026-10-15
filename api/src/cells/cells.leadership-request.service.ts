@@ -356,7 +356,7 @@ export class CellsLeadershipRequestService {
    * at all. `SUBMITTED_IN_ERROR` is in the fixed list for exactly this.
    *
    * The strict reading was refused because it is terminal rather than merely stricter:
-   * `cell.approve_leadership` is Admin's alone, so on a single-Admin deployment a
+   * `cell.approve_leadership` was Admin's alone (decision 0352 changed that), so on a single-Admin deployment a
    * request Admin submitted could be approved by nobody — correctly — and declined by
    * nobody either, leaving it `PENDING` for ever with the per-leader unique index
    * blocking every future `NEW_CELL` request for that person.
@@ -412,6 +412,10 @@ export class CellsLeadershipRequestService {
         throw new NotFoundError('No such leadership request.');
       }
 
+      // Before the state, so an account section 10 sends to Admin learns nothing of the
+      // request's state (section 7's contents ordering, decision 0193).
+      await this.assertMayDecideWithin(trx, existing, actor, authority, 'decline');
+
       if (existing.state !== 'PENDING') {
         throw new InvariantViolationError(
           'That request was already decided. A decision is never withdrawn or rewritten, ' +
@@ -420,8 +424,6 @@ export class CellsLeadershipRequestService {
           { request_id: existing.id, state: existing.state },
         );
       }
-
-      await this.assertMayDecideWithin(trx, existing, actor, authority, 'decline');
 
       const decidedAt = await this.nowWithin(trx);
 
@@ -474,11 +476,10 @@ export class CellsLeadershipRequestService {
 
   /**
    * Approve a pending request: mint the Cell, or hand an existing one over
-   * (SKILL.md section 10, *Step two — Admin approves*).
+   * (SKILL.md section 10, *Step two — an approver or Admin approves*).
    *
-   * **The guard has declared `cell.approve_leadership` against the church**, which
-   * section 7 gives to Admin alone at Whole Church only — so a grant issued narrower
-   * covers nothing and is refused `SCOPE_DENIED` before this runs.
+   * **The guard has declared `cell.approve_leadership` against the prospective leader**
+   * (decision 0352); who below Whole Church may decide the request is `assertMayDecideWithin`.
    *
    * **What this method owes on top of that is section 10's per-request control**: "no
    * actor may approve a request they submitted", which holds "even where one person
@@ -509,11 +510,8 @@ export class CellsLeadershipRequestService {
     // `actorFor` each read a table, and asking a bounded pool for a second
     // connection while holding one is the liveness hazard that section names.
     // ------------------------------------------------------------------
-    // **The actor's own authority is deliberately not read here.** Every scope
-    // question this operation asks is about the *requester* (section 10), and the only
-    // thing asked of the approver is `cell.approve_leadership`, which the guard has
-    // already decided against the church — section 7 gives it at Whole Church only, so
-    // there is no narrower reach left for a domain check to test.
+    // The requester's authority, and since decision 0352 the approver's too: below Whole
+    // Church, `assertMayDecideWithin` asks what section 10 sends to Admin.
     //
     // **Read once here to learn whom to lock, then read again under the lock.** The
     // person locks must be taken before any `cells` row lock (section 5), and the
@@ -540,10 +538,9 @@ export class CellsLeadershipRequestService {
       .executeTakeFirst();
 
     if (!pre) {
-      // Safe as a `NOT_FOUND` rather than a denial: the guard admits only a Whole
-      // Church holder of `cell.approve_leadership`, so every caller reaching here
-      // would have been covered had the request existed — which is exactly the actor
-      // section 22 reserves `NOT_FOUND` for.
+      // Safe as a `NOT_FOUND` rather than a denial: an unknown request resolves the guard's
+      // target to nobody, which only a Whole Church holder covers, so every caller reaching
+      // here would have been covered had it existed (section 22).
       throw new NotFoundError('No such leadership request.');
     }
 
@@ -632,6 +629,9 @@ export class CellsLeadershipRequestService {
         throw new NotFoundError('No such leadership request.');
       }
 
+      // Before the state, as on decline (section 7's contents ordering, decision 0193).
+      await this.assertMayDecideWithin(trx, request, actor, actorAuthority, 'approve');
+
       if (request.state !== 'PENDING') {
         throw new InvariantViolationError(
           'That request was already decided. A decision is never withdrawn or rewritten ' +
@@ -706,8 +706,6 @@ export class CellsLeadershipRequestService {
             'longer cover what it would write. Retry in a moment.',
         );
       }
-
-      await this.assertMayDecideWithin(trx, request, actor, actorAuthority, 'approve');
 
       // Re-checked as at the request: the state at approval governs (decision 0353).
       await this.assertMembersQualifyWithin(trx, request.prospective_leader_id, memberIds, true);
@@ -869,9 +867,7 @@ export class CellsLeadershipRequestService {
         requested_by: row.requested_by,
         requested_at: row.requested_at.toISOString(),
         // The Cell's UUID, and only for a handover. Section 10: for a new Cell nothing
-        // names one until approval mints it. The `CELL-000000` handle is deliberately
-        // not resolved here — it would be a join per page for a field the queue does
-        // not decide anything by, and the Cell's own route carries it.
+        // names one until approval mints it. Its `CELL-000000` handle is in `cell` below.
         cell_uuid: row.cell_id,
         // What a restart resumes, where the request is one (decision 0264). The
         // approver is being asked whether this person should lead this Cell again, and
@@ -1715,14 +1711,6 @@ export class CellsLeadershipRequestService {
   }
 
   /**
-   * The database clock, read inside the transaction.
-   *
-   * `clock_timestamp()` rather than `now()`, which is transaction start: this row is
-   * written after a `FOR UPDATE` wait, and stamping it with the instant the request
-   * arrived would put the decision before a write it followed. That is the defect the
-   * closure endpoint shipped once and had to correct.
-   */
-  /**
    * The members a new-Cell request names, checked for the request's shape (decision 0353):
    * three different people other than the prospective leader. A handover names none.
    * `VALIDATION_FAILED`, because section 22 keeps that code for a request's shape.
@@ -1787,7 +1775,7 @@ export class CellsLeadershipRequestService {
 
       if (!person || person.mergedIntoId !== null || person.isArchived) {
         throw new InvariantViolationError(
-          `One of the members is no longer a current Person${when}.${remedy}`,
+          `One of the members is not a current Person${when}.${remedy}`,
           where,
         );
       }
@@ -2029,6 +2017,14 @@ export class CellsLeadershipRequestService {
     return details;
   }
 
+  /**
+   * The database clock, read inside the transaction.
+   *
+   * `clock_timestamp()` rather than `now()`, which is transaction start: this row is
+   * written after a `FOR UPDATE` wait, and stamping it with the instant the request
+   * arrived would put the decision before a write it followed. That is the defect the
+   * closure endpoint shipped once and had to correct.
+   */
   private async nowWithin(trx: Transaction<Database>): Promise<Date> {
     const row = await trx
       .selectNoFrom((eb) => eb.fn<Date>('clock_timestamp', []).as('at'))

@@ -46,10 +46,11 @@ import {
  * Creation is the one section 2 relaxes rather than the one section 10 makes
  * ordinary: while initial encoding is open, Admin creates a Cell and its leadership
  * assignment directly. Everything else here is an ordinary section 10 operation.
- * Request-and-approve is complete here, for both kinds: a request, the Admin queue,
+ * Request-and-approve is complete here, for both kinds: a request, the approval queue,
  * a decline and an approval. `cell.request_leadership` guards step one against the
- * prospective leader; `cell.approve_leadership` guards the other three against the
- * church, because section 7 gives it to Admin alone at Whole Church only.
+ * prospective leader; `cell.approve_leadership` guards the queue at any scope and the
+ * decisions against the prospective leader, held at Whole Church by Admin or over its own
+ * branch by an account ticked Approves Cells (decision 0352).
  */
 @Controller('cells')
 export class CellsController {
@@ -536,7 +537,7 @@ export class CellsController {
 
   /**
    * `POST /api/v1/cells/leadership-requests/{request_id}/approve` — step two
-   * (SKILL.md section 10, *Step two — Admin approves*).
+   * (SKILL.md section 10, *Step two — an approver or Admin approves*).
    *
    * **`cell.approve_leadership`, against the prospective leader** the request names
    * (decision 0352), exactly as the decline beside it. A Whole Church holder is covered

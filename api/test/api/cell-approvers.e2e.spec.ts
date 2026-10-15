@@ -1140,15 +1140,23 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       ).rejects.toThrow(/only a new-Cell request names members/);
     });
 
-    it('refuses one person named twice on one request', async () => {
+    it('refuses adding a member once the request is sent, a fourth or one already named', async () => {
       const { id, members } = await pendingNewCell(manuelAccount, mark.id);
+      const fourth = await createPerson(db, { firstName: 'Fourth', network: 'MENS' });
+
+      await expect(
+        db
+          .insertInto('cell_leadership_request_members')
+          .values({ request_id: id, person_id: fourth.id })
+          .execute(),
+      ).rejects.toThrow(/never added later/);
 
       await expect(
         db
           .insertInto('cell_leadership_request_members')
           .values({ request_id: id, person_id: members[0] })
           .execute(),
-      ).rejects.toThrow(/duplicate key/);
+      ).rejects.toThrow(/never added later/);
     });
   });
 
@@ -1223,6 +1231,15 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
     it('accepts only the value "true"', async () => {
       const response = await withStatus(list(adminA, { fewer_than_three: 'false' }), 422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('refuses the closed view rather than ignoring the filter there', async () => {
+      const response = await withStatus(
+        list(adminA, { fewer_than_three: 'true', state: 'CLOSED' }),
+        422,
+      );
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details).toMatchObject({ field: 'fewer_than_three' });
     });
   });
 });
