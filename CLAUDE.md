@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-15, the trigger being decision 0352: of 351 files, 350 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0352 each moved the first two and
+2026-10-15, the trigger being decision 0353: of 352 files, 351 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0353 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-15 and triggered by 0352, and was left stale by 0353 the same day. The one before that was dated
 2026-10-14 and triggered by 0351, and was left stale by 0352 the next day. The one before that was dated
 2026-10-14 and triggered by 0350, and was left stale by 0351 the same day. The one before that was dated
 2026-10-14 and triggered by 0348 and 0349, and was left stale by 0350 the same day. The one before that was dated
@@ -744,6 +745,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-14 — [Add a person for those who may, and no 0 on Record's switch](docs/decisions/0350-add-a-person-for-those-who-may-and-no-0-on-the-switch.md)
 - 2026-10-14 — [Changing a password while signed in](docs/decisions/0351-changing-a-password-while-signed-in.md)
 - 2026-10-15 — [An administrator ticks who approves Cells](docs/decisions/0352-an-administrator-ticks-who-approves-cells.md)
+- 2026-10-15 — [A new Cell starts with three members](docs/decisions/0353-a-new-cell-starts-with-three-members.md)
 
 ### Open — awaiting a ruling
 
