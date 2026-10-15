@@ -129,7 +129,7 @@ export async function getDccRoster(
   eventId: string,
   signal?: AbortSignal,
 ): Promise<DccRoster> {
-  return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster?limit=200`, {
+  return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${encodeURIComponent(eventId)}/roster?limit=200`, {
     signal,
   });
 }
@@ -151,7 +151,7 @@ export async function getLeaderDccRoster(
   signal?: AbortSignal,
 ): Promise<LeaderDccRoster> {
   return authenticatedRequest<LeaderDccRoster>(
-    `/api/v1/dcc/events/${eventId}/leaders/${leaderId}/roster?limit=200`,
+    `/api/v1/dcc/events/${encodeURIComponent(eventId)}/leaders/${encodeURIComponent(leaderId)}/roster?limit=200`,
     { signal },
   );
 }
@@ -176,7 +176,7 @@ export async function getWholeDccRoster(
     }
     const query = `?${params.toString()}`;
     const page: DccRoster = await authenticatedRequest<DccRoster>(
-      `/api/v1/dcc/events/${eventId}/roster${query}`,
+      `/api/v1/dcc/events/${encodeURIComponent(eventId)}/roster${query}`,
       { signal },
     );
     lines.push(...page.data);
@@ -198,7 +198,7 @@ export async function submitDccAttendance(
   records: DccRecordInput[],
   idempotencyKey: string,
 ): Promise<unknown> {
-  return authenticatedRequest<unknown>(`/api/v1/dcc/events/${eventId}/submit`, {
+  return authenticatedRequest<unknown>(`/api/v1/dcc/events/${encodeURIComponent(eventId)}/submit`, {
     method: 'POST',
     body: { records },
     idempotencyKey,
@@ -297,7 +297,7 @@ export async function getLeaderChecklist(
   signal?: AbortSignal,
 ): Promise<LeaderChecklist> {
   return authenticatedRequest(
-    `/api/v1/dcc/leaders/${leaderId}/checklist?${new URLSearchParams({ month }).toString()}`,
+    `/api/v1/dcc/leaders/${encodeURIComponent(leaderId)}/checklist?${new URLSearchParams({ month }).toString()}`,
     { signal },
   );
 }
@@ -357,7 +357,7 @@ export async function getPersonDccAttendance(
   const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : '';
 
   return authenticatedRequest<PersonDccAttendance>(
-    `/api/v1/dcc/people/${personId}/attendance${query}`,
+    `/api/v1/dcc/people/${encodeURIComponent(personId)}/attendance${query}`,
     { signal },
   );
 }

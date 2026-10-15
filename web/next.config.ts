@@ -22,15 +22,16 @@ function apiOrigin(): string | null {
  * One fixed policy for every page (owner's choice of 2026-09-28).
  *
  * **What it is for.** The refresh token lives in the browser's storage (SKILL.md section
- * 6), so what matters most is that nothing on a page can send it anywhere: `connect-src`
- * names this site and the API and nothing else, and `img-src` allows no other host an
- * image request could smuggle it to. No script loads from another site, and no other site
- * may frame this one.
+ * 6): `connect-src` names this site and the API and nothing else, and `img-src` allows no
+ * other host, so a request or an image cannot carry it elsewhere. No script loads from
+ * another site, and no other site may frame this one.
  *
  * **What it does not do.** Inline scripts are allowed, because Next.js writes its own into
  * every page; refusing them would need a per-request nonce and would stop pages being
  * pre-built and cached, which was the option not chosen. So an injected script could still
- * run, but it would have nowhere to send what it read.
+ * run, and could still send the token away by navigating the page (`location`, `window.open`),
+ * which no CSP directive governs. The defence against that is having no injection: React
+ * escapes what it renders, and nothing here sets HTML directly.
  *
  * `'unsafe-eval'` and the websocket are for `next dev` alone, which needs both for
  * reloading; the production build is served without them.

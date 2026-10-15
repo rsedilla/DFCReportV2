@@ -125,7 +125,7 @@ export function networkOfPerson(person: Person): Network | null {
 }
 
 export async function getPerson(id: string, signal?: AbortSignal): Promise<PersonFull> {
-  return authenticatedRequest<PersonFull>(`/api/v1/people/${id}`, { signal });
+  return authenticatedRequest<PersonFull>(`/api/v1/people/${encodeURIComponent(id)}`, { signal });
 }
 
 export interface PersonInput {
@@ -185,7 +185,7 @@ export async function editPerson(
   changes: PersonEdit,
   idempotencyKey: string,
 ): Promise<PersonFull> {
-  return authenticatedRequest<PersonFull>(`/api/v1/people/${id}`, {
+  return authenticatedRequest<PersonFull>(`/api/v1/people/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: changes,
     idempotencyKey,

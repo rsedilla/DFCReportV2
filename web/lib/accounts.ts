@@ -28,7 +28,7 @@ export async function getAccountForPerson(
   personId: string,
   signal?: AbortSignal,
 ): Promise<{ account: PersonAccount | null }> {
-  return authenticatedRequest(`/api/v1/accounts/for-person/${personId}`, { signal });
+  return authenticatedRequest(`/api/v1/accounts/for-person/${encodeURIComponent(personId)}`, { signal });
 }
 
 /** The key is the caller's, for the reason `createPerson` gives. */
@@ -44,7 +44,7 @@ export async function provisionAccount(
 }
 
 export async function resendActivation(accountId: string, idempotencyKey: string): Promise<void> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/activation-email`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/activation-email`, {
     method: 'POST',
     idempotencyKey,
   });
@@ -56,7 +56,7 @@ export async function correctAccountEmail(
   email: string,
   idempotencyKey: string,
 ): Promise<{ id: string; email: string; status: PersonAccount['status'] }> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/email`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/email`, {
     method: 'POST',
     body: { email },
     idempotencyKey,
@@ -68,7 +68,7 @@ export async function correctAccountEmail(
  * The API refuses an administrator's, which is reset on the server.
  */
 export async function resetSecondStep(accountId: string, idempotencyKey: string): Promise<void> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/second-step/reset`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/second-step/reset`, {
     method: 'POST',
     idempotencyKey,
   });
@@ -80,7 +80,7 @@ export async function setAccountAccess(
   action: 'disable' | 'reactivate',
   idempotencyKey: string,
 ): Promise<{ id: string; status: PersonAccount['status'] }> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/${action}`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/${action}`, {
     method: 'POST',
     idempotencyKey,
   });
@@ -92,7 +92,7 @@ export async function setFullView(
   fullView: boolean,
   idempotencyKey: string,
 ): Promise<{ id: string; full_view: boolean }> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/full-view`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/full-view`, {
     method: 'POST',
     body: { full_view: fullView },
     idempotencyKey,
@@ -105,7 +105,7 @@ export async function setApprovesCells(
   approvesCells: boolean,
   idempotencyKey: string,
 ): Promise<{ id: string; approves_cells: boolean }> {
-  return authenticatedRequest(`/api/v1/accounts/${accountId}/approves-cells`, {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/approves-cells`, {
     method: 'POST',
     body: { approves_cells: approvesCells },
     idempotencyKey,
