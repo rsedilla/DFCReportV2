@@ -481,6 +481,8 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
 
     const box = page.getByRole('checkbox', { name: /^Full view/ });
     await expect(box).not.toBeChecked();
+    // Approves Cells is offered only with Full view (decision 0352).
+    await expect(page.getByRole('checkbox', { name: /^Approves Cells/ })).toHaveCount(0);
     await expect(
       page.getByText('Marilou sees the recording screens: Record, People, My Cell and SUYNL.'),
     ).toBeVisible();

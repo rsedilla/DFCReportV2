@@ -361,6 +361,64 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    // Offered only with Full view (owner, 2026-10-15, decision 0352 point 10).
+    it('is refused on a Leader account without Full view', async () => {
+      await db
+        .updateTable('accounts')
+        .set({ full_view: false })
+        .where('id', '=', benAccount.id)
+        .execute();
+
+      const response = await setApprovesCells(adminA, benAccount.id, true).expect(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      const row = await db
+        .selectFrom('accounts')
+        .select('approves_cells')
+        .where('id', '=', benAccount.id)
+        .executeTakeFirstOrThrow();
+      expect(row.approves_cells).toBe(false);
+    });
+
+    it('is cleared with Full view, and audited as its own change', async () => {
+      await tick(benAccount, true);
+
+      await http()
+        .post(`/api/v1/accounts/${benAccount.id}/full-view`)
+        .set('Authorization', `Bearer ${adminA.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ full_view: false })
+        .expect(200);
+
+      const row = await db
+        .selectFrom('accounts')
+        .select(['full_view', 'approves_cells'])
+        .where('id', '=', benAccount.id)
+        .executeTakeFirstOrThrow();
+      expect(row).toEqual({ full_view: false, approves_cells: false });
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['before', 'after'])
+        .where('action', '=', 'account.approves_cells_changed')
+        .where('target_id', '=', benAccount.id)
+        .execute();
+      expect(entries).toEqual([
+        { before: { approves_cells: true }, after: { approves_cells: false } },
+      ]);
+    });
+
+    it('grants nothing on a row that holds it without Full view', async () => {
+      await db
+        .updateTable('accounts')
+        .set({ full_view: false, approves_cells: true })
+        .where('id', '=', benAccount.id)
+        .execute();
+
+      const response = await queue(benAccount).expect(403);
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+    });
+
     it('starts a new Leader account without it, and the account read says so', async () => {
       // A Leader account arrives with the Cell leadership that qualifies it (section 6).
       await createCell(db, { leader: juan });

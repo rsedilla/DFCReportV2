@@ -269,6 +269,35 @@ export class AccountAccessService {
         });
       }
 
+      // Approves Cells is offered only on an account with Full view (owner, 2026-10-15,
+      // decision 0352): its queue is on the Cells page, which only Full view screens carry.
+      if (column === 'approves_cells' && value && !account.full_view) {
+        throw new InvariantViolationError(
+          'Approves Cells is offered only on an account with Full view. Tick Full view first ' +
+            '(SKILL.md section 7, decision 0352).',
+          { account_id: accountId },
+        );
+      }
+
+      // Clearing Full view clears Approves Cells with it, in the same transaction and audited
+      // as its own change, so no account holds the capability without the screens to use it.
+      if (column === 'full_view' && !value && account.approves_cells) {
+        await trx
+          .updateTable('accounts')
+          .set({ approves_cells: false, updated_at: new Date() })
+          .where('id', '=', accountId)
+          .execute();
+
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'account.approves_cells_changed',
+          targetType: 'account',
+          targetId: accountId,
+          before: { approves_cells: true },
+          after: { approves_cells: false },
+        });
+      }
+
       if (account[column] !== value) {
         await trx
           .updateTable('accounts')

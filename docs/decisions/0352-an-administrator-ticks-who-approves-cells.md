@@ -44,9 +44,12 @@ able to step in.
 9. **Where the queue is**: *Cells to Approve*, the third tab of the Cells page, with its
    count, for an account holding `cell.approve_leadership`, listing the pending requests that
    account may decide. Each row names the kind of request, the new leader, the Cell's
-   category, day and time, and the leader the request came from. Where a ticked account without
-   Full view, whose screens have no Cells page (decision 0323), reaches it is left open.
-10. **The account step is unchanged.** A newly approved leader without an account is given one
+   category, day and time, and the leader the request came from.
+10. **The tick is offered only on an account with Full view** (owner, 2026-10-15), because the
+    queue is on the Cells page, which only Full view screens carry (decision 0323). Ticking it
+    on an account without Full view is refused `INVARIANT_VIOLATION`, and clearing Full view
+    clears it in the same change, audited as its own.
+11. **The account step is unchanged.** A newly approved leader without an account is given one
     by an administrator, as after every approval today (decisions 0152 and 0276).
 
 ## What the build's tests must show

@@ -313,7 +313,9 @@ export class AuthorizationService {
 
     for (const role of roles.honoured) {
       const defaults =
-        role === 'LEADER' && roles.approvesCells
+        // Only with Full view (decision 0352); the tick write keeps the two together, and a
+        // row restored past it still grants nothing alone.
+        role === 'LEADER' && roles.approvesCells && roles.fullView
           ? { ...ROLE_DEFAULTS[role], ...LEADER_APPROVES_CELLS }
           : ROLE_DEFAULTS[role];
 

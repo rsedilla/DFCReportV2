@@ -235,6 +235,8 @@ export function PersonAccount({
                     : `${firstName} sees the recording screens: Record, People, My Cell and SUYNL.`
                 }
               />
+              {/* Offered only with Full view (decision 0352). */}
+              {current.full_view ? (
               <LeaderTickRow
                 personId={personId}
                 field="approves_cells"
@@ -247,6 +249,7 @@ export function PersonAccount({
                     : `${firstName} does not approve Cells; an administrator does.`
                 }
               />
+              ) : null}
             </>
           ) : null}
           <AccessRow
