@@ -9,7 +9,13 @@ import {
 import { Capability } from '../auth/authorization/capabilities';
 import { NotFoundError, ValidationFailedError } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
-import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
+import {
+  compareRosterKeys,
+  decodeRosterCursor,
+  encodeRosterCursor,
+  pageByRosterKey,
+  rosterKeyOf,
+} from '../common/roster-cursor';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { assertReportingMonth } from '../common/time/reporting-period';
 import {
@@ -261,22 +267,13 @@ export class DccCoverageService {
           firstName: identity?.firstName ?? '',
         };
       })
-      .sort((left, right) => compareKeys(keyOf(left), keyOf(right)));
+      .sort((left, right) => compareRosterKeys(left, right));
 
-    const after = decodeRosterCursor(page.cursor);
-    const limit = page.limit ?? DEFAULT_PAGE;
-
-    // `-1` means the cursor is past every line, which is the last page rather than the
-    // first: slicing from it would restart the collection, which is the silent behaviour
-    // section 22 refuses a cursor over. The same arithmetic the roster route uses, for
-    // the same reason — this list is assembled in application code and has no single
-    // query to key.
-    const beyond =
-      after === null ? 0 : lines.findIndex((line) => compareKeys(keyOf(line), after) > 0);
-    const start = beyond === -1 ? lines.length : beyond;
-
-    const window = lines.slice(start, start + limit);
-    const more = start + limit < lines.length;
+    // Assembled in application code, so there is no single query to key (section 22).
+    const { window, next_cursor } = pageByRosterKey(lines, rosterKeyOf, {
+      cursor: page.cursor,
+      limit: page.limit ?? DEFAULT_PAGE,
+    });
 
     return {
       event: {
@@ -292,7 +289,7 @@ export class DccCoverageService {
         member_id: line.memberId,
         full_name: line.fullName,
       })),
-      next_cursor: more ? encodeRosterCursor(keyOf(window[window.length - 1])) : null,
+      next_cursor,
     };
   }
 
@@ -707,7 +704,7 @@ export class DccCoverageService {
     lines.sort(
       (left, right) =>
         left.event.eventDate.localeCompare(right.event.eventDate) ||
-        compareKeys(
+        compareRosterKeys(
           { lastName: left.lastName, firstName: left.firstName, memberId: left.memberId },
           { lastName: right.lastName, firstName: right.firstName, memberId: right.memberId },
         ),
@@ -850,8 +847,8 @@ export class DccCoverageService {
             containsInOrder(normalizeName(`${line.firstName} ${line.lastName}`), term) ||
             line.memberId.toUpperCase().includes((query.q ?? '').trim().toUpperCase())),
       )
-      .sort((left, right) => compareKeys(keyOf(left), keyOf(right)))
-      .filter((line) => after === null || compareKeys(keyOf(line), after) > 0);
+      .sort((left, right) => compareRosterKeys(left, right))
+      .filter((line) => after === null || compareRosterKeys(line, after) > 0);
 
     const limit = query.limit ?? DEFAULT_PAGE;
     const page = matching.slice(0, limit);
@@ -915,7 +912,7 @@ export class DccCoverageService {
           may_record: mayRecord,
         };
       }),
-      next_cursor: more && last !== undefined ? encodeRosterCursor(keyOf(last)) : null,
+      next_cursor: more && last !== undefined ? encodeRosterCursor(rosterKeyOf(last)) : null,
     };
   }
 
@@ -1197,7 +1194,7 @@ export class DccCoverageService {
           marks,
         };
       })
-      .sort((left, right) => compareKeys(keyOf(left), keyOf(right)));
+      .sort((left, right) => compareRosterKeys(left, right));
 
     return {
       reporting_month: reportingMonth,
@@ -1411,22 +1408,4 @@ function nextMonth(reportingMonth: string): string {
   return month === 12
     ? `${String(year + 1).padStart(4, '0')}-01-01`
     : `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-01`;
-}
-
-function keyOf(line: RosterCursor): RosterCursor {
-  return { lastName: line.lastName, firstName: line.firstName, memberId: line.memberId };
-}
-
-/**
- * Lexicographic over the three keys, in order — `localeCompare`, matching how the lines
- * are sorted. A comparison ordering differently from the sort would put the page boundary
- * somewhere the sort never placed it, and rows either side of it would be skipped or
- * repeated.
- */
-function compareKeys(left: RosterCursor, right: RosterCursor): number {
-  return (
-    left.lastName.localeCompare(right.lastName) ||
-    left.firstName.localeCompare(right.firstName) ||
-    left.memberId.localeCompare(right.memberId)
-  );
 }

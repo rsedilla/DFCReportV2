@@ -18,6 +18,7 @@ import {
   removeCellMember,
   type CellMember,
 } from '@/lib/cells';
+import { useCursorPages } from '@/lib/cursor-pages';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -74,8 +75,7 @@ function CellMembers() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
 
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [page, setPage] = useState(0);
+  const pages = useCursorPages(params.id);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -91,8 +91,8 @@ function CellMembers() {
   });
 
   const members = useQuery({
-    queryKey: ['cell-members', params.id, cursors[page]],
-    queryFn: ({ signal }) => listCellMembers(params.id, cursors[page], signal),
+    queryKey: ['cell-members', params.id, pages.cursor],
+    queryFn: ({ signal }) => listCellMembers(params.id, pages.cursor, signal),
   });
 
   const remove = useMutation({
@@ -258,8 +258,8 @@ function CellMembers() {
             neither, so both would be invented.
           */}
           <div className="mt-6 flex gap-3">
-            {page > 0 ? (
-              <Button type="button" variant="secondary" onClick={() => setPage((p) => p - 1)}>
+            {pages.page > 0 ? (
+              <Button type="button" variant="secondary" onClick={pages.previous}>
                 Previous
               </Button>
             ) : null}
@@ -267,10 +267,7 @@ function CellMembers() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  setCursors((current) => [...current.slice(0, page + 1), members.data.next_cursor]);
-                  setPage((p) => p + 1);
-                }}
+                onClick={() => pages.next(members.data.next_cursor)}
               >
                 Next
               </Button>

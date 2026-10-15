@@ -39,7 +39,7 @@ import {
 } from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { awaitingReassignment, MINIMUM_SEARCH_LENGTH } from '@/lib/people';
+import { awaitingReassignment } from '@/lib/people';
 import {
   dayLabel,
   monthLabel,
@@ -48,6 +48,7 @@ import {
   todayInManila,
 } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useSearchTerm } from '@/lib/search-term';
 import { deadlineLabel, mayStillBeOpen, monthOpenUntilLabel } from '@/lib/weekly-deadline';
 import { cn } from '@/lib/utils';
 
@@ -1652,9 +1653,7 @@ function PendingDccFilters({
   value: { q: string; network: 'MENS' | 'WOMENS' | null };
   onChange: (next: { q: string; network: 'MENS' | 'WOMENS' | null }) => void;
 }) {
-  const [term, setTerm] = useState(value.q);
-  const trimmed = term.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
+  const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(value.q);
 
   return (
     <div className={`mt-4 ${CONTROL_BAR}`}>
@@ -1678,7 +1677,7 @@ function PendingDccFilters({
           className="min-w-0 sm:flex-1"
         />
         <Button type="submit" disabled={tooShort}>
-          {trimmed === '' && value.q !== '' ? 'Clear search' : 'Search'}
+          {buttonLabel}
         </Button>
       </form>
       {wholeChurch ? (

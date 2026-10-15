@@ -2,13 +2,13 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
-import { MINIMUM_SEARCH_LENGTH } from '@/lib/people';
+import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
 
 /**
@@ -182,16 +182,7 @@ export function GrowthFilters({
   onSearch: (term: string) => void;
   onMine: (mine: boolean) => void;
 }) {
-  const [term, setTerm] = useState(submitted);
-  // Follows the address, which Back and a reload change underneath it.
-  const [lastSubmitted, setLastSubmitted] = useState(submitted);
-  if (lastSubmitted !== submitted) {
-    setLastSubmitted(submitted);
-    setTerm(submitted);
-  }
-
-  const trimmed = term.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
+  const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
 
   return (
     <form
@@ -214,7 +205,7 @@ export function GrowthFilters({
         className="w-full min-w-0 sm:w-auto sm:flex-1"
       />
       <Button type="submit" disabled={tooShort}>
-        {trimmed.length === 0 && submitted !== '' ? 'Clear search' : 'Search'}
+        {buttonLabel}
       </Button>
       <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
         {mine ? 'Showing only my disciples' : 'Only my disciples'}
