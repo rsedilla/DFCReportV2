@@ -27,7 +27,7 @@ act on it and without anything being sent to them.
    (Section 1, Principle 7).
 4. **Every closure carries a written explanation** (owner, 2026-10-16), in the closure note
    and within the length it already had. It is what the Senior Pastors read. A backdated
-   closure explains its date in the same note, as Section 10 already provides for *Other*. The
+   closure explains its date in the same note, as Section 10 provided for *Other* before this ruling. The
    database refuses the change to `CLOSED` without one, or giving `MEMBERS_DISPERSED`; a Cell
    closed before this ruling keeps the note and reason it had.
 5. **Members are decided at closure exactly as Section 10 says.** The administrator may move
@@ -36,10 +36,17 @@ act on it and without anything being sent to them.
 6. **Section 15's list of Cells with no meeting held is built**, as the filter *No meeting in 3
    months* on the running Cells of the Cells page, beside *Fewer than 3 members*, carrying no
    count. A Cell is on it when it is `ACTIVE`, was created before the first day of the window,
-   and has no meeting recorded `HELD` or `RESCHEDULED` in the window: the last finished Manila
+   and has no meeting held in the window: the last finished Manila
    months, as many as the church-wide attention setting says (three). Each row shows each month
    of the window, with how many meetings were recorded as *Did not meet* and how many are *Not
    recorded*, so a quiet Cell is told from one nobody reports on. The number in the label is the setting's.
+   **A meeting moved to another day that happened counts as met** (owner, 2026-10-16): a
+   meeting recorded `RESCHEDULED` whose actual date has come. A meeting belongs to the month
+   it reports in (Section 13), so one planned for 31 January and held on 2 February counts for
+   January. **A meeting with no record whose week is still open to recording** (decision 0335)
+   **is not counted among the row's *Not recorded*** (owner, 2026-10-16), and while any
+   meeting of the window is in that state the Cell is not listed, so nobody is shown on the list while they still have
+   time to record.
 7. **Whoever lists a Cell sees it on that filter, and only an account that may close sees a way
    to close.** The list is read under `cell.view_subtree`, as the Cells page is. A Full view
    leader therefore sees their whole branch, read-only. Each row says whether the reader may
