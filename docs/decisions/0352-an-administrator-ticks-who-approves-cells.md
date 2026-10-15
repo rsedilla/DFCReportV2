@@ -21,14 +21,14 @@ able to step in.
    a closed Cell's last leader.
 3. **A ticked approver may not decide** a request they sent, a request naming themselves as
    the new leader, a request naming a Cell they lead themselves, or a request whose new leader
-   is their own direct disciple. Those go to the Admin. The last one is there because a
+   is their own direct disciple. Those go to the Admin, and each is refused `SCOPE_DENIED`. The last one is there because a
    leader's own direct disciples are what Section 16's *Leaders with 12+ Direct Leaders* and
    Section 27's *Raise 12 leaders* count, so approving one would be approving something that
    counts for the approver.
 4. **Nobody approves a request naming themselves as the new leader**, whatever capability and
    scope they hold. It is a domain check, as Section 10's rule for requesting is, because a
    scope value enforces nothing (Section 7).
-5. **The Admin keeps approving and declining everything**, at Whole Church, so a request is
+5. **The Admin keeps approving and declining**, at Whole Church, so a request is
    never stuck behind an approver who is away or has no account yet.
 6. **An approval the Admin thinks wrong is undone the way Section 10 already provides**: a new
    Cell or a restart is closed as `CREATED_IN_ERROR`, which only the Admin may give (decision
@@ -44,8 +44,8 @@ able to step in.
 9. **Where the queue is**: *Cells to Approve*, the third tab of the Cells page, with its
    count, for an account holding `cell.approve_leadership`, listing the pending requests that
    account may decide. Each row names the kind of request, the new leader, the Cell's
-   category, day and time, and the leader the request came from. A ticked account without Full
-   view, whose screens have no Cells page (decision 0323), is given one holding that tab alone.
+   category, day and time, and the leader the request came from. Where a ticked account without
+   Full view, whose screens have no Cells page (decision 0323), reaches it is left open.
 10. **The account step is unchanged.** A newly approved leader without an account is given one
     by an administrator, as after every approval today (decisions 0152 and 0276).
 
