@@ -114,6 +114,8 @@ export class CellsIndexService {
       cursor?: string;
       q?: string;
       state?: 'ACTIVE' | 'CLOSED';
+      /** Section 15's *Fewer than 3 members* (decision 0353); running Cells only. */
+      fewerThanThree?: boolean;
     },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
@@ -179,6 +181,7 @@ export class CellsIndexService {
             limit: limit + 1,
             after: after?.cellId ?? null,
             search: query.q ?? null,
+            fewerThanThree: query.fewerThanThree ?? false,
           });
 
     const visible = rows.slice(0, limit);

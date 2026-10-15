@@ -38,6 +38,18 @@ export type TargetSpec =
   | { kind: 'cell_meeting'; from: string; onFrom: string }
   | { kind: 'church' }
   /**
+   * A Cell leadership request, resolved through the person it names as the new leader
+   * (decision 0352). Asked of `CELL_SCOPE_PORT`, because `cells` owns the table.
+   */
+  | { kind: 'cell_leadership_request'; from: string }
+  /**
+   * The capability held at any scope, with the owning module narrowing the answer to what
+   * that scope reaches. For a queue whose rows each carry their own target, where a grant
+   * excluding the actor (`SUBTREE_EXCL_SELF`) would never cover the actor themselves
+   * (decision 0352). Never for a route that acts on one record.
+   */
+  | { kind: 'held' }
+  /**
    * A **report scope selector** (SKILL.md section 7), which is the target itself.
    *
    * Three paths rather than one, because the selector is three values: which scope is

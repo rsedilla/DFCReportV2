@@ -116,6 +116,12 @@ export interface LeadershipRequestRow {
    */
   requested_at_key: string;
   cell_id: string | null;
+  /** What a new-Cell request asks for; null on a handover (decision 0352's queue). */
+  category: CellCategory | null;
+  day_of_week: number | null;
+  time_of_day: string | null;
+  /** The `CELL-000000` handle of the Cell a handover or a restart names. */
+  named_cell_handle: string | null;
 }
 
 /** A request as its sender reads it back (decision 0269), paged by the same cursor. */

@@ -136,6 +136,21 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The person a Cell leadership request names, for the guard on deciding it (decision
+   * 0352). On the pool, because the guard runs outside any transaction; the decision
+   * re-reads the request under its lock.
+   */
+  async prospectiveLeaderOfRequest(requestId: string): Promise<string | null> {
+    const row = await this.db
+      .selectFrom('cell_leadership_requests')
+      .select('prospective_leader_id')
+      .where('id', '=', requestId)
+      .executeTakeFirst();
+
+    return row?.prospective_leader_id ?? null;
+  }
+
+  /**
    * The people who were members of this Cell on a given Manila **date**.
    *
    * Section 12: "The roster for a meeting is exactly the people holding an active
@@ -718,9 +733,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * list, which is a different surface with a different reader and no capability that
    * can guard it today — recorded as open in `CLAUDE.md` rather than answered here.
    *
-   * No scope filter, and that is the capability rather than an omission:
-   * `cell.approve_leadership` is Admin's alone at Whole Church (section 7), so every
-   * caller who reaches this sees the same queue.
+   * No scope filter here: the caller narrows the rows to those the actor may decide
+   * (decision 0352).
    */
   async pendingLeadershipRequestsWithin(
     executor: Db | Transaction<Database>,
@@ -739,6 +753,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           'requested_at',
           'cell_id',
           'restart_of_cell_id',
+          'category',
+          'day_of_week',
+          'time_of_day',
+          sql<string | null>`(SELECT c.cell_id FROM cells AS c
+            WHERE c.id = COALESCE(cell_leadership_requests.cell_id,
+              cell_leadership_requests.restart_of_cell_id))`.as('named_cell_handle'),
           // **The ordering key at the column's own precision**, which the `Date` beside
           // it is not: `timestamptz` holds microseconds and the driver parses it into a
           // JS `Date`, which holds milliseconds. A cursor built from
@@ -1401,7 +1421,13 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
      * so that a page describes one state rather than one per join.
      */
     at: Date,
-    page: { limit: number; after?: string | null; search?: string | null },
+    page: {
+      limit: number;
+      after?: string | null;
+      search?: string | null;
+      /** Only Cells holding fewer than three current memberships (decision 0353). */
+      fewerThanThree?: boolean;
+    },
   ): Promise<
     {
       id: string;
@@ -1489,6 +1515,16 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
       )
       .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      // Section 15's *Fewer than 3 members* (decision 0353): open memberships, the roster's
+      // own rule, so the leader, who holds none, is not counted.
+      .$if(page.fewerThanThree === true, (query) =>
+        query.where(
+          sql<number>`(SELECT count(*)::int FROM cell_memberships AS m
+                        WHERE m.cell_id = cells.id AND m.ended_at IS NULL)`,
+          '<',
+          3,
+        ),
+      )
       .$if(codePattern !== null || namePattern !== null, (query) =>
         query.where((eb) =>
           eb.or([

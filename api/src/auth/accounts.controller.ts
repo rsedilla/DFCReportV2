@@ -10,7 +10,12 @@ import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
-import { CorrectAccountEmailDto, ProvisionAccountDto, SetFullViewDto } from './dto/credentials.dto';
+import {
+  CorrectAccountEmailDto,
+  ProvisionAccountDto,
+  SetApprovesCellsDto,
+  SetFullViewDto,
+} from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
 
@@ -161,5 +166,21 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return { ...(await this.access.setFullView(id, body.full_view, actor, claim)) };
+  }
+
+  /**
+   * Ticks or clears Approves Cells on a Leader account (section 7, decision 0352), under
+   * `roles.manage` against the Account, as Full view is.
+   */
+  @Post(':id/approves-cells')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setApprovesCells(
+    @Param('id') id: string,
+    @Body() body: SetApprovesCellsDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return { ...(await this.access.setApprovesCells(id, body.approves_cells, actor, claim)) };
   }
 }

@@ -77,6 +77,17 @@ export interface LeadershipRequestInput {
   cellId?: string;
   /** The closed Cell a new-Cell request asks to resume (decision 0264). */
   restartOfCellId?: string;
+  /** The three members a new-Cell request names (decision 0353). */
+  members?: string[];
+}
+
+/** What deciding a request reads of it (decision 0352). */
+interface DecidableRequest {
+  kind: CellRequestKind;
+  prospective_leader_id: string;
+  requested_by: string;
+  cell_id: string | null;
+  restart_of_cell_id: string | null;
 }
 
 /**
@@ -214,6 +225,8 @@ export class CellsLeadershipRequestService {
       );
     }
 
+    const members = this.membersOfShape(input);
+
     return this.db.transaction().execute(async (trx) => {
       const cell =
         input.kind === 'HANDOVER'
@@ -223,6 +236,10 @@ export class CellsLeadershipRequestService {
       if (input.restartOfCellId !== undefined) {
         await this.assertRestartableWithin(trx, input, actor, authority);
       }
+
+      // After the scope checks, so a refusal about a member is never what an actor
+      // without the scope is answered (section 7, decision 0353).
+      await this.assertMembersQualifyWithin(trx, input.prospectiveLeaderId, members);
 
       // **Two uniqueness rules, one per kind, and they are not the same rule** (section
       // 10). Both are partial unique indexes and both stay the enforcement; these reads
@@ -256,6 +273,14 @@ export class CellsLeadershipRequestService {
         .returning(['id', 'state', 'requested_at'])
         .executeTakeFirstOrThrow();
 
+      // Part of what the request asked (decision 0353), never changed afterwards.
+      if (members.length > 0) {
+        await trx
+          .insertInto('cell_leadership_request_members')
+          .values(members.map((personId) => ({ request_id: row.id, person_id: personId })))
+          .execute();
+      }
+
       // Section 21 names "Cell leadership requested" with its kind. The prospective
       // leader is the target, because that is what the request is about and what a
       // reader asking how a leader was developed searches on — section 10 calls the
@@ -284,6 +309,8 @@ export class CellsLeadershipRequestService {
                 category: input.category ?? null,
                 day_of_week: input.dayOfWeek ?? null,
                 time_of_day: input.timeOfDay ?? null,
+                // The members it names are part of what was asked (decision 0353).
+                members,
               }
             : { cell_id: cell?.cell_id ?? null, cell_uuid: cell?.id ?? null }),
         },
@@ -309,6 +336,7 @@ export class CellsLeadershipRequestService {
         category: input.kind === 'NEW_CELL' ? (input.category ?? null) : null,
         day_of_week: input.kind === 'NEW_CELL' ? (input.dayOfWeek ?? null) : null,
         time_of_day: input.kind === 'NEW_CELL' ? (input.timeOfDay ?? null) : null,
+        members,
       };
 
       await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
@@ -344,6 +372,9 @@ export class CellsLeadershipRequestService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // On the pool, before the transaction (section 24).
+    const authority = await this.authorization.authorityFor(actor.accountId);
+
     return this.db.transaction().execute(async (trx) => {
       // **The bound, which this operation owes and did not set** (section 5). It takes
       // a row lock and locks no person, so `lockPersonsWithin`'s early return never
@@ -364,7 +395,15 @@ export class CellsLeadershipRequestService {
       // it needs none of the advisory locks section 5 orders.
       const existing = await trx
         .selectFrom('cell_leadership_requests')
-        .select(['id', 'kind', 'state', 'prospective_leader_id', 'cell_id'])
+        .select([
+          'id',
+          'kind',
+          'state',
+          'prospective_leader_id',
+          'requested_by',
+          'cell_id',
+          'restart_of_cell_id',
+        ])
         .where('id', '=', requestId)
         .forUpdate()
         .executeTakeFirst();
@@ -381,6 +420,8 @@ export class CellsLeadershipRequestService {
           { request_id: existing.id, state: existing.state },
         );
       }
+
+      await this.assertMayDecideWithin(trx, existing, actor, authority, 'decline');
 
       const decidedAt = await this.nowWithin(trx);
 
@@ -521,6 +562,11 @@ export class CellsLeadershipRequestService {
     }
 
     const requesterAuthority = await this.authorization.authorityFor(pre.requested_by);
+    const actorAuthority = await this.authorization.authorityFor(actor.accountId);
+
+    // The members it names, so their person locks are taken with the others (decision
+    // 0353). Never changed, so this list is the one re-read under the lock.
+    const memberIds = await this.membersOfRequestWithin(this.db, pre.id);
 
     // The outgoing leader, for a handover, so the lock list is complete. Re-read
     // under the locks below; this value decides nothing.
@@ -544,7 +590,9 @@ export class CellsLeadershipRequestService {
       // lock key; this call site must not.
       await lockPersonsWithin(
         trx,
-        [pre.prospective_leader_id, outgoingBeforeLock].filter((id): id is string => id !== null),
+        [pre.prospective_leader_id, outgoingBeforeLock, ...memberIds].filter(
+          (id): id is string => id !== null,
+        ),
       );
 
       // `FOR SHARE`: this operation does not write the `cells` row, and depends on its
@@ -659,6 +707,11 @@ export class CellsLeadershipRequestService {
         );
       }
 
+      await this.assertMayDecideWithin(trx, request, actor, actorAuthority, 'approve');
+
+      // Re-checked as at the request: the state at approval governs (decision 0353).
+      await this.assertMembersQualifyWithin(trx, request.prospective_leader_id, memberIds, true);
+
       const decision = await this.assertApprovableWithin(trx, request, {
         actor,
         requester,
@@ -673,6 +726,12 @@ export class CellsLeadershipRequestService {
         request.kind === 'NEW_CELL'
           ? await this.approveNewCellWithin(trx, request, actor)
           : await this.handOverWithin(trx, request, decision, actor);
+
+      // The members it names join the Cell from its first instant, in the transaction
+      // that creates it (decision 0353).
+      if (request.kind === 'NEW_CELL' && memberIds.length > 0) {
+        await this.addMembersWithin(trx, applied, memberIds, actor);
+      }
 
       await trx
         .updateTable('cell_leadership_requests')
@@ -754,22 +813,55 @@ export class CellsLeadershipRequestService {
    * Section 22's envelope and its cursor pagination, with the `limit + 1` read that
    * answers whether another page exists without a count — section 22 returns no totals.
    */
-  async pendingQueue(page: {
-    limit?: number;
-    cursor?: string;
-  }): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+  async pendingQueue(
+    actor: Actor,
+    page: {
+      limit?: number;
+      cursor?: string;
+    },
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
     const limit = page.limit ?? 50;
+    const authority = await this.authorization.authorityFor(actor.accountId);
+    const wholeChurch = await this.authorization.coversWith(
+      this.db,
+      actor,
+      authority,
+      Capability.CellApproveLeadership,
+      { kind: 'church' },
+    );
 
-    const rows = await this.cells.pendingLeadershipRequestsWithin(this.db, {
-      limit: limit + 1,
-      after: decodeLeadershipRequestCursor(page.cursor),
-    });
+    // A Whole Church holder sees every pending request; an account ticked Approves Cells
+    // sees only those it may decide (decision 0352). The filter is per row, so pages are
+    // read until one is full or the queue ends; the queue is a few dozen rows at most.
+    const rows: Awaited<ReturnType<CellsReadService['pendingLeadershipRequestsWithin']>> = [];
+    let after = decodeLeadershipRequestCursor(page.cursor);
+
+    for (;;) {
+      const batch = await this.cells.pendingLeadershipRequestsWithin(this.db, {
+        limit: limit + 1,
+        after,
+      });
+
+      for (const row of batch) {
+        if (wholeChurch || (await this.mayDecide(this.db, row, actor, authority))) {
+          rows.push(row);
+        }
+      }
+
+      const tail = batch.at(-1);
+      if (rows.length > limit || batch.length <= limit || tail === undefined) {
+        break;
+      }
+      after = { requestedAt: tail.requested_at_key, id: tail.id };
+    }
 
     const visible = rows.slice(0, limit);
     const last = visible.at(-1);
+    const details = await this.queueDetails(visible);
 
     return {
       data: visible.map((row) => ({
+        ...details.get(row.id),
         id: row.id,
         kind: row.kind,
         state: 'PENDING',
@@ -1630,6 +1722,316 @@ export class CellsLeadershipRequestService {
    * arrived would put the decision before a write it followed. That is the defect the
    * closure endpoint shipped once and had to correct.
    */
+  /**
+   * The members a new-Cell request names, checked for the request's shape (decision 0353):
+   * three different people other than the prospective leader. A handover names none.
+   * `VALIDATION_FAILED`, because section 22 keeps that code for a request's shape.
+   */
+  private membersOfShape(input: LeadershipRequestInput): string[] {
+    if (input.kind === 'HANDOVER') {
+      if (input.members !== undefined) {
+        throw new ValidationFailedError(
+          'A handover names no members: the Cell already has its own (SKILL.md section 10).',
+          { field: 'members' },
+        );
+      }
+      return [];
+    }
+
+    const members = input.members ?? [];
+    const distinct = new Set(members.map((id) => id.toLowerCase()));
+
+    if (members.length !== 3 || distinct.size !== 3) {
+      throw new ValidationFailedError(
+        'A new Cell is asked for with three different members (SKILL.md section 10).',
+        { field: 'members' },
+      );
+    }
+
+    const leaderAt = members.findIndex((id) => sameId(id, input.prospectiveLeaderId));
+    if (leaderAt !== -1) {
+      throw new ValidationFailedError(
+        'The new leader is not one of the three members; name three other people ' +
+          '(SKILL.md section 10).',
+        { field: 'members', path: `members[${leaderAt}]` },
+      );
+    }
+
+    return members;
+  }
+
+  /**
+   * Each member a new-Cell request names is a current Person, in the prospective leader's
+   * Network now, and holds no open Cell membership (decision 0353). Rules about what may
+   * be recorded, so `INVARIANT_VIOLATION`, naming the line; at approval, naming the person.
+   */
+  private async assertMembersQualifyWithin(
+    trx: Transaction<Database>,
+    leaderId: string,
+    members: readonly string[],
+    atApproval = false,
+  ): Promise<void> {
+    if (members.length === 0) {
+      return;
+    }
+
+    const leaderNetwork = await this.networks.currentNetwork(trx, leaderId);
+    const when = atApproval ? ' since this request was sent' : '';
+    const remedy = atApproval
+      ? ' Decline this request and send another naming somebody else.'
+      : ' Name somebody else.';
+
+    for (const [index, personId] of members.entries()) {
+      const where = { field: 'members', path: `members[${index}]`, person_id: personId };
+      const person = await this.people.forDecisionWithin(trx, personId);
+
+      if (!person || person.mergedIntoId !== null || person.isArchived) {
+        throw new InvariantViolationError(
+          `One of the members is no longer a current Person${when}.${remedy}`,
+          where,
+        );
+      }
+
+      if ((await this.networks.currentNetwork(trx, personId)) !== leaderNetwork) {
+        throw new InvariantViolationError(
+          `One of the members is not in the new leader's Network${when}. A Cell's members ` +
+            `share its leader's Network (SKILL.md section 10).${remedy}`,
+          where,
+        );
+      }
+
+      if ((await this.cells.openMembershipOf(trx, personId)) !== null) {
+        throw new InvariantViolationError(
+          `One of the members is in a Cell${when}. Somebody already in a Cell cannot be ` +
+            `named yet (SKILL.md section 10).${remedy}`,
+          where,
+        );
+      }
+    }
+  }
+
+  /** The members a request names, in the order they were named. */
+  private async membersOfRequestWithin(
+    executor: Db | Transaction<Database>,
+    requestId: string,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('cell_leadership_request_members')
+      .select('person_id')
+      .where('request_id', '=', requestId)
+      .execute();
+
+    return rows.map((row) => row.person_id);
+  }
+
+  /** The three members join the new Cell from its first instant (decision 0353). */
+  private async addMembersWithin(
+    trx: Transaction<Database>,
+    applied: AppliedApproval,
+    memberIds: readonly string[],
+    actor: Actor,
+  ): Promise<void> {
+    await trx
+      .insertInto('cell_memberships')
+      .values(
+        memberIds.map((personId) => ({
+          person_id: personId,
+          cell_id: applied.cellUuid,
+          started_at: applied.at,
+        })),
+      )
+      .execute();
+
+    for (const personId of memberIds) {
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'cell_membership.added',
+        targetType: 'person',
+        targetId: personId,
+        before: null,
+        after: {
+          cell_uuid: applied.cellUuid,
+          cell_id: applied.cellId,
+          started_at: applied.at.toISOString(),
+        },
+      });
+    }
+  }
+
+  /**
+   * Who may decide this request (section 10, decision 0352), refusing `SCOPE_DENIED`.
+   *
+   * Nobody approves a request naming themselves, at any scope. Admin, at Whole Church,
+   * may otherwise decide any request, and may decline one they sent (decision 0147). An
+   * account holding the capability narrower, through Approves Cells, decides only a
+   * request whose new leader and named Cell are in its branch, and never one it sent, one
+   * naming a Cell it leads, or one whose new leader is its own direct disciple.
+   */
+  private async assertMayDecideWithin(
+    trx: Transaction<Database>,
+    request: DecidableRequest,
+    actor: Actor,
+    authority: ActorAuthority,
+    mode: 'approve' | 'decline',
+  ): Promise<void> {
+    if (mode === 'approve' && sameId(request.prospective_leader_id, actor.personId)) {
+      throw new ScopeDeniedError(
+        'This request names you as the new leader. Nobody approves their own leadership ' +
+          '(SKILL.md section 10).',
+        { capability: Capability.CellApproveLeadership },
+      );
+    }
+
+    const wholeChurch = await this.authorization.coversWith(
+      trx,
+      actor,
+      authority,
+      Capability.CellApproveLeadership,
+      { kind: 'church' },
+    );
+
+    if (wholeChurch) {
+      return;
+    }
+
+    if (!(await this.mayDecide(trx, request, actor, authority))) {
+      throw new ScopeDeniedError(
+        'This request goes to an administrator: it is outside your branch, or it is your ' +
+          'own request, your own leadership, a Cell you lead, or a Cell for your own ' +
+          'direct disciple (SKILL.md section 10).',
+        { capability: Capability.CellApproveLeadership },
+      );
+    }
+  }
+
+  /**
+   * Whether an account holding `cell.approve_leadership` below Whole Church may decide
+   * this request (decision 0352): the queue's filter, and the decision's check.
+   */
+  private async mayDecide(
+    executor: Db | Transaction<Database>,
+    request: DecidableRequest,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<boolean> {
+    if (sameId(request.requested_by, actor.accountId)) {
+      return false;
+    }
+
+    if (sameId(request.prospective_leader_id, actor.personId)) {
+      return false;
+    }
+
+    const covers = (personId: string | null): Promise<boolean> =>
+      this.authorization.coversWith(executor, actor, authority, Capability.CellApproveLeadership, {
+        kind: 'person',
+        personId: personId ?? NIL_UUID,
+      });
+
+    // The new leader is in the account's branch, the account itself excluded.
+    if (!(await covers(request.prospective_leader_id))) {
+      return false;
+    }
+
+    // The Cell a handover or a restart names, through its leader or a closed Cell's
+    // last leader; the scope excludes the account, so a Cell it leads is refused.
+    const namedCellId = request.kind === 'HANDOVER' ? request.cell_id : request.restart_of_cell_id;
+    if (namedCellId !== null) {
+      const cellLeader = await this.cells.leaderForScopeWithin(executor, namedCellId);
+      if (!(await covers(cellLeader))) {
+        return false;
+      }
+    }
+
+    // A request for the account's own direct disciple goes to Admin.
+    const edge = await this.hierarchy.openAssignmentOf(executor, request.prospective_leader_id);
+    return !(edge !== null && edge.leaderId !== null && sameId(edge.leaderId, actor.personId));
+  }
+
+  /**
+   * What the approval queue names on each row (decision 0352): the new leader, who sent it,
+   * the Cell, a handover's present leader, the members, and the branch it is in.
+   */
+  private async queueDetails(
+    rows: Awaited<ReturnType<CellsReadService['pendingLeadershipRequestsWithin']>>,
+  ): Promise<Map<string, Record<string, unknown>>> {
+    const details = new Map<string, Record<string, unknown>>();
+    if (rows.length === 0) {
+      return details;
+    }
+
+    const memberRows = await this.db
+      .selectFrom('cell_leadership_request_members')
+      .select(['request_id', 'person_id'])
+      .where(
+        'request_id',
+        'in',
+        rows.map((row) => row.id),
+      )
+      .execute();
+
+    const perRow = await Promise.all(
+      rows.map(async (row) => {
+        const requester = await this.authorization.actorFor(row.requested_by);
+        const namedCellId = row.kind === 'HANDOVER' ? row.cell_id : row.restart_of_cell_id;
+        const outgoing =
+          row.kind === 'HANDOVER' && row.cell_id !== null
+            ? await this.cells.leaderForScope(row.cell_id)
+            : null;
+        const path = await this.hierarchy.pastoralPathOf(row.prospective_leader_id);
+        const branchOf = path.topIsRoot && path.ids.length >= 2 ? path.ids[1] : null;
+        // A handover's Cell as it stands; a new Cell, a restart included, is what the
+        // request asks for.
+        const heading =
+          row.kind === 'HANDOVER' && namedCellId !== null
+            ? await this.cells.cellHeadingWithin(this.db, namedCellId)
+            : null;
+
+        return { row, requester, outgoing, branchOf, heading };
+      }),
+    );
+
+    const names = await this.people.namesOf([
+      ...new Set(
+        [
+          ...rows.map((row) => row.prospective_leader_id),
+          ...memberRows.map((m) => m.person_id),
+          ...perRow.flatMap((r) => [r.requester?.personId ?? null, r.outgoing, r.branchOf]),
+        ].filter((id): id is string => id !== null),
+      ),
+    ]);
+
+    const person = (id: string | null) =>
+      id === null
+        ? null
+        : {
+            person_id: id,
+            full_name: names.get(id)?.fullName ?? '',
+            member_id: names.get(id)?.memberId ?? '',
+          };
+
+    for (const { row, requester, outgoing, branchOf, heading } of perRow) {
+      details.set(row.id, {
+        restart: row.restart_of_cell_id !== null,
+        prospective_leader: person(row.prospective_leader_id),
+        requested_by_person: person(requester?.personId ?? null),
+        cell: {
+          cell_id: row.named_cell_handle,
+          category: heading ? heading.category : row.category,
+          day_of_week: heading ? heading.dayOfWeek : row.day_of_week,
+          time_of_day: heading ? heading.scheduledTime : row.time_of_day,
+        },
+        outgoing_leader: person(outgoing),
+        members: memberRows
+          .filter((m) => m.request_id === row.id)
+          .map((m) => person(m.person_id)),
+        branch_of: person(branchOf),
+      });
+    }
+
+    return details;
+  }
+
   private async nowWithin(trx: Transaction<Database>): Promise<Date> {
     const row = await trx
       .selectNoFrom((eb) => eb.fn<Date>('clock_timestamp', []).as('at'))

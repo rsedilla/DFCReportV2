@@ -149,6 +149,17 @@ export const LEADER_FULL_VIEW_ONLY: ReadonlySet<Capability> = new Set([
   Capability.ConquestConfirmOnBehalf,
 ]);
 
+/**
+ * What a Leader account holds only with Approves Cells (section 7, decision 0352): the
+ * approval of the Cell leadership requests of its own branch, excluding itself. Section
+ * 10's further refusals are domain checks in `cells`; the scope value carries the
+ * prohibition on naming oneself and does not enforce it. Like Full view, it adds only to
+ * what the Leader role gives.
+ */
+export const LEADER_APPROVES_CELLS: RoleDefaults = {
+  [Capability.CellApproveLeadership]: ScopeType.SubtreeExclSelf,
+};
+
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
   SENIOR_PASTOR: SENIOR_PASTOR,
   ADMIN: ADMIN,

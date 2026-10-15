@@ -101,6 +101,11 @@ export class CapabilityGuard implements CanActivate {
       );
     }
 
+    if (requirement.target.kind === 'held') {
+      await this.authorization.assertHolds(actor, requirement.capability);
+      return true;
+    }
+
     const target = await this.resolveTarget(requirement.target, request, actor);
     await this.authorization.authorize(actor, requirement.capability, target);
     return true;
@@ -232,6 +237,11 @@ export class CapabilityGuard implements CanActivate {
       return { kind: 'person', personId: actor.personId };
     }
 
+    if (spec.kind === 'held') {
+      // Decided in `canActivate` before any target is resolved; unreachable here.
+      throw new CapabilityDeniedError('This endpoint asks only whether a capability is held.');
+    }
+
     if (spec.kind === 'report_scope') {
       return this.resolveReportScope(spec, request);
     }
@@ -288,6 +298,20 @@ export class CapabilityGuard implements CanActivate {
       // the capability check, and an absent Account and an out-of-scope one produce
       // the identical message and details. The nil UUID is a Person nothing can be,
       // so an unknown Cell and an out-of-scope Cell now answer identically too.
+      return { kind: 'person', personId: leaderId ?? NIL_UUID };
+    }
+
+    if (spec.kind === 'cell_leadership_request') {
+      if (!this.cellScope) {
+        throw new CapabilityDeniedError(
+          'This deployment cannot resolve a Cell scope, so the endpoint is closed.',
+          { target: 'cell_leadership_request' },
+        );
+      }
+
+      // An unknown request becomes a target nothing narrower than Whole Church covers,
+      // the idiom the Cell branch above sets out: absent and out of scope answer alike.
+      const leaderId = await this.cellScope.prospectiveLeaderOfRequest(value);
       return { kind: 'person', personId: leaderId ?? NIL_UUID };
     }
 

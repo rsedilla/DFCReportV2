@@ -28,6 +28,12 @@ export type FullViewBody = {
   full_view: boolean;
 };
 
+/** What setting Approves Cells answers: the account's value after the change. */
+export type ApprovesCellsBody = {
+  id: string;
+  approves_cells: boolean;
+};
+
 /**
  * Disabling an account and re-enabling it, by an administrator (SKILL.md section 6,
  * decision 0307), and ticking Full view (section 7, decision 0323).
@@ -198,10 +204,49 @@ export class AccountAccessService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<FullViewBody> {
+    return (await this.setLeaderTick(
+      'full_view',
+      accountId,
+      fullView,
+      actor,
+      claim,
+    )) as unknown as FullViewBody;
+  }
+
+  /**
+   * Ticks or clears Approves Cells on a Leader account (decision 0352, point 1), exactly as
+   * Full view is ticked: refused on an account holding no `LEADER` role, and audited only
+   * when the value changes.
+   */
+  async setApprovesCells(
+    accountId: string,
+    approvesCells: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<ApprovesCellsBody> {
+    return (await this.setLeaderTick(
+      'approves_cells',
+      accountId,
+      approvesCells,
+      actor,
+      claim,
+    )) as unknown as ApprovesCellsBody;
+  }
+
+  /** The one write both ticks share: lock, check the role, write and audit a change. */
+  private async setLeaderTick(
+    column: 'full_view' | 'approves_cells',
+    accountId: string,
+    value: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, string | boolean>> {
+    const label = column === 'full_view' ? 'Full view' : 'Approves Cells';
+
     return this.db.transaction().execute(async (trx) => {
       const account = await trx
         .selectFrom('accounts')
-        .select(['id', 'full_view'])
+        .select(['id', 'full_view', 'approves_cells'])
         .where('id', '=', accountId)
         .forNoKeyUpdate()
         .executeTakeFirst();
@@ -219,29 +264,30 @@ export class AccountAccessService {
         .executeTakeFirst();
 
       if (!leader) {
-        throw new InvariantViolationError('Full view applies only to a Leader account.', {
+        throw new InvariantViolationError(`${label} applies only to a Leader account.`, {
           account_id: accountId,
         });
       }
 
-      if (account.full_view !== fullView) {
+      if (account[column] !== value) {
         await trx
           .updateTable('accounts')
-          .set({ full_view: fullView, updated_at: new Date() })
+          .set({ [column]: value, updated_at: new Date() })
           .where('id', '=', accountId)
           .execute();
 
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
-          action: 'account.full_view_changed',
+          action:
+            column === 'full_view' ? 'account.full_view_changed' : 'account.approves_cells_changed',
           targetType: 'account',
           targetId: accountId,
-          before: { full_view: account.full_view },
-          after: { full_view: fullView },
+          before: { [column]: account[column] },
+          after: { [column]: value },
         });
       }
 
-      const body: FullViewBody = { id: accountId, full_view: fullView };
+      const body: Record<string, string | boolean> = { id: accountId, [column]: value };
 
       // Last statement (CLAUDE.md, Write endpoints).
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body });

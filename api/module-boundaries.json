@@ -46,6 +46,7 @@
     "cell_leaderships": "cells",
     "cell_memberships": "cells",
     "cell_leadership_requests": "cells",
+    "cell_leadership_request_members": "cells",
     "dcc_events": "attendance",
     "dcc_attendance": "attendance",
     "cell_meetings": "attendance",

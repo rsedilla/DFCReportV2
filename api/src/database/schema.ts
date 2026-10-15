@@ -103,6 +103,12 @@ export interface AccountsTable {
    */
   full_view: Generated<boolean>;
   /**
+   * Approves Cells (section 7, decision 0352): with it a Leader account holds
+   * `cell.approve_leadership` over its own branch, excluding itself. Set only by an
+   * account holding `roles.manage`.
+   */
+  approves_cells: Generated<boolean>;
+  /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
    */
@@ -233,6 +239,9 @@ export type AuditAction =
   // Full view ticked or cleared (section 7, decision 0323), with its previous and new
   // value, by an administrator. Targets the account.
   | 'account.full_view_changed'
+  // Approves Cells ticked or cleared (section 7, decision 0352), with its previous and
+  // new value, by an administrator. Targets the account.
+  | 'account.approves_cells_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
@@ -590,6 +599,12 @@ export interface CellLeadershipRequestsTable {
   decided_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }
 
+/** The three members a new-Cell request names (section 10, decision 0353). Never changed. */
+export interface CellLeadershipRequestMembersTable {
+  request_id: string;
+  person_id: string;
+}
+
 export type IdempotencyState = 'IN_FLIGHT' | 'COMPLETED';
 
 export interface IdempotencyKeysTable {
@@ -856,6 +871,7 @@ export interface Database {
   cell_leaderships: CellLeadershipsTable;
   cell_memberships: CellMembershipsTable;
   cell_leadership_requests: CellLeadershipRequestsTable;
+  cell_leadership_request_members: CellLeadershipRequestMembersTable;
   dcc_events: DccEventsTable;
   dcc_attendance: DccAttendanceTable;
   cell_meetings: CellMeetingsTable;
