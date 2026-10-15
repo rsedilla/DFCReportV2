@@ -604,7 +604,9 @@ export class CellIndexDto {
    * scope already lists and widens nothing.
    */
   @IsOptional()
-  @IsIn(['true'], { message: 'fewer_than_three accepts only the value "true" (SKILL.md section 22).' })
+  @IsIn(['true'], {
+    message: 'fewer_than_three accepts only the value "true" (SKILL.md section 22).',
+  })
   fewer_than_three?: 'true';
 
   /**

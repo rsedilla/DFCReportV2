@@ -146,6 +146,10 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['second_step_recovery_codes', 'sign-in state'],
       ['second_step_challenges', 'sign-in state'],
       ['cell_leadership_requests', 'a request is not a leadership until approved'],
+      [
+        'cell_leadership_request_members',
+        'a named member is not a membership until approved (decision 0353)',
+      ],
       ['audit_log', 'a record of changes, not a source of figures'],
       ['idempotency_keys', 'request replay state'],
       ['settings', 'the monthly reports read no setting; My 12 reads the calendar start'],

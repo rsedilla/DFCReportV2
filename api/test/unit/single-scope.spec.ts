@@ -64,6 +64,23 @@ describe('capabilities held only at Whole Church (section 7)', () => {
     expect(grantCoversNothing(Capability.AccountsManage, ScopeType.WholeChurch)).toBe(false);
   });
 
+  it('voids an explicit narrower grant of cell.approve_leadership, and not the role default Approves Cells selects (decision 0352)', () => {
+    // The tick is the one way a Leader holds it narrower; an Admin-issued grant at any
+    // scope below Whole Church still covers nothing. The source defaults to a grant, so
+    // a caller that forgets to pass it is refused rather than widened.
+    for (const scope of [ScopeType.OwnSubtree, ScopeType.SubtreeExclSelf, ScopeType.Network]) {
+      expect(grantCoversNothing(Capability.CellApproveLeadership, scope, 'grant')).toBe(true);
+      expect(grantCoversNothing(Capability.CellApproveLeadership, scope)).toBe(true);
+    }
+    expect(
+      grantCoversNothing(Capability.CellApproveLeadership, ScopeType.SubtreeExclSelf, 'role'),
+    ).toBe(false);
+
+    // The exemption is for that one capability: a role default of any other member of
+    // the set is still voided below Whole Church.
+    expect(grantCoversNothing(Capability.AccountsManage, ScopeType.OwnSubtree, 'role')).toBe(true);
+  });
+
   it('touches nothing outside the set', () => {
     // A wider grant is untouched too: section 7 contemplates Admin issuing
     // authority beyond a role's defaults, and this rule is about a grant that

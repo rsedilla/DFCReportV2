@@ -417,14 +417,21 @@ export class AuthorizationService {
    * that scope reaches (decision 0352). A grant `grantCoversNothing` voids does not count.
    */
   async assertHolds(actor: Actor, capability: Capability): Promise<void> {
-    const grants = (await this.grantsFor(actor.accountId)).filter(
-      (grant) =>
-        grant.capability === capability &&
-        !grantCoversNothing(capability, grant.scope.type, grant.source),
+    const held = (await this.grantsFor(actor.accountId)).filter(
+      (grant) => grant.capability === capability,
     );
 
-    if (grants.length === 0) {
+    if (held.length === 0) {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
+    }
+
+    // Held, but only at a scope that covers nothing: section 7 answers `SCOPE_DENIED` so an
+    // administrator is sent to the scope rather than to grant a capability already granted.
+    if (held.every((grant) => grantCoversNothing(capability, grant.scope.type, grant.source))) {
+      throw new ScopeDeniedError(
+        `Your grant of ${capability} is narrower than Whole Church, and covers nothing.`,
+        { capability },
+      );
     }
   }
 

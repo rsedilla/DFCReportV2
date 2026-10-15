@@ -105,8 +105,8 @@ export class AccountProvisioningService {
       second_step: { required: boolean; set_up_at: string | null };
       /** Full view (decision 0323); meaningful on a Leader account only. */
       full_view: boolean;
-  /** Approves Cells (decision 0352). */
-  approves_cells: boolean;
+      /** Approves Cells (decision 0352). */
+      approves_cells: boolean;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -143,7 +143,7 @@ export class AccountProvisioningService {
         created_at: new Date(account.created_at).toISOString(),
         second_step: await this.secondSteps.describeFor(account.id),
         full_view: account.full_view,
-      approves_cells: account.approves_cells,
+        approves_cells: account.approves_cells,
       },
     };
   }

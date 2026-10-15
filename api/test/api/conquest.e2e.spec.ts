@@ -11,6 +11,7 @@ import {
   createAccount,
   createCell,
   createPerson,
+  createRequestMembers,
   createTestApp,
   nameSeniorPastors,
 } from '../setup/fixtures';
@@ -549,6 +550,8 @@ describe('Conquest (section 27)', () => {
         category: 'YOUTH',
         day_of_week: 6,
         time_of_day: '18:00',
+        // A new Cell names three members (decision 0353).
+        members: (await createRequestMembers(db, 'MENS')).ids,
       });
       expect(asked.status).toBe(201);
       const approved = await approve(asked.body.id);

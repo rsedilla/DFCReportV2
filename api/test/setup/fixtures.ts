@@ -382,6 +382,35 @@ export function resetRateLimits(app: INestApplication): void {
   storage.storage.clear();
 }
 
+/**
+ * Three current Persons in one Network, for the members a new-Cell request names
+ * (SKILL.md section 10, decision 0353): different people, in no Cell, none of them the
+ * prospective leader. Returned as Persons so a case can archive, move or enrol one of
+ * them; `ids` is what a request body carries.
+ *
+ * Invented names, like every fixture (CLAUDE.md, Secrets).
+ */
+export async function createRequestMembers(
+  db: Kysely<Database>,
+  network: NetworkName,
+  options: { prefix?: string } = {},
+): Promise<{ people: TestPerson[]; ids: string[] }> {
+  const prefix = options.prefix ?? 'Member';
+  const people: TestPerson[] = [];
+
+  for (const suffix of ['One', 'Two', 'Three']) {
+    people.push(
+      await createPerson(db, {
+        firstName: `${prefix}${suffix}`,
+        lastName: `Requestmember${randomUUID().slice(0, 6)}`,
+        network,
+      }),
+    );
+  }
+
+  return { people, ids: people.map((person) => person.id) };
+}
+
 export interface TestCell {
   id: string;
   cellId: string;

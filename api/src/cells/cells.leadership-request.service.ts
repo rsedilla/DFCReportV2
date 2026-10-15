@@ -1831,16 +1831,15 @@ export class CellsLeadershipRequestService {
     memberIds: readonly string[],
     actor: Actor,
   ): Promise<void> {
-    await trx
-      .insertInto('cell_memberships')
-      .values(
-        memberIds.map((personId) => ({
-          person_id: personId,
-          cell_id: applied.cellUuid,
-          started_at: applied.at,
-        })),
-      )
-      .execute();
+    // The Cell's own `created_at`, read in SQL at its full precision: the leadership row's
+    // `started_at` is that instant to the microsecond, and a JavaScript `Date` keeps only the
+    // millisecond, which would start each membership just before the Cell had a leader and be
+    // refused by migration 0009's same-Network check. `insert-cell.ts` does the same.
+    await sql`INSERT INTO cell_memberships (person_id, cell_id, started_at)
+      SELECT member.person_id, c.id, c.created_at
+      FROM cells AS c
+      CROSS JOIN unnest(${[...memberIds]}::uuid[]) AS member(person_id)
+      WHERE c.id = ${applied.cellUuid}`.execute(trx);
 
     for (const personId of memberIds) {
       await this.audit.writeWithin(trx, {
@@ -2022,9 +2021,7 @@ export class CellsLeadershipRequestService {
           time_of_day: heading ? heading.scheduledTime : row.time_of_day,
         },
         outgoing_leader: person(outgoing),
-        members: memberRows
-          .filter((m) => m.request_id === row.id)
-          .map((m) => person(m.person_id)),
+        members: memberRows.filter((m) => m.request_id === row.id).map((m) => person(m.person_id)),
         branch_of: person(branchOf),
       });
     }

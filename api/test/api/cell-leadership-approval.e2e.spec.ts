@@ -13,6 +13,7 @@ import {
   createAccount,
   createCell,
   createPerson,
+  createRequestMembers,
   createTestApp,
 } from '../setup/fixtures';
 
@@ -120,13 +121,29 @@ describe('Cell leadership approval (section 10)', () => {
       .set('Idempotency-Key', randomUUID())
       .send({ reason: 'TIMING_DEFERRED' });
 
-  const newCellBody = (prospectiveLeaderId: string) => ({
+  const newCellBody = (prospectiveLeaderId: string, members: string[]) => ({
     kind: 'NEW_CELL',
     prospective_leader_id: prospectiveLeaderId,
     category: 'YOUTH',
     day_of_week: 6,
     time_of_day: '18:00',
+    members,
   });
+
+  /**
+   * Three fresh members in the prospective leader's current Network (decision 0353).
+   * Fresh per request, because an approval enrols them and a member already in a Cell
+   * may not be named again.
+   */
+  const membersFor = async (prospectiveLeaderId: string): Promise<string[]> => {
+    const row = await db
+      .selectFrom('network_assignments')
+      .select('network')
+      .where('person_id', '=', prospectiveLeaderId)
+      .where('ended_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    return (await createRequestMembers(db, row.network)).ids;
+  };
 
   const handoverBody = (prospectiveLeaderId: string, cellId: string) => ({
     kind: 'HANDOVER',
@@ -136,7 +153,9 @@ describe('Cell leadership approval (section 10)', () => {
 
   /** Submit as `actor` and return the request id. */
   const pendingNewCell = async (actor: TestAccount, personId: string): Promise<string> => {
-    const response = await submit(actor, newCellBody(personId)).expect(201);
+    const response = await submit(actor, newCellBody(personId, await membersFor(personId))).expect(
+      201,
+    );
     return response.body.id as string;
   };
 
@@ -395,11 +414,16 @@ describe('Cell leadership approval (section 10)', () => {
         .where('actor_id', '=', admin.id)
         .execute();
 
+      // Decision 0353: the three members the request names are added in the same
+      // transaction, each audited as a membership change (section 21).
       expect(actions.map((row) => row.action).sort()).toEqual([
         'cell.created',
         'cell_leadership.account_pending',
         'cell_leadership.opened',
         'cell_leadership_request.approved',
+        'cell_membership.added',
+        'cell_membership.added',
+        'cell_membership.added',
       ]);
     });
 
@@ -442,7 +466,7 @@ describe('Cell leadership approval (section 10)', () => {
       approver = await createAccount(app, db, { person: second, roles: ['ADMIN'] });
     });
 
-    const restart = (actor: TestAccount, overrides: Record<string, unknown> = {}) =>
+    const restart = async (actor: TestAccount, overrides: Record<string, unknown> = {}) =>
       submit(actor, {
         kind: 'NEW_CELL',
         prospective_leader_id: mark.id,
@@ -450,6 +474,8 @@ describe('Cell leadership approval (section 10)', () => {
         day_of_week: 6,
         time_of_day: '17:00',
         restart_of_cell_id: markCell.id,
+        // A restart names three members like any new-Cell request (decision 0353).
+        members: await membersFor((overrides.prospective_leader_id as string) ?? mark.id),
         ...overrides,
       });
 
@@ -865,7 +891,13 @@ describe('Cell leadership approval (section 10)', () => {
       const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
       await assignTo(db, womensRoot.id, null);
 
-      const requestId = await pendingNewCell(markAccount, juan.id);
+      // **The three members move with him** (decision 0353). Approval re-checks that each
+      // member is in the new leader's Network, and that check would otherwise refuse
+      // first with `INVARIANT_VIOLATION`; this case pins the leader's own Network change,
+      // so the members are kept in step and only the subtree condition can answer.
+      const members = await membersFor(juan.id);
+      const submitted = await submit(markAccount, newCellBody(juan.id, members)).expect(201);
+      const requestId = submitted.body.id as string;
 
       await db.transaction().execute(async (trx) => {
         const at = new Date();
@@ -875,12 +907,18 @@ describe('Cell leadership approval (section 10)', () => {
         await trx
           .updateTable('network_assignments')
           .set({ ended_at: at })
-          .where('person_id', '=', juan.id)
+          .where('person_id', 'in', [juan.id, ...members])
           .where('ended_at', 'is', null)
           .execute();
         await trx
           .insertInto('network_assignments')
-          .values({ person_id: juan.id, network: 'WOMENS', started_at: at })
+          .values(
+            [juan.id, ...members].map((personId) => ({
+              person_id: personId,
+              network: 'WOMENS' as const,
+              started_at: at,
+            })),
+          )
           .execute();
 
         await trx
@@ -1255,9 +1293,9 @@ describe('Cell leadership approval (section 10)', () => {
   }, 30000);
 
   it('answers NOT_FOUND for a request that does not exist', async () => {
-    // Safe as an absence rather than a denial: the guard admits only a Whole Church
-    // holder of `cell.approve_leadership`, so every caller reaching here would have
-    // been covered had the request existed (section 22).
+    // Safe as an absence rather than a denial: an unknown request resolves to a target
+    // only a Whole Church holder covers (decision 0352), so every caller reaching here
+    // would have been covered had the request existed (section 22).
     const response = await approve(admin, randomUUID()).expect(404);
     expect(response.body.error.code).toBe('NOT_FOUND');
   });
