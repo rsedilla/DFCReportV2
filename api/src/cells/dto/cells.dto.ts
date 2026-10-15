@@ -171,6 +171,17 @@ export class CreateLeadershipRequestDto {
   @ValidateIf((dto: CreateLeadershipRequestDto) => dto.restart_of_cell_id !== undefined)
   @IsUUID()
   restart_of_cell_id?: string;
+
+  /**
+   * The three members a new-Cell request names, a restart included (decision 0353).
+   * Their count, their being different and the leader not being one of them are checked
+   * in the service, beside the other rules `kind` decides; refused on a handover there.
+   */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.members !== undefined)
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsUUID(undefined, { each: true })
+  members?: string[];
 }
 
 /**
@@ -586,6 +597,17 @@ export class CellIndexDto {
     message: 'state accepts ACTIVE or CLOSED (SKILL.md section 22).',
   })
   state?: 'ACTIVE' | 'CLOSED';
+
+  /**
+   * `true` for section 15's *Fewer than 3 members*: the running Cells holding fewer than
+   * three current memberships, the leader not counted (decision 0353). It narrows what the
+   * scope already lists and widens nothing.
+   */
+  @IsOptional()
+  @IsIn(['true'], {
+    message: 'fewer_than_three accepts only the value "true" (SKILL.md section 22).',
+  })
+  fewer_than_three?: 'true';
 
   /**
    * Narrows the page to Cells whose identifier contains the term, where the term carries a

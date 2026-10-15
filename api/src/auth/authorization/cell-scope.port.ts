@@ -89,4 +89,11 @@ export interface CellScopePort {
    * serves a viewing one.
    */
   leaderForScopeAsOf(cellId: string, at: Date): Promise<string | null>;
+
+  /**
+   * The person a Cell leadership request names as the new leader, or null where no such
+   * request exists. What deciding a request is authorized against (decision 0352): the
+   * prospective leader is what the scope is about (section 10).
+   */
+  prospectiveLeaderOfRequest(requestId: string): Promise<string | null>;
 }

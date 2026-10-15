@@ -3,11 +3,14 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   CELL_CHOICES,
   CREATED_CELL,
+  MEMBER_CHOICES,
   PERSON_IN_SCOPE,
+  chooseThreeMembers,
   mockCellApprover,
   mockCellChoices,
   mockCellCreated,
   mockMembershipAdd,
+  mockMemberSearch,
   mockPeople,
   mockPersonCells,
   mockSignedIn,
@@ -534,6 +537,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
   }) => {
     await mockSignedIn(page);
     await mockCellsWithClosed(page);
+    await mockMemberSearch(page);
 
     const sent: unknown[] = [];
     await page.route('**/api/v1/cells/leadership-requests', (route) => {
@@ -572,6 +576,9 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await expect(dialog.getByLabel('What time')).toHaveValue('19:30');
 
     await dialog.getByRole('radio', { name: 'Saturday' }).check();
+    // A restart names three members too (decision 0353).
+    await expect(dialog.getByRole('button', { name: 'Send for approval' })).toBeDisabled();
+    await chooseThreeMembers(dialog);
     await dialog.getByRole('button', { name: 'Send for approval' }).click();
 
     await expect(dialog).toBeHidden();
@@ -583,6 +590,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
         category: 'YOUNG_PRO',
         day_of_week: 6,
         time_of_day: '19:30',
+        members: MEMBER_CHOICES.map((member) => member.id),
       },
     ]);
     await expect(row).toContainText('Sent for approval');

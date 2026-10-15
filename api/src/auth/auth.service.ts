@@ -360,7 +360,7 @@ export class AuthService {
       // `grantsFor` already suppresses the other meaningless grant — a `read_only`
       // write capability — and the two now behave alike from a client's side.
       capabilities: grants
-        .filter((grant) => !grantCoversNothing(grant.capability, grant.scope.type))
+        .filter((grant) => !grantCoversNothing(grant.capability, grant.scope.type, grant.source))
         .map((grant) => ({
           capability: grant.capability,
           scope_type: grant.scope.type,

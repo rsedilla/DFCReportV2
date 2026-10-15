@@ -107,6 +107,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         second_step: { required: true, set_up_at: null },
         // A new account starts without Full view (decision 0323).
         full_view: false,
+        // Nor Approves Cells (decision 0352).
+        approves_cells: false,
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);

@@ -58,6 +58,12 @@ export class SetFullViewDto {
   full_view!: boolean;
 }
 
+/** Approves Cells on a Leader account, ticked or cleared (section 7, decision 0352). */
+export class SetApprovesCellsDto {
+  @IsBoolean()
+  approves_cells!: boolean;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)

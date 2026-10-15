@@ -116,6 +116,8 @@ export async function requestNewCell(
     category: CellCategory;
     day_of_week: number;
     time_of_day: string;
+    /** The three members besides the leader (decision 0353). */
+    members: string[];
   },
   idempotencyKey: string,
 ): Promise<unknown> {
@@ -127,7 +129,8 @@ export async function requestNewCell(
 }
 /**
  * Ask for a closed Cell to restart (decisions 0264 and 0265): a new-Cell request naming
- * the Cell it resumes and the leader who led it. Admin approves it like any other.
+ * the Cell it resumes, the leader who led it and three members (decision 0353). It is
+ * approved like any other new-Cell request.
  */
 export async function requestCellRestart(
   body: {
@@ -136,6 +139,8 @@ export async function requestCellRestart(
     category: CellCategory;
     day_of_week: number;
     time_of_day: string;
+    /** The three members besides the leader (decision 0353). */
+    members: string[];
   },
   idempotencyKey: string,
 ): Promise<unknown> {
@@ -432,6 +437,8 @@ export async function listCells(
     q?: string;
     limit?: number;
     state?: 'ACTIVE' | 'CLOSED';
+    /** Section 15's *Fewer than 3 members* (decision 0353). */
+    fewerThanThree?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
@@ -441,6 +448,9 @@ export async function listCells(
   }
   if (params.state === 'CLOSED') {
     query.set('state', 'CLOSED');
+  }
+  if (params.fewerThanThree) {
+    query.set('fewer_than_three', 'true');
   }
   if (params.cursor) {
     query.set('cursor', params.cursor);

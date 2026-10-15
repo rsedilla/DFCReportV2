@@ -195,6 +195,10 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/approves-cells",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "GET /api/v1/reports/recording-status",
       "screen": "web/components/recording-status.tsx"
     },

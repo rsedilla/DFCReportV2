@@ -1,5 +1,5 @@
 import { ALL_CAPABILITIES } from '../../src/auth/authorization/capabilities';
-import { ROLE_DEFAULTS } from '../../src/auth/authorization/role-defaults';
+import { LEADER_APPROVES_CELLS, ROLE_DEFAULTS } from '../../src/auth/authorization/role-defaults';
 
 import type { Capability } from '../../src/auth/authorization/capabilities';
 import type { AccountRole } from '../../src/database/schema';
@@ -88,6 +88,9 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'SUBTREE_EXCL_SELF',
     LEADER: 'SUBTREE_EXCL_SELF',
   },
+  // The Leader cell reads "subtree, excl. self, with Approves Cells" (decision 0352). Unlike
+  // the Full view rows it is not a Leader default withheld without the tick but one the
+  // tick adds, so it is absent here and pinned against `LEADER_APPROVES_CELLS` below.
   'cell.approve_leadership': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'cell.manage_lifecycle': {
     SENIOR_PASTOR: null,
@@ -230,6 +233,14 @@ describe('the role catalog (SKILL.md section 7)', () => {
       // incentive Person Lifecycle guards against (section 3).
       expect(ROLE_DEFAULTS.LEADER['people.manage_lifecycle']).toBeUndefined();
     });
+  });
+
+  it('gives a Leader cell.approve_leadership only with Approves Cells, over its branch excluding itself (decision 0352)', () => {
+    // The catalog's "subtree, excl. self, with Approves Cells": a set the tick adds,
+    // holding that one capability and nothing else, and never part of the Leader role.
+    expect(LEADER_APPROVES_CELLS).toEqual({ 'cell.approve_leadership': 'SUBTREE_EXCL_SELF' });
+    expect(ROLE_DEFAULTS.LEADER['cell.approve_leadership']).toBeUndefined();
+    expect(ROLE_DEFAULTS.SENIOR_PASTOR['cell.approve_leadership']).toBeUndefined();
   });
 
   it('holds cell.request_leadership at subtree scope for every role', () => {

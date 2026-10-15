@@ -10,6 +10,7 @@ import {
   createAccount,
   createCell,
   createPerson,
+  createRequestMembers,
   createTestApp,
 } from '../setup/fixtures';
 
@@ -44,6 +45,8 @@ describe('Cell leadership requests (section 10)', () => {
   let juan: TestPerson;
   let ben: TestPerson;
   let benCell: TestCell;
+  /** The three members a new-Cell request names (decision 0353). */
+  let members: string[];
 
   beforeAll(async () => {
     db = createTestDb();
@@ -77,6 +80,10 @@ describe('Cell leadership requests (section 10)', () => {
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
     await assignTo(db, ben.id, root.id);
     benCell = await createCell(db, { leader: ben });
+
+    // A pending request holds no membership, so one set of three may be named by every
+    // request a case sends (decision 0353).
+    members = (await createRequestMembers(db, 'MENS')).ids;
   });
 
   afterAll(async () => {
@@ -109,6 +116,7 @@ describe('Cell leadership requests (section 10)', () => {
     category: 'YOUTH',
     day_of_week: 6,
     time_of_day: '18:00',
+    members,
   });
 
   describe('submitting a request', () => {
@@ -707,8 +715,9 @@ describe('Cell leadership requests (section 10)', () => {
     });
 
     it('is refused to a leader', async () => {
-      // `cell.approve_leadership` is Admin's alone (section 7): whoever may decide a
-      // request may see the queue of them, and nobody else.
+      // A Leader holds `cell.approve_leadership` only with Approves Cells (section 7,
+      // decision 0352); Mark is not ticked. Whoever may decide a request may see the
+      // queue of them, and nobody else.
       const response = await queue(markAccount).expect(403);
 
       expect(response.body.error.code).toBe('CAPABILITY_DENIED');

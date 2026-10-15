@@ -63,6 +63,17 @@ export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = new Set([
  * refused the same way and in the same place: a row that cannot mean what it
  * appears to mean grants nothing, rather than being honoured in part.
  */
-export function grantCoversNothing(capability: Capability, scopeType: ScopeType): boolean {
+export function grantCoversNothing(
+  capability: Capability,
+  scopeType: ScopeType,
+  source: 'role' | 'grant' = 'grant',
+): boolean {
+  // A role default a tick selects is the one way a Leader holds one of these narrower
+  // (decision 0352): Approves Cells gives `cell.approve_leadership` over the account's own
+  // branch. An explicit grant narrower than Whole Church still covers nothing.
+  if (source === 'role' && capability === Capability.CellApproveLeadership) {
+    return false;
+  }
+
   return WHOLE_CHURCH_ONLY.has(capability) && scopeType !== ScopeType.WholeChurch;
 }

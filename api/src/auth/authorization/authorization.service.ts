@@ -9,7 +9,7 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
-import { LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
+import { LEADER_APPROVES_CELLS, LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
 import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
@@ -41,6 +41,8 @@ interface ActiveRoles {
   held: AccountRole[];
   /** Full view (section 7, decision 0323), read on the same row as the roles. */
   fullView: boolean;
+  /** Approves Cells (section 7, decision 0352), read on the same row. */
+  approvesCells: boolean;
 }
 
 /**
@@ -133,13 +135,19 @@ export class AuthorizationService {
     const rows = await executor
       .selectFrom('account_roles')
       .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
-      .select(['account_roles.role', 'accounts.person_id', 'accounts.full_view'])
+      .select([
+        'account_roles.role',
+        'accounts.person_id',
+        'accounts.full_view',
+        'accounts.approves_cells',
+      ])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
     return {
       fullView: rows.some((row) => row.full_view),
+      approvesCells: rows.some((row) => row.approves_cells),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -304,7 +312,16 @@ export class AuthorizationService {
     const effective: EffectiveGrant[] = [];
 
     for (const role of roles.honoured) {
-      for (const [capability, scopeType] of Object.entries(ROLE_DEFAULTS[role])) {
+      const defaults =
+        // Only with Full view (decision 0352); the tick write keeps the two together, and a
+        // row restored past it still grants nothing alone.
+        role === 'LEADER' && roles.approvesCells && roles.fullView
+          ? { ...ROLE_DEFAULTS[role], ...LEADER_APPROVES_CELLS }
+          : ROLE_DEFAULTS[role];
+
+      // Approves Cells adds to what the Leader role gives (decision 0352), as Full view
+      // withholds from it; neither touches another role's defaults.
+      for (const [capability, scopeType] of Object.entries(defaults)) {
         // A Leader account without Full view holds none of these (decision 0323).
         if (
           role === 'LEADER' &&
@@ -371,6 +388,31 @@ export class AuthorizationService {
   }
 
   /**
+   * Throws unless the actor holds `capability` at some scope that covers anything: the
+   * guard's answer for a `held` route, whose module then narrows what it returns to what
+   * that scope reaches (decision 0352). Held only at a scope `grantCoversNothing` voids, it
+   * answers `SCOPE_DENIED`, as `authorize` does.
+   */
+  async assertHolds(actor: Actor, capability: Capability): Promise<void> {
+    const held = (await this.grantsFor(actor.accountId)).filter(
+      (grant) => grant.capability === capability,
+    );
+
+    if (held.length === 0) {
+      throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
+    }
+
+    // Held, but only at a scope that covers nothing: section 7 answers `SCOPE_DENIED` so an
+    // administrator is sent to the scope rather than to grant a capability already granted.
+    if (held.every((grant) => grantCoversNothing(capability, grant.scope.type, grant.source))) {
+      throw new ScopeDeniedError(
+        `Your grant of ${capability} is narrower than Whole Church, and covers nothing.`,
+        { capability },
+      );
+    }
+  }
+
+  /**
    * Throws unless the actor holds `capability` over `target`.
    *
    * `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because the
@@ -417,7 +459,7 @@ export class AuthorizationService {
     let coveredNothing = false;
 
     for (const grant of grants) {
-      if (grantCoversNothing(capability, grant.scope.type)) {
+      if (grantCoversNothing(capability, grant.scope.type, grant.source)) {
         coveredNothing = true;
         continue;
       }
@@ -579,7 +621,7 @@ export class AuthorizationService {
     }
 
     for (const grant of authority.grants.filter((held) => held.capability === capability)) {
-      if (grantCoversNothing(capability, grant.scope.type)) {
+      if (grantCoversNothing(capability, grant.scope.type, grant.source)) {
         continue;
       }
 
@@ -664,7 +706,7 @@ export class AuthorizationService {
     const personIds = new Set<string>();
 
     for (const grant of authority.grants.filter((held) => held.capability === capability)) {
-      if (grantCoversNothing(capability, grant.scope.type)) {
+      if (grantCoversNothing(capability, grant.scope.type, grant.source)) {
         continue;
       }
 

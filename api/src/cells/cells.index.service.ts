@@ -114,6 +114,8 @@ export class CellsIndexService {
       cursor?: string;
       q?: string;
       state?: 'ACTIVE' | 'CLOSED';
+      /** Section 15's *Fewer than 3 members* (decision 0353); running Cells only. */
+      fewerThanThree?: boolean;
     },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
@@ -167,6 +169,14 @@ export class CellsIndexService {
     const now = await databaseNow(this.db);
 
     if (query.state === 'CLOSED') {
+      if (query.fewerThanThree) {
+        // Section 15's list is of running Cells (decision 0353); accepted and ignored here it
+        // would answer closed Cells to a question about small ones (section 22).
+        throw new ValidationFailedError(
+          'fewer_than_three lists running Cells and cannot be asked of the closed view.',
+          { field: 'fewer_than_three' },
+        );
+      }
       return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
     }
 
@@ -179,6 +189,7 @@ export class CellsIndexService {
             limit: limit + 1,
             after: after?.cellId ?? null,
             search: query.q ?? null,
+            fewerThanThree: query.fewerThanThree ?? false,
           });
 
     const visible = rows.slice(0, limit);
