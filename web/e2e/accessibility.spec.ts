@@ -933,8 +933,9 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Teresita Alcantara' }).first()).toBeVisible();
-      // The focus block, which is all that names the person now (decision 0354).
-      await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
+      await expect(
+        page.getByRole('navigation', { name: 'Where this person sits' }).getByRole('link').first(),
+      ).toBeVisible();
     },
   },
   {

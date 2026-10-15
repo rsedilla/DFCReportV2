@@ -747,7 +747,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-14 — [Changing a password while signed in](docs/decisions/0351-changing-a-password-while-signed-in.md)
 - 2026-10-15 — [An administrator ticks who approves Cells](docs/decisions/0352-an-administrator-ticks-who-approves-cells.md)
 - 2026-10-15 — [A new Cell starts with three members](docs/decisions/0353-a-new-cell-starts-with-three-members.md)
-- 2026-10-15 — [The People tab is named Add People, and the Branch screen loses its trail and search](docs/decisions/0354-add-people-and-a-plainer-branch-screen.md)
+- 2026-10-15 — [The People tab is named Add People, and its button reads Add](docs/decisions/0354-add-people-and-a-plainer-branch-screen.md)
 
 ### Open — awaiting a ruling
 
