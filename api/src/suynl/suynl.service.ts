@@ -7,18 +7,18 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { Capability } from '../auth/authorization/capabilities';
 import {
   ApiError,
-  ApiErrorCode,
   InvariantViolationError,
   ValidationFailedError,
 } from '../common/errors/api-error';
-import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { GrowthConflictError, nameOfAccount, nameOfPerson } from '../common/growth/growth-conflict';
+import { mayFileEach, submitterLookup, type Filing } from '../common/growth/growth-filing';
 import {
-  filingFor,
-  mayFileEach,
-  submitterLookup,
-  type Filing,
-} from '../common/growth/growth-filing';
+  answerLostRace,
+  filingsFor,
+  onBehalfOf,
+  seenIsCurrent,
+  uniqueIds,
+} from '../common/growth/growth-submit';
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -224,7 +224,7 @@ export class SuynlService {
 
     const reached = (ids: readonly string[]) =>
       ids.filter((id) => population === null || population.has(canonicalId(id)));
-    const everyone = unique([...rows.flatMap((row) => row.members), ...(own ?? [])]);
+    const everyone = uniqueIds([...rows.flatMap((row) => row.members), ...(own ?? [])]);
 
     // The whole church is never enumerated, so its progress is read unrestricted.
     const progress = await this.currentProgress(churchWide ? null : new Set(reached(everyone)));
@@ -235,11 +235,11 @@ export class SuynlService {
     const elsewhere = churchWide ? [...counted.keys()].filter((id) => !inRows.has(id)) : null;
 
     const identities = await this.people.forDecisions(
-      unique([...rows.map((row) => row.leaderId), ...(own ?? []), ...counted.keys()]),
+      uniqueIds([...rows.map((row) => row.leaderId), ...(own ?? []), ...counted.keys()]),
     );
 
     const figures = (ids: readonly string[], names = options.names) => {
-      const people = unique(reached(ids))
+      const people = uniqueIds(reached(ids))
         .flatMap((id) => {
           const entry = counted.get(canonicalId(id));
           const identity = identities.get(id) ?? identities.get(canonicalId(id));
@@ -332,37 +332,20 @@ export class SuynlService {
     try {
       return await this.db.transaction().execute(async (trx) => {
         const now = await databaseNow(trx);
-        const personIds = unique(changes.map((change) => change.person_id));
+        const personIds = uniqueIds(changes.map((change) => change.person_id));
         const identities = await this.people.forDecisionsWithin(trx, personIds);
         const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, now);
-        const filerOf = submitterLookup(this.deps, trx, now);
-        const filings = new Map<string, Filing>();
-
-        for (const change of changes) {
-          const key = canonicalId(change.person_id);
-          if (filings.has(key)) {
-            continue;
-          }
-
-          const filing = await filingFor(
-            this.deps,
-            trx,
-            actor,
-            authority,
-            CAPABILITIES,
-            change.person_id,
-            identities.get(change.person_id),
-            assignments.get(change.person_id),
-            undefined,
-            filerOf,
-          );
-
-          if (filing instanceof Error) {
-            throw filing;
-          }
-
-          filings.set(key, filing);
-        }
+        const filings = await filingsFor(
+          this.deps,
+          trx,
+          actor,
+          authority,
+          CAPABILITIES,
+          personIds,
+          identities,
+          assignments,
+          submitterLookup(this.deps, trx, now),
+        );
 
         // Locked, so a correction racing this one waits and then reads what it left.
         const stored = keyed(await this.currentLessons(trx, personIds, { lock: true }));
@@ -446,26 +429,17 @@ export class SuynlService {
         return response;
       });
     } catch (error) {
-      if (!isUniqueViolation(error) || violatedConstraint(error) !== ONE_CURRENT_INDEX) {
-        throw error;
-      }
-
-      // A lost race on a first tick (section 22, *Write conflicts*): re-read what is now
-      // committed and answer on it — a conflict where a line now disagrees, otherwise
-      // `RESOURCE_BUSY`, since the identical body resubmitted writes nothing.
-      const personIds = unique(changes.map((change) => change.person_id));
-      const stored = keyed(await this.currentLessons(this.db, personIds));
-      const stale = changes.find((change) => outcomeOf(change, stored) === 'STALE');
-
-      if (stale !== undefined) {
-        throw await this.conflictFor(this.db, actor, stale, stored);
-      }
-
-      throw new ApiError(
-        ApiErrorCode.RESOURCE_BUSY,
+      // A lost race on a first tick.
+      return answerLostRace(
+        error,
+        ONE_CURRENT_INDEX,
+        changes,
+        async () =>
+          keyed(await this.currentLessons(this.db, uniqueIds(changes.map((c) => c.person_id)))),
+        (change, stored) => outcomeOf(change, stored) === 'STALE',
+        (change, stored) => this.conflictFor(this.db, actor, change, stored),
         'Somebody else recorded these lessons while yours was being saved. Retry shortly, ' +
           'with the same key.',
-        {},
       );
     }
   }
@@ -640,11 +614,7 @@ function outcomeOf(change: SuynlChange, stored: Map<string, Lesson>): Outcome {
     return 'UNCHANGED';
   }
 
-  const seen = change.seen_id ?? null;
-  if (
-    (seen === null ? null : canonicalId(seen)) !==
-    (current === null ? null : canonicalId(current.id))
-  ) {
+  if (!seenIsCurrent(change.seen_id, current === null ? null : current.id)) {
     return 'STALE';
   }
 
@@ -717,21 +687,12 @@ function idsWhere(
   return new Set([...progress].filter(([, entry]) => test(entry.count)).map(([id]) => id));
 }
 
-/** Whether the actor is withdrawing somebody else's statement (section 14). */
-function onBehalfOf(confirmedBy: string | null, actorPersonId: string): boolean {
-  return confirmedBy !== null && canonicalId(confirmedBy) !== canonicalId(actorPersonId);
-}
-
 function keyOf(personId: string, lesson: number): string {
   return `${canonicalId(personId)}|${lesson}`;
 }
 
 function keyed(lessons: readonly Lesson[]): Map<string, Lesson> {
   return new Map(lessons.map((lesson) => [keyOf(lesson.personId, lesson.lesson), lesson]));
-}
-
-function unique(ids: readonly string[]): string[] {
-  return [...new Map(ids.map((id) => [canonicalId(id), id])).values()];
 }
 
 /** A branch as it stands now: everyone in it, and each direct disciple's own, themselves included. */

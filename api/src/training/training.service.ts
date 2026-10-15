@@ -7,13 +7,18 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { Capability } from '../auth/authorization/capabilities';
 import {
   ApiError,
-  ApiErrorCode,
   InvariantViolationError,
   ValidationFailedError,
 } from '../common/errors/api-error';
-import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { GrowthConflictError, nameOfAccount, nameOfPerson } from '../common/growth/growth-conflict';
-import { filingFor, mayFileEach, type Filing } from '../common/growth/growth-filing';
+import { mayFileEach, type Filing } from '../common/growth/growth-filing';
+import {
+  answerLostRace,
+  filingsFor,
+  onBehalfOf,
+  seenIsCurrent,
+  uniqueIds,
+} from '../common/growth/growth-submit';
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -203,34 +208,19 @@ export class TrainingService {
           }
         }
 
-        const personIds = unique(changes.map((change) => change.person_id));
+        const personIds = uniqueIds(changes.map((change) => change.person_id));
         const identities = await this.people.forDecisionsWithin(trx, personIds);
         const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, now);
-        const filings = new Map<string, Filing>();
-
-        for (const change of changes) {
-          const key = canonicalId(change.person_id);
-          if (filings.has(key)) {
-            continue;
-          }
-
-          const filing = await filingFor(
-            this.deps,
-            trx,
-            actor,
-            authority,
-            CAPABILITIES,
-            change.person_id,
-            identities.get(change.person_id),
-            assignments.get(change.person_id),
-          );
-
-          if (filing instanceof Error) {
-            throw filing;
-          }
-
-          filings.set(key, filing);
-        }
+        const filings = await filingsFor(
+          this.deps,
+          trx,
+          actor,
+          authority,
+          CAPABILITIES,
+          personIds,
+          identities,
+          assignments,
+        );
 
         const stored = keyed(await this.currentGraduations(trx, personIds, { lock: true }));
         const outcomes = changes.map((change) => outcomeOf(change, stored));
@@ -334,25 +324,17 @@ export class TrainingService {
         return response;
       });
     } catch (error) {
-      if (!isUniqueViolation(error) || violatedConstraint(error) !== ONE_CURRENT_INDEX) {
-        throw error;
-      }
-
-      // A lost race on a first graduation (section 22, *Write conflicts*), answered on
-      // what is now committed, as `SuynlService.submit` answers its own.
-      const personIds = unique(changes.map((change) => change.person_id));
-      const stored = keyed(await this.currentGraduations(this.db, personIds));
-      const stale = changes.find((change) => outcomeOf(change, stored) === 'STALE');
-
-      if (stale !== undefined) {
-        throw await this.conflictFor(this.db, actor, stale, stored);
-      }
-
-      throw new ApiError(
-        ApiErrorCode.RESOURCE_BUSY,
+      // A lost race on a first graduation.
+      return answerLostRace(
+        error,
+        ONE_CURRENT_INDEX,
+        changes,
+        async () =>
+          keyed(await this.currentGraduations(this.db, uniqueIds(changes.map((c) => c.person_id)))),
+        (change, stored) => outcomeOf(change, stored) === 'STALE',
+        (change, stored) => this.conflictFor(this.db, actor, change, stored),
         'Somebody else recorded these graduations while yours was being saved. Retry shortly, ' +
           'with the same key.',
-        {},
       );
     }
   }
@@ -395,7 +377,7 @@ export class TrainingService {
       .execute();
 
     // Current people only (decision 0279).
-    const identities = await this.people.forDecisions(unique(rows.map((row) => row.person_id)));
+    const identities = await this.people.forDecisions(uniqueIds(rows.map((row) => row.person_id)));
     const held = new Map<string, Set<TrainingProgram>>();
 
     for (const row of rows) {
@@ -544,11 +526,7 @@ function outcomeOf(change: TrainingChange, stored: Map<string, Graduation>): Out
     return 'UNCHANGED';
   }
 
-  const seen = change.seen_id ?? null;
-  if (
-    (seen === null ? null : canonicalId(seen)) !==
-    (current === null ? null : canonicalId(current.id))
-  ) {
+  if (!seenIsCurrent(change.seen_id, current === null ? null : current.id)) {
     return 'STALE';
   }
 
@@ -640,11 +618,6 @@ function allFive(held: Map<string, Set<TrainingProgram>>): Set<string> {
   );
 }
 
-/** Whether the actor is withdrawing somebody else's statement (section 14). */
-function onBehalfOf(confirmedBy: string | null, actorPersonId: string): boolean {
-  return confirmedBy !== null && canonicalId(confirmedBy) !== canonicalId(actorPersonId);
-}
-
 function keyOf(personId: string, program: TrainingProgram): string {
   return `${canonicalId(personId)}|${program}`;
 }
@@ -653,8 +626,4 @@ function keyed(graduations: readonly Graduation[]): Map<string, Graduation> {
   return new Map(
     graduations.map((graduation) => [keyOf(graduation.personId, graduation.program), graduation]),
   );
-}
-
-function unique(ids: readonly string[]): string[] {
-  return [...new Map(ids.map((id) => [canonicalId(id), id])).values()];
 }
