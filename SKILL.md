@@ -1728,7 +1728,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.manage_leadership` | — | Whole Church | own/subtree |
 | `cell.manage_configuration` | — | Whole Church | own/subtree |
 | `cell.request_leadership` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
-| `cell.approve_leadership` | — | Whole Church | — |
+| `cell.approve_leadership` | — | Whole Church | subtree, excl. self, with Approves Cells |
 | `cell.manage_lifecycle` | — | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
 | `audit.view` | Whole Church | Whole Church | — |
@@ -1767,6 +1767,8 @@ A role is a starting set, never a ceiling or a substitute for the checks themsel
 
 **A Leader account without *Full view* holds no `reports.view_subtree` and no Training or Conquest capability** (ruling of 2026-10-08, decision 0323). An account holding `roles.manage` ticks Full view on a Leader account, as many as it chooses, and each change is audit logged with its previous and new value; a new account starts without it. Beside `reports.view_subtree` it withholds `training.view_subtree`, `training.confirm`, `training.confirm_on_behalf`, `conquest.view_subtree`, `conquest.confirm` and `conquest.confirm_on_behalf`, and the API refuses their routes to such an account. It changes only what the Leader role gives, so an account that also holds `SENIOR_PASTOR` or `ADMIN` keeps that role's defaults. Section 19 gives the account the recording screens.
 
+**A Leader account holds `cell.approve_leadership` only with *Approves Cells*** (ruling of 2026-10-15, decision 0352). An account holding `roles.manage` ticks it on a Leader account, as Full view is ticked, and each change is audit logged with its previous and new value; a new account starts without it. With it the account holds the capability at `SUBTREE_EXCL_SELF`, as a Leader default the tick selects, so `/api/v1/auth/me` marks it `role`; Section 10 says what it may decide. The tick confers it, never the person's place in the tree (Section 1, Principle 3).
+
 ### Capability and Scope are independent grants
 
 Authorization is expressed as two independent dimensions that combine to form Access:
@@ -1780,7 +1782,7 @@ Authorization is expressed as two independent dimensions that combine to form Ac
 
 The four scope values are a closed enumeration. A guard cannot fail closed against an open one, so do not add a fifth without amending this specification.
 
-`SUBTREE_EXCL_SELF` is used by `cell.request_leadership` alone, where the object the scope is about — the prospective leader — is also the one object the actor may not be (Section 10). A handover carries a second object, the Cell, and that one is a domain check rather than part of the scope, on the rule below. Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records the attendance they owe. Where a rule forbids acting on oneself the prohibition is a domain check rather than a scope value — whether or not the grant must still reach oneself as a *source*, as it must for pastoral reassignment (Section 5 invariant 4). `cell.request_leadership` is not an exception to that: its scope value is chosen to match the prohibition and does not enforce it, for the reason given under *How grants are held* below.
+`SUBTREE_EXCL_SELF` is used by `cell.request_leadership`, and by `cell.approve_leadership` on an account ticked *Approves Cells* (decision 0352), where the object the scope is about — the prospective leader — is also the one object the actor may not be (Section 10). A handover carries a second object, the Cell, and that one is a domain check rather than part of the scope, on the rule below. Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records the attendance they owe. Where a rule forbids acting on oneself the prohibition is a domain check rather than a scope value — whether or not the grant must still reach oneself as a *source*, as it must for pastoral reassignment (Section 5 invariant 4). Neither capability is an exception to that: its scope value is chosen to match the prohibition and does not enforce it, for the reason given under *How grants are held* below.
 
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
@@ -1947,7 +1949,7 @@ It is self-perpetuating, which is why it is a constraint rather than a caution: 
 
 **`roles.manage` and `accounts.manage` are never held by an account holding `SENIOR_PASTOR`, by role or by explicit grant.** A grant of either against such an account is rejected, and so is a `SENIOR_PASTOR` row on an account already carrying one. An endpoint that issues a grant or a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error. No endpoint issues a capability grant at all today, and the one that issues a role does so only on an account created in the same transaction, which can carry no grants — so this is the contract the first endpoint to reach it owes.
 
-**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` and `cell.approve_leadership` are withheld by the table and argued nowhere above.
+**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` is withheld by the table and argued nowhere above, and so is `cell.approve_leadership`, which a Leader account holds over its own branch only when an administrator ticks *Approves Cells* (decision 0352).
 
 So the other five remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
 
@@ -2024,9 +2026,9 @@ A request is allowed where **any** active role default or active grant for that 
 
 Those conditions are enforced in the owning module's domain layer — `hierarchy` for Section 5, `cells` for the Section 10 workflow — and are additional to the guard, never a substitute for it and never expressible as a scope value. A developer who implements the guard and believes the rule is implemented has built half of it.
 
-`SUBTREE_EXCL_SELF` exists for the one case where a scope value is *chosen* to match a prohibition: `cell.request_leadership`, where the object the scope resolves against is the object the actor may not be (Section 10).
+`SUBTREE_EXCL_SELF` exists for the cases where a scope value is *chosen* to match a prohibition: `cell.request_leadership`, and `cell.approve_leadership` held through *Approves Cells* (decision 0352), where the object the scope resolves against is the object the actor may not be (Section 10).
 
-**It does not enforce that prohibition, and must not be relied on to.** Section 10's rule is categorical — "no holder of the capability, at any scope, may name themselves" — and a scope value delivers it only while the grant carries that scope. A grant of this capability at `NETWORK` or `WHOLE_CHURCH` is an ordinary row: this section permits authority beyond a role's defaults, and the rule refusing a grant for being too *narrow* has no counterpart refusing one for being too wide. At Whole Church the scope check returns before the target is read at all. The prohibition is therefore a domain check in the module that owns the workflow, exactly as it is for Section 5 invariant 4 — which Section 10 names as the same prohibition for the same reason.
+**It does not enforce either prohibition, and must not be relied on to.** Section 10's rule is categorical — "no holder of the capability, at any scope, may name themselves" — and a scope value delivers it only while the grant carries that scope. A grant of this capability at `NETWORK` or `WHOLE_CHURCH` is an ordinary row: this section permits authority beyond a role's defaults, and the rule refusing a grant for being too *narrow* has no counterpart refusing one for being too wide. At Whole Church the scope check returns before the target is read at all. The prohibition is therefore a domain check in the module that owns the workflow, exactly as it is for Section 5 invariant 4 — which Section 10 names as the same prohibition for the same reason.
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
@@ -2084,7 +2086,10 @@ two codes.
 The rule is general rather than named per capability, because the hole is. It was
 first closed for `people.correct_sex` alone, and the same shape was open on
 `accounts.manage`, `roles.manage`, `people.merge`, `records.backdate_effective_date`,
-`settings.manage`, `people.manage_lifecycle` and `cell.approve_leadership`.
+`settings.manage`, `people.manage_lifecycle` and `cell.approve_leadership`. The last is
+also held narrower through *Approves Cells* (decision 0352), which is a role default the
+tick selects and not a grant; an explicit grant of it narrower than Whole Church still
+covers nothing.
 
 **`audit.view` is deliberately not among them**, and the two lines above say why:
 an audit entry resolves through its target, which is machinery with no purpose
@@ -2664,7 +2669,7 @@ Changing a Cell's schedule is governed by `cell.manage_configuration` (Section 7
 
 ### Creating a Cell
 
-A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **Admin approves**. **No actor may approve a request they submitted.**
+A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **an approver of that branch, or Admin, approves** (decision 0352). **No actor may approve a request they submitted.**
 
 Outside initial encoding (Section 2), this is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
 
@@ -2692,11 +2697,11 @@ The consequence is narrow and is accepted rather than discovered: an actor grant
 
 No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
 
-**Step two — Admin approves.** The capability is `cell.approve_leadership`, held by Admin only and granted to no other role.
+**Step two — an approver or Admin approves** (ruling of 2026-10-15, decision 0352). The capability is `cell.approve_leadership`. Admin holds it at Whole Church and may approve or decline any request. A Leader account an administrator has ticked *Approves Cells* (Section 7) holds it over its own branch: the prospective leader must be in its subtree, and so must the Cell a handover or a restart names, resolved through the Cell's leader, or a closed Cell's last leader. Such an account may not decide a request it sent, one naming its own Person as the new leader, one naming a Cell that Person leads, or one whose new leader is that Person's own direct disciple, whom Section 16's *Leaders with 12+ Direct Leaders* and Section 27's *Raise 12 leaders* count for it; those go to Admin. **No holder of the capability, at any scope, approves a request naming themselves as the new leader**, a domain check as the matching rule for requesting is. An approval Admin thinks wrong is undone as this section already provides: a new Cell or a restart is closed as `CREATED_IN_ERROR`, and a wrong handover is handed back by a new request. A decision itself stays final (below).
 
 The enforceable control is the per-request rule stated above: **no actor may approve a request they submitted.** That is what must be checked on every approval, and it holds even where one person happens to hold both capabilities. Do not rely instead on the two capabilities never meeting in one actor — Admin holds both by default, and separation expressed only through role defaults is separation an Admin-issued grant can undo (Section 7).
 
-Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so approval and the account land with one authorized actor rather than stalling between two.
+*Admin held approval alone until decision 0352, on the ground that approving a new Cell Leader meant provisioning their account. That ground had already gone: approval leaves the account step pending for an administrator (below, decision 0152).*
 
 **Approval revalidates the target.** The state at approval governs, never the state at request.
 
@@ -2757,7 +2762,7 @@ Nothing else about the Cell changes. It keeps its Cell ID, its category history 
 
 **Everything takes effect at approval, never at request.** New Cell Leaders is defined by when a leadership assignment starts (Section 16), so a request submitted on 30 September and approved on 2 October belongs to October. Nothing about a request is backdated to when it was made.
 
-**Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
+**Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards. It needs `cell.approve_leadership` at Whole Church, so an account holding it only through *Approves Cells* is refused (decision 0352).
 
 ```text
 cell_leadership_requests
@@ -2803,7 +2808,7 @@ cell_leadership_requests
 
 Declined requests are retained — they are part of the record of how a leader was developed.
 
-**Declining.** Admin may decline a request with a reason, from a fixed list:
+**Declining.** Whoever may approve a request may decline it (decision 0352), with a reason, from a fixed list:
 
 - `LEADER_DEVELOPMENT_CONTINUING`
 - `TIMING_DEFERRED`
@@ -2815,9 +2820,9 @@ The list is fixed and not administrator-configurable, for the reason given in Se
 
 **The requester may decline their own request.** The prohibition above is on *approving* one, and the reason it exists does not carry: the requester benefits from an approval, which is why a second party is required for it, and benefits from a decline not at all. `SUBMITTED_IN_ERROR` is in the fixed list for exactly this, and it is the reason a requester will ordinarily use — a leader who named the wrong person, or who has since learned that the timing is wrong, withdrawing their own request.
 
-Stated rather than left to fall out of the silence, because the alternative is terminal rather than merely stricter. `cell.approve_leadership` is Admin's alone (Section 7), so on a deployment with one Admin a request that Admin submitted could be approved by nobody — correctly — and declined by nobody either. It would stay `PENDING` for ever, and the per-leader uniqueness rule above would then block every future `NEW_CELL` request for that prospective leader, permanently.
+Stated rather than left to fall out of the silence, because the alternative is terminal rather than merely stricter. `cell.approve_leadership` was Admin's alone until decision 0352, so on a deployment with one Admin a request that Admin submitted could be approved by nobody — correctly — and declined by nobody either. It would stay `PENDING` for ever, and the per-leader uniqueness rule above would then block every future `NEW_CELL` request for that prospective leader, permanently.
 
-A decline still carries `cell.approve_leadership`, so an ordinary leader cannot decline their own request; the case this rule reaches is an Admin who submitted one. It changes nothing about who may *approve*.
+A decline still carries `cell.approve_leadership`, so a leader who holds it nowhere cannot decline their own request; the case this rule reaches is an Admin or a ticked approver who submitted one. It changes nothing about who may *approve*.
 
 **A decision is final.** A `DECLINED` request is never later approved, an `APPROVED` one is never reversed, and neither is returned to `PENDING`. What a request asked — its kind, the person it names, who submitted it and when — is immutable from the moment it is written; the category, day and time a `NEW_CELL` request asks *for* stay writable while it is `PENDING`, so a mistyped time is corrected rather than declined and resubmitted.
 
@@ -2825,13 +2830,13 @@ The way forward from a decline is a new request, not a revived one. That keeps t
 
 Reversing an approval is a different operation and is not this one. A Cell created in error is closed (`CREATED_IN_ERROR`, Cell lifecycle below), and a handover completed in error is corrected by handing the Cell back — each an ordinary authorized action with its own audit entry, rather than a decision rewritten in place.
 
-**Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
+**Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and to an account holding `cell.approve_leadership` those it may decide, on the Cells page's *Cells to Approve* tab (Section 19, decision 0352), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
 
 **Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
 
 The same shape governs the other actions where a leader would benefit from the result. Archival reduces a leader's own People count, and is requested by a leader and performed by Admin. Person Merge lowers totals for periods already reported, and is Admin only — not held by Senior Pastors (Section 3, Section 7).
 
-**What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the Admin queue above, which is the workflow's own task surface.
+**What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the queue above, which is the workflow's own task surface; an approver deciding a request there is the workflow's one approval, not a tier added to it (decision 0352).
 
 ### Cell lifecycle
 
@@ -4175,10 +4180,11 @@ The sidebar has five items, four for a Leader account without Full view and thre
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    Cell Groups, DCC, SUYNL, Training and Conquest (a Full view leader: four, decision 0340), and Network Summary when it is built (Section 16)
 People     My People and Search (Sections 3 and 8), and My Network, the pastoral tree (Section 5)
-Cells      the Cell Leaders module (Section 15)
+Cells      the Cell Leaders module (Section 15), and Cells to Approve (decision 0352)
 Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 My Cell    a Leader account without Full view: its own Cells (Section 15, decision 0323)
 SUYNL      a Leader account without Full view: the Growth SUYNL tab (Section 28, decision 0323)
+Cells      a Leader account without Full view ticked Approves Cells: Cells to Approve alone (decision 0352)
 Trends     a Senior Pastor: one figure over twelve months (Section 17, decision 0326)
 ```
 
@@ -4713,7 +4719,7 @@ POST /api/v1/cells                       direct creation, initial encoding only
 GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor's own or their branch (decision 0258)
 
 POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
-GET  /api/v1/cells/leadership-requests     the Admin queue: pending, either kind
+GET  /api/v1/cells/leadership-requests     the approval queue: pending, either kind, those the actor may decide (decision 0352)
 GET  /api/v1/cells/leadership-requests/sent  the requests the caller's account sent, decision 0269
 POST /api/v1/cells/leadership-requests/{request_id}/approve
 POST /api/v1/cells/leadership-requests/{request_id}/decline  with a reason from the fixed list
