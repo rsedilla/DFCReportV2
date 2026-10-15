@@ -682,9 +682,11 @@ function FocusBlock({
     <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
       <div>
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
-        <p className="text-muted mt-1 text-sm">
-          {parent === null ? noLeaderLabel(entries, noLeaderReason) : `pastored by ${parent.full_name}`}
-        </p>
+        {/* Who pastors them is the trail above; the line saying so is gone (decision 0354). Where
+            nobody pastors them, why is still said (decision 0270). */}
+        {parent === null ? (
+          <p className="text-muted mt-1 text-sm">{noLeaderLabel(entries, noLeaderReason)}</p>
+        ) : null}
       </div>
       {mayMove && !isMe ? (
         <Button variant="secondary" onClick={onMove}>

@@ -227,7 +227,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/people');
 
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
-      'People',
+      'Add People',
       'Branch',
       'Family Tree',
     ]);
