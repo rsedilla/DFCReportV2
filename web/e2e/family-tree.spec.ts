@@ -31,7 +31,7 @@ test('a Full view account has the Family Tree tab, after People and Branch', asy
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['People', 'Branch', 'Family Tree']);
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Branch', 'Family Tree']);
   await expect(peopleTabs(page).getByRole('link', { name: 'Family Tree' })).toHaveAttribute(
     'href',
     '/family-tree',
@@ -45,7 +45,7 @@ test('a Senior Pastor has no Family Tree tab', async ({ page }) => {
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['People', 'Branch']);
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Branch']);
 });
 
 test('a Recording-only account has no Family Tree tab', async ({ page }) => {

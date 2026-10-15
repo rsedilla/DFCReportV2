@@ -2484,14 +2484,14 @@ test('the People item carries People, Branch and Family Tree tabs', async ({ pag
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['People', 'Branch', 'Family Tree']);
-  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('People');
+  await expect(tabs.getByRole('link')).toHaveText(['Add People', 'Branch', 'Family Tree']);
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveAttribute(
     'href',
     '/network',
   );
 
-  await tabs.getByRole('link', { name: 'People', exact: true }).focus();
+  await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toBeFocused();
 });
