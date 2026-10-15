@@ -1,24 +1,19 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { GrowthSaveBar, GrowthTabs, longDay } from '@/components/growth-controls';
 import {
-  GrowthCards,
-  GrowthFilters,
-  GrowthSaveBar,
-  GrowthTabs,
-  StillToFinish,
-  longDay,
-} from '@/components/growth-controls';
-import { Button } from '@/components/ui/button';
-import { CursorPager } from '@/components/ui/cursor-pager';
-import { FailureNotice } from '@/components/ui/failure-notice';
+  GrowthFailure,
+  GrowthListControls,
+  GrowthPersonName,
+  GrowthRows,
+  useGrowthList,
+  useGrowthSave,
+} from '@/components/growth-list';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { ApiRequestError } from '@/lib/api-client';
 import {
   PROGRAM_LABELS,
   TRAINING_PROGRAMS,
@@ -29,13 +24,7 @@ import {
   type TrainingPerson,
   type TrainingProgram,
 } from '@/lib/growth';
-import { idempotencyKeyFor } from '@/lib/idempotency';
-import { getMe } from '@/lib/me';
-import { describeFailure } from '@/lib/messages';
 import { todayInManila } from '@/lib/reporting-month';
-import { useCursorPages } from '@/lib/cursor-pages';
-import { usePageSize } from '@/lib/page-size';
-import { useScreenAddress } from '@/lib/screen-address';
 
 /**
  * The Training tab of Growth (SKILL.md section 28; decisions 0278 to 0282, and the owner's
@@ -83,46 +72,17 @@ function isChange(entry: DraftEntry): boolean {
 }
 
 function TrainingTab() {
-  const search = useSearchParams();
-  const go = useScreenAddress();
-  const queryClient = useQueryClient();
-  const q = search.get('q') ?? '';
-  const mine = search.get('mine') === '1';
-  const step = search.get('step');
-  const everyone = search.get('all') === '1';
-  // Opens on those still to finish (decision 0287); a card, a search, Only my disciples or
-  // Show everyone widens it.
-  const listStep = step ?? (q === '' && !mine && !everyone ? 'STILL_TO_FINISH' : null);
-
-  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const pageSize = usePageSize();
-  // A new size starts the list again, so no row is skipped between two page lengths.
-  const pages = useCursorPages(`${q}|${mine}|${listStep ?? ''}|${pageSize}`);
-
-  const counts = useQuery({
-    queryKey: ['training-counts'],
-    queryFn: ({ signal }) => getTrainingCounts(signal),
+  const list = useGrowthList({
+    name: 'training',
+    getCounts: getTrainingCounts,
+    listPeople: listTrainingPeople,
   });
-  const people = useQuery({
-    queryKey: ['training-people', q, mine, listStep, pages.cursor, pageSize],
-    queryFn: ({ signal }) =>
-      listTrainingPeople(
-        {
-          q,
-          mine,
-          step: listStep ?? undefined,
-          cursor: pages.cursor,
-          limit: pageSize,
-        },
-        signal,
-      ),
-  });
+  const { me, counts, rows } = list;
 
   const [draft, setDraft] = useState<Record<string, DraftEntry>>({});
   const [reason, setReason] = useState('');
   const [saved, setSaved] = useState(false);
 
-  const rows = useMemo(() => people.data?.data ?? [], [people.data]);
   const entries = Object.values(draft).filter(isChange);
   const needsReason = entries.some((entry) => entry.seen_id !== null);
   const today = todayInManila();
@@ -141,41 +101,27 @@ function TrainingTab() {
         })),
     [draft, reason],
   );
-  const idempotencyKey = useMemo(() => idempotencyKeyFor('training', changes), [changes]);
 
-  const save = useMutation({
-    mutationFn: () => submitTraining(changes, idempotencyKey),
-    onSuccess: async () => {
+  const growthSave = useGrowthSave({
+    list,
+    changes,
+    submit: submitTraining,
+    setDraft,
+    keep: (entry, byPerson) => {
+      const row = byPerson.get(entry.person_id);
+      if (row === undefined) {
+        return true;
+      }
+      const stored = row.graduations.find((item) => item.program === entry.program) ?? null;
+      return (stored?.id ?? null) === entry.seen_id;
+    },
+    onSaved: () => {
       setDraft({});
       setReason('');
       setSaved(true);
-      await queryClient.invalidateQueries({ queryKey: ['training-people'] });
-      await queryClient.invalidateQueries({ queryKey: ['training-counts'] });
     },
   });
-
-  const stale = save.error instanceof ApiRequestError && save.error.code === 'VERSION_CONFLICT';
-
-  /** Refetch, and keep only the draft lines still made against what is now stored. */
-  async function reload() {
-    const fresh = await people.refetch();
-    await counts.refetch();
-    const byPerson = new Map((fresh.data?.data ?? []).map((row) => [row.person_id, row]));
-
-    setDraft((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([, entry]) => {
-          const row = byPerson.get(entry.person_id);
-          if (row === undefined) {
-            return true;
-          }
-          const stored = row.graduations.find((item) => item.program === entry.program) ?? null;
-          return (stored?.id ?? null) === entry.seen_id;
-        }),
-      ),
-    );
-    save.reset();
-  }
+  const { save } = growthSave;
 
   function update(row: TrainingPerson, program: TrainingProgram, change: Partial<DraftEntry>) {
     const stored = row.graduations.find((item) => item.program === program) ?? null;
@@ -250,120 +196,72 @@ function TrainingTab() {
           </Link>
         </p>
 
-        <GrowthFilters
-          submitted={q}
-          mine={mine}
-          onSearch={(term) => go({ q: term })}
-          onMine={(next) => go({ mine: next ? '1' : null })}
-        />
-
-        <GrowthCards
+        <GrowthListControls
+          list={list}
           cards={cards}
-          selected={step}
-          onSelect={(next) => go({ step: next, all: null })}
+          finished={counts.data?.all_five}
+          what="all five"
         />
 
-        {step === null && q === '' && !mine ? (
-          <StillToFinish
-            everyone={everyone}
-            finished={counts.data?.all_five}
-            what="all five"
-            onChange={(all) => go({ all: all ? '1' : null })}
-          />
-        ) : null}
+        <GrowthFailure list={list} growthSave={growthSave} />
 
-        <div className="mt-8">
-          <FailureNotice
-            failure={
-              people.isError
-                ? describeFailure(people.error)
-                : counts.isError
-                  ? describeFailure(counts.error)
-                  : save.isError
-                    ? describeFailure(save.error)
-                    : null
-            }
-          />
-          {stale ? (
-            <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
-              Reload
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="mt-4">
-          {people.isPending ? (
-            <p className="text-muted text-sm">Loading&hellip;</p>
-          ) : people.isError ? null : rows.length === 0 ? (
-            <p className="text-sm">Nobody here matches.</p>
-          ) : (
-            <>
-              <Table
-                caption="Training graduations for the people you oversee"
-                className="hidden lg:block"
-              >
-                <thead>
-                  <tr>
-                    <HeaderCell>Person</HeaderCell>
-                    {TRAINING_PROGRAMS.map((program) => (
-                      <HeaderCell key={program} className="px-1 text-center">
-                        {PROGRAM_LABELS[program]}
-                      </HeaderCell>
-                    ))}
-                    <HeaderCell className="text-right">Done</HeaderCell>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.person_id} className={rowClasses}>
-                      <td className="px-3 py-3 align-top">
-                        <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                      </td>
-                      {TRAINING_PROGRAMS.map((program) => (
-                        <td key={program} className="px-1 py-3 text-center align-top">
-                          {cell(row, program)}
-                        </td>
-                      ))}
-                      <td className="px-3 py-3 text-right align-top">{doneLabel(row, draft)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-
-              <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
-                {rows.map((row) => (
-                  <li key={row.person_id} className="py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <PersonName row={row} self={row.person_id === me.data?.person_id} />
-                      <span className="text-sm">{doneLabel(row, draft)}</span>
-                    </div>
-                    <ul className="mt-2">
-                      {TRAINING_PROGRAMS.map((program) => (
-                        <li
-                          key={program}
-                          className="border-line flex min-h-11 items-center justify-between gap-3 border-t py-2 first:border-t-0"
-                        >
-                          <span aria-hidden="true" className="text-sm">
-                            {PROGRAM_LABELS[program]}
-                          </span>
-                          <div className="flex flex-col items-end">{cell(row, program)}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
+        <GrowthRows list={list}>
+          <Table
+            caption="Training graduations for the people you oversee"
+            className="hidden lg:block"
+          >
+            <thead>
+              <tr>
+                <HeaderCell>Person</HeaderCell>
+                {TRAINING_PROGRAMS.map((program) => (
+                  <HeaderCell key={program} className="px-1 text-center">
+                    {PROGRAM_LABELS[program]}
+                  </HeaderCell>
                 ))}
-              </ul>
+                <HeaderCell className="text-right">Done</HeaderCell>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.person_id} className={rowClasses}>
+                  <td className="px-3 py-3 align-top">
+                    <GrowthPersonName row={row} self={row.person_id === me.data?.person_id} />
+                  </td>
+                  {TRAINING_PROGRAMS.map((program) => (
+                    <td key={program} className="px-1 py-3 text-center align-top">
+                      {cell(row, program)}
+                    </td>
+                  ))}
+                  <td className="px-3 py-3 text-right align-top">{doneLabel(row, draft)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
 
-              <CursorPager
-                label="Results"
-                page={pages.page}
-                nextCursor={people.data.next_cursor}
-                onPrevious={pages.previous}
-                onNext={() => pages.next(people.data.next_cursor)}
-              />
-            </>
-          )}
-        </div>
+          <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
+            {rows.map((row) => (
+              <li key={row.person_id} className="py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <GrowthPersonName row={row} self={row.person_id === me.data?.person_id} />
+                  <span className="text-sm">{doneLabel(row, draft)}</span>
+                </div>
+                <ul className="mt-2">
+                  {TRAINING_PROGRAMS.map((program) => (
+                    <li
+                      key={program}
+                      className="border-line flex min-h-11 items-center justify-between gap-3 border-t py-2 first:border-t-0"
+                    >
+                      <span aria-hidden="true" className="text-sm">
+                        {PROGRAM_LABELS[program]}
+                      </span>
+                      <div className="flex flex-col items-end">{cell(row, program)}</div>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </GrowthRows>
 
         <GrowthSaveBar
           summary={
@@ -387,26 +285,6 @@ function TrainingTab() {
         />
       </GrowthTabs>
     </main>
-  );
-}
-
-function PersonName({ row, self }: { row: TrainingPerson; self: boolean }) {
-  return (
-    <div>
-      <Link
-        href={`/people/${row.person_id}`}
-        className="focus-visible:outline-accent inline-flex min-h-6 items-center font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-      >
-        {row.full_name}
-      </Link>
-      {!row.may_file ? (
-        // Decision 0280: nobody records their own; anyone else here is somebody the
-        // reader may not file for, a Network root among them, who has no leader.
-        <span className="text-muted block text-xs">
-          {self ? 'You · another leader records these' : 'Not yours to record'}
-        </span>
-      ) : null}
-    </div>
   );
 }
 
