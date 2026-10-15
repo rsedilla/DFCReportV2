@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CapabilityDeniedError, ScopeDeniedError } from '../common/errors/api-error';
-import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
+import { compareRosterKeys, pageByRosterKey, rosterKeyOf } from '../common/roster-cursor';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 
@@ -132,19 +132,14 @@ export class NetworkTreeService {
       .flatMap((id) => {
         const identity = identities.get(id);
 
-        return identity === undefined ? [] : [{ id, key: keyOf(identity) }];
+        return identity === undefined ? [] : [{ id, key: rosterKeyOf(identity) }];
       })
-      .sort((left, right) => compareKeys(left.key, right.key));
+      .sort((left, right) => compareRosterKeys(left.key, right.key));
 
-    const after = decodeRosterCursor(page.cursor);
-    const limit = page.limit ?? DEFAULT_PAGE;
-
-    // `-1` means the cursor is past every row, which is the last page rather than the
-    // first, as the DCC gap list argues for the same arithmetic.
-    const beyond = after === null ? 0 : rows.findIndex((row) => compareKeys(row.key, after) > 0);
-    const start = beyond === -1 ? rows.length : beyond;
-    const window = rows.slice(start, start + limit);
-    const last = window[window.length - 1];
+    const { window, next_cursor } = pageByRosterKey(rows, (row) => row.key, {
+      cursor: page.cursor,
+      limit: page.limit ?? DEFAULT_PAGE,
+    });
 
     return {
       person: nodeOf(personId),
@@ -153,8 +148,7 @@ export class NetworkTreeService {
 
         return node === null ? [] : [node];
       }),
-      next_cursor:
-        start + limit < rows.length && last !== undefined ? encodeRosterCursor(last.key) : null,
+      next_cursor,
     };
   }
 }
@@ -188,21 +182,4 @@ export function countBeneath(
   }
 
   return counts;
-}
-
-function keyOf(identity: { lastName: string; firstName: string; memberId: string }): RosterCursor {
-  return {
-    lastName: identity.lastName,
-    firstName: identity.firstName,
-    memberId: identity.memberId,
-  };
-}
-
-/** The same comparison the DCC gap list pages by, so the sort and the cursor agree. */
-function compareKeys(left: RosterCursor, right: RosterCursor): number {
-  return (
-    left.lastName.localeCompare(right.lastName) ||
-    left.firstName.localeCompare(right.firstName) ||
-    left.memberId.localeCompare(right.memberId)
-  );
 }

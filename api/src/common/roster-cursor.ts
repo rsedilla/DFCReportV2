@@ -8,12 +8,11 @@ import { isStorableText } from './text/storable-text';
  * **Two routes page by exactly this key**, in two modules, which is why the file is
  * here rather than in either: `GET /api/v1/cells/{id}/members` and
  * `GET /api/v1/dcc/events/{id}/roster`. It was `cells/roster-cursor.ts` until the
- * second arrived (decision 0174) — and what it does *not* know is how the key is
- * compared, deliberately. The Cell roster compares it in SQL as a lexicographic
- * keyset; the DCC checklist compares it against a list its own service assembled by
- * walking the pastoral tree, because there is no single query to key. The wire format
- * is the part a client sees and the part that was going to diverge; the comparison is
- * each route's own.
+ * second arrived (decision 0174). The Cell roster compares the key in SQL as a
+ * lexicographic keyset; every list assembled in application code, where there is no
+ * single query to key, compares it with `compareRosterKeys` and pages with
+ * `pageByRosterKey`, below. Those two were written out in each such route until
+ * 2026-10-14.
  *
  * The two other cursors in this API keep their own pairs and are not an oversight.
  * `people.controller.ts` keys on two names and a UUID and `leadership-request-cursor.ts`
@@ -101,4 +100,71 @@ export function decodeRosterCursor(value: string | undefined): RosterCursor | nu
 
 export function encodeRosterCursor(cursor: RosterCursor | null): string | null {
   return cursor === null ? null : Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+/** The three ordering keys of anything carrying them, and nothing else. */
+export function rosterKeyOf(identity: RosterCursor): RosterCursor {
+  return {
+    lastName: identity.lastName,
+    firstName: identity.firstName,
+    memberId: identity.memberId,
+  };
+}
+
+/**
+ * The roster order, for a list assembled in application code: last name, first name,
+ * Member ID, lexicographic over the three in turn.
+ *
+ * `localeCompare` deliberately, and every in-memory roster sorts with this same function: a
+ * comparison ordering differently from the sort would put a page boundary somewhere the sort
+ * never placed it, and rows either side of it would be skipped or repeated. It was written
+ * out in five files until 2026-10-14, each copy identical.
+ */
+export function compareRosterKeys(left: RosterCursor, right: RosterCursor): number {
+  return (
+    left.lastName.localeCompare(right.lastName) ||
+    left.firstName.localeCompare(right.firstName) ||
+    left.memberId.localeCompare(right.memberId)
+  );
+}
+
+/**
+ * Where a page of a sorted in-memory roster starts: the first item after the cursor.
+ *
+ * A cursor past every item answers the end of the list, which is the last page rather than
+ * the first: restarting the collection is the silent behaviour section 22 refuses a cursor
+ * over.
+ */
+export function rosterStart<T>(
+  items: readonly T[],
+  keyOf: (item: T) => RosterCursor,
+  after: RosterCursor | null,
+): number {
+  if (after === null) {
+    return 0;
+  }
+  const beyond = items.findIndex((item) => compareRosterKeys(keyOf(item), after) > 0);
+  return beyond === -1 ? items.length : beyond;
+}
+
+/**
+ * One page of a roster sorted by {@link compareRosterKeys}, and the cursor to the next: for a
+ * list assembled in application code, which has no single query to key (section 22).
+ */
+export function pageByRosterKey<T>(
+  items: readonly T[],
+  keyOf: (item: T) => RosterCursor,
+  page: { cursor?: string; limit: number },
+): { window: T[]; next_cursor: string | null } {
+  const start = rosterStart(items, keyOf, decodeRosterCursor(page.cursor));
+  const window = items.slice(start, start + page.limit);
+  const last = window[window.length - 1];
+
+  return {
+    window,
+    next_cursor:
+      start + page.limit < items.length && last !== undefined
+        ? encodeRosterCursor(keyOf(last))
+        : null,
+  };
 }
