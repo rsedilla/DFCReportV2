@@ -408,15 +408,14 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       ]);
     });
 
-    it('grants nothing on a row that holds it without Full view', async () => {
-      await db
-        .updateTable('accounts')
-        .set({ full_view: false, approves_cells: true })
-        .where('id', '=', benAccount.id)
-        .execute();
-
-      const response = await queue(benAccount).expect(403);
-      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+    it('cannot be held without Full view, by the database too', async () => {
+      await expect(
+        db
+          .updateTable('accounts')
+          .set({ full_view: false, approves_cells: true })
+          .where('id', '=', benAccount.id)
+          .execute(),
+      ).rejects.toThrow(/accounts_approves_cells_needs_full_view/);
     });
 
     it('starts a new Leader account without it, and the account read says so', async () => {

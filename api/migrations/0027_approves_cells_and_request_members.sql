@@ -14,6 +14,11 @@
 
 ALTER TABLE accounts ADD COLUMN approves_cells boolean NOT NULL DEFAULT false;
 
+-- Offered only with Full view (owner, 2026-10-15, decision 0352): the queue is on the Cells
+-- page, which only Full view screens carry. Every existing row is false, so nothing breaks it.
+ALTER TABLE accounts
+  ADD CONSTRAINT accounts_approves_cells_needs_full_view CHECK (NOT approves_cells OR full_view);
+
 -- ---------------------------------------------------------------------------
 -- The three members a new-Cell request names (SKILL.md section 10, decision 0353)
 --
@@ -103,5 +108,7 @@ DROP TRIGGER cell_leadership_request_members_fixed ON cell_leadership_request_me
 DROP FUNCTION cell_leadership_request_member_is_fixed();
 
 DROP TABLE cell_leadership_request_members;
+
+ALTER TABLE accounts DROP CONSTRAINT accounts_approves_cells_needs_full_view;
 
 ALTER TABLE accounts DROP COLUMN approves_cells;

@@ -237,18 +237,18 @@ export function PersonAccount({
               />
               {/* Offered only with Full view (decision 0352). */}
               {current.full_view ? (
-              <LeaderTickRow
-                personId={personId}
-                field="approves_cells"
-                label="Approves Cells"
-                value={current.approves_cells}
-                save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
-                describe={(shown) =>
-                  shown
-                    ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
-                    : `${firstName} does not approve Cells; an administrator does.`
-                }
-              />
+                <LeaderTickRow
+                  personId={personId}
+                  field="approves_cells"
+                  label="Approves Cells"
+                  value={current.approves_cells}
+                  save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
+                  describe={(shown) =>
+                    shown
+                      ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
+                      : `${firstName} does not approve Cells; an administrator does.`
+                  }
+                />
               ) : null}
             </>
           ) : null}

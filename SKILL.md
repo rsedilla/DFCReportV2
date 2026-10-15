@@ -1728,7 +1728,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.manage_leadership` | — | Whole Church | own/subtree |
 | `cell.manage_configuration` | — | Whole Church | own/subtree |
 | `cell.request_leadership` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
-| `cell.approve_leadership` | — | Whole Church | subtree, excl. self, with Approves Cells |
+| `cell.approve_leadership` | — | Whole Church | subtree, excl. self, with Approves Cells and Full view |
 | `cell.manage_lifecycle` | — | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
 | `audit.view` | Whole Church | Whole Church | — |
