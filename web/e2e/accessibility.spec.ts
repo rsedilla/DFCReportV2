@@ -933,9 +933,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Teresita Alcantara' }).first()).toBeVisible();
-      await expect(
-        page.getByRole('navigation', { name: 'Where this person sits' }).getByRole('link').first(),
-      ).toBeVisible();
+      // The focus block, which is all that names the person now (decision 0354).
+      await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
     },
   },
   {
@@ -2484,14 +2483,14 @@ test('the People item carries People, Branch and Family Tree tabs', async ({ pag
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['People', 'Branch', 'Family Tree']);
-  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('People');
+  await expect(tabs.getByRole('link')).toHaveText(['Add People', 'Branch', 'Family Tree']);
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveAttribute(
     'href',
     '/network',
   );
 
-  await tabs.getByRole('link', { name: 'People', exact: true }).focus();
+  await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toBeFocused();
 });

@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
  * (owner's choice of 2026-10-05).
  */
 const TABS = [
-  { href: '/people', label: 'People', fullOnly: false },
+  // Named for what the tab is for (owner, 2026-10-15, decision 0354); the sidebar item stays People.
+  { href: '/people', label: 'Add People', fullOnly: false },
   { href: '/network', label: 'Branch', fullOnly: false },
   { href: '/family-tree', label: 'Family Tree', fullOnly: true },
 ] as const;

@@ -3,15 +3,14 @@
 import type { ReactNode } from 'react';
 
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { PeopleTabs } from '@/components/people-tabs';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
-import { Button, buttonClasses } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -31,15 +30,12 @@ import {
   type Branch,
   type BranchNode,
 } from '@/lib/network';
-import { MINIMUM_SEARCH_LENGTH, searchPeople } from '@/lib/people';
 import { monthLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
-/** How many search results show before "Show 10 more" (decision 0252). */
-const SEARCH_STEP = 10;
 
 /** How many direct disciples show before "Show 20 more" (decision 0252). */
 const STEP = 20;
@@ -232,13 +228,8 @@ function NetworkScreen() {
 
       <PeopleTabs current="/network">
 
-        {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
-        <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
-          <Breadcrumb entries={entries} meId={me.data?.person_id} />
-          {/* The path's names are the way up; one control per job (owner, 2026-10-05). */}
-          <Search />
-        </div>
-
+        {/* No trail and no search (owner, 2026-10-15, decision 0354): a person is found from
+            Add People, and the reader goes back up with the browser's Back. */}
         <div className="mt-6">
           <FailureNotice failure={failure} />
         </div>
@@ -610,57 +601,6 @@ function RowActions({
   ) : null;
 }
 
-/**
- * Where the reader is on the path to the focus person. The reader's own position and
- * everything beneath it are links; anything above is plain text (see the page comment).
- */
-function Breadcrumb({
-  entries,
-  meId,
-}: {
-  entries: readonly PathEntry[];
-  meId: string | undefined;
-}) {
-  const focusHref = useFocusHref();
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const meIndex = entries.findIndex((entry) => entry.id === meId);
-  const firstLink = meIndex === -1 ? 0 : meIndex;
-
-  return (
-    <nav aria-label="Where this person sits" className="min-w-0">
-      <ol className="text-muted flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        {entries.map((entry, index) => {
-          const current = index === entries.length - 1;
-
-          return (
-            <li key={entry.id} className="flex items-center gap-1.5">
-              {current ? (
-                <span aria-current="page" className="text-ink font-medium">
-                  {entry.full_name}
-                </span>
-              ) : index >= firstLink ? (
-                <Link
-                  href={focusHref(entry.id === meId ? null : entry.id)}
-                  className={`${LINK} text-accent min-w-6 justify-center`}
-                >
-                  {entry.full_name}
-                </Link>
-              ) : (
-                <span>{entry.full_name}</span>
-              )}
-              {current ? null : <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
 function FocusBlock({
   person,
   entries,
@@ -682,119 +622,15 @@ function FocusBlock({
     <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
       <div>
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
-        <p className="text-muted mt-1 text-sm">
-          {parent === null ? noLeaderLabel(entries, noLeaderReason) : `pastored by ${parent.full_name}`}
-        </p>
+        {parent === null ? (
+          <p className="text-muted mt-1 text-sm">{noLeaderLabel(entries, noLeaderReason)}</p>
+        ) : null}
       </div>
       {mayMove && !isMe ? (
         <Button variant="secondary" onClick={onMove}>
           Move this person
         </Button>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * Search by name over the reader's own scope — the People search decision 0244 already
- * limits — ten at a time. Choosing a result focuses them.
- */
-function Search() {
-  const focusHref = useFocusHref();
-  const [term, setTerm] = useState('');
-  const [asked, setAsked] = useState<string | null>(null);
-  const [visible, setVisible] = useState(SEARCH_STEP);
-
-  const results = useInfiniteQuery({
-    queryKey: ['network-search', asked],
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => searchPeople(asked ?? '', pageParam, signal),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: asked !== null,
-  });
-
-  const found = results.data?.pages.flatMap((page) => page.data) ?? [];
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    setAsked(term.trim());
-    setVisible(SEARCH_STEP);
-  };
-
-  const more = () => {
-    if (visible + SEARCH_STEP > found.length && results.hasNextPage) {
-      void results.fetchNextPage();
-    }
-    setVisible((current) => current + SEARCH_STEP);
-  };
-
-  return (
-    <div className="min-w-0">
-      <form role="search" onSubmit={submit} className="flex flex-wrap gap-2">
-        <label htmlFor="network-search" className="sr-only">
-          Search by name
-        </label>
-        <input
-          id="network-search"
-          type="search"
-          value={term}
-          onChange={(event) => setTerm(event.target.value)}
-          placeholder="Search by name"
-          className="border-edge bg-surface min-h-11 w-64 max-w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:flex-none"
-        />
-        <Button
-          type="submit"
-          variant="secondary"
-          disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}
-        >
-          Search
-        </Button>
-        {asked === null ? null : (
-          <Button
-            variant="quiet"
-            onClick={() => {
-              setAsked(null);
-              setTerm('');
-            }}
-          >
-            Clear search
-          </Button>
-        )}
-      </form>
-
-      {asked === null ? null : (
-        <div className="mt-4">
-          <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
-          {results.isPending ? (
-            <p className="text-muted text-sm">Searching&hellip;</p>
-          ) : found.length === 0 ? (
-            <p className="text-muted text-sm">Nobody by that name among the people you oversee.</p>
-          ) : (
-            <>
-              <ul className="border-line flex flex-col divide-y border">
-                {found.slice(0, visible).map((result) => (
-                  <li
-                    key={result.id}
-                    className="flex flex-wrap items-center justify-between gap-2 p-3"
-                  >
-                    <span className="font-medium">{result.full_name}</span>
-                    <Link href={focusHref(result.id)} className={buttonClasses('secondary')}>
-                      Open
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              {visible < found.length || results.hasNextPage ? (
-                <p className="mt-3">
-                  <Button variant="secondary" onClick={more} disabled={results.isFetchingNextPage}>
-                    Show 10 more
-                  </Button>
-                </p>
-              ) : null}
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
