@@ -156,8 +156,14 @@ function PeopleList() {
               {buttonLabel}
             </Button>
             {mayAdd ? (
-              <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
-                Add a person
+              // Reads Add, the tab being Add People (owner, 2026-10-15, decision 0354); its name
+              // says what it adds, and holds the word shown (WCAG 2.5.3).
+              <Link
+                href="/people/new"
+                aria-label="Add a person"
+                className={cn(buttonClasses('secondary'))}
+              >
+                Add
               </Link>
             ) : null}
           </div>
