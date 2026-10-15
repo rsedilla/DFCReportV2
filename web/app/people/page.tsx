@@ -4,25 +4,26 @@ import { useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { PeopleTabs } from '@/components/people-tabs';
 import { buttonClasses } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
+import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
+import { useCursorPages } from '@/lib/cursor-pages';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
-  MINIMUM_SEARCH_LENGTH,
   networkLabel,
   searchPeople,
   type Person,
 } from '@/lib/people';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
 
 /**
@@ -83,23 +84,9 @@ function PeopleList() {
   const search = useSearchParams();
   const go = useScreenAddress();
   const submitted = search.get('q') ?? '';
-  // What is being typed is not yet what is being asked, so it stays here and follows the
-  // address, which Back and a reload change underneath it.
-  const [term, setTerm] = useState(submitted);
-  // Paging is deliberately not in the address: a cursor belongs to one set of rows. A new
-  // search — including one arrived at by pressing Back — starts the list again.
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [page, setPage] = useState(0);
-
-  // Adjusted while rendering rather than in an effect, which is React's own answer for state
-  // that follows something from outside: an effect would render the old results once first.
-  const [lastSubmitted, setLastSubmitted] = useState(submitted);
-  if (lastSubmitted !== submitted) {
-    setLastSubmitted(submitted);
-    setTerm(submitted);
-    setCursors([null]);
-    setPage(0);
-  }
+  const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
+  // A new search — including one arrived at by pressing Back — starts the list again.
+  const pages = useCursorPages(submitted);
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const searchOnly = me.data !== undefined && me.data.screens !== 'RECORDING';
@@ -109,8 +96,8 @@ function PeopleList() {
   const mayAdd = (me.data?.capabilities ?? []).some((grant) => grant.capability === 'people.create');
 
   const results = useQuery({
-    queryKey: ['people', submitted, cursors[page], PAGE_SIZE],
-    queryFn: ({ signal }) => searchPeople(submitted, cursors[page], signal, { limit: PAGE_SIZE }),
+    queryKey: ['people', submitted, pages.cursor, PAGE_SIZE],
+    queryFn: ({ signal }) => searchPeople(submitted, pages.cursor, signal, { limit: PAGE_SIZE }),
     enabled: me.data !== undefined && !awaitingSearch,
   });
 
@@ -126,8 +113,6 @@ function PeopleList() {
   });
   const cellsById = new Map((cells.data?.data ?? []).map((entry) => [entry.person_id, entry]));
 
-  const trimmed = term.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +153,7 @@ function PeopleList() {
           />
           <div className="flex gap-3">
             <Button type="submit" disabled={tooShort}>
-              {trimmed.length === 0 && submitted !== '' ? 'Clear search' : 'Search'}
+              {buttonLabel}
             </Button>
             {mayAdd ? (
               <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
@@ -245,33 +230,13 @@ function PeopleList() {
                   </li>
                 ))}
               </ul>
-              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  disabled={page === 0}
-                  onClick={() => setPage((current) => Math.max(0, current - 1))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={!results.data.next_cursor}
-                  onClick={() => {
-                    const next = results.data.next_cursor;
-                    if (!next) {
-                      return;
-                    }
-                    setCursors((current) => {
-                      const copy = current.slice(0, page + 1);
-                      copy.push(next);
-                      return copy;
-                    });
-                    setPage((current) => current + 1);
-                  }}
-                >
-                  Next
-                </Button>
-              </nav>
+              <CursorPager
+                label="Results"
+                page={pages.page}
+                nextCursor={results.data.next_cursor}
+                onPrevious={pages.previous}
+                onNext={() => pages.next(results.data.next_cursor)}
+              />
             </>
           )}
         </div>

@@ -15,6 +15,7 @@ import {
   longDay,
 } from '@/components/growth-controls';
 import { Button } from '@/components/ui/button';
+import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ApiRequestError } from '@/lib/api-client';
@@ -28,6 +29,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { useCursorPages } from '@/lib/cursor-pages';
 import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
 
@@ -82,32 +84,24 @@ function SuynlTab() {
   // Show everyone widens it.
   const listStep = step ?? (q === '' && !mine && !everyone ? 'STILL_TO_FINISH' : null);
 
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [page, setPage] = useState(0);
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const pageSize = usePageSize();
   // A new size starts the list again, so no row is skipped between two page lengths.
-  const filterKey = `${q}|${mine}|${listStep ?? ''}|${pageSize}`;
-  const [lastFilter, setLastFilter] = useState(filterKey);
-  if (lastFilter !== filterKey) {
-    setLastFilter(filterKey);
-    setCursors([null]);
-    setPage(0);
-  }
+  const pages = useCursorPages(`${q}|${mine}|${listStep ?? ''}|${pageSize}`);
 
   const counts = useQuery({
     queryKey: ['suynl-counts'],
     queryFn: ({ signal }) => getSuynlCounts(signal),
   });
   const people = useQuery({
-    queryKey: ['suynl-people', q, mine, listStep, cursors[page], pageSize],
+    queryKey: ['suynl-people', q, mine, listStep, pages.cursor, pageSize],
     queryFn: ({ signal }) =>
       listSuynlPeople(
         {
           q,
           mine,
           step: listStep ?? undefined,
-          cursor: cursors[page],
+          cursor: pages.cursor,
           limit: pageSize,
         },
         signal,
@@ -369,27 +363,13 @@ function SuynlTab() {
                 ))}
               </ul>
 
-              <nav aria-label="Results" className="mt-6 flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  disabled={page === 0}
-                  onClick={() => setPage((current) => Math.max(0, current - 1))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={!people.data.next_cursor}
-                  onClick={() => {
-                    const next = people.data.next_cursor;
-                    if (!next) return;
-                    setCursors((current) => [...current.slice(0, page + 1), next]);
-                    setPage((current) => current + 1);
-                  }}
-                >
-                  Next
-                </Button>
-              </nav>
+              <CursorPager
+                label="Results"
+                page={pages.page}
+                nextCursor={people.data.next_cursor}
+                onPrevious={pages.previous}
+                onNext={() => pages.next(people.data.next_cursor)}
+              />
             </>
           )}
         </div>
