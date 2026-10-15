@@ -9,6 +9,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
+import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
@@ -24,11 +25,12 @@ import {
   listCells,
   type CellSummary,
 } from '@/lib/cells';
-import { MINIMUM_SEARCH_LENGTH } from '@/lib/people';
+import { useCursorPages } from '@/lib/cursor-pages';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
 
 /** Ten a page, as the People list pages (decision 0261). */
@@ -90,25 +92,18 @@ function CellsIndex() {
   // The address still decides, which is what makes Back and a reload work: the block below
   // takes whatever it says.
   const [view, setView] = useState(viewInAddress);
-  // What is being typed is not yet what is being asked, so it stays here; it follows the
-  // address, which is what Back and a reload change underneath it.
-  const [term, setTerm] = useState(submitted);
-  // Paging is deliberately not in the address: a cursor belongs to one set of rows, and an
-  // address carrying one would break as soon as the rows behind it changed. Any narrowing —
-  // including one arrived at by pressing Back — starts the list again.
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [page, setPage] = useState(0);
+  const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
+  // Any narrowing — including one arrived at by pressing Back — starts the list again.
+  const asked = `${month}|${String(mineOnly)}|${submitted}|${viewInAddress}`;
+  const pages = useCursorPages(asked);
 
   // Adjusted while rendering rather than in an effect, which is React's own answer for state
   // that follows something from outside: an effect would render the old list once first.
-  const asked = `${month}|${String(mineOnly)}|${submitted}|${viewInAddress}`;
   const [lastAsked, setLastAsked] = useState(asked);
   if (lastAsked !== asked) {
     setLastAsked(asked);
     setTerm(submitted);
     setView(viewInAddress);
-    setCursors([null]);
-    setPage(0);
   }
   const [restarting, setRestarting] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
@@ -117,14 +112,14 @@ function CellsIndex() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
   const cells = useQuery({
-    queryKey: ['cells', month, mineOnly, submitted, cursors[page], PAGE_SIZE, view],
+    queryKey: ['cells', month, mineOnly, submitted, pages.cursor, PAGE_SIZE, view],
     queryFn: ({ signal }) =>
       listCells(
         {
           month,
           ledBy: mineOnly ? 'me' : undefined,
           q: submitted === '' ? undefined : submitted,
-          cursor: cursors[page],
+          cursor: pages.cursor,
           limit: PAGE_SIZE,
           state: view,
         },
@@ -132,8 +127,6 @@ function CellsIndex() {
       ),
   });
 
-  const trimmed = term.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
 
 
   return (
@@ -208,7 +201,7 @@ function CellsIndex() {
             className="min-w-0 sm:flex-1"
           />
           <Button type="submit" disabled={tooShort}>
-            {trimmed === '' && submitted !== '' ? 'Clear search' : 'Search'}
+            {buttonLabel}
           </Button>
         </form>
 
@@ -315,29 +308,13 @@ function CellsIndex() {
               ))}
             </ul>
 
-            <nav aria-label="Closed Cells" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!cells.data.next_cursor}
-                onClick={() => {
-                  const next = cells.data?.next_cursor;
-                  if (!next) {
-                    return;
-                  }
-                  setCursors((current) => [...current.slice(0, page + 1), next]);
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
+            <CursorPager
+              label="Closed Cells"
+              page={pages.page}
+              nextCursor={cells.data.next_cursor}
+              onPrevious={pages.previous}
+              onNext={() => pages.next(cells.data?.next_cursor)}
+            />
           </>
         ) : cells.data ? (
           <>
@@ -385,30 +362,13 @@ function CellsIndex() {
               ))}
             </ul>
 
-            {/* No total and no page number: section 22 pages by cursor and returns neither. */}
-            <nav aria-label="Cells" className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!cells.data.next_cursor}
-                onClick={() => {
-                  const next = cells.data?.next_cursor;
-                  if (!next) {
-                    return;
-                  }
-                  setCursors((current) => [...current.slice(0, page + 1), next]);
-                  setPage((current) => current + 1);
-                }}
-              >
-                Next
-              </Button>
-            </nav>
+            <CursorPager
+              label="Cells"
+              page={pages.page}
+              nextCursor={cells.data.next_cursor}
+              onPrevious={pages.previous}
+              onNext={() => pages.next(cells.data?.next_cursor)}
+            />
           </>
         ) : null}
 
