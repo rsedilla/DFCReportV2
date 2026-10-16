@@ -12,7 +12,9 @@ import {
   createAccount,
   createCell,
   createPerson,
+  createRequestMembers,
   createTestApp,
+  nameSeniorPastors,
 } from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
@@ -28,6 +30,15 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * endpoint's half: who may close, that the decision about every member is required
  * and checked against the Cell's actual membership, what the five writes leave
  * behind, the effective-date floor, and the audit entries section 21 asks for.
+ *
+ * **Since decision 0355 only a Whole Church holder of `cell.manage_lifecycle` closes**,
+ * which by default is Admin alone; every closure carries a note; and `MEMBERS_DISPERSED`
+ * is no longer a reason a new closure may give. Cases that need a closer *below* Admin —
+ * to make a destination's scope, the backdating capability or decision 0330's role check
+ * actually decide something — use a Leader holding an explicit Whole Church grant of
+ * `cell.manage_lifecycle` ({@link churchCloser}). That is the reading the ruling builds
+ * ("the capability at Whole Church, not the `ADMIN` role"), and whether it is right is the
+ * open question `CLAUDE.md` carries for direct creation; those cases rest on it.
  *
  * Fixture names and email addresses are invented (CLAUDE.md, Secrets).
  */
@@ -50,6 +61,7 @@ describe('closing a Cell (section 10)', () => {
 
   beforeEach(async () => {
     await truncateAll(db);
+    nameSeniorPastors(app, []);
 
     root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     await assignTo(db, root.id, null);
@@ -74,12 +86,50 @@ describe('closing a Cell (section 10)', () => {
     await db.destroy();
   });
 
+  /** Every closure carries an explanation (decision 0355). */
+  const NOTE = 'Talked through with the Senior Pastors (invented).';
+
+  /**
+   * POST a closure. A body that does not mention `note` is sent with {@link NOTE}, since
+   * every closure owes one; a case about the note itself sets the key, and `note:
+   * undefined` sends none at all (JSON drops it).
+   */
   const close = (actor: TestAccount, cellUuid: string, body: Record<string, unknown>) =>
     request(app.getHttpServer())
       .post(`/api/v1/cells/${cellUuid}/closure`)
       .set('Authorization', `Bearer ${actor.accessToken}`)
       .set('Idempotency-Key', randomUUID())
-      .send(body);
+      .send('note' in body ? body : { ...body, note: NOTE });
+
+  const grant = async (
+    account: TestAccount,
+    capability: 'cell.manage_lifecycle' | 'records.backdate_effective_date',
+    scope: { scope_type: 'WHOLE_CHURCH' | 'OWN_SUBTREE' | 'NETWORK'; scope_network?: 'MENS' },
+  ): Promise<void> => {
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: account.id,
+        capability,
+        ...scope,
+        read_only: false,
+        reason: 'Invented for this case (CLAUDE.md, Secrets).',
+        granted_by: admin.id,
+      })
+      .execute();
+  };
+
+  /**
+   * A Leader who may close: the role's defaults plus `cell.manage_lifecycle` at Whole
+   * Church, granted explicitly. It keeps `cell.manage_membership` over its own subtree
+   * only, so a destination is still bound by scope (section 10), and it holds no
+   * backdating capability and no `ADMIN` role.
+   */
+  const churchCloser = async (person: TestPerson): Promise<TestAccount> => {
+    const account = await createAccount(app, db, { person, roles: ['LEADER'] });
+    await grant(account, 'cell.manage_lifecycle', { scope_type: 'WHOLE_CHURCH' });
+    return account;
+  };
 
   const addMember = async (personId: string, cellUuid: string): Promise<void> => {
     await request(app.getHttpServer())
@@ -116,14 +166,14 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
       }).expect(200);
 
       expect(response.body).toMatchObject({
         cell_id: markCell.cellId,
         state: 'CLOSED',
-        closure_reason: 'MEMBERS_DISPERSED',
+        closure_reason: 'MEMBERS_STOPPED_ATTENDING',
         members_left_unassigned: [],
       });
       expect(response.body.members_moved).toEqual([
@@ -192,10 +242,10 @@ describe('closing a Cell (section 10)', () => {
     });
 
     it('refuses closing a Cell that is already closed', async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [],
       }).expect(409);
 
@@ -209,7 +259,7 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [],
       }).expect(409);
 
@@ -223,7 +273,7 @@ describe('closing a Cell (section 10)', () => {
       // check rather than a completeness check: a decision made about a list that has
       // moved on is a decision about somebody else (section 14).
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: null }],
       }).expect(409);
 
@@ -234,7 +284,7 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [
           { person_id: juan.id, destination_cell_id: benCell.id },
           { person_id: juan.id, destination_cell_id: null },
@@ -248,7 +298,7 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: markCell.id }],
       }).expect(422);
 
@@ -264,20 +314,81 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id }],
       }).expect(422);
 
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    it('refuses a note-less OTHER with an answer, not a constraint violation', async () => {
-      // `cells_other_requires_note` is an immediate CHECK, so left to the database
-      // this is a `23514` nothing classifies and the caller gets `INTERNAL_ERROR`.
-      // The DTO's docblock claimed this validation for a version that carried only
-      // `@IsOptional()` — a rule stated in a comment and enforced nowhere.
+    it.each([
+      'MERGED_INTO_ANOTHER_CELL',
+      'LEADER_STEPPED_DOWN',
+      'LEADER_MOVED_AWAY',
+      'LEADER_LEFT_THE_CHURCH',
+      'LEADER_PASSED_AWAY',
+      'MEMBERS_STOPPED_ATTENDING',
+      'CREATED_IN_ERROR',
+      'OTHER',
+    ])(
+      'refuses a note-less %s closure with an answer, not a constraint violation',
+      async (reason) => {
+        // **Every closure carries a written explanation** (decision 0355), not only
+        // `OTHER` as before it. Left to the database this is a `23514` from
+        // `cells_closure_explained` that nothing classifies and the caller gets
+        // `INTERNAL_ERROR`; the DTO owes the answer.
+        const response = await close(admin, markCell.id, {
+          reason,
+          note: undefined,
+          members: [],
+        }).expect(422);
+
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(JSON.stringify(response.body.error.details)).toMatch(/note/);
+        expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
+      },
+    );
+
+    it.each([
+      'LEADER_MOVED_AWAY',
+      'LEADER_LEFT_THE_CHURCH',
+      'LEADER_PASSED_AWAY',
+      'MEMBERS_STOPPED_ATTENDING',
+    ])('accepts %s, a reason decision 0355 added, and stores the note', async (reason) => {
+      const response = await close(admin, markCell.id, {
+        reason,
+        note: '  He has moved to another city.  ',
+        members: [],
+      }).expect(200);
+
+      expect(response.body.closure_reason).toBe(reason);
+      // Trimmed before it is stored, as the DTO's transform says.
+      expect(await cellRow(markCell.id)).toMatchObject({
+        state: 'CLOSED',
+        closure_reason: reason,
+        closure_note: 'He has moved to another city.',
+      });
+    });
+
+    it('refuses MEMBERS_DISPERSED for a new closure', async () => {
+      // Decision 0355: retired for new closures, kept on the Cells already closed with
+      // it. Refused at the edge as a value outside the closed list, so it never reaches
+      // the trigger that would refuse it as a raw `check_violation`.
+      const response = await close(admin, markCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        members: [],
+      }).expect(422);
+
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(JSON.stringify(response.body.error.details)).toMatch(/reason/);
+      expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
+    });
+
+    it('refuses a note longer than 500 characters', async () => {
+      // "within the length it already had" (decision 0355, point 4).
       const response = await close(admin, markCell.id, {
         reason: 'OTHER',
+        note: 'x'.repeat(501),
         members: [],
       }).expect(422);
 
@@ -285,7 +396,7 @@ describe('closing a Cell (section 10)', () => {
 
       await close(admin, markCell.id, {
         reason: 'OTHER',
-        note: 'the venue was sold',
+        note: 'x'.repeat(500),
         members: [],
       }).expect(200);
     });
@@ -313,7 +424,7 @@ describe('closing a Cell (section 10)', () => {
 
       // Ben's Cell was created today, long after the closure date.
       const response = await close(admin, closing.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         note: 'correcting the recorded date',
         members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
         effective_date: '2026-03-02',
@@ -370,7 +481,7 @@ describe('closing a Cell (section 10)', () => {
         .execute();
 
       await close(admin, closing.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         note: 'correcting the recorded date',
         members: [{ person_id: juan.id, destination_cell_id: destination.id }],
         effective_date: '2026-03-10',
@@ -448,26 +559,17 @@ describe('closing a Cell (section 10)', () => {
       // destination case failed to discriminate. And the closure must be **backdated**,
       // because an undated one takes effect now and the two readings then agree; a
       // Leader can only backdate with an explicit grant, which section 7 permits Admin
-      // to issue.
+      // to issue. Since decision 0355 a Leader closes at all only with a Whole Church
+      // grant of `cell.manage_lifecycle`, which leaves `cell.manage_membership` at its
+      // subtree default — so the destination is still decided by scope.
       //
       // A first version of this case used an undated closure and passed against the
       // mutation it names, which is the fault it was written to catch.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
-
-      await db
-        .insertInto('capability_grants')
-        .values({
-          account_id: leader.id,
-          capability: 'records.backdate_effective_date',
-          scope_type: 'WHOLE_CHURCH',
-          read_only: false,
-          reason: 'Invented for this case (CLAUDE.md, Secrets).',
-          granted_by: admin.id,
-        })
-        .execute();
+      const leader = await churchCloser(mark);
+      await grant(leader, 'records.backdate_effective_date', { scope_type: 'WHOLE_CHURCH' });
 
       await close(leader, closing.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         note: 'correcting the recorded date',
         members: [{ person_id: juan.id, destination_cell_id: destination.id }],
         // **Before the destination's handover, which is the whole staging.** Dated
@@ -481,7 +583,7 @@ describe('closing a Cell (section 10)', () => {
       // Section 22 states the number and the code. Refused at the boundary, before
       // anything is locked or read, so the entries need only be well-formed.
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: Array.from({ length: 501 }, () => ({
           person_id: randomUUID(),
           destination_cell_id: null,
@@ -493,10 +595,10 @@ describe('closing a Cell (section 10)', () => {
 
     it('refuses a closed destination Cell', async () => {
       await addMember(juan.id, markCell.id);
-      await closeCellDirectly(db, benCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, benCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
       }).expect(409);
 
@@ -516,7 +618,7 @@ describe('closing a Cell (section 10)', () => {
       await addMember(juan.id, markCell.id);
 
       const response = await close(admin, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: graceCell.id }],
       }).expect(409);
 
@@ -525,34 +627,161 @@ describe('closing a Cell (section 10)', () => {
     });
   });
 
-  describe('who may close', () => {
-    it('lets the Cell leader close their own Cell', async () => {
-      const leader = await createAccount(app, db, {
-        person: mark,
-        roles: ['LEADER'],
-      });
+  describe('who may close (decision 0355)', () => {
+    // Only an account holding `cell.manage_lifecycle` at Whole Church closes, checked
+    // against the church as direct creation is. A Leader keeps the capability over
+    // their own subtree — it is the second-object check a handover or restart makes —
+    // and that grant closes nothing. The guard answers `SCOPE_DENIED` to it, because the
+    // capability is held and the scope is what fails (section 7 names the half that
+    // failed); a Senior Pastor, who holds no `cell.manage_lifecycle` at all, is answered
+    // `CAPABILITY_DENIED`.
 
-      // Not `CREATED_IN_ERROR`, which is an Admin's reason since decision 0330; the
-      // describe below pins that refusal.
-      await close(leader, markCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(200);
+    const expectUntouched = async (cellUuid: string): Promise<void> => {
+      const cell = await cellRow(cellUuid);
+      expect(cell.state).toBe('ACTIVE');
+      expect(cell.closed_at).toBeNull();
+      expect(await openRows('cell_leaderships', cellUuid)).toBe(1);
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('action', '=', 'cell.closed')
+        .execute();
+      expect(entries).toEqual([]);
+    };
+
+    it('lets an Admin close any Cell', async () => {
+      await close(admin, benCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(200);
+
+      expect((await cellRow(benCell.id)).state).toBe('CLOSED');
     });
 
-    it('refuses a leader closing a Cell in a branch they do not oversee', async () => {
-      // Ben is Mark's sibling under the root, so `cell.manage_lifecycle` at
-      // own/subtree does not reach Ben's Cell (section 7, resolved through its
-      // leader).
-      const leader = await createAccount(app, db, {
-        person: mark,
-        roles: ['LEADER'],
-      });
+    it('refuses the Cell’s own leader, who holds the capability over their subtree', async () => {
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
 
-      const response = await close(leader, benCell.id, {
-        reason: 'CREATED_IN_ERROR',
+      const response = await close(leader, markCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
         members: [],
       }).expect(403);
 
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect((await cellRow(benCell.id)).state).toBe('ACTIVE');
+      expect(response.body.error.details.capability).toBe('cell.manage_lifecycle');
+      await expectUntouched(markCell.id);
+    });
+
+    it('refuses a leader upline of the Cell’s leader', async () => {
+      // Oriel -> Mark: before decision 0355 this closure went through.
+      const upline = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+
+      const response = await close(upline, markCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
+        members: [],
+      }).expect(403);
+
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      await expectUntouched(markCell.id);
+    });
+
+    it('refuses a leader closing a Cell in a branch they do not oversee', async () => {
+      // Ben is Mark's sibling, so this was refused before 0355 too; the answer is the
+      // same one an in-branch leader now gets, so it says nothing about the branch.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      const outside = await close(leader, benCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
+        members: [],
+      }).expect(403);
+      const inside = await close(leader, markCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
+        members: [],
+      }).expect(403);
+
+      expect(outside.body.error).toEqual(inside.body.error);
+      await expectUntouched(benCell.id);
+    });
+
+    it('refuses a Network-scoped grant of the capability', async () => {
+      // A church target is never in scope at any value narrower than Whole Church.
+      const leader = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+      await grant(leader, 'cell.manage_lifecycle', {
+        scope_type: 'NETWORK',
+        scope_network: 'MENS',
+      });
+
+      const response = await close(leader, markCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
+        members: [],
+      }).expect(403);
+
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      await expectUntouched(markCell.id);
+    });
+
+    it('refuses a Senior Pastor, who holds no cell.manage_lifecycle', async () => {
+      nameSeniorPastors(app, [root.id]);
+      const pastor = await createAccount(app, db, {
+        person: root,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+
+      const response = await close(pastor, markCell.id, {
+        reason: 'LEADER_STEPPED_DOWN',
+        members: [],
+      }).expect(403);
+
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      await expectUntouched(markCell.id);
+    });
+
+    it('lets a non-Admin holding the capability at Whole Church close', async () => {
+      // The ruling builds "only the Admin" as the capability at Whole Church rather than
+      // as the role (decision 0355, point 1). This pins that reading as built; whether
+      // it is right is the open question `CLAUDE.md` records for direct creation.
+      const closer = await churchCloser(ben);
+
+      await close(closer, markCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(200);
+
+      expect((await cellRow(markCell.id)).state).toBe('CLOSED');
+    });
+
+    it('still lets a Leader request a handover of their own Cell, and an upline a restart', async () => {
+      // The subtree default of `cell.manage_lifecycle` is kept for exactly this
+      // (decision 0355, point 1): the second-object check a handover or a restart makes
+      // on the Cell it names. Taking it away would have stopped both.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      await close(leader, markCell.id, { reason: 'LEADER_STEPPED_DOWN', members: [] }).expect(403);
+
+      const handover = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${leader.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ kind: 'HANDOVER', prospective_leader_id: juan.id, cell_id: markCell.id })
+        .expect(201);
+
+      expect(handover.body).toMatchObject({ kind: 'HANDOVER', state: 'PENDING' });
+
+      // A restart of Ben's Cell, closed by the Admin, requested by Ben's upline Oriel.
+      await close(admin, benCell.id, { reason: 'LEADER_MOVED_AWAY', members: [] }).expect(200);
+      const upline = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+
+      const restart = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${upline.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          kind: 'NEW_CELL',
+          prospective_leader_id: ben.id,
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '17:00',
+          restart_of_cell_id: benCell.id,
+          members: (await createRequestMembers(db, 'MENS')).ids,
+        });
+
+      expect(restart.status).toBe(201);
+      expect(restart.body).toMatchObject({ kind: 'NEW_CELL', state: 'PENDING' });
+      expect(restart.body.restart_of_cell_uuid).toBe(benCell.id);
     });
 
     it('refuses a destination Cell outside the closer’s scope', async () => {
@@ -562,16 +791,16 @@ describe('closing a Cell (section 10)', () => {
       //
       // **The capability is `cell.manage_membership`, not the lifecycle one**, and
       // the two are asked about different Cells: authority over the Cell being closed
-      // says nothing about where its members may be put.
+      // says nothing about where its members may be put. Since decision 0355 the closer
+      // holds the lifecycle capability at Whole Church; this one holds the membership
+      // capability over their own subtree only, and section 10 says such a closer is
+      // still bound by it.
       await addMember(juan.id, markCell.id);
 
-      const leader = await createAccount(app, db, {
-        person: mark,
-        roles: ['LEADER'],
-      });
+      const leader = await churchCloser(mark);
 
       const response = await close(leader, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
       }).expect(403);
 
@@ -586,8 +815,9 @@ describe('closing a Cell (section 10)', () => {
 
   describe('only an Admin may close a Cell created in error (decision 0330)', () => {
     // Section 10, *What closing does*: the closure route refuses `CREATED_IN_ERROR`
-    // from anyone without the `ADMIN` role as `CAPABILITY_DENIED`, and the Cell's
-    // leader and the leaders above them still close it for every other reason.
+    // from anyone without the `ADMIN` role as `CAPABILITY_DENIED`. Since decision 0355 a
+    // Leader reaches that check only holding `cell.manage_lifecycle` at Whole Church
+    // ({@link churchCloser}); without it the guard refuses first, with `SCOPE_DENIED`.
 
     const closureEntries = () =>
       db
@@ -613,9 +843,9 @@ describe('closing a Cell (section 10)', () => {
       expect(await closureEntries()).toEqual([]);
     };
 
-    it('refuses the Cell’s own leader', async () => {
+    it('refuses the Cell’s own leader, though they may close', async () => {
       await addMember(juan.id, markCell.id);
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
 
       const response = await close(leader, markCell.id, {
         reason: 'CREATED_IN_ERROR',
@@ -625,11 +855,11 @@ describe('closing a Cell (section 10)', () => {
       await expectRefusedAndUntouched(response);
     });
 
-    it('refuses a leader upline of the Cell’s leader, who has it in scope', async () => {
+    it('refuses a leader upline of the Cell’s leader, though they may close', async () => {
       await addMember(juan.id, markCell.id);
-      // Oriel -> Mark: the Cell is inside Oriel's subtree, so the guard admits the
-      // request and the refusal is the reason's alone.
-      const upline = await createAccount(app, db, { person: root, roles: ['LEADER'] });
+      // Oriel -> Mark, holding the lifecycle capability at Whole Church: the guard admits
+      // the request and the refusal is the reason's alone.
+      const upline = await churchCloser(root);
 
       const response = await close(upline, markCell.id, {
         reason: 'CREATED_IN_ERROR',
@@ -639,9 +869,10 @@ describe('closing a Cell (section 10)', () => {
       await expectRefusedAndUntouched(response);
     });
 
-    it('still answers SCOPE_DENIED to a leader the Cell is out of scope for', async () => {
-      // Scope is decided first: an out-of-scope actor learns nothing about the reason
-      // rule. Ben is Mark's sibling, so Mark's Cell is outside Ben's subtree.
+    it('still answers SCOPE_DENIED to a leader who may not close at all', async () => {
+      // The guard is decided first: an actor who may not close learns nothing about the
+      // reason rule. Since decision 0355 that is every Leader without a Whole Church
+      // grant, Ben (Mark's sibling) here.
       await addMember(juan.id, markCell.id);
       const sibling = await createAccount(app, db, { person: ben, roles: ['LEADER'] });
 
@@ -674,17 +905,20 @@ describe('closing a Cell (section 10)', () => {
       ]);
     });
 
-    it('still lets the Cell’s own leader close it for another reason', async () => {
+    it('still lets a non-Admin closer close it for another reason', async () => {
       await addMember(juan.id, markCell.id);
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
 
       const response = await close(leader, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         members: [{ person_id: juan.id, destination_cell_id: null }],
       }).expect(200);
 
-      expect(response.body).toMatchObject({ state: 'CLOSED', closure_reason: 'MEMBERS_DISPERSED' });
-      expect((await cellRow(markCell.id)).closure_reason).toBe('MEMBERS_DISPERSED');
+      expect(response.body).toMatchObject({
+        state: 'CLOSED',
+        closure_reason: 'MEMBERS_STOPPED_ATTENDING',
+      });
+      expect((await cellRow(markCell.id)).closure_reason).toBe('MEMBERS_STOPPED_ATTENDING');
     });
   });
 
@@ -778,7 +1012,7 @@ describe('closing a Cell (section 10)', () => {
         .execute();
 
       const response = await close(admin, cell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-03',
@@ -838,7 +1072,7 @@ describe('closing a Cell (section 10)', () => {
         .execute();
 
       const response = await close(admin, cell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         note: 'correcting the recorded date',
         members: [{ person_id: juan.id, destination_cell_id: null }],
         effective_date: '2026-03-04',
@@ -866,7 +1100,7 @@ describe('closing a Cell (section 10)', () => {
       await close(admin, markCell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
     });
 
-    it('requires a note when backdating, and not otherwise', async () => {
+    it('requires a note when backdating, and since decision 0355 when not', async () => {
       // **Section 7: backdating a closure "is Admin-only and always requires a
       // reason".** The closure reason cannot be that reason — every closure carries
       // one from the fixed list, so reading it that way makes the requirement vacuous.
@@ -874,20 +1108,36 @@ describe('closing a Cell (section 10)', () => {
       // requires of a backdated reassignment and for the reason section 10 gives: a
       // backdated closure erases the scheduled-meeting count a coverage line is read
       // against.
+      //
+      // Decision 0355 made the note owed on every closure, so an undated closure
+      // without one is refused too — and the backdated one explains its date in the
+      // same note (point 4).
       const created = new Date('2026-03-01T00:00:00+08:00');
       const cell = await createCell(db, { leader: mark, createdAt: created });
 
       const refused = await close(admin, cell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: undefined,
         members: [],
         effective_date: '2026-03-02',
       }).expect(422);
 
       expect(refused.body.error.code).toBe('VALIDATION_FAILED');
-      expect(refused.body.error.details.field).toBe('note');
+      expect(JSON.stringify(refused.body.error.details)).toMatch(/note/);
 
-      // Undated, so no note is owed and the closure goes through.
-      await close(admin, cell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
+      const undated = await close(admin, cell.id, {
+        reason: 'CREATED_IN_ERROR',
+        note: undefined,
+        members: [],
+      }).expect(422);
+      expect(undated.body.error.code).toBe('VALIDATION_FAILED');
+
+      await close(admin, cell.id, {
+        reason: 'CREATED_IN_ERROR',
+        note: 'Created twice at setup; this one never met.',
+        members: [],
+        effective_date: '2026-03-02',
+      }).expect(200);
     });
 
     it('does not treat an explicit date of today as backdating', async () => {
@@ -899,7 +1149,7 @@ describe('closing a Cell (section 10)', () => {
       // It is refused here, but by the **floor**: this Cell's leadership began today,
       // so Manila midnight is below it. That is the point — the refusal names the
       // rule that actually applies rather than a capability the actor does not need.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
 
       const response = await close(leader, markCell.id, {
         reason: 'LEADER_STEPPED_DOWN',
@@ -926,7 +1176,7 @@ describe('closing a Cell (section 10)', () => {
       // *inside* the transaction leaves this green, because the request has waited and
       // the host clock has crossed midnight too. What stays unpinned is the residue —
       // host-to-server skew, which section 24 bounds nowhere and no test can stage.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
       const created = new Date('2026-03-01T00:00:00+08:00');
       const cell = await createCell(db, { leader: mark, createdAt: created });
 
@@ -988,7 +1238,7 @@ describe('closing a Cell (section 10)', () => {
       // said here rather than left as a green case asserting more than it holds. It
       // becomes observable the day `records.backdate_effective_date` leaves
       // `WHOLE_CHURCH_ONLY`, and not before.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
       const created = new Date('2026-03-01T00:00:00+08:00');
       const cell = await createCell(db, { leader: mark, createdAt: created });
 
@@ -1103,7 +1353,7 @@ describe('closing a Cell (section 10)', () => {
       // holds it and a Leader does not -- and the reason is the coverage line, which a
       // leader who has submitted nothing all month could otherwise erase by closing
       // effective the first of it.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const leader = await churchCloser(mark);
 
       const response = await close(leader, markCell.id, {
         reason: 'LEADER_STEPPED_DOWN',
@@ -1281,7 +1531,7 @@ describe('closing a Cell (section 10)', () => {
         await holdPersonLock(holder, juan.id);
 
         const closing = close(admin, markCell.id, {
-          reason: 'MEMBERS_DISPERSED',
+          reason: 'MEMBERS_STOPPED_ATTENDING',
           members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
         }).then((response) => response);
 
@@ -1340,20 +1590,14 @@ describe('closing a Cell (section 10)', () => {
       }
     }, 20000);
 
-    it('refuses a closure whose Cell was handed away while it waited', async () => {
-      // **Section 10 requires scope to be re-decided inside the transaction, after
-      // the locks**, and nothing failed without it until this case existed. The
-      // guard answers on the pool before the transaction opens, so a handover
-      // committing in between leaves that answer describing authority the actor no
-      // longer holds -- the staleness section 24 records for an intermediate
-      // ancestor, reached here through the Cell rather than through the tree.
-      //
-      // Deleting the re-check left all twenty-five other cases green, because every
-      // one of them is decided the same way by the guard. That is the
-      // disjunction-with-one-member shape this repository keeps recording, and the
-      // only thing that separates the two layers is making the guard's answer go
-      // stale on purpose.
-      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+    it('closes a Cell handed away while it waited, ending the leadership in force', async () => {
+      // **Decision 0355 moved who may close onto the church.** This case used to have a
+      // Leader refused `SCOPE_DENIED` when the Cell left their subtree mid-wait: the
+      // in-transaction re-check below caught authority going stale. A closer now holds
+      // `cell.manage_lifecycle` at Whole Church, which covers every Cell whoever leads
+      // it, so no handover can take a Cell out of a closer's scope and that refusal is
+      // unreachable. What a handover mid-wait can still get wrong is *which* leadership
+      // the closure ends, so that is what is pinned: the one in force after the lock.
       const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
@@ -1368,15 +1612,14 @@ describe('closing a Cell (section 10)', () => {
         // Dispatched, not merely constructed: the object supertest returns is lazy,
         // and a case that holds a lock and asserts a request waits must first send it
         // (section 25 rule 19, which names this exact copy).
-        const closing = close(leader, markCell.id, {
-          reason: 'CREATED_IN_ERROR',
+        const closing = close(admin, markCell.id, {
+          reason: 'LEADER_STEPPED_DOWN',
           members: [],
         }).then((response) => response);
 
         await waitForApiBlocked(holderPid);
 
-        // The Cell changes hands while the closure waits for its row lock. Ben is
-        // Mark's sibling under the root, so the Cell leaves Mark's subtree.
+        // The Cell changes hands while the closure waits for its row lock.
         await holder.query(
           'UPDATE cell_leaderships SET ended_at = now() WHERE cell_id = $1 AND ended_at IS NULL',
           [markCell.id],
@@ -1389,9 +1632,17 @@ describe('closing a Cell (section 10)', () => {
 
         const response = await closing;
 
-        expect(response.status).toBe(403);
-        expect(response.body.error.code).toBe('SCOPE_DENIED');
-        expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
+        expect(response.status).toBe(200);
+        expect((await cellRow(markCell.id)).state).toBe('CLOSED');
+
+        // Ben's leadership, opened while the closure waited, is the one it ended.
+        const ended = await db
+          .selectFrom('audit_log')
+          .select('before')
+          .where('action', '=', 'cell_leadership.ended')
+          .executeTakeFirstOrThrow();
+        expect(ended.before).toMatchObject({ cell_leader_id: ben.id });
+        expect(await openRows('cell_leaderships', markCell.id)).toBe(0);
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();

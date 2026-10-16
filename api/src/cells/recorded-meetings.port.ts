@@ -78,4 +78,16 @@ export interface RecordedMeetingsPort {
     cellIds: readonly string[],
     reportingMonth: string,
   ): Promise<Map<string, Set<string>>>;
+
+  /**
+   * The same records with their status, by scheduled date, for the *No meeting in 3
+   * months* filter (decision 0355): `held` is `HELD`, or `RESCHEDULED` with its actual
+   * date on or before `today` (a Manila `YYYY-MM-DD`); `notHeld` is `NOT_HELD`; a move
+   * still planned is neither. A Cell that recorded nothing is absent.
+   */
+  recordedStatusesIn(
+    cellIds: readonly string[],
+    reportingMonth: string,
+    today: string,
+  ): Promise<Map<string, Map<string, 'held' | 'notHeld' | 'planned'>>>;
 }

@@ -2864,6 +2864,43 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     return dates;
   }
 
+  /** `RecordedMeetingsPort`. The same rows with what each says happened (decision 0355). */
+  async recordedStatusesIn(
+    cellIds: readonly string[],
+    reportingMonth: string,
+    today: string,
+  ): Promise<Map<string, Map<string, 'held' | 'notHeld' | 'planned'>>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('cell_meetings')
+      .select([
+        'cell_id',
+        'status',
+        sql<string>`to_char(scheduled_date, 'YYYY-MM-DD')`.as('day'),
+        sql<string | null>`to_char(actual_date, 'YYYY-MM-DD')`.as('actual_day'),
+      ])
+      .where('cell_id', 'in', [...cellIds])
+      .where('reporting_month', '=', reportingMonth)
+      .execute();
+
+    const statuses = new Map<string, Map<string, 'held' | 'notHeld' | 'planned'>>();
+    for (const row of rows) {
+      const outcome =
+        row.status === 'NOT_HELD'
+          ? 'notHeld'
+          : row.status === 'HELD' || (row.actual_day !== null && row.actual_day <= today)
+            ? 'held'
+            : 'planned';
+      const days = statuses.get(row.cell_id) ?? new Map<string, 'held' | 'notHeld' | 'planned'>();
+      days.set(row.day, outcome);
+      statuses.set(row.cell_id, days);
+    }
+    return statuses;
+  }
+
   /**
    * The meetings actually recorded for this Cell in a month, by scheduled date.
    *

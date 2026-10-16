@@ -372,7 +372,7 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
       // backdating.
       const closed = (await createCell(db, { leader: stranger, createdAt: BEFORE })).id;
       await closeCellDirectly(db, closed, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         at: new Date('2020-05-20T00:00:00+08:00'),
       });
 

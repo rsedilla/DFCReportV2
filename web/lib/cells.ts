@@ -70,14 +70,48 @@ export interface CellSummary {
    * answer, never derived here (section 7).
    */
   may_restart?: boolean;
+  /** The closed view only: the explanation the closure carries, null before decision 0355. */
+  closure_explanation?: string | null;
+  /** The Running view: whether this reader may close it, the server's answer (decision 0355). */
+  may_close?: boolean;
+  /** With *No meeting in 3 months* only: each month of the window (decision 0355). */
+  no_meeting?: QuietMonth[];
+}
+
+/** One month of a quiet Cell's window: meetings recorded as not held, and with no record. */
+export interface QuietMonth {
+  month: string;
+  did_not_meet: number;
+  not_recorded: number;
 }
 
 export type CellClosureReason =
   | 'MERGED_INTO_ANOTHER_CELL'
   | 'LEADER_STEPPED_DOWN'
+  | 'LEADER_MOVED_AWAY'
+  | 'LEADER_LEFT_THE_CHURCH'
+  | 'LEADER_PASSED_AWAY'
+  | 'MEMBERS_STOPPED_ATTENDING'
   | 'MEMBERS_DISPERSED'
   | 'CREATED_IN_ERROR'
   | 'OTHER';
+
+/**
+ * The reasons a new closure may give, in the order the owner chose (decision 0355).
+ * `MEMBERS_DISPERSED` is shown on Cells closed with it and is never offered.
+ * `CREATED_IN_ERROR` is offered to every closer, Admin by default; the server refuses it to
+ * anyone without the `ADMIN` role (decision 0330).
+ */
+export const CLOSURE_REASONS: readonly CellClosureReason[] = [
+  'MERGED_INTO_ANOTHER_CELL',
+  'LEADER_STEPPED_DOWN',
+  'LEADER_MOVED_AWAY',
+  'LEADER_LEFT_THE_CHURCH',
+  'LEADER_PASSED_AWAY',
+  'MEMBERS_STOPPED_ATTENDING',
+  'OTHER',
+  'CREATED_IN_ERROR',
+];
 
 export function closureReasonLabel(reason: CellClosureReason): string {
   switch (reason) {
@@ -85,6 +119,14 @@ export function closureReasonLabel(reason: CellClosureReason): string {
       return 'Merged into another Cell';
     case 'LEADER_STEPPED_DOWN':
       return 'Leader stepped down';
+    case 'LEADER_MOVED_AWAY':
+      return 'Leader moved away';
+    case 'LEADER_LEFT_THE_CHURCH':
+      return 'Leader left the church';
+    case 'LEADER_PASSED_AWAY':
+      return 'Leader passed away';
+    case 'MEMBERS_STOPPED_ATTENDING':
+      return 'Members stopped attending';
     case 'MEMBERS_DISPERSED':
       return 'Members dispersed';
     case 'CREATED_IN_ERROR':
@@ -92,6 +134,27 @@ export function closureReasonLabel(reason: CellClosureReason): string {
     default:
       return 'Other';
   }
+}
+
+/**
+ * Close a Cell (decision 0355): an administrator's act, with a reason, an explanation, and a
+ * decision about every member, here each left without a Cell or moved to `destinationCellId`.
+ * The server decides who may; a refusal is shown as it says.
+ */
+export async function closeCell(
+  cellId: string,
+  body: {
+    reason: CellClosureReason;
+    note: string;
+    members: { person_id: string; destination_cell_id: string | null }[];
+  },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${encodeURIComponent(cellId)}/closure`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
 }
 
 /** A `YYYY-MM-DD` day with its year, because a Cell may have closed years ago. */
@@ -175,6 +238,8 @@ export interface CellIndexPage {
   reporting_month: string;
   /** Section 17: whether the month is still open, because the figures still move. */
   open: boolean;
+  /** With *No meeting in 3 months* only: the window's months, oldest first (decision 0355). */
+  no_meeting_months?: string[];
   data: CellSummary[];
   next_cursor: string | null;
 }
@@ -439,6 +504,8 @@ export async function listCells(
     state?: 'ACTIVE' | 'CLOSED';
     /** Section 15's *Fewer than 3 members* (decision 0353). */
     fewerThanThree?: boolean;
+    /** Section 15's *No meeting in 3 months* (decision 0355). */
+    noMeeting?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
@@ -451,6 +518,9 @@ export async function listCells(
   }
   if (params.fewerThanThree) {
     query.set('fewer_than_three', 'true');
+  }
+  if (params.noMeeting) {
+    query.set('no_meeting', 'true');
   }
   if (params.cursor) {
     query.set('cursor', params.cursor);

@@ -477,7 +477,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
 
     it('approves a restart of a closed Cell its branch led, resolved through the last leader', async () => {
       const markCell = await createCell(db, { leader: mark });
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const submitted = await submit(manuelAccount, {
         ...newCellBody(mark.id, (await createRequestMembers(db, 'MENS')).ids),
@@ -566,7 +566,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       // Pedro leads a Cell under Ben, which closes; Ben is not ticked, so Raymond is the
       // only candidate below the Admin, and Pedro is outside his branch on both counts.
       const pedroCell = await createCell(db, { leader: pedro });
-      await closeCellDirectly(db, pedroCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, pedroCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
       const submitted = await submit(adminA, {
         ...newCellBody(pedro.id, (await createRequestMembers(db, 'MENS')).ids),
         restart_of_cell_id: pedroCell.id,
@@ -796,7 +796,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
 
     it('marks a restart', async () => {
       const juanCell = await createCell(db, { leader: juan });
-      await closeCellDirectly(db, juanCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, juanCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
       // Juan's pending new-Cell request (Raymond's own) blocks a second; decline it.
       await decline(adminB, all[2]).expect(200);
       const submitted = await submit(manuelAccount, {
@@ -872,7 +872,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
 
     it('refuses a restart naming no members', async () => {
       const markCell = await createCell(db, { leader: mark });
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
       const body: Record<string, unknown> = {
         ...newCellBody(mark.id, []),
         restart_of_cell_id: markCell.id,
@@ -980,7 +980,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       // Ben passes the guard for Pedro but not the second object, a closed Cell outside his
       // branch. An archived member would be refused 409 if it were checked first.
       const markCell = await createCell(db, { leader: mark });
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
       const { ids } = await createRequestMembers(db, 'MENS');
       await archive(ids[0]);
 

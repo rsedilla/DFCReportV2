@@ -42,7 +42,8 @@ const DECLINE_REASONS: CellDeclineReason[] = [
 ];
 
 /**
- * Section 10, *Closure reasons*, and the list is closed.
+ * Section 10, *Closure reasons*, and the list is closed: the reasons a new closure may give
+ * (decision 0355). `MEMBERS_DISPERSED` is not among them; Cells already closed with it keep it.
  *
  * Multiplication is deliberately absent and must not be added: when a Cell
  * multiplies a disciple opens a new Cell and the original continues under the same
@@ -51,7 +52,10 @@ const DECLINE_REASONS: CellDeclineReason[] = [
 const CLOSURE_REASONS: CellClosureReason[] = [
   'MERGED_INTO_ANOTHER_CELL',
   'LEADER_STEPPED_DOWN',
-  'MEMBERS_DISPERSED',
+  'LEADER_MOVED_AWAY',
+  'LEADER_LEFT_THE_CHURCH',
+  'LEADER_PASSED_AWAY',
+  'MEMBERS_STOPPED_ATTENDING',
   'CREATED_IN_ERROR',
   'OTHER',
 ];
@@ -379,8 +383,9 @@ export class CloseCellDto {
   reason!: CellClosureReason;
 
   /**
-   * Required where the reason is `OTHER` or the closure is backdated; optional
-   * otherwise.
+   * The explanation the Senior Pastors read, **required on every closure** (decision 0355).
+   * Until that ruling it was required only where the reason was `OTHER` or the closure was
+   * backdated, which is what the paragraphs below were written about.
    *
    * **The decorators are what enforce the first half, and an earlier version of this
    * block claimed the enforcement while carrying only `@IsOptional()`.** A closure
@@ -402,7 +407,6 @@ export class CloseCellDto {
    * a closure legitimately carries a sentence of context. Section 10 keeps the *reason*
    * list closed and free of judgement (Principle 7); the note qualifies it.
    */
-  @ValidateIf((closure: CloseCellDto) => closure.reason === 'OTHER' || closure.note !== undefined)
   @IsString()
   @MaxLength(500)
   // **Trimmed, then required to be non-empty.** `@MinLength(1)` alone accepts `"  "`,
@@ -417,7 +421,7 @@ export class CloseCellDto {
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
   @IsStorableText()
-  note?: string;
+  note!: string;
 
   /**
    * Asia/Manila calendar day, `YYYY-MM-DD` (section 22).
@@ -608,6 +612,16 @@ export class CellIndexDto {
     message: 'fewer_than_three accepts only the value "true" (SKILL.md section 22).',
   })
   fewer_than_three?: 'true';
+
+  /**
+   * `true` for section 15's *No meeting in 3 months*: the running Cells with no meeting held
+   * in the attention window (decision 0355). It narrows what the scope already lists.
+   */
+  @IsOptional()
+  @IsIn(['true'], {
+    message: 'no_meeting accepts only the value "true" (SKILL.md section 22).',
+  })
+  no_meeting?: 'true';
 
   /**
    * Narrows the page to Cells whose identifier contains the term, where the term carries a

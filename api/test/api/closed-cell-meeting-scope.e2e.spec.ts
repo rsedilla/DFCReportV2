@@ -164,7 +164,7 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
         .execute();
     });
 
-    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED', at: closure });
+    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_STOPPED_ATTENDING', at: closure });
   });
 
   afterAll(async () => {

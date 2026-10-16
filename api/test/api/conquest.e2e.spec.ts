@@ -609,7 +609,7 @@ describe('Conquest (section 27)', () => {
       for (const reason of [
         'LEADER_STEPPED_DOWN',
         'MERGED_INTO_ANOTHER_CELL',
-        'MEMBERS_DISPERSED',
+        'MEMBERS_STOPPED_ATTENDING',
         'OTHER',
       ] as const) {
         const opener = await discipleOf(mark, onDay(1));
@@ -722,7 +722,10 @@ describe('Conquest (section 27)', () => {
     it('does not reach twelve on a leadership that ended before the twelfth began', async () => {
       const { cells } = await twelveLeaders();
       // The first Cell closes on the 10th, before the twelfth leader arrives on the 14th.
-      await closeCellDirectly(db, cells[0].id, { reason: 'MEMBERS_DISPERSED', at: onDay(10) });
+      await closeCellDirectly(db, cells[0].id, {
+        reason: 'MEMBERS_STOPPED_ATTENDING',
+        at: onDay(10),
+      });
 
       expect((await goalsOf(mark.id)).raise_12_leaders).toEqual({ reached_on: null, now: 11 });
     });

@@ -246,7 +246,7 @@ describe('cell configuration (section 10)', () => {
     });
 
     it('refuses a closed Cell, for being closed', async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await changeCategory(admin, markCell.id, 'YOUNG_PRO').expect(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
@@ -413,7 +413,7 @@ describe('cell configuration (section 10)', () => {
     });
 
     it('refuses a closed Cell, for being closed', async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await changeSchedule(admin, markCell.id, 7, '16:00').expect(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');

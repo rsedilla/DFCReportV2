@@ -6,8 +6,9 @@ import {
   type ScopeMembership,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
+import { SettingsService } from '../admin/settings/settings.service';
 import { canonicalId, sameId } from '../common/identifiers';
-import { manilaDayOf } from '../common/time/manila';
+import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
 import {
   databaseNow,
@@ -27,6 +28,13 @@ import { normalizeName } from '../people/duplicate-matching';
 
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
 const DEFAULT_PAGE = 50;
+
+/** One month of a quiet Cell's window (decision 0355). */
+interface QuietMonth {
+  month: string;
+  did_not_meet: number;
+  not_recorded: number;
+}
 
 /**
  * `GET /api/v1/cells` — the Cells of the actor's scope (SKILL.md sections 10, 12, 19 and
@@ -72,6 +80,7 @@ export class CellsIndexService {
     private readonly people: PeopleReadService,
     private readonly authorization: AuthorizationService,
     private readonly networks: NetworksService,
+    private readonly settings: SettingsService,
     /**
      * The coverage numerator, from the module owning `cell_meetings` (section 2).
      *
@@ -116,6 +125,8 @@ export class CellsIndexService {
       state?: 'ACTIVE' | 'CLOSED';
       /** Section 15's *Fewer than 3 members* (decision 0353); running Cells only. */
       fewerThanThree?: boolean;
+      /** Section 15's *No meeting in 3 months* (decision 0355); running Cells only. */
+      noMeeting?: boolean;
     },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
@@ -177,20 +188,67 @@ export class CellsIndexService {
           { field: 'fewer_than_three' },
         );
       }
+      if (query.noMeeting) {
+        throw new ValidationFailedError(
+          'no_meeting lists running Cells and cannot be asked of the closed view.',
+          { field: 'no_meeting' },
+        );
+      }
       return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
     }
 
-    // One more than asked for, so whether another page exists is answered by the read
-    // rather than by a second count, and the extra row is dropped before it is returned.
-    const rows =
-      leaderIds !== null && leaderIds.length === 0
-        ? []
-        : await this.cells.cellsInScope(this.db, leaderIds, now, {
-            limit: limit + 1,
-            after: after?.cellId ?? null,
-            search: query.q ?? null,
-            fewerThanThree: query.fewerThanThree ?? false,
-          });
+    // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355), so whether this
+    // reader may close is one answer for every row, given by the server.
+    const mayClose =
+      (await this.authorization.scopeMembership(actor, Capability.CellManageLifecycle)).kind ===
+      'WHOLE_CHURCH';
+
+    let rows: Awaited<ReturnType<CellsReadService['cellsInScope']>>;
+    let window: { months: string[]; quiet: Map<string, QuietMonth[]> } | null = null;
+
+    if (query.noMeeting) {
+      // **Read whole, then paged** (decision 0355): whether a Cell is quiet is answered from
+      // another module's records and from each meeting's deadline, which no single query
+      // here can filter on. A church holds some hundreds of Cells, so the scope is read once
+      // and the page is cut from the Cells that qualify, in the same `cell_id` order.
+      const months = await this.attentionWindow(now);
+      const candidates =
+        leaderIds !== null && leaderIds.length === 0
+          ? []
+          : await this.cells.cellsInScope(this.db, leaderIds, now, {
+              limit: 100_000,
+              search: query.q ?? null,
+              fewerThanThree: query.fewerThanThree ?? false,
+              createdBefore: startOfManilaDay(months[0]),
+            });
+      // Refused rather than cut short: a scope this large would list part of the church as
+      // the whole of it. A church holds some hundreds of Cells.
+      if (candidates.length >= 100_000) {
+        throw new Error('Cannot list Cells with no meeting: the scope holds too many Cells.');
+      }
+      const quiet = await this.quietMonths(
+        candidates.map((row) => row.id),
+        months,
+        now,
+      );
+      window = { months, quiet };
+      rows = candidates
+        .filter((row) => quiet.has(row.id))
+        .filter((row) => after === null || after === undefined || row.cellId > after.cellId)
+        .slice(0, limit + 1);
+    } else {
+      // One more than asked for, so whether another page exists is answered by the read
+      // rather than by a second count, and the extra row is dropped before it is returned.
+      rows =
+        leaderIds !== null && leaderIds.length === 0
+          ? []
+          : await this.cells.cellsInScope(this.db, leaderIds, now, {
+              limit: limit + 1,
+              after: after?.cellId ?? null,
+              search: query.q ?? null,
+              fewerThanThree: query.fewerThanThree ?? false,
+            });
+    }
 
     const visible = rows.slice(0, limit);
     const cellIds = visible.map((row) => row.id);
@@ -222,6 +280,7 @@ export class CellsIndexService {
       // Section 17: a report must say whether the period it shows is open, "because an
       // open month's coverage figure is still changing". Every row here carries one.
       open,
+      ...(window === null ? {} : { no_meeting_months: window.months }),
       data: visible.map((row) => {
         const leader = leaders.get(row.leaderId);
 
@@ -250,6 +309,8 @@ export class CellsIndexService {
             scheduled: scheduled.get(row.id) ?? 0,
             behind: behindIn(dueDays, recordedDates, row.id, now),
           },
+          may_close: mayClose,
+          ...(window === null ? {} : { no_meeting: window.quiet.get(row.id) ?? [] }),
         };
       }),
       next_cursor:
@@ -257,6 +318,98 @@ export class CellsIndexService {
           ? encodeCellIndexCursor({ cellId: last.cellId })
           : null,
     };
+  }
+
+  /**
+   * The *No meeting* window (decision 0355): the last finished Manila months, as many as
+   * the church-wide attention setting says (section 15), oldest first, as `YYYY-MM-01`.
+   */
+  private async attentionWindow(now: Date): Promise<string[]> {
+    const count = await this.settings.cellAttentionMonthsWithin(this.db);
+    const [year, month] = reportingMonthOf(manilaDayOf(now)).split('-').map(Number);
+
+    return Array.from({ length: count }, (_, index) => {
+      const first = new Date(Date.UTC(year, month - 1 - count + index, 1));
+      return first.toISOString().slice(0, 10);
+    });
+  }
+
+  /**
+   * For each Cell, the window's months with how many meetings were recorded as not held and
+   * how many have no record — present only where the Cell qualifies (decision 0355): no
+   * meeting held in the window, and none with no record whose week is still open to
+   * recording (decision 0335). A move still planned is neither held nor counted.
+   */
+  private async quietMonths(
+    cellIds: readonly string[],
+    months: readonly string[],
+    now: Date,
+  ): Promise<Map<string, QuietMonth[]>> {
+    const today = manilaDayOf(now);
+    const read = await Promise.all(
+      months.map(async (month) => {
+        const [year, monthNumber] = month.split('-').map(Number);
+        const lastDay = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+        const [due, statuses] = await Promise.all([
+          this.cells.dueDaysIn(this.db, cellIds, month, lastDay),
+          this.recordedStatuses(cellIds, month, today),
+        ]);
+        return { month, due, statuses };
+      }),
+    );
+
+    const quiet = new Map<string, QuietMonth[]>();
+    for (const cellId of cellIds) {
+      let held = false;
+      let stillInTime = false;
+      const counts: QuietMonth[] = [];
+
+      for (const { month, due, statuses } of read) {
+        const recorded = statuses.get(cellId) ?? new Map<string, string>();
+        let didNotMeet = 0;
+        let notRecorded = 0;
+
+        for (const outcome of recorded.values()) {
+          if (outcome === 'held') {
+            held = true;
+          } else if (outcome === 'notHeld') {
+            didNotMeet += 1;
+          }
+        }
+        for (const day of due.get(cellId) ?? []) {
+          if (recorded.has(day)) {
+            continue;
+          }
+          if (now.getTime() < recordClosesAt(day).getTime()) {
+            stillInTime = true;
+          } else {
+            notRecorded += 1;
+          }
+        }
+        counts.push({ month, did_not_meet: didNotMeet, not_recorded: notRecorded });
+      }
+
+      if (!held && !stillInTime) {
+        quiet.set(cellId, counts);
+      }
+    }
+    return quiet;
+  }
+
+  /** The records with their outcome, or a refusal where the port is unbound (as {@link recordedCounts}). */
+  private async recordedStatuses(
+    cellIds: readonly string[],
+    reportingMonth: string,
+    today: string,
+  ): Promise<Map<string, Map<string, 'held' | 'notHeld' | 'planned'>>> {
+    if (!this.recorded) {
+      throw new Error(
+        'Cannot list Cells: RECORDED_MEETINGS_PORT is not bound, so which Cells held no ' +
+          'meeting cannot be known. This is a deployment fault.',
+      );
+    }
+
+    return this.recorded.recordedStatusesIn(cellIds, reportingMonth, today);
   }
 
   /**
@@ -331,6 +484,8 @@ export class CellsIndexService {
           },
           closed_on: manilaDayOf(row.closedAt),
           closure_reason: row.closureReason,
+          // What the Senior Pastors read (decision 0355); none on a Cell closed before it.
+          closure_explanation: row.closureNote,
           restarted_as: row.restartedAs,
           // The category and day that Cell opened with, to name it without its code (decisions 0306, 0347).
           restarted_as_category: row.restartedAsCategory,

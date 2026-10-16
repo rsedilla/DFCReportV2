@@ -132,7 +132,7 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
       `.execute(trx);
     });
     await closeCellDirectly(db, markCell.id, {
-      reason: 'MEMBERS_DISPERSED',
+      reason: 'MEMBERS_STOPPED_ATTENDING',
       at: new Date('2026-09-05T10:00:00+08:00'),
     });
 
@@ -320,7 +320,7 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
     const leavingAccount = await createAccount(app, db, { person: leaving, roles: ['LEADER'] });
 
     await closeCellDirectly(db, closingCell.id, {
-      reason: 'MEMBERS_DISPERSED',
+      reason: 'MEMBERS_STOPPED_ATTENDING',
       at: new Date('2026-08-15T21:00:00+08:00'),
     });
 

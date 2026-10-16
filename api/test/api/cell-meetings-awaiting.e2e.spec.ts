@@ -222,7 +222,7 @@ describe('the recording queue (sections 13 and 19)', () => {
     // Closed the evening of its most recent meeting: every earlier Saturday is still
     // owed, and the Cell is gone from the `ACTIVE`-only index that fed the Dashboard.
     await closeCellDirectly(db, cell.id, {
-      reason: 'MEMBERS_DISPERSED',
+      reason: 'MEMBERS_STOPPED_ATTENDING',
       at: manilaEndOf(dates[dates.length - 1]),
     });
 

@@ -78,6 +78,20 @@ export class SettingsService {
   }
 
   /**
+   * The church-wide attention threshold (SKILL.md section 15): how many finished months
+   * the *No meeting in 3 months* filter looks back over (decision 0355). Refused where the
+   * row is missing or not a whole number of at least one, rather than defaulted.
+   */
+  async cellAttentionMonthsWithin(executor: Db | Transaction<Database>): Promise<number> {
+    const value = await this.readFlag(executor, 'cell_attention_months');
+
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+      throw new Error('The setting `cell_attention_months` is not a whole number of months.');
+    }
+    return value;
+  }
+
+  /**
    * Set the floor, once, and audit it — or do neither.
    *
    * **The two are one statement on purpose.** Section 7 requires every change to a

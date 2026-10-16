@@ -467,6 +467,11 @@ export type CellCategory = 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
 export type CellClosureReason =
   | 'MERGED_INTO_ANOTHER_CELL'
   | 'LEADER_STEPPED_DOWN'
+  | 'LEADER_MOVED_AWAY'
+  | 'LEADER_LEFT_THE_CHURCH'
+  | 'LEADER_PASSED_AWAY'
+  | 'MEMBERS_STOPPED_ATTENDING'
+  /** Kept on Cells closed before decision 0355; no new closure gives it. */
   | 'MEMBERS_DISPERSED'
   | 'CREATED_IN_ERROR'
   | 'OTHER';

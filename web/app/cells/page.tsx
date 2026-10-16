@@ -14,6 +14,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
 import { CellApprovals } from '@/components/cell-approvals';
+import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
@@ -25,6 +26,7 @@ import {
   getCellCounts,
   listCells,
   type CellSummary,
+  type QuietMonth,
 } from '@/lib/cells';
 import { listApprovalRequests } from '@/lib/cell-approvals';
 import { useCursorPages } from '@/lib/cursor-pages';
@@ -89,6 +91,8 @@ function CellsIndex() {
   const mineOnly = search.get('mine') === '1';
   const submitted = search.get('q') ?? '';
   const fewOnly = search.get('few') === '1';
+  // Section 15's *No meeting in 3 months* (decision 0355).
+  const quietOnly = search.get('quiet') === '1';
   const viewParam = search.get('view');
   const viewInAddress: 'ACTIVE' | 'CLOSED' | 'APPROVE' =
     viewParam === 'CLOSED' || viewParam === 'APPROVE' ? viewParam : 'ACTIVE';
@@ -99,7 +103,7 @@ function CellsIndex() {
   const [view, setView] = useState(viewInAddress);
   const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
   // Any narrowing — including one arrived at by pressing Back — starts the list again.
-  const asked = `${month}|${String(mineOnly)}|${String(fewOnly)}|${submitted}|${viewInAddress}`;
+  const asked = `${month}|${String(mineOnly)}|${String(fewOnly)}|${String(quietOnly)}|${submitted}|${viewInAddress}`;
   const pages = useCursorPages(asked);
 
   // Adjusted while rendering rather than in an effect, which is React's own answer for state
@@ -111,6 +115,7 @@ function CellsIndex() {
     setView(viewInAddress);
   }
   const [restarting, setRestarting] = useState<CellSummary | null>(null);
+  const [closing, setClosing] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
   const closed = view === 'CLOSED';
   // Offered only where the route would answer; the route still decides (section 1, principle 4).
@@ -127,7 +132,7 @@ function CellsIndex() {
     enabled: approver,
   });
   const cells = useQuery({
-    queryKey: ['cells', month, mineOnly, fewOnly, submitted, pages.cursor, PAGE_SIZE, view],
+    queryKey: ['cells', month, mineOnly, fewOnly, quietOnly, submitted, pages.cursor, PAGE_SIZE, view],
     queryFn: ({ signal }) =>
       listCells(
         {
@@ -138,11 +143,17 @@ function CellsIndex() {
           limit: PAGE_SIZE,
           state: view === 'CLOSED' ? 'CLOSED' : 'ACTIVE',
           fewerThanThree: view === 'ACTIVE' && fewOnly,
+          noMeeting: view === 'ACTIVE' && quietOnly,
         },
         signal,
       ),
     enabled: view !== 'APPROVE',
   });
+  // The number in the label is the church-wide setting's (decision 0355), known once the
+  // filtered list has answered; three until then, which is the setting's seeded value and
+  // which nothing in the product can change today.
+  const quietMonths = cells.data?.no_meeting_months ?? [];
+  const quietLabel = `${quietMonths.length || 3} months`;
 
 
 
@@ -184,7 +195,7 @@ function CellsIndex() {
             aria-pressed={view === key}
             onClick={() => {
               setView(key);
-              go({ view: key === 'ACTIVE' ? null : key, few: null });
+              go({ view: key === 'ACTIVE' ? null : key, few: null, quiet: null });
             }}
             className={cn(tabClasses(view === key), 'inline-flex items-center gap-2')}
           >
@@ -239,7 +250,8 @@ function CellsIndex() {
             No month in the closed view: it lists when a Cell closed and whether it may
             restart, and neither is a figure for a period.
           */}
-          {closed ? null : (
+          {/* Nor with *No meeting in 3 months*, whose window is its own (decision 0355). */}
+          {closed || quietOnly ? null : (
             <MonthPicker
               month={month}
               onChange={(next) => go({ month: next })}
@@ -260,23 +272,35 @@ function CellsIndex() {
               {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
             </Button>
           ) : (
-            // Section 15's *Fewer than 3 members* (decision 0353): a list to look at, and
-            // nothing happens to a Cell because it is on it.
-            <Button
-              type="button"
-              variant="secondary"
-              aria-pressed={fewOnly}
-              onClick={() => go({ few: fewOnly ? null : '1' })}
-            >
-              {fewOnly ? 'Showing fewer than 3 members' : 'Fewer than 3 members'}
-            </Button>
+            // Section 15's two filters (decisions 0353 and 0355): lists to look at, carrying
+            // no count, and nothing happens to a Cell because it is on one.
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-pressed={fewOnly}
+                onClick={() => go({ few: fewOnly ? null : '1' })}
+              >
+                {fewOnly ? 'Showing fewer than 3 members' : 'Fewer than 3 members'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-pressed={quietOnly}
+                onClick={() => go({ quiet: quietOnly ? null : '1' })}
+              >
+                {quietOnly ? `Showing no meeting in ${quietLabel}` : `No meeting in ${quietLabel}`}
+              </Button>
+            </>
           )}
         </div>
 
         <CellTotals
-          current={!closed && !fewOnly && submitted === '' && month === reportingMonthOf()}
+          current={!closed && !fewOnly && !quietOnly && submitted === '' && month === reportingMonthOf()}
           mineOnly={mineOnly}
-          onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null, few: null })}
+          onChoose={(mine) =>
+            go({ mine: mine ? '1' : null, month: null, view: null, q: null, few: null, quiet: null })
+          }
         />
 
         <div className="mt-8">
@@ -293,7 +317,9 @@ function CellsIndex() {
                 ? mineOnly
                   ? 'No Cell you led has closed.'
                   : 'No Cell you oversee has closed.'
-                : fewOnly
+                : quietOnly
+                  ? `No Cell you oversee has gone the last ${quietLabel} without a meeting. A Cell newer than that, or whose leader still has time to record, is not listed.`
+                  : fewOnly
                   ? 'Every Cell you oversee has at least 3 members.'
                   : mineOnly
                 ? 'You do not lead a Cell this month.'
@@ -327,6 +353,11 @@ function CellsIndex() {
                     </td>
                     <td className="px-3 py-3">
                       {cell.closure_reason ? closureReasonLabel(cell.closure_reason) : ''}
+                      {cell.closure_explanation ? (
+                        <span className="text-muted mt-1 block text-sm">
+                          {cell.closure_explanation}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-3">
                       <RestartAction
@@ -353,6 +384,22 @@ function CellsIndex() {
 
             <CursorPager
               label="Closed Cells"
+              page={pages.page}
+              nextCursor={cells.data.next_cursor}
+              onPrevious={pages.previous}
+              onNext={() => pages.next(cells.data?.next_cursor)}
+            />
+          </>
+        ) : cells.data && quietOnly ? (
+          <>
+            <QuietCells
+              cells={cells.data.data}
+              months={quietMonths}
+              month={month}
+              onClose={(cell) => setClosing(cell)}
+            />
+            <CursorPager
+              label="Cells with no meeting"
               page={pages.page}
               nextCursor={cells.data.next_cursor}
               onPrevious={pages.previous}
@@ -421,6 +468,19 @@ function CellsIndex() {
             cell={restarting}
             onClose={() => setRestarting(null)}
             onSent={(cellId) => setSent((current) => new Set(current).add(cellId))}
+          />
+        ) : null}
+
+        {closing ? (
+          <CloseCellDialog
+            open
+            cell={{
+              id: closing.id,
+              name: cellShortName({ ...closing, day_of_week: closing.schedule.day_of_week }),
+              leaderName: closing.leader.full_name,
+            }}
+            onClose={() => setClosing(null)}
+            onClosed={() => undefined}
           />
         ) : null}
         </>
@@ -505,6 +565,160 @@ function CellTotals({
   );
 }
 
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * "Jul 2026", from a `YYYY-MM-01` month. A fixed list rather than `Intl`, whose short
+ * September is "Sept" in one engine and "Sep" in another.
+ */
+function shortMonthLabel(month: string): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+
+  return `${SHORT_MONTHS[monthNumber - 1]} ${year}`;
+}
+
+/**
+ * One month of a quiet Cell, in Section 13's words (decision 0355): how many meetings were
+ * recorded as *Did not meet* and how many are *Not recorded*. Never a colour.
+ */
+function quietMonthText(entry: QuietMonth): string {
+  const parts = [
+    entry.did_not_meet > 0 ? `Did not meet ${entry.did_not_meet}` : null,
+    entry.not_recorded > 0 ? `Not recorded ${entry.not_recorded}` : null,
+  ].filter((part): part is string => part !== null);
+
+  return parts.length > 0 ? parts.join(' · ') : 'No meeting due';
+}
+
+/**
+ * Section 15's *No meeting in 3 months* (decision 0355): the running Cells of the reader's
+ * scope with no meeting held in the window, each month shown so a quiet Cell is told from one
+ * nobody reports on. **Read-only for whoever may not close** — a Primary sees what is
+ * happening in their branch and acts by talking to the administrator; `may_close` is the
+ * server's answer, and only then is *Close this Cell* offered. Ordered by Cell ID, never by
+ * how quiet a Cell is.
+ */
+function QuietCells({
+  cells,
+  months,
+  month,
+  onClose,
+}: {
+  cells: CellSummary[];
+  months: string[];
+  month: string;
+  onClose: (cell: CellSummary) => void;
+}) {
+  const anyMayClose = cells.some((cell) => cell.may_close);
+
+  return (
+    <>
+      <p className="text-muted mt-6 text-sm leading-relaxed">
+        No meeting held in{' '}
+        {months.length > 0
+          ? `${shortMonthLabel(months[0])} to ${shortMonthLabel(months[months.length - 1])}`
+          : 'the last 3 months'}
+        . A meeting moved to another day that happened counts as held, and a Cell whose leader
+        still has time to record is not listed.
+      </p>
+
+      <Table caption="Cells with no meeting held" className="mt-4 hidden lg:block">
+        <thead>
+          <tr>
+            <HeaderCell>Cell</HeaderCell>
+            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell>Members</HeaderCell>
+            {months.map((each) => (
+              <HeaderCell key={each}>{shortMonthLabel(each)}</HeaderCell>
+            ))}
+            {anyMayClose ? (
+              <HeaderCell>
+                <span className="sr-only">Close</span>
+              </HeaderCell>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {cells.map((cell) => {
+            const name = cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week });
+
+            return (
+              <tr key={cell.id} className={rowClasses}>
+                <td className="px-3 py-3">
+                  <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={`${LINK} font-medium`}>
+                    {name}
+                  </Link>
+                </td>
+                <td className="px-3 py-3">{cell.leader.full_name}</td>
+                <td className="px-3 py-3">{cell.member_count}</td>
+                {(cell.no_meeting ?? []).map((entry) => (
+                  <td key={entry.month} className="px-3 py-3 text-sm">
+                    {quietMonthText(entry)}
+                  </td>
+                ))}
+                {anyMayClose ? (
+                  <td className="px-3 py-3">
+                    {cell.may_close ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => onClose(cell)}
+                        aria-label={`Close this Cell, ${name}, led by ${cell.leader.full_name}`}
+                      >
+                        Close this Cell
+                      </Button>
+                    ) : null}
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+
+      <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+        {cells.map((cell) => {
+          const name = cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week });
+
+          return (
+            <li key={cell.id} className="border-line border p-4">
+              <h2 className="text-base font-medium">
+                <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
+                  {name}
+                </Link>
+              </h2>
+              <p className="text-muted mt-1 text-sm">
+                {cell.leader.full_name} · {cell.member_count}{' '}
+                {cell.member_count === 1 ? 'member' : 'members'}
+              </p>
+              <dl className="mt-3 grid gap-1 text-sm">
+                {(cell.no_meeting ?? []).map((entry) => (
+                  <div key={entry.month} className="flex gap-2">
+                    <dt className="text-muted">{shortMonthLabel(entry.month)}</dt>
+                    <dd>{quietMonthText(entry)}</dd>
+                  </div>
+                ))}
+              </dl>
+              {cell.may_close ? (
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => onClose(cell)}
+                    aria-label={`Close this Cell, ${name}, led by ${cell.leader.full_name}`}
+                  >
+                    Close this Cell
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 /**
  * What a closed Cell offers, in words (section 23: never colour alone). Whether a
  * restart is offered is the server's answer (`may_restart`); this only says which of
@@ -583,6 +797,10 @@ function ClosedCellCard({
           </dd>
         </div>
       </dl>
+      {/* What the Senior Pastors read (decision 0355); none on a Cell closed before it. */}
+      {cell.closure_explanation ? (
+        <p className="text-muted mt-2 text-sm leading-relaxed">{cell.closure_explanation}</p>
+      ) : null}
       <div className="mt-3">
         <RestartAction cell={cell} sent={sent} onRestart={onRestart} />
       </div>

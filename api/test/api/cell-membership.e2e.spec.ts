@@ -187,7 +187,7 @@ describe('cell membership (section 10)', () => {
       // correction. The refusal here is about the Cell being closed rather than about
       // scope, which is what shows the scope resolved.
       const closing = await createCell(db, { leader: mark, category: 'COUPLE' });
-      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const account = await createAccount(app, db, {
         person: mark,

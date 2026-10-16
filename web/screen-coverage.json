@@ -331,8 +331,8 @@
     },
     {
       "route": "POST /api/v1/cells/:id/closure",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "A closure is never reversed (decision 0133), so it is deliberately not put in front of a pilot leader."
+      "reason": "Only an administrator closes a Cell, after talking it through with the Senior Pastors (decision 0355): offered on the Cell's members page and on the Cells page's No meeting filter, to an account that may close.",
+      "screen": "web/components/close-cell-dialog.tsx"
     },
     {
       "route": "POST /api/v1/cells/leadership-requests",

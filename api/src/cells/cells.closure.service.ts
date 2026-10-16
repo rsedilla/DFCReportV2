@@ -150,9 +150,9 @@ export class CellsClosureService {
       }
 
       // Section 10: scope over the Cell is re-decided inside the transaction, after
-      // the locks. The guard answered on the pool before the request queued, and a
-      // handover committing in between leaves that answer describing authority the
-      // actor no longer holds.
+      // the locks. **Since decision 0355 it cannot fail**: closing needs the capability at
+      // Whole Church, which covers every Cell. It is kept so that a narrower closer, if a
+      // later ruling allows one, is re-checked after the lock as it was before.
       await this.assertStillInScopeWithin(
         trx,
         actor,
@@ -207,6 +207,10 @@ export class CellsClosureService {
         await this.assertMayBackdateWithin(trx, actor, authority);
 
         if (input.note === undefined) {
+          // **Unreachable through the API since decision 0355**, whose DTO requires a note
+          // on every closure; kept for a caller that bypasses it. The paragraphs below
+          // argue the rule as it stood when only `OTHER` required a note.
+          //
           // Section 7: backdating a closure "is Admin-only and always requires a
           // reason". The closure reason cannot be that reason — every closure carries
           // one from the fixed list, so reading it that way makes the requirement

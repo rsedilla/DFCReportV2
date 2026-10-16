@@ -181,7 +181,7 @@ describe('how a Cell closure takes its locks', () => {
     }
 
     await client.query(
-      "UPDATE cells SET state = 'CLOSED', closed_at = $1, closure_reason = 'MEMBERS_DISPERSED' WHERE id = $2",
+      "UPDATE cells SET state = 'CLOSED', closed_at = $1, closure_reason = 'MEMBERS_STOPPED_ATTENDING', closure_note = 'Closed for this case (invented).' WHERE id = $2",
       [at, closing.id],
     );
   };

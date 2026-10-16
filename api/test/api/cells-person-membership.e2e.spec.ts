@@ -179,7 +179,7 @@ describe('a person’s current Cell (sections 8 and 10, decision 0248)', () => {
 
   it('ignores a membership and a leadership that have ended', async () => {
     await joinCell(peter, joelCell);
-    await closeCellDirectly(db, joelCell.id, { reason: 'MEMBERS_DISPERSED' });
+    await closeCellDirectly(db, joelCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
     const member = await cellsOf(admin, peter.id).expect(200);
     expect(member.body.membership).toBeNull();
