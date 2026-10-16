@@ -447,12 +447,6 @@ export class CellsMembershipService {
       // governs, and a concurrent add of the same person must not interleave with it.
       await lockPersonsWithin(trx, [personId]);
 
-      // The guard checked `cell.move_members` over this Cell (decision 0357); re-decided
-      // after the lock, as section 10 asks of every Cell an operation touches.
-      await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
-        cellId,
-      ]);
-
       const current = await this.openMembershipWithin(trx, personId);
 
       // **`current.cell_uuid !== cellId` is the whole cross-Cell authorization of
@@ -463,6 +457,14 @@ export class CellsMembershipService {
       if (!current || current.cell_uuid !== cellId) {
         throw new NotFoundError('That person holds no open membership of that Cell.');
       }
+
+      // The guard checked `cell.move_members` over this Cell (decision 0357); re-decided
+      // after the lock, as section 10 asks of every Cell an operation touches. After the
+      // membership read, so a Cell that does not exist answers `NOT_FOUND` as before
+      // rather than reaching a leader lookup that finds nobody.
+      await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
+        cellId,
+      ]);
 
       const at = await this.nowWithin(trx);
 

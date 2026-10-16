@@ -1942,28 +1942,6 @@ export class CellsLeadershipRequestService {
       );
     }
 
-    // **Only an approver who may move the named members decides it** (decision 0357), and
-    // that binds a Whole Church approver too. An approver it refuses neither approves nor
-    // declines it, and the queue leaves it out; it reaches the Admin.
-    const move = await this.moveAnswerFor(trx, request, actor, authority);
-
-    if (move === 'capability') {
-      throw new CapabilityDeniedError(
-        'This request names somebody who is in a Cell, and approving it moves them. Moving ' +
-          'a member is done by the Primary of the branch or the Admin, so this request goes ' +
-          'to an administrator (SKILL.md section 10, decision 0357).',
-        { capability: Capability.CellMoveMembers },
-      );
-    }
-
-    if (move === 'scope') {
-      throw new ScopeDeniedError(
-        'This request names somebody in a Cell outside your branch, and approving it moves ' +
-          'them, so it goes to an administrator (SKILL.md section 10, decision 0357).',
-        { capability: Capability.CellMoveMembers },
-      );
-    }
-
     const wholeChurch = await this.authorization.coversWith(
       trx,
       actor,
@@ -1972,16 +1950,37 @@ export class CellsLeadershipRequestService {
       { kind: 'church' },
     );
 
-    if (wholeChurch) {
-      return;
-    }
-
-    if (!(await this.mayDecide(trx, request, actor, authority))) {
+    if (!wholeChurch && !(await this.mayDecide(trx, request, actor, authority))) {
       throw new ScopeDeniedError(
         'This request goes to an administrator: it is outside your branch, or it is your ' +
           'own request, your own leadership, a Cell you lead, or a Cell for your own ' +
           'direct disciple (SKILL.md section 10).',
         { capability: Capability.CellApproveLeadership },
+      );
+    }
+
+    // **Only an approver who may move the named members decides it** (decision 0357), and
+    // that binds a Whole Church approver too. An approver it refuses neither approves nor
+    // declines it, and the queue leaves it out; it reaches the Admin. **After the checks
+    // above** (section 7's contents ordering, decision 0193), so an approver the request
+    // was never theirs to decide learns nothing about its members; and the words say what
+    // approving would do, never where a member is (section 8).
+    const move = await this.moveAnswerFor(trx, request, actor, authority);
+
+    if (move === 'capability') {
+      throw new CapabilityDeniedError(
+        'This request goes to an administrator: approving it would move somebody out of a ' +
+          'Cell, which only the Primary of the branch or the Admin does (SKILL.md section ' +
+          '10, decision 0357).',
+        { capability: Capability.CellMoveMembers },
+      );
+    }
+
+    if (move === 'scope') {
+      throw new ScopeDeniedError(
+        'This request goes to an administrator: approving it would make a move outside ' +
+          'your branch (SKILL.md section 10, decision 0357).',
+        { capability: Capability.CellMoveMembers },
       );
     }
   }

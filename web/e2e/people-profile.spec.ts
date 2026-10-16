@@ -292,9 +292,12 @@ test.describe('a person’s Cell', () => {
   for (const [code, words] of [
     [
       'CAPABILITY_DENIED',
-      'Marilou Reyes Santos is already in another Cell. Moves to another Cell are made by their Primary.',
+      'You can add somebody who is in no Cell. Moves between Cells are made by the Primary.',
     ],
-    ['SCOPE_DENIED', 'That move involves a Cell outside your branch, so it is made by the Admin.'],
+    [
+      'SCOPE_DENIED',
+      'You move members only between Cells of your own branch. Other moves are made by the Admin.',
+    ],
   ] as const) {
     test(`a move refused ${code} says who makes it, in plain words (decision 0357)`, async ({
       page,

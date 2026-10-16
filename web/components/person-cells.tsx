@@ -47,6 +47,8 @@ export function PersonCells({
   const mayMoveMembers = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.move_members',
   );
+  // The line names the Primary, so it is for a Leader; a Senior Pastor has no Primary.
+  const isLeader = me.data?.roles.includes('LEADER') ?? false;
 
   return (
     <section aria-labelledby={headingId} className={`${FRAME} ${className}`}>
@@ -93,9 +95,9 @@ export function PersonCells({
               <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
                 Move to another Cell
               </Button>
-            ) : (
+            ) : isLeader ? (
               <p className="text-muted mt-3 text-sm">Moves to another Cell are made by your Primary.</p>
-            )
+            ) : null
           ) : cells.data.leads.length === 0 ? (
             <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
               Add to a Cell

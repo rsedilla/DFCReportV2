@@ -297,6 +297,11 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(marilou.id)).toBeNull();
     });
 
+    it('answers NOT_FOUND when the Admin removes from a Cell that does not exist', async () => {
+      const response = await removeMember(admin, randomUUID(), lito.id).expect(404);
+      expect(codeOf(response)).toBe('NOT_FOUND');
+    });
+
     it('refuses a Senior Pastor moving and removing a member', async () => {
       expect(codeOf(await addMember(orielAccount, cellE.id, marilou.id).expect(403))).toBe(
         'CAPABILITY_DENIED',
@@ -374,6 +379,90 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(codeOf(await approve(ginaAccount, id).expect(403))).toBe('CAPABILITY_DENIED');
       expect(codeOf(await decline(ginaAccount, id).expect(403))).toBe('CAPABILITY_DENIED');
       expect(await cellOf(marilou.id)).toBe(cellC.id);
+    });
+
+    it('locks each named member’s current Cell before writing anything, so it waits on a closure holding that Cell', async () => {
+      // Section 5's order: approval takes a named member's current Cell in its one sorted
+      // `cells` lock call, before it writes. Hold that row as a closure would. The outcome
+      // alone cannot tell whether approval took it up front: migration 0009's membership
+      // trigger takes the same row `FOR SHARE` at commit, so approval would be refused
+      // either way. What the up-front lock decides is **when** it waits, so this reads
+      // `pg_locks` while it waits: it must hold no lock on `cell_leaderships`, the table it
+      // writes once its locks are taken. Released inside approval's lock bound, so the
+      // approval then completes.
+      const sent = await submit(corazonAccount, mia.id, [marilou.id, ...(await fresh())]).expect(
+        201,
+      );
+
+      let release!: () => void;
+      let locked!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      const isLocked = new Promise<void>((resolve) => (locked = resolve));
+      const holder = db.transaction().execute(async (trx) => {
+        await sql`SELECT id FROM cells WHERE id = ${cellC.id}::uuid FOR NO KEY UPDATE`.execute(trx);
+        locked();
+        await held;
+      });
+
+      await isLocked;
+      // Its own connection, so the probe never waits on the pool the holder is using.
+      const probe = createTestDb();
+      let settled = false;
+      const pending = approve(elenaAccount, sent.body.id as string).then((response) => {
+        settled = true;
+        return response;
+      });
+
+      let waiter: number | undefined;
+      let writtenWhileWaiting: number | undefined;
+      try {
+        // The approval's backend, once it waits on a lock: any backend but the probe's
+        // and the holder's, while the request is still open.
+        while (waiter === undefined && !settled) {
+          const rows = await sql<{ pid: number }>`
+            SELECT pid FROM pg_locks
+             WHERE NOT granted AND pid <> pg_backend_pid()
+             LIMIT 1`.execute(probe);
+          waiter = rows.rows[0]?.pid;
+          if (waiter === undefined) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          }
+        }
+
+        if (waiter !== undefined) {
+          const written = await sql<{ n: number }>`
+            SELECT count(*)::int AS n FROM pg_locks l JOIN pg_class c ON c.oid = l.relation
+             WHERE l.pid = ${waiter} AND c.relname = 'cell_leaderships'`.execute(probe);
+          writtenWhileWaiting = written.rows[0].n;
+        }
+      } finally {
+        release();
+        await holder;
+        await probe.destroy();
+      }
+      const response = await pending;
+
+      expect(waiter).toBeDefined();
+      expect(writtenWhileWaiting).toBe(0);
+
+      // Released inside its lock bound, the approval goes on and moves her.
+      expect(response.status).toBe(200);
+      expect(await cellOf(marilou.id)).toBe(response.body.cell_uuid);
+    });
+
+    it('refuses an approver for the request’s own reasons before anything about its members', async () => {
+      // Teresa is Elena's direct disciple, so the request goes to the Admin (decision 0352)
+      // whatever its members; Lito's Cell is outside Elena's branch too. The refusal must be
+      // the first, so it says nothing about where a member is (section 7, decision 0193).
+      const sent = await submit(orielAccount, teresa.id, [lito.id, ...(await fresh())]).expect(201);
+
+      for (const response of [
+        await approve(elenaAccount, sent.body.id as string).expect(403),
+        await decline(elenaAccount, sent.body.id as string).expect(403),
+      ]) {
+        expect(codeOf(response)).toBe('SCOPE_DENIED');
+        expect(response.body.error.details).toEqual({ capability: 'cell.approve_leadership' });
+      }
     });
 
     it('stays with an approver who moves nobody when it names nobody in a Cell', async () => {

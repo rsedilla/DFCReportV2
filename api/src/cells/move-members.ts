@@ -83,8 +83,8 @@ export async function assertMayMoveMembersWithin(
 
   if (answer === 'scope') {
     throw new ScopeDeniedError(
-      'You move members only between Cells of your own branch. A move involving a Cell ' +
-        'in another branch is made by the Admin (SKILL.md section 10, decision 0357).',
+      'You move members only between Cells of your own branch. Other moves are made by the ' +
+        'Admin (SKILL.md section 10, decision 0357).',
       { capability: Capability.CellMoveMembers },
     );
   }
