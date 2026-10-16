@@ -168,7 +168,13 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     // `nameSeniorPastors`.
     nameSeniorPastors(app, [oriel.id, geraldine.id]);
 
-    raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
+    // Ticked Moves people (decision 0356), so each case run as Raymond fails for the reason it
+    // names rather than for the missing tick. Case 12 pins the tick itself.
+    raymondAccount = await createAccount(app, db, {
+      person: raymond,
+      roles: ['LEADER'],
+      movesPeople: true,
+    });
     orielAccount = await createAccount(app, db, {
       person: oriel,
       roles: ['SENIOR_PASTOR'],
@@ -393,6 +399,31 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].started_at.getTime()).toBe(EPOCH.getTime());
   });
+
+  it('12. refuses a move to a Leader not ticked Moves people, and admits it once ticked', async () => {
+    // A Leader moves people only with the tick (decision 0356). The same move, inside
+    // Raymond's own subtree, is refused without it and recorded with it.
+    await setMovesPeople(raymondAccount, false);
+    const unticked = await reassign(raymondAccount, mark.id, raymond.id);
+
+    expect(unticked.status).toBe(403);
+    expect(unticked.body.error.code).toBe('CAPABILITY_DENIED');
+    await expectLeaderUnchanged(mark.id, manuel.id);
+
+    await setMovesPeople(raymondAccount, true);
+    const ticked = await reassign(raymondAccount, mark.id, raymond.id);
+
+    expect(ticked.status).toBe(200);
+    await expectLeaderUnchanged(mark.id, raymond.id);
+  });
+
+  async function setMovesPeople(account: TestAccount, value: boolean): Promise<void> {
+    await db
+      .updateTable('accounts')
+      .set({ moves_people: value })
+      .where('id', '=', account.id)
+      .execute();
+  }
 
   function reassign(
     actor: TestAccount,

@@ -95,7 +95,12 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       person: await createPerson(db, { firstName: 'Ester', network: 'WOMENS' }),
       roles: ['ADMIN'],
     });
-    raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
+    // Ticked Moves people (decision 0356): these cases pin the rules a mover meets.
+    raymondAccount = await createAccount(app, db, {
+      person: raymond,
+      roles: ['LEADER'],
+      movesPeople: true,
+    });
   });
 
   afterAll(async () => {

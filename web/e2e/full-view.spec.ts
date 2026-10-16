@@ -563,6 +563,70 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     ).toBeVisible();
   });
 
+  test('ticks Moves people beside Approves Cells, sending it on its own route (decision 0356)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockGrants(page, ['accounts.manage', 'roles.manage']);
+    await mockPastoralPath(page);
+    let movesPeople = false;
+    await page.route(`**/api/v1/accounts/for-person/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill(
+        json({
+          account: {
+            id: ACCOUNT_ID,
+            email: 'marilou@example.test',
+            status: 'ACTIVE',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+            full_view: true,
+            approves_cells: false,
+            moves_people: movesPeople,
+          },
+        }),
+      ),
+    );
+    const sent: { path: string; body: unknown }[] = [];
+    await page.route('**/api/v1/accounts/*/moves-people', (route) => {
+      const body = route.request().postDataJSON() as { moves_people: boolean };
+      sent.push({ path: new URL(route.request().url()).pathname, body });
+      movesPeople = body.moves_people;
+      return route.fulfill(json({ id: ACCOUNT_ID, moves_people: body.moves_people }));
+    });
+
+    await page.goto(PROFILE);
+
+    const box = page.getByRole('checkbox', { name: /^Moves people/ });
+    await expect(box).not.toBeChecked();
+    await expect(page.getByText('Marilou does not move people to another leader.')).toBeVisible();
+
+    await box.click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent).toEqual([
+      { path: `/api/v1/accounts/${ACCOUNT_ID}/moves-people`, body: { moves_people: true } },
+    ]);
+    await expect(
+      page.getByText(
+        'Marilou moves anyone in their branch to another leader at once. A move to another branch is made by the Admin.',
+      ),
+    ).toBeVisible();
+  });
+
+  test('offers Moves people only with Full view (decision 0356)', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockGrants(page, ['accounts.manage', 'roles.manage']);
+    await mockPastoralPath(page);
+    await accountHolding(page, 'LEADER', { fullView: false });
+
+    await page.goto(PROFILE);
+
+    await expect(page.getByRole('checkbox', { name: /^Full view/ })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /^Moves people/ })).toHaveCount(0);
+  });
+
   test('is not offered to a reader without roles.manage', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);

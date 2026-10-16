@@ -18,6 +18,7 @@ import {
   resetSecondStep,
   setAccountAccess,
   setApprovesCells,
+  setMovesPeople,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -237,18 +238,33 @@ export function PersonAccount({
               />
               {/* Offered only with Full view (decision 0352). */}
               {current.full_view ? (
-                <LeaderTickRow
-                  personId={personId}
-                  field="approves_cells"
-                  label="Approves Cells"
-                  value={current.approves_cells}
-                  save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
-                  describe={(shown) =>
-                    shown
-                      ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
-                      : `${firstName} does not approve Cells; an administrator does.`
-                  }
-                />
+                <>
+                  <LeaderTickRow
+                    personId={personId}
+                    field="approves_cells"
+                    label="Approves Cells"
+                    value={current.approves_cells}
+                    save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
+                        : `${firstName} does not approve Cells; an administrator does.`
+                    }
+                  />
+                  {/* Also offered only with Full view, and meant for the Primaries (decision 0356). */}
+                  <LeaderTickRow
+                    personId={personId}
+                    field="moves_people"
+                    label="Moves people"
+                    value={current.moves_people}
+                    save={(next) => setMovesPeople(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} moves anyone in their branch to another leader at once. A move to another branch is made by the Admin.`
+                        : `${firstName} does not move people to another leader.`
+                    }
+                  />
+                </>
               ) : null}
             </>
           ) : null}
@@ -409,8 +425,9 @@ function AccessRow({
 /**
  * A tick on a Leader account, under `roles.manage` (SKILL.md section 7): *Full view*
  * (decision 0323), which gives today's screens over the account's branch where cleared gives the
- * recording screens, or *Approves Cells* (decision 0352), which lets the account decide the Cell
- * leadership requests of its branch. Saved as soon as it is changed, and audit logged.
+ * recording screens, *Approves Cells* (decision 0352), which lets the account decide the Cell
+ * leadership requests of its branch, or *Moves people* (decision 0356), which lets it move people in
+ * its branch to another leader. Saved as soon as it is changed, and audit logged.
  */
 function LeaderTickRow({
   personId,
@@ -421,7 +438,7 @@ function LeaderTickRow({
   describe,
 }: {
   personId: string;
-  field: 'full_view' | 'approves_cells';
+  field: 'full_view' | 'approves_cells' | 'moves_people';
   label: string;
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;

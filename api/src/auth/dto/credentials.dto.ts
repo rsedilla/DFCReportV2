@@ -64,6 +64,12 @@ export class SetApprovesCellsDto {
   approves_cells!: boolean;
 }
 
+/** Moves people on a Leader account, ticked or cleared (sections 5 and 7, decision 0356). */
+export class SetMovesPeopleDto {
+  @IsBoolean()
+  moves_people!: boolean;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)

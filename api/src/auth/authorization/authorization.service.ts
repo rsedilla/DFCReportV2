@@ -9,7 +9,12 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
-import { LEADER_APPROVES_CELLS, LEADER_FULL_VIEW_ONLY, ROLE_DEFAULTS } from './role-defaults';
+import {
+  LEADER_APPROVES_CELLS,
+  LEADER_FULL_VIEW_ONLY,
+  LEADER_MOVES_PEOPLE,
+  ROLE_DEFAULTS,
+} from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
 import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
@@ -43,6 +48,8 @@ interface ActiveRoles {
   fullView: boolean;
   /** Approves Cells (section 7, decision 0352), read on the same row. */
   approvesCells: boolean;
+  /** Moves people (sections 5 and 7, decision 0356), read on the same row. */
+  movesPeople: boolean;
 }
 
 /**
@@ -140,6 +147,7 @@ export class AuthorizationService {
         'accounts.person_id',
         'accounts.full_view',
         'accounts.approves_cells',
+        'accounts.moves_people',
       ])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
@@ -148,6 +156,7 @@ export class AuthorizationService {
     return {
       fullView: rows.some((row) => row.full_view),
       approvesCells: rows.some((row) => row.approves_cells),
+      movesPeople: rows.some((row) => row.moves_people),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -312,15 +321,18 @@ export class AuthorizationService {
     const effective: EffectiveGrant[] = [];
 
     for (const role of roles.honoured) {
-      const defaults =
-        // Only with Full view (decision 0352); the tick write keeps the two together, and a
-        // row restored past it still grants nothing alone.
-        role === 'LEADER' && roles.approvesCells && roles.fullView
-          ? { ...ROLE_DEFAULTS[role], ...LEADER_APPROVES_CELLS }
-          : ROLE_DEFAULTS[role];
+      // Each tick adds to what the Leader role gives, only with Full view (decisions 0352 and
+      // 0356); the tick writes keep each with Full view, and a row restored past them still
+      // grants nothing alone.
+      const ticked = role === 'LEADER' && roles.fullView;
+      const defaults = {
+        ...ROLE_DEFAULTS[role],
+        ...(ticked && roles.approvesCells ? LEADER_APPROVES_CELLS : {}),
+        ...(ticked && roles.movesPeople ? LEADER_MOVES_PEOPLE : {}),
+      };
 
-      // Approves Cells adds to what the Leader role gives (decision 0352), as Full view
-      // withholds from it; neither touches another role's defaults.
+      // The ticks add to what the Leader role gives, as Full view withholds from it; none
+      // touches another role's defaults.
       for (const [capability, scopeType] of Object.entries(defaults)) {
         // A Leader account without Full view holds none of these (decision 0323).
         if (

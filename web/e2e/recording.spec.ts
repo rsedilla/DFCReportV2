@@ -2676,3 +2676,40 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
   });
 });
+
+test.describe('Awaiting Leader Assignment for a reader who may not move people (decision 0356)', () => {
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
+
+  async function mockList(page: Page) {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page);
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+    await mockPendingDcc(page);
+    await mockDccOwed(page);
+  }
+
+  test('lists the people read-only, saying their Primary chooses a new leader', async ({ page }) => {
+    await mockList(page);
+    await page.goto('/dashboard?list=leader');
+
+    await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    await expect(page.getByText('A new leader is chosen by your Primary.')).toBeVisible();
+  });
+
+  test('does not say so to a reader who may move them', async ({ page }) => {
+    await mockList(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await page.goto('/dashboard?list=leader');
+
+    await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    await expect(page.getByText('A new leader is chosen by your Primary.')).toHaveCount(0);
+  });
+});

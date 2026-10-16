@@ -117,7 +117,6 @@ const LEADER: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.OwnSubtree,
   [Capability.PeopleCreate]: ScopeType.OwnSubtree,
   [Capability.PeopleEditBasic]: ScopeType.OwnSubtree,
-  [Capability.PeopleManagePastoralAssignment]: ScopeType.OwnSubtree,
   [Capability.DccTakeAttendance]: ScopeType.OwnSubtree,
   [Capability.DccViewSubtree]: ScopeType.OwnSubtree,
   [Capability.DccCorrectSubtree]: ScopeType.OwnSubtree,
@@ -158,6 +157,15 @@ export const LEADER_FULL_VIEW_ONLY: ReadonlySet<Capability> = new Set([
  */
 export const LEADER_APPROVES_CELLS: RoleDefaults = {
   [Capability.CellApproveLeadership]: ScopeType.SubtreeExclSelf,
+};
+
+/**
+ * What a Leader account holds only with Moves people (sections 5 and 7, decision 0356):
+ * moving a person in its own subtree to another pastoral leader. Without it a Leader moves
+ * nobody. Like Approves Cells, it adds only to what the Leader role gives.
+ */
+export const LEADER_MOVES_PEOPLE: RoleDefaults = {
+  [Capability.PeopleManagePastoralAssignment]: ScopeType.OwnSubtree,
 };
 
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {

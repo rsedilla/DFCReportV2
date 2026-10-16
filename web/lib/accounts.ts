@@ -22,6 +22,8 @@ export interface PersonAccount {
   full_view: boolean;
   /** Approves Cells (decision 0352); meaningful on a Leader account only. */
   approves_cells: boolean;
+  /** Moves people (decision 0356); meaningful on a Leader account only. */
+  moves_people: boolean;
 }
 
 export async function getAccountForPerson(
@@ -108,6 +110,19 @@ export async function setApprovesCells(
   return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/approves-cells`, {
     method: 'POST',
     body: { approves_cells: approvesCells },
+    idempotencyKey,
+  });
+}
+
+/** Ticks or clears Moves people on a Leader account (decision 0356). Needs `roles.manage`. */
+export async function setMovesPeople(
+  accountId: string,
+  movesPeople: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; moves_people: boolean }> {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/moves-people`, {
+    method: 'POST',
+    body: { moves_people: movesPeople },
     idempotencyKey,
   });
 }

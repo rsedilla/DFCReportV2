@@ -107,6 +107,8 @@ export class AccountProvisioningService {
       full_view: boolean;
       /** Approves Cells (decision 0352). */
       approves_cells: boolean;
+      /** Moves people (decision 0356). */
+      moves_people: boolean;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -117,7 +119,16 @@ export class AccountProvisioningService {
 
     const account = await this.db
       .selectFrom('accounts')
-      .select(['id', 'email', 'username', 'status', 'created_at', 'full_view', 'approves_cells'])
+      .select([
+        'id',
+        'email',
+        'username',
+        'status',
+        'created_at',
+        'full_view',
+        'approves_cells',
+        'moves_people',
+      ])
       .where('person_id', '=', personId)
       .executeTakeFirst();
 
@@ -144,6 +155,7 @@ export class AccountProvisioningService {
         second_step: await this.secondSteps.describeFor(account.id),
         full_view: account.full_view,
         approves_cells: account.approves_cells,
+        moves_people: account.moves_people,
       },
     };
   }

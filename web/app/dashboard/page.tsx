@@ -215,6 +215,11 @@ function Dashboard() {
     setWhose(whoseInAddress);
   }
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  // Who may move the people on Awaiting Leader Assignment: a Leader only when ticked Moves people
+  // (decision 0356). The API decides each move again.
+  const mayMove = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'people.manage_pastoral_assignment',
+  );
 
   // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
   // decision 0323): no other list, and Leaders Under Me only while the
@@ -886,6 +891,10 @@ function Dashboard() {
                 People you oversee whose pastoral leader is not in the pastoral tree.
               </p>
             </div>
+            {/* Read only for a reader who may not move them (owner, 2026-10-16, decision 0356). */}
+            {me.data && !mayMove ? (
+              <p className="text-muted mt-2 text-sm">A new leader is chosen by your Primary.</p>
+            ) : null}
             {unplaced.isPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
             ) : unplaced.data ? (

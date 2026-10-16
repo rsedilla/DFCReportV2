@@ -367,6 +367,8 @@ test.describe('who pastors a person', () => {
     });
 
     await page.goto(PROFILE);
+    // An account that may move people is not told somebody else makes moves (decision 0356).
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Move to another leader' }).click();
 
     const dialog = page.getByRole('dialog', {
@@ -394,6 +396,8 @@ test.describe('who pastors a person', () => {
     await expect(page.getByRole('link', { name: 'Edit details' })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    // In its place, who makes moves, and nothing to ask with (decision 0356).
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toBeVisible();
   });
 
   test('on your own profile, names your leader without a link and offers no move', async ({
@@ -417,6 +421,7 @@ test.describe('who pastors a person', () => {
     await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
   });
 
   test('a record outside your scope is refused in plain words, without the API’s', async ({

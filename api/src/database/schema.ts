@@ -109,6 +109,12 @@ export interface AccountsTable {
    */
   approves_cells: Generated<boolean>;
   /**
+   * Moves people (sections 5 and 7, decision 0356): with it a Leader account holds
+   * `people.manage_pastoral_assignment` over its own subtree. Set only by an account holding
+   * `roles.manage`, and only with Full view.
+   */
+  moves_people: Generated<boolean>;
+  /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
    */
@@ -242,6 +248,9 @@ export type AuditAction =
   // Approves Cells ticked or cleared (section 7, decision 0352), with its previous and
   // new value, by an administrator. Targets the account.
   | 'account.approves_cells_changed'
+  // Moves people ticked or cleared (sections 5 and 7, decision 0356), with its previous and
+  // new value, by an administrator. Targets the account.
+  | 'account.moves_people_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
