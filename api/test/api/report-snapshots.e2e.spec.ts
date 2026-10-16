@@ -384,7 +384,8 @@ describe('stored closed months (section 20, decision 0320)', () => {
             .set({
               state: 'CLOSED',
               closed_at: IN_JUNE,
-              closure_reason: 'MEMBERS_DISPERSED',
+              closure_reason: 'MEMBERS_STOPPED_ATTENDING',
+              closure_note: 'Closed for this case (invented).',
             } as never)
             .where('id', '=', cell.id)
             .execute(),

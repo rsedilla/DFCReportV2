@@ -490,6 +490,13 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
           'MEMBERS_DISPERSED',
           'CREATED_IN_ERROR',
           'OTHER',
+          // Migration 0028 (decision 0355). `MEMBERS_DISPERSED` stays in the type for the
+          // Cells already closed with it; `cells_closure_explained` refuses it for a new
+          // closure, which `test/database/cells.spec.ts` pins.
+          'LEADER_MOVED_AWAY',
+          'LEADER_LEFT_THE_CHURCH',
+          'LEADER_PASSED_AWAY',
+          'MEMBERS_STOPPED_ATTENDING',
         ],
       ],
       ['cell_request_kind', ['NEW_CELL', 'HANDOVER']],
@@ -515,6 +522,22 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
    * losing its shape, which a behavioural case cannot see.
    */
   describe('the Cell tables (sections 10 and 11)', () => {
+    it('explains every closure with a per-row BEFORE UPDATE trigger on cells (decision 0355)', async () => {
+      // The behaviour is pinned in `test/database/cells.spec.ts`; this pins that it is a
+      // trigger that exists, is enabled, fires on UPDATE of `cells` for each row, and runs
+      // BEFORE the write — so a later migration that drops or disables it fails here
+      // rather than the explanation quietly becoming optional again.
+      const trigger = await constraintTriggerFacts(db, 'cells', 'cells_closure_explained');
+
+      expect(trigger).toMatchObject({
+        fires_on_update: true,
+        timing: 'BEFORE',
+        per_row: true,
+        enabled: true,
+        function_name: 'cells_closure_is_explained',
+      });
+    });
+
     it.each([
       ['cell_categories', 'cell_categories_one_open'],
       ['cell_schedules', 'cell_schedules_one_open'],

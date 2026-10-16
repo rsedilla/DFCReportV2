@@ -132,6 +132,48 @@ export async function mockCells(
   );
 }
 
+/**
+ * *No meeting in 3 months* (decision 0355): one quiet Cell the reader may close, its three
+ * months each in words, and its two members for the close dialog.
+ */
+export async function mockQuietCells(page: Page): Promise<void> {
+  await mockCellCounts(page, { in_scope: 2, led_by_me: 1 });
+  await page.route('**/api/v1/cells?*', (route) =>
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(
+          json({
+            reporting_month: '2026-06-01',
+            open: false,
+            no_meeting_months: ['2026-03-01', '2026-04-01', '2026-05-01'],
+            data: [
+              {
+                ...CELL_WITH_MEETINGS,
+                may_close: true,
+                no_meeting: [
+                  { month: '2026-03-01', did_not_meet: 2, not_recorded: 2 },
+                  { month: '2026-04-01', did_not_meet: 0, not_recorded: 4 },
+                  { month: '2026-05-01', did_not_meet: 0, not_recorded: 5 },
+                ],
+              },
+            ],
+            next_cursor: null,
+          }),
+        ),
+  );
+  await page.route('**/api/v1/cells/*/members*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          { person_id: '3f1b7c6e-0000-4000-8000-000000000301', member_id: 'M-000611', full_name: 'Lucia Herrera', started_at: '2026-01-10T00:00:00Z' },
+          { person_id: '3f1b7c6e-0000-4000-8000-000000000302', member_id: 'M-000612', full_name: 'Mateo Cruz', started_at: '2026-02-14T00:00:00Z' },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
 /** A leader who oversees no Cell this month, which is a sentence rather than an error. */
 export async function mockCellsEmpty(page: Page): Promise<void> {
   await mockCellCounts(page, { in_scope: 0, led_by_me: 0 });

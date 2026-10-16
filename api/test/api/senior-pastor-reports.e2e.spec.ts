@@ -335,7 +335,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       const closing = await cellOf(lito, 'YOUTH');
       await cellOf(rico, 'YOUNG_PRO', during);
       const changing = await cellOf(sam, 'YOUTH');
-      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_DISPERSED', at: during });
+      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_STOPPED_ATTENDING', at: during });
       await recategorise(changing, 'COUPLE', during);
       await archiveAt(paz, during);
 
@@ -465,7 +465,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
     let dan: TestPerson;
     let cara: TestPerson;
 
-    async function buildAndClose(reason: 'CREATED_IN_ERROR' | 'MEMBERS_DISPERSED'): Promise<void> {
+    async function buildAndClose(
+      reason: 'CREATED_IN_ERROR' | 'MEMBERS_STOPPED_ATTENDING',
+    ): Promise<void> {
       ana = await leader('Ana', 'Cruz', oriel);
       const lito = await leader('Lito', 'Mercado', ana);
       dan = await leader('Dan', 'Esguerra', ana);
@@ -529,7 +531,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
     });
 
     it('still counts, in the months it ran, a Cell closed afterwards for another reason', async () => {
-      await buildAndClose('MEMBERS_DISPERSED');
+      await buildAndClose('MEMBERS_STOPPED_ATTENDING');
       const last = shiftMonth(await currentMonth(), -1);
 
       const body = (await counts(pastor, last).expect(200)).body as Counts;

@@ -803,7 +803,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
       await record(markCell.id, mark.id, markAccount.id, third);
       await closeCellDirectly(db, markCell.id, {
-        reason: 'MEMBERS_DISPERSED',
+        reason: 'MEMBERS_STOPPED_ATTENDING',
         at: new Date(`${plusDays(second, 1)}T10:00:00+08:00`),
       });
 
@@ -845,7 +845,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     const rowsOf = (response: request.Response): ClosedRow[] => response.body.data as ClosedRow[];
 
     it('lists a closed Cell to the upline of its last leader, and the running view does not', async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const closed = await list(manuelAccount, { state: 'CLOSED' });
       const running = await list(manuelAccount);
@@ -856,7 +856,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
         state: 'CLOSED',
         leader: { person_id: mark.id },
         closed_on: await today(),
-        closure_reason: 'MEMBERS_DISPERSED',
+        closure_reason: 'MEMBERS_STOPPED_ATTENDING',
         restarted_as: null,
         restarted_as_category: null,
         restarted_as_day_of_week: null,
@@ -865,11 +865,56 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       expect(cellIdsOf(running)).toEqual([manuelCell.id, nathanCell.id].sort());
     });
 
+    it('carries the closure’s explanation, and null for a Cell closed before decision 0355', async () => {
+      // Decision 0355, point 9: the Closed tab shows the reason and the explanation to
+      // whoever lists the closed Cell. A Cell closed before the ruling may have no note
+      // and the retired reason, and keeps both.
+      await closeCellDirectly(db, markCell.id, {
+        reason: 'LEADER_MOVED_AWAY',
+        note: 'He moved to another province; talked through with the Senior Pastors.',
+      });
+      await closeCellDirectly(db, nathanCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        note: null,
+        legacy: true,
+      });
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const byId = new Map(
+        (
+          response.body.data as {
+            id: string;
+            closure_reason: string;
+            closure_explanation: string | null;
+          }[]
+        ).map((row) => [row.id, row]),
+      );
+
+      expect(byId.get(markCell.id)).toMatchObject({
+        closure_reason: 'LEADER_MOVED_AWAY',
+        closure_explanation:
+          'He moved to another province; talked through with the Senior Pastors.',
+      });
+      expect(byId.get(nathanCell.id)).toMatchObject({
+        closure_reason: 'MEMBERS_DISPERSED',
+        closure_explanation: null,
+      });
+    });
+
+    it('shows a closed Cell’s explanation to its former leader too', async () => {
+      // "to whoever lists the closed Cell" — not only to an Admin or a Primary.
+      await closeCellDirectly(db, markCell.id, { reason: 'OTHER', note: 'The venue was sold.' });
+
+      const response = await list(markAccount, { state: 'CLOSED' });
+
+      expect(response.body.data[0].closure_explanation).toBe('The venue was sold.');
+    });
+
     it('shows the former leader their own closed Cell, and never offers them its restart', async () => {
       // Section 10: no holder of `cell.request_leadership` may name themselves, and a
       // restart names the Cell's last leader (decision 0264).
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
-      await closeCellDirectly(db, nathanCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
+      await closeCellDirectly(db, nathanCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await list(markAccount, { state: 'CLOSED' });
 
@@ -956,7 +1001,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       // `cell.request_leadership`, which every role holds over its own subtree excluding
       // itself (section 7). This administrator is outside the tree, so they see the Cell
       // and may not ask for it to restart.
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await list(admin, { state: 'CLOSED' });
 
@@ -969,7 +1014,10 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       // change queued for a later month is left zero-length with the latest `started_at`
       // on the Cell. Section 5: no instant resolves to such a row.
       const closedAt = new Date('2026-06-15T10:00:00+08:00');
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED', at: closedAt });
+      await closeCellDirectly(db, markCell.id, {
+        reason: 'MEMBERS_STOPPED_ATTENDING',
+        at: closedAt,
+      });
       await db
         .insertInto('cell_schedules')
         .values({
@@ -993,7 +1041,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       // Section 15 calls `may_restart` "the scope half of what the request checks", and two
       // API answers claimed to be equal need a case that takes one to the other. Without
       // it each side is pinned alone and they may drift apart silently.
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const listed = await list(manuelAccount, { state: 'CLOSED' });
       const row = rowsOf(listed)[0];
@@ -1020,7 +1068,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     });
 
     it('agrees with the request route: a row offering none is one the route refuses', async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const listed = await list(markAccount, { state: 'CLOSED' });
       const row = rowsOf(listed)[0];

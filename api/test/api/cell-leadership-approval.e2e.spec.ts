@@ -458,7 +458,7 @@ describe('Cell leadership approval (section 10)', () => {
     let approver: TestAccount;
 
     beforeEach(async () => {
-      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       // Root requests the restart, being Mark's upline, so the approval needs a second
       // administrator: section 10 refuses an approval by the account that submitted it.
@@ -506,7 +506,7 @@ describe('Cell leadership approval (section 10)', () => {
         .executeTakeFirstOrThrow();
 
       expect(closed.state).toBe('CLOSED');
-      expect(closed.closure_reason).toBe('MEMBERS_DISPERSED');
+      expect(closed.closure_reason).toBe('MEMBERS_STOPPED_ATTENDING');
     });
 
     it('shows the queue what the request resumes', async () => {
@@ -587,7 +587,7 @@ describe('Cell leadership approval (section 10)', () => {
       // `OWN_SUBTREE` and is Carlo’s upline, so this passes only because section 7
       // resolves a closed Cell through its last leader. Under "resolves through
       // nobody" it answers 403.
-      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const response = await restart(benAccount, {
         prospective_leader_id: carlo.id,
@@ -628,7 +628,7 @@ describe('Cell leadership approval (section 10)', () => {
     });
 
     it('answers a Cell outside the actor’s scope as it answers an absent one', async () => {
-      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       // Ben passes the guard — Carlo is his disciple — so both of these reach the
       // restart check itself. Section 22: an out-of-scope Cell and an absent one answer

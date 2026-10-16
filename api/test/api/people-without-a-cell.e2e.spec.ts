@@ -169,7 +169,7 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
 
     expect(idsOf(await list(admin))).not.toContain(mark.id);
 
-    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
     expect(idsOf(await list(admin))).toContain(mark.id);
   });
@@ -184,7 +184,7 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
 
     expect(idsOf(await list(admin))).not.toContain(nathan.id);
 
-    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
     // Closure ends every membership, so the member is waiting for a Cell again — and so
     // is the leader, for the separate reason the case above pins.

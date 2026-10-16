@@ -539,6 +539,13 @@ export async function endCellConfigurationWithin(
  * It writes the tables directly rather than calling `CellsClosureService`, and that is
  * the point: cases in `test/database/` measure the schema, and a fixture routed
  * through the service would have them measuring the service instead.
+ *
+ * **Every closure carries an explanation since decision 0355**, and migration 0028's
+ * `cells_closure_explained` refuses the change to `CLOSED` without one or giving
+ * `MEMBERS_DISPERSED`. So the note defaults to an invented sentence. `legacy` stages a
+ * Cell closed *before* that ruling — no note, or the retired reason — by disabling that
+ * one trigger inside this transaction only; `ALTER TABLE … DISABLE TRIGGER` is
+ * transactional, so nothing outside the fixture ever runs without it.
  */
 export async function closeCellDirectly(
   db: Kysely<Database>,
@@ -547,11 +554,18 @@ export async function closeCellDirectly(
     reason:
       | 'MERGED_INTO_ANOTHER_CELL'
       | 'LEADER_STEPPED_DOWN'
+      | 'LEADER_MOVED_AWAY'
+      | 'LEADER_LEFT_THE_CHURCH'
+      | 'LEADER_PASSED_AWAY'
+      | 'MEMBERS_STOPPED_ATTENDING'
       | 'MEMBERS_DISPERSED'
       | 'CREATED_IN_ERROR'
       | 'OTHER';
-    note?: string;
+    /** `null` leaves the note empty, which only a `legacy` closure may. */
+    note?: string | null;
     at?: Date;
+    /** A Cell closed before decision 0355, which the trigger would now refuse. */
+    legacy?: boolean;
   },
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
@@ -559,13 +573,18 @@ export async function closeCellDirectly(
       options.at ??
       (await sql<{ now: Date }>`SELECT clock_timestamp() AS now`.execute(trx)).rows[0].now;
 
+    if (options.legacy === true) {
+      await sql`ALTER TABLE cells DISABLE TRIGGER cells_closure_explained`.execute(trx);
+    }
+
     await trx
       .updateTable('cells')
       .set({
         state: 'CLOSED',
         closed_at: at,
         closure_reason: options.reason,
-        closure_note: options.note ?? null,
+        closure_note:
+          options.note === undefined ? 'Closed for this case (invented).' : options.note,
       })
       .where('id', '=', cellId)
       .execute();
@@ -585,5 +604,12 @@ export async function closeCellDirectly(
       .execute();
 
     await endCellConfigurationWithin(trx, cellId, at);
+
+    if (options.legacy === true) {
+      // `ALTER TABLE` refuses while deferred trigger events are pending, and the closure
+      // above queued some: fire them now, with all five writes made, then re-enable.
+      await sql`SET CONSTRAINTS ALL IMMEDIATE`.execute(trx);
+      await sql`ALTER TABLE cells ENABLE TRIGGER cells_closure_explained`.execute(trx);
+    }
   });
 }

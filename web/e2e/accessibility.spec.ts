@@ -31,6 +31,7 @@ import {
   mockMeetingsAwaiting,
   mockCells,
   mockCellsEmpty,
+  mockQuietCells,
   mockDccEvents,
   mockCellMembers,
   mockPastoralPath,
@@ -479,6 +480,41 @@ const SCANS = [
       // alone would pass on a page where the second row never rendered.
       await expect(
         page.getByRole('link', { name: /Couple · Wed|CELL-000011/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
+    },
+  },
+  {
+    // Section 15's *No meeting in 3 months* (decision 0355): each month in words, and Close
+    // this Cell for an account the server says may close.
+    name: 'cells, no meeting in 3 months',
+    route: '/cells?quiet=1',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockQuietCells(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('button', { name: /^Close this Cell, Youth · Sat/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
+    },
+  },
+  {
+    // Closing a Cell (decision 0355), the dialog over that list: a radio group of reasons, the
+    // explanation, and what happens to the members.
+    name: 'cells, closing a cell',
+    route: '/cells?quiet=1',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockQuietCells(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page
+        .getByRole('button', { name: /^Close this Cell, Youth · Sat/ })
+        .filter({ visible: true })
+        .first()
+        .click();
+      await expect(
+        page.getByRole('dialog', { name: 'Close Youth · Sat' }).getByText(/Lucia Herrera, Mateo Cruz\./),
       ).toBeVisible();
     },
   },
@@ -1825,6 +1861,20 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'cells, no meeting in 3 months',
+    why:
+      'The measured "cells" with its other filter pressed. Its controls are the same search box ' +
+      'and Button, the two filter Buttons, the totals and the Cell links measured there, and ' +
+      'Close this Cell is the same Button primitive, measured on every screen.',
+  },
+  {
+    name: 'cells, closing a cell',
+    why:
+      'Opens the Close dialog over "cells, no meeting in 3 months". Its controls are labelled ' +
+      'radios as on "add a person", a textarea as on the Growth save bar, the search Field and ' +
+      'Button as on "new cell", and two Buttons, the primitive measured on every screen.',
+  },
   {
     name: 'my cell, asking for a new cell',
     why:

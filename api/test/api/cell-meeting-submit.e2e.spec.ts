@@ -2026,6 +2026,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
             state: 'CLOSED',
             closed_at: closedAt,
             closure_reason: 'MERGED_INTO_ANOTHER_CELL',
+            closure_note: 'Closed for this case (invented).',
           } as never)
           .where('id', '=', markCell.id)
           .execute();

@@ -133,8 +133,18 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('refuses a CLOSED state with no closure date', async () => {
       const cell = await createCell(db, { leader });
 
+      // With a reason and a note, so that `cells_closure_explained` (0028), a BEFORE
+      // trigger, admits the row and the CHECK this case is about is what refuses it.
       await expect(
-        db.updateTable('cells').set({ state: 'CLOSED' }).where('id', '=', cell.id).execute(),
+        db
+          .updateTable('cells')
+          .set({
+            state: 'CLOSED',
+            closure_reason: 'LEADER_STEPPED_DOWN',
+            closure_note: 'Closed for this case (invented).',
+          })
+          .where('id', '=', cell.id)
+          .execute(),
       ).rejects.toThrow(/cells_closed_iff_closed_at/);
     });
 
@@ -151,15 +161,144 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     });
 
     it('requires a note where the closure reason is OTHER', async () => {
+      // `cells_other_requires_note` predates decision 0355 and still stands. Since 0028
+      // `cells_closure_explained` refuses a note-less closure first, on every reason, so
+      // the CHECK is reached here with that trigger disabled — which is the state of a
+      // restore or a psql session that disabled it, and the reason the CHECK is kept.
       const cell = await createCell(db, { leader });
 
-      await expect(closeCellDirectly(db, cell.id, { reason: 'OTHER' })).rejects.toThrow(
-        /cells_other_requires_note/,
-      );
+      await expect(
+        closeCellDirectly(db, cell.id, { reason: 'OTHER', note: null, legacy: true }),
+      ).rejects.toThrow(/cells_other_requires_note/);
 
       await expect(
         closeCellDirectly(db, cell.id, { reason: 'OTHER', note: 'the venue was sold' }),
       ).resolves.toBeUndefined();
+    });
+
+    describe('every closure carries an explanation (decision 0355, migration 0028)', () => {
+      // Written straight against the database, bypassing `CloseCellDto`: the DTO's
+      // `@MinLength(1)` is the answer a caller gets, and this trigger is what refuses
+      // the same write from a script, a restore or a later service that forgets it.
+      const closeRaw = (cellId: string, reason: string, note: string | null): Promise<unknown> =>
+        db.transaction().execute(async (trx) => {
+          const at = await dbNow(trx);
+          await sql`
+            UPDATE cells
+               SET state = 'CLOSED', closed_at = ${at},
+                   closure_reason = ${reason}::cell_closure_reason, closure_note = ${note}
+             WHERE id = ${cellId}::uuid
+          `.execute(trx);
+          await sql`UPDATE cell_leaderships SET ended_at = ${at} WHERE cell_id = ${cellId}::uuid AND ended_at IS NULL`.execute(
+            trx,
+          );
+          await endCellConfigurationWithin(trx, cellId, at);
+        });
+
+      const sqlState = async (attempt: Promise<unknown>): Promise<string | undefined> => {
+        try {
+          await attempt;
+          return undefined;
+        } catch (error) {
+          return (error as { code?: string }).code;
+        }
+      };
+
+      it.each([
+        ['no note', null],
+        ['an empty note', ''],
+        ['a note of spaces only', '    '],
+        // Any whitespace, not only spaces: a one-argument `btrim` let these through.
+        ['a note of tabs and line breaks only', '\t\n\r\n'],
+      ])('refuses a closure with %s, as check_violation', async (_label, note) => {
+        const cell = await createCell(db, { leader });
+
+        const attempt = closeRaw(cell.id, 'LEADER_STEPPED_DOWN', note);
+        await expect(attempt).rejects.toThrow(/every closure carries a written explanation/);
+        expect(await sqlState(closeRaw(cell.id, 'LEADER_STEPPED_DOWN', note))).toBe('23514');
+
+        const row = await db
+          .selectFrom('cells')
+          .select(['state', 'closed_at'])
+          .where('id', '=', cell.id)
+          .executeTakeFirstOrThrow();
+        expect(row).toEqual({ state: 'ACTIVE', closed_at: null });
+      });
+
+      it('refuses MEMBERS_DISPERSED for a new closure, even with a note', async () => {
+        const cell = await createCell(db, { leader });
+
+        await expect(
+          closeRaw(cell.id, 'MEMBERS_DISPERSED', 'they went to other Cells'),
+        ).rejects.toThrow(/MEMBERS_DISPERSED is no longer given for a new closure/);
+        expect(
+          await sqlState(closeRaw(cell.id, 'MEMBERS_DISPERSED', 'they went to other Cells')),
+        ).toBe('23514');
+      });
+
+      it.each([
+        'MERGED_INTO_ANOTHER_CELL',
+        'LEADER_STEPPED_DOWN',
+        'LEADER_MOVED_AWAY',
+        'LEADER_LEFT_THE_CHURCH',
+        'LEADER_PASSED_AWAY',
+        'MEMBERS_STOPPED_ATTENDING',
+        'CREATED_IN_ERROR',
+        'OTHER',
+      ])('accepts %s with an explanation', async (reason) => {
+        const cell = await createCell(db, { leader });
+
+        await closeRaw(cell.id, reason, 'Talked through with the Senior Pastors (invented).');
+
+        const row = await db
+          .selectFrom('cells')
+          .select(['state', 'closure_reason'])
+          .where('id', '=', cell.id)
+          .executeTakeFirstOrThrow();
+        expect(row).toEqual({ state: 'CLOSED', closure_reason: reason });
+      });
+
+      it('leaves a Cell closed before the ruling, with no note and the retired reason, untouched', async () => {
+        // A Cell closed before 0028 keeps the note and reason it had (decision 0355,
+        // point 4). The trigger fires on the ACTIVE -> CLOSED transition only, so an
+        // UPDATE that touches such a row for any other column is not refused by it — a
+        // table CHECK would have refused every later write to the row.
+        const cell = await createCell(db, { leader });
+        await closeCellDirectly(db, cell.id, {
+          reason: 'MEMBERS_DISPERSED',
+          note: null,
+          legacy: true,
+        });
+
+        // A no-op write to the closed row: nothing about its closure changes, so
+        // `cells_record_is_final` admits it, and this trigger must too.
+        await expect(
+          sql`UPDATE cells SET state = state WHERE id = ${cell.id}::uuid`.execute(db),
+        ).resolves.toBeDefined();
+
+        const row = await db
+          .selectFrom('cells')
+          .select(['state', 'closure_reason', 'closure_note'])
+          .where('id', '=', cell.id)
+          .executeTakeFirstOrThrow();
+        expect(row).toEqual({
+          state: 'CLOSED',
+          closure_reason: 'MEMBERS_DISPERSED',
+          closure_note: null,
+        });
+      });
+
+      it('leaves the trigger enabled after a legacy fixture closure', async () => {
+        // The fixture disables it inside its own transaction; this is what would catch a
+        // fixture that forgot to re-enable it and so left every later case unguarded.
+        const legacy = await createCell(db, { leader });
+        await closeCellDirectly(db, legacy.id, { reason: 'OTHER', note: 'x', legacy: true });
+
+        const next = await createCell(db, { leader });
+        await expect(closeRaw(next.id, 'LEADER_STEPPED_DOWN', null)).rejects.toThrow(
+          /every closure carries a written explanation/,
+        );
+      });
     });
 
     it('never reverses a closure', async () => {
@@ -364,7 +503,12 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
 
           await trx
             .updateTable('cells')
-            .set({ state: 'CLOSED', closed_at: at, closure_reason: 'LEADER_STEPPED_DOWN' })
+            .set({
+              state: 'CLOSED',
+              closed_at: at,
+              closure_reason: 'LEADER_STEPPED_DOWN',
+              closure_note: 'Closed for this case (invented).',
+            })
             .where('id', '=', cell.id)
             .execute();
           await endCellConfigurationWithin(trx, cell.id, at);
@@ -386,7 +530,12 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
         db.transaction().execute(async (trx) => {
           await trx
             .updateTable('cells')
-            .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
+            .set({
+              state: 'CLOSED',
+              closed_at: at,
+              closure_reason: 'MEMBERS_STOPPED_ATTENDING',
+              closure_note: 'Closed for this case (invented).',
+            })
             .where('id', '=', cell.id)
             .execute();
           await trx
@@ -403,7 +552,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('accepts a closure that ends the leadership on the same date', async () => {
       const cell = await createCell(db, { leader });
 
-      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       const cellRow = await db
         .selectFrom('cells')
@@ -1094,7 +1243,12 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
           const at = await dbNow(trx);
           await trx
             .updateTable('cells')
-            .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
+            .set({
+              state: 'CLOSED',
+              closed_at: at,
+              closure_reason: 'MEMBERS_STOPPED_ATTENDING',
+              closure_note: 'Closed for this case (invented).',
+            })
             .where('id', '=', cell.id)
             .execute();
           await trx
@@ -1111,7 +1265,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('refuses adding a member to a Cell that is already closed', async () => {
       const cell = await createCell(db, { leader });
       const member = await createPerson(db, { firstName: 'Juan', network: 'MENS' });
-      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
       await expect(addMember(db, cell.id, member.id)).rejects.toThrow(/open membership/);
     });
@@ -1127,7 +1281,12 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
         db.transaction().execute(async (trx) => {
           await trx
             .updateTable('cells')
-            .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
+            .set({
+              state: 'CLOSED',
+              closed_at: at,
+              closure_reason: 'MEMBERS_STOPPED_ATTENDING',
+              closure_note: 'Closed for this case (invented).',
+            })
             .where('id', '=', cell.id)
             .execute();
           await trx
@@ -1826,7 +1985,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
         await adder.query('BEGIN');
 
         await closer.query(
-          "UPDATE cells SET state = 'CLOSED', closed_at = $1, closure_reason = 'MEMBERS_DISPERSED' WHERE id = $2",
+          "UPDATE cells SET state = 'CLOSED', closed_at = $1, closure_reason = 'MEMBERS_STOPPED_ATTENDING', closure_note = 'Closed for this case (invented).' WHERE id = $2",
           [at, cell.id],
         );
         await closer.query(

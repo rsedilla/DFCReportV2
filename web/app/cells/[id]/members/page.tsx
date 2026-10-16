@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { AddMemberDialog } from '@/components/add-member-dialog';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -20,7 +21,7 @@ import {
 } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
 import { idempotencyKeyFor } from '@/lib/idempotency';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -83,6 +84,10 @@ function CellMembers() {
   // **The recording screens add members and offer no removal** (decision 0323).
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const mayRemove = me.data !== undefined && me.data.screens !== 'RECORDING';
+  // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355); offered only where
+  // the route would answer, and the route still decides (section 1, principle 4).
+  const mayClose = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
+  const [closing, setClosing] = useState(false);
 
   const month = reportingMonthOf();
   const cell = useQuery({
@@ -152,16 +157,39 @@ function CellMembers() {
           closure and the route refuses an addition, so the button would always fail.
         */}
         {closedOn === null ? (
-          <Button
-            onClick={() => {
-              setAdded(null);
-              setAdding(true);
-            }}
-          >
-            Add a member
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                setAdded(null);
+                setAdding(true);
+              }}
+            >
+              Add a member
+            </Button>
+            {mayClose ? (
+              <Button variant="secondary" onClick={() => setClosing(true)}>
+                Close this Cell
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
+
+      {closing && cell.data ? (
+        <CloseCellDialog
+          open
+          cell={{
+            id: params.id,
+            name: cellName(cell.data),
+            leaderName: cell.data.leader?.full_name ?? null,
+          }}
+          onClose={() => setClosing(false)}
+          onClosed={() => {
+            void queryClient.invalidateQueries({ queryKey: ['cell-members', params.id] });
+            void queryClient.invalidateQueries({ queryKey: ['cell-meetings', params.id] });
+          }}
+        />
+      ) : null}
 
       <AddMemberDialog
         open={adding}

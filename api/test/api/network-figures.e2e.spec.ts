@@ -522,7 +522,7 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
       await createCell(db, { leader: manuel });
       // Mark's Cell is closed, so he is not a current Cell Leader (decision 0025).
       const marks = await createCell(db, { leader: mark });
-      await closeCellDirectly(db, marks.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, marks.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
       // Juan is in Oriel's branch and not in Raymond's.
       await createCell(db, { leader: juan });
 

@@ -170,6 +170,7 @@ export class CellsController {
       q: query.q,
       state: query.state,
       fewerThanThree: query.fewer_than_three === 'true',
+      noMeeting: query.no_meeting === 'true',
     });
   }
 
@@ -611,19 +612,16 @@ export class CellsController {
    * is that decision rather than a convenience: a member the request does not name
    * refuses the closure, and one it names who is no longer a member refuses it too.
    *
-   * The capability is `cell.manage_lifecycle`, resolved against this Cell through its
-   * leader (section 7) — which is what makes section 10's list of holders, the Cell's
-   * current leader and any leader upline of them within their own subtree, Admin and
-   * the Senior Pastors, fall out of the scope rather than being restated. Each
+   * The capability is `cell.manage_lifecycle` **checked against the church** (decision
+   * 0355): only a Whole Church holder closes, Admin by default, as direct creation is
+   * checked (decision 0352). A Leader's subtree default of the same capability is the
+   * second-object check a handover or a restart makes, and closes nothing. Each
    * dispersal **destination** is a second object and is checked in the domain layer
    * under `cell.manage_membership`, which is the shape section 7 settles for a rule
    * about anything the guard did not resolve.
    */
   @Post(':id/closure')
-  @RequiresCapability(Capability.CellManageLifecycle, {
-    kind: 'cell',
-    from: 'params.id',
-  })
+  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'church' })
   @HttpCode(200)
   async close(
     @Param('id') cellId: string,

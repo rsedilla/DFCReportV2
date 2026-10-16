@@ -71,8 +71,8 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
     const closedOfManuel = await createCell(db, { leader: manuel });
     await createCell(db, { leader: rico });
     const closedOfRico = await createCell(db, { leader: rico });
-    await closeCellDirectly(db, closedOfManuel.id, { reason: 'MEMBERS_DISPERSED' });
-    await closeCellDirectly(db, closedOfRico.id, { reason: 'MEMBERS_DISPERSED' });
+    await closeCellDirectly(db, closedOfManuel.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
+    await closeCellDirectly(db, closedOfRico.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
 
     const today = (
       await sql<{ today: string }>`

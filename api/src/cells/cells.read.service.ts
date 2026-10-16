@@ -1427,6 +1427,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       search?: string | null;
       /** Only Cells holding fewer than three current memberships (decision 0353). */
       fewerThanThree?: boolean;
+      /** Only Cells created before this instant: the *No meeting* window's start (decision 0355). */
+      createdBefore?: Date;
     },
   ): Promise<
     {
@@ -1515,6 +1517,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
       )
       .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(page.createdBefore !== undefined, (query) =>
+        query.where('cells.created_at', '<', page.createdBefore as Date),
+      )
       // Section 15's *Fewer than 3 members* (decision 0353): open memberships, the roster's
       // own rule, so the leader, who holds none, is not counted.
       .$if(page.fewerThanThree === true, (query) =>
@@ -1657,6 +1662,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       timeOfDay: string;
       closedAt: Date;
       closureReason: string;
+      closureNote: string | null;
       restartedAs: string | null;
       restartedAsCategory: CellCategory | null;
       restartedAsDayOfWeek: number | null;
@@ -1717,6 +1723,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'last_schedule.time_of_day as time_of_day',
         'cells.closed_at as closed_at',
         'cells.closure_reason as closure_reason',
+        'cells.closure_note as closure_note',
         'restart.cell_id as restarted_as',
         openedWithCategory().as('restarted_as_category'),
         openedWithDay().as('restarted_as_day_of_week'),
@@ -1762,6 +1769,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       timeOfDay: String(row.time_of_day).slice(0, 5),
       closedAt: row.closed_at as Date,
       closureReason: row.closure_reason as string,
+      closureNote: row.closure_note ?? null,
       restartedAs: row.restarted_as ?? null,
       restartedAsCategory: row.restarted_as_category ?? null,
       restartedAsDayOfWeek:
