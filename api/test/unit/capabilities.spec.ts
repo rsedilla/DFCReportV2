@@ -31,6 +31,7 @@ describe('the capability enumeration the application declares', () => {
     'cell.submit_on_behalf',
     'cell.correct_subtree',
     'cell.manage_membership',
+    'cell.move_members',
     'cell.manage_leadership',
     'cell.manage_configuration',
     'cell.request_leadership',
@@ -66,7 +67,7 @@ describe('the capability enumeration the application declares', () => {
   // alone. The three Growth reads arrived with their modules; the counts are
   // written out rather than derived, because a count computed from the list it is
   // checking agrees with it whatever the list says.
-  it('divides into eight reads and twenty-eight writes', () => {
+  it('divides into eight reads and twenty-nine writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
@@ -79,7 +80,7 @@ describe('the capability enumeration the application declares', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(28);
+    expect(writes).toHaveLength(29);
   });
 });
 

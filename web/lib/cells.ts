@@ -911,6 +911,17 @@ export async function listEveryCell(
  * which cites the specification. Every other refusal keeps the server's own message.
  */
 export function membershipFailure(error: unknown, personName: string, cellHandle: string): Failure {
+  // Somebody already in another Cell is moved, which needs `cell.move_members` (decision 0357).
+  if (error instanceof ApiRequestError && error.details.capability === 'cell.move_members') {
+    return {
+      message:
+        error.code === 'CAPABILITY_DENIED'
+          ? `${personName} is already in another Cell. Moves to another Cell are made by their Primary.`
+          : `That move involves a Cell outside your branch, so it is made by the Admin.`,
+      aboutInput: false,
+    };
+  }
+
   if (error instanceof ApiRequestError && error.code === 'INVARIANT_VIOLATION') {
     const member = error.details.member_network;
     const cell = error.details.cell_network;

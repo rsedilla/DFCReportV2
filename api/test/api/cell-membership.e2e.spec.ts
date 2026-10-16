@@ -311,10 +311,13 @@ describe('cell membership (section 10)', () => {
       const peerCell = await createCell(db, { leader: peer });
       await addMember(admin, peerCell.id, juan.id).expect(201);
 
+      // Ticked Moves people, so the refusal is the source Cell's scope and not the missing
+      // `cell.move_members` (decision 0357); an unticked leader is refused before that.
       const account = await createAccount(app, db, {
         person: mark,
         roles: ['LEADER'],
         grantedBy: admin.id,
+        movesPeople: true,
       });
 
       const response = await addMember(account, markCell.id, juan.id).expect(403);

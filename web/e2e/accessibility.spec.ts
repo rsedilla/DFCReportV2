@@ -250,7 +250,7 @@ const SCANS = [
       await mockSignedIn(page);
       // The Growth frame renders only for a reader holding these, so without them the
       // scan would never see it.
-      await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree']);
+      await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
       await mockPeople(page);
       await mockPastoralPath(page);
       await mockPersonGrowth(page);
@@ -277,6 +277,8 @@ const SCANS = [
     pattern: '/people/[id]',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // Moving a member needs `cell.move_members` (decision 0357).
+      await mockGrants(page, ['cell.move_members']);
       await mockPeople(page);
       await mockCellChoices(page);
     },
@@ -996,6 +998,8 @@ const SCANS = [
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // Removing needs `cell.move_members` (decision 0357).
+      await mockGrants(page, ['cell.move_members']);
       await mockCellMeetings(page);
       await mockCellMembers(page);
     },
@@ -2234,7 +2238,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // The person page's Growth frame, which asks the same two lists by Member ID and falls
   // through to the two above for anything else. It renders only for a reader holding the
   // two view capabilities, and no other screen reads them.
-  await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree']);
+  await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
   await mockPersonGrowth(page);
 
   for (const entry of TARGET_SWEEP) {

@@ -20,6 +20,7 @@ import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
+import { assertMayMoveMembersWithin } from './move-members';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
@@ -70,7 +71,8 @@ export class CellsMembershipService {
    * Add a person to a Cell, moving them out of any Cell they already belong to.
    *
    * The guard has already resolved `cell.manage_membership` against the destination
-   * Cell, which section 7 places through its leader. What is left is the source.
+   * Cell, which section 7 places through its leader. A move also needs
+   * `cell.move_members` over both Cells (decision 0357), checked under the lock.
    */
   async add(
     cellId: string,
@@ -187,8 +189,14 @@ export class CellsMembershipService {
       // check about the Cell it is closing and about each dispersal destination.
       await this.assertActorMayChangeMembershipOf(trx, actor, authority, cellId);
 
+      // **Somebody already in another Cell is moved, not added** (decision 0357): that needs
+      // `cell.move_members` over both Cells, which a Leader holds only with Moves people.
+      // `cell.manage_membership` over the source is not asked; this replaces it.
       if (current) {
-        await this.assertActorMayChangeMembershipOf(trx, actor, authority, current.cell_uuid);
+        await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
+          current.cell_uuid,
+          cellId,
+        ]);
       }
 
       const at = await this.nowWithin(trx);
@@ -431,10 +439,19 @@ export class CellsMembershipService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // Before the transaction, as in `add` (section 24).
+    const authority = await this.authorization.authorityFor(actor.accountId);
+
     return this.db.transaction().execute(async (trx) => {
       // The same lock, for the same reason: this closes a row `cell_memberships_one_open`
       // governs, and a concurrent add of the same person must not interleave with it.
       await lockPersonsWithin(trx, [personId]);
+
+      // The guard checked `cell.move_members` over this Cell (decision 0357); re-decided
+      // after the lock, as section 10 asks of every Cell an operation touches.
+      await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
+        cellId,
+      ]);
 
       const current = await this.openMembershipWithin(trx, personId);
 
@@ -599,36 +616,22 @@ export class CellsMembershipService {
   }
 
   /**
-   * The **source** Cell of a move, which the guard has not checked.
+   * `cell.manage_membership` over the **destination** Cell, re-decided under the lock.
    *
-   * Section 10 gives `cell.manage_membership` per Cell — "the Cell's current leader,
-   * over their own Cells; any leader upline of that Cell's leader, acting within
-   * their own authorized pastoral subtree" — and a move is two membership changes,
-   * one to each Cell. The guard resolves the destination, because that is the
-   * request's primary target; section 7 settles that a rule about a second object is
-   * a check in the owning module.
-   *
-   * **Without it a leader could pull anybody in the church into their own Cell**,
-   * ending a membership in a Cell they have nothing to do with and moving that
-   * person's attendance out of another leader's denominator, with no involvement
-   * from the leader who holds them. That is the shape section 5 forbids for pastoral
-   * assignment — authorization case 1, pulling a person from a sibling branch — and
-   * the harm here is the same kind even though the relationship is a different one
-   * (section 1, principle 3).
-   *
-   * **Section 10 does not spell out the move case**, and this is the reading rather
-   * than a rule quoted: it is what "over their own Cells" means when an operation
-   * touches two. Admin holds Whole Church and is unaffected;
-   * an upline leader is unaffected; only a peer taking from a peer is refused, which
-   * is a pastoral conversation rather than a system action. Escalated in CLAUDE.md.
+   * The guard resolved it on the pool before the request queued, so a handover
+   * committing in between would leave that answer stale (section 10). The source Cell
+   * of a move is no longer checked here: since decision 0357 a move needs
+   * `cell.move_members` over both Cells, which `assertMayMoveMembersWithin` decides,
+   * and which is what stops a leader pulling somebody out of a Cell they have nothing
+   * to do with (authorization case 1's shape, section 1 principle 3).
    */
   private async assertActorMayChangeMembershipOf(
     trx: Transaction<Database>,
     actor: Actor,
     authority: ActorAuthority,
-    sourceCellId: string,
+    cellId: string,
   ): Promise<void> {
-    const leaderId = await this.cells.leaderForScopeWithin(trx, sourceCellId);
+    const leaderId = await this.cells.leaderForScopeWithin(trx, cellId);
 
     if (leaderId === null) {
       // Section 8 again, and it took two attempts. The first stopped naming the Cell
@@ -646,8 +649,8 @@ export class CellsMembershipService {
       );
     }
 
-    // Evaluated through the transaction, so a concurrent handover of the source
-    // Cell cannot leave this answering from the state the request arrived with.
+    // Evaluated through the transaction, so a concurrent handover of the Cell cannot
+    // leave this answering from the state the request arrived with.
     if (
       !(await this.authorization.coversWith(
         trx,
@@ -660,19 +663,10 @@ export class CellsMembershipService {
         },
       ))
     ) {
-      // **It names no Cell, and does not say the person belongs to one.** Section 8
-      // forbids exposing "Cell membership or Cell IDs" for a person outside the
-      // searching leader's pastoral scope — and this refusal is reached precisely
-      // for such a person, because the guard resolved scope against the destination
-      // Cell rather than against the member (section 10: membership need not mirror
-      // pastoral assignment). An earlier version returned the source Cell's
-      // identifier in `details` and asserted the membership in its message, which
-      // any Leader could have used as an oracle: names are church-wide, so pick a
-      // UUID out of a search, submit it against your own Cell, and read back both
-      // facts, writing nothing.
-      //
-      // The Network refusal beside this one may name Networks, because Network is
-      // one of the five fields section 8 publishes church-wide.
+      // **It names no Cell, and does not say the person belongs to one** (section 8).
+      // An earlier version, made for the source Cell of a move, returned that Cell's
+      // identifier and asserted the membership, which any Leader could have used as an
+      // oracle; `assertMayMoveMembersWithin` keeps the same silence.
       throw new ScopeDeniedError(
         'You do not have authority to make that membership change (SKILL.md section 10).',
       );

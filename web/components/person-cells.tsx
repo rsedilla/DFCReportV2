@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
 import { cellShortName, getPersonCells } from '@/lib/cells';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -42,6 +43,10 @@ export function PersonCells({
     queryKey: ['person-cells', personId],
     queryFn: ({ signal }) => getPersonCells(personId, signal),
   });
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayMoveMembers = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'cell.move_members',
+  );
 
   return (
     <section aria-labelledby={headingId} className={`${FRAME} ${className}`}>
@@ -78,9 +83,22 @@ export function PersonCells({
             </p>
           ) : null}
 
-          {cells.data.membership || cells.data.leads.length === 0 ? (
+          {/*
+            A move needs `cell.move_members`, which a Leader holds only when ticked Moves
+            people (decision 0357): anybody else is offered no button and asks for nothing.
+            Adding somebody in no Cell stays every leader's.
+          */}
+          {cells.data.membership ? (
+            me.data === undefined ? null : mayMoveMembers ? (
+              <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
+                Move to another Cell
+              </Button>
+            ) : (
+              <p className="text-muted mt-3 text-sm">Moves to another Cell are made by your Primary.</p>
+            )
+          ) : cells.data.leads.length === 0 ? (
             <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
-              {cells.data.membership ? 'Move to another Cell' : 'Add to a Cell'}
+              Add to a Cell
             </Button>
           ) : null}
 

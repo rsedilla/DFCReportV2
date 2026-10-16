@@ -19,8 +19,10 @@ import { getPerson, networkOfPerson } from '@/lib/people';
  * 10's same-Network rule and section 7's authority over the Cell are the API's to refuse,
  * and the same-Network refusal is said in plain words by `membershipFailure`.
  *
- * **Somebody already in another Cell moves here.** A move is an add: the route ends the
- * current membership and opens this one, so the dialog sends one request.
+ * **Somebody already in another Cell moves here**, for a reader holding `cell.move_members`
+ * (decision 0357). A move is an add: the route ends the current membership and opens this
+ * one, so the dialog sends one request. Any other reader is told such a person is moved by
+ * their Primary, and the route refuses it.
  */
 export function AddMemberDialog({
   open,
@@ -29,6 +31,7 @@ export function AddMemberDialog({
   cellId,
   cellHandle,
   leaderId,
+  mayMove,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,6 +41,8 @@ export function AddMemberDialog({
   cellHandle: string | null;
   /** The Cell's leader, whose Network is the Cell's (section 10); null while unknown. */
   leaderId: string | null;
+  /** Whether the reader holds `cell.move_members`; the API decides each move. */
+  mayMove: boolean;
 }) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<{ id: string; full_name: string } | null>(null);
@@ -103,7 +108,9 @@ export function AddMemberDialog({
         />
 
         <p className="text-muted text-sm leading-relaxed">
-          It takes effect today. Somebody already in another Cell moves here.
+          {mayMove
+            ? 'It takes effect today. Somebody already in another Cell moves here.'
+            : 'It takes effect today. Somebody already in another Cell is moved by their Primary.'}
         </p>
 
         <FailureNotice

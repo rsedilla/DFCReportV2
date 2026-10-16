@@ -417,8 +417,25 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
   });
 
-  test('a Full view account is still offered Remove', async ({ page }) => {
+  test('a Full view account that moves no members is offered no Remove (decision 0357)', async ({
+    page,
+  }) => {
     await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+
+    await page.goto(MEMBERS);
+
+    await expect(page.getByRole('link', { name: 'Rosalinda Ocampo' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
+  });
+
+  test('an account holding cell.move_members is offered Remove (decision 0357)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['cell.move_members']);
     await mockCellMeetings(page);
     await mockCellMembers(page);
 
@@ -428,6 +445,32 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await expect(
       page.getByRole('button', { name: 'Remove' }).filter({ visible: true }),
     ).toHaveCount(2);
+  });
+
+  test('Add a member says who moves somebody in another Cell, by what the account may do (decision 0357)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+    await page.goto(MEMBERS);
+
+    await page.getByRole('button', { name: 'Add a member' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByText(
+        'It takes effect today. Somebody already in another Cell is moved by their Primary.',
+      ),
+    ).toBeVisible();
+
+    await mockGrants(page, ['cell.move_members']);
+    await page.reload();
+    await page.getByRole('button', { name: 'Add a member' }).click();
+    await expect(
+      page
+        .getByRole('dialog')
+        .getByText('It takes effect today. Somebody already in another Cell moves here.'),
+    ).toBeVisible();
   });
 });
 

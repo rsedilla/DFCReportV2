@@ -965,10 +965,18 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       await refusedAt([ids[0], other.id, ids[2]], 1);
     });
 
-    it('refuses a Person already in a Cell', async () => {
+    it('accepts a Person already in a Cell, who stays there while it waits (decision 0357)', async () => {
       const { ids } = await createRequestMembers(db, 'MENS');
       await enrol(ids[1], benCell.id);
-      await refusedAt(ids, 1);
+      await submit(manuelAccount, newCellBody(mark.id, ids)).expect(201);
+
+      const open = await db
+        .selectFrom('cell_memberships')
+        .select('cell_id')
+        .where('person_id', '=', ids[1])
+        .where('ended_at', 'is', null)
+        .execute();
+      expect(open).toEqual([{ cell_id: benCell.id }]);
     });
 
     it('refuses an identifier naming nobody, rather than answering 500', async () => {
@@ -1083,10 +1091,18 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       expect(memberships.map((row) => row.person_id).sort()).toEqual([...members].sort());
     });
 
-    it('refuses where a member has since joined a Cell', async () => {
+    it('moves a member who has since joined a Cell, for an approver who may move them (decision 0357)', async () => {
       const { id, members } = await pendingNewCell(manuelAccount, mark.id);
       await enrol(members[1], benCell.id);
-      await refusedNaming(id, members[1]);
+
+      const response = await approve(adminB, id).expect(200);
+      const open = await db
+        .selectFrom('cell_memberships')
+        .select('cell_id')
+        .where('person_id', '=', members[1])
+        .where('ended_at', 'is', null)
+        .execute();
+      expect(open).toEqual([{ cell_id: response.body.cell_uuid as string }]);
     });
 
     it('refuses where a member has since been archived', async () => {

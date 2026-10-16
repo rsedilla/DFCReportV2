@@ -98,6 +98,9 @@ const ADMIN: RoleDefaults = {
   [Capability.CellSubmitOnBehalf]: ScopeType.WholeChurch,
   [Capability.CellCorrectSubtree]: ScopeType.WholeChurch,
   [Capability.CellManageMembership]: ScopeType.WholeChurch,
+  // Moves a member between Cells of any branch (decision 0357); a Leader holds it only
+  // with Moves people, and a Senior Pastor not at all.
+  [Capability.CellMoveMembers]: ScopeType.WholeChurch,
   [Capability.CellManageLeadership]: ScopeType.WholeChurch,
   [Capability.CellManageConfiguration]: ScopeType.WholeChurch,
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
@@ -160,12 +163,14 @@ export const LEADER_APPROVES_CELLS: RoleDefaults = {
 };
 
 /**
- * What a Leader account holds only with Moves people (sections 5 and 7, decision 0356):
- * moving a person in its own subtree to another pastoral leader. Without it a Leader moves
- * nobody. Like Approves Cells, it adds only to what the Leader role gives.
+ * What a Leader account holds only with Moves people (sections 5, 7 and 10, decisions 0356
+ * and 0357): moving a person in its own subtree to another pastoral leader, and moving or
+ * removing a member of a Cell there. Without it a Leader moves nobody. Like Approves Cells,
+ * it adds only to what the Leader role gives.
  */
 export const LEADER_MOVES_PEOPLE: RoleDefaults = {
   [Capability.PeopleManagePastoralAssignment]: ScopeType.OwnSubtree,
+  [Capability.CellMoveMembers]: ScopeType.OwnSubtree,
 };
 
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
