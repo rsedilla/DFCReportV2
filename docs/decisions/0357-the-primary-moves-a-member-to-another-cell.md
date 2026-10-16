@@ -41,9 +41,18 @@ decided; neither was built.
    asks for nothing in the application. Where *Move to another Cell* stood, the person's page
    says *Moves to another Cell are made by your Primary.*, and the *Add a member* dialog says
    that somebody already in another Cell is moved by their Primary.
-7. **Whether a new-Cell request may name somebody already in a Cell is not settled here.** The
-   owner's 16 Oct decisions do not reach it, so decision 0353's refusal stands as it was, and the
-   question is recorded in `CLAUDE.md`.
+7. **A new-Cell request may name somebody already in a Cell** (owner, 2026-10-16), replacing
+   decision 0353's refusal of such a person. They stay in their Cell while the request waits, and
+   **move into the new Cell when it is approved**, in the approval's transaction, their old
+   membership closing at the instant the new one opens. **Only an approver who may move them
+   approves it**: one holding `cell.move_members` over each such member's current Cell, by default
+   the ticked Primary of that branch or the Admin. An approver without it is refused
+   `SCOPE_DENIED` or `CAPABILITY_DENIED` and the Admin decides. Sending the request moves nobody,
+   so it needs no `cell.move_members`. The old Cell's leader is not asked. A restart names its
+   members the same way and follows the same rule. **A request an approver may no longer approve,
+   because a named member is in a Cell outside its reach, is neither listed for it nor declinable
+   by it**, as with decision 0352's refusals; it reaches only the Admin. The queue therefore reads
+   each named member's current Cell.
 8. **Unchanged**: closing a Cell, which only the Admin does and which moves or releases every
    member as Section 10 says (decision 0355), its destination Cells still checked under
    `cell.manage_membership`; a Recording-only account, which already adds and
@@ -63,8 +72,9 @@ migration Section 7 names for a read capability, is not changed. No column is ad
 At the API: a Leader without the tick is refused moving and removing and admitted adding
 somebody in no Cell; a ticked Leader moves a member between two Cells of its branch at once and
 is refused a destination outside it `SCOPE_DENIED`; the Admin moves across branches; a Senior
-Pastor is refused moving and removing; a new-Cell request naming somebody in a Cell is still
-refused. On the web: the buttons above follow `/auth/me`, and the two lines are shown.
+Pastor is refused moving and removing; a new-Cell request naming somebody in a Cell is sent,
+leaves them in their Cell while it waits, and on approval moves them, refused to an approver
+without `cell.move_members` over their Cell. On the web: the buttons above follow `/auth/me`, and the two lines are shown.
 
 ## Why
 
