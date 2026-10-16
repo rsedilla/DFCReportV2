@@ -7,6 +7,7 @@ import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { ApiRequestError } from '@/lib/api-client';
 import { reassignPastoralLeader } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
@@ -136,6 +137,10 @@ export function MoveLeaderDialog({
 
       <div className="mt-4">
         <FailureNotice failure={move.isError ? describeFailure(move.error) : null} />
+        {/* A move outside the mover's branch is the Admin's (decision 0356, point 4). */}
+        {move.error instanceof ApiRequestError && move.error.code === 'SCOPE_DENIED' ? (
+          <p className="mt-2 text-sm">Moves outside your branch are made by the Admin.</p>
+        ) : null}
       </div>
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap">

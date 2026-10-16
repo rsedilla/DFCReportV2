@@ -951,7 +951,7 @@ const SCANS = [
       await expect(page.getByText('Network root')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
       await expect(
-        page.getByText('ask a leader who pastors them, or an administrator', { exact: false }),
+        page.getByText('Moves to another leader are made by your Primary.', { exact: true }),
       ).toBeVisible();
       await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
     },
