@@ -381,15 +381,13 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(marilou.id)).toBe(cellC.id);
     });
 
-    it('locks each named member’s current Cell before writing anything, so it waits on a closure holding that Cell', async () => {
+    it('locks each named member’s current Cell before writing anything', async () => {
       // Section 5's order: approval takes a named member's current Cell in its one sorted
-      // `cells` lock call, before it writes. Hold that row as a closure would. The outcome
-      // alone cannot tell whether approval took it up front: migration 0009's membership
-      // trigger takes the same row `FOR SHARE` at commit, so approval would be refused
-      // either way. What the up-front lock decides is **when** it waits, so this reads
-      // `pg_locks` while it waits: it must hold no lock on `cell_leaderships`, the table it
-      // writes once its locks are taken. Released inside approval's lock bound, so the
-      // approval then completes.
+      // `cells` lock call, before it writes. Hold that row. The outcome alone cannot tell
+      // whether approval took it up front: migration 0009's membership trigger takes the
+      // same row `FOR SHARE` at commit, so approval waits either way. What the up-front lock
+      // decides is **when** it waits, so this reads `pg_locks` while it waits: it must hold
+      // no lock on `cell_leaderships`, the table it writes once its locks are taken.
       const sent = await submit(corazonAccount, mia.id, [marilou.id, ...(await fresh())]).expect(
         201,
       );
@@ -398,8 +396,11 @@ describe('Moving a Cell member (decision 0357)', () => {
       let locked!: () => void;
       const held = new Promise<void>((resolve) => (release = resolve));
       const isLocked = new Promise<void>((resolve) => (locked = resolve));
+      let holderPid!: number;
       const holder = db.transaction().execute(async (trx) => {
         await sql`SELECT id FROM cells WHERE id = ${cellC.id}::uuid FOR NO KEY UPDATE`.execute(trx);
+        holderPid = (await sql<{ pid: number }>`SELECT pg_backend_pid() AS pid`.execute(trx))
+          .rows[0].pid;
         locked();
         await held;
       });
@@ -416,12 +417,12 @@ describe('Moving a Cell member (decision 0357)', () => {
       let waiter: number | undefined;
       let writtenWhileWaiting: number | undefined;
       try {
-        // The approval's backend, once it waits on a lock: any backend but the probe's
-        // and the holder's, while the request is still open.
+        // The approval's backend: the one the holder blocks (`pg_blocking_pids`), which no
+        // other backend on the server can be, as `test/setup/concurrency.ts` requires.
         while (waiter === undefined && !settled) {
           const rows = await sql<{ pid: number }>`
-            SELECT pid FROM pg_locks
-             WHERE NOT granted AND pid <> pg_backend_pid()
+            SELECT pid FROM pg_stat_activity
+             WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))
              LIMIT 1`.execute(probe);
           waiter = rows.rows[0]?.pid;
           if (waiter === undefined) {
