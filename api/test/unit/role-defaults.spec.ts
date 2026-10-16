@@ -1,5 +1,9 @@
 import { ALL_CAPABILITIES } from '../../src/auth/authorization/capabilities';
-import { LEADER_APPROVES_CELLS, ROLE_DEFAULTS } from '../../src/auth/authorization/role-defaults';
+import {
+  LEADER_APPROVES_CELLS,
+  LEADER_MOVES_PEOPLE,
+  ROLE_DEFAULTS,
+} from '../../src/auth/authorization/role-defaults';
 
 import type { Capability } from '../../src/auth/authorization/capabilities';
 import type { AccountRole } from '../../src/database/schema';
@@ -30,10 +34,12 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     LEADER: 'OWN_SUBTREE',
   },
   'people.manage_lifecycle': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  // The Leader cell reads "own/subtree, with Moves people and Full view" (decision 0356): a
+  // default the tick adds, so it is absent here and pinned against `LEADER_MOVES_PEOPLE` below.
   'people.manage_pastoral_assignment': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
-    LEADER: 'OWN_SUBTREE',
+    LEADER: null,
   },
   'people.correct_sex': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'dcc.take_attendance': {
@@ -241,6 +247,15 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(LEADER_APPROVES_CELLS).toEqual({ 'cell.approve_leadership': 'SUBTREE_EXCL_SELF' });
     expect(ROLE_DEFAULTS.LEADER['cell.approve_leadership']).toBeUndefined();
     expect(ROLE_DEFAULTS.SENIOR_PASTOR['cell.approve_leadership']).toBeUndefined();
+  });
+
+  it('gives a Leader people.manage_pastoral_assignment only with Moves people, over its own subtree (decision 0356)', () => {
+    // A set the tick adds, holding that one capability and nothing else, never part of the
+    // Leader role, and unchanged for the two roles that move anyone.
+    expect(LEADER_MOVES_PEOPLE).toEqual({ 'people.manage_pastoral_assignment': 'OWN_SUBTREE' });
+    expect(ROLE_DEFAULTS.LEADER['people.manage_pastoral_assignment']).toBeUndefined();
+    expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
+    expect(ROLE_DEFAULTS.ADMIN['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
   });
 
   it('holds cell.request_leadership at subtree scope for every role', () => {

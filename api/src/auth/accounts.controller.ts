@@ -15,6 +15,7 @@ import {
   ProvisionAccountDto,
   SetApprovesCellsDto,
   SetFullViewDto,
+  SetMovesPeopleDto,
 } from './dto/credentials.dto';
 
 import type { Actor } from './authorization/authorization.service';
@@ -182,5 +183,21 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return { ...(await this.access.setApprovesCells(id, body.approves_cells, actor, claim)) };
+  }
+
+  /**
+   * Ticks or clears Moves people on a Leader account (sections 5 and 7, decision 0356), under
+   * `roles.manage` against the Account, as Approves Cells is.
+   */
+  @Post(':id/moves-people')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setMovesPeople(
+    @Param('id') id: string,
+    @Body() body: SetMovesPeopleDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return { ...(await this.access.setMovesPeople(id, body.moves_people, actor, claim)) };
   }
 }

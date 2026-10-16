@@ -14,7 +14,7 @@ import { TokensService } from './tokens.service';
 
 import type { Actor } from './authorization/authorization.service';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { AccountStatus } from '../database/schema';
+import type { AccountStatus, AuditAction } from '../database/schema';
 
 /** What both routes answer: the account's state after the change. */
 export type AccountAccessBody = {
@@ -33,6 +33,27 @@ export type ApprovesCellsBody = {
   id: string;
   approves_cells: boolean;
 };
+
+/** What setting Moves people answers: the account's value after the change. */
+export type MovesPeopleBody = {
+  id: string;
+  moves_people: boolean;
+};
+
+type LeaderTick = 'full_view' | 'approves_cells' | 'moves_people';
+
+/** Each tick's name in a refusal and its audit action (decisions 0323, 0352 and 0356). */
+const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
+  full_view: { label: 'Full view', action: 'account.full_view_changed' },
+  approves_cells: { label: 'Approves Cells', action: 'account.approves_cells_changed' },
+  moves_people: { label: 'Moves people', action: 'account.moves_people_changed' },
+};
+
+/** The ticks offered only with Full view, and cleared with it (decisions 0352 and 0356). */
+const NEEDS_FULL_VIEW: readonly ('approves_cells' | 'moves_people')[] = [
+  'approves_cells',
+  'moves_people',
+];
 
 /**
  * Disabling an account and re-enabling it, by an administrator (SKILL.md section 6,
@@ -233,20 +254,40 @@ export class AccountAccessService {
     )) as unknown as ApprovesCellsBody;
   }
 
-  /** The one write both ticks share: lock, check the role, write and audit a change. */
+  /**
+   * Ticks or clears Moves people on a Leader account (decision 0356), exactly as Approves
+   * Cells is ticked: refused on an account holding no `LEADER` role or without Full view,
+   * and audited only when the value changes.
+   */
+  async setMovesPeople(
+    accountId: string,
+    movesPeople: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<MovesPeopleBody> {
+    return (await this.setLeaderTick(
+      'moves_people',
+      accountId,
+      movesPeople,
+      actor,
+      claim,
+    )) as unknown as MovesPeopleBody;
+  }
+
+  /** The one write the three ticks share: lock, check the role, write and audit a change. */
   private async setLeaderTick(
-    column: 'full_view' | 'approves_cells',
+    column: LeaderTick,
     accountId: string,
     value: boolean,
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, string | boolean>> {
-    const label = column === 'full_view' ? 'Full view' : 'Approves Cells';
+    const { label } = TICKS[column];
 
     return this.db.transaction().execute(async (trx) => {
       const account = await trx
         .selectFrom('accounts')
-        .select(['id', 'full_view', 'approves_cells'])
+        .select(['id', 'full_view', 'approves_cells', 'moves_people'])
         .where('id', '=', accountId)
         .forNoKeyUpdate()
         .executeTakeFirst();
@@ -269,33 +310,35 @@ export class AccountAccessService {
         });
       }
 
-      // Approves Cells is offered only on an account with Full view (owner, 2026-10-15,
-      // decision 0352): its queue is on the Cells page, which only Full view screens carry.
-      if (column === 'approves_cells' && value && !account.full_view) {
+      // Approves Cells and Moves people are offered only on an account with Full view
+      // (owners' rulings of 2026-10-15 and 2026-10-16, decisions 0352 and 0356).
+      if (column !== 'full_view' && value && !account.full_view) {
         throw new InvariantViolationError(
-          'Approves Cells is offered only on an account with Full view. Tick Full view first ' +
-            '(SKILL.md section 7, decision 0352).',
+          `${label} is offered only on an account with Full view. Tick Full view first ` +
+            '(SKILL.md section 7).',
           { account_id: accountId },
         );
       }
 
-      // Clearing Full view clears Approves Cells with it, in the same transaction and audited
-      // as its own change, so no account holds the capability without the screens to use it.
-      if (column === 'full_view' && !value && account.approves_cells) {
-        await trx
-          .updateTable('accounts')
-          .set({ approves_cells: false, updated_at: new Date() })
-          .where('id', '=', accountId)
-          .execute();
+      // Clearing Full view clears both with it, in the same transaction and each audited as
+      // its own change, so no account holds either without Full view.
+      if (column === 'full_view' && !value) {
+        for (const tick of NEEDS_FULL_VIEW.filter((name) => account[name])) {
+          await trx
+            .updateTable('accounts')
+            .set({ [tick]: false, updated_at: new Date() })
+            .where('id', '=', accountId)
+            .execute();
 
-        await this.audit.writeWithin(trx, {
-          actorId: actor.accountId,
-          action: 'account.approves_cells_changed',
-          targetType: 'account',
-          targetId: accountId,
-          before: { approves_cells: true },
-          after: { approves_cells: false },
-        });
+          await this.audit.writeWithin(trx, {
+            actorId: actor.accountId,
+            action: TICKS[tick].action,
+            targetType: 'account',
+            targetId: accountId,
+            before: { [tick]: true },
+            after: { [tick]: false },
+          });
+        }
       }
 
       if (account[column] !== value) {
@@ -307,8 +350,7 @@ export class AccountAccessService {
 
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
-          action:
-            column === 'full_view' ? 'account.full_view_changed' : 'account.approves_cells_changed',
+          action: TICKS[column].action,
           targetType: 'account',
           targetId: accountId,
           before: { [column]: account[column] },

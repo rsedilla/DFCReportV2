@@ -51,7 +51,8 @@ import { cn } from '@/lib/utils';
  *
  * **Move to another leader is its own action** beside Edit details, offered to an account
  * holding `people.manage_pastoral_assignment` at any scope and never on your own profile,
- * which section 5 forbids. Whether a particular move is allowed is still the API's.
+ * which section 5 forbids. Whether a particular move is allowed is still the API's. A Leader holds it
+ * only when ticked *Moves people* (decision 0356); one without it reads, in its place, who makes moves.
  *
  * **Age is derived here and never stored.** Section 3 keeps the birthday as the
  * authoritative value precisely because it cannot go stale, and the API returns
@@ -167,6 +168,10 @@ function PersonDetail() {
               Where they sit
             </Link>
           </div>
+          {/* No button and no request: the Primary decides (owner, 2026-10-16, decision 0356). */}
+          {me.data && !own && !mayMove ? (
+            <p className="text-muted mt-3 text-sm">Moves to another leader are made by your Primary.</p>
+          ) : null}
 
 
           {/*

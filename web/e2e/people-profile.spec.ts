@@ -367,6 +367,8 @@ test.describe('who pastors a person', () => {
     });
 
     await page.goto(PROFILE);
+    // An account that may move people is not told somebody else makes moves (decision 0356).
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Move to another leader' }).click();
 
     const dialog = page.getByRole('dialog', {
@@ -386,6 +388,39 @@ test.describe('who pastors a person', () => {
     ]);
   });
 
+  test('says a move outside the branch is the Admin’s when one is refused (decision 0356)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await mockPastoralPath(page);
+    await page.route('**/api/v1/people/*/pastoral-leader', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'SCOPE_DENIED',
+            message: 'A reassignment must stay within your authorized scope at both ends.',
+          },
+        }),
+      }),
+    );
+
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Move to another leader' }).click();
+    const dialog = page.getByRole('dialog', {
+      name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
+    });
+    await dialog.getByLabel('Search for a leader by name').fill('ann');
+    await dialog.getByRole('button', { name: 'Search people' }).click();
+    await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
+    await expect(dialog.getByText('Moves outside your branch are made by the Admin.')).toHaveCount(0);
+    await dialog.getByRole('button', { name: `Move under ${PERSON_WITHHELD.full_name}` }).click();
+
+    await expect(dialog.getByText('Moves outside your branch are made by the Admin.')).toBeVisible();
+  });
+
   test('offers no move to an account that may not move people', async ({ page }) => {
     await signedInWithPeople(page);
     await mockPastoralPath(page);
@@ -394,6 +429,8 @@ test.describe('who pastors a person', () => {
     await expect(page.getByRole('link', { name: 'Edit details' })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    // In its place, who makes moves, and nothing to ask with (decision 0356).
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toBeVisible();
   });
 
   test('on your own profile, names your leader without a link and offers no move', async ({
@@ -417,6 +454,7 @@ test.describe('who pastors a person', () => {
     await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
   });
 
   test('a record outside your scope is refused in plain words, without the API’s', async ({

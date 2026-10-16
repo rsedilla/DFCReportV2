@@ -109,6 +109,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         full_view: false,
         // Nor Approves Cells (decision 0352).
         approves_cells: false,
+        // Nor Moves people (decision 0356).
+        moves_people: false,
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);
@@ -1304,12 +1306,14 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       // guards against**, and it is sharper than the case above because the two
       // roles differ on scope rather than on membership: `SENIOR_PASTOR` holds
       // `people.manage_pastoral_assignment` at Whole Church and `LEADER` holds the
-      // same capability at own subtree. So the row being dropped and the account
-      // keeping its own authority are one assertion each, on one capability.
+      // same capability at own subtree, the Leader's through Moves people (decision 0356). So
+      // the row being dropped and the account keeping its own authority are one assertion
+      // each, on one capability.
       const account = await createAccount(app, db, {
         person: ester,
         roles: ['LEADER', 'SENIOR_PASTOR'],
         seniorPastorSlot: 1,
+        movesPeople: true,
       });
 
       const response = await me(account);

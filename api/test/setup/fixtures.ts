@@ -223,6 +223,11 @@ export async function createAccount(
      * cases that pin the ruling pass false.
      */
     fullView?: boolean;
+    /**
+     * Moves people (decision 0356). False by default, as in the application: a Leader moves
+     * nobody without it. Needs Full view, which the database checks.
+     */
+    movesPeople?: boolean;
   },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
@@ -238,6 +243,7 @@ export async function createAccount(
       password_hash: options.passwordHash ?? 'argon2-placeholder-not-a-valid-hash',
       status: 'ACTIVE',
       full_view: options.fullView ?? true,
+      moves_people: options.movesPeople ?? false,
     })
     .returning('id')
     .executeTakeFirstOrThrow();
