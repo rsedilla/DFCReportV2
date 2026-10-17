@@ -216,9 +216,11 @@ describe('GET /reports/people/branch (decision 0364)', () => {
     const thisMonth = new Date(Date.UTC(Number(before.slice(0, 4)), Number(before.slice(5, 7)), 1))
       .toISOString()
       .slice(0, 10);
-    // Dan, and Eva beneath him, move to Ben at the start of this month.
-    await endAssignment(dan, dayOf(thisMonth, '01'));
-    await assignTo(db, dan.id, ben.id, dayOf(thisMonth, '01'));
+    // Dan, and Eva beneath him, move to Ben at the first instant of this month, so the move has
+    // happened whatever day or hour the suite runs.
+    const moved = new Date(`${thisMonth}T00:00:00+08:00`);
+    await endAssignment(dan, moved);
+    await assignTo(db, dan.id, ben.id, moved);
 
     const then = (await branch(anaAccount, ana.id, before).expect(200)).body as Branch;
     expect(then.rows.map((row) => row.leader?.id)).toEqual([dan.id, fe.id]);
