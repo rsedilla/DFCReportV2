@@ -51,13 +51,14 @@ for (const each of TABS) {
       await page.goto(`/reports/${each.tab}?period=quarter`);
 
       await expect(label(page, 'Q3 2026 · Jul–Sep')).toBeVisible();
-      await expect(page.getByText(/^Open until 7 [A-Z][a-z]+$/)).toBeVisible();
+      // In the note under the controls for a leader (decision 0363).
+      await expect(page.getByText(/Still open, until 7 [A-Z][a-z]+\.$/)).toBeVisible();
       await expect(page.getByText('Q4 2026 · Oct–Dec opens on 1 January.', { exact: true })).toBeVisible();
       // Q2 ended before the calendar's first Sunday, and Q4 has not finished.
       await expect(before(page)).toBeDisabled();
       await expect(after(page)).toBeDisabled();
       // A Full view leader reads their branch (decision 0340).
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       // The running quarter is never asked for, so no figure of it is ever shown.
       expect(asked.map((query) => query.get('start'))).not.toContain('2026-10-01');
     });
@@ -73,7 +74,7 @@ for (const each of TABS) {
         ),
       ).toBeVisible();
       await expect(before(page)).toHaveCount(0);
-      await expect(page.getByRole('heading', { name: /branch$|their journey/ })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: /Disciples$|their journey/ })).toHaveCount(0);
       expect(asked.map((query) => query.get('start'))).not.toContain('2026-01-01');
     });
 
@@ -138,7 +139,7 @@ for (const each of TABS) {
         `/reports/${each.tab}?period=quarter&start=2026-07-01&leader=${TWELVE.consuelo.id}`,
       );
       await expect(label(page, 'Q3 2026 · Jul–Sep')).toBeVisible();
-      await expect(page.getByRole('heading', { name: /’s branch$/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /’s Disciples$/ })).toBeVisible();
       await expect(page.getByText('Outside your scope.')).toHaveCount(0);
     });
 

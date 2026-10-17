@@ -21,7 +21,9 @@ import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { getCellTwelve } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
+import { rangeEndOf } from '@/lib/report-range';
 import { useScreenAddress } from '@/lib/screen-address';
+import { periodStillOpenNote } from '@/lib/weekly-deadline';
 
 /**
  * The Cell Groups report (SKILL.md sections 12, 13, 17, 19 and 20; decisions 0202, 0216,
@@ -91,7 +93,7 @@ export function CellReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
       <ReportsTabs current="cells" month={guardMonth}>
-        {seniorPastor ? null : (
+        {seniorPastor || branchReader ? null : (
           <PeriodTabs
             value={kind}
             onChange={period.choosePeriodKind}
@@ -112,6 +114,13 @@ export function CellReport() {
               onChange={period.choosePeriodKind}
             />
           ) : null}
+          {/* A Full view leader's period, labelled, on a row of its own (decision 0363). */}
+          {branchReader ? (
+            <div className="basis-full">
+              <p className="field-label">Show</p>
+              <PeriodTabs inBar value={kind} onChange={period.choosePeriodKind} />
+            </div>
+          ) : null}
           {reach?.kind === 'none' ? null : (
             <RangeNavigator
               kind={kind}
@@ -120,6 +129,7 @@ export function CellReport() {
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
               quiet={seniorPastor}
+              labelled={branchReader}
               onChange={period.choosePeriodStart}
             />
           )}
@@ -146,6 +156,12 @@ export function CellReport() {
               ) : null}
             </select>
           </div>
+          {/* A Full view leader's note under the controls (decision 0363): whether it is still open. */}
+          {branchReader && twelve.data ? (
+            <p className="text-muted basis-full text-sm">
+              {twelve.data.open ? `${periodStillOpenNote(rangeEndOf(kind, start))}.` : 'Closed.'}
+            </p>
+          ) : null}
         </div>
 
         {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
@@ -182,8 +198,9 @@ export function CellReport() {
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
             {/* Coverage leads, as one line (decision 0202); who is behind is on Record's Recording
-                Status (decision 0340). The Senior Pastors read it there instead (owner, 2026-10-09). */}
-            {seniorPastor ? null : (
+                Progress (decision 0340). The Senior Pastors read it there instead (owner, 2026-10-09),
+                and so does a Full view leader (decision 0363). */}
+            {seniorPastor || branchReader ? null : (
               <p className="text-sm">
                 <span className="font-bold tabular-nums">
                   {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}

@@ -1055,9 +1055,10 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      // Coverage leads as one line, then the branch (decision 0340), and the four tabs.
-      await expect(page.getByText(/^6 of 8 meetings recorded/)).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      // One control panel with its note and no coverage line (decision 0363), then the
+      // disciples' cards, and the three tabs.
+      await expect(page.getByText(/^(Still open, until .+|Closed)\.$/)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByText('Counted under more than one leader', { exact: true })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
@@ -1077,7 +1078,7 @@ const SCANS = [
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1093,7 +1094,7 @@ const SCANS = [
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1301,7 +1302,7 @@ const SCANS = [
       await mockDccTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1318,7 +1319,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       // My 12 over the year, and its month-by-month table beneath (decisions 0257, 0293).
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1336,14 +1337,14 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       // That leader's 12, with no Cell of their own: the row carries no numbers.
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /’s branch$/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /’s Disciples$/ })).toBeVisible();
       await expect(page.getByText(/no Cell of (your|their) own/)).toBeVisible();
     },
   },
   {
-    // The coverage line, the Sundays counted naming the removed one (section 9 requires a
-    // removal to be explained rather than left as a smaller number), My 12 with the reader
-    // alone as "You", and How often people came, Monthly's alone (decision 0294).
+    // The note under the controls, its Sundays naming the removed one (section 9 requires a
+    // removal to be explained rather than left as a smaller number; decision 0363), My 12 with
+    // the reader alone as "You", and How often people came, Monthly's alone (decision 0294).
     name: 'dcc figures report',
     route: '/reports/dcc',
     async before(page: import('@playwright/test').Page) {
@@ -1352,9 +1353,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-      await expect(page.getByText('12 of 18 records filed in the month')).toBeVisible();
-      await expect(page.getByText(/no service on Sunday 14 June/)).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByText(/^3 Sundays, no service on Sunday 14 June\./)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
     },
   },

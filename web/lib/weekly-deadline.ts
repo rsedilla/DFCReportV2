@@ -71,6 +71,16 @@ export function periodOpenUntilLabel(lastDay: string): string {
   return openUntil(dayClose(lastDay));
 }
 
+/**
+ * "Still open, until Mon 16 Nov, 12 noon": the same close in a sentence, for the note under a
+ * Full view leader's report controls (decision 0363), where a tag would read as a button.
+ */
+export function periodStillOpenNote(lastDay: string): string {
+  return openUntil(dayClose(lastDay))
+    .replace('Open until', 'Still open, until')
+    .replace(', 12NN', ', 12 noon');
+}
+
 function openUntil(close: { day: string; noon: boolean }): string {
   if (!close.noon) {
     const [, month, day] = close.day.split('-').map(Number);

@@ -23,8 +23,10 @@ import { getBranch } from '@/lib/network';
 import { networkLabel } from '@/lib/people';
 import { getDccTwelve, type ReportNetwork } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
+import { rangeEndOf } from '@/lib/report-range';
 import { dayLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { periodStillOpenNote } from '@/lib/weekly-deadline';
 
 /**
  * The DCC report (SKILL.md sections 9, 13, 17, 19 and 20; decisions 0216, 0224, 0257, 0292
@@ -105,7 +107,7 @@ export function DccReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="Who came to DCC (Doulos Cell Celebration), and where they are in their journey." />
       <ReportsTabs current="dcc" month={guardMonth}>
-        {seniorPastor ? null : (
+        {seniorPastor || branchReader ? null : (
           <PeriodTabs
             value={kind}
             onChange={period.choosePeriodKind}
@@ -126,6 +128,13 @@ export function DccReport() {
               onChange={period.choosePeriodKind}
             />
           ) : null}
+          {/* A Full view leader's period, labelled, on a row of its own (decision 0363). */}
+          {branchReader ? (
+            <div className="basis-full">
+              <p className="field-label">Show</p>
+              <PeriodTabs inBar value={kind} onChange={period.choosePeriodKind} />
+            </div>
+          ) : null}
           {reach?.kind === 'none' ? null : (
             <RangeNavigator
               kind={kind}
@@ -134,6 +143,7 @@ export function DccReport() {
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
               quiet={seniorPastor}
+              labelled={branchReader}
               onChange={period.choosePeriodStart}
             />
           )}
@@ -173,6 +183,17 @@ export function DccReport() {
               ) : null}
             </select>
           </div>
+          {/* A Full view leader's note under the controls (decision 0363): the Sundays the period
+              counts, any with no service (section 9), and whether it is still open. */}
+          {branchReader && twelve.data ? (
+            <p className="text-muted basis-full text-sm">
+              {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'}
+              {twelve.data.removed_events.length > 0
+                ? `, no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                : ''}
+              .{twelve.data.open ? ` ${periodStillOpenNote(rangeEndOf(kind, start))}.` : ' Closed.'}
+            </p>
+          ) : null}
         </div>
 
         {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
@@ -209,33 +230,36 @@ export function DccReport() {
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
             {/* Coverage leads, as one line (decision 0224); who is behind is on Record's Recording
-                Status (decision 0340). The Senior Pastors read it there instead (owner,
-                2026-10-09), and see only a Sunday with no service, which section 9 names. */}
-            <div className="text-sm">
-              {seniorPastor ? null : (
-                <p>
-                  <span className="font-bold tabular-nums">
-                    {twelve.data.coverage.met} of {twelve.data.coverage.owed}
-                  </span>{' '}
-                  records filed {what}
-                </p>
-              )}
-              {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
-              {seniorPastor ? (
-                twelve.data.removed_events.length > 0 ? (
-                  <p className="text-muted">
-                    No service on {twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}
+                Progress (decision 0340). The Senior Pastors read it there instead (owner,
+                2026-10-09), and see only a Sunday with no service, which section 9 names. A Full
+                view leader reads it there too, and their Sundays are in the note (decision 0363). */}
+            {branchReader ? null : (
+              <div className="text-sm">
+                {seniorPastor ? null : (
+                  <p>
+                    <span className="font-bold tabular-nums">
+                      {twelve.data.coverage.met} of {twelve.data.coverage.owed}
+                    </span>{' '}
+                    records filed {what}
                   </p>
-                ) : null
-              ) : (
-                <p className="text-muted mt-1">
-                  {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
-                  {twelve.data.removed_events.length > 0
-                    ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
-                    : ''}
-                </p>
-              )}
-            </div>
+                )}
+                {/* Section 9: a removed Sunday is named rather than left as a smaller number. */}
+                {seniorPastor ? (
+                  twelve.data.removed_events.length > 0 ? (
+                    <p className="text-muted">
+                      No service on {twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}
+                    </p>
+                  ) : null
+                ) : (
+                  <p className="text-muted mt-1">
+                    {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
+                    {twelve.data.removed_events.length > 0
+                      ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                      : ''}
+                  </p>
+                )}
+              </div>
+            )}
 
             {subject?.kind === 'NETWORK' ? (
               // A Network's own total, by membership (decision 0219); its rows are the pastors'.
