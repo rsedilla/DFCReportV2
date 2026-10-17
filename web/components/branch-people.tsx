@@ -117,7 +117,7 @@ export function BranchPeoplePanel({
                   <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
                     <td className="px-3 py-3">
                       {row.leader === null ? (
-                        <span className="text-muted">A leader you don’t oversee</span>
+                        <span className="text-muted">A leader not named here</span>
                       ) : (
                         <Link
                           href={

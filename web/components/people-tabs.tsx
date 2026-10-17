@@ -9,8 +9,8 @@ import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
 /**
- * The tabs of the People item: People, then *# of People* in Branch's place (decision 0364) for a
- * reader of reports, and Family Tree on Full view screens alone (decision 0341). Each is its own address, so Back, a reload and every
+ * The tabs of the People item: People, then *# of People* in Branch's place (decision 0364) and
+ * Family Tree (decision 0341) on Full view screens alone. Each is its own address, so Back, a reload and every
  * existing link keep working. The chosen tab opens into the pane that holds everything of it
  * (owner's choice of 2026-10-05).
  */
@@ -32,9 +32,10 @@ export function PeopleTabs({
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  // **The recording screens have the People tab alone** (decision 0323), and *# of People* is a
-  // report, so only a reader of reports is offered it (decision 0364). No tabs until the server
-  // names the screens either, so no tab flashes (owner,
+  // **The recording screens have the People tab alone** (decision 0323); *# of People* and Family
+  // Tree are the Full view screens' (decisions 0341 and 0364), keyed on the screens the server
+  // names and never on a capability. No tabs until the server names the screens either, so no
+  // tab flashes (owner,
   // 2026-10-11). The pane stays where it is either way, so the screen inside it is not
   // remounted when the answer arrives and nothing typed into it is lost.
   const tabbed = !me.isPending && me.data?.screens !== 'RECORDING';
@@ -43,11 +44,7 @@ export function PeopleTabs({
     <>
       {tabbed ? (
         <nav aria-label="People" className={cn('mt-6 flex', TAB_ROW)}>
-          {TABS.filter((tab) => !tab.fullOnly || me.data?.screens === 'FULL').filter(
-            (tab) =>
-              tab.href !== '/people/number-of-people' ||
-              (me.data?.capabilities ?? []).some((grant) => grant.capability === 'reports.view_subtree'),
-          ).map((tab) => {
+          {TABS.filter((tab) => !tab.fullOnly || me.data?.screens === 'FULL').map((tab) => {
             const active = tab.href === current;
 
             return (

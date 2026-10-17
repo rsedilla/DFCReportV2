@@ -8,7 +8,8 @@ to replace the `Branch` tab everywhere. They chose it from mocks and then real s
 ## The ruling
 
 1. **`People` carries *Add People*, *# of People* and *Family Tree*.** *# of People* takes
-   `Branch`'s place, and is offered to an account holding `reports.view_subtree`.
+   `Branch`'s place, on the screens a Full view leader and the Admin have, as the server names
+   them (decision 0323, point 5).
 2. **A Full view leader's *# of People* is their own branch for a month**: a box headed *Your
    Disciples* with its people, one row per direct disciple counting them and everyone beneath
    them, their own row, and a total. A name opens that leader's count, with a way back. It is

@@ -37,7 +37,7 @@ test.describe('a Full view leader’s # of People', () => {
       /^Consuelo Bautista\s*14$/,
       /^Efren Dimaculangan\s*10$/,
       // A leader the reader may not open is counted and named nobody.
-      /^A leader you don’t oversee\s*17$/,
+      /^A leader not named here\s*17$/,
       /^You\s*1$/,
       /^Total\s*42$/,
     ]);

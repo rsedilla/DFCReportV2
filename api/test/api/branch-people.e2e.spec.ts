@@ -196,4 +196,73 @@ describe('GET /reports/people/branch (decision 0364)', () => {
     expect(response.status).toBe(422);
     expect(response.body.error?.code).toBe('VALIDATION_FAILED');
   });
+
+  /** An instant in a month, Manila noon on the given day. */
+  const dayOf = (month: string, day: string): Date =>
+    new Date(`${month.slice(0, 7)}-${day}T12:00:00+08:00`);
+
+  /** Closes a person's open assignment at an instant, as a reassignment or departure does. */
+  async function endAssignment(person: TestPerson, at: Date): Promise<void> {
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: at })
+      .where('person_id', '=', person.id)
+      .where('ended_at', 'is', null)
+      .execute();
+  }
+
+  it('reads a past month as it stood then, after a disciple has moved (decisions 0207 and 0214)', async () => {
+    const before = await lastMonth();
+    const thisMonth = new Date(Date.UTC(Number(before.slice(0, 4)), Number(before.slice(5, 7)), 1))
+      .toISOString()
+      .slice(0, 10);
+    // Dan, and Eva beneath him, move to Ben at the start of this month.
+    await endAssignment(dan, dayOf(thisMonth, '01'));
+    await assignTo(db, dan.id, ben.id, dayOf(thisMonth, '01'));
+
+    const then = (await branch(anaAccount, ana.id, before).expect(200)).body as Branch;
+    expect(then.rows.map((row) => row.leader?.id)).toEqual([dan.id, fe.id]);
+    expect(then.total).toBe(4);
+
+    const now = (await branch(anaAccount, ana.id, thisMonth).expect(200)).body as Branch;
+    expect(now.rows.map((row) => row.leader?.id)).toEqual([fe.id]);
+    expect(now.total).toBe(2);
+    // And Dan is no longer the reader's to open this month.
+    const response = await branch(anaAccount, dan.id, thisMonth);
+    expect({ status: response.status, code: response.body.error?.code }).toEqual({
+      status: 403,
+      code: 'SCOPE_DENIED',
+    });
+  });
+
+  it('counts a disciple the reader may not open as a row naming nobody, still adding up (decision 0254)', async () => {
+    const period = await lastMonth();
+    // Fe left Ana mid-month and holds no assignment since: section 20's placement graph keeps
+    // her under Ana for the month, while the tree at its end, which authorizes, does not.
+    await endAssignment(fe, dayOf(period, '10'));
+
+    const body = (await branch(anaAccount, ana.id, period).expect(200)).body as Branch;
+    expect(body.rows.map((row) => row.leader?.id ?? null)).toEqual([dan.id, null]);
+    expect(body.rows.reduce((sum, row) => sum + row.people, 0) + body.own).toBe(body.total);
+  });
+
+  it('answers no figures where section 20 refuses the month’s graph', async () => {
+    const period = await lastMonth();
+    // Two writes legal when made that leave a cycle on the month's placement graph, as
+    // `reporting-subtree.spec.ts` builds one: Pia under Quin to the 10th, Quin under Pia from
+    // the 12th to the 20th.
+    const pia = await createPerson(db, { firstName: 'Pia', lastName: 'Ramos', network: 'MENS' });
+    const quin = await createPerson(db, { firstName: 'Quin', lastName: 'Santos', network: 'MENS' });
+    await assignTo(db, pia.id, quin.id, dayOf(period, '01'));
+    await endAssignment(pia, dayOf(period, '10'));
+    await assignTo(db, quin.id, pia.id, dayOf(period, '12'));
+    await endAssignment(quin, dayOf(period, '20'));
+
+    const body = (await branch(anaAccount, ana.id, period).expect(200)).body as {
+      total: number | null;
+      own: number | null;
+      rows: unknown[] | null;
+    };
+    expect(body).toMatchObject({ total: null, own: null, rows: null });
+  });
 });
