@@ -249,8 +249,11 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       // The Growth frame renders only for a reader holding these, so without them the
-      // scan would never see it.
-      await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
+      // scan would never see it. Reports at Whole Church, as the Admin holds them, since a Full
+      // view leader is shown no Training half (decision 0360).
+      await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members'], {
+        wholeChurch: true,
+      });
       await mockPeople(page);
       await mockPastoralPath(page);
       await mockPersonGrowth(page);
@@ -1585,10 +1588,11 @@ const TARGET_SWEEP = [
     //
     // **Settled on the Growth frame's last link rather than on Edit details**, because the
     // frame renders nothing, not even "Loading…", until its lists answer, so the wait for
-    // every pending section below cannot see it. Its two links make five.
+    // every pending section below cannot see it. Its one link, a Full view leader being shown
+    // no Training half (decision 0360), makes four.
     settleRole: 'link' as const,
-    settle: 'Open Training',
-    minimum: 5,
+    settle: 'Open SUYNL',
+    minimum: 4,
   },
   {
     name: 'edit a person',
@@ -1714,101 +1718,102 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's four report tabs (decision 0340), the four
+    // A Full view leader's three report tabs (decisions 0340 and 0360), the four
     // period buttons, the navigator's two, the Figures for select and the three names of
-    // their 12 (decision 0293): **fourteen**. Settled on the last name, which renders from
+    // their 12 (decision 0293): **thirteen**. Settled on the last name, which renders from
     // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'link' as const,
     settle: 'Teresita Alcantara',
-    minimum: 14,
+    minimum: 13,
   },
   {
-    // The same controls as "dcc figures report": **fourteen** (decision 0294). The
+    // The same controls as "dcc figures report": **thirteen** (decision 0294). The
     // month-by-month table holds no control.
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 14,
+    minimum: 13,
   },
   {
-    // The same controls as "cell attendance report": **fourteen**. The month-by-month table
+    // The same controls as "cell attendance report": **thirteen**. The month-by-month table
     // holds no control.
     name: 'cell attendance report, year',
     route: '/reports/cells?period=year',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 14,
+    minimum: 13,
   },
   {
-    // The four report tabs, the four period buttons, the navigator's
+    // The three report tabs, the four period buttons, the navigator's
     // two, the Figures for select, the Back link and the one name in that leader's 12:
-    // **thirteen**.
+    // **twelve**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 13,
+    minimum: 12,
   },
   {
-    // The four report tabs, the four period buttons, the navigator's
+    // The three report tabs, the four period buttons, the navigator's
     // two, the Figures for select and the three names of the reader's 12 (decision 0294):
-    // **fourteen**, as CG Attendance.
+    // **thirteen**, as CG Attendance.
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'link' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 14,
+    minimum: 13,
   },
   {
-    // A Full view leader's four report tabs (decision 0340), the Next Encounter card's link
-    // to the seasons and the link to Growth (decision 0296), then the readiness table's three
-    // name buttons and the two "their 12" links, one per row whose leader leads anybody
-    // (decision 0297): **eleven**.
+    // A Full view leader's three report tabs (decisions 0340 and 0360), the Next Encounter
+    // card's link to the seasons and the link to Growth (decision 0296), then the readiness
+    // table's three name buttons and the two "their 12" links, one per row whose leader leads
+    // anybody (decision 0297): **ten**.
     // The cards are figures, not controls.
     name: 'suynl report',
     route: '/reports/suynl',
     settleRole: 'link' as const,
     settle: 'Tick lessons in Growth',
-    minimum: 11,
+    minimum: 10,
   },
   {
-    // The four report tabs, the card's link, Back to your report, the one row's name button
-    // and its "their 12" link, and the link to Growth: **nine**. Settled on the table's own
+    // The three report tabs, the card's link, Back to your report, the one row's name button
+    // and its "their 12" link, and the link to Growth: **eight**. Settled on the table's own
     // way back, which renders from the address, and then on every section loading.
     name: 'suynl report, one leader',
     route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 9,
+    minimum: 8,
   },
   {
-    // The three Growth tabs and Back to Training, the sweep's account being no
-    // administrator: **four**. The table holds no control for it.
+    // A Full view leader's one Growth tab and Back to SUYNL (decision 0360), the sweep's
+    // account being no administrator: **two**. The table holds no control for it.
     name: 'encounter seasons',
     route: '/growth/training/encounters',
     settleRole: 'link' as const,
-    settle: 'Back to Training',
-    minimum: 4,
+    settle: 'Back to SUYNL',
+    minimum: 2,
   },
   {
-    // A Full view leader's four report tabs, which carry no Training (decision 0340), and
-    // the link to Growth: **five**. The page is still reachable by its address.
+    // A Full view leader's three report tabs, which carry no Training (decisions 0340 and
+    // 0360), and the link to Growth: **four**. The page is still reachable by its address.
     name: 'training report',
     route: '/reports/training',
     settleRole: 'link' as const,
     settle: 'Record graduations in Growth',
-    minimum: 5,
+    minimum: 4,
   },
   {
-    // A Full view leader's four report tabs (decision 0340) and the link to Growth: **five**.
+    // A Full view leader's three report tabs, Conquest hidden but reachable by its address
+    // (decision 0360), and the link to Growth: **four**.
     name: 'conquest report',
     route: '/reports/conquest',
     settleRole: 'link' as const,
     settle: 'See each person in Growth',
-    minimum: 5,
+    minimum: 4,
   },
   {
     // Back link and two radios per person across two people. No Save: it appears once
@@ -1822,7 +1827,7 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The two tabs, three cards, the search, Search and the filter, the line's Show only
+    // The one tab (decision 0360), three cards, the search, Search and the filter, the line's Show only
     // those still to finish, four name links, twenty boxes across the two rows the reader
     // may file for, Edit lessons on the graduated row, and the two pager buttons. Settled
     // on Edit lessons, which renders from the data. Everyone, because the opening view
@@ -1830,10 +1835,10 @@ const TARGET_SWEEP = [
     name: 'growth suynl',
     route: '/growth/suynl?all=1',
     settle: 'Edit lessons',
-    minimum: 36,
+    minimum: 34,
   },
   {
-    // The two tabs, the link to the Encounter seasons (decision 0296), six cards, the search,
+    // The one tab (decision 0360), the link to the Encounter seasons (decision 0296), six cards, the search,
     // Search and the filter, the line's Show only those still to finish, four name links,
     // fifteen boxes, a date button per saved dated or undated graduation on the three rows
     // the reader may file for (seven), and the two pager buttons. Everyone, because the
@@ -1842,17 +1847,17 @@ const TARGET_SWEEP = [
     route: '/growth/training?all=1',
     settleRole: 'link' as const,
     settle: 'Lualhati Dizon',
-    minimum: 41,
+    minimum: 39,
   },
   {
-    // The three tabs, four cards, the search, Search and the filter, a name link per person
+    // The one tab (decision 0360), four cards, the search, Search and the filter, a name link per person
     // in the table and in the list below `lg` (six, the hidden rendering counted as on
     // "cell attendance report"), and the two pager buttons. No box: every goal is derived.
     name: 'growth conquest',
     route: '/growth/conquest',
     settleRole: 'link' as const,
     settle: 'Dalisay Soriano',
-    minimum: 18,
+    minimum: 16,
   },
 ] as const;
 

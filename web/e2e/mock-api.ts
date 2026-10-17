@@ -122,8 +122,12 @@ export async function mockAdministrator(page: Page): Promise<void> {
     read_only: false,
     source: 'ROLE',
   });
+  // Reports at Whole Church too, as the role gives them, so the Admin is no Full view leader
+  // and keeps every Growth tab (decision 0360).
   const capabilities = [
-    ...CAPABILITIES,
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree' ? wholeChurch(grant.capability) : grant,
+    ),
     wholeChurch('settings.manage'),
     wholeChurch('suynl.view_subtree'),
   ];
@@ -181,10 +185,20 @@ export const SIGNED_IN_PERSON_ID = ME.person_id;
  * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, as the two
  * below do. The shared grant list holds neither `people.manage_pastoral_assignment` nor
  * `dcc.correct_subtree`, so the controls those capabilities offer are reachable only here.
+ * `wholeChurch` widens the reporting grant as `mockWholeChurchReader` does, for a case about
+ * what a Full view leader is not shown (decision 0360).
  */
-export async function mockGrants(page: Page, extra: readonly string[]): Promise<void> {
+export async function mockGrants(
+  page: Page,
+  extra: readonly string[],
+  { wholeChurch = false }: { wholeChurch?: boolean } = {},
+): Promise<void> {
   const capabilities = [
-    ...CAPABILITIES,
+    ...CAPABILITIES.map((grant) =>
+      wholeChurch && grant.capability === 'reports.view_subtree'
+        ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
+        : grant,
+    ),
     ...extra.map((capability) => ({
       capability,
       scope_type: 'OWN_SUBTREE',

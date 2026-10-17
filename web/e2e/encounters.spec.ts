@@ -288,6 +288,7 @@ test.describe('the Encounter seasons page', () => {
   test('sits under Growth, Training marked current, and leads back to Training', async ({
     page,
   }) => {
+    await mockAdministrator(page);
     await mockEncounterSeasons(page);
     await page.goto('/growth/training/encounters');
 
@@ -302,6 +303,23 @@ test.describe('the Encounter seasons page', () => {
     await expect(page.getByRole('link', { name: 'Back to Training' })).toHaveAttribute(
       'href',
       '/growth/training',
+    );
+  });
+
+  test('for a Full view leader, SUYNL is marked current and the way back (decision 0360)', async ({
+    page,
+  }) => {
+    await mockEncounterSeasons(page);
+    await page.goto('/growth/training/encounters');
+
+    await expect(page.getByText('The Encounter God Weekends, set by an administrator.')).toBeVisible();
+    const tabs = page.getByRole('navigation', { name: 'Growth' });
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
+    await expect(tabs.locator('a[aria-current="page"]')).toHaveText('SUYNL');
+    await expect(page.getByRole('link', { name: 'Back to Training' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Back to SUYNL' })).toHaveAttribute(
+      'href',
+      '/growth/suynl',
     );
   });
 

@@ -6,6 +6,7 @@ import { type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { isBranchReader } from '@/components/reports-tabs';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { useSearchTerm } from '@/lib/search-term';
@@ -42,12 +43,15 @@ export function GrowthTabs({
   // No tabs until the server names the screens either, so they never flash (owner, 2026-10-11).
   // The pane stays where it is either way, so the screen inside is not remounted.
   const tabbed = !me.isPending && me.data?.screens !== 'RECORDING';
+  // **A Full view leader has SUYNL alone** (decision 0360): Training and Conquest are hidden,
+  // not withdrawn, so their pages still open by address and the tabs come back beside it.
+  const tabs = isBranchReader(me.data) ? TABS.filter((tab) => tab.href === '/growth/suynl') : TABS;
 
   return (
     <>
       {tabbed ? (
         <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
-          {TABS.map((tab) => {
+          {tabs.map((tab) => {
             const active = tab.href === current;
 
             return (
