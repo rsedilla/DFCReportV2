@@ -85,11 +85,11 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
       'Young Pro',
       'Couple',
     ]);
-    // The server's order, and each name a link in the link colour to that Primary's branch.
+    // The server's order, and each name a link in the link colour to that Primary's page (decision 0364).
     const names = mens.getByRole('link');
     await expect(names).toHaveText([SP_PRIMARIES.abad.full_name, SP_PRIMARIES.ocampo.full_name]);
     await expect(names.first()).toHaveClass(/text-accent/);
-    await expect(names.first()).toHaveAttribute('href', `/network?focus=${SP_PRIMARIES.abad.id}`);
+    await expect(names.first()).toHaveAttribute('href', `/people/${SP_PRIMARIES.abad.id}`);
     await expect(mens.getByRole('row').nth(1).getByRole('cell')).toHaveText([
       SP_PRIMARIES.abad.full_name,
       '2',

@@ -186,6 +186,22 @@ export interface ChurchCounts {
   branches: Map<string, ChurchCountFigures | null>;
 }
 
+/**
+ * *# of People* for one leader's branch over a month (decision 0364): the people that leader or
+ * anyone beneath them is, counted at the instant {@link ChurchCounts} counts at. Each row is one
+ * of the leader's direct disciples and everyone beneath them; `own` is the leader. A branch is a
+ * tree, so the rows and `own` add up to `total`. All three are null where section 20 refuses
+ * the graph.
+ */
+export interface BranchPeople {
+  period: string;
+  at: Date;
+  current: boolean;
+  total: number | null;
+  own: number | null;
+  rows: { leaderId: string; people: number }[] | null;
+}
+
 /** Per leader, how many records they owed in a run of days and how many have none. */
 type OwedByLeader = Map<string, { owed: number; unrecorded: number; late: number }>;
 
@@ -1357,6 +1373,48 @@ export class ReportingService {
         tables,
         others,
         branches: asked,
+      };
+    });
+  }
+
+  /**
+   * *# of People* for one leader's branch (decision 0364), a Full view leader's under People.
+   *
+   * **The Senior Pastors' figure one level down**, counted the same way: at the month's final
+   * millisecond where it has ended and now where it has not, nobody outside the pastoral tree
+   * at that instant (decision 0339), and placed on section 20's placement graph for the month,
+   * so a row here is the figure a # of People row would give that leader.
+   */
+  async branchPeople(leaderId: string, period: string): Promise<BranchPeople> {
+    return this.overPeriod(period, async (trx, bounds) => {
+      const now = await databaseNow(trx);
+      const current = now.getTime() < bounds.end.getTime();
+      const at = current ? now : bounds.end;
+
+      const outside = await this.people.outsideTreeAt(trx, at);
+      const people = new Set(
+        (await this.people.currentIdsAt(trx, at))
+          .filter((id) => !outside.has(id))
+          .map((id) => canonicalId(id)),
+      );
+      const count = (ids: readonly string[]): number =>
+        ids.filter((id) => people.has(canonicalId(id))).length;
+
+      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      if (graph.refused) {
+        return { period, at, current, total: null, own: null, rows: null };
+      }
+
+      return {
+        period,
+        at,
+        current,
+        total: count(graph.subtree(leaderId)),
+        own: count([leaderId]),
+        rows: graph.children(leaderId).map((id) => ({
+          leaderId: id,
+          people: count(graph.subtree(id)),
+        })),
       };
     });
   }

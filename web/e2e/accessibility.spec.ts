@@ -59,7 +59,7 @@ import {
   mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
-import { mockChurchCounts, mockTrends } from './mock-senior-pastor';
+import { mockBranchPeople, mockChurchCounts, mockTrends } from './mock-senior-pastor';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -929,6 +929,21 @@ const SCANS = [
     },
   },
   {
+    // # of People under People (decision 0364): the month control, the box, a named row, an
+    // unnamed one, the reader's own row and the total.
+    name: 'number of people',
+    route: '/people/number-of-people',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockBranchPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
+    },
+  },
+  {
     // The Family Tree tab (decision 0341), the reader's line open and one disciple's opened,
     // so the nested outline and both states of the disclosure button are checked.
     name: 'family tree',
@@ -1700,6 +1715,15 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
+    // The three People tabs, the month's two arrows, and the two named rows: **seven**.
+    // Settled on the last name, which renders from the data.
+    name: 'number of people',
+    route: '/people/number-of-people',
+    settleRole: 'link' as const,
+    settle: 'Efren Dimaculangan',
+    minimum: 7,
+  },
+  {
     // The three People tabs, the open and closed disclosure buttons, each name link and Show
     // more. Settled on Show more, which renders only once the first generation has arrived.
     name: 'family tree',
@@ -2245,6 +2269,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // two view capabilities, and no other screen reads them.
   await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
   await mockPersonGrowth(page);
+  await mockBranchPeople(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;
@@ -2515,13 +2540,13 @@ test('only the most specific navigation entry is marked as the current page', as
 
   await page.goto('/people');
 
-  // Branch is a tab of People (decisions 0288 and 0318): the tab is followed, and People stays
-  // the one current entry of the main navigation while the tab marks Branch.
+  // # of People is a tab of People (decision 0364): the tab is followed, and People stays the
+  // one current entry of the main navigation while the tab marks # of People.
   const navigation = page.getByRole('navigation', { name: 'Main' });
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await tabs.getByRole('link', { name: 'Branch', exact: true }).click();
+  await tabs.getByRole('link', { name: 'Number of People', exact: true }).click();
 
-  await expect(page).toHaveURL(/\/network$/);
+  await expect(page).toHaveURL(/\/people\/number-of-people$/);
 
   const current = navigation.locator('a[aria-current="page"]');
 
@@ -2529,30 +2554,32 @@ test('only the most specific navigation entry is marked as the current page', as
     1,
   );
   await expect(current).toHaveText('People');
-  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Branch');
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of People');
 });
 
 /**
- * People carries People and Branch, each marked on its own screen (decisions 0288 and 0318),
- * and on Full view screens Family Tree (decision 0341).
+ * People carries People and # of People in Branch's place (decision 0364), each marked on its
+ * own screen, and on Full view screens Family Tree (decision 0341).
  */
-test('the People item carries People, Branch and Family Tree tabs', async ({ page }) => {
+test('the People item carries People, # of People and Family Tree tabs', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['Add People', 'Branch', 'Family Tree']);
+  await expect(tabs.getByRole('link')).toHaveText(['Add People', '# of People', 'Family Tree']);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
-  await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveAttribute(
+  // The `#` label keeps its words as the link's name (section 23).
+  await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveAttribute(
     'href',
-    '/network',
+    '/people/number-of-people',
   );
+  await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
 
   await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toBeFocused();
+  await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toBeFocused();
 });
 
 /**

@@ -456,6 +456,36 @@ export async function getChurchCounts(period: string, signal?: AbortSignal): Pro
   );
 }
 
+/**
+ * `GET /reports/people/branch`: *# of People* for one leader's branch (decision 0364). The three
+ * figures are null where the placement graph is refused (section 20).
+ */
+export interface BranchPeople {
+  period: string;
+  current: boolean;
+  at: string;
+  total: number | null;
+  own: number | null;
+  rows:
+    | {
+        /** Null for a leader the reader may not open; the row still counts. */
+        leader: { id: string; member_id: string | null; full_name: string | null } | null;
+        people: number;
+      }[]
+    | null;
+}
+
+export async function getBranchPeople(
+  leaderId: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<BranchPeople> {
+  return authenticatedRequest<BranchPeople>(
+    `/api/v1/reports/people/branch?${new URLSearchParams({ period, scope: 'LEADER', leader_id: leaderId }).toString()}`,
+    { signal },
+  );
+}
+
 export type TrendFigure = 'CG' | 'DCC' | 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 
 /** `GET /reports/trends`: twelve months of one figure (decision 0326, point 4). */

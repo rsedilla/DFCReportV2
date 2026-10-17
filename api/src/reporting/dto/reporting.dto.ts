@@ -221,6 +221,23 @@ export class ChurchCountsDto {
   period!: string;
 }
 
+/**
+ * `GET /reports/people/branch`: *# of People* for one leader's branch (decision 0364). The
+ * selector is the report guard's, which admits `WHOLE_CHURCH` and `LEADER`; the controller
+ * refuses `WHOLE_CHURCH`, whose figure is `church-counts`, as `cells/twelve` refuses `CELL`.
+ */
+export class BranchPeopleDto {
+  @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
+  period!: string;
+
+  @IsIn(['WHOLE_CHURCH', 'LEADER'])
+  scope!: 'WHOLE_CHURCH' | 'LEADER';
+
+  @ValidateIf((dto: BranchPeopleDto) => dto.scope === 'LEADER')
+  @IsUUID()
+  leader_id?: string;
+}
+
 /** The five figures *Trends* draws (decision 0326, point 4; Cell Leaders, owner 2026-10-09). */
 export const TREND_FIGURES = ['CG', 'DCC', 'CELLS', 'CELL_LEADERS', 'PEOPLE'] as const;
 export type TrendFigure = (typeof TREND_FIGURES)[number];

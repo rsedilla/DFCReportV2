@@ -28,6 +28,7 @@ import type { NetworkName } from '../database/schema';
 import { PeopleReadService } from '../people/people.read.service';
 
 import {
+  BranchPeopleDto,
   CellByLeaderDto,
   CellMonthlyReportDto,
   CellTwelveDto,
@@ -605,6 +606,105 @@ export class ReportingController {
       },
       rows,
       others,
+    };
+  }
+
+  /**
+   * `GET /api/v1/reports/people/branch` -- *# of People* for one leader's branch over a month
+   * (decision 0364): the box, one row per direct disciple, and the leader's own row.
+   *
+   * **The report guard on a `LEADER` selector**, dated at the month as every report's is
+   * (decision 0207), so a Full view leader reads their own branch and anyone's beneath them,
+   * and nobody's above or beside. Their reach is checked again at the instant the figures were
+   * counted, and a row is named only where that leader would be admitted as a selector then,
+   * as a My 12 row is (decisions 0214 and 0254); any other stays a row, unnamed and not
+   * opening, so the rows still add up. In first-name order, never by a figure (section 13).
+   */
+  @Get('people/branch')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    periodFrom: 'query.period',
+  })
+  async branchPeople(
+    @Query() query: BranchPeopleDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    // The whole church's figure is `church-counts`; this route counts one leader's branch.
+    if (query.scope !== 'LEADER' || query.leader_id === undefined) {
+      throw new ValidationFailedError(
+        'This counts one leader’s branch: send scope LEADER with leader_id.',
+        { field: 'scope', value: query.scope },
+      );
+    }
+    const leaderId = query.leader_id;
+    await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
+    const counts = await this.reporting.branchPeople(leaderId, query.period);
+
+    const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
+      {
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: leaderId },
+        at: counts.at,
+      },
+    ]);
+    if (!reaches) {
+      throw new ScopeDeniedError('This report is outside your scope for the period asked.', {
+        scope: 'LEADER',
+      });
+    }
+
+    const rows = counts.rows ?? [];
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      rows.map((row) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: row.leaderId },
+        at: counts.at,
+      })),
+    );
+    const identities = await this.people.forDecisions(
+      rows.filter((_, index) => admitted[index]).map((row) => row.leaderId),
+    );
+
+    return {
+      period: counts.period,
+      current: counts.current,
+      at: counts.at.toISOString(),
+      total: counts.total,
+      own: counts.own,
+      rows:
+        counts.rows === null
+          ? null
+          : rows
+              .map((row, index) => {
+                const identity = admitted[index] ? identities.get(row.leaderId) : undefined;
+
+                return {
+                  key: identity === undefined ? null : rosterKeyOf(identity),
+                  row: {
+                    leader:
+                      identity === undefined
+                        ? null
+                        : {
+                            id: row.leaderId,
+                            member_id: identity.memberId,
+                            full_name: identity.fullName,
+                          },
+                    people: row.people,
+                  },
+                };
+              })
+              .sort((left, right) =>
+                left.key === null
+                  ? 1
+                  : right.key === null
+                    ? -1
+                    : compareRosterKeys(left.key, right.key),
+              )
+              .map((entry) => entry.row),
     };
   }
 

@@ -40,7 +40,7 @@ const LABEL: Record<Figure, string> = {
  * day, and the current month as of now, *so far*. The whole church first, then one table for
  * each root's direct leaders, the Men's root first, then *Others*, so the rows and *Others*
  * add up to the whole church. Rows are in first-name order, never sorted by a figure, never
- * numbered or coloured (sections 13 and 17); each name opens that leader's branch.
+ * numbered or coloured (sections 13 and 17); each name opens that leader's page (decision 0364).
  */
 export function ChurchCountsPanel({
   figure,
@@ -126,7 +126,7 @@ export function ChurchCountsPanel({
 }
 
 /** The month's instant, in words: *as at today, so far* or *as at 31 October 2026*. */
-function asAt(month: string, current: boolean): string {
+export function asAt(month: string, current: boolean): string {
   if (current) {
     return 'as at today, so far';
   }
@@ -224,7 +224,8 @@ function BranchLink({
 }) {
   return (
     <Link
-      href={`/network?focus=${leader.id}`}
+      // The person's page, Branch having left People (decision 0364).
+      href={`/people/${leader.id}`}
       // Red, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >

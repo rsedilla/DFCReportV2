@@ -81,6 +81,56 @@ export async function mockChurchCounts(page: Page): Promise<string[]> {
   return asked;
 }
 
+/**
+ * `GET /reports/people/branch` (decision 0364): a Full view leader's *# of People*. The reader's
+ * branch is two named disciples, one the reader may not open, and themselves; Consuelo's, opened,
+ * is Lourdes and herself. The leader and period asked are returned for a case to check. Names
+ * are invented.
+ */
+export async function mockBranchPeople(page: Page): Promise<{ leader: string; period: string }[]> {
+  const asked: { leader: string; period: string }[] = [];
+  const named = (id: string, memberId: string, fullName: string) => ({
+    id,
+    member_id: memberId,
+    full_name: fullName,
+  });
+  await page.route('**/api/v1/reports/people/branch?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const leader = params.get('leader_id') ?? '';
+    const period = params.get('period') ?? '';
+    asked.push({ leader, period });
+    const consuelo = leader === '3f1b7c6e-0000-4000-8000-000000000701';
+    return route.fulfill(
+      json({
+        period,
+        current: period === '2026-10-01',
+        at: '2026-10-08T02:00:00.000Z',
+        total: consuelo ? 4 : 42,
+        own: 1,
+        rows: consuelo
+          ? [
+              {
+                leader: named('3f1b7c6e-0000-4000-8000-000000000703', 'M-000803', 'Lourdes Magsaysay'),
+                people: 3,
+              },
+            ]
+          : [
+              {
+                leader: named('3f1b7c6e-0000-4000-8000-000000000701', 'M-000801', 'Consuelo Bautista'),
+                people: 14,
+              },
+              {
+                leader: named('3f1b7c6e-0000-4000-8000-000000000702', 'M-000802', 'Efren Dimaculangan'),
+                people: 10,
+              },
+              { leader: null, people: 17 },
+            ],
+      }),
+    );
+  });
+  return asked;
+}
+
 const MONTHS = [
   '2025-11-01',
   '2025-12-01',

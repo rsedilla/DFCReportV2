@@ -215,6 +215,10 @@
       "screen": "web/components/church-counts.tsx"
     },
     {
+      "route": "GET /api/v1/reports/people/branch",
+      "screen": "web/components/branch-people.tsx"
+    },
+    {
       "route": "GET /api/v1/reports/trends",
       "screen": "web/app/trends/page.tsx"
     },
