@@ -231,11 +231,7 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
       <h2 id="ready-heading" className="field-label">
         {title} · SUYNL, getting ready for the Encounter
       </h2>
-      <p className="text-muted mt-1 text-sm leading-relaxed">
-        Each row counts that leader and everyone under them, as of today. People already at the
-        Encounter or in Life Class are not counted.
-        {readiness.rows.length > 0 ? ' Open a name to see the people.' : ''}
-      </p>
+      {/* No note under the heading (owner, 2026-10-17): the page's own line says "as of today". */}
       <Table caption={`${title} · SUYNL readiness`} className="mt-3">
         <thead>
           <tr>
