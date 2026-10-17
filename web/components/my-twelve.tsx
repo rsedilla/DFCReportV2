@@ -46,18 +46,25 @@ export function PeriodTabs({
   value,
   onChange,
   inBar = false,
+  labelled = false,
 }: {
   value: RangeKind;
   onChange: (value: RangeKind) => void;
   /** Inside the control bar, beside the period it chooses (the Senior Pastors, owner 2026-10-09). */
   inBar?: boolean;
+  /**
+   * Under its *Show* label in a Full view leader's one row of controls (decision 0363, owner
+   * 2026-10-18): each button as wide as the longest word, so the row fits beside the period
+   * and Figures for.
+   */
+  labelled?: boolean;
 }) {
   return (
     <ViewSwitch
       label="Report period"
       options={PERIODS.map(([key, label]) => ({ key, label }))}
-      even
-      className={inBar ? 'mt-0 w-auto' : undefined}
+      even={labelled ? 'content' : true}
+      className={labelled ? 'mt-2' : inBar ? 'mt-0 w-auto' : undefined}
       value={value}
       onChange={onChange}
     />

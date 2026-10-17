@@ -633,6 +633,54 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
   });
 });
 
+/**
+ * A Full view leader's controls (decision 0363, owner 2026-10-18): Show, the period and Figures
+ * for side by side from a laptop's width, each the same height, the note under them; stacked on
+ * a phone, where they cannot fit.
+ */
+test.describe('a Full view leader’s report controls', () => {
+  const ROW = [
+    { width: 1920, height: 900, row: true },
+    { width: 1280, height: 800, row: true },
+    { width: 390, height: 844, row: false },
+  ] as const;
+
+  for (const { width, height, row } of ROW) {
+    for (const path of ['/reports/cells', '/reports/dcc']) {
+      test(`${path} at ${width}px ${row ? 'sits in one row' : 'stacks'}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW);
+        await page.setViewportSize({ width, height });
+        await mockSignedIn(page);
+        await mockCellTwelve(page, { today: '2026-06-20' });
+        await mockDccTwelve(page, { today: '2026-06-20' });
+        await page.goto(path);
+        await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+
+        const tops = await Promise.all(
+          [
+            page.getByRole('group', { name: 'Report period' }),
+            page.getByRole('button', { name: 'The period before' }),
+            page.getByRole('combobox', { name: 'Figures for' }),
+          ].map(async (control) => Math.round((await control.boundingBox())!.y)),
+        );
+        if (row) {
+          expect(new Set(tops).size, `${path}: the three controls share one row`).toBe(1);
+        } else {
+          expect(tops[0]).toBeLessThan(tops[1]);
+          expect(tops[1]).toBeLessThan(tops[2]);
+        }
+
+        const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(scrollWidth, `${path} scrolls sideways at ${width}px`).toBeLessThanOrEqual(clientWidth);
+      });
+    }
+  }
+});
+
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
    * A whole-church reader's five (decision 0292): equal, two across on a phone and one row from
