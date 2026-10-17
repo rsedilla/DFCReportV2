@@ -733,10 +733,10 @@ const SCANS = [
     },
   },
   {
-    // The Senior Pastors' Record opens on Recording status (decision 0325): two Whole Church
+    // The Senior Pastors' Record opens on Recording Progress (decision 0325): two Whole Church
     // boxes, a table per root's direct leaders, and Others. Completed is a pale red label,
     // the one status shown by colour, which is why its contrast is worth scanning.
-    name: 'record, recording status',
+    name: 'record, recording progress',
     route: '/dashboard',
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
@@ -819,7 +819,7 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
       // A Cell meeting's row, the half the screen opens on. A Sunday's row is behind
       // DCC and is scanned under "dashboard, own DCC checklist".
       await expect(
@@ -854,7 +854,7 @@ const SCANS = [
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
       await page
-        .getByRole('group', { name: 'Update Record' })
+        .getByRole('group', { name: 'Update Records' })
         .getByRole('button', { name: /^DCC/ })
         .click();
       await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
@@ -1893,7 +1893,7 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the primitive measured on every screen.',
   },
   {
-    name: 'record, recording status',
+    name: 'record, recording progress',
     why:
       'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
       'full-view.spec.ts, on the same fixture.',

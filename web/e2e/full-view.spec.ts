@@ -37,7 +37,7 @@ import { mockSuynl } from './mock-growth';
  *
  * A Recording-only account (`screens: 'RECORDING'`) has `Record · People · My Cell · SUYNL`,
  * one list on Record, no Branch tab, its own Cells with no removal, and SUYNL as an item of
- * its own. A Senior Pastor (`screens: 'SENIOR_PASTOR'`) opens Record on Recording status. Full
+ * its own. A Senior Pastor (`screens: 'SENIOR_PASTOR'`) opens Record on Recording Progress. Full
  * view is ticked on the person page by a holder of `roles.manage`.
  *
  * What these screens leave out is not what keeps a route closed: the API refuses decision
@@ -139,7 +139,10 @@ test.describe('a Recording-only account (decision 0323)', () => {
     // An address naming another list still opens the one this account has.
     await page.goto('/dashboard?list=behind');
 
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
+    // No tab row names the list here, so its heading and line stay (decision 0362).
+    await expect(page.getByRole('heading', { level: 2, name: 'Update Records' })).toBeVisible();
+    await expect(page.getByText(/^Still to record this month/)).toBeVisible();
     await expect(page.getByText('What still needs a record.')).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
@@ -147,7 +150,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Recording Progress' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
     // Its other lists and the month figures are not asked for, and the API's refusals are
@@ -171,7 +174,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     // The branch view in the address is not honoured when the server withholds it.
     await page.goto('/dashboard?whose=branch');
 
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
     ).toBeVisible();
@@ -730,38 +733,38 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     return page.getByText(label, { exact: true }).locator('..');
   }
 
-  test('opens on Recording status, with Awaiting a record as the other tab', async ({ page }) => {
+  test('opens on Recording Progress, with Awaiting a record as the other tab', async ({ page }) => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSeniorPastor(page);
 
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Record' });
-    await expect(tabs.getByRole('button')).toHaveText(['Recording Status', /^Update Record/]);
-    await expect(tabs.getByRole('button', { name: 'Recording status' })).toHaveAttribute(
+    await expect(tabs.getByRole('button')).toHaveText(['Recording Progress', /^Update Records/]);
+    await expect(tabs.getByRole('button', { name: 'Recording Progress' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     // No heading of its own: the tab names it (decision 0327).
-    await expect(page.getByRole('region', { name: 'Recording status' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recording Progress' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
     // None of the other lists of section 19, and no month figures.
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
 
-    await tabs.getByRole('button', { name: /^Update Record/ }).click();
+    await tabs.getByRole('button', { name: /^Update Records/ }).click();
 
     await expect(page).toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Recording status' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Recording Progress' })).toHaveCount(0);
     // Their own work only: no Whose switch.
     await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /^Record Young Pro · / }).first()).toBeVisible();
 
-    await tabs.getByRole('button', { name: 'Recording status' }).click();
+    await tabs.getByRole('button', { name: 'Recording Progress' }).click();
     await expect(page).not.toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('region', { name: 'Recording status' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
   });
 
   test('opens on the current week and asks for the period the Week and Month switch names', async ({
@@ -968,11 +971,11 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
   });
 
   // WCAG 2.5.8, measured here because the accessibility sweep signs in no Senior Pastor (its
-  // TARGET_EXEMPT entry for "record, recording status" points here). Measured as that sweep
+  // TARGET_EXEMPT entry for "record, recording progress" points here). Measured as that sweep
   // measures: focused, and by the label a control sits in where it has one. A phone width,
   // where the tables are cards, and a desktop one, where they are tables.
   for (const width of [390, 1280]) {
-    test(`every control on Recording status is at least 24 by 24 at ${width}px`, async ({
+    test(`every control on Recording Progress is at least 24 by 24 at ${width}px`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -1047,10 +1050,10 @@ test('a Recording-only account never sees the five items while the server answer
 });
 
 /**
- * A Full view leader's Recording Status (decision 0334): the last of Record's tabs, for a
+ * A Full view leader's Recording Progress (decision 0334): the last of Record's tabs, for a
  * reader whose role reads reports over their own branch, and reading that branch.
  */
-test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
+test.describe('a Full view leader’s Recording Progress (decision 0334)', () => {
   const column = (recorded: number, owed: number) => ({ recorded, owed });
 
   async function mockFullRecord(page: Page) {
@@ -1110,7 +1113,7 @@ test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
     await expect(tabs).toHaveCount(6);
-    await expect(tabs.last()).toHaveText('Recording Status');
+    await expect(tabs.last()).toHaveText('Recording Progress');
     await tabs.last().click();
 
     await expect(page.getByText('How your 12 are recording this week.')).toBeVisible();
@@ -1134,6 +1137,6 @@ test.describe('a Full view leader’s Recording Status (decision 0334)', () => {
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
     await expect(tabs).toHaveCount(5);
-    await expect(page.getByRole('button', { name: 'Recording Status' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Recording Progress' })).toHaveCount(0);
   });
 });

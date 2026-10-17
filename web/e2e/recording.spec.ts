@@ -385,8 +385,8 @@ test.describe('a Sunday with a mark already recorded', () => {
   });
 
   // Decision 0338: the Sunday says what is left in Not recorded's words, and once saved its
-  // link back opens Update Record on DCC, the half just recorded.
-  test('says what is left to mark, and links back to Update Record on DCC once saved', async ({
+  // link back opens Update Records on DCC, the half just recorded.
+  test('says what is left to mark, and links back to Update Records on DCC once saved', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -404,7 +404,7 @@ test.describe('a Sunday with a mark already recorded', () => {
       .check();
     await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
-    await expect(page.getByRole('link', { name: 'Back to Update Record' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
       'href',
       '/dashboard?list=awaiting&kind=dcc',
     );
@@ -956,7 +956,7 @@ test.describe('the Record queue', () => {
 
     // Nor does a count: a queue that was not read is not a queue of 0, and the Sundays
     // alone are not the whole of it. Each button's whole name is its label.
-    await expect(recordLists(page).getByRole('button', { name: 'Update Record', exact: true })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: 'Update Records', exact: true })).toBeVisible();
     await expect(awaitingHalves(page).getByRole('button', { name: 'Cell Group', exact: true })).toBeVisible();
     await expect(
       awaitingHalves(page).getByRole('button', { name: 'DCC', exact: true }),
@@ -1022,14 +1022,14 @@ test.describe('the Record queue', () => {
     // The roster mock answers `meeting: null` on every read, so a saved meeting does
     // not read back as recorded; the submission having been made is what to wait for.
     await expect.poll(() => submitted).toBe(1);
-    await expect(page.getByRole('link', { name: 'Back to Update Record' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
       'href',
       '/dashboard?list=awaiting',
     );
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Record' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
     await expect.poll(() => asked).toBe(2);
   });
 
@@ -1185,7 +1185,7 @@ test.describe('the Record queue', () => {
 
     answer = [];
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
   });
 
@@ -1350,7 +1350,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toBeVisible();
     await expect(
       page
-        .getByRole('table', { name: 'Update Record, Ana Lim' })
+        .getByRole('table', { name: 'Update Records, Ana Lim' })
         .getByRole('row')
         .filter({ hasText: 'Young Pro · Fri' })
         .getByRole('cell')
@@ -1411,7 +1411,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard?whose=branch');
 
-    const lines = page.getByRole('region', { name: 'Update Record' }).getByRole('button', {
+    const lines = page.getByRole('region', { name: 'Update Records' }).getByRole('button', {
       name: /^(Ana Lim|Teofilo Ramos \(you\))$/,
     });
     // Ana before Teofilo: first-name order, whoever the reader is.
@@ -1444,7 +1444,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByText('June is open until the end of Tuesday 7 July.')).toBeVisible();
     await page.getByRole('button', { name: 'Ana Lim' }).click();
     await expect(
-      page.getByRole('table', { name: 'Update Record, Ana Lim' }).getByText('Closes end of Tue 7 Jul').first(),
+      page.getByRole('table', { name: 'Update Records, Ana Lim' }).getByText('Closes end of Tue 7 Jul').first(),
     ).toBeVisible();
 
     await page.getByRole('radio', { name: 'Own ' }).check();
@@ -1481,7 +1481,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     // One meeting of the reader's own, and the two Sundays with somebody still unmarked.
     await expect(halves.getByRole('button', { name: /^Cell Group\s*1$/ })).toBeVisible();
     await expect(halves.getByRole('button', { name: /^DCC\s*2$/ })).toBeVisible();
-    await expect(recordLists(page).getByRole('button', { name: /^Update Record\s*3$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Update Records\s*3$/ })).toBeVisible();
 
     await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^Record DCC · / })).toHaveCount(0);
@@ -1556,7 +1556,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
 
     // One line per leader, by first name (decisions 0311 and 0359): Carlo, then The reader.
-    const region = page.getByRole('region', { name: 'Update Record' });
+    const region = page.getByRole('region', { name: 'Update Records' });
     const owedLines = region.getByRole('button', { name: /^(The reader \(you\)|Carlo Reyes)$/ });
     await expect(owedLines).toHaveCount(2);
     await expect(owedLines.nth(0)).toHaveAccessibleName('Carlo Reyes');
@@ -1605,7 +1605,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await mockDccOwed(page);
 
     await page.goto('/dashboard?kind=dcc&whose=branch');
-    const region = page.getByRole('region', { name: 'Update Record' });
+    const region = page.getByRole('region', { name: 'Update Records' });
     await region.getByRole('button', { name: 'Carlo Reyes' }).click();
 
     const row = page
@@ -1653,7 +1653,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 
     await page.goto('/dashboard?kind=dcc&whose=branch');
     await page
-      .getByRole('region', { name: 'Update Record' })
+      .getByRole('region', { name: 'Update Records' })
       .getByRole('button', { name: 'Carlo Reyes' })
       .click();
 
@@ -1758,7 +1758,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await chooseList(page, /^Awaiting Leader Assignment/);
     await expect(page).toHaveURL(/list=leader/);
 
-    await chooseList(page, /^Update Record/);
+    await chooseList(page, /^Update Records/);
     await expect(page).not.toHaveURL(/list=/);
     await chooseDcc(page);
     await expect(page).toHaveURL(/kind=dcc/);
@@ -1871,7 +1871,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
   }
 
-  test('opens on five buttons of one size, each with its count, Update Record chosen', async ({
+  test('opens on five buttons of one size, each with its count, Update Records chosen', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1885,7 +1885,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     // Two meetings of the reader's own and two Sundays; one Cell behind; no leader behind on
     // DCC; two people on each of the people lists.
     for (const name of [
-      /^Update Record\s*4$/,
+      /^Update Records\s*4$/,
       /^Pending CG Records\s*1$/,
       // A count of 0 is left off (decision 0349).
       /^Pending DCC Records$/,
@@ -1894,7 +1894,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     ]) {
       await expect(lists.getByRole('button', { name })).toBeVisible();
     }
-    await expect(lists.getByRole('button', { name: /^Update Record/ })).toHaveAttribute(
+    await expect(lists.getByRole('button', { name: /^Update Records/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1918,8 +1918,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
     expect(tops).toBe(1);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
 
-    // Only the chosen list is on the page.
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    // Only the chosen list is on the page, and the tab names it: no heading repeats the name
+    // inside it (decision 0362).
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Update Records' })).toHaveCount(0);
+    await expect(page.getByText(/^Still to record this month/)).toHaveCount(0);
     for (const name of [
       'Pending CG Records',
       'Pending DCC Records',
@@ -2029,7 +2032,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
     // The queue is read whole, so its count carries no "+".
-    await expect(lists.getByRole('button', { name: /^Update Record\s*4$/ })).toBeVisible();
+    await expect(lists.getByRole('button', { name: /^Update Records\s*4$/ })).toBeVisible();
   });
 
   test('switches between the lists, showing one at a time', async ({ page }) => {
@@ -2044,11 +2047,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
       'aria-pressed',
       'true',
     );
-    await expect(recordLists(page).getByRole('button', { name: /^Update Record/ })).toHaveAttribute(
+    await expect(recordLists(page).getByRole('button', { name: /^Update Records/ })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
     const behind = page.getByRole('table', { name: 'Pending CG Records' });
     await expect(behind.getByRole('columnheader')).toHaveText([
       'Cell',
@@ -2096,8 +2099,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page.locator('a[href="/people/awaiting-reassignment"]')).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Open the full list|See everyone/ })).toHaveCount(0);
 
-    await chooseList(page, /^Update Record/);
-    await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
+    await chooseList(page, /^Update Records/);
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Awaiting CG Assignment' })).toHaveCount(0);
   });
 
@@ -2279,7 +2282,7 @@ async function chooseList(page: Page, name: RegExp) {
 
 /** Awaiting a record's two halves, Cell Group and DCC (decision 0290). */
 function awaitingHalves(page: Page) {
-  return page.getByRole('group', { name: 'Update Record', exact: true });
+  return page.getByRole('group', { name: 'Update Records', exact: true });
 }
 
 async function chooseDcc(page: Page) {
@@ -2288,7 +2291,7 @@ async function chooseDcc(page: Page) {
 
 /** The queue as a table, which is what is shown from `lg`. */
 function awaitingTable(page: Page) {
-  return page.getByRole('table', { name: 'Update Record', exact: true });
+  return page.getByRole('table', { name: 'Update Records', exact: true });
 }
 
 test.describe('your month, from the queue (owner’s design, 2026-09-19)', () => {

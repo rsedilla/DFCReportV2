@@ -24,7 +24,7 @@ import {
 type Kind = 'WEEK' | 'MONTH';
 
 /**
- * The Senior Pastors' *Recording status* (SKILL.md section 19, decision 0325): whether the
+ * The Senior Pastors' *Recording Progress* (SKILL.md section 19, decision 0325): whether the
  * church has recorded, for a week or a month, opening on the current week.
  *
  * **Every figure is the server's**, the two percentages included: the boxes are the only
@@ -52,7 +52,7 @@ export function RecordingStatusPanel() {
 
   return (
     // No heading of its own: the tab above names it (owner, 2026-10-09).
-    <section aria-label="Recording Status">
+    <section aria-label="Recording Progress">
 
       <ViewSwitch
         label="Period"
@@ -156,7 +156,7 @@ export function RecordingStatusPanel() {
 }
 
 /**
- * A Full view leader's *Recording Status* (decision 0334): the Senior Pastors' tab one level
+ * A Full view leader's *Recording Progress* (decision 0334): the Senior Pastors' tab one level
  * down, for the reader's own branch. Boxes for everyone beneath them, then one row per leader
  * of their 12, each counting that leader and everyone beneath. Week and Month, as above.
  */
@@ -177,7 +177,7 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
   const data = status.data;
 
   return (
-    <section aria-label="Recording Status">
+    <section aria-label="Recording Progress">
       <p className="text-muted text-sm">How your 12 are recording this {unit}.</p>
 
       <ViewSwitch
@@ -313,7 +313,7 @@ function rowFigure(column: RecordingColumn, deadline: boolean): string {
 }
 
 /**
- * The week a Recording Status opens on: the one whose deadline last passed, 12 noon on the
+ * The week a Recording Progress opens on: the one whose deadline last passed, 12 noon on the
  * Monday after it (decision 0335). Null before the first deadline, 2 November 2026, so the
  * screen opens on the current week as it did.
  */

@@ -145,12 +145,12 @@
     {
       "route": "GET /api/v1/reports/dcc/monthly/by-leader",
       "no_screen_owed": true,
-      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Status says who is behind. The route stays."
+      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Progress says who is behind. The route stays."
     },
     {
       "route": "GET /api/v1/reports/cells/monthly/by-leader",
       "no_screen_owed": true,
-      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Status says who is behind. The route stays."
+      "reason": "Filed Reports' By leader table (decision 0254) was its one screen, and Filed Reports is withdrawn (decision 0340): Record's Recording Progress says who is behind. The route stays."
     },
     {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
