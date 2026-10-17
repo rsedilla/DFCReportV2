@@ -2,8 +2,8 @@ import { unresolvableCursor } from './cursor';
 import { isStorableText } from './text/storable-text';
 
 /**
- * The opaque cursor for a collection ordered by `(last_name, first_name, member_id)`
- * (SKILL.md section 22).
+ * The opaque cursor for a collection ordered by `(first_name, last_name, member_id)`
+ * (SKILL.md section 22; surname first until decision 0359).
  *
  * **Two routes page by exactly this key**, in two modules, which is why the file is
  * here rather than in either: `GET /api/v1/cells/{id}/members` and
@@ -112,8 +112,8 @@ export function rosterKeyOf(identity: RosterCursor): RosterCursor {
 }
 
 /**
- * The roster order, for a list assembled in application code: last name, first name,
- * Member ID, lexicographic over the three in turn.
+ * The roster order, for a list assembled in application code: first name, last name,
+ * Member ID, lexicographic over the three in turn (SKILL.md section 22, decision 0359).
  *
  * `localeCompare` deliberately, and every in-memory roster sorts with this same function: a
  * comparison ordering differently from the sort would put a page boundary somewhere the sort
@@ -122,8 +122,8 @@ export function rosterKeyOf(identity: RosterCursor): RosterCursor {
  */
 export function compareRosterKeys(left: RosterCursor, right: RosterCursor): number {
   return (
-    left.lastName.localeCompare(right.lastName) ||
     left.firstName.localeCompare(right.firstName) ||
+    left.lastName.localeCompare(right.lastName) ||
     left.memberId.localeCompare(right.memberId)
   );
 }

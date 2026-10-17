@@ -225,7 +225,7 @@ export class ReportingController {
    * the subject's own disciple, so every row is named in practice; one that is not stays a
    * row, unnamed and not opening, so the People column still reconciles.
    *
-   * **In surname order, or a whole-church reader's in Network order, never by a figure**
+   * **In first-name order, or a whole-church reader's in Network order, never by a figure**
    * (section 13, decision 0293): no row numbers, and
    * nothing a client can sort by a count.
    */
@@ -344,7 +344,7 @@ export class ReportingController {
   /**
    * The Senior Pastors' *Recording status* (decision 0325): whether the church has recorded,
    * for a week or a month, as Whole Church boxes, one table per root's direct leaders in
-   * surname order, and an *Others* line.
+   * first-name order, and an *Others* line.
    *
    * **Whole Church only** (point 8): `reports.view_subtree` against the church, so a reader
    * holding it over a subtree is refused rather than handed a narrower screen under a
@@ -451,7 +451,7 @@ export class ReportingController {
   /**
    * A Full view leader's *Recording Status* (decision 0334): the Senior Pastors' tab for one
    * branch. Boxes for everyone beneath the leader, then one row per direct leader counting
-   * that leader and everyone beneath them, in surname order.
+   * that leader and everyone beneath them, in first-name order.
    *
    * Placed by the guard as a My 12 table is, so `reports.view_subtree` over the leader at the
    * period's instant. **A row is named only where the reader could open that leader as a
@@ -760,7 +760,7 @@ export class ReportingController {
     return { values, open: church.open };
   }
 
-  /** Names identities and orders them by surname, first name and Member ID, never by a figure. */
+  /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
   private async namer(ids: readonly string[]): Promise<{
     person: (id: string) => { id: string; member_id: string | null; full_name: string | null };
     byName: (left: string, right: string) => number;

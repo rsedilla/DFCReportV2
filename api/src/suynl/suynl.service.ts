@@ -190,7 +190,7 @@ export class SuynlService {
    * **`names: false` leaves each row's people out** (checklist row perf-suynl-readiness): a
    * whole-church table carries every counted name in the church, and the screen asks for a
    * row's people only when its name is opened, from the same route for that leader, with
-   * **`totalNames`**, which lists the total's people as one list in surname order.
+   * **`totalNames`**, which lists the total's people as one list in first-name order.
    */
   async readiness(
     actor: Actor,
@@ -283,7 +283,7 @@ export class SuynlService {
           row,
           identity: identities.get(row.leaderId) ?? identities.get(canonicalId(row.leaderId)),
         }))
-        // A whole-church reader's rows are in Network order, a leader's in surname order,
+        // A whole-church reader's rows are in Network order, a leader's in first-name order,
         // and never by a figure (sections 13 and 17, decision 0293).
         .sort((left, right) =>
           left.row.network !== null && right.row.network !== null

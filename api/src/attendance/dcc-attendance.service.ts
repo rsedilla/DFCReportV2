@@ -758,7 +758,7 @@ export class DccAttendanceService {
       };
     });
 
-    // `(last_name, first_name, member_id)`, which is section 8's directory order and
+    // `(first_name, last_name, member_id)`, which is section 8's directory order and
     // the key `GET /cells/{id}/members` already pages by. Total: two people
     // legitimately share a name, so the Member ID breaks the tie (sections 3 and 22).
     lines.sort(compareRosterKeys);

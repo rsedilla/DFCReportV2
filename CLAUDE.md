@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-17, the trigger being decision 0358: of 357 files, 356 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0358 each moved the first two and
+2026-10-17, the trigger being decision 0359: of 358 files, 357 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0359 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-17 and triggered by 0358, and was left stale by 0359 the same day. The one before that was dated
 2026-10-16 and triggered by 0357, and was left stale by 0358 the next day. The one before that was dated
 2026-10-16 and triggered by 0356, and was left stale by 0357 the same day. The one before that was dated
 2026-10-16 and triggered by 0355, and was left stale by 0356 the same day. The one before that was dated
@@ -759,6 +760,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-16 — [An administrator ticks who moves people to another leader](docs/decisions/0356-an-administrator-ticks-who-moves-people.md)
 - 2026-10-16 — [The Primary moves a member to another Cell](docs/decisions/0357-the-primary-moves-a-member-to-another-cell.md)
 - 2026-10-17 — [Pending CG Records and Pending DCC Records](docs/decisions/0358-pending-cg-and-dcc-records.md)
+- 2026-10-17 — [Lists of people in first-name order](docs/decisions/0359-lists-of-people-in-first-name-order.md)
 
 ### Open — awaiting a ruling
 

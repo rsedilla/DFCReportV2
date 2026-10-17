@@ -246,7 +246,8 @@ test.describe('My 12 on DCC', () => {
     const rows = table.locator('tbody tr');
     await expect(rows).toHaveCount(6);
 
-    for (const [index, leader] of [TWELVE.teresita, TWELVE.consuelo, TWELVE.efren].entries()) {
+    // First-name order as sent (decision 0359), which is 4, 0, 3 by Total.
+    for (const [index, leader] of [TWELVE.consuelo, TWELVE.efren, TWELVE.teresita].entries()) {
       await expect(rows.nth(index).getByRole('cell').first()).toHaveText(leader.full_name);
       await expect(rows.nth(index).getByRole('link', { name: leader.full_name })).toHaveAttribute(
         'href',
@@ -262,7 +263,7 @@ test.describe('My 12 on DCC', () => {
     await expect(table.getByText('Counted under more than one leader', { exact: true })).toHaveCount(0);
     await expect(table.getByText(/Cell [Gg]roup|no Cell of/)).toHaveCount(0);
 
-    // The Total column adds up in plain sight (section 20): 3 + 4 + 0 + 1 + 2 = 10.
+    // The Total column adds up in plain sight (section 20): 4 + 0 + 3 + 1 + 2 = 10.
     const totals = await Promise.all(
       [0, 1, 2, 3].map(async (index) => Number((await cellsOf(rows.nth(index)))[1])),
     );
@@ -413,9 +414,9 @@ test.describe('My 12 on DCC', () => {
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
     await expect(select.locator('option')).toHaveText([
       'People you oversee',
-      'Teresita Alcantara',
       'Consuelo Bautista',
       'Efren Dimaculangan',
+      'Teresita Alcantara',
     ]);
   });
 });

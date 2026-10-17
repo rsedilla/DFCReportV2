@@ -163,7 +163,7 @@ describe('Pending DCC Records (decision 0336)', () => {
   const rowOf = (rows: Row[], person: TestPerson): Row | undefined =>
     rows.find((row) => row.leader.person_id === person.id);
 
-  it('lists the whole branch by surname, and drops a leader once anybody on their checklist is marked', async () => {
+  it('lists the whole branch by first name, and drops a leader once anybody on their checklist is marked', async () => {
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
     const reader = await leader(raymond);
@@ -172,9 +172,10 @@ describe('Pending DCC Records (decision 0336)', () => {
     await leader(angelo);
 
     // Angelo is three levels down, so Leaders Under Me would stop short of him (decision
-    // 0324); nobody outside Raymond's branch is listed.
+    // 0324); nobody outside Raymond's branch is listed. First-name order (decision 0359),
+    // the reverse of the order the tree was written in.
     const before = await list(reader);
-    expect(ids(before.data)).toEqual([raymond.id, jhoemar.id, dave.id, angelo.id]);
+    expect(ids(before.data)).toEqual([angelo.id, dave.id, jhoemar.id, raymond.id]);
     expect(rowOf(before.data, raymond)?.leader.is_actor).toBe(true);
     expect(rowOf(before.data, raymond)?.may_record).toBe(true);
     expect(before.data[0].sundays.map((s) => s.event_date)).toEqual([sunday]);
@@ -187,7 +188,7 @@ describe('Pending DCC Records (decision 0336)', () => {
       .send({ records: [{ person_id: angelo.id, present: false }] })
       .expect(201);
 
-    expect(ids((await list(reader)).data)).toEqual([raymond.id, jhoemar.id, angelo.id]);
+    expect(ids((await list(reader)).data)).toEqual([angelo.id, jhoemar.id, raymond.id]);
   });
 
   it('gives an Admin outside the tree both Networks, with Record wherever a recorder exists', async () => {
@@ -202,13 +203,13 @@ describe('Pending DCC Records (decision 0336)', () => {
 
     const rows = (await list(reader)).data;
     expect(ids(rows)).toEqual([
-      oriel.id,
-      raymond.id,
-      jhoemar.id,
-      dave.id,
       angelo.id,
+      dave.id,
       geraldine.id,
       grace.id,
+      jhoemar.id,
+      oriel.id,
+      raymond.id,
     ]);
     for (const person of [raymond, dave, angelo, grace]) {
       expect(rowOf(rows, person)).toMatchObject({ may_record: true, record_for: person.id });
@@ -362,14 +363,16 @@ describe('Pending DCC Records (decision 0336)', () => {
     }
   });
 
-  it('orders by surname, never by how many Sundays are owed', async () => {
+  it('orders by first name, never by how many Sundays are owed', async () => {
     const sunday = await recentSunday();
     const earlier = await createEvent(shift(sunday, -7)); // its week still open
     await createEvent(sunday);
     const reader = await leader(raymond);
-    // Aquino joins last, so he is last in the table, and owes both Sundays.
+    // Rommel Aquino joins last and owes both Sundays, as do Angelo, Dave and Jhoemar. He
+    // sorts after Raymond by first name (decision 0359), so Raymond, owing one, is neither
+    // first, as ascending by Sundays owed would put him, nor last, as descending would.
     const aquino = await createPerson(db, {
-      firstName: 'Lito',
+      firstName: 'Rommel',
       lastName: 'Aquino',
       network: 'MENS',
     });
@@ -389,9 +392,8 @@ describe('Pending DCC Records (decision 0336)', () => {
       .expect(201);
 
     const rows = (await list(reader)).data;
-    expect(ids(rows).slice(0, 2)).toEqual([aquino.id, raymond.id]);
-    expect(rows[0].sundays).toHaveLength(2);
-    expect(rows[1].sundays).toHaveLength(1);
+    expect(ids(rows)).toEqual([angelo.id, dave.id, jhoemar.id, raymond.id, aquino.id]);
+    expect(rows.map((row) => row.sundays.length)).toEqual([2, 2, 2, 1, 2]);
   });
 
   it('pages by name with a cursor', async () => {
@@ -399,14 +401,14 @@ describe('Pending DCC Records (decision 0336)', () => {
     const reader = await admin();
 
     const first = await list(reader, { limit: 3 });
-    expect(ids(first.data)).toEqual([oriel.id, raymond.id, jhoemar.id]);
+    expect(ids(first.data)).toEqual([angelo.id, dave.id, geraldine.id]);
     expect(first.next_cursor).not.toBeNull();
 
     const second = await list(reader, { limit: 3, cursor: first.next_cursor as string });
-    expect(ids(second.data)).toEqual([dave.id, angelo.id, geraldine.id]);
+    expect(ids(second.data)).toEqual([grace.id, jhoemar.id, oriel.id]);
 
     const third = await list(reader, { limit: 3, cursor: second.next_cursor as string });
-    expect(ids(third.data)).toEqual([grace.id]);
+    expect(ids(third.data)).toEqual([raymond.id]);
     expect(third.next_cursor).toBeNull();
   });
 });

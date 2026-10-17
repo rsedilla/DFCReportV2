@@ -340,16 +340,16 @@ describe('SUYNL readiness (decision 0297)', () => {
   // ---------------------------------------------------------------------------
 
   describe('a leader reading their own table', () => {
-    it("rows are the leader's direct disciples in surname order, each counting their branch", async () => {
+    it("rows are the leader's direct disciples in first-name order, each counting their branch", async () => {
       const response = await readiness(manuelAccount);
 
       expect(response.status).toBe(200);
       const body = response.body as Readiness;
 
       expect(body.subject).toEqual({ id: manuel.id, full_name: 'Manuel Bautista' });
-      // Surname, then first name: Abad, Castillo Mark, Castillo Paulo. Never by a figure,
-      // or Mark's branch, the largest, would lead.
-      expect(body.rows.map((row) => row.leader?.id)).toEqual([nathan.id, mark.id, paulo.id]);
+      // First name (decision 0359): Mark, Nathan, Paulo. Never by a figure: by people
+      // descending it would be Mark, Paulo, Nathan, and ascending Mark last.
+      expect(body.rows.map((row) => row.leader?.id)).toEqual([mark.id, nathan.id, paulo.id]);
       expect(body.elsewhere).toBeNull();
 
       // Mark's branch includes Mark himself; archived Silas and merged Quentin are not
@@ -521,7 +521,7 @@ describe('SUYNL readiness (decision 0297)', () => {
         });
         expect(men.leads_anyone).toBe(true);
         expect(figuresOf(men)).toEqual(fig(1, 1, 2));
-        // Surname order across the whole branch.
+        // First-name order across the whole branch (decision 0359).
         expect(men.members.map((member) => member.person_id)).toEqual([
           manuel.id,
           mark.id,
@@ -713,8 +713,8 @@ describe('SUYNL readiness (decision 0297)', () => {
     let menReader: TestAccount;
 
     beforeEach(async () => {
-      // Bacani sorts before his leader Mark Castillo, so Mark's people joined own-row-first
-      // are out of surname order.
+      // Benjamin sorts before his leader Mark, so Mark's people joined own-row-first are
+      // out of first-name order (decision 0359).
       const benjamin = await createPerson(db, {
         firstName: 'Benjamin',
         lastName: 'Bacani',
@@ -813,7 +813,7 @@ describe('SUYNL readiness (decision 0297)', () => {
         }
 
         expect(compared).toBeGreaterThan(0);
-        // Some opened row's people, joined part by part, are out of surname order, so the
+        // Some opened row's people, joined part by part, are out of first-name order, so the
         // comparison above can tell the two apart.
         expect(joinDiffers).toBe(true);
       },

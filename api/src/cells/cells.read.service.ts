@@ -442,8 +442,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                       OR (cell_memberships.ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
       // Section 22's roster order, the same key `GET /cells/{id}/members` pages by.
-      .orderBy('persons.last_name')
       .orderBy('persons.first_name')
+      .orderBy('persons.last_name')
       .orderBy('persons.member_id')
       .execute();
 
@@ -687,21 +687,21 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           const key = after as RosterCursor;
 
           return eb.or([
-            eb('persons.last_name', '>', key.lastName),
+            eb('persons.first_name', '>', key.firstName),
             eb.and([
-              eb('persons.last_name', '=', key.lastName),
-              eb('persons.first_name', '>', key.firstName),
+              eb('persons.first_name', '=', key.firstName),
+              eb('persons.last_name', '>', key.lastName),
             ]),
             eb.and([
-              eb('persons.last_name', '=', key.lastName),
               eb('persons.first_name', '=', key.firstName),
+              eb('persons.last_name', '=', key.lastName),
               eb('persons.member_id', '>', key.memberId),
             ]),
           ]);
         }),
       )
-      .orderBy('persons.last_name')
       .orderBy('persons.first_name')
+      .orderBy('persons.last_name')
       .orderBy('persons.member_id')
       .limit(page.limit)
       .execute();

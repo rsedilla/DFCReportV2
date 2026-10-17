@@ -125,7 +125,7 @@ export function RangeNavigator({
  * different people who came in the period, once each, split by the stage each had reached by
  * its last day. The own row is the subject's own Cell groups for Cell Groups, and the subject
  * alone for DCC, whose attendance nobody records for themselves. Rows are in the API's order
- * (surname, or Network for a whole-church reader), never numbered, never sorted by a figure,
+ * (first name, or Network for a whole-church reader), never numbered, never sorted by a figure,
  * never coloured (section 13). Each name opens that
  * leader's report, which shows their 12. A whole-church reader's rows are the Network roots,
  * named by the pastor with their Network beside, since that reader disciples neither.

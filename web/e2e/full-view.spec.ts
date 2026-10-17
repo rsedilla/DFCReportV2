@@ -886,7 +886,7 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     ]);
 
     const rows = mens.getByRole('row').filter({ has: page.getByRole('cell') });
-    // Surname order, never sorted by a figure.
+    // First-name order (decision 0359), never sorted by a figure.
     await expect(rows.getByRole('link')).toHaveText([
       'Bernardo Abad',
       'Celestino Ocampo',

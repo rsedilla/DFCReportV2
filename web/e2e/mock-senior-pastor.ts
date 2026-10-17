@@ -6,7 +6,8 @@ import type { Page } from '@playwright/test';
  *
  * **The order is the server's and is built to tell a client that re-sorts it apart**, as the
  * Recording status fixture is: the Men's root comes first although his name sorts after the
- * Women's root's, and a table's rows are in surname order while their figures are not.
+ * Women's root's, and a table's rows are in first-name order (decision 0359) while their
+ * figures are not.
  */
 function json(body: unknown, status = 200) {
   return { status, contentType: 'application/json', body: JSON.stringify(body) };

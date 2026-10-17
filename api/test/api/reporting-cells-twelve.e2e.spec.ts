@@ -32,11 +32,11 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * not a rounding issue.
  *
  * The tree is `CLAUDE.md`'s `Raymond -> Manuel -> Mark`, with two more direct disciples of
- * Raymond: Onofre, who leads a Cell, and Pio, who leads nothing. Surnames are chosen so that
- * surname order (Abella, Bautista, Zamora) differs from creation order **and** from the order
- * of any figure, which is what lets "surname order, never by a figure" (section 13) be told
- * apart from either sort. Oriel is the Women's root. All names are invented (`CLAUDE.md`,
- * Secrets).
+ * Raymond: Onofre, who leads a Cell, and Pio, who leads nothing. Names are chosen so that
+ * first-name order (Manuel, Onofre, Pio; decision 0359) differs from creation order (Manuel,
+ * Pio, Onofre) **and** from the order of any figure, which is what lets "first-name order,
+ * never by a figure" (section 13) be told apart from either sort. Oriel is the Women's root.
+ * All names are invented (`CLAUDE.md`, Secrets).
  *
  * June 2020 is the reported month: closed, fixed and in the past. Its Saturdays --
  * `createCell`'s default meeting day -- are the 6th, 13th, 20th and 27th, and its weeks
@@ -248,17 +248,17 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
   // ---------------------------------------------------------------------------------------
 
   describe('the table', () => {
-    it('lists the direct disciples in surname order, never by a figure (section 13)', async () => {
+    it('lists the direct disciples in first-name order, never by a figure (section 13)', async () => {
       // Onofre 2, Manuel 1, Pio 0: ascending by figure is Pio first, descending is Onofre
-      // then Manuel then Pio -- and surname order is Abella, Bautista, Zamora. Only the
-      // last passes this case.
+      // then Manuel then Pio -- and first-name order is Manuel, Onofre, Pio (decision 0359).
+      // Only the last passes this case.
       await attend(await meeting(onofreCell, '2020-06-06', onofre.id), anacleto, benigno);
       await attend(await meeting(markCell, '2020-06-13', mark.id), dionisio);
 
       const body = await ok(`${raymondsJune}${raymond.id}`, adminAccount);
 
-      expect(body.rows.map((row) => row.leader?.id)).toEqual([onofre.id, manuel.id, pio.id]);
-      expect(body.rows.map((row) => row.unique_people)).toEqual([2, 1, 0]);
+      expect(body.rows.map((row) => row.leader?.id)).toEqual([manuel.id, onofre.id, pio.id]);
+      expect(body.rows.map((row) => row.unique_people)).toEqual([1, 2, 0]);
       expect(rowOf(body, onofre).leader?.full_name).toContain('Abella');
       expect(rowOf(body, onofre).leader?.member_id).toMatch(/^M-/);
       expect(rowOf(body, pio).classification).toEqual(ZERO);
@@ -425,7 +425,7 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
         adminAccount,
       );
 
-      // Labelled by Network, so in that order rather than by surname (decision 0293).
+      // Labelled by Network, so in that order rather than by first name (decision 0293).
       expect(body.rows.map((row) => [row.leader?.id, row.network])).toEqual([
         [raymond.id, 'MENS'],
         [oriel.id, 'WOMENS'],
@@ -485,11 +485,11 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
         roots: { id: string; network: string }[];
       };
 
-      // Raymond's three by surname (Abella, Bautista, Zamora), then Oriel's one. Neither root
+      // Raymond's three by first name (Manuel, Onofre, Pio), then Oriel's one. Neither root
       // is a row.
       expect(extra.rows.map((row) => [row.leader?.id, row.root_id])).toEqual([
-        [onofre.id, raymond.id],
         [manuel.id, raymond.id],
+        [onofre.id, raymond.id],
         [pio.id, raymond.id],
         [carmelita.id, oriel.id],
       ]);

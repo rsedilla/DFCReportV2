@@ -56,7 +56,7 @@ import { cn } from '@/lib/utils';
  * 13, 17 and 19 forbid the last of those, and section 23 keeps the one state
  * token for form fields.
  *
- * **It opens on everyone the searcher oversees, ten a page, A to Z by surname** (decision
+ * **It opens on everyone the searcher oversees, ten a page, A to Z by first name** (decision
  * 0259, the owner's design adjusted), **for an account on the Recording screens alone**. An
  * Admin, a Senior Pastor and a Full view leader oversee too many people to browse ten at a
  * time, so their tab opens on the search and lists only what a search finds (decision 0348).

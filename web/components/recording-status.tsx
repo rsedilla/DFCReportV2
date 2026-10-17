@@ -29,7 +29,7 @@ type Kind = 'WEEK' | 'MONTH';
  *
  * **Every figure is the server's**, the two percentages included: the boxes are the only
  * recording figures shown as a percentage (point 3), and the client divides nothing. Rows
- * come in surname order and are never sorted by a figure.
+ * come in first-name order and are never sorted by a figure.
  *
  * **Completed is a pale red label** (point 5), an exception to sections 13, 17 and 19 for
  * this word on this screen alone; the word carries the meaning without the colour.

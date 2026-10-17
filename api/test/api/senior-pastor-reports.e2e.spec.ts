@@ -25,7 +25,7 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * *Trends* at the API (SKILL.md sections 19 and 20; decision 0326, points 3, 4 and 5).
  *
  * The two Network roots are `Oriel Villanueva` (Men's) and `Gemma Bautista` (Women's), each
- * holding a Senior Pastor account. Gemma sorts first by surname, so a table order putting
+ * holding a Senior Pastor account. Gemma sorts first by name, so a table order putting
  * Oriel first is the Network order rather than the name order. **No Admin account exists
  * unless a case creates one**, so the Leader refusals are not resting on anybody else's
  * account. Fixture names are invented (CLAUDE.md, Secrets).
@@ -225,7 +225,8 @@ describe('Senior Pastor reports (decision 0326)', () => {
     let cara: TestPerson;
 
     async function buildChurch(): Promise<void> {
-      // Ben before Ana, so the rows' surname order is tested rather than creation order.
+      // Ben before Ana, so the rows' first-name order (decision 0359) is tested rather than
+      // creation order.
       ben = await leader('Ben', 'Dizon', oriel);
       ana = await leader('Ana', 'Cruz', oriel);
       dan = await leader('Dan', 'Esguerra', ana);
@@ -255,7 +256,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       await cellOf(xavier, 'YOUTH');
     }
 
-    it('adds both root tables and Others up to the whole church, Men’s root first, rows by surname', async () => {
+    it('adds both root tables and Others up to the whole church, Men’s root first, rows by first name', async () => {
       await buildChurch();
       const last = shiftMonth(await currentMonth(), -1);
 
@@ -277,7 +278,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
         body.whole_church.cell_groups,
       );
 
-      // The Men's root's table first, though Gemma sorts first by surname.
+      // The Men's root's table first, though Gemma sorts first by name.
       expect(body.tables!.map((table) => table.root.id)).toEqual([oriel.id, gemma.id]);
       expect(body.tables!.map((table) => table.network)).toEqual(['MENS', 'WOMENS']);
       expect(body.tables![0].rows.map((row) => row.leader.id)).toEqual([ana.id, ben.id]);
@@ -940,15 +941,15 @@ describe('Senior Pastor reports (decision 0326)', () => {
       for (const domain of ['cells', 'dcc'] as const) {
         const body = await attendance(domain, JUNE);
 
-        // Oriel's two by surname (Bautista, Cruz), then Gemma's one.
+        // Oriel's two by first name (Ana, Manuel; decision 0359), then Gemma's one.
         expect({
           domain,
           rows: body.rows.map((row) => [row.leader?.id, row.root_id]),
         }).toEqual({
           domain,
           rows: [
-            [manuel.id, oriel.id],
             [ana.id, oriel.id],
+            [manuel.id, oriel.id],
             [cara.id, gemma.id],
           ],
         });
@@ -1015,8 +1016,8 @@ describe('Senior Pastor reports (decision 0326)', () => {
         }).toEqual({
           domain,
           rows: [
-            [manuel.id, oriel.id],
             [ana.id, oriel.id],
+            [manuel.id, oriel.id],
             [cara.id, gemma.id],
           ],
         });

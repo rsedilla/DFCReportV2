@@ -272,7 +272,7 @@ export class DccCoverageGapsDto {
   /**
    * The `next_cursor` of the previous page, passed back unmodified (section 22).
    *
-   * The same `(last_name, first_name, member_id)` key the roster beside it pages by, and
+   * The same `(first_name, last_name, member_id)` key the roster beside it pages by, and
    * literally the same encoder: this list is ordered by name for section 15's reason, so
    * it shares the key rather than deriving a fourth one (`roster-cursor.ts`).
    */

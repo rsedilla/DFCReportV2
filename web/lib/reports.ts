@@ -160,7 +160,7 @@ export interface CellTwelve {
   /** Meetings due and recorded through `through`: the current month's end at most. */
   coverage: { recorded: number; scheduled: number; through: string };
   /**
-   * In surname order, or Network order where `network` is set. `leader` is null for a row the reader may not open. `network` is set
+   * In first-name order, or Network order where `network` is set. `leader` is null for a row the reader may not open. `network` is set
    * on a whole-church reader's rows, the Network roots, which are labelled by it.
    */
   rows: (TwelveFigure & {

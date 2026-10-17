@@ -406,22 +406,23 @@ describe('DCC recording (sections 9 and 14)', () => {
   // ---------------------------------------------------------------------------
 
   describe('the roster as a collection', () => {
-    it('orders by (last name, first name, Member ID) and pages with a cursor', async () => {
+    it('orders by (first name, last name, Member ID) and pages with a cursor', async () => {
       const eventId = await createEvent(await recentSunday());
 
-      // Manuel's checklist is Mark, Nathan, Paul and Quentin. Distinct surnames so the
-      // order is decided by the first key rather than by the tie-break.
-      const surnames = new Map([
-        [mark.id, 'Delacruz'],
-        [nathan.id, 'Bautista'],
-        [paul.id, 'Aquino'],
-        [quentin.id, 'Castillo'],
+      // Manuel's checklist is Mark, Nathan, Paul and Quentin, renamed so first-name order
+      // (decision 0359) is neither creation order nor surname order, and two share a first
+      // name: the page boundary falls between the two Beas, decided by the surname.
+      const names = new Map([
+        [mark.id, ['Dino', 'Aquino']],
+        [nathan.id, ['Bea', 'Castillo']],
+        [paul.id, ['Abel', 'Zamora']],
+        [quentin.id, ['Bea', 'Bautista']],
       ]);
 
-      for (const [personId, lastName] of surnames) {
+      for (const [personId, [firstName, lastName]] of names) {
         await db
           .updateTable('persons')
-          .set({ last_name: lastName })
+          .set({ first_name: firstName, last_name: lastName })
           .where('id', '=', personId)
           .execute();
       }
@@ -429,7 +430,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       const first = await roster(manuelAccount, eventId, '?limit=2').expect(200);
       const firstIds = (first.body.data as { person_id: string }[]).map((line) => line.person_id);
 
-      expect(firstIds).toEqual([paul.id, nathan.id]);
+      expect(firstIds).toEqual([paul.id, quentin.id]);
       expect(first.body.next_cursor).toBeTruthy();
 
       const second = await roster(
@@ -440,7 +441,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       const secondIds = (second.body.data as { person_id: string }[]).map((line) => line.person_id);
 
       // The page after, with nothing repeated and nothing skipped.
-      expect(secondIds).toEqual([quentin.id, mark.id]);
+      expect(secondIds).toEqual([nathan.id, mark.id]);
       expect(second.body.next_cursor).toBeNull();
     });
 

@@ -846,7 +846,7 @@ function Dashboard() {
               </h2>
               <p className="text-muted text-sm">
                 Leaders you oversee whose 12 have no DCC record for a Sunday still open, by
-                surname.
+                first name.
               </p>
             </div>
             <PendingDccFilters
@@ -1212,8 +1212,8 @@ interface LeaderOf {
 }
 
 /**
- * A branch view's entries under the leader each names (decision 0311), in surname, then
- * first name, then Member ID order: never by how much a leader owes or how long it has
+ * A branch view's entries under the leader each names (decision 0311), in first name, then
+ * surname, then Member ID order (decision 0359): never by how much a leader owes or how long it has
  * waited, which would read as a ranking (decision 0009). Each group keeps its entries'
  * own order, oldest first.
  */
@@ -1233,10 +1233,10 @@ function groupByLeader<Item>(
   return [...groups.values()]
     .sort(
       (left, right) =>
-        (left.leader.lastName ?? left.leader.name).localeCompare(
-          right.leader.lastName ?? right.leader.name,
+        (left.leader.firstName ?? left.leader.name).localeCompare(
+          right.leader.firstName ?? right.leader.name,
         ) ||
-        (left.leader.firstName ?? '').localeCompare(right.leader.firstName ?? '') ||
+        (left.leader.lastName ?? '').localeCompare(right.leader.lastName ?? '') ||
         (left.leader.memberId ?? '').localeCompare(right.leader.memberId ?? ''),
     )
     .map(({ leader, items: grouped }) => ({
@@ -1709,7 +1709,7 @@ function PendingDccFilters({
 }
 
 /**
- * Pending DCC Records (decision 0336): one row per leader, by surname, each open Sunday on a
+ * Pending DCC Records (decision 0336): one row per leader, by first name, each open Sunday on a
  * line of its own with Update Record's label. The recorder named, Record and See checklist
  * follow the oldest Sunday; Record is offered where the API says the reader may record there.
  */

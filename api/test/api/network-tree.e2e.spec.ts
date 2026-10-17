@@ -323,7 +323,8 @@ describe('the pastoral tree routes (SKILL.md sections 5, 19 and 22)', () => {
        * Six disciples of Noel, created in an order that is neither their name order nor,
        * except by chance, their identifier order.
        *
-       * **Last name decides before first name**: Zeno Abad sorts before Aaron Zamora.
+       * **First name decides before last name** (decision 0359): Aaron Zamora sorts before
+       * Zeno Abad. **Two Beas** are separated by their surnames, Abella before Cruz.
        * **Two share a whole name**, so the Member ID is what separates them, and it is
        * the tie-break a key of names alone would lose at a page boundary -- the case the
        * roster cursor carries all three keys for.
@@ -342,19 +343,19 @@ describe('the pastoral tree routes (SKILL.md sections 5, 19 and 22)', () => {
         const twinFirst = await make('Luis', 'Mendoza');
         const abad = await make('Zeno', 'Abad');
         const twinSecond = await make('Luis', 'Mendoza');
-        const cruzB = await make('Bea', 'Cruz');
-        const cruzA = await make('Abel', 'Cruz');
+        const beaCruz = await make('Bea', 'Cruz');
+        const beaAbella = await make('Bea', 'Abella');
 
         // The twins were created in this order, so the Member ID sequence orders them so.
-        expected = [abad.id, cruzA.id, cruzB.id, twinFirst.id, twinSecond.id, zamora.id];
+        expected = [zamora.id, beaAbella.id, beaCruz.id, twinFirst.id, twinSecond.id, abad.id];
       });
 
-      it('orders by last name, then first name, then Member ID', async () => {
+      it('orders by first name, then last name, then Member ID', async () => {
         const response = await children(adminAccount, noel.id);
 
         expect(response.status).toBe(200);
         expect(response.body.data.map((node: { id: string }) => node.id)).toEqual(expected);
-        expect(namesOf(response.body.data)[0]).toBe('Zeno Abad');
+        expect(namesOf(response.body.data)[0]).toBe('Aaron Zamora');
         expect(response.body.person).toMatchObject({ direct_reports: 6, beneath: 6 });
       });
 

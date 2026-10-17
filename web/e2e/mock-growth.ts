@@ -255,14 +255,15 @@ export async function mockSuynl(
  * row's buckets sum to its people, and the rows, the reader's own row and the elsewhere line
  * sum to the total.
  *
- * **The leader's view** (`GET /suynl/readiness`): three direct disciples in surname order.
- * Arturo leads people and carries four, one in each bucket at least; Florante leads nobody
- * and carries himself; Gregoria leads people none of whom is counted. The reader alone is on
- * the own row.
+ * **The leader's view** (`GET /suynl/readiness`): three direct disciples in first-name order
+ * (decision 0359). Arturo leads people and carries four, one in each bucket at least; Benita
+ * leads people none of whom is counted; Florante leads nobody and carries himself. By people
+ * that is 4, 0, 1, so name order is neither ascending nor descending by a figure. The reader
+ * alone is on the own row.
  */
 export const READINESS_ARTURO_ID = '7f000000-0000-4000-8000-000000000001';
 export const READINESS_FLORANTE_ID = '7f000000-0000-4000-8000-000000000002';
-export const READINESS_GREGORIA_ID = '7f000000-0000-4000-8000-000000000003';
+export const READINESS_BENITA_ID = '7f000000-0000-4000-8000-000000000003';
 export const READINESS_MENS_ROOT_ID = '7f000000-0000-4000-8000-000000000011';
 export const READINESS_WOMENS_ROOT_ID = '7f000000-0000-4000-8000-000000000012';
 
@@ -322,13 +323,13 @@ export const READINESS_LEADER = {
   subject: { id: SIGNED_IN_PERSON_ID, full_name: READER.full_name },
   rows: [
     row(READINESS_ARTURO_ID, 'M-004201', 'Arturo Buenaventura', null, true, [
-      CARMELITA,
       ARTURO,
+      CARMELITA,
       DIOSDADO,
       EPIFANIA,
     ]),
+    row(READINESS_BENITA_ID, 'M-004203', 'Benita Navarro', null, true, []),
     row(READINESS_FLORANTE_ID, 'M-004202', 'Florante Mendoza', null, false, [FLORANTE]),
-    row(READINESS_GREGORIA_ID, 'M-004203', 'Gregoria Navarro', null, true, []),
   ],
   own: figures([READER]),
   elsewhere: null,
@@ -342,7 +343,7 @@ export const READINESS_LEADER = {
  */
 export function readinessChurch(options: { elsewhere: boolean }) {
   const elsewhere = options.elsewhere ? [JOVITA] : [];
-  const men = [CARMELITA, ARTURO, HERMINIO];
+  const men = [ARTURO, CARMELITA, HERMINIO];
   const women = [ISIDRA];
   return {
     subject: null,
@@ -389,23 +390,17 @@ type Readiness = {
 const AMPARO_ID = '7f000000-0000-4000-8000-000000000010';
 const AMPARO = member('10', 'Amparo Abella', 3);
 
-/** The API's order (decision 0293): surname, then first name. */
-const bySurname = (left: Member, right: Member) => {
-  const key = (each: Member) => {
-    const words = each.full_name.split(' ');
-    return `${words[words.length - 1]} ${words.slice(0, -1).join(' ')}`;
-  };
-  return key(left).localeCompare(key(right));
-};
+/** The API's order (decision 0359): first name, then surname. */
+const byFirstName = (left: Member, right: Member) => left.full_name.localeCompare(right.full_name);
 
-/** A table as `total_names=true` answers it: the total's people, one list in surname order. */
+/** A table as `total_names=true` answers it: the total's people, one list in first-name order. */
 function withTotalNames(table: Readiness) {
   const everyone = [
     ...table.rows.flatMap((each) => each.members),
     ...(table.own?.members ?? []),
     ...(table.elsewhere?.members ?? []),
   ];
-  return { ...table, total: { ...table.total, members: [...everyone].sort(bySurname) } };
+  return { ...table, total: { ...table.total, members: [...everyone].sort(byFirstName) } };
 }
 
 /** A table as `names=false` answers it: the counts, and no people behind them. */
@@ -430,7 +425,7 @@ export async function mockSuynlReadiness(
   const traffic = { asked: [] as string[] };
 
   // `crossBranch`: Florante leads Amparo Abella, who sorts before him, so his people joined
-  // own-row-first are out of surname order and the API's list is not.
+  // own-row-first are out of first-name order and the API's list is not.
   const leader: Readiness = options.crossBranch
     ? {
         ...READINESS_LEADER,

@@ -50,7 +50,7 @@ describe('Recording status (decision 0325)', () => {
   beforeEach(async () => {
     await truncateAll(db);
 
-    // Sorting after Gemma by surname, so the tables' Network order is what puts him first.
+    // Sorting after Gemma by name, so the tables' Network order is what puts him first.
     oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Villanueva', network: 'MENS' });
     await assignTo(db, oriel.id, null);
     gemma = await createPerson(db, { firstName: 'Gemma', lastName: 'Bautista', network: 'WOMENS' });
@@ -406,7 +406,8 @@ describe('Recording status (decision 0325)', () => {
   it('adds the tables and Others up to the whole church, with each row’s status', async () => {
     const { monday, day } = await lastWeek();
     // Oriel -> Ana -> Dan, Oriel -> Ben; Gemma -> Cara; Xavier holds no assignment.
-    // Ben first, so the rows' surname order is tested rather than their creation order.
+    // Ben first, so the rows' first-name order (decision 0359) is tested rather than their
+    // creation order.
     const ben = await leader('Ben', 'Dizon', oriel);
     const ana = await leader('Ana', 'Cruz', oriel);
     const dan = await leader('Dan', 'Esguerra', ana);
@@ -450,7 +451,7 @@ describe('Recording status (decision 0325)', () => {
     });
 
     // One table per root, the Men's first whatever the names (owner, 2026-10-08): Oriel sorts
-    // after Gemma by surname and still comes first. Rows in surname order.
+    // after Gemma by name and still comes first. Rows in first-name order.
     expect(body.tables.map((table: { root: { id: string } }) => table.root.id)).toEqual([
       oriel.id,
       gemma.id,

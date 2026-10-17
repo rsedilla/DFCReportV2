@@ -37,7 +37,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  * better. Who is behind is on Record's Recording Status (decision 0340).
  *
  * **My 12 is the reader's direct disciples, then their own Cell groups, then the total**,
- * in surname order, never numbered, sorted by a figure or coloured (section 13). Opening a
+ * in first-name order, never numbered, sorted by a figure or coloured (section 13). Opening a
  * name shows that leader's 12, one generation down; Figures for offers the same names. A
  * whole-church reader's rows are the Network roots, where the Network screen starts them
  * (decision 0268), each named by the pastor with their Network beside (decision 0294).

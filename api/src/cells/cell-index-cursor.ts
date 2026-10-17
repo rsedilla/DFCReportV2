@@ -8,7 +8,7 @@ import { isStorableText } from '../common/text/storable-text';
  * **One key, and its own file rather than a fourth use of `roster-cursor.ts`.** That
  * file states the rule it lives by: "Sharing happens where the key is identical, and
  * there it is not optional." This key is not identical — it is a single column, not the
- * `(last_name, first_name, member_id)` triple — so a shared implementation would need a
+ * `(first_name, last_name, member_id)` triple — so a shared implementation would need a
  * type parameter and a per-route validator, which is most of what each file already
  * holds.
  *

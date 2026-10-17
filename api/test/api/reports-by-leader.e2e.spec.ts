@@ -35,9 +35,9 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * line for the same scope and period. A mismatch is a data-integrity defect.
  *
  * The tree is `CLAUDE.md`'s `Raymond -> Manuel -> Mark`, with a sibling branch under Raymond
- * (Onofre) and a Women's root (Oriel). Surnames are chosen so name order differs from
- * creation order: Oriel **Abad** sorts before the reader, Raymond **Alvarez**, which is what
- * lets "reader first" be told apart from "sorted by name". All names are invented
+ * (Onofre) and a Women's root (Oriel). Oriel is written first, so first-name order (decision
+ * 0359) differs from creation order, and **Oriel** sorts before the reader, **Raymond**, which
+ * is what lets "reader first" be told apart from "sorted by name". All names are invented
  * (`CLAUDE.md`, Secrets).
  *
  * June 2026 is the reported month: closed, fixed, and in the past. Its Sundays are the 7th,
@@ -178,6 +178,7 @@ describe('Reports coverage by leader (section 17, decision 0254)', () => {
   beforeEach(async () => {
     await truncateAll(db);
 
+    oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Abad', network: 'WOMENS' });
     raymond = await createPerson(db, {
       firstName: 'Raymond',
       lastName: 'Alvarez',
@@ -186,7 +187,6 @@ describe('Reports coverage by leader (section 17, decision 0254)', () => {
     manuel = await createPerson(db, { firstName: 'Manuel', lastName: 'Bautista', network: 'MENS' });
     mark = await createPerson(db, { firstName: 'Mark', lastName: 'Castillo', network: 'MENS' });
     onofre = await createPerson(db, { firstName: 'Onofre', lastName: 'Delgado', network: 'MENS' });
-    oriel = await createPerson(db, { firstName: 'Oriel', lastName: 'Abad', network: 'WOMENS' });
     anacleto = await createPerson(db, {
       firstName: 'Anacleto',
       lastName: 'Espino',
@@ -580,8 +580,8 @@ describe('Reports coverage by leader (section 17, decision 0254)', () => {
   // ---------------------------------------------------------------------------------------
 
   describe('the reader first, then by name, paged without loss or repetition', () => {
-    // Raymond (Alvarez) reads as Admin; Oriel Abad sorts before him by name.
-    const expectedOrder = () => [raymond.id, oriel.id, manuel.id, mark.id, onofre.id];
+    // Raymond reads as Admin; Oriel sorts before him by first name (decision 0359).
+    const expectedOrder = () => [raymond.id, manuel.id, mark.id, onofre.id, oriel.id];
 
     const setUp = async (route: Route) => {
       if (route === 'dcc') {
