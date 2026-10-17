@@ -381,12 +381,14 @@ test.describe('the table header', () => {
   });
 });
 
+// A whole-church reader's; a Full view leader's tabs carry no coverage line (decision 0363).
 test.describe('Cell Groups and DCC keep coverage first, as one line linking nowhere (decision 0340)', () => {
   test('Cell Groups opens on recording coverage as one line, with no row-by-row table of its own', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
+    await mockWholeChurchReader(page);
     await mockCellTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/cells?month=2026-05-01');
 
@@ -395,10 +397,10 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
     // and decision 0293 makes it one line above My 12.
     const coverage = page.getByText('6 of 8 meetings recorded in the month');
     await expect(coverage).toBeVisible();
-    const branch = page.getByRole('heading', { name: 'Your branch' });
-    await expect(branch).toBeVisible();
-    const [line, heading] = await Promise.all([coverage.boundingBox(), branch.boundingBox()]);
-    expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(heading!.y);
+    const twelve = page.getByRole('heading', { name: / · their journey$/ });
+    await expect(twelve).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above the figures').toBeLessThan(heading!.y);
 
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
@@ -415,6 +417,7 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
+    await mockWholeChurchReader(page);
     await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc?month=2026-05-01');
 
@@ -424,10 +427,10 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
     // Coverage is the first figure, and decision 0294 makes it one line above My 12.
     const coverage = page.getByText('12 of 18 records filed in the month');
     await expect(coverage).toBeVisible();
-    const branch = page.getByRole('heading', { name: 'Your branch' });
-    await expect(branch).toBeVisible();
-    const [line, heading] = await Promise.all([coverage.boundingBox(), branch.boundingBox()]);
-    expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(heading!.y);
+    const twelve = page.getByRole('heading', { name: / · their journey$/ });
+    await expect(twelve).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above the figures').toBeLessThan(heading!.y);
 
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
@@ -461,8 +464,11 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
           'period=week',
         ]) {
           await page.goto(`/reports/${report}?${query}`);
-          await expect(page.getByRole('heading', { name: /(Your|’s) branch$|· their journey$/ })).toBeVisible();
-          await expect(page.getByText(/^\d+ of \d+ (meetings recorded|records filed)/)).toBeVisible();
+          await expect(page.getByRole('heading', { name: /(Your|’s) Disciples$|· their journey$/ })).toBeVisible();
+          // Coverage for a whole-church reader; none for a Full view leader (decision 0363).
+          await expect(page.getByText(/^\d+ of \d+ (meetings recorded|records filed)/)).toHaveCount(
+            church ? 1 : 0,
+          );
           await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
           await expect(page.getByRole('link', { name: /Filed/ })).toHaveCount(0);
         }

@@ -233,7 +233,8 @@ test.describe('the navigator', () => {
       await expect(periodLabel(page, each.label)).toBeVisible();
       await expect(after).toBeDisabled();
       await expect(before).toBeEnabled();
-      await expect(page.getByText(/^Open until (7 [A-Z][a-z]+|Mon \d+ [A-Z][a-z]{2}, 12NN)$/).first()).toBeVisible();
+      // A Full view leader reads it in the note under the controls (decision 0363).
+      await expect(page.getByText(/(Open until|Still open, until) (7 [A-Z][a-z]+|Mon \d+ [A-Z][a-z]{2}, (12NN|12 noon))\.?$/).first()).toBeVisible();
 
       await before.click();
       const previous = BEFORE[each.kind];
@@ -242,7 +243,7 @@ test.describe('the navigator', () => {
       await expect(after).toBeEnabled();
       await expect(
         page
-          .getByText(previous.open ? /^Open until 7 [A-Z][a-z]+$/ : /^Closed$/)
+          .getByText(previous.open ? /(Open until|Still open, until) 7 [A-Z][a-z]+\.?$/ : /^Closed\.?$/)
           .first(),
       ).toBeVisible();
 
@@ -260,13 +261,13 @@ test.describe('My 12', () => {
     await arrange(page);
     await page.goto('/reports/cells');
 
-    await expect(page.getByRole('heading', { name: 'Your branch', level: 2 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Your 12', level: 3 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples', level: 2 })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     // Not the whole-church reader's table (decision 0293), which carries this heading.
     await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
 
     // The branch's figures as cards, in order, equal to the Total row below.
-    const cards = page.getByRole('region', { name: 'Your branch' }).locator('dl');
+    const cards = page.getByRole('region', { name: 'Your Disciples' }).locator('dl');
     await expect(cards.getByRole('term')).toHaveText([
       'Total',
       'VIP',
@@ -353,12 +354,12 @@ test.describe('My 12', () => {
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s branch', level: 2 }),
+      page.getByRole('heading', { name: 'Consuelo Bautista’s Disciples', level: 2 }),
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s 12', level: 3 }),
+      page.getByRole('table', { name: 'Consuelo Bautista’s 12' }),
     ).toBeVisible();
-    const branch = page.getByRole('region', { name: 'Consuelo Bautista’s branch' });
+    const branch = page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' });
     await expect(branch.locator('dl').getByRole('definition')).toHaveText([
       '4',
       '1',
@@ -395,11 +396,11 @@ test.describe('My 12', () => {
     const note = page.getByText(/^Periods are never added together/);
 
     await page.goto('/reports/cells');
-    await expect(page.getByRole('heading', { name: 'Your 12' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(note).toHaveCount(0);
 
     await page.goto('/reports/cells?period=week');
-    await expect(page.getByRole('heading', { name: 'Your 12' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(note).toHaveText(
       'Periods are never added together: somebody who came in three weeks counts once in the month.',
     );
@@ -506,9 +507,10 @@ test.describe('Figures for', () => {
 });
 
 test.describe('the coverage line', () => {
+  // A whole-church reader's: a Full view leader's tab carries none (decision 0363), below.
   for (const each of PERIODS) {
     test(`${each.button}: one line, linking nowhere (decision 0340)`, async ({ page }) => {
-      await arrange(page, { church: each.kind === 'QUARTER' || each.kind === 'YEAR' });
+      await arrange(page, { church: true });
       await page.goto(`/reports/cells?${each.address}`);
 
       // Year 2026 is due through the end of June, the current month; the week, the month and
@@ -522,10 +524,24 @@ test.describe('the coverage line', () => {
     });
   }
 
-  test('a past month reads that month, and a closed year says nothing about due', async ({
+  test('a Full view leader has none, and the note under the controls says whether it is open (decision 0363)', async ({
     page,
   }) => {
     await arrange(page);
+    const note = page.locator('main p').filter({ hasText: /^(Still open, until .+|Closed)\.$/ });
+
+    await page.goto('/reports/cells');
+    await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveCount(0);
+    await expect(note).toHaveText('Still open, until 7 July.');
+
+    await page.goto('/reports/cells?month=2026-05-01');
+    await expect(note).toHaveText('Closed.');
+  });
+
+  test('a past month reads that month, and a closed year says nothing about due', async ({
+    page,
+  }) => {
+    await arrange(page, { church: true });
 
     await page.goto('/reports/cells?month=2026-05-01');
     await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveText(
@@ -592,7 +608,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockCellTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/cells?period=week');
 
-    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expect(periodLabel(page, '29 Jun – 5 Jul 2026')).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
@@ -660,7 +676,7 @@ test.describe('what decision 0293 took off this page', () => {
   test('no Month/Year radio, no Cell choices and no stages frame', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/cells');
-    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
 
     await expect(page.getByRole('radiogroup', { name: 'Report period' })).toHaveCount(0);
     await expect(
@@ -684,7 +700,7 @@ test.describe('at a phone, a tablet and a desktop', () => {
 
       for (const each of PERIODS) {
         await page.goto(`/reports/cells?${each.address}`);
-        await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
         await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
 

@@ -22,6 +22,14 @@ const PERIODS: readonly [RangeKind, string][] = [
   ['YEAR', 'Year'],
 ];
 
+/** The label above a labelled navigator (decision 0363). */
+const RANGE_NOUN: Record<RangeKind, string> = {
+  WEEK: 'Week',
+  MONTH: 'Month',
+  QUARTER: 'Quarter',
+  YEAR: 'Year',
+};
+
 const WHAT: Record<RangeKind, string> = {
   WEEK: 'in the week',
   MONTH: 'in the month',
@@ -68,10 +76,16 @@ export function RangeNavigator({
   open,
   onChange,
   quiet = false,
+  labelled = false,
 }: {
   kind: RangeKind;
   start: string;
   current: string;
+  /**
+   * Labelled above, with the period between the arrows and no tag (a Full view leader, decision
+   * 0363): whether it is open is said in the note under the controls.
+   */
+  labelled?: boolean;
   /** The earliest period this reader is offered, where there is one (decision 0310). */
   earliest?: string;
   open: boolean | undefined;
@@ -85,27 +99,48 @@ export function RangeNavigator({
 }) {
   const button =
     'border-line focus-visible:outline-accent inline-flex min-h-11 min-w-11 items-center justify-center border text-lg focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40';
+  const before = (
+    <button
+      type="button"
+      className={button}
+      aria-label="The period before"
+      disabled={earliest !== undefined && start <= earliest}
+      onClick={() => onChange(shiftRange(kind, start, -1))}
+    >
+      ‹
+    </button>
+  );
+  const after = (
+    <button
+      type="button"
+      className={button}
+      aria-label="The period after"
+      disabled={start >= current}
+      onClick={() => onChange(shiftRange(kind, start, 1))}
+    >
+      ›
+    </button>
+  );
+
+  if (labelled) {
+    return (
+      <div>
+        <p className="field-label">{RANGE_NOUN[kind]}</p>
+        <div className="mt-2 flex items-center">
+          {before}
+          <span className="border-line bg-surface inline-flex min-h-11 min-w-32 items-center justify-center border-y px-3 text-sm font-bold">
+            {rangeLabel(kind, start)}
+          </span>
+          {after}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        className={button}
-        aria-label="The period before"
-        disabled={earliest !== undefined && start <= earliest}
-        onClick={() => onChange(shiftRange(kind, start, -1))}
-      >
-        ‹
-      </button>
-      <button
-        type="button"
-        className={button}
-        aria-label="The period after"
-        disabled={start >= current}
-        onClick={() => onChange(shiftRange(kind, start, 1))}
-      >
-        ›
-      </button>
+      {before}
+      {after}
       <span className="text-accent text-sm font-bold">{rangeLabel(kind, start)}</span>
       {quiet ? (
         open ? <span className="text-muted text-sm">· so far</span> : null
@@ -332,7 +367,7 @@ export function BranchTwelve({
   return (
     <section aria-labelledby="branch-heading">
       <h2 id="branch-heading" className="field-label">
-        {subjectName === null ? 'Your branch' : `${subjectName}’s branch`}
+        {subjectName === null ? 'Your Disciples' : `${subjectName}’s Disciples`}
       </h2>
 
       <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
@@ -349,8 +384,9 @@ export function BranchTwelve({
       </dl>
 
       <div className="mt-5">
-        <h3 className="text-base font-bold tracking-tight">{heading}</h3>
-        <Table caption={heading} className="mt-2">
+        {/* No visible label: the Leader column says what the rows are (decision 0363). The
+            caption keeps the table's name for a screen reader (section 23). */}
+        <Table caption={heading}>
           <thead>
             <tr>
               <HeaderCell style={{ width: '34%' }}>Leader</HeaderCell>

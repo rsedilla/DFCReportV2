@@ -95,6 +95,9 @@ const coverageLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ of \d+ records filed/ });
 const sundaysLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ Sundays? counted/ });
+/** A Full view leader's note under the controls (decision 0363). */
+const noteLine = (page: Page) =>
+  page.locator('main p').filter({ hasText: /^\d+ Sundays?[.,]/ });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -162,11 +165,13 @@ test.describe('the four periods (decision 0294)', () => {
 });
 
 test.describe('the coverage line and the Sundays under it', () => {
+  // A whole-church reader keeps the coverage line (section 12); a Full view leader reads who
+  // has recorded on Record's Recording Progress instead (decision 0363), below.
   for (const each of PERIODS) {
-    test(`${each.button}: one line, linking nowhere, above the branch (decision 0340)`, async ({
+    test(`${each.button}: one line, linking nowhere, above the figures (decision 0340)`, async ({
       page,
     }) => {
-      await arrange(page);
+      await arrange(page, { church: true });
       await page.goto(`/reports/dcc?${each.address}`);
 
       await expect(coverageLine(page)).toHaveText(`12 of 18 records filed ${each.what}`);
@@ -174,18 +179,37 @@ test.describe('the coverage line and the Sundays under it', () => {
       await expect(coverageLine(page).getByRole('link')).toHaveCount(0);
       await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
 
-      // The coverage line leads: it sits above the branch's figures (section 12).
-      const heading = page.getByRole('heading', { name: 'Your branch' });
-      const [line, branch] = await Promise.all([
+      // The coverage line leads: it sits above the figures (section 12).
+      const [line, figures] = await Promise.all([
         coverageLine(page).boundingBox(),
-        heading.boundingBox(),
+        twelveTable(page).boundingBox(),
       ]);
-      expect(line!.y, 'the coverage line sits above the branch').toBeLessThan(branch!.y);
+      expect(line!.y, 'the coverage line sits above the figures').toBeLessThan(figures!.y);
     });
   }
 
-  test('names the Sundays counted, and any Sunday that had no service', async ({ page }) => {
+  test('a Full view leader has no coverage line, and the note under the controls names the Sundays (decision 0363)', async ({
+    page,
+  }) => {
     await arrange(page);
+
+    await page.goto('/reports/dcc');
+    await expect(coverageLine(page)).toHaveCount(0);
+    await expect(sundaysLine(page)).toHaveCount(0);
+    await expect(noteLine(page)).toHaveText(
+      '3 Sundays, no service on Sunday 14 June. Still open, until 7 July.',
+    );
+
+    await page.goto('/reports/dcc?period=week');
+    await expect(noteLine(page)).toHaveText(/^1 Sunday\. (Still open, until .+|Closed)\.?$/);
+
+    // The week whose only Sunday was removed counts none, and says why.
+    await page.goto('/reports/dcc?period=week&start=2026-06-08');
+    await expect(noteLine(page)).toHaveText(/^0 Sundays, no service on Sunday 14 June\. /);
+  });
+
+  test('names the Sundays counted, and any Sunday that had no service', async ({ page }) => {
+    await arrange(page, { church: true });
 
     await page.goto('/reports/dcc');
     await expect(sundaysLine(page)).toHaveText('3 Sundays counted · no service on Sunday 14 June');
@@ -199,7 +223,7 @@ test.describe('the coverage line and the Sundays under it', () => {
   });
 
   test('a leader opened has their own coverage line, linking nowhere', async ({ page }) => {
-    await arrange(page);
+    await arrange(page, { church: true });
     await page.goto(`/reports/dcc?month=2026-06-01&leader=${TWELVE.consuelo.id}`);
 
     await expect(coverageLine(page)).toHaveText('2 of 3 records filed in the month');
@@ -217,12 +241,12 @@ test.describe('My 12 on DCC', () => {
     await expect(
       page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Your branch', level: 2 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Your 12', level: 3 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples', level: 2 })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
 
     // The branch's figures as cards, equal to the Total row below.
-    const cards = page.getByRole('region', { name: 'Your branch' }).locator('dl');
+    const cards = page.getByRole('region', { name: 'Your Disciples' }).locator('dl');
     await expect(cards.getByRole('term')).toHaveText([
       'Total',
       'VIP',
@@ -283,10 +307,10 @@ test.describe('My 12 on DCC', () => {
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s branch', level: 2 }),
+      page.getByRole('heading', { name: 'Consuelo Bautista’s Disciples', level: 2 }),
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s 12', level: 3 }),
+      page.getByRole('table', { name: 'Consuelo Bautista’s 12' }),
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(3);
@@ -400,7 +424,7 @@ test.describe('My 12 on DCC', () => {
     const asked = await arrange(page);
     await page.goto('/reports/dcc?network=MENS');
 
-    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expectAsked(asked, { scope: 'LEADER', leader_id: READER });
     expect(asked.some((query) => query.get('scope') === 'NETWORK')).toBe(false);
     await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
@@ -439,7 +463,7 @@ test.describe('How often people came, and Year', () => {
 
     for (const each of PERIODS.filter((period) => period.kind !== 'MONTH')) {
       await page.goto(`/reports/dcc?${each.address}`);
-      await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
     }
   });
@@ -494,7 +518,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockDccTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/dcc?period=week');
 
-    await expect(page.getByRole('heading', { name: 'Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
     expect(new Set(mine.map((query) => query.get('period')))).toEqual(
