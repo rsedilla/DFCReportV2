@@ -29,7 +29,7 @@ interface Row {
 }
 
 /**
- * Record's *Pending DCC Reports* (SKILL.md section 19, decision 0336):
+ * Record's *Pending DCC Records* (SKILL.md section 19, decision 0336):
  * `GET /api/v1/dcc/pending-leaders`.
  *
  * The Men's tree is `Oriel -> Raymond -> Jhoemar -> Dave -> Angelo -> Pedro`, so Angelo is
@@ -38,7 +38,7 @@ interface Row {
  * `WEEKLY_DEADLINE_FROM` unless a case says otherwise, and every date comes from the
  * database's day. Fixture names are invented (CLAUDE.md, Secrets).
  */
-describe('Pending DCC Reports (decision 0336)', () => {
+describe('Pending DCC Records (decision 0336)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 

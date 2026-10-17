@@ -146,7 +146,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ).toBeVisible();
 
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recording status' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 

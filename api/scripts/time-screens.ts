@@ -109,7 +109,7 @@ const SCREENS: Screen[] = [
         '/api/v1/people/awaiting-reassignment?limit=50',
         '/api/v1/cells/people-without-a-cell?limit=50',
         `/api/v1/cells/meetings/awaiting?month=${M}&whose=mine`,
-        // Pending CG Reports reads the whole branch (decision 0340).
+        // Pending CG Records reads the whole branch (decision 0340).
         paged(`/api/v1/cells?month=${M}&limit=200`),
         paged(`/api/v1/cells?month=${M}&state=CLOSED&limit=200`),
         `/api/v1/dcc/events?month=${M}`,
@@ -148,7 +148,7 @@ const SCREENS: Screen[] = [
   },
   {
     // Every page, as Show more reads it (decision 0336).
-    name: 'Record › Pending DCC Reports, every page',
+    name: 'Record › Pending DCC Records, every page',
     stages: [() => [paged('/api/v1/dcc/pending-leaders')]],
   },
   {

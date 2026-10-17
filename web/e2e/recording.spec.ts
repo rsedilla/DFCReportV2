@@ -1047,7 +1047,7 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
     await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment\s*2$/ })).toBeVisible();
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*1$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*1$/ })).toBeVisible();
     await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
 
     await expect(page.getByRole('heading', { name: 'As things stand today' })).toHaveCount(0);
@@ -1077,8 +1077,8 @@ test.describe('the Record queue', () => {
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
     // No count box: the button's whole name is its label.
-    await recordLists(page).getByRole('button', { name: 'Pending CG Reports', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toBeVisible();
+    await recordLists(page).getByRole('button', { name: 'Pending CG Records', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toBeVisible();
     await expect(page.getByText('No Cell you oversee is behind this month.')).toHaveCount(0);
   });
 
@@ -1092,10 +1092,10 @@ test.describe('the Record queue', () => {
     await mockCellsAtScale(page);
 
     await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*2$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Reports/);
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
+    await chooseList(page, /^Pending CG Records/);
 
-    const attention = page.getByRole('region', { name: 'Pending CG Reports' });
+    const attention = page.getByRole('region', { name: 'Pending CG Records' });
     // The eleven share one name (decision 0306), so each is told apart by its address.
     const links = attention.getByRole('link', { name: 'Youth · Sat' });
     await expect(links).toHaveCount(2);
@@ -1186,7 +1186,7 @@ test.describe('the Record queue', () => {
   });
 
   /**
-   * Pending CG Reports reads every page of both views of the Cells index, following
+   * Pending CG Records reads every page of both views of the Cells index, following
    * `next_cursor` 200 at a time, so it names every Cell behind and its count is exact
    * (decision 0340): no "+", no "None of the first 50", and no link to Filed Reports, which
    * is withdrawn. Each view here is two pages, and the Cells behind are on the second.
@@ -1239,9 +1239,9 @@ test.describe('the Record queue', () => {
     // Nobody behind on either page of either view, and the whole scope is claimed. A count of 0
     // is left off the button (decision 0349).
     await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Reports/);
-    const attention = page.getByRole('region', { name: 'Pending CG Reports' });
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records$/ })).toBeVisible();
+    await chooseList(page, /^Pending CG Records/);
+    const attention = page.getByRole('region', { name: 'Pending CG Records' });
     await expect(
       attention.getByRole('cell', { name: 'No Cell you oversee is behind this month.' }),
     ).toBeVisible();
@@ -1261,9 +1261,9 @@ test.describe('the Record queue', () => {
     // One Cell behind on each view's second page: both are named, and the count is exact.
     behind = true;
     await page.reload();
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports\s*2$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Reports/);
-    const rows = page.getByRole('table', { name: 'Pending CG Reports' }).locator('tbody tr');
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
+    await chooseList(page, /^Pending CG Records/);
+    const rows = page.getByRole('table', { name: 'Pending CG Records' }).locator('tbody tr');
     await expect(rows).toHaveCount(2);
     await expect(rows.filter({ hasText: 'Gregoria Malabanan' })).toHaveCount(1);
     await expect(rows.filter({ hasText: 'Paolo Reyes' })).toHaveCount(1);
@@ -1881,9 +1881,9 @@ test.describe('Record’s four lists (decision 0290)', () => {
     // DCC; two people on each of the people lists.
     for (const name of [
       /^Update Record\s*4$/,
-      /^Pending CG Reports\s*1$/,
+      /^Pending CG Records\s*1$/,
       // A count of 0 is left off (decision 0349).
-      /^Pending DCC Reports$/,
+      /^Pending DCC Records$/,
       /^Awaiting Leader Assignment\s*2$/,
       /^Awaiting CG Assignment\s*2$/,
     ]) {
@@ -1894,8 +1894,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
       'true',
     );
     for (const name of [
-      /^Pending CG Reports/,
-      /^Pending DCC Reports/,
+      /^Pending CG Records/,
+      /^Pending DCC Records/,
       /^Awaiting Leader Assignment/,
       /^Awaiting CG Assignment/,
     ]) {
@@ -1916,8 +1916,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     // Only the chosen list is on the page.
     await expect(page.getByRole('heading', { name: 'Update Record' })).toBeVisible();
     for (const name of [
-      'Pending CG Reports',
-      'Pending DCC Reports',
+      'Pending CG Records',
+      'Pending DCC Records',
       'Awaiting Leader Assignment',
       'Awaiting CG Assignment',
     ]) {
@@ -1925,7 +1925,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     }
   });
 
-  test('Pending DCC Reports lists each leader once, with each open Sunday and who records it (decision 0336)', async ({
+  test('Pending DCC Records lists each leader once, with each open Sunday and who records it (decision 0336)', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1936,11 +1936,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await page.goto('/dashboard?list=dcc');
 
-    await expect(recordLists(page).getByRole('button', { name: /^Pending DCC Reports\s*2$/ })).toHaveAttribute(
+    await expect(recordLists(page).getByRole('button', { name: /^Pending DCC Records\s*2$/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    const table = page.getByRole('table', { name: 'Pending DCC Reports' });
+    const table = page.getByRole('table', { name: 'Pending DCC Records' });
     await expect(table.getByRole('columnheader')).toHaveText(['Leader', 'Sundays still to record', 'Action']);
 
     // The reader's own row records; Late is a word, never a colour.
@@ -1974,7 +1974,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
-  test('a list with a further page unread counts what it read and says there is more, and Pending CG Reports reads every page', async ({
+  test('a list with a further page unread counts what it read and says there is more, and Pending CG Records reads every page', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -2020,7 +2020,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     const lists = recordLists(page);
     // Every page is read, so the count is exact and carries no "+".
-    await expect(lists.getByRole('button', { name: /^Pending CG Reports\s*2$/ })).toBeVisible();
+    await expect(lists.getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
     // The queue is read whole, so its count carries no "+".
@@ -2034,8 +2034,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     await page.goto('/dashboard');
 
-    await chooseList(page, /^Pending CG Reports/);
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports/ })).toHaveAttribute(
+    await chooseList(page, /^Pending CG Records/);
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -2044,7 +2044,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       'false',
     );
     await expect(page.getByRole('heading', { name: 'Update Record' })).toHaveCount(0);
-    const behind = page.getByRole('table', { name: 'Pending CG Reports' });
+    const behind = page.getByRole('table', { name: 'Pending CG Records' });
     await expect(behind.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
@@ -2063,7 +2063,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
 
     await chooseList(page, /^Awaiting Leader Assignment/);
-    await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
     const unplaced = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
     await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
     await expect(
@@ -2214,8 +2214,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 
       // The other three lists are cards too.
-      await chooseList(page, /^Pending CG Reports/);
-      await expect(page.getByRole('table', { name: 'Pending CG Reports' })).toBeHidden();
+      await chooseList(page, /^Pending CG Records/);
+      await expect(page.getByRole('table', { name: 'Pending CG Records' })).toBeHidden();
       await expect(
         page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Youth · Sat' }) }),
       ).toBeVisible();
@@ -2247,7 +2247,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     // The one visible Record button for that meeting is the table's.
     await expect(record.locator('xpath=ancestor::table')).toHaveCount(1);
 
-    for (const name of ['Pending CG Reports', 'Awaiting Leader Assignment', 'Awaiting CG Assignment']) {
+    for (const name of ['Pending CG Records', 'Awaiting Leader Assignment', 'Awaiting CG Assignment']) {
       await chooseList(page, new RegExp(`^${name}`));
       const table = page.getByRole('table', { name });
       await expect(table).toBeVisible();
@@ -2621,7 +2621,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await mockCellsByMonth(page, { septemberOpen });
   }
 
-  const table = (page: Page) => page.getByRole('table', { name: 'Pending CG Reports', exact: true });
+  const table = (page: Page) => page.getByRole('table', { name: 'Pending CG Records', exact: true });
 
   test('lists a Cell behind for last month in the first seven days, with its month', async ({
     page,
@@ -2638,7 +2638,7 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
       'href',
       /month=2026-09-01/,
     );
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Reports/ })).toContainText('1');
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records/ })).toContainText('1');
   });
 
   test('lists none of last month once its window has shut', async ({ page }) => {

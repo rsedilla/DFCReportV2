@@ -741,7 +741,7 @@ export class DccCoverageService {
   }
 
   /**
-   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Reports* (decision 0336): one
+   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Records* (decision 0336): one
    * row per leader in the reader's `dcc.view_subtree` scope now who owes a record for a
    * Sunday whose week is still open, with each such Sunday.
    *
