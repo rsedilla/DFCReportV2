@@ -25,13 +25,13 @@ function peopleTabs(page: Page) {
   return page.getByRole('navigation', { name: 'People' });
 }
 
-test('a Full view account has the Family Tree tab, after People and Branch', async ({ page }) => {
+test('a Full view account has the Family Tree tab, after People and # of People', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Branch', 'Family Tree']);
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', '# of People', 'Family Tree']);
   await expect(peopleTabs(page).getByRole('link', { name: 'Family Tree' })).toHaveAttribute(
     'href',
     '/family-tree',
@@ -45,7 +45,8 @@ test('a Senior Pastor has no Family Tree tab', async ({ page }) => {
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Branch']);
+  // # of People is offered on Full view screens; a Senior Pastor's is under Reports (decision 0364).
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People']);
 });
 
 test('a Recording-only account has no Family Tree tab', async ({ page }) => {

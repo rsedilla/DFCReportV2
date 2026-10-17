@@ -223,7 +223,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
   });
 
-  test('a Full view account’s People still carries the Branch tab', async ({ page }) => {
+  test('a Full view account’s People carries # of People in Branch’s place (decision 0364)', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
 
@@ -231,7 +231,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
       'Add People',
-      'Branch',
+      '# of People',
       'Family Tree',
     ]);
   });
@@ -913,10 +913,10 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       '0 of 0 leaders',
       'Nothing owed',
     ]);
-    // Each name opens that leader's branch.
+    // Each name opens that leader's page, Branch having left People (decision 0364).
     await expect(rows.nth(1).getByRole('link')).toHaveAttribute(
       'href',
-      '/network?focus=3f1b7c6e-0000-4000-8000-000000000b02',
+      '/people/3f1b7c6e-0000-4000-8000-000000000b02',
     );
 
     const womens = page.getByRole('table', { name: 'Ptra. Amparo Lacson’s leaders' });

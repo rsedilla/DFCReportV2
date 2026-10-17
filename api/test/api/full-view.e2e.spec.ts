@@ -119,6 +119,8 @@ describe('Full view (decision 0323)', () => {
       // The Senior Pastors' Number of Cells, Number of people and Trends (decision 0326).
       'GET /reports/church-counts': get('reports/church-counts', { period }),
       'GET /reports/trends': get('reports/trends', { figure: 'CELLS' }),
+      // # of People for one leader's branch, under People (decision 0364).
+      'GET /reports/people/branch': get('reports/people/branch', leaderScope),
       'GET /training/counts': get('training/counts'),
       'GET /training/people': get('training/people'),
       'POST /training/submit': (token) =>

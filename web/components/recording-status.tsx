@@ -458,7 +458,8 @@ function LeaderTable({
 function BranchLink({ row }: { row: RecordingRow }) {
   return (
     <Link
-      href={`/network?focus=${row.leader.id}`}
+      // The person's page, Branch having left People (decision 0364).
+      href={`/people/${row.leader.id}`}
       // Red, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
