@@ -360,6 +360,9 @@ export function BranchTwelve({
   const own = twelve.own;
   const ownLabel = ownLabelOf(own, subjectName);
   const heading = subjectName === null ? 'Your 12' : `${subjectName}’s 12`;
+  /** One line's figures on a phone: Total, then each stage, in the table's order. */
+  const phoneFigures = (figure: TwelveFigure) =>
+    [`Total ${figure.unique_people}`, ...STAGES.map(([key, label]) => `${label} ${figure.classification[key]}`)].join(' · ');
   const figures = (figure: TwelveFigure) => (
     <>
       <td className={`${cell} font-bold`}>{figure.unique_people}</td>
@@ -372,28 +375,13 @@ export function BranchTwelve({
   );
 
   return (
-    <section aria-labelledby="branch-heading">
-      <h2 id="branch-heading" className="field-label">
-        {subjectName === null ? 'Your Disciples' : `${subjectName}’s Disciples`}
-      </h2>
-
-      <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
-        <div className="border-line border p-2">
-          <dt className="text-ink text-sm font-bold">Total</dt>
-          <dd className="text-xl font-bold tabular-nums">{twelve.total.unique_people}</dd>
-        </div>
-        {STAGES.map(([key, label]) => (
-          <div key={key} className="border-line border p-2">
-            <dt className="text-ink text-sm font-bold">{label}</dt>
-            <dd className="text-xl font-bold tabular-nums">{twelve.total.classification[key]}</dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="mt-5">
+    // No cards and no heading (decision 0365): the table's Total row carries the branch's
+    // figures, and the section keeps its name for a screen reader (section 23).
+    <section aria-label={subjectName === null ? 'Your Disciples' : `${subjectName}’s Disciples`}>
+      <div>
         {/* No visible label: the Leader column says what the rows are (decision 0363). The
-            caption keeps the table's name for a screen reader (section 23). */}
-        <Table caption={heading}>
+            caption keeps the table's name for a screen reader (section 23). From `lg` up. */}
+        <Table caption={heading} className="hidden lg:block">
           <thead>
             <tr>
               <HeaderCell style={{ width: '34%' }}>Leader</HeaderCell>
@@ -459,6 +447,48 @@ export function BranchTwelve({
             </tr>
           </tbody>
         </Table>
+
+        {/* Below `lg` each line is two short lines, as the Senior Pastors' # tables are on a
+            phone, so no figure is out of sight to one side (decision 0365). */}
+        <ul className="flex flex-col lg:hidden" aria-label={heading}>
+          {twelve.rows.map((row, index) => (
+            <li key={row.leader?.id ?? `unnamed-${index}`} className="border-line even:bg-raised border-b px-2 py-2">
+              {row.leader === null ? (
+                <span className="text-muted text-sm">A leader you don’t oversee</span>
+              ) : (
+                <Link
+                  href={openHref(row.leader.id)}
+                  className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  {row.leader.full_name}
+                </Link>
+              )}
+              <p className="text-muted text-sm tabular-nums">{phoneFigures(row)}</p>
+            </li>
+          ))}
+          {own === null ? null : (
+            <li className="border-line border-b px-2 py-2">
+              <span className="text-sm">{ownLabel}</span>
+              {own.cells === 0 ? null : (
+                <p className="text-muted text-sm tabular-nums">{phoneFigures(own)}</p>
+              )}
+            </li>
+          )}
+          {twelve.overlap === 0 ? null : (
+            <li className="border-line text-muted border-b px-2 py-2 text-sm italic">
+              Counted under more than one leader −{twelve.overlap}
+            </li>
+          )}
+          {twelve.elsewhere === 0 ? null : (
+            <li className="border-line text-muted border-b px-2 py-2 text-sm italic">
+              Elsewhere in this branch +{twelve.elsewhere}
+            </li>
+          )}
+          <li className="border-edge border-t-2 px-2 py-2 font-bold">
+            <span className="text-sm">Total</span>
+            <p className="text-sm tabular-nums">{phoneFigures(twelve.total)}</p>
+          </li>
+        </ul>
       </div>
 
       {kind === 'MONTH' ? null : (
