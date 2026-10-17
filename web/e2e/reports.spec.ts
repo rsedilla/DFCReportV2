@@ -77,12 +77,12 @@ const TABS = [
 
 /**
  * A Full view leader's three (decisions 0340 and 0360): the shared account, which reads reports
- * over one Network. No Training or Conquest, and the first two named as the Senior Pastors' are.
+ * over one Network. No Training or Conquest, and each named a report (decision 0361).
  */
 const BRANCH_TABS = [
-  { label: 'CG Attendance', path: '/reports/cells', dated: true },
-  { label: 'DCC Attendance', path: '/reports/dcc', dated: true },
-  { label: 'SUYNL', path: '/reports/suynl', dated: false },
+  { label: 'CG Attendance Reports', path: '/reports/cells', dated: true },
+  { label: 'DCC Attendance Reports', path: '/reports/dcc', dated: true },
+  { label: 'SUYNL Reports', path: '/reports/suynl', dated: false },
 ] as const;
 
 /** Each reader, with the tabs they are shown. */
@@ -629,11 +629,13 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
-   * Two across on a phone and one row from `sm`: a whole-church reader's five (decision 0292)
-   * and a Full view leader's three (decisions 0340 and 0360).
+   * A whole-church reader's five (decision 0292): equal, two across on a phone and one row from
+   * `sm`. A Full view leader's three (decision 0361): sized to their words, one row everywhere,
+   * a label wrapping inside its tab on a phone.
    */
   const LAYOUTS = [
-    { width: 375, height: 812, columns: { five: 2, three: 2 }, rows: { five: 3, three: 2 } },
+    { width: 320, height: 640, columns: { five: 2, three: 3 }, rows: { five: 3, three: 1 } },
+    { width: 375, height: 812, columns: { five: 2, three: 3 }, rows: { five: 3, three: 1 } },
     { width: 768, height: 1024, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
     { width: 1280, height: 800, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
   ] as const;
@@ -681,9 +683,23 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
           }
-          // Equal buttons: every tab as wide as the others, within a pixel.
           const widths = boxes.map((box) => box.width);
-          expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
+          if (count === 'five') {
+            // Equal buttons: every tab as wide as the others, within a pixel.
+            expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
+          } else {
+            // Sized to their words, from the left (decision 0361): SUYNL Reports is the narrowest,
+            // and from `sm` the row leaves room after the last tab. On a phone the labels wrap
+            // and the three fill the row without passing its edge.
+            expect(widths[2], `${tab.path}: SUYNL Reports is stretched`).toBeLessThan(widths[0]);
+            const row = await which.evaluate((nav) => nav.getBoundingClientRect().right);
+            const last = boxes[boxes.length - 1];
+            if (layout.width >= 640) {
+              expect(last.left + last.width, `${tab.path}: the tabs fill the row`).toBeLessThan(row - 1);
+            } else {
+              expect(last.left + last.width, `${tab.path}: a tab passes the row`).toBeLessThanOrEqual(row + 0.5);
+            }
+          }
 
           const { scrollWidth, clientWidth } = await page.evaluate(() => ({
             scrollWidth: document.documentElement.scrollWidth,

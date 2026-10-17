@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-17, the trigger being decision 0360: of 359 files, 358 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0360 each moved the first two and
+2026-10-17, the trigger being decision 0361: of 360 files, 359 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0361 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-17 and triggered by 0360, and was left stale by 0361 the same day. The one before that was dated
 2026-10-17 and triggered by 0359, and was left stale by 0360 the same day. The one before that was dated
 2026-10-17 and triggered by 0358, and was left stale by 0359 the same day. The one before that was dated
 2026-10-16 and triggered by 0357, and was left stale by 0358 the next day. The one before that was dated
@@ -763,6 +764,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-17 — [Pending CG Records and Pending DCC Records](docs/decisions/0358-pending-cg-and-dcc-records.md)
 - 2026-10-17 — [Lists of people in first-name order](docs/decisions/0359-lists-of-people-in-first-name-order.md)
 - 2026-10-17 — [A Full view leader's tabs hide Training and Conquest](docs/decisions/0360-the-primaries-tabs-hide-training-and-conquest.md)
+- 2026-10-17 — [The Primaries' report tabs say Reports, sized to their words](docs/decisions/0361-the-primaries-report-tabs-say-reports.md)
 
 ### Open — awaiting a ruling
 

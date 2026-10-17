@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
@@ -18,14 +18,14 @@ const TABS = [
 ] as const;
 
 /**
- * A Full view leader's three (decisions 0340 and 0360): the first two under the names the Senior
- * Pastors' carry, laid out as theirs for the leader's own branch. Training and Conquest are
- * hidden, not withdrawn: their pages still open by address.
+ * A Full view leader's three (decisions 0340 and 0360), each named a report (decision 0361), the
+ * first two laid out as the Senior Pastors' are for the leader's own branch. Training and
+ * Conquest are hidden, not withdrawn: their pages still open by address.
  */
 const BRANCH_TABS = [
-  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
-  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
-  { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
+  { key: 'cells', label: 'CG Attendance Reports', path: '/reports/cells' },
+  { key: 'dcc', label: 'DCC Attendance Reports', path: '/reports/dcc' },
+  { key: 'suynl', label: 'SUYNL Reports', path: '/reports/suynl' },
 ] as const;
 
 /**
@@ -68,7 +68,9 @@ export type ReportTab =
  * view leader's three (decisions 0340 and 0360), not ARIA tabs.** Each report keeps an address of its own, so the landing page
  * decision 0245 gives a whole-church reader, the sidebar and a saved link all still work, and
  * something that navigates is announced as a link. Equal widths in the Record screen's style
- * (decision 0290): one row from a small screen up, and two on a phone.
+ * (decision 0290): one row from a small screen up, and two on a phone. **A Full view leader's
+ * three are sized to their words instead** (decision 0361), in the tab style every other tab row
+ * uses, a long label wrapping inside its tab on a phone.
  *
  * **The month travels** to the reports that have one, so switching from the DCC figures for
  * June to the Cell figures opens June rather than the current month. The Growth reports
@@ -105,9 +107,8 @@ export function ReportsTabs({
         <nav
           aria-label="Which report"
           className={cn(
-            'mt-6 grid grid-cols-2',
-            // The labels fit one row from a small screen up (owner, 2026-10-09).
-            branch ? 'sm:grid-cols-3' : 'sm:grid-cols-5',
+            // The five labels fit one row from a small screen up (owner, 2026-10-09).
+            branch ? 'mt-6 flex' : 'mt-6 grid grid-cols-2 sm:grid-cols-5',
             TAB_ROW,
           )}
         >
@@ -126,11 +127,17 @@ export function ReportsTabs({
                 href={month && dated ? `${tab.path}?month=${month}` : tab.path}
                 aria-current={active ? 'page' : undefined}
                 aria-label={tab.name}
-                className={cn(
-                  'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                  'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
-                  active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
-                )}
+                className={
+                  branch
+                    ? // Tighter below `sm`, so the three fit a 320px phone with their words wrapped,
+                      // with room to spare for a wider font: `px-2` left 3px too few on Linux.
+                      cn(tabClasses(active), 'px-1.5')
+                    : cn(
+                        'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
+                        'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
+                        active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
+                      )
+                }
               >
                 {tab.label}
               </Link>

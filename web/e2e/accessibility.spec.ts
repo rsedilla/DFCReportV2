@@ -1062,7 +1062,7 @@ const SCANS = [
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-      ).toHaveText('CG Attendance');
+      ).toHaveText('CG Attendance Reports');
     },
   },
   {
