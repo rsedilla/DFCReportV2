@@ -864,8 +864,8 @@ const SCANS = [
     route: '/dashboard',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Pending CG Reports/);
-      await expect(page.getByRole('heading', { name: 'Pending CG Reports' })).toBeVisible();
+      await chooseRecordList(page, /^Pending CG Records/);
+      await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
     },
   },

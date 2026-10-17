@@ -253,7 +253,7 @@ function Dashboard() {
   // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
   // when the list or the view changes, so a list switched away from does not come back open.
   const [chosenLeader, setChosenLeader] = useState<ChosenLeader | null>(null);
-  // The leader whose checklist is open under Pending DCC Reports (decision 0336).
+  // The leader whose checklist is open under Pending DCC Records (decision 0336).
   const [pendingChosen, setPendingChosen] = useState<ChosenLeader | null>(null);
   const [chosenFor, setChosenFor] = useState(`${filter}|${whose}`);
   if (chosenFor !== `${filter}|${whose}`) {
@@ -298,7 +298,7 @@ function Dashboard() {
     data: withoutACellPages.data?.pages.flatMap((page) => page.data),
   };
 
-  // **Pending DCC Reports** (decision 0336): the leaders in the reader's whole scope whose 12
+  // **Pending DCC Records** (decision 0336): the leaders in the reader's whole scope whose 12
   // are unrecorded for a Sunday whose week is open, fifty at a time, searched and filtered on
   // the server. Undated: it asks about now.
   const [pendingFilter, setPendingFilter] = useState<{
@@ -336,7 +336,7 @@ function Dashboard() {
     enabled: whoseKnown,
   });
 
-  // **The whole branch, every page** (decision 0340), so Pending CG Reports names every Cell
+  // **The whole branch, every page** (decision 0340), so Pending CG Records names every Cell
   // behind: Filed Reports, which used to hold the rest, is withdrawn.
   const scoped = useQuery({
     queryKey: ['cells-every', month],
@@ -559,7 +559,7 @@ function Dashboard() {
     },
     {
       key: 'behind',
-      label: 'Pending CG Reports',
+      label: 'Pending CG Records',
       count:
         behindPending || behindFailed
           ? null
@@ -567,7 +567,7 @@ function Dashboard() {
     },
     {
       key: 'dcc',
-      label: 'Pending DCC Reports',
+      label: 'Pending DCC Records',
       count: pendingDcc ? `${pendingDcc.length}${pendingDccPages.hasNextPage ? '+' : ''}` : null,
     },
     {
@@ -796,7 +796,7 @@ function Dashboard() {
           <section className={LIST} aria-labelledby="attention-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
-                Pending CG Reports
+                Pending CG Records
               </h2>
               <p className="text-muted text-sm">
                 {lastMonthRead
@@ -809,7 +809,7 @@ function Dashboard() {
             ) : behindFailed ? null : (
               <>
                 <ListTable
-                  caption="Pending CG Reports"
+                  caption="Pending CG Records"
                   columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
                   empty={`No Cell you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`}
                   rows={needingAttention.map(({ cell, month: cellMonth }) => ({
@@ -842,7 +842,7 @@ function Dashboard() {
           <section className={LIST} aria-labelledby="pending-dcc-heading">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id="pending-dcc-heading" className="text-lg font-bold tracking-tight">
-                Pending DCC Reports
+                Pending DCC Records
               </h2>
               <p className="text-muted text-sm">
                 Leaders you oversee whose 12 have no DCC record for a Sunday still open, by
@@ -1650,7 +1650,7 @@ function OwedList({
 }
 
 /**
- * Pending DCC Reports' search, and its Network filter for a whole-church reader (decision
+ * Pending DCC Records' search, and its Network filter for a whole-church reader (decision
  * 0336). The search narrows on the server and never reorders (decision 0009).
  */
 function PendingDccFilters({
@@ -1709,7 +1709,7 @@ function PendingDccFilters({
 }
 
 /**
- * Pending DCC Reports (decision 0336): one row per leader, by surname, each open Sunday on a
+ * Pending DCC Records (decision 0336): one row per leader, by surname, each open Sunday on a
  * line of its own with Update Record's label. The recorder named, Record and See checklist
  * follow the oldest Sunday; Record is offered where the API says the reader may record there.
  */
@@ -1802,7 +1802,7 @@ function PendingDccList({
 
   return (
     <>
-      <Table caption="Pending DCC Reports" className="mt-4 hidden lg:block">
+      <Table caption="Pending DCC Records" className="mt-4 hidden lg:block">
         <thead>
           <tr>
             <HeaderCell>Leader</HeaderCell>

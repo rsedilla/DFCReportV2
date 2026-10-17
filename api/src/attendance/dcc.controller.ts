@@ -222,7 +222,7 @@ export class DccController {
   }
 
   /**
-   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Reports* (decision 0336): the
+   * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Records* (decision 0336): the
    * leaders in the actor's scope whose 12 are unrecorded for a Sunday whose week is open,
    * one row each. Under `dcc.view_subtree` against the actor, narrowed to that scope in the
    * service. It names no period, so it asks about now (section 7).

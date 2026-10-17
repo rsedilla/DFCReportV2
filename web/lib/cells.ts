@@ -878,7 +878,7 @@ export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
 /**
  * Every Cell of one view for a month, with the month's `open` flag, following the cursor to
  * the end 200 at a time, the API's most: the index returns no total (section 22). Record's
- * *Pending CG Reports* reads the whole branch this way, so it names every Cell behind
+ * *Pending CG Records* reads the whole branch this way, so it names every Cell behind
  * (decision 0340). The closed view stops at its first page once the month has shut, since
  * it then lists nothing behind (decision 0266).
  */

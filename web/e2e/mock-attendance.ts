@@ -635,7 +635,7 @@ export async function mockLeaderDccRoster(
 }
 
 /**
- * Record's Pending DCC Reports (decision 0336). Empty unless rows are given; every screen
+ * Record's Pending DCC Records (decision 0336). Empty unless rows are given; every screen
  * test that opens Record registers it, because the tab's count is read on arrival.
  * Returns the query strings asked for.
  */
@@ -650,7 +650,7 @@ export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<
   return asked;
 }
 
-/** Two rows for Pending DCC Reports: the reader's own, and a leader with no account. */
+/** Two rows for Pending DCC Records: the reader's own, and a leader with no account. */
 export const PENDING_DCC_ROWS = [
   {
     leader: {
