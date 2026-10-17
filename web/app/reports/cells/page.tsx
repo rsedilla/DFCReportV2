@@ -34,7 +34,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  *
  * **Coverage leads, as one line** (decision 0202): meetings recorded over meetings due,
  * above the table, because it is the one figure that recording less makes worse rather than
- * better. Who is behind is on Record's Recording Status (decision 0340).
+ * better. Who is behind is on Record's Recording Progress (decision 0340).
  *
  * **My 12 is the reader's direct disciples, then their own Cell groups, then the total**,
  * in first-name order, never numbered, sorted by a figure or coloured (section 13). Opening a

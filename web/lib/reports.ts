@@ -256,7 +256,7 @@ export async function getCellTwelve(
   }
 }
 
-/** One column of *Recording status*: X of Y leaders (decision 0325). */
+/** One column of *Recording Progress*: X of Y leaders (decision 0325). */
 export interface RecordingColumn {
   recorded: number;
   owed: number;
@@ -307,7 +307,7 @@ export interface RecordingStatus {
   others: Omit<RecordingRow, 'leader'> | null;
 }
 
-/** A Full view leader's *Recording Status* (decision 0334): their branch and their 12. */
+/** A Full view leader's *Recording Progress* (decision 0334): their branch and their 12. */
 export interface LeaderRecordingStatus {
   kind: 'WEEK' | 'MONTH';
   start: string;

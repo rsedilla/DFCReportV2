@@ -305,7 +305,7 @@ function DccChecklist() {
           {save.isSuccess ? (
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <TextLink inline href="/dashboard?list=awaiting&kind=dcc">Back to Update Record</TextLink>
+              <TextLink inline href="/dashboard?list=awaiting&kind=dcc">Back to Update Records</TextLink>
             </p>
           ) : null}
 

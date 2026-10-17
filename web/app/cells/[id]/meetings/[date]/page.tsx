@@ -476,7 +476,7 @@ function RecordMeeting() {
             // Polite, because it is the result of the reader's own action.
             <p aria-live="polite" className="mt-6 text-sm font-medium">
               Saved.{' '}
-              <TextLink inline href="/dashboard?list=awaiting">Back to Update Record</TextLink>
+              <TextLink inline href="/dashboard?list=awaiting">Back to Update Records</TextLink>
             </p>
           ) : null}
 

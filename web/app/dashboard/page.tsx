@@ -225,12 +225,12 @@ function Dashboard() {
   // decision 0323): no other list, and Leaders Under Me only while the
   // server says a leader holding an account sits directly beneath it.
   const recordingOnly = me.data?.screens === 'RECORDING';
-  // **The Senior Pastors' Record has two tabs, Recording status first** (decision 0325):
+  // **The Senior Pastors' Record has two tabs, Recording Progress first** (decision 0325):
   // their own Awaiting a record with no Leaders Under Me, and none of the other lists.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
   const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
-  // **Recording Status, last, for a reader who reads reports over their own branch**
+  // **Recording Progress, last, for a reader who reads reports over their own branch**
   // (decision 0334): a Full view leader, whose Leader default gives `reports.view_subtree` that scope.
   const leaderStatus =
     fullRecord &&
@@ -551,7 +551,7 @@ function Dashboard() {
   const tabs: readonly { key: RecordTab; label: string; count: string | null }[] = [
     {
       key: 'awaiting',
-      label: 'Update Record',
+      label: 'Update Records',
       count:
         queuePending || queueFailed || owedPending || owedFailure
           ? null
@@ -583,7 +583,7 @@ function Dashboard() {
         : null,
     },
     ...(leaderStatus || churchStatus
-      ? [{ key: 'status' as const, label: 'Recording Status', count: null }]
+      ? [{ key: 'status' as const, label: 'Recording Progress', count: null }]
       : []),
   ];
 
@@ -618,8 +618,8 @@ function Dashboard() {
           label="Record"
           className={cn('mt-6', TAB_ROW)}
           tabs={[
-            { key: 'status', label: 'Recording Status', count: null },
-            { key: 'awaiting', label: 'Update Record', count: tabs[0].count },
+            { key: 'status', label: 'Recording Progress', count: null },
+            { key: 'awaiting', label: 'Update Records', count: tabs[0].count },
           ]}
           current={spTab}
           onChoose={(next) => go({ list: next === 'status' ? null : 'awaiting' })}
@@ -647,19 +647,27 @@ function Dashboard() {
           </div>
         ) : null}
         {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
-          <section aria-labelledby="awaiting-heading" className={LIST}>
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
-                Update Record
-              </h2>
-              <p className="text-muted text-sm">
-                Still to record this month
-                {inCloseWeek ? ', and last month while it is open' : ''}, oldest first.
-              </p>
-            </div>
+          // The tab names the list, so its pane repeats no heading (decision 0362). A
+          // Recording-only account has no tabs, so it keeps the heading and its line.
+          <section
+            aria-labelledby={recordingOnly ? 'awaiting-heading' : undefined}
+            aria-label={recordingOnly ? undefined : 'Update Records'}
+            className={LIST}
+          >
+            {recordingOnly ? (
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
+                  Update Records
+                </h2>
+                <p className="text-muted text-sm">
+                  Still to record this month
+                  {inCloseWeek ? ', and last month while it is open' : ''}, oldest first.
+                </p>
+              </div>
+            ) : null}
 
             <ViewSwitch
-              label="Update Record"
+              label="Update Records"
               options={[
                 {
                   key: 'CELLS',
@@ -752,7 +760,7 @@ function Dashboard() {
                   ...group,
                   content: (
                     <QueueList
-                      caption={`Update Record, ${group.title}`}
+                      caption={`Update Records, ${group.title}`}
                       items={group.items}
                       today={today}
                     />
@@ -761,7 +769,7 @@ function Dashboard() {
               />
             ) : (
               <QueueList
-                caption="Update Record"
+                caption="Update Records"
                 items={shown}
                 today={today}
               />
@@ -977,7 +985,7 @@ function openUntilLabel(itemMonth: string): string {
   return `${name} · ${monthOpenUntilLabel(itemMonth).replace(/^Open/, 'open')}`;
 }
 
-/** Which of Record's lists, or Recording Status, is open (decisions 0290 and 0336). */
+/** Which of Record's lists, or Recording Progress, is open (decisions 0290 and 0336). */
 const RECORD_TABS = ['awaiting', 'behind', 'dcc', 'leader', 'nocell', 'status'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
@@ -1720,7 +1728,7 @@ function PendingDccFilters({
 
 /**
  * Pending DCC Records (decision 0336): one row per leader, by first name, each open Sunday on a
- * line of its own with Update Record's label. The recorder named, Record and See checklist
+ * line of its own with Update Records's label. The recorder named, Record and See checklist
  * follow the oldest Sunday; Record is offered where the API says the reader may record there.
  */
 function PendingDccList({

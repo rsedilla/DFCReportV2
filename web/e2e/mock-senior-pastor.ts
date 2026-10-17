@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test';
  * answers them. Every name is invented (CLAUDE.md, Secrets).
  *
  * **The order is the server's and is built to tell a client that re-sorts it apart**, as the
- * Recording status fixture is: the Men's root comes first although his name sorts after the
+ * Recording Progress fixture is: the Men's root comes first although his name sorts after the
  * Women's root's, and a table's rows are in first-name order (decision 0359) while their
  * figures are not.
  */
