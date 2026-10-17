@@ -1393,12 +1393,15 @@ function DccChecklistGrid({
   checklists: readonly { data?: DccRosterLine[] }[];
   month: string;
 }) {
-  const people = new Map<string, { name: string }>();
+  const people = new Map<string, { name: string; key: [string, string, string] }>();
   const marks = new Map<string, Map<string, boolean>>();
 
   events.forEach((event, index) => {
     for (const line of checklists[index]?.data ?? []) {
-      people.set(line.person_id, { name: line.full_name });
+      people.set(line.person_id, {
+        name: line.full_name,
+        key: [line.first_name, line.last_name, line.member_id],
+      });
       if (line.record !== null) {
         const byEvent = marks.get(line.person_id) ?? new Map<string, boolean>();
         byEvent.set(event.id, line.record.present);
@@ -1411,7 +1414,14 @@ function DccChecklistGrid({
     return null;
   }
 
-  const rows = [...people.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name));
+  // First name, surname, Member ID (decision 0359): never the composed name, which leads
+  // with a title (decision 0271).
+  const rows = [...people.entries()].sort(
+    ([, a], [, b]) =>
+      a.key[0].localeCompare(b.key[0]) ||
+      a.key[1].localeCompare(b.key[1]) ||
+      a.key[2].localeCompare(b.key[2]),
+  );
 
   return (
     <section aria-labelledby="dcc-grid-heading" className="mt-8">

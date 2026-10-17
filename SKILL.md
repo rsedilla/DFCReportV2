@@ -4954,7 +4954,7 @@ Offset pagination is not used. Rows inserted while a client is paging shift ever
 
 Collection endpoints do not return total counts. A count over a large scoped set is expensive on every page, and totals are a reporting concern with their own endpoints and their own rules (Section 20).
 
-**A list of people ordered by name is ordered by first name, then surname, then Member ID** (ruling of 2026-10-17, decision 0359), the order a name is read in, wherever the list is assembled, in SQL or in application code, and a cursor over it carries the three in that order. A title is never compared (decision 0271).
+**A list of people ordered by name is ordered by first name, then surname, then Member ID** (ruling of 2026-10-17, decision 0359), or the record's identifier as that last tie-break where a cursor already carried it (the People search and the lists that page like it), the order a name is read in, wherever the list is assembled, in SQL or in application code, and a cursor over it carries the three in that order. A title is never compared (decision 0271). The list of duplicate candidates (Section 3) keeps its own order, and a page open across the change from surname order (decision 0359) may skip or repeat rows once, which the owner accepted before the first native release, as decision 0328 did for narrowing the API.
 
 #### Errors
 

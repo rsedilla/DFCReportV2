@@ -462,6 +462,8 @@ test.describe('a DCC checklist in sections', () => {
     person_id: `3f1b7c6e-0000-4000-8000-${String(700 + n).padStart(12, '0')}`,
     member_id: `M-0007${String(n).padStart(2, '0')}`,
     full_name: name,
+    first_name: name.split(' ')[0],
+    last_name: name.split(' ').slice(1).join(' '),
     responsible_leader_id: leader,
     record: null,
   });
@@ -595,6 +597,8 @@ test.describe('a long DCC checklist', () => {
     person_id: `3f1b7c6e-0000-4000-8000-${String(700000 + n).padStart(12, '0')}`,
     member_id: `M-${String(900000 + n)}`,
     full_name: `Person ${String(n).padStart(3, '0')}`,
+    first_name: `Person ${String(n).padStart(3, '0')}`,
+    last_name: 'Test',
     responsible_leader_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
     record: n === size ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
   });
@@ -2490,6 +2494,8 @@ test.describe('a DCC checklist longer than one page', () => {
       person_id: `3f1b7c6e-0000-4000-8000-0000000071${String(n).padStart(2, '0')}`,
       member_id: `M-0071${String(n).padStart(2, '0')}`,
       full_name: `Person ${String(n).padStart(2, '0')}`,
+      first_name: `Person ${String(n).padStart(2, '0')}`,
+      last_name: 'Test',
       responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
       record: marked ? { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' } : null,
     });
@@ -2548,6 +2554,8 @@ test.describe('a DCC checklist longer than one page', () => {
       person_id: `3f1b7c6e-0000-4000-8000-000000072${String(index).padStart(3, '0')}`,
       member_id: `M-072${String(index).padStart(3, '0')}`,
       full_name: `Person ${String(index).padStart(3, '0')}`,
+      first_name: `Person ${String(index).padStart(3, '0')}`,
+      last_name: 'Test',
       responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
       record: index === 119 ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
     }));

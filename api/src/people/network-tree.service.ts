@@ -85,7 +85,20 @@ export class NetworkTreeService {
       }
     }
 
-    return nodes.sort((left, right) => left.full_name.localeCompare(right.full_name));
+    // By the roster key (decision 0359), never `full_name`, which leads with a title
+    // (decision 0271).
+    const identities = await this.read.forDecisionsWithin(
+      this.db,
+      nodes.map((node) => node.id),
+    );
+    const keyOf = (node: BranchNode) => {
+      const identity = identities.get(node.id);
+      return identity === undefined
+        ? { firstName: node.full_name, lastName: '', memberId: node.member_id }
+        : rosterKeyOf(identity);
+    };
+
+    return nodes.sort((left, right) => compareRosterKeys(keyOf(left), keyOf(right)));
   }
 
   /** The focus person and one page of their direct disciples, by name. */

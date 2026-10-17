@@ -54,7 +54,7 @@ export interface PersonForDecision {
   /**
    * The family name on its own, for **ordering** rather than for addressing.
    *
-   * Section 8 orders the church-wide directory by `(first_name, last_name, id)`, and
+   * The church-wide directory pages by `(first_name, last_name, id)` (section 22, decision 0359), and
    * two collections page by `(first_name, last_name, member_id)` — so a caller
    * assembling a list in application code needs this half of the name as a field
    * rather than by splitting `fullName`, which is not splittable: a middle name sits

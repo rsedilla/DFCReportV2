@@ -214,7 +214,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
     /**
      *   Oriel (Men's root, leads a YOUNG_PRO Cell)
      *     -> Ben Dizon (no Cell)
-     *     -> Ana Cruz (YOUTH) -> Dan Esguerra (COUPLE)
+     *     -> Ana Zamora (YOUTH) -> Dan Esguerra (COUPLE)
      *   Gemma (Women's root) -> Cara Flores (YOUNG_PRO)
      *   Adele Ocampo, outside the tree, -> Ines Pineda (COUPLE)
      *   Xavier Gatchalian, no assignment (YOUTH)
@@ -226,9 +226,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
 
     async function buildChurch(): Promise<void> {
       // Ben before Ana, so the rows' first-name order (decision 0359) is tested rather than
-      // creation order.
+      // creation order; and Zamora after Dizon, so it is not surname order either.
       ben = await leader('Ben', 'Dizon', oriel);
-      ana = await leader('Ana', 'Cruz', oriel);
+      ana = await leader('Ana', 'Zamora', oriel);
       dan = await leader('Dan', 'Esguerra', ana);
       cara = await leader('Cara', 'Flores', gemma);
       const adele = await createPerson(db, {
