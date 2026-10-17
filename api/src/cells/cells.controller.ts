@@ -336,8 +336,9 @@ export class CellsController {
    * **Deliberately not the person being added.** Section 10 says membership need not
    * mirror pastoral assignment, so a leader may add somebody from outside their own
    * pastoral subtree to their Cell; resolving scope against the member would refuse
-   * exactly that. The *source* Cell of a move is the second object and is checked in
-   * the domain layer (section 7).
+   * exactly that. Adding somebody already in another Cell is a move, which needs
+   * `cell.move_members` over both Cells (decision 0357), checked in the domain layer
+   * (section 7).
    */
   @Post(':id/members')
   @RequiresCapability(Capability.CellManageMembership, {
@@ -365,9 +366,13 @@ export class CellsController {
    * `DELETE` names the membership, not the row: section 5 never deletes a row of an
    * effective-dated table, and migration 0009 refuses one. The membership is closed,
    * and the record is preserved in full.
+   *
+   * **`cell.move_members`, not `cell.manage_membership`** (decision 0357): removing is a
+   * move to no Cell, so a leader who cannot move a member cannot empty them out of a Cell
+   * for somebody else to add elsewhere.
    */
   @Delete(':id/members/:person_id')
-  @RequiresCapability(Capability.CellManageMembership, {
+  @RequiresCapability(Capability.CellMoveMembers, {
     kind: 'cell',
     from: 'params.id',
   })

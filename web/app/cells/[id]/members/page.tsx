@@ -81,9 +81,12 @@ function CellMembers() {
   const [added, setAdded] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  // **The recording screens add members and offer no removal** (decision 0323).
+  // **Removing needs `cell.move_members`** (decision 0357), which a Leader holds only when
+  // ticked Moves people, so the recording screens still offer no removal (decision 0323).
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const mayRemove = me.data !== undefined && me.data.screens !== 'RECORDING';
+  const mayRemove = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'cell.move_members',
+  );
   // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355); offered only where
   // the route would answer, and the route still decides (section 1, principle 4).
   const mayClose = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
@@ -142,8 +145,11 @@ function CellMembers() {
           ) : null}
           {closedOn === undefined ? null : closedOn === null ? (
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Who is in this Cell now. Removing somebody ends their membership from today; it
-              does not erase the months they were part of, and past figures keep counting them.
+              Who is in this Cell now.
+              {/* Only for an account offered Remove (decision 0357). */}
+              {mayRemove
+                ? ' Removing somebody ends their membership from today; it does not erase the months they were part of, and past figures keep counting them.'
+                : ''}
             </p>
           ) : (
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
@@ -198,6 +204,7 @@ function CellMembers() {
         cellId={params.id}
         cellHandle={handle}
         leaderId={cell.data?.leader?.id ?? null}
+        mayMove={mayRemove}
       />
 
       {added ? (

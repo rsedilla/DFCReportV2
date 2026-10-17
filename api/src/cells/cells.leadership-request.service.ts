@@ -9,6 +9,7 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import {
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
@@ -27,6 +28,7 @@ import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
 import { insertCellWithin } from './insert-cell';
+import { moveMembersAnswer } from './move-members';
 import {
   decodeLeadershipRequestCursor,
   encodeLeadershipRequestCursor,
@@ -83,6 +85,7 @@ export interface LeadershipRequestInput {
 
 /** What deciding a request reads of it (decision 0352). */
 interface DecidableRequest {
+  id: string;
   kind: CellRequestKind;
   prospective_leader_id: string;
   requested_by: string;
@@ -596,8 +599,19 @@ export class CellsLeadershipRequestService {
       // `state` staying put — the same strength `CellLock.ReadsTheState` documents. It
       // conflicts with the `FOR NO KEY UPDATE` a closure takes, which is what stops a
       // Cell closing underneath a handover, and it does not conflict with itself.
-      if (pre.kind === 'HANDOVER' && pre.cell_id !== null) {
-        await lockCellsWithin(trx, [{ cellId: pre.cell_id, strength: CellLock.ReadsTheState }]);
+      //
+      // **With the Cells the named members are in now** (decision 0357): they move into the
+      // new Cell at approval, so each such Cell must stay open and keep them. Read after
+      // the person locks, which every membership writer takes, so the list cannot change
+      // under this transaction; then taken in the same call, so the order stays sorted.
+      const sourceCells = await this.sourceCellsOfWithin(trx, memberIds);
+      const cellLocks = [
+        ...(pre.kind === 'HANDOVER' && pre.cell_id !== null ? [pre.cell_id] : []),
+        ...sourceCells,
+      ].map((cellId) => ({ cellId, strength: CellLock.ReadsTheState }));
+
+      if (cellLocks.length > 0) {
+        await lockCellsWithin(trx, cellLocks);
       }
 
       // ------------------------------------------------------------------
@@ -841,7 +855,10 @@ export class CellsLeadershipRequestService {
       });
 
       for (const row of batch) {
-        if (wholeChurch || (await this.mayDecide(this.db, row, actor, authority))) {
+        if (
+          (wholeChurch || (await this.mayDecide(this.db, row, actor, authority))) &&
+          (await this.moveAnswerFor(this.db, row, actor, authority)) === 'ok'
+        ) {
           rows.push(row);
         }
       }
@@ -1749,8 +1766,9 @@ export class CellsLeadershipRequestService {
   }
 
   /**
-   * Each member a new-Cell request names is a current Person, in the prospective leader's
-   * Network now, and holds no open Cell membership (decision 0353). Rules about what may
+   * Each member a new-Cell request names is a current Person and in the prospective
+   * leader's Network now (decision 0353; since decision 0357 one may already be in a
+   * Cell). Rules about what may
    * be recorded, so `INVARIANT_VIOLATION`, naming the line; at approval, naming the person.
    */
   private async assertMembersQualifyWithin(
@@ -1788,14 +1806,51 @@ export class CellsLeadershipRequestService {
         );
       }
 
-      if ((await this.cells.openMembershipOf(trx, personId)) !== null) {
-        throw new InvariantViolationError(
-          `One of the members is in a Cell${when}. Somebody already in a Cell cannot be ` +
-            `named yet (SKILL.md section 10).${remedy}`,
-          where,
-        );
+      // Somebody already in a Cell may be named (decision 0357): they stay there while the
+      // request waits and move into the new Cell at approval.
+    }
+  }
+
+  /** The Cells these people are members of now, each once (decision 0357). */
+  private async sourceCellsOfWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+  ): Promise<string[]> {
+    const cells = new Set<string>();
+
+    for (const personId of personIds) {
+      const current = await this.cells.openMembershipOf(executor, personId);
+      if (current !== null) {
+        cells.add(current.id);
       }
     }
+
+    return [...cells];
+  }
+
+  /**
+   * Whether the actor may move this request's named members out of the Cells they are in
+   * now, which approving it does (decision 0357). `'ok'` for a request naming nobody in a
+   * Cell, and for every handover.
+   */
+  private async moveAnswerFor(
+    executor: Db | Transaction<Database>,
+    request: { id: string; kind: CellRequestKind },
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<'ok' | 'capability' | 'scope'> {
+    if (request.kind === 'HANDOVER') {
+      return 'ok';
+    }
+
+    const sources = await this.sourceCellsOfWithin(
+      executor,
+      await this.membersOfRequestWithin(executor, request.id),
+    );
+
+    return sources.length === 0
+      ? 'ok'
+      : moveMembersAnswer(executor, this.authorization, this.cells, actor, authority, sources);
   }
 
   /** The members a request names, in the order they were named. */
@@ -1812,7 +1867,10 @@ export class CellsLeadershipRequestService {
     return rows.map((row) => row.person_id);
   }
 
-  /** The three members join the new Cell from its first instant (decision 0353). */
+  /**
+   * The three members join the new Cell from its first instant (decision 0353). One already
+   * in a Cell moves (decision 0357): that membership closes at the instant the new one opens.
+   */
   private async addMembersWithin(
     trx: Transaction<Database>,
     applied: AppliedApproval,
@@ -1822,7 +1880,19 @@ export class CellsLeadershipRequestService {
     // The Cell's own `created_at`, read in SQL at its full precision: the leadership row's
     // `started_at` is that instant to the microsecond, and a JavaScript `Date` keeps only the
     // millisecond, which would start each membership just before the Cell had a leader and be
-    // refused by migration 0009's same-Network check. `insert-cell.ts` does the same.
+    // refused by migration 0009's same-Network check. `insert-cell.ts` does the same. The
+    // closing instant is the same value, so the person is never in two Cells or in none.
+    const closed = await sql<{ person_id: string; cell_uuid: string; cell_id: string }>`
+      UPDATE cell_memberships AS m
+      SET ended_at = c.created_at
+      FROM cells AS c, cells AS old
+      WHERE c.id = ${applied.cellUuid}
+        AND old.id = m.cell_id
+        AND m.person_id = ANY(${[...memberIds]}::uuid[])
+        AND m.ended_at IS NULL
+      RETURNING m.person_id, old.id AS cell_uuid, old.cell_id`.execute(trx);
+    const movedFrom = new Map(closed.rows.map((row) => [row.person_id, row]));
+
     await sql`INSERT INTO cell_memberships (person_id, cell_id, started_at)
       SELECT member.person_id, c.id, c.created_at
       FROM cells AS c
@@ -1830,12 +1900,15 @@ export class CellsLeadershipRequestService {
       WHERE c.id = ${applied.cellUuid}`.execute(trx);
 
     for (const personId of memberIds) {
+      const from = movedFrom.get(personId);
+      // Section 21: a move is one entry carrying both Cells, as `CellsMembershipService.add`
+      // writes it.
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
-        action: 'cell_membership.added',
+        action: from ? 'cell_membership.moved' : 'cell_membership.added',
         targetType: 'person',
         targetId: personId,
-        before: null,
+        before: from ? { cell_uuid: from.cell_uuid, cell_id: from.cell_id } : null,
         after: {
           cell_uuid: applied.cellUuid,
           cell_id: applied.cellId,
@@ -1877,16 +1950,37 @@ export class CellsLeadershipRequestService {
       { kind: 'church' },
     );
 
-    if (wholeChurch) {
-      return;
-    }
-
-    if (!(await this.mayDecide(trx, request, actor, authority))) {
+    if (!wholeChurch && !(await this.mayDecide(trx, request, actor, authority))) {
       throw new ScopeDeniedError(
         'This request goes to an administrator: it is outside your branch, or it is your ' +
           'own request, your own leadership, a Cell you lead, or a Cell for your own ' +
           'direct disciple (SKILL.md section 10).',
         { capability: Capability.CellApproveLeadership },
+      );
+    }
+
+    // **Only an approver who may move the named members decides it** (decision 0357), and
+    // that binds a Whole Church approver too. An approver it refuses neither approves nor
+    // declines it, and the queue leaves it out; it reaches the Admin. **After the checks
+    // above** (section 7's contents ordering, decision 0193), so an approver the request
+    // was never theirs to decide learns nothing about its members; and the words say what
+    // approving would do, never where a member is (section 8).
+    const move = await this.moveAnswerFor(trx, request, actor, authority);
+
+    if (move === 'capability') {
+      throw new CapabilityDeniedError(
+        'This request goes to an administrator: approving it would move somebody out of a ' +
+          'Cell, which only the Primary of the branch or the Admin does (SKILL.md section ' +
+          '10, decision 0357).',
+        { capability: Capability.CellMoveMembers },
+      );
+    }
+
+    if (move === 'scope') {
+      throw new ScopeDeniedError(
+        'This request goes to an administrator: approving it would make a move outside ' +
+          'your branch (SKILL.md section 10, decision 0357).',
+        { capability: Capability.CellMoveMembers },
       );
     }
   }

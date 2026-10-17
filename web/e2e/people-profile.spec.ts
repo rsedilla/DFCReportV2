@@ -39,6 +39,12 @@ async function signedInWithPeople(page: Page) {
   await mockPeople(page);
 }
 
+/** The same, for an account that moves Cell members: a ticked Primary (decision 0357). */
+async function signedInMovingMembers(page: Page) {
+  await signedInWithPeople(page);
+  await mockGrants(page, ['cell.move_members']);
+}
+
 test.describe('why a person has no pastoral leader (decision 0270)', () => {
   for (const [reason, words] of [
     ['OUTSIDE_TREE', 'Outside the pastoral tree'],
@@ -188,6 +194,26 @@ test.describe('a person’s Cell', () => {
     await expect(page.getByRole('button', { name: 'Add to a Cell' })).toHaveCount(0);
   });
 
+  test('a reader who moves no Cell members is offered no move, and told the Primary makes it (decision 0357)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByText('Moves to another Cell are made by your Primary.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
+  });
+
+  test('a reader who moves Cell members is offered the move, with no Primary line', async ({
+    page,
+  }) => {
+    await signedInMovingMembers(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByRole('button', { name: 'Move to another Cell' })).toBeVisible();
+    await expect(page.getByText('Moves to another Cell are made by your Primary.')).toHaveCount(0);
+  });
+
   test('a person in no Cell is offered one, which takes effect today', async ({ page }) => {
     await signedInWithPeople(page);
     await mockPersonCells(page, { membership: null, leads: [] });
@@ -204,7 +230,7 @@ test.describe('a person’s Cell', () => {
   test('moves a member to another Cell in one request, leaving the current Cell off the list', async ({
     page,
   }) => {
-    await signedInWithPeople(page);
+    await signedInMovingMembers(page);
     await mockCellChoices(page);
     const sent = await mockMembershipAdd(page, 'accepted');
 
@@ -246,7 +272,7 @@ test.describe('a person’s Cell', () => {
   test('offers only the person’s own Network’s Cells, and says why (owner’s choice, 2026-09-21)', async ({
     page,
   }) => {
-    await signedInWithPeople(page);
+    await signedInMovingMembers(page);
     await mockCellChoices(page, [MENS_CELL_CHOICE]);
     await page.goto(PROFILE);
 
@@ -263,8 +289,51 @@ test.describe('a person’s Cell', () => {
     ).toBeVisible();
   });
 
+  for (const [code, words] of [
+    [
+      'CAPABILITY_DENIED',
+      'You can add somebody who is in no Cell. Moves between Cells are made by the Primary.',
+    ],
+    [
+      'SCOPE_DENIED',
+      'You move members only between Cells of your own branch. Other moves are made by the Admin.',
+    ],
+  ] as const) {
+    test(`a move refused ${code} says who makes it, in plain words (decision 0357)`, async ({
+      page,
+    }) => {
+      await signedInMovingMembers(page);
+      await mockCellChoices(page);
+      await page.route('**/api/v1/cells/*/members', (route) =>
+        route.request().method() === 'POST'
+          ? route.fulfill({
+              status: 403,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: {
+                  code,
+                  message: 'Moving somebody out of a Cell is done by the Primary (SKILL.md section 10).',
+                  details: { capability: 'cell.move_members' },
+                },
+              }),
+            })
+          : route.fallback(),
+      );
+      await page.goto(PROFILE);
+
+      await page.getByRole('button', { name: 'Move to another Cell' }).click();
+      const dialog = page.getByRole('dialog');
+      await searchCells(dialog, '000011');
+      await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
+      await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+
+      await expect(dialog.getByText(words)).toBeVisible();
+      await expect(dialog.getByText('SKILL.md')).toHaveCount(0);
+    });
+  }
+
   test('a refusal for the other Network names both Networks in plain words', async ({ page }) => {
-    await signedInWithPeople(page);
+    await signedInMovingMembers(page);
     await mockCellChoices(page);
     await mockMembershipAdd(page, 'other-network');
     await page.goto(PROFILE);
@@ -489,7 +558,7 @@ test.describe('who pastors a person', () => {
 
 test.describe('dialogs', () => {
   test('rise from the bottom edge on a phone and sit centred on a desktop', async ({ page }) => {
-    await signedInWithPeople(page);
+    await signedInMovingMembers(page);
     await mockCellChoices(page);
 
     await page.setViewportSize({ width: 390, height: 844 });

@@ -911,6 +911,18 @@ export async function listEveryCell(
  * which cites the specification. Every other refusal keeps the server's own message.
  */
 export function membershipFailure(error: unknown, personName: string, cellHandle: string): Failure {
+  // Somebody already in another Cell is moved, which needs `cell.move_members` (decision 0357).
+  // Each sentence says what the reader may do, never where the person is (section 8).
+  if (error instanceof ApiRequestError && error.details.capability === 'cell.move_members') {
+    return {
+      message:
+        error.code === 'CAPABILITY_DENIED'
+          ? 'You can add somebody who is in no Cell. Moves between Cells are made by the Primary.'
+          : 'You move members only between Cells of your own branch. Other moves are made by the Admin.',
+      aboutInput: false,
+    };
+  }
+
   if (error instanceof ApiRequestError && error.code === 'INVARIANT_VIOLATION') {
     const member = error.details.member_network;
     const cell = error.details.cell_network;

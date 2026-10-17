@@ -46,13 +46,14 @@ export function ThreeMembers({
       <legend className="field-label">Three members</legend>
       <p className="text-muted text-sm leading-relaxed">
         Three people who will be in the Cell, besides its leader. Each must be in the
-        leader&rsquo;s Network and not already in a Cell.
+        leader&rsquo;s Network. Somebody already in a Cell stays there until this is
+        approved, then moves into the new Cell.
       </p>
       {[0, 1, 2].map((slot) => (
         <PersonPicker
           key={slot}
           legend={`Member ${slot + 1}`}
-          description="In the leader’s Network, and in no Cell."
+          description="In the leader’s Network."
           searchLabel={`Search for member ${slot + 1} by name`}
           selectedId={members[slot]?.id ?? null}
           selectedName={members[slot]?.full_name ?? null}

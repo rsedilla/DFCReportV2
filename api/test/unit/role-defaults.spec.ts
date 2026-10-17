@@ -79,6 +79,9 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
+  // The Leader cell reads "own/subtree, with Moves people and Full view" (decision 0357): the
+  // same tick as people.manage_pastoral_assignment, pinned against `LEADER_MOVES_PEOPLE` below.
+  'cell.move_members': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'cell.manage_leadership': {
     SENIOR_PASTOR: null,
     ADMIN: 'WHOLE_CHURCH',
@@ -249,11 +252,17 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(ROLE_DEFAULTS.SENIOR_PASTOR['cell.approve_leadership']).toBeUndefined();
   });
 
-  it('gives a Leader people.manage_pastoral_assignment only with Moves people, over its own subtree (decision 0356)', () => {
-    // A set the tick adds, holding that one capability and nothing else, never part of the
-    // Leader role, and unchanged for the two roles that move anyone.
-    expect(LEADER_MOVES_PEOPLE).toEqual({ 'people.manage_pastoral_assignment': 'OWN_SUBTREE' });
+  it('gives a Leader people.manage_pastoral_assignment and cell.move_members only with Moves people, over its own subtree (decisions 0356 and 0357)', () => {
+    // A set the tick adds, holding those two capabilities and nothing else, never part of
+    // the Leader role. A Senior Pastor moves people to another leader and moves no member.
+    expect(LEADER_MOVES_PEOPLE).toEqual({
+      'people.manage_pastoral_assignment': 'OWN_SUBTREE',
+      'cell.move_members': 'OWN_SUBTREE',
+    });
     expect(ROLE_DEFAULTS.LEADER['people.manage_pastoral_assignment']).toBeUndefined();
+    expect(ROLE_DEFAULTS.LEADER['cell.move_members']).toBeUndefined();
+    expect(ROLE_DEFAULTS.SENIOR_PASTOR['cell.move_members']).toBeUndefined();
+    expect(ROLE_DEFAULTS.ADMIN['cell.move_members']).toBe('WHOLE_CHURCH');
     expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
     expect(ROLE_DEFAULTS.ADMIN['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
   });

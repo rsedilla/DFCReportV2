@@ -27,6 +27,7 @@ export const Capability = {
   CellSubmitOnBehalf: 'cell.submit_on_behalf',
   CellCorrectSubtree: 'cell.correct_subtree',
   CellManageMembership: 'cell.manage_membership',
+  CellMoveMembers: 'cell.move_members',
   CellManageLeadership: 'cell.manage_leadership',
   CellManageConfiguration: 'cell.manage_configuration',
   CellRequestLeadership: 'cell.request_leadership',
