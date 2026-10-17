@@ -129,8 +129,9 @@ export function ReportsTabs({
                 aria-label={tab.name}
                 className={
                   branch
-                    ? // Tighter below `sm`, so the three fit a 320px phone with their words wrapped.
-                      cn(tabClasses(active), 'px-2')
+                    ? // Tighter below `sm`, so the three fit a 320px phone with their words wrapped,
+                      // with room to spare for a wider font: `px-2` left 3px too few on Linux.
+                      cn(tabClasses(active), 'px-1.5')
                     : cn(
                         'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
                         'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
