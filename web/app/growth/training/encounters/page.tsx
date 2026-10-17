@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { GrowthTabs } from '@/components/growth-controls';
+import { isBranchReader } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -77,6 +78,7 @@ function EncounterSeasons() {
     queryFn: ({ signal }) => listEncounterSeasons(signal),
   });
   const mayChange = holdsWholeChurch(me.data, 'settings.manage');
+  const branch = isBranchReader(me.data);
   // Which half a reader is shown is the API's to decide (decision 0296): a Whole Church reader,
   // who is the only one who edits, both; anyone else their own Network's.
   const shows = seasons.data?.shows ?? 'BOTH';
@@ -151,9 +153,14 @@ function EncounterSeasons() {
         <h1 className="text-2xl font-semibold tracking-tight">Growth</h1>
         <p className="text-muted text-sm">The Encounter God Weekends, set by an administrator.</p>
       </div>
-      <GrowthTabs current="/growth/training">
+      {/* A Full view leader's Training is hidden, so SUYNL is the way back (decision 0360). */}
+      <GrowthTabs current={branch ? '/growth/suynl' : '/growth/training'}>
         <p className="mt-4">
-          <TextLink href="/growth/training">Back to Training</TextLink>
+          {branch ? (
+            <TextLink href="/growth/suynl">Back to SUYNL</TextLink>
+          ) : (
+            <TextLink href="/growth/training">Back to Training</TextLink>
+          )}
         </p>
 
         <section className={`mt-2 ${FRAME}`} aria-labelledby="seasons-heading">

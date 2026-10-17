@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId } from 'react';
 
 import { longDay } from '@/components/growth-controls';
+import { isBranchReader } from '@/components/reports-tabs';
 import { FRAME } from '@/components/ui/frame';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
@@ -44,7 +45,8 @@ export function PersonGrowth({ personId, memberId }: { personId: string; memberI
   const training = useQuery({
     queryKey: ['person-training', memberId],
     queryFn: ({ signal }) => listTrainingPeople({ q: memberId, limit: 1 }, signal),
-    enabled: holds('training.view_subtree'),
+    // A Full view leader's Training is hidden, as its Growth tab is (decision 0360).
+    enabled: holds('training.view_subtree') && !isBranchReader(me.data),
     retry: false,
   });
 

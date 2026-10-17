@@ -76,14 +76,13 @@ const TABS = [
 ] as const;
 
 /**
- * A Full view leader's four (decision 0340): the shared account, which reads reports over one
- * Network. No Training, and the first two named as the Senior Pastors' are.
+ * A Full view leader's three (decisions 0340 and 0360): the shared account, which reads reports
+ * over one Network. No Training or Conquest, and the first two named as the Senior Pastors' are.
  */
 const BRANCH_TABS = [
   { label: 'CG Attendance', path: '/reports/cells', dated: true },
   { label: 'DCC Attendance', path: '/reports/dcc', dated: true },
   { label: 'SUYNL', path: '/reports/suynl', dated: false },
-  { label: 'Conquest', path: '/reports/conquest', dated: false },
 ] as const;
 
 /** Each reader, with the tabs they are shown. */
@@ -138,15 +137,33 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     }
   }
 
-  test('a Full view leader is offered no Training tab (decision 0340)', async ({ page }) => {
+  test('a Full view leader is offered no Training or Conquest tab (decisions 0340 and 0360)', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(NOW);
     await mockEveryReport(page);
     await page.goto('/reports/cells');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link')).toHaveCount(4);
-    await expect(which.getByRole('link', { name: 'Training' })).toHaveCount(0);
+    await expect(which.getByRole('link')).toHaveCount(3);
+    for (const name of ['Training', 'Conquest']) {
+      await expect(which.getByRole('link', { name })).toHaveCount(0);
+    }
     await expect(which.locator('a[href^="/reports/training"]')).toHaveCount(0);
+    await expect(which.locator('a[href^="/reports/conquest"]')).toHaveCount(0);
+  });
+
+  test('a Full view leader still opens Conquest by its address, hidden rather than withdrawn (decision 0360)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page);
+    await page.goto('/reports/conquest');
+
+    await expect(page.getByRole('link', { name: 'See each person in Growth' })).toBeVisible();
+    const which = page.getByRole('navigation', { name: 'Which report' });
+    await expect(which.getByRole('link')).toHaveText(BRANCH_TABS.map((each) => each.label));
+    await expect(which.locator('a[aria-current="page"]')).toHaveCount(0);
   });
 
   test('the month travels to CG Attendance and DCC Attendance, and never to SUYNL or Conquest', async ({
@@ -613,16 +630,16 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
    * Two across on a phone and one row from `sm`: a whole-church reader's five (decision 0292)
-   * and a Full view leader's four (decision 0340).
+   * and a Full view leader's three (decisions 0340 and 0360).
    */
   const LAYOUTS = [
-    { width: 375, height: 812, columns: { five: 2, four: 2 }, rows: { five: 3, four: 2 } },
-    { width: 768, height: 1024, columns: { five: 5, four: 4 }, rows: { five: 1, four: 1 } },
-    { width: 1280, height: 800, columns: { five: 5, four: 4 }, rows: { five: 1, four: 1 } },
+    { width: 375, height: 812, columns: { five: 2, three: 2 }, rows: { five: 3, three: 2 } },
+    { width: 768, height: 1024, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
+    { width: 1280, height: 800, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
   ] as const;
 
   for (const { reader, church, tabs } of READERS) {
-    const count = tabs.length === 5 ? 'five' : 'four';
+    const count = tabs.length === 5 ? 'five' : 'three';
     for (const layout of LAYOUTS) {
       test(`for ${reader}, at ${layout.width}px the ${count} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
         page,

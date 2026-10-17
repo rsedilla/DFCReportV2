@@ -29,9 +29,12 @@ async function openProfile(
   page: Page,
   grants: readonly string[],
   answers: { suynl?: PersonGrowthAnswer; training?: PersonGrowthAnswer } = {},
+  // A reader of the whole church's reports, as the Admin is, unless the case is about a Full
+  // view leader, whose Training is hidden (decision 0360).
+  { wholeChurch = true }: { wholeChurch?: boolean } = {},
 ) {
   await mockSignedIn(page);
-  await mockGrants(page, grants);
+  await mockGrants(page, grants, { wholeChurch });
   await mockPeople(page);
   const traffic = await mockPersonGrowth(page, answers);
   await page.goto(PROFILE);
@@ -149,6 +152,17 @@ test.describe('when the frame, or half of it, is left out', () => {
 
   test('shows only SUYNL to a reader holding only suynl.view_subtree', async ({ page }) => {
     const traffic = await openProfile(page, ['suynl.view_subtree']);
+    await expect(frame(page).getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
+    await settled(page, traffic, { suynl: traffic.suynl.length, training: 0 });
+
+    await expect(frame(page).getByText('Training', { exact: true })).toHaveCount(0);
+    await expect(frame(page).getByRole('link', { name: 'Open Training' })).toHaveCount(0);
+  });
+
+  test('shows a Full view leader SUYNL and no Training, and asks for none (decision 0360)', async ({
+    page,
+  }) => {
+    const traffic = await openProfile(page, BOTH, {}, { wholeChurch: false });
     await expect(frame(page).getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
     await settled(page, traffic, { suynl: traffic.suynl.length, training: 0 });
 

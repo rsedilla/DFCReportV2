@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { SIGNED_IN_PERSON_ID, mockSignedIn } from './mock-api';
+import { SIGNED_IN_PERSON_ID, mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
   SUYNL_IN_PROGRESS,
   SUYNL_NOT_MINE,
@@ -54,9 +54,13 @@ async function openTraining(page: Page, path = '/growth/training') {
 }
 
 test.describe('the Growth tabs', () => {
+  // A whole-church reader, as the Admin is: a Full view leader has SUYNL alone (decision 0360).
   test('are links, and the one open is marked as the current page', async ({ page }) => {
-    await openSuynl(page);
+    await mockSignedIn(page);
+    await mockWholeChurchReader(page);
+    await mockSuynl(page);
     await mockTraining(page);
+    await page.goto('/growth/suynl');
 
     const tabs = page.getByRole('navigation', { name: 'Growth' });
     await expect(tabs.getByRole('link', { name: 'SUYNL' })).toHaveAttribute('aria-current', 'page');
@@ -70,6 +74,24 @@ test.describe('the Growth tabs', () => {
       'page',
     );
     await expect(tabs.getByRole('link', { name: 'SUYNL' })).not.toHaveAttribute('aria-current');
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
+  });
+
+  test('are SUYNL alone for a Full view leader, and Training still opens by its address (decision 0360)', async ({
+    page,
+  }) => {
+    await openSuynl(page);
+    await mockTraining(page);
+
+    const tabs = page.getByRole('navigation', { name: 'Growth' });
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
+    await expect(tabs.getByRole('link', { name: 'SUYNL' })).toHaveAttribute('aria-current', 'page');
+
+    // Hidden, not withdrawn: the page answers, under the one tab, with none marked current.
+    await page.goto('/growth/training');
+    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
+    await expect(tabs.locator('a[aria-current="page"]')).toHaveCount(0);
   });
 
   test('sit under the Growth item of the sidebar, which is the current page', async ({ page }) => {

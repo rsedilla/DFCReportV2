@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { mockSignedIn } from './mock-api';
+import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import { CONQUEST_ALL, CONQUEST_NONE, CONQUEST_PARTWAY, mockConquest } from './mock-growth';
 
 /**
@@ -21,8 +21,11 @@ function lastList(lists: URLSearchParams[]): URLSearchParams {
   return lists[lists.length - 1];
 }
 
-async function openConquest(page: Page, address = '/growth/conquest') {
+async function openConquest(page: Page, address = '/growth/conquest', church = false) {
   await mockSignedIn(page);
+  if (church) {
+    await mockWholeChurchReader(page);
+  }
   const traffic = await mockConquest(page);
   await page.goto(address);
   await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
@@ -47,8 +50,9 @@ function cellsOf(page: Page, name: string) {
 }
 
 test.describe('the Conquest tab', () => {
+  // A whole-church reader, as the Admin is: a Full view leader's tab is hidden (decision 0360).
   test('is a Growth tab, marked as the current page', async ({ page }) => {
-    await openConquest(page);
+    await openConquest(page, '/growth/conquest', true);
 
     const tabs = page.getByRole('navigation', { name: 'Growth' });
     await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);

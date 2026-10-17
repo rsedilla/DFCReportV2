@@ -18,14 +18,14 @@ const TABS = [
 ] as const;
 
 /**
- * A Full view leader's four (decision 0340): the first two under the names the Senior Pastors'
- * carry, laid out as theirs for the leader's own branch, and no Training.
+ * A Full view leader's three (decisions 0340 and 0360): the first two under the names the Senior
+ * Pastors' carry, laid out as theirs for the leader's own branch. Training and Conquest are
+ * hidden, not withdrawn: their pages still open by address.
  */
 const BRANCH_TABS = [
   { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
   { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
-  { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
 ] as const;
 
 /**
@@ -65,7 +65,7 @@ export type ReportTab =
  * Which report is on screen, and the way to the others (SKILL.md section 19; decision 0292).
  *
  * **Five links for a whole-church reader, the Senior Pastors' five (decision 0326), or a Full
- * view leader's four (decision 0340), not ARIA tabs.** Each report keeps an address of its own, so the landing page
+ * view leader's three (decisions 0340 and 0360), not ARIA tabs.** Each report keeps an address of its own, so the landing page
  * decision 0245 gives a whole-church reader, the sidebar and a saved link all still work, and
  * something that navigates is announced as a link. Equal widths in the Record screen's style
  * (decision 0290): one row from a small screen up, and two on a phone.
@@ -107,7 +107,7 @@ export function ReportsTabs({
           className={cn(
             'mt-6 grid grid-cols-2',
             // The labels fit one row from a small screen up (owner, 2026-10-09).
-            branch ? 'sm:grid-cols-4' : 'sm:grid-cols-5',
+            branch ? 'sm:grid-cols-3' : 'sm:grid-cols-5',
             TAB_ROW,
           )}
         >
