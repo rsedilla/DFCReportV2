@@ -1017,8 +1017,9 @@ export class HierarchyService {
       ])
       .where('pa.leader_id', '=', personId)
       .where('pa.ended_at', 'is', null)
-      .orderBy('disciple.last_name')
       .orderBy('disciple.first_name')
+      .orderBy('disciple.last_name')
+      .orderBy('disciple.member_id')
       .execute();
 
     return rows.map((row) => ({

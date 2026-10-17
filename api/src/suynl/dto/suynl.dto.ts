@@ -92,7 +92,7 @@ export class SuynlReadinessDto {
   names?: boolean;
 
   /**
-   * `total_names=true` adds the people behind the total, one list in surname order, which is
+   * `total_names=true` adds the people behind the total, one list in first-name order, which is
    * an opened row's people in the order the row listed them (decision 0293).
    */
   @IsOptional()

@@ -57,10 +57,11 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     await assignTo(db, raymond.id, null);
 
+    // Mark is written before Manuel, so first-name order (Manuel, Mark; decision 0359) is
+    // not the order the rows were written in.
+    mark = await createPerson(db, { firstName: 'Mark', lastName: 'Bautista', network: 'MENS' });
     manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     await assignTo(db, manuel.id, raymond.id);
-
-    mark = await createPerson(db, { firstName: 'Mark', lastName: 'Bautista', network: 'MENS' });
     await assignTo(db, mark.id, manuel.id);
 
     timothy = await createPerson(db, { firstName: 'Timothy', network: 'MENS' });
@@ -422,11 +423,11 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     const response = await gaps(manuelAccount, eventId);
 
     expect(response.status).toBe(200);
-    // Bautista before Testfixture: section 8's directory order, which section 15 permits
-    // and which says nothing about who is furthest behind.
+    // Manuel before Mark: first-name order (decision 0359), which section 15 permits and
+    // which says nothing about who is furthest behind.
     expect((response.body.data as { person_id: string }[]).map((row) => row.person_id)).toEqual([
-      mark.id,
       manuel.id,
+      mark.id,
     ]);
   });
 
@@ -500,7 +501,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     expect([
       ...(first.body.data as { person_id: string }[]).map((row) => row.person_id),
       ...(second.body.data as { person_id: string }[]).map((row) => row.person_id),
-    ]).toEqual([mark.id, manuel.id]);
+    ]).toEqual([manuel.id, mark.id]);
   });
 
   it('refuses a cursor it cannot read', async () => {
@@ -596,6 +597,14 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
   }
 
   it('lists each leader in the branch who owes a record, the actor included, by name', async () => {
+    // Abel, a leader with an account under Manuel, sorts before him by first name (decision
+    // 0359), so the actor is in the middle rather than first by being the actor.
+    const abel = await createPerson(db, { firstName: 'Abel', network: 'MENS' });
+    await assignTo(db, abel.id, manuel.id);
+    await createAccount(app, db, { person: abel, roles: ['LEADER'] });
+    const abelsDisciple = await createPerson(db, { firstName: 'Zoilo', network: 'MENS' });
+    await assignTo(db, abelsDisciple.id, abel.id);
+
     const sunday = await recentSunday();
     const eventId = await createEvent(sunday);
 
@@ -604,8 +613,9 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     expect(response.status).toBe(200);
     const rows = (response.body.data as OwedRow[]).filter((row) => row.event_id === eventId);
     expect(rows.map((row) => [row.leader.person_id, row.leader.is_actor])).toEqual([
-      [mark.id, false],
+      [abel.id, false],
       [manuel.id, true],
+      [mark.id, false],
     ]);
     // The parts the branch view sorts by (decision 0311), which the fixtures' untitled
     // names compose into the full name.

@@ -846,7 +846,7 @@ function Dashboard() {
               </h2>
               <p className="text-muted text-sm">
                 Leaders you oversee whose 12 have no DCC record for a Sunday still open, by
-                surname.
+                first name.
               </p>
             </div>
             <PendingDccFilters
@@ -1212,8 +1212,8 @@ interface LeaderOf {
 }
 
 /**
- * A branch view's entries under the leader each names (decision 0311), in surname, then
- * first name, then Member ID order: never by how much a leader owes or how long it has
+ * A branch view's entries under the leader each names (decision 0311), in first name, then
+ * surname, then Member ID order (decision 0359): never by how much a leader owes or how long it has
  * waited, which would read as a ranking (decision 0009). Each group keeps its entries'
  * own order, oldest first.
  */
@@ -1233,10 +1233,10 @@ function groupByLeader<Item>(
   return [...groups.values()]
     .sort(
       (left, right) =>
-        (left.leader.lastName ?? left.leader.name).localeCompare(
-          right.leader.lastName ?? right.leader.name,
+        (left.leader.firstName ?? left.leader.name).localeCompare(
+          right.leader.firstName ?? right.leader.name,
         ) ||
-        (left.leader.firstName ?? '').localeCompare(right.leader.firstName ?? '') ||
+        (left.leader.lastName ?? '').localeCompare(right.leader.lastName ?? '') ||
         (left.leader.memberId ?? '').localeCompare(right.leader.memberId ?? ''),
     )
     .map(({ leader, items: grouped }) => ({
@@ -1393,12 +1393,15 @@ function DccChecklistGrid({
   checklists: readonly { data?: DccRosterLine[] }[];
   month: string;
 }) {
-  const people = new Map<string, { name: string }>();
+  const people = new Map<string, { name: string; key: [string, string, string] }>();
   const marks = new Map<string, Map<string, boolean>>();
 
   events.forEach((event, index) => {
     for (const line of checklists[index]?.data ?? []) {
-      people.set(line.person_id, { name: line.full_name });
+      people.set(line.person_id, {
+        name: line.full_name,
+        key: [line.first_name, line.last_name, line.member_id],
+      });
       if (line.record !== null) {
         const byEvent = marks.get(line.person_id) ?? new Map<string, boolean>();
         byEvent.set(event.id, line.record.present);
@@ -1411,7 +1414,14 @@ function DccChecklistGrid({
     return null;
   }
 
-  const rows = [...people.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name));
+  // First name, surname, Member ID (decision 0359): never the composed name, which leads
+  // with a title (decision 0271).
+  const rows = [...people.entries()].sort(
+    ([, a], [, b]) =>
+      a.key[0].localeCompare(b.key[0]) ||
+      a.key[1].localeCompare(b.key[1]) ||
+      a.key[2].localeCompare(b.key[2]),
+  );
 
   return (
     <section aria-labelledby="dcc-grid-heading" className="mt-8">
@@ -1709,7 +1719,7 @@ function PendingDccFilters({
 }
 
 /**
- * Pending DCC Records (decision 0336): one row per leader, by surname, each open Sunday on a
+ * Pending DCC Records (decision 0336): one row per leader, by first name, each open Sunday on a
  * line of its own with Update Record's label. The recorder named, Record and See checklist
  * follow the oldest Sunday; Record is offered where the API says the reader may record there.
  */

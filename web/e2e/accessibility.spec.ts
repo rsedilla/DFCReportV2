@@ -1721,7 +1721,7 @@ const TARGET_SWEEP = [
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'link' as const,
-    settle: 'Efren Dimaculangan',
+    settle: 'Teresita Alcantara',
     minimum: 14,
   },
   {

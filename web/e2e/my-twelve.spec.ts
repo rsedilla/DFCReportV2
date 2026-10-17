@@ -10,7 +10,7 @@ import { mockCellReport, mockCellTwelve, TWELVE } from './mock-attendance';
  * `api/test/api/reporting-cells-twelve.e2e.spec.ts` pins the figures and who may read them.
  * This pins what the screen does with them: which period it asks for, what the address
  * holds, where the navigator stops, and that the table keeps section 13's four conditions --
- * surname order as the API sends it, no row numbers, each name opening that leader's 12, and
+ * first-name order as the API sends it, no row numbers, each name opening that leader's 12, and
  * the total adding up in plain sight. A Full view leader -- the shared account, which reads
  * reports over one Network -- reads their branch's cards and their 12 with Total second
  * (decision 0340); a whole-church reader keeps the table decision 0293 gave them.
@@ -292,8 +292,9 @@ test.describe('My 12', () => {
     const rows = table.locator('tbody tr');
     await expect(rows).toHaveCount(7);
 
-    // Surname order as sent, which is 3, 4, 0 by Total: neither ascending nor descending.
-    const names = [TWELVE.teresita, TWELVE.consuelo, TWELVE.efren];
+    // First-name order as sent (decision 0359), which is 4, 0, 3 by Total: neither ascending
+    // nor descending.
+    const names = [TWELVE.consuelo, TWELVE.efren, TWELVE.teresita];
     for (const [index, leader] of names.entries()) {
       const row = rows.nth(index);
       // No row number: the first cell is the name and nothing else.
@@ -303,9 +304,9 @@ test.describe('My 12', () => {
         `/reports/cells?month=2026-06-01&leader=${leader.id}`,
       );
     }
-    expect(await cellsOf(rows.nth(0))).toEqual(['Teresita Alcantara', '3', '1', '0', '1', '0', '1']);
-    expect(await cellsOf(rows.nth(1))).toEqual(['Consuelo Bautista', '4', '1', '1', '0', '1', '1']);
-    expect(await cellsOf(rows.nth(2))).toEqual(['Efren Dimaculangan', '0', '0', '0', '0', '0', '0']);
+    expect(await cellsOf(rows.nth(0))).toEqual(['Consuelo Bautista', '4', '1', '1', '0', '1', '1']);
+    expect(await cellsOf(rows.nth(1))).toEqual(['Efren Dimaculangan', '0', '0', '0', '0', '0', '0']);
+    expect(await cellsOf(rows.nth(2))).toEqual(['Teresita Alcantara', '3', '1', '0', '1', '0', '1']);
     expect(await cellsOf(rows.nth(3))).toEqual([
       'You · your own Cell Groups (2)',
       '2',
@@ -326,7 +327,7 @@ test.describe('My 12', () => {
     // The cards are the Total row's figures, so the two cannot disagree.
     expect(await cards.getByRole('definition').allTextContents()).toEqual(totalRow.slice(1));
 
-    // The Total column adds up in plain sight (section 20): 3 + 4 + 0 + 2 − 1 + 2 = 10.
+    // The Total column adds up in plain sight (section 20): 4 + 0 + 3 + 2 − 1 + 2 = 10.
     const signed = async (index: number) =>
       Number((await cellsOf(rows.nth(index)))[1].replace('−', '-'));
     let sum = 0;
@@ -473,9 +474,9 @@ test.describe('Figures for', () => {
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
     await expect(select.locator('option')).toHaveText([
       'People you oversee',
-      'Teresita Alcantara',
       'Consuelo Bautista',
       'Efren Dimaculangan',
+      'Teresita Alcantara',
     ]);
 
     await select.selectOption({ label: 'Teresita Alcantara' });

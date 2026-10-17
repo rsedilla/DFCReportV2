@@ -24,11 +24,11 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * sum to the same total. A mismatch is a data-integrity defect, not a rounding issue.
  *
  * The tree is `CLAUDE.md`'s `Raymond -> Manuel -> Mark`, with two more direct disciples of
- * Raymond, Onofre and Pio, and a disciple under each of Mark and Onofre. Surnames are chosen
- * so surname order (Abella, Bautista, Zamora) differs from creation order and from any
- * figure. Oriel is the Women's root, and her surname (Abad) sorts before Raymond's (Alvarez),
- * which is what lets Network order be told apart from surname order on the whole-church
- * rows. All names are invented (`CLAUDE.md`, Secrets).
+ * Raymond, Onofre and Pio, and a disciple under each of Mark and Onofre. Names are chosen so
+ * first-name order (Manuel, Onofre, Pio; decision 0359) differs from creation order (Manuel,
+ * Pio, Onofre) and from any figure. Oriel is the Women's root, and her name sorts before
+ * Raymond's, which is what lets Network order be told apart from name order on the
+ * whole-church rows. All names are invented (`CLAUDE.md`, Secrets).
  *
  * 2020 is the reported year: closed, fixed and in the past. Its Sundays used here are
  * 5 April; 3, 10, 17, 24 and 31 May; 7, 14, 21 and 28 June; and 5 July. June's weeks
@@ -272,18 +272,19 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
   // ---------------------------------------------------------------------------------------
 
   describe('the table', () => {
-    it('lists the direct disciples in surname order, never by a figure (section 13)', async () => {
+    it('lists the direct disciples in first-name order, never by a figure (section 13)', async () => {
       // Onofre 2 (himself and Benigno), Manuel 1 (Anacleto), Pio 0: ascending by figure is
-      // Pio first, descending is Onofre then Manuel then Pio -- and surname order is Abella,
-      // Bautista, Zamora. Only the last passes this case with both figure orders excluded.
+      // Pio first, descending is Onofre then Manuel then Pio -- and first-name order is
+      // Manuel, Onofre, Pio (decision 0359). Only the last passes this case with both figure
+      // orders excluded.
       await present('2020-06-07', onofre, raymond);
       await present('2020-06-07', benigno, onofre);
       await present('2020-06-14', anacleto, mark);
 
       const body = await ok(juneOf(raymond), adminAccount);
 
-      expect(body.rows.map((row) => row.leader?.id)).toEqual([onofre.id, manuel.id, pio.id]);
-      expect(body.rows.map((row) => row.unique_people)).toEqual([2, 1, 0]);
+      expect(body.rows.map((row) => row.leader?.id)).toEqual([manuel.id, onofre.id, pio.id]);
+      expect(body.rows.map((row) => row.unique_people)).toEqual([1, 2, 0]);
       expect(rowOf(body, onofre).leader?.full_name).toContain('Abella');
       expect(rowOf(body, onofre).leader?.member_id).toMatch(/^M-/);
       expect(rowOf(body, pio).classification).toEqual(ZERO);
@@ -400,7 +401,7 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
 
       const body = await ok(WHOLE_JUNE, adminAccount);
 
-      // Oriel Abad sorts before Raymond Alvarez by surname; MENS before WOMENS is the order.
+      // Oriel sorts before Raymond by first name; MENS before WOMENS is the order.
       expect(body.rows.map((row) => [row.leader?.id, row.network])).toEqual([
         [raymond.id, 'MENS'],
         [oriel.id, 'WOMENS'],
@@ -426,10 +427,10 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
         roots: { id: string; network: string }[];
       };
 
-      // Raymond's three by surname (Abella, Bautista, Zamora), then Oriel's one.
+      // Raymond's three by first name (Manuel, Onofre, Pio), then Oriel's one.
       expect(extra.rows.map((row) => [row.leader?.id, row.root_id])).toEqual([
-        [onofre.id, raymond.id],
         [manuel.id, raymond.id],
+        [onofre.id, raymond.id],
         [pio.id, raymond.id],
         [carmelita.id, oriel.id],
       ]);

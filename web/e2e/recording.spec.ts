@@ -462,6 +462,8 @@ test.describe('a DCC checklist in sections', () => {
     person_id: `3f1b7c6e-0000-4000-8000-${String(700 + n).padStart(12, '0')}`,
     member_id: `M-0007${String(n).padStart(2, '0')}`,
     full_name: name,
+    first_name: name.split(' ')[0],
+    last_name: name.split(' ').slice(1).join(' '),
     responsible_leader_id: leader,
     record: null,
   });
@@ -482,7 +484,7 @@ test.describe('a DCC checklist in sections', () => {
             removal_reason: null,
             coverage: null,
           },
-          // In the roster's own order: surname, first name, Member ID.
+          // In the roster's own order: first name, surname, Member ID (decision 0359).
           data: [
             line(1, 'Corazon Dela Cruz', READER),
             line(2, 'Eduardo Galang', null),
@@ -595,6 +597,8 @@ test.describe('a long DCC checklist', () => {
     person_id: `3f1b7c6e-0000-4000-8000-${String(700000 + n).padStart(12, '0')}`,
     member_id: `M-${String(900000 + n)}`,
     full_name: `Person ${String(n).padStart(3, '0')}`,
+    first_name: `Person ${String(n).padStart(3, '0')}`,
+    last_name: 'Test',
     responsible_leader_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
     record: n === size ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
   });
@@ -1397,8 +1401,9 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('link', { name: /^Record Young Pro · Fri,/ })).toHaveCount(0);
   });
 
-  // Decision 0311: one line per leader, name only, in surname order, closed until opened.
-  test('Leaders Under Me is one line per leader, by surname, each opened to its meetings', async ({
+  // Decision 0311: one line per leader, name only, in first-name order (decision 0359),
+  // closed until opened.
+  test('Leaders Under Me is one line per leader, by first name, each opened to its meetings', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1409,7 +1414,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     const lines = page.getByRole('region', { name: 'Update Record' }).getByRole('button', {
       name: /^(Ana Lim|Teofilo Ramos \(you\))$/,
     });
-    // Lim before Ramos: surname order, whoever the reader is.
+    // Ana before Teofilo: first-name order, whoever the reader is.
     await expect(lines).toHaveCount(2);
     await expect(lines.nth(0)).toHaveAccessibleName('Ana Lim');
     await expect(lines.nth(1)).toHaveAccessibleName('Teofilo Ramos (you)');
@@ -1550,12 +1555,12 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page).toHaveURL(/kind=dcc/);
     await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
 
-    // One line per leader, by surname (decision 0311): Reader, then Reyes.
+    // One line per leader, by first name (decisions 0311 and 0359): Carlo, then The reader.
     const region = page.getByRole('region', { name: 'Update Record' });
     const owedLines = region.getByRole('button', { name: /^(The reader \(you\)|Carlo Reyes)$/ });
     await expect(owedLines).toHaveCount(2);
-    await expect(owedLines.nth(0)).toHaveAccessibleName('The reader (you)');
-    await expect(owedLines.nth(1)).toHaveAccessibleName('Carlo Reyes');
+    await expect(owedLines.nth(0)).toHaveAccessibleName('Carlo Reyes');
+    await expect(owedLines.nth(1)).toHaveAccessibleName('The reader (you)');
     await region.getByRole('button', { name: 'Carlo Reyes' }).click();
     await region.getByRole('button', { name: 'The reader (you)' }).click();
 
@@ -2489,6 +2494,8 @@ test.describe('a DCC checklist longer than one page', () => {
       person_id: `3f1b7c6e-0000-4000-8000-0000000071${String(n).padStart(2, '0')}`,
       member_id: `M-0071${String(n).padStart(2, '0')}`,
       full_name: `Person ${String(n).padStart(2, '0')}`,
+      first_name: `Person ${String(n).padStart(2, '0')}`,
+      last_name: 'Test',
       responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
       record: marked ? { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' } : null,
     });
@@ -2547,6 +2554,8 @@ test.describe('a DCC checklist longer than one page', () => {
       person_id: `3f1b7c6e-0000-4000-8000-000000072${String(index).padStart(3, '0')}`,
       member_id: `M-072${String(index).padStart(3, '0')}`,
       full_name: `Person ${String(index).padStart(3, '0')}`,
+      first_name: `Person ${String(index).padStart(3, '0')}`,
+      last_name: 'Test',
       responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000201',
       record: index === 119 ? null : { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
     }));

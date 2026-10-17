@@ -758,7 +758,7 @@ export class DccAttendanceService {
       };
     });
 
-    // `(last_name, first_name, member_id)`, which is section 8's directory order and
+    // `(first_name, last_name, member_id)`, which is section 22's order for a list of people (decision 0359) and
     // the key `GET /cells/{id}/members` already pages by. Total: two people
     // legitimately share a name, so the Member ID breaks the tie (sections 3 and 22).
     lines.sort(compareRosterKeys);
@@ -1458,6 +1458,10 @@ function renderLine(line: RosterLine): Record<string, unknown> {
     person_id: line.personId,
     member_id: line.memberId,
     full_name: line.fullName,
+    // The two halves of the order key (decision 0359), additive, so a client merging
+    // several checklists can keep the order without parsing `full_name`.
+    first_name: line.firstName,
+    last_name: line.lastName,
     responsible_leader_id: line.responsibleLeaderId,
     record:
       line.record === null

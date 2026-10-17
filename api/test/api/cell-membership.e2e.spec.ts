@@ -740,19 +740,19 @@ describe('cell membership (section 10)', () => {
       // exactly the current membership, and this route is the only way to obtain one —
       // so any Cell with more members than the page was closable by nobody.
       // **Four members, so that each of the three disjuncts decides exactly one
-      // boundary and none is dead.** Two members with distinct last names pin only that
+      // boundary and none is dead.** Two members with distinct first names pin only that
       // *some* filter exists, and three sharing a full name still leave the middle
-      // disjunct unreachable — `last_name = X AND first_name > Y` selects nobody when
+      // disjunct unreachable — `first_name = X AND last_name > Y` selects nobody when
       // the two candidates share both names. The keyset's whole justification is that a
       // lexicographic comparison needs every key it orders by, and section 3 says
       // plainly that a congregation of several thousand holds two people who share a
       // name.
       //
-      // Name order, which is the page order:
-      //   1 Santos, Ana   (alpha)
-      //   2 Santos, Ana   (twin)   <- 1→2 crosses on the tie-break: both names equal
-      //   3 Santos, Berta (berta)  <- 2→3 crosses on the first name within an equal last
-      //   4 Zamora, Zosimo (omega) <- 3→4 crosses on the last name
+      // Name order (first name, then surname; decision 0359), which is the page order:
+      //   1 Berta Santos  (alpha)
+      //   2 Berta Santos  (twin)   <- 1→2 crosses on the tie-break: both names equal
+      //   3 Berta Torres  (berta)  <- 2→3 crosses on the last name within an equal first
+      //   4 Zosimo Abad   (omega)  <- 3→4 crosses on the first name
       //
       // **One inversion, and it is load-bearing: `omega` is created first.** Member IDs
       // come off a sequence in creation order, so creating everyone in name order makes
@@ -764,32 +764,34 @@ describe('cell membership (section 10)', () => {
       // *A previous version created `berta` second as a second inversion and claimed, in
       // four places, that without it the tie-break would reach her and the middle
       // disjunct would stay dead. That is false: the tie-break requires
-      // `first_name = key.firstName`, and hers is `Berta` against a key of `Ana`, so it
+      // `last_name = key.lastName`, and hers is `Torres` against a key of `Santos`, so it
       // excludes her on the name before a Member ID is compared. Her creation position
       // cannot affect any mutation, and the inversion was removed rather than left with
       // a corrected comment — what made three members insufficient was the absence of a
-      // distinct first name within an equal last name, not an ordering trick.*
+      // distinct last name within an equal first name, not an ordering trick.*
+      //
+      // `omega`'s surname, Abad, sorts first, so surname order would page her first.
       //
       // A member silently skipped here is a Cell whose closure can never name its
       // membership exactly, and therefore a Cell nobody can close.
       const omega = await createPerson(db, {
         firstName: 'Zosimo',
-        lastName: 'Zamora',
+        lastName: 'Abad',
         network: 'MENS',
       });
       const alpha = await createPerson(db, {
-        firstName: 'Ana',
+        firstName: 'Berta',
         lastName: 'Santos',
         network: 'MENS',
       });
       const twin = await createPerson(db, {
-        firstName: 'Ana',
+        firstName: 'Berta',
         lastName: 'Santos',
         network: 'MENS',
       });
       const berta = await createPerson(db, {
         firstName: 'Berta',
-        lastName: 'Santos',
+        lastName: 'Torres',
         network: 'MENS',
       });
 
@@ -848,7 +850,7 @@ describe('cell membership (section 10)', () => {
 
       // **1 → 2 crosses on the tie-break**: `alpha` and `twin` share both names, so only
       // the third disjunct separates them. Reddens if the tie-break is dropped, which
-      // lands on `berta`; and under `last_name >` alone, which selects only `Zamora` and
+      // lands on `berta`; and under `first_name >` alone, which selects only `Zosimo` and
       // so lands on `omega`. *The two were previously described as landing on the same
       // person — they do not, and only one of them can.*
       const second = await page(first.body.next_cursor as string);
@@ -856,17 +858,17 @@ describe('cell membership (section 10)', () => {
       expect(second.body.data[0].person_id).toBe(twin.id);
       expect(second.body.next_cursor).not.toBeNull();
 
-      // **2 → 3 crosses on the first name within an equal last name**, which is the
+      // **2 → 3 crosses on the last name within an equal first name**, which is the
       // only boundary the middle disjunct decides — and the reason a three-member
       // fixture was not enough. The tie-break cannot reach `berta` whatever her Member
-      // ID, because it requires the first name to be *equal* and hers is not, so a
+      // ID, because it requires the last name to be *equal* and hers is not, so a
       // comparison missing this disjunct skips straight to `omega`.
       const third = await page(second.body.next_cursor as string);
       expect(third.body.data).toHaveLength(1);
       expect(third.body.data[0].person_id).toBe(berta.id);
       expect(third.body.next_cursor).not.toBeNull();
 
-      // **3 → 4 crosses on the last name**, then ends. `Zamora` sorts after `Santos`.
+      // **3 → 4 crosses on the first name**, then ends. `Zosimo` sorts after `Berta`.
       const fourth = await page(third.body.next_cursor as string);
       expect(fourth.body.data).toHaveLength(1);
       expect(fourth.body.data[0].person_id).toBe(omega.id);

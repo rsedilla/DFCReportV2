@@ -131,7 +131,7 @@ export function getSuynlReadiness(
 
 /**
  * The people behind one leader's row, read when the row is opened. A row counts that leader's
- * branch, which is that leader's own total, listed by the server in surname order.
+ * branch, which is that leader's own total, listed by the server in first-name order.
  */
 export async function getReadinessPeople(
   leader: string,

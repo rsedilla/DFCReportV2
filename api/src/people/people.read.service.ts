@@ -54,8 +54,8 @@ export interface PersonForDecision {
   /**
    * The family name on its own, for **ordering** rather than for addressing.
    *
-   * Section 8 orders the church-wide directory by `(last_name, first_name, id)`, and
-   * two collections page by `(last_name, first_name, member_id)` — so a caller
+   * The church-wide directory pages by `(first_name, last_name, id)` (section 22, decision 0359), and
+   * two collections page by `(first_name, last_name, member_id)` — so a caller
    * assembling a list in application code needs this half of the name as a field
    * rather than by splitting `fullName`, which is not splittable: a middle name sits
    * between them and a generational suffix lives inside this one (section 3).
@@ -387,7 +387,7 @@ export class PeopleReadService {
    * Keyset rather than offset, because rows inserted while a client is paging
    * shift every subsequent offset and the directory grows during a Sunday service
    * — which duplicates and skips records, and is worse for mobile sync. The key
-   * is `(last_name, first_name, id)`, and `id` is there to make it total: two
+   * is `(first_name, last_name, id)`, and `id` is there to make it total: two
    * people legitimately share a name, and a key that is not unique loses rows at
    * the page boundary.
    *
@@ -503,8 +503,8 @@ export class PeopleReadService {
           ]),
         ),
       )
-      .orderBy('last_name')
       .orderBy('first_name')
+      .orderBy('last_name')
       .orderBy('id')
       // One more than asked for, which is how the last page is recognised without
       // a count -- section 22 does not return totals.
@@ -513,11 +513,11 @@ export class PeopleReadService {
     if (cursor !== null) {
       query = query.where((eb) =>
         eb.or([
-          eb('last_name', '>', cursor.lastName),
-          eb.and([eb('last_name', '=', cursor.lastName), eb('first_name', '>', cursor.firstName)]),
+          eb('first_name', '>', cursor.firstName),
+          eb.and([eb('first_name', '=', cursor.firstName), eb('last_name', '>', cursor.lastName)]),
           eb.and([
-            eb('last_name', '=', cursor.lastName),
             eb('first_name', '=', cursor.firstName),
+            eb('last_name', '=', cursor.lastName),
             eb('id', '>', cursor.id),
           ]),
         ]),
@@ -888,8 +888,8 @@ export class PeopleReadService {
           ),
         ),
       )
-      .orderBy('person.last_name')
       .orderBy('person.first_name')
+      .orderBy('person.last_name')
       .orderBy('person.id')
       // One more than asked for, so the last page is recognised without a count
       // (section 22 returns no totals).
@@ -902,14 +902,14 @@ export class PeopleReadService {
     if (cursor !== null) {
       query = query.where((eb) =>
         eb.or([
-          eb('person.last_name', '>', cursor.lastName),
+          eb('person.first_name', '>', cursor.firstName),
           eb.and([
-            eb('person.last_name', '=', cursor.lastName),
-            eb('person.first_name', '>', cursor.firstName),
+            eb('person.first_name', '=', cursor.firstName),
+            eb('person.last_name', '>', cursor.lastName),
           ]),
           eb.and([
-            eb('person.last_name', '=', cursor.lastName),
             eb('person.first_name', '=', cursor.firstName),
+            eb('person.last_name', '=', cursor.lastName),
             eb('person.id', '>', cursor.id),
           ]),
         ]),
@@ -1131,8 +1131,8 @@ export class PeopleReadService {
         ),
       )
       .$if(outside.size > 0, (qb) => qb.where('person.id', 'not in', [...outside]))
-      .orderBy('person.last_name')
       .orderBy('person.first_name')
+      .orderBy('person.last_name')
       // The Member ID rather than the identifier, so this reuses `RosterCursor`
       // instead of declaring a fourth cursor shape. It is unique and not null, so the
       // three keys are a total order.
@@ -1146,14 +1146,14 @@ export class PeopleReadService {
     if (cursor !== null) {
       query = query.where((eb) =>
         eb.or([
-          eb('person.last_name', '>', cursor.lastName),
+          eb('person.first_name', '>', cursor.firstName),
           eb.and([
-            eb('person.last_name', '=', cursor.lastName),
-            eb('person.first_name', '>', cursor.firstName),
+            eb('person.first_name', '=', cursor.firstName),
+            eb('person.last_name', '>', cursor.lastName),
           ]),
           eb.and([
-            eb('person.last_name', '=', cursor.lastName),
             eb('person.first_name', '=', cursor.firstName),
+            eb('person.last_name', '=', cursor.lastName),
             eb('person.member_id', '>', cursor.memberId),
           ]),
         ]),

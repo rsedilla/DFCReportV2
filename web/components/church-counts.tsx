@@ -39,7 +39,7 @@ const LABEL: Record<Figure, string> = {
  * **A month at a time, with previous and next**: a month that has ended is counted on its last
  * day, and the current month as of now, *so far*. The whole church first, then one table for
  * each root's direct leaders, the Men's root first, then *Others*, so the rows and *Others*
- * add up to the whole church. Rows are in surname order, never sorted by a figure, never
+ * add up to the whole church. Rows are in first-name order, never sorted by a figure, never
  * numbered or coloured (sections 13 and 17); each name opens that leader's branch.
  */
 export function ChurchCountsPanel({

@@ -569,6 +569,8 @@ export async function mockDccRoster(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
             member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
+            first_name: 'Rosalinda',
+            last_name: 'Ocampo',
             responsible_leader_id: READER_PERSON_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
@@ -576,6 +578,8 @@ export async function mockDccRoster(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
             member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
+            first_name: 'Bienvenido',
+            last_name: 'Trinidad',
             responsible_leader_id: READER_PERSON_ID,
             record: null,
           },
@@ -617,6 +621,8 @@ export async function mockLeaderDccRoster(
             person_id: '3f1b7c6e-0000-4000-8000-000000000612',
             member_id: 'M-000712',
             full_name: 'Benito Lagman',
+            first_name: 'Benito',
+            last_name: 'Lagman',
             responsible_leader_id: OWED_LEADER_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
@@ -624,6 +630,8 @@ export async function mockLeaderDccRoster(
             person_id: '3f1b7c6e-0000-4000-8000-000000000613',
             member_id: 'M-000713',
             full_name: 'Danilo Suarez',
+            first_name: 'Danilo',
+            last_name: 'Suarez',
             responsible_leader_id: OWED_LEADER_ID,
             record: null,
           },
@@ -650,31 +658,11 @@ export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<
   return asked;
 }
 
-/** Two rows for Pending DCC Records: the reader's own, and a leader with no account. */
+/**
+ * Two rows for Pending DCC Records in the API's first-name order (decision 0359): a leader
+ * with no account, and the reader's own.
+ */
 export const PENDING_DCC_ROWS = [
-  {
-    leader: {
-      person_id: LEADER_ID,
-      member_id: 'M-000700',
-      full_name: 'The reader',
-      last_name: 'Reader',
-      first_name: 'The',
-      is_actor: true,
-      has_account: true,
-    },
-    recorded_by: null,
-    recorded_by_you: false,
-    sundays: [
-      {
-        event_id: '3f1b7c6e-0000-4000-8000-000000000501',
-        event_date: '2026-06-07',
-        due_at: '2026-06-08T04:00:00.000Z',
-        closes_at: '2026-06-22T04:00:00.000Z',
-      },
-    ],
-    record_for: LEADER_ID,
-    may_record: true,
-  },
   {
     leader: {
       person_id: '3f1b7c6e-0000-4000-8000-000000000611',
@@ -704,6 +692,29 @@ export const PENDING_DCC_ROWS = [
     record_for: null,
     may_record: false,
   },
+  {
+    leader: {
+      person_id: LEADER_ID,
+      member_id: 'M-000700',
+      full_name: 'The reader',
+      last_name: 'Reader',
+      first_name: 'The',
+      is_actor: true,
+      has_account: true,
+    },
+    recorded_by: null,
+    recorded_by_you: false,
+    sundays: [
+      {
+        event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+        event_date: '2026-06-07',
+        due_at: '2026-06-08T04:00:00.000Z',
+        closes_at: '2026-06-22T04:00:00.000Z',
+      },
+    ],
+    record_for: LEADER_ID,
+    may_record: true,
+  },
 ];
 
 /** A downline leader in the DCC branch view (decision 0301). Invented name. */
@@ -719,7 +730,24 @@ export async function mockDccOwed(page: Page): Promise<void> {
       json({
         reporting_month: '2026-06-01',
         open: true,
+        // Sent out of first-name order, so the line order is the screen's own sort
+        // (decisions 0311 and 0359) rather than the order these arrive in.
         data: [
+          {
+            event_id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            leader: {
+              person_id: LEADER_ID,
+              member_id: 'M-000700',
+              full_name: 'The reader',
+              last_name: 'Reader',
+              first_name: 'The',
+              is_actor: true,
+              recorded_by_you: true,
+            },
+            record_for: LEADER_ID,
+            may_record: true,
+          },
           {
             event_id: '3f1b7c6e-0000-4000-8000-000000000501',
             event_date: '2026-06-07',
@@ -734,21 +762,6 @@ export async function mockDccOwed(page: Page): Promise<void> {
             },
             // The reader may record for Carlo (decision 0313).
             record_for: OWED_LEADER_ID,
-            may_record: true,
-          },
-          {
-            event_id: '3f1b7c6e-0000-4000-8000-000000000501',
-            event_date: '2026-06-07',
-            leader: {
-              person_id: LEADER_ID,
-              member_id: 'M-000700',
-              full_name: 'The reader',
-              last_name: 'Reader',
-              first_name: 'The',
-              is_actor: true,
-              recorded_by_you: true,
-            },
-            record_for: LEADER_ID,
             may_record: true,
           },
         ],
@@ -859,6 +872,8 @@ export async function mockClosedDccRoster(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
             member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
+            first_name: 'Rosalinda',
+            last_name: 'Ocampo',
             responsible_leader_id: READER_PERSON_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
@@ -1254,8 +1269,8 @@ export async function mockCellsWithClosed(
 const leaderOf = (id: string, member: string, name: string) => ({ id, member_id: member, full_name: name });
 
 /**
- * The leaders My 12 names (decision 0293). Surname order is Alcantara, Bautista,
- * Dimaculangan, and the People column runs 3, 4, 0 -- so the order is neither ascending nor
+ * The leaders My 12 names (decision 0293). First-name order (decision 0359) is Consuelo,
+ * Efren, Teresita, and the People column runs 4, 0, 3 -- so the order is neither ascending nor
  * descending by a figure, which is what a case pinning section 13's "never sorted by a
  * figure" needs. Invented names.
  */
@@ -1387,14 +1402,14 @@ export async function mockCellTwelve(
       );
     }
 
-    // The reader's own, and any other leader opened: 3 + 4 + 0 + 2 - 1 + 2 = 10.
+    // The reader's own, and any other leader opened: 4 + 0 + 3 + 2 - 1 + 2 = 10.
     return route.fulfill(
       json({
         ...period,
         rows: [
-          { leader: TWELVE.teresita, ...stages(1, 0, 1, 0, 1) },
           { leader: TWELVE.consuelo, ...stages(1, 1, 0, 1, 1) },
           { leader: TWELVE.efren, ...stages(0, 0, 0, 0, 0) },
+          { leader: TWELVE.teresita, ...stages(1, 0, 1, 0, 1) },
         ],
         own: { cells: ownCells, ...stages(0, 1, 0, 0, 1) },
         overlap: 1,
@@ -1562,14 +1577,14 @@ export async function mockDccTwelve(
       );
     }
 
-    // The reader's own, and any other leader opened: 3 + 4 + 0 + 1 - 0 + 2 = 10.
+    // The reader's own, and any other leader opened: 4 + 0 + 3 + 1 - 0 + 2 = 10.
     return route.fulfill(
       json({
         ...period,
         rows: [
-          { leader: TWELVE.teresita, network: null, ...stages(1, 0, 1, 0, 1) },
           { leader: TWELVE.consuelo, network: null, ...stages(1, 1, 0, 1, 1) },
           { leader: TWELVE.efren, network: null, ...stages(0, 0, 0, 0, 0) },
+          { leader: TWELVE.teresita, network: null, ...stages(1, 0, 1, 0, 1) },
         ],
         own: stages(0, 1, 0, 0, 0),
         overlap: 0,
@@ -1591,7 +1606,7 @@ export async function mockDccTwelve(
  *
  * **The order is the server's and is built to tell a client that re-sorts it apart.** The Men's
  * root comes first although his name sorts after the Women's root's, and the rows are in
- * surname order while their figures are not monotonic, so a client sorting by name or by a
+ * first-name order while their figures are not monotonic, so a client sorting by name or by a
  * figure reorders them.
  */
 const MENS_ROOT = {

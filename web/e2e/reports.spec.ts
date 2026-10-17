@@ -12,7 +12,7 @@ import {
 import {
   CONQUEST_COUNTS,
   READINESS_ARTURO_ID,
-  READINESS_GREGORIA_ID,
+  READINESS_BENITA_ID,
   READINESS_LEADER,
   READINESS_MENS_ROOT_ID,
   READINESS_WOMENS_ROOT_ID,
@@ -818,11 +818,12 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
       page.getByRole('heading', { name: 'My 12 · SUYNL, getting ready for the Encounter' }),
     ).toBeVisible();
     await expect(table(page, 'My 12').getByRole('columnheader')).toHaveText(COLUMNS);
-    // In the API's order, which is surname order and never a figure's.
+    // In the API's order, which is first-name order (decision 0359) and never a figure's:
+    // People 4, 0, 1 is neither ascending nor descending.
     await expectRows(page, 'My 12', [
       ['Arturo Buenaventura their 12', '1', '1', '2', '4'],
+      ['Benita Navarro their 12', '0', '0', '0', '0'],
       ['Florante Mendoza', '0', '0', '1', '1'],
-      ['Gregoria Navarro their 12', '0', '0', '0', '0'],
       ['You', '0', '1', '0', '1'],
       ['Total', '1', '2', '3', '6'],
     ]);
@@ -862,7 +863,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
 
     // A group with nobody in it is left out rather than shown empty.
     await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
-    await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
+    await expect(table(page, 'My 12').locator('tbody > tr').nth(3).locator('p')).toHaveText([
       '1–6 lessons: Florante Mendoza (5)',
     ]);
   });
@@ -873,9 +874,9 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     const traffic = await mockSuynlReadiness(page);
     await page.goto('/reports/suynl');
 
-    await page.getByRole('button', { name: 'Gregoria Navarro', exact: true }).click();
+    await page.getByRole('button', { name: 'Benita Navarro', exact: true }).click();
     await expect(table(page, 'My 12').getByText('Nobody in this branch is counted.')).toBeVisible();
-    expect(traffic.asked.some((path) => path.includes(READINESS_GREGORIA_ID))).toBe(false);
+    expect(traffic.asked.some((path) => path.includes(READINESS_BENITA_ID))).toBe(false);
   });
 
   // Checklist row perf-suynl-readiness: the table comes without the people behind its rows,
@@ -902,15 +903,15 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     ]);
   });
 
-  test("an opened row's group is in surname order across the leader and their branches", async ({
+  test("an opened row's group is in first-name order across the leader and their branches", async ({
     page,
   }) => {
     await mockSuynlReadiness(page, { crossBranch: true });
     await page.goto('/reports/suynl');
 
     await page.getByRole('button', { name: 'Florante Mendoza', exact: true }).click();
-    // Amparo Abella is Florante's disciple; one list sorted by surname puts her first.
-    await expect(table(page, 'My 12').locator('tbody > tr').nth(2).locator('p')).toHaveText([
+    // Amparo Abella is Florante's disciple; one list sorted by first name puts her first.
+    await expect(table(page, 'My 12').locator('tbody > tr').nth(3).locator('p')).toHaveText([
       '1–6 lessons: Amparo Abella (3) · Florante Mendoza (5)',
     ]);
   });

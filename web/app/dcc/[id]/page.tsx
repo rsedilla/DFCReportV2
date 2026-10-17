@@ -518,7 +518,7 @@ interface Section {
  * one section per leader without an account whose people fall to the reader (section 9),
  * then the Network roots, who have no leader. Who is on the checklist is unchanged.
  *
- * The roster arrives in surname, first name, Member ID order, so each section keeps it,
+ * The roster arrives in first name, surname, Member ID order, so each section keeps it,
  * and the sections of other leaders follow the order of those leaders' own lines.
  */
 function sectionsOf(

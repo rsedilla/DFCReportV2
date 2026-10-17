@@ -246,18 +246,18 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
   // ---------------------------------------------------------------------------
 
   it('orders by name rather than by anything else', async () => {
-    // Ramos, Sy, Tan, Uy — alphabetical, and deliberately not the order the fixture
-    // writes them in, which is Uy, Tan, Sy, Ramos. An unordered query fails this.
+    // Manuel, Mark, Nathan, Raymond — first-name order (decision 0359), and deliberately
+    // not the order the fixture writes them in, which is Raymond, Manuel, Mark, Nathan,
+    // nor surname order. An unordered query fails this.
     const response = await list(admin, { limit: 200 });
 
     // Filtered by identifier rather than by name: the administrator is a fixture of
-    // this file rather than part of the spine, and their surname sorts into the
-    // middle of it.
+    // this file rather than part of the spine, and their first name sorts ahead of it.
     const spine = (response.body.data as { id: string; full_name: string }[])
       .filter((row) => row.id !== admin.personId)
       .map((row) => row.full_name);
 
-    expect(spine).toEqual(['Nathan Ramos', 'Mark Sy', 'Manuel Tan', 'Raymond Uy']);
+    expect(spine).toEqual(['Manuel Tan', 'Mark Sy', 'Nathan Ramos', 'Raymond Uy']);
   });
 
   it('pages by cursor and reports the last page with a null cursor', async () => {

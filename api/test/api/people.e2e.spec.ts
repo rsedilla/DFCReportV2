@@ -1202,6 +1202,56 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(seen).not.toContain(geraldine.id);
     });
 
+    it('pages by first name, then last name, then id, each condition deciding a boundary (decision 0359)', async () => {
+      // A page of one, so every pair of neighbours is a page boundary and the cursor's
+      // three conditions each decide one: Bea Testfixturea to Bea Testfixturez by last
+      // name, Bea to Luis by first name, the two Luis Testfixtures by id. Surname order
+      // would put the four plain Testfixtures first, so it fails this.
+      const placed: TestPerson[] = [];
+      for (const [firstName, lastName] of [
+        ['Luis', 'Testfixture'],
+        ['Bea', 'Testfixturez'],
+        ['Luis', 'Testfixture'],
+        ['Bea', 'Testfixturea'],
+      ] as const) {
+        const extra = await createPerson(db, { firstName, lastName, network: 'MENS' });
+        await assignTo(db, extra.id, manuel.id);
+        placed.push(extra);
+      }
+      const [luisOne, beaZ, luisTwo, beaA] = placed;
+      const [luisFirst, luisSecond] = [luisOne.id, luisTwo.id].sort();
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+
+      for (let page = 0; page < 10; page += 1) {
+        const response: request.Response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query(
+            cursor === null
+              ? { q: 'Testfixture', limit: 1 }
+              : { q: 'Testfixture', limit: 1, cursor },
+          )
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+        expect(response.status).toBe(200);
+        seen.push(...(response.body.data as { id: string }[]).map((row) => row.id));
+        cursor = response.body.next_cursor as string | null;
+        if (cursor === null) {
+          break;
+        }
+      }
+
+      expect(seen).toEqual([
+        beaA.id,
+        beaZ.id,
+        luisFirst,
+        luisSecond,
+        manuel.id,
+        raymondAccount.personId,
+      ]);
+    });
+
     it('refuses a church_wide value it does not define', async () => {
       // Sections 22 and decisions 0185, 0199 and 0200: a value the API does not
       // define is refused at the edge rather than absorbed. `banana` answered 200

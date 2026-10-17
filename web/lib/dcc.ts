@@ -94,6 +94,9 @@ export interface DccRosterLine {
   person_id: string;
   member_id: string;
   full_name: string;
+  /** The order key's two names (decision 0359); `full_name` carries a title and is not compared. */
+  first_name: string;
+  last_name: string;
   /** The person's direct pastoral leader; null for a Network root, who has none (section 9). */
   responsible_leader_id: string | null;
   /**
