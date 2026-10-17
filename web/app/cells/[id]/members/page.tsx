@@ -145,8 +145,11 @@ function CellMembers() {
           ) : null}
           {closedOn === undefined ? null : closedOn === null ? (
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Who is in this Cell now. Removing somebody ends their membership from today; it
-              does not erase the months they were part of, and past figures keep counting them.
+              Who is in this Cell now.
+              {/* Only for an account offered Remove (decision 0357). */}
+              {mayRemove
+                ? ' Removing somebody ends their membership from today; it does not erase the months they were part of, and past figures keep counting them.'
+                : ''}
             </p>
           ) : (
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
