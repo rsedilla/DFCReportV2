@@ -128,11 +128,11 @@ export function DccReport() {
               onChange={period.choosePeriodKind}
             />
           ) : null}
-          {/* A Full view leader's period, labelled, on a row of its own (decision 0363). */}
+          {/* A Full view leader's period, labelled, in one row with the others (decision 0363). */}
           {branchReader ? (
-            <div className="basis-full">
+            <div>
               <p className="field-label">Show</p>
-              <PeriodTabs inBar value={kind} onChange={period.choosePeriodKind} />
+              <PeriodTabs labelled value={kind} onChange={period.choosePeriodKind} />
             </div>
           ) : null}
           {reach?.kind === 'none' ? null : (
