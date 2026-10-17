@@ -464,7 +464,13 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
           'period=week',
         ]) {
           await page.goto(`/reports/${report}?${query}`);
-          await expect(page.getByRole('heading', { name: /(Your|’s) Disciples$|· their journey$/ })).toBeVisible();
+          // A Full view leader's figures are a region with no heading (decision 0365); a whole-church
+          // reader's table carries one.
+          await expect(
+            page
+              .getByRole('region', { name: /(Your|’s) Disciples$/ })
+              .or(page.getByRole('heading', { name: /· their journey$/ })),
+          ).toBeVisible();
           // Coverage for a whole-church reader; none for a Full view leader (decision 0363).
           await expect(page.getByText(/^\d+ of \d+ (meetings recorded|records filed)/)).toHaveCount(
             church ? 1 : 0,
@@ -634,6 +640,41 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 });
 
 /**
+ * A Full view leader's 12 on a phone (decision 0365): no cards above it, and below `lg` each line
+ * is its name and then every figure, so nothing is out of sight to one side; the table from `lg`.
+ */
+test.describe('a Full view leader’s 12 at a phone and a computer', () => {
+  for (const path of ['/reports/cells', '/reports/dcc']) {
+    test(`${path} is two short lines a leader on a phone, and the table on a computer`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(NOW);
+      await mockSignedIn(page);
+      await mockCellTwelve(page, { today: '2026-06-20' });
+      await mockDccTwelve(page, { today: '2026-06-20' });
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(path);
+      const list = page.getByRole('list', { name: 'Your 12' });
+      await expect(list).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Your 12' })).toBeHidden();
+      await expect(list.getByRole('listitem').last()).toHaveText(
+        /^Total\s*Total \d+ · VIP \d+ · 2nd Timer \d+ · 3rd Timer \d+ · 4th Timer \d+ · Regular \d+$/,
+      );
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
+      await expect(list).toBeHidden();
+    });
+  }
+});
+
+/**
  * A Full view leader's controls (decision 0363, owner 2026-10-18): Show, the period and Figures
  * for side by side from a laptop's width, each the same height, the note under them; stacked on
  * a phone, where they cannot fit.
@@ -654,7 +695,7 @@ test.describe('a Full view leader’s report controls', () => {
         await mockCellTwelve(page, { today: '2026-06-20' });
         await mockDccTwelve(page, { today: '2026-06-20' });
         await page.goto(path);
-        await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
 
         const tops = await Promise.all(

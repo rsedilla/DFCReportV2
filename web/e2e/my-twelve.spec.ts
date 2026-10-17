@@ -261,22 +261,14 @@ test.describe('My 12', () => {
     await arrange(page);
     await page.goto('/reports/cells');
 
-    await expect(page.getByRole('heading', { name: 'Your Disciples', level: 2 })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     // Not the whole-church reader's table (decision 0293), which carries this heading.
     await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
 
-    // The branch's figures as cards, in order, equal to the Total row below.
-    const cards = page.getByRole('region', { name: 'Your Disciples' }).locator('dl');
-    await expect(cards.getByRole('term')).toHaveText([
-      'Total',
-      'VIP',
-      '2nd Timer',
-      '3rd Timer',
-      '4th Timer',
-      'Regular',
-    ]);
-    await expect(cards.getByRole('definition')).toHaveText(['10', '2', '2', '1', '1', '4']);
+    // No cards and no heading above the table (decision 0365): its Total row carries them.
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Your Disciples' }).locator('dl')).toHaveCount(0);
 
     const table = twelveTable(page);
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -325,9 +317,6 @@ test.describe('My 12', () => {
     const totalRow = await cellsOf(rows.nth(6));
     expect(totalRow).toEqual(['Total', '10', '2', '2', '1', '1', '4']);
 
-    // The cards are the Total row's figures, so the two cannot disagree.
-    expect(await cards.getByRole('definition').allTextContents()).toEqual(totalRow.slice(1));
-
     // The Total column adds up in plain sight (section 20): 4 + 0 + 3 + 2 − 1 + 2 = 10.
     const signed = async (index: number) =>
       Number((await cellsOf(rows.nth(index)))[1].replace('−', '-'));
@@ -353,23 +342,14 @@ test.describe('My 12', () => {
     await expect(page).toHaveURL(/[?&]month=2026-06-01/);
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
-    await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s Disciples', level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' })).toBeVisible();
     await expect(
       page.getByRole('table', { name: 'Consuelo Bautista’s 12' }),
     ).toBeVisible();
-    const branch = page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' });
-    await expect(branch.locator('dl').getByRole('definition')).toHaveText([
-      '4',
-      '1',
-      '1',
-      '0',
-      '1',
-      '1',
-    ]);
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(3);
+    // Her branch's figures are the Total row, there being no cards above (decision 0365).
+    expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
     await expect(rows.nth(0).getByRole('link', { name: TWELVE.lourdes.full_name })).toHaveAttribute(
       'href',
       `/reports/cells?month=2026-06-01&leader=${TWELVE.lourdes.id}`,
@@ -608,7 +588,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockCellTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/cells?period=week');
 
-    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expect(periodLabel(page, '29 Jun – 5 Jul 2026')).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
@@ -676,7 +656,7 @@ test.describe('what decision 0293 took off this page', () => {
   test('no Month/Year radio, no Cell choices and no stages frame', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/cells');
-    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
 
     await expect(page.getByRole('radiogroup', { name: 'Report period' })).toHaveCount(0);
     await expect(
@@ -700,7 +680,7 @@ test.describe('at a phone, a tablet and a desktop', () => {
 
       for (const each of PERIODS) {
         await page.goto(`/reports/cells?${each.address}`);
-        await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
         await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
 

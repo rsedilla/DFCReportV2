@@ -241,21 +241,13 @@ test.describe('My 12 on DCC', () => {
     await expect(
       page.getByText('Who came to DCC (Doulos Cell Celebration), and where they are in their journey.'),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Your Disciples', level: 2 })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(page.getByRole('heading', { name: / · their journey$/ })).toHaveCount(0);
 
-    // The branch's figures as cards, equal to the Total row below.
-    const cards = page.getByRole('region', { name: 'Your Disciples' }).locator('dl');
-    await expect(cards.getByRole('term')).toHaveText([
-      'Total',
-      'VIP',
-      '2nd Timer',
-      '3rd Timer',
-      '4th Timer',
-      'Regular',
-    ]);
-    await expect(cards.getByRole('definition')).toHaveText(['10', '3', '2', '1', '1', '3']);
+    // No cards and no heading above the table (decision 0365): its Total row carries them.
+    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Your Disciples' }).locator('dl')).toHaveCount(0);
 
     const table = twelveTable(page);
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -283,7 +275,6 @@ test.describe('My 12 on DCC', () => {
     expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
     const totalRow = await cellsOf(rows.nth(5));
     expect(totalRow).toEqual(['Total', '10', '3', '2', '1', '1', '3']);
-    expect(await cards.getByRole('definition').allTextContents()).toEqual(totalRow.slice(1));
     await expect(table.getByText('Counted under more than one leader', { exact: true })).toHaveCount(0);
     await expect(table.getByText(/Cell [Gg]roup|no Cell of/)).toHaveCount(0);
 
@@ -306,9 +297,7 @@ test.describe('My 12 on DCC', () => {
     await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.consuelo.id}`));
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
-    await expect(
-      page.getByRole('heading', { name: 'Consuelo Bautista’s Disciples', level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' })).toBeVisible();
     await expect(
       page.getByRole('table', { name: 'Consuelo Bautista’s 12' }),
     ).toBeVisible();
@@ -424,7 +413,7 @@ test.describe('My 12 on DCC', () => {
     const asked = await arrange(page);
     await page.goto('/reports/dcc?network=MENS');
 
-    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expectAsked(asked, { scope: 'LEADER', leader_id: READER });
     expect(asked.some((query) => query.get('scope') === 'NETWORK')).toBe(false);
     await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
@@ -463,7 +452,7 @@ test.describe('How often people came, and Year', () => {
 
     for (const each of PERIODS.filter((period) => period.kind !== 'MONTH')) {
       await page.goto(`/reports/dcc?${each.address}`);
-      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
     }
   });
@@ -518,7 +507,7 @@ test.describe('a guard month the server disagrees with', () => {
     const asked = await mockDccTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/dcc?period=week');
 
-    await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByText(/read as of/)).toHaveCount(0);
     const mine = asked.filter((query) => query.get('leader_id') === READER);
     expect(new Set(mine.map((query) => query.get('period')))).toEqual(

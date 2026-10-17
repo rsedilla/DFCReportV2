@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-18, the trigger being decision 0364: of 363 files, 362 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0364 each moved the first two and
+2026-10-18, the trigger being decision 0365: of 364 files, 363 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0365 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-18 and triggered by 0364, and was left stale by 0365 the same day. The one before that was dated
 2026-10-18 and triggered by 0363, and was left stale by 0364 the same day. The one before that was dated
 2026-10-17 and triggered by 0362, and was left stale by 0363 the next day. The one before that was dated
 2026-10-17 and triggered by 0361, and was left stale by 0362 the same day. The one before that was dated
@@ -771,6 +772,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-17 — [Update Records and Recording Progress](docs/decisions/0362-update-records-and-recording-progress.md)
 - 2026-10-18 — [The Primaries' report controls, and no coverage line](docs/decisions/0363-the-primaries-report-controls.md)
 - 2026-10-18 — [# of People under People, in Branch's place](docs/decisions/0364-number-of-people-under-people.md)
+- 2026-10-18 — [No cards above the Primaries' 12](docs/decisions/0365-no-cards-above-the-primaries-twelve.md)
 
 ### Open — awaiting a ruling
 
