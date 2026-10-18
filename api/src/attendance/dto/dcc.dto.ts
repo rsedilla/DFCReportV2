@@ -251,6 +251,15 @@ export class DccPendingLeadersDto {
   @IsOptional()
   @IsIn(['MENS', 'WOMENS'], { message: 'network accepts MENS or WOMENS (SKILL.md section 22).' })
   network?: NetworkName;
+
+  /**
+   * `true` keeps only the Sundays past their deadline whose week is still open, and the
+   * leaders who owe one (decision 0368). Anything but `true` or `false` is refused.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  late?: boolean;
 }
 
 /**

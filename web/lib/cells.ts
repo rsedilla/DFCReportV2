@@ -303,6 +303,59 @@ export interface AwaitingMeetings {
   meetings: AwaitingMeeting[];
 }
 
+/**
+ * One Cell on Record's Pending CG Records (decision 0368): its leader, and each meeting that
+ * has come, has no record, and whose week is still open, oldest first.
+ */
+export interface PendingCgCell {
+  cell: {
+    id: string;
+    cell_code: string;
+    category: CellCategory | null;
+    day_of_week: number | null;
+    /** Null while the Cell is `ACTIVE`. */
+    closed_on: string | null;
+  };
+  leader: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+    last_name: string;
+    first_name: string;
+    is_actor: boolean;
+  };
+  meetings: {
+    scheduled_date: string;
+    scheduled_time: string;
+    reporting_month: string;
+    due_at: string | null;
+    closes_at: string;
+  }[];
+  /** Whether this reader may record the oldest one: their own, or on the leader's behalf. */
+  may_record: boolean;
+}
+
+export async function getPendingCgCells(
+  options: {
+    cursor?: string | null;
+    q?: string;
+    network?: 'MENS' | 'WOMENS' | null;
+    late?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<{ data: PendingCgCell[]; next_cursor: string | null }> {
+  const query = new URLSearchParams();
+  if (options.cursor) query.set('cursor', options.cursor);
+  if (options.q) query.set('q', options.q);
+  if (options.network) query.set('network', options.network);
+  if (options.late) query.set('late', 'true');
+  const text = query.toString();
+
+  return authenticatedRequest(`/api/v1/cells/meetings/pending${text ? `?${text}` : ''}`, {
+    signal,
+  });
+}
+
 /** A recorded meeting. Absent — `meeting: null` — means awaiting a record. */
 export interface RecordedMeeting {
   id: string;

@@ -283,6 +283,11 @@
       "screen": "web/app/cells/[id]/meetings/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/meetings/pending",
+      "reason": "Record's Pending CG Records, laid out as Pending DCC Records is (decision 0368).",
+      "screen": "web/app/dashboard/page.tsx"
+    },
+    {
       "route": "GET /api/v1/cells/meetings/awaiting",
       "reason": "§19's recording queue, and the only surface that names a closed Cell's meetings (ruling of 2026-09-17).",
       "screen": "web/app/dashboard/page.tsx"

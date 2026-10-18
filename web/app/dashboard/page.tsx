@@ -18,13 +18,13 @@ import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import {
   cellShortName,
-  behindOf,
   closedOnLabel,
-  listEveryCell,
+  getPendingCgCells,
   listMeetingsAwaiting,
   type CellCategory,
   peopleWithoutACell,
   type AwaitingMeetings,
+  type PendingCgCell,
 } from '@/lib/cells';
 import {
   getDccOwed,
@@ -301,12 +301,9 @@ function Dashboard() {
   // **Pending DCC Records** (decision 0336): the leaders in the reader's whole scope whose 12
   // are unrecorded for a Sunday whose week is open, fifty at a time, searched and filtered on
   // the server. Undated: it asks about now.
-  const [pendingFilter, setPendingFilter] = useState<{
-    q: string;
-    network: 'MENS' | 'WOMENS' | null;
-  }>({ q: '', network: null });
+  const [pendingFilter, setPendingFilter] = useState<PendingFilter>(NO_PENDING_FILTER);
   const pendingDccPages = useInfiniteQuery({
-    queryKey: ['dcc-pending-leaders', pendingFilter.q, pendingFilter.network],
+    queryKey: ['dcc-pending-leaders', pendingFilter.q, pendingFilter.network, pendingFilter.late],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       getPendingDccLeaders(
@@ -314,6 +311,7 @@ function Dashboard() {
           cursor: pageParam,
           q: pendingFilter.q === '' ? undefined : pendingFilter.q,
           network: pendingFilter.network,
+          late: pendingFilter.late,
         },
         signal,
       ),
@@ -321,6 +319,28 @@ function Dashboard() {
     enabled: fullRecord,
   });
   const pendingDcc = pendingDccPages.data?.pages.flatMap((page) => page.data);
+
+  // **Pending CG Records** (decision 0368), laid out as Pending DCC Records is: one row per
+  // Cell, each meeting still open on a line of its own, fifty at a time, searched and
+  // filtered on the server. It replaced four reads of every Cell in the reader's scope.
+  const [cgFilter, setCgFilter] = useState<PendingFilter>(NO_PENDING_FILTER);
+  const pendingCgPages = useInfiniteQuery({
+    queryKey: ['cg-pending', cgFilter.q, cgFilter.network, cgFilter.late],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      getPendingCgCells(
+        {
+          cursor: pageParam,
+          q: cgFilter.q === '' ? undefined : cgFilter.q,
+          network: cgFilter.network,
+          late: cgFilter.late,
+        },
+        signal,
+      ),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: fullRecord,
+  });
+  const pendingCg = pendingCgPages.data?.pages.flatMap((page) => page.data);
 
   // **One request per open month**, replacing two index calls and one per Cell. The
   // key is the month and whose view is shown (decision 0258).
@@ -334,35 +354,6 @@ function Dashboard() {
     queryKey: ['meetings-awaiting', month, shownWhose],
     queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, shownWhose),
     enabled: whoseKnown,
-  });
-
-  // **The whole branch, every page** (decision 0340), so Pending CG Records names every Cell
-  // behind: Filed Reports, which used to hold the rest, is withdrawn.
-  const scoped = useQuery({
-    queryKey: ['cells-every', month],
-    queryFn: ({ signal }) => listEveryCell({ month }, signal),
-    enabled: fullRecord,
-  });
-
-  // **Section 15's attention list includes a closed Cell while its month is open**, and
-  // the running view cannot carry one. The closed view (decision 0266) can.
-  const scopedClosed = useQuery({
-    queryKey: ['cells-every', month, 'CLOSED'],
-    queryFn: ({ signal }) => listEveryCell({ month, state: 'CLOSED' }, signal),
-    enabled: fullRecord,
-  });
-
-  // **Last month's Cells behind while that month is open** (section 15, decision 0315),
-  // read only in the close week. A month that has shut answers `open: false`.
-  const scopedPrevious = useQuery({
-    queryKey: ['cells-every', previousMonth],
-    queryFn: ({ signal }) => listEveryCell({ month: previousMonth }, signal),
-    enabled: fullRecord && inCloseWeek,
-  });
-  const scopedClosedPrevious = useQuery({
-    queryKey: ['cells-every', previousMonth, 'CLOSED'],
-    queryFn: ({ signal }) => listEveryCell({ month: previousMonth, state: 'CLOSED' }, signal),
-    enabled: fullRecord && inCloseWeek,
   });
 
   // **The Sundays on the leader's own checklist.** The events index says which of
@@ -456,9 +447,6 @@ function Dashboard() {
     (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
     checklistsPrevious.some((query) => query.isPending);
 
-  // Last month by name, for the rows and notes that carry it.
-  const previousName = monthLabel(previousMonth).split(' ')[0];
-
   // **Oldest first, and the page says so.** Date order is the one order that ranks
   // nobody, and it puts last month's entries before this month's. A Cell meeting and a
   // Sunday on the same date keep that order, because the sort is stable and the Cell
@@ -484,36 +472,6 @@ function Dashboard() {
     checklists.some((query) => query.isError) ||
     previousFailed !== undefined;
 
-  // Bounded by the window rather than by how recently the Cell closed, so the list never
-  // shows a meeting only Admin could act on (section 15). **One predicate for both views**
-  // (decision 0267): a meeting that has come and has no record. It used to compare with
-  // the whole month's schedule, which named a running Cell for meetings not yet held.
-  const needingAttention = [
-    ...[
-      ...(scoped.data?.data ?? []),
-      ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
-    ].map((cell) => ({ cell, month })),
-    // Last month's only while its window is open, each view by its own flag.
-    ...(inCloseWeek
-      ? [
-          ...(scopedPrevious.data?.open ? scopedPrevious.data.data : []),
-          ...(scopedClosedPrevious.data?.open ? scopedClosedPrevious.data.data : []),
-        ].map((cell) => ({ cell, month: previousMonth }))
-      : []),
-  ].filter(({ cell }) => behindOf(cell.coverage) > 0);
-  // Last month was read and is still open, so the list speaks for it too.
-  const lastMonthRead =
-    inCloseWeek && (scopedPrevious.data?.open === true || scopedClosedPrevious.data?.open === true);
-  const behindPending =
-    scoped.isPending ||
-    scopedClosed.isPending ||
-    (inCloseWeek && (scopedPrevious.isPending || scopedClosedPrevious.isPending));
-  const behindFailed = [
-    scoped,
-    scopedClosed,
-    ...(inCloseWeek ? [scopedPrevious, scopedClosedPrevious] : []),
-  ].find((query) => query.isError);
-
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work here precisely so a leader can trust it, and a
   // failed load that renders as an empty queue says "nothing to do" on this screen's
@@ -531,8 +489,8 @@ function Dashboard() {
           ? describeFailure(previousFailed.error)
           : owedFailure
             ? describeFailure(owedFailure.error)
-          : behindFailed
-              ? describeFailure(behindFailed.error)
+          : pendingCgPages.isError
+              ? describeFailure(pendingCgPages.error)
               : unplaced.isError
                 ? describeFailure(unplaced.error)
               : pendingDccPages.isError
@@ -560,10 +518,7 @@ function Dashboard() {
     {
       key: 'behind',
       label: 'Pending CG Records',
-      count:
-        behindPending || behindFailed
-          ? null
-          : String(needingAttention.length),
+      count: pendingCg ? `${pendingCg.length}${pendingCgPages.hasNextPage ? '+' : ''}` : null,
     },
     {
       key: 'dcc',
@@ -807,42 +762,34 @@ function Dashboard() {
                 Pending CG Records
               </h2>
               <p className="text-muted text-sm">
-                {lastMonthRead
-                  ? `Cells you oversee, this month and ${previousName} while it is open, in no particular order.`
-                  : 'Cells you oversee, in no particular order.'}
+                Cells you oversee with a meeting still to record whose week is open, by the
+                leader&rsquo;s first name.
               </p>
             </div>
-            {behindPending ? (
+            <PendingFilters
+              searchLabel="Search by Cell ID or leader"
+              wholeChurch={holdsWholeChurch(me.data, 'cell.view_subtree')}
+              name="pending-cg"
+              value={cgFilter}
+              onChange={setCgFilter}
+            />
+            {pendingCgPages.isPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
-            ) : behindFailed ? null : (
+            ) : pendingCg ? (
               <>
-                <ListTable
-                  caption="Pending CG Records"
-                  columns={['Cell', 'Leader', 'Meetings recorded', 'Status']}
-                  empty={`No Cell you oversee is behind ${lastMonthRead ? `this month or in ${previousName}` : 'this month'}.`}
-                  rows={needingAttention.map(({ cell, month: cellMonth }) => ({
-                    key: `${cell.id}|${cellMonth}`,
-                    cells: [
-                      <Link
-                        key="cell"
-                        href={`/cells/${cell.id}/meetings?month=${cellMonth}`}
-                        className={NAME_LINK}
-                      >
-                        {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-                      </Link>,
-                      cell.leader.full_name,
-                      <span key="recorded" className="tabular-nums">
-                        {cell.coverage.recorded} of {cell.coverage.scheduled}
-                      </span>,
-                      (cell.state === 'CLOSED' && cell.closed_on
-                        ? `Closed ${closedOnLabel(cell.closed_on)}`
-                        : 'Open') +
-                        (cellMonth === month ? '' : ` · ${openUntilLabel(cellMonth)}`),
-                    ],
-                  }))}
+                <PendingCgList
+                  rows={pendingCg}
+                  empty={
+                    cgFilter.late
+                      ? 'No Cell you oversee has a meeting past its deadline.'
+                      : cgFilter.q !== '' || cgFilter.network !== null
+                        ? 'No Cell matching this has a meeting still to record.'
+                        : 'No Cell you oversee has a meeting still to record.'
+                  }
                 />
+                <ShowMore pages={pendingCgPages} />
               </>
-            )}
+            ) : null}
           </section>
         ) : null}
 
@@ -857,8 +804,10 @@ function Dashboard() {
                 first name.
               </p>
             </div>
-            <PendingDccFilters
+            <PendingFilters
+              searchLabel="Search a leader by name or Member ID"
               wholeChurch={holdsWholeChurch(me.data, 'dcc.view_subtree')}
+              name="pending-dcc"
               value={pendingFilter}
               onChange={setPendingFilter}
             />
@@ -869,9 +818,11 @@ function Dashboard() {
                 <PendingDccList
                   rows={pendingDcc}
                   empty={
-                    pendingFilter.q !== '' || pendingFilter.network !== null
-                      ? 'No leader matching this is behind on DCC.'
-                      : 'No leader you oversee is behind on DCC.'
+                    pendingFilter.late
+                      ? 'No leader you oversee has a Sunday past its deadline.'
+                      : pendingFilter.q !== '' || pendingFilter.network !== null
+                        ? 'No leader matching this is behind on DCC.'
+                        : 'No leader you oversee is behind on DCC.'
                   }
                   chosenId={pendingChosen?.id ?? null}
                   onChoose={setPendingChosen}
@@ -970,19 +921,6 @@ function Dashboard() {
       {recordingOnly || seniorPastor ? null : <SentRequests />}
     </main>
   );
-}
-
-/**
- * "September · open until Mon 19 Oct, 12NN": the month a Cell's figure belongs to and when
- * it closes, which is when its last week closes (section 13, decision 0335).
- */
-function openUntilLabel(itemMonth: string): string {
-  const [year, month] = itemMonth.split('-').map(Number);
-  const name = new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(
-    new Date(Date.UTC(year, month - 1, 15)),
-  );
-
-  return `${name} · ${monthOpenUntilLabel(itemMonth).replace(/^Open/, 'open')}`;
 }
 
 /** Which of Record's lists, or Recording Progress, is open (decisions 0290 and 0336). */
@@ -1667,18 +1605,33 @@ function OwedList({
   );
 }
 
+/** What the two Pending lists are narrowed by, all on the server (decision 0368). */
+interface PendingFilter {
+  q: string;
+  network: 'MENS' | 'WOMENS' | null;
+  late: boolean;
+}
+
+const NO_PENDING_FILTER: PendingFilter = { q: '', network: null, late: false };
+
 /**
- * Pending DCC Records' search, and its Network filter for a whole-church reader (decision
- * 0336). The search narrows on the server and never reorders (decision 0009).
+ * The two Pending lists' controls, one bar for both (decision 0368): the search, the Network
+ * filter for a whole-church reader, and *Late only*, the items past their deadline whose week
+ * is still open. Each narrows on the server and none reorders (decision 0009).
  */
-function PendingDccFilters({
+function PendingFilters({
+  searchLabel,
   wholeChurch,
+  name,
   value,
   onChange,
 }: {
+  searchLabel: string;
   wholeChurch: boolean;
-  value: { q: string; network: 'MENS' | 'WOMENS' | null };
-  onChange: (next: { q: string; network: 'MENS' | 'WOMENS' | null }) => void;
+  /** Keeps the two bars' radio groups apart. */
+  name: string;
+  value: PendingFilter;
+  onChange: (next: PendingFilter) => void;
 }) {
   const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(value.q);
 
@@ -1695,7 +1648,7 @@ function PendingDccFilters({
         noValidate
       >
         <Field
-          label="Search a leader by name or Member ID"
+          label={searchLabel}
           type="search"
           name="q"
           autoComplete="off"
@@ -1710,7 +1663,7 @@ function PendingDccFilters({
       {wholeChurch ? (
         <RadioGroup
           legend="Network"
-          name="pending-dcc-network"
+          name={`${name}-network`}
           value={value.network ?? 'ALL'}
           onChange={(next) =>
             onChange({ ...value, network: next === 'ALL' ? null : (next as 'MENS' | 'WOMENS') })
@@ -1722,7 +1675,132 @@ function PendingDccFilters({
           ]}
         />
       ) : null}
+      <Button
+        type="button"
+        variant="secondary"
+        aria-pressed={value.late}
+        onClick={() => onChange({ ...value, late: !value.late })}
+      >
+        {value.late ? 'Showing late only' : 'Late only'}
+      </Button>
     </div>
+  );
+}
+
+/**
+ * Pending CG Records (decision 0368), laid out as Pending DCC Records is: one row per Cell,
+ * named by its leader, by first name, each meeting still open on a line of its own with
+ * Update Records's label. Record opens the oldest, where the API says the reader may record
+ * it; See meeting opens the Cell's meetings for that month.
+ */
+function PendingCgList({ rows, empty }: { rows: readonly PendingCgCell[]; empty: string }) {
+  const name = (row: PendingCgCell) =>
+    row.leader.is_actor ? (
+      'You'
+    ) : (
+      <Link href={`/people/${row.leader.person_id}`} className={NAME_LINK}>
+        {row.leader.full_name}
+      </Link>
+    );
+
+  const cellLine = (row: PendingCgCell) =>
+    `${
+      row.cell.category !== null && row.cell.day_of_week !== null
+        ? cellShortName({ ...row.cell, cell_id: row.cell.cell_code })
+        : row.cell.cell_code
+    }${row.cell.closed_on ? ` · Closed ${closedOnLabel(row.cell.closed_on)}` : ''}`;
+
+  const meetings = (row: PendingCgCell) => (
+    <ul className="flex flex-col gap-1">
+      {row.meetings.map((meeting) => (
+        <li key={meeting.scheduled_date}>
+          <span className="text-ink whitespace-nowrap">{dayLabel(meeting.scheduled_date)}</span>
+          {' · '}
+          {deadlineLabel(meeting)?.text}
+        </li>
+      ))}
+    </ul>
+  );
+
+  const actions = (row: PendingCgCell) => {
+    const oldest = row.meetings[0];
+    const label = cellLine(row);
+
+    return (
+      <span className="inline-flex flex-wrap gap-2">
+        {row.may_record ? (
+          <Link
+            href={`/cells/${row.cell.id}/meetings/${oldest.scheduled_date}`}
+            className={buttonClasses('primary')}
+          >
+            Record
+            <span className="sr-only">
+              {' '}
+              {label}, {dayLabel(oldest.scheduled_date)}
+            </span>
+          </Link>
+        ) : null}
+        <Link
+          href={`/cells/${row.cell.id}/meetings?month=${oldest.reporting_month}`}
+          className={buttonClasses('secondary')}
+        >
+          See meeting
+          <span className="sr-only"> of {label}</span>
+        </Link>
+      </span>
+    );
+  };
+
+  return (
+    <>
+      <Table caption="Pending CG Records" className="mt-4 hidden lg:block">
+        <thead>
+          <tr>
+            <HeaderCell>Cell</HeaderCell>
+            <HeaderCell>Meetings still to record</HeaderCell>
+            <HeaderCell>
+              <span className="sr-only">Action</span>
+            </HeaderCell>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="text-muted px-3 py-3">
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={`${row.cell.id}|${row.leader.person_id}`} className={rowClasses}>
+                <td className="px-3 py-3 align-top">
+                  {name(row)}
+                  <span className="text-muted block text-xs">{cellLine(row)}</span>
+                </td>
+                <td className="text-muted px-3 py-3 align-top text-sm">{meetings(row)}</td>
+                <td className="px-3 py-3 text-right align-top">{actions(row)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </Table>
+      <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+        {rows.length === 0 ? (
+          <li className="border-line text-muted border p-4 text-sm">{empty}</li>
+        ) : (
+          rows.map((row) => (
+            <li key={`${row.cell.id}|${row.leader.person_id}`} className="border-line flex flex-col gap-2 border p-4">
+              <div className="min-w-0">
+                <p className="text-base font-medium">{name(row)}</p>
+                <p className="text-muted text-sm">{cellLine(row)}</p>
+              </div>
+              <div className="text-muted text-sm">{meetings(row)}</div>
+              <div>{actions(row)}</div>
+            </li>
+          ))
+        )}
+      </ul>
+    </>
   );
 }
 

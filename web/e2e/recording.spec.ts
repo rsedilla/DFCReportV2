@@ -11,14 +11,11 @@ import {
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
-  CLOSED_CELL as CLOSED_CELL_ROW,
   awaitingClosedRow,
   awaitingRow,
-  closedAsked,
   mockCellMeetings,
   mockCellReport,
   mockCells,
-  mockCellsAtScale,
   mockClosedDccRoster,
   mockDccEvents,
   mockDccOwed,
@@ -29,7 +26,9 @@ import {
   mockMeetingRoster,
   mockMeetingsAwaiting,
   mockRecordedMeetingRoster,
+  mockPendingCg,
   mockPendingDcc,
+  PENDING_CG_ROWS,
   PENDING_DCC_ROWS,
 } from './mock-attendance';
 
@@ -731,6 +730,8 @@ test.describe('the Record queue', () => {
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
     await mockPendingDcc(page);
+    // One Cell still to record (decision 0368).
+    await mockPendingCg(page, [PENDING_CG_ROWS[0]]);
   }
 
   // Section 13 keeps a month open through its 7th and has every leader see their own
@@ -1060,53 +1061,6 @@ test.describe('the Record queue', () => {
     expect(ledByMe).toEqual([]);
   });
 
-  // The Cells index no longer feeds the queue, and still feeds Cells behind — so its
-  // failure must still reach the notice, and Cells behind must neither count nor claim
-  // that nothing is behind.
-  test('reports a failed Cells read although the queue no longer depends on it', async ({
-    page,
-  }) => {
-    await mockRecordScreen(page, {});
-    await page.route('**/api/v1/cells?*', (route) =>
-      route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
-        }),
-      }),
-    );
-
-    await page.goto('/dashboard');
-
-    await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    // No count box: the button's whole name is its label.
-    await recordLists(page).getByRole('button', { name: 'Pending CG Records', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toBeVisible();
-    await expect(page.getByText('No Cell you oversee is behind this month.')).toHaveCount(0);
-  });
-
-  // Decision 0267: the list names a Cell a meeting that came is missing from, by the
-  // server's `behind`. The first Cell has recorded two of the month's four and is not behind —
-  // its other two have not come — so a list keyed on the whole month would name it.
-  test('lists the Cells behind, and not a Cell whose unrecorded meetings have not come', async ({
-    page,
-  }) => {
-    await mockRecordScreen(page, {});
-    await mockCellsAtScale(page);
-
-    await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Records/);
-
-    const attention = page.getByRole('region', { name: 'Pending CG Records' });
-    // The eleven share one name (decision 0306), so each is told apart by its address.
-    const links = attention.getByRole('link', { name: 'Youth · Sat' });
-    await expect(links).toHaveCount(2);
-    await expect(links.first()).toHaveAttribute('href', /0119\/meetings/);
-    await expect(links.nth(1)).toHaveAttribute('href', /0120\/meetings/);
-  });
-
   // Decision 0269: the requests the reader sent, each with its outcome in words.
   test('lists the requests the reader sent, with each outcome, and nothing when there are none', async ({
     page,
@@ -1189,91 +1143,6 @@ test.describe('the Record queue', () => {
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
   });
 
-  /**
-   * Pending CG Records reads every page of both views of the Cells index, following
-   * `next_cursor` 200 at a time, so it names every Cell behind and its count is exact
-   * (decision 0340): no "+", no "None of the first 50", and no link to Filed Reports, which
-   * is withdrawn. Each view here is two pages, and the Cells behind are on the second.
-   */
-  test('reads every page of the Cells, counts every Cell behind exactly, and points nowhere else', async ({
-    page,
-  }) => {
-    // Mid-month, so last month is not read too (decision 0315), and June is open, so the
-    // closed view is read as well (decision 0266).
-    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
-    await mockRecordScreen(page, {});
-
-    const caughtUp = { coverage: { recorded: 4, scheduled: 4, behind: 0 } };
-    const secondRunning = {
-      ...CELL_WITH_MEETINGS,
-      id: '3f1b7c6e-0000-4000-8000-000000000119',
-      cell_id: 'CELL-000019',
-      leader: {
-        person_id: '3f1b7c6e-0000-4000-8000-000000000219',
-        member_id: 'M-000519',
-        full_name: 'Gregoria Malabanan',
-      },
-    };
-    let behind = false;
-    const asked: URLSearchParams[] = [];
-    await page.route('**/api/v1/cells?*', (route) => {
-      const params = new URL(route.request().url()).searchParams;
-      asked.push(params);
-      const closed = params.get('state') === 'CLOSED';
-      const second = params.get('cursor') === (closed ? 'closed-two' : 'running-two');
-      const data = closed
-        ? second
-          ? [behind ? CLOSED_CELL_ROW : { ...CLOSED_CELL_ROW, ...caughtUp }]
-          : []
-        : second
-          ? [behind ? secondRunning : { ...secondRunning, ...caughtUp }]
-          : [{ ...CELL_WITH_MEETINGS, ...caughtUp }];
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          reporting_month: '2026-06-01',
-          open: true,
-          data,
-          next_cursor: second ? null : closed ? 'closed-two' : 'running-two',
-        }),
-      });
-    });
-
-    // Nobody behind on either page of either view, and the whole scope is claimed. A count of 0
-    // is left off the button (decision 0349).
-    await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Records/);
-    const attention = page.getByRole('region', { name: 'Pending CG Records' });
-    await expect(
-      attention.getByRole('cell', { name: 'No Cell you oversee is behind this month.' }),
-    ).toBeVisible();
-    await expect(attention.getByText(/None of the first/)).toHaveCount(0);
-    for (const [state, cursor] of [
-      [null, 'running-two'],
-      ['CLOSED', 'closed-two'],
-    ] as const) {
-      expect(
-        asked.some((query) => query.get('state') === state && query.get('cursor') === cursor),
-        `the ${state ?? 'running'} view's second page was not read`,
-      ).toBe(true);
-    }
-    // Two hundred at a time, the API's most.
-    expect(asked.every((query) => query.get('limit') === '200')).toBe(true);
-
-    // One Cell behind on each view's second page: both are named, and the count is exact.
-    behind = true;
-    await page.reload();
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
-    await chooseList(page, /^Pending CG Records/);
-    const rows = page.getByRole('table', { name: 'Pending CG Records' }).locator('tbody tr');
-    await expect(rows).toHaveCount(2);
-    await expect(rows.filter({ hasText: 'Gregoria Malabanan' })).toHaveCount(1);
-    await expect(rows.filter({ hasText: 'Paolo Reyes' })).toHaveCount(1);
-    await expect(attention.getByRole('link', { name: /^See every Cell behind/ })).toHaveCount(0);
-    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
-  });
 });
 
 test.describe('the Record queue as the owner designed it (decision 0258)', () => {
@@ -1746,6 +1615,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await mockPeopleWithoutACell(page);
     await mockPendingDcc(page);
     await mockDccOwed(page);
+    // One Cell still to record (decision 0368).
+    await mockPendingCg(page, [PENDING_CG_ROWS[0]]);
   }
 
   test('keeps the list, the half and whose in the address, so Back returns to each', async ({
@@ -1982,7 +1853,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
-  test('a list with a further page unread counts what it read and says there is more, and Pending CG Records reads every page', async ({
+  test('a list with a further page unread counts what it read and says there is more', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -2002,33 +1873,13 @@ test.describe('Record’s four lists (decision 0290)', () => {
       [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
       [person(13, 'Soledad Aquino')],
     );
-    // The running view is two pages, a Cell behind on each (decision 0340).
-    await page.route('**/api/v1/cells?*', (route) => {
-      const url = route.request().url();
-      const second = new URL(url).searchParams.get('cursor') === 'more-cells';
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          reporting_month: '2026-06-01',
-          open: false,
-          data: closedAsked(url)
-            ? []
-            : [
-                second
-                  ? { ...CELL_WITH_MEETINGS, id: '3f1b7c6e-0000-4000-8000-000000000119', cell_id: 'CELL-000019' }
-                  : CELL_WITH_MEETINGS,
-              ],
-          next_cursor: closedAsked(url) || second ? null : 'more-cells',
-        }),
-      });
-    });
+    // Pending CG Records is read fifty at a time too (decision 0368).
+    await mockTwoPages(page, '**/api/v1/cells/meetings/pending*', [PENDING_CG_ROWS[0]], [PENDING_CG_ROWS[1]]);
 
     await page.goto('/dashboard');
 
     const lists = recordLists(page);
-    // Every page is read, so the count is exact and carries no "+".
-    await expect(lists.getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
+    await expect(lists.getByRole('button', { name: /^Pending CG Records\s*1\+$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
     await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
     // The queue is read whole, so its count carries no "+".
@@ -2053,19 +1904,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
     );
     await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
     const behind = page.getByRole('table', { name: 'Pending CG Records' });
-    await expect(behind.getByRole('columnheader')).toHaveText([
-      'Cell',
-      'Leader',
-      'Meetings recorded',
-      'Status',
-    ]);
-    await expect(behind.getByRole('row').filter({ hasText: 'Youth · Sat' }).getByRole('cell')).toHaveText([
-      'Youth · Sat',
-      'Teofilo Ramos',
-      '3 of 4',
-      'Open',
-    ]);
-    await expect(behind.getByRole('link', { name: 'Youth · Sat' })).toHaveAttribute(
+    // Laid out as Pending DCC Records is (decision 0368).
+    await expect(behind.getByRole('columnheader')).toHaveText(['Cell', 'Meetings still to record', 'Action']);
+    const row = behind.getByRole('row').filter({ hasText: 'Carlo Reyes' });
+    await expect(row).toContainText('Youth · Sat');
+    await expect(row.getByRole('link', { name: /^See meeting/ })).toHaveAttribute(
       'href',
       /^\/cells\/3f1b7c6e-0000-4000-8000-000000000101\/meetings\?month=\d{4}-\d{2}-01$/,
     );
@@ -2225,7 +2068,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       await chooseList(page, /^Pending CG Records/);
       await expect(page.getByRole('table', { name: 'Pending CG Records' })).toBeHidden();
       await expect(
-        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Youth · Sat' }) }),
+        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Carlo Reyes' }) }),
       ).toBeVisible();
 
       await chooseList(page, /^Awaiting Leader Assignment/);
@@ -2597,27 +2440,12 @@ test.describe('a DCC checklist longer than one page', () => {
   });
 });
 
-test.describe('Cells behind carries last month while it is open (decision 0315)', () => {
-  /** The Cells index by month: Youth is behind in September only, and October has nothing behind. */
-  async function mockCellsByMonth(page: Page, { septemberOpen }: { septemberOpen: boolean }) {
-    await page.route('**/api/v1/cells?*', (route) => {
-      const url = new URL(route.request().url());
-      const month = url.searchParams.get('month');
-      const september = month === '2026-09-01';
-      const closed = url.searchParams.get('state') === 'CLOSED';
-      return route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          reporting_month: month,
-          open: september ? septemberOpen : true,
-          data: september && !closed ? [CELL_WITH_MEETINGS] : [],
-          next_cursor: null,
-        }),
-      });
-    });
-  }
+test.describe('Pending CG Records laid out as Pending DCC Records (decision 0368)', () => {
+  /** 10:00 on 20 June 2026 in Manila. */
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
 
-  async function mockRecord(page: Page, septemberOpen: boolean) {
+  async function mockRecord(page: Page) {
+    await page.clock.setFixedTime(JUNE_20);
     await mockSignedIn(page);
     await mockCells(page);
     await mockCellMeetings(page);
@@ -2630,65 +2458,132 @@ test.describe('Cells behind carries last month while it is open (decision 0315)'
     await mockPeopleWithoutACell(page);
     await mockPendingDcc(page);
     await mockDccOwed(page);
-    await mockCellsByMonth(page, { septemberOpen });
   }
 
   const table = (page: Page) => page.getByRole('table', { name: 'Pending CG Records', exact: true });
 
-  test('lists a Cell behind for last month in the first seven days, with its month', async ({
+  test('names each Cell by its leader, each meeting on its own line, with Record and See meeting', async ({
     page,
   }) => {
-    // 10:00 on 3 October in Manila.
-    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecord(page, true);
+    await mockRecord(page);
+    await mockPendingCg(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard?list=behind');
 
-    await expect(page.getByText(/this month and September while it is open/)).toBeVisible();
-    const row = table(page).getByRole('row').filter({ hasText: 'Youth · Sat' });
-    await expect(row).toContainText('Open · September · open until 7 Oct');
-    await expect(row.getByRole('link', { name: 'Youth · Sat' })).toHaveAttribute(
+    await expect(table(page).getByRole('columnheader')).toHaveText([
+      'Cell',
+      'Meetings still to record',
+      'Action',
+    ]);
+    const carlo = table(page).getByRole('row').filter({ hasText: 'Carlo Reyes' });
+    await expect(carlo).toContainText('Youth · Sat');
+    await expect(carlo.getByRole('listitem')).toHaveCount(2);
+    // Late is a word, never a colour (decision 0335).
+    await expect(carlo.getByRole('listitem').first()).toContainText('Saturday 6 June · Late · closes');
+    await expect(carlo.getByRole('link', { name: /^Record/ })).toHaveAttribute(
       'href',
-      /month=2026-09-01/,
+      '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-06',
     );
-    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records/ })).toContainText('1');
+    await expect(carlo.getByRole('link', { name: /^See meeting/ })).toHaveAttribute(
+      'href',
+      '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings?month=2026-06-01',
+    );
+    await expect(carlo.getByRole('link', { name: 'Carlo Reyes' })).toHaveAttribute(
+      'href',
+      '/people/3f1b7c6e-0000-4000-8000-000000000611',
+    );
+
+    // A closed Cell says so, and one the reader may not record carries See meeting alone.
+    const herminia = table(page).getByRole('row').filter({ hasText: 'Herminia Lazaro' });
+    await expect(herminia).toContainText('Couple · Wed · Closed 12 Jun 2026');
+    await expect(herminia.getByRole('link', { name: /^Record/ })).toHaveCount(0);
+    await expect(herminia.getByRole('link', { name: /^See meeting/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
   });
 
-  test('lists none of last month once its window has shut', async ({ page }) => {
-    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecord(page, false);
+  test('asks the server for each narrowing, Late only included, and never reorders', async ({ page }) => {
+    await mockRecord(page);
+    const asked = await mockPendingCg(page);
+    await page.goto('/dashboard?list=behind');
+    await expect(table(page).getByRole('row').filter({ hasText: 'Carlo Reyes' })).toBeVisible();
+
+    const pane = page.getByRole('region', { name: 'Pending CG Records' });
+    await pane.getByLabel('Search by Cell ID or leader').fill('cell-0000');
+    await pane.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect.poll(() => asked.some((query) => query.includes('q=cell-0000'))).toBe(true);
+
+    const late = pane.getByRole('button', { name: 'Late only' });
+    await expect(late).toHaveAttribute('aria-pressed', 'false');
+    await late.click();
+    await expect(pane.getByRole('button', { name: 'Showing late only' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect.poll(() => asked.some((query) => query.includes('late=true'))).toBe(true);
+    // The Network filter is a whole-church reader's alone (decision 0336).
+    await expect(pane.getByRole('radiogroup', { name: 'Network' })).toHaveCount(0);
+  });
+
+  test('reads fifty at a time, counts what it has read, and Show more reads the next page', async ({
+    page,
+  }) => {
+    await mockRecord(page);
+    const cursors: (string | null)[] = [];
+    await page.route('**/api/v1/cells/meetings/pending*', (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor');
+      cursors.push(cursor);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          cursor === 'page-two'
+            ? { data: [PENDING_CG_ROWS[1]], next_cursor: null }
+            : { data: [PENDING_CG_ROWS[0]], next_cursor: 'page-two' },
+        ),
+      });
+    });
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard?list=behind');
 
-    await expect(table(page)).toContainText('No Cell you oversee is behind this month.');
-    await expect(page.getByText(/while it is open/)).toHaveCount(0);
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*1\+$/ })).toBeVisible();
+    await expect(table(page).getByRole('row').filter({ hasText: 'Herminia Lazaro' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await expect(table(page).getByRole('row').filter({ hasText: 'Herminia Lazaro' })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*2$/ })).toBeVisible();
+    expect(cursors).toContain('page-two');
+    // The Cells index is no longer read for this list.
+    await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
   });
 
-  test('a failed read of last month never says that nothing is behind', async ({ page }) => {
-    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecord(page, true);
-    await page.route('**/api/v1/cells?*month=2026-09-01*', (route) =>
-      route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  test('a failed read says so and never says that nothing is still to record', async ({ page }) => {
+    await mockRecord(page);
+    await page.route('**/api/v1/cells/meetings/pending*', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} } }),
+      }),
     );
     await page.goto('/dashboard?list=behind');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText(/No Cell you oversee is behind/)).toHaveCount(0);
+    // No count box: the button's whole name is its label.
+    await expect(recordLists(page).getByRole('button', { name: 'Pending CG Records', exact: true })).toBeVisible();
+    await expect(page.getByText(/No Cell you oversee has a meeting still to record/)).toHaveCount(0);
   });
 
-  test('does not ask for last month after the 7th', async ({ page }) => {
-    // 10:00 on 10 October in Manila.
-    await page.clock.setFixedTime(new Date('2026-10-10T02:00:00Z'));
-    const asked: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/api/v1/cells?')) asked.push(request.url());
-    });
-    await mockRecord(page, true);
+  test('an empty list says so in one row, and Late only says it in its own words', async ({ page }) => {
+    await mockRecord(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard?list=behind');
 
-    await expect(table(page)).toContainText('No Cell you oversee is behind this month.');
-    expect(asked.some((url) => url.includes('month=2026-09-01'))).toBe(false);
+    await expect(table(page).getByRole('cell')).toHaveText(['No Cell you oversee has a meeting still to record.']);
+    await page.getByRole('region', { name: 'Pending CG Records' }).getByRole('button', { name: 'Late only' }).click();
+    await expect(table(page).getByRole('cell')).toHaveText([
+      'No Cell you oversee has a meeting past its deadline.',
+    ]);
   });
 });
-
 test.describe('Awaiting Leader Assignment for a reader who may not move people (decision 0356)', () => {
   const JUNE_20 = new Date('2026-06-20T02:00:00Z');
 
