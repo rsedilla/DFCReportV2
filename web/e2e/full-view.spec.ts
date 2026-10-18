@@ -1116,7 +1116,15 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await expect(tabs.last()).toHaveText('Recording Progress');
     await tabs.last().click();
 
-    await expect(page.getByText('How your 12 are recording this week.')).toBeVisible();
+    // No line under the tab, and Week or Month sits in the bar with the period (owner,
+    // 2026-10-18).
+    await expect(page.getByText('How your 12 are recording this week.')).toHaveCount(0);
+    const bar = page
+      .getByRole('region', { name: 'Recording Progress' })
+      .locator('div')
+      .filter({ has: page.getByRole('button', { name: 'Month', exact: true }) })
+      .filter({ hasText: 'Oct 2026' });
+    await expect(bar.first()).toBeVisible();
     await expect(page.getByText(/^1 of 2 leaders . 50%$/)).toBeVisible();
     const table = page.getByRole('table', { name: 'My 12' });
     await expect(table.getByRole('link', { name: 'Ana Lim' })).toBeVisible();

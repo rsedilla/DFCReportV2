@@ -53,24 +53,24 @@ export function RecordingStatusPanel() {
   return (
     // No heading of its own: the tab above names it (owner, 2026-10-09).
     <section aria-label="Recording Progress">
-
-      <ViewSwitch
-        label="Period"
-        even
-        className="max-w-xs"
-        options={[
-          { key: 'WEEK', label: 'Week' },
-          { key: 'MONTH', label: 'Month' },
-        ]}
-        value={kind}
-        onChange={(next) => {
-          setKind(next);
-          setStart(rangeStartOf(next, today));
-        }}
-      />
-
-      {/* The same ‹ › control as Reports, in the same bar (owner, 2026-10-09). */}
+      {/* The same ‹ › control as Reports (owner, 2026-10-09), with Week or Month beside it in
+          one bar, wrapping on a phone (owner, 2026-10-18). Its own gap from the tabs, which
+          the Primaries' panel takes from the list around it. */}
       <div className={`mt-4 ${CONTROL_BAR}`}>
+        <ViewSwitch
+          label="Period"
+          even
+          className="w-full sm:w-64"
+          options={[
+            { key: 'WEEK', label: 'Week' },
+            { key: 'MONTH', label: 'Month' },
+          ]}
+          value={kind}
+          onChange={(next) => {
+            setKind(next);
+            setStart(rangeStartOf(next, today));
+          }}
+        />
         <RangeNavigator
           kind={kind}
           start={shown}
@@ -177,25 +177,25 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
   const data = status.data;
 
   return (
+    // No line under the tab: the tab names it (owner, 2026-10-18).
     <section aria-label="Recording Progress">
-      <p className="text-muted text-sm">How your 12 are recording this {unit}.</p>
-
-      <ViewSwitch
-        label="Period"
-        even
-        className="max-w-xs"
-        options={[
-          { key: 'WEEK', label: 'Week' },
-          { key: 'MONTH', label: 'Month' },
-        ]}
-        value={kind}
-        onChange={(next) => {
-          setKind(next);
-          setStart(rangeStartOf(next, today));
-        }}
-      />
-
-      <div className={`mt-4 ${CONTROL_BAR}`}>
+      {/* Week or Month, the ‹ › and the period in one bar, wrapping on a phone (owner,
+          2026-10-18). */}
+      <div className={CONTROL_BAR}>
+        <ViewSwitch
+          label="Period"
+          even
+          className="w-full sm:w-64"
+          options={[
+            { key: 'WEEK', label: 'Week' },
+            { key: 'MONTH', label: 'Month' },
+          ]}
+          value={kind}
+          onChange={(next) => {
+            setKind(next);
+            setStart(rangeStartOf(next, today));
+          }}
+        />
         <RangeNavigator
           kind={kind}
           start={shown}
