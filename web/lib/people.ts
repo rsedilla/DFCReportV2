@@ -397,3 +397,20 @@ export function civilStatusLabel(status: CivilStatus): string {
 export function sexLabel(sex: Sex): string {
   return sex === 'MALE' ? 'Male' : 'Female';
 }
+
+/**
+ * `PUT /people/{id}/sex`, section 4's audited correction: the Network changes with it, and a
+ * person who has a pastoral leader moves to `pastoral_leader_id` in the new Network at the
+ * same instant. `effective_date` is sent only to backdate it.
+ */
+export async function correctSex(
+  personId: string,
+  body: { sex: Sex; reason: string; pastoral_leader_id?: string; effective_date?: string },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/people/${encodeURIComponent(personId)}/sex`, {
+    method: 'PUT',
+    body,
+    idempotencyKey,
+  });
+}

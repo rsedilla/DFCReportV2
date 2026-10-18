@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-18, the trigger being decision 0366: of 365 files, 364 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0366 each moved the first two and
+2026-10-18, the trigger being decision 0367: of 366 files, 365 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0367 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-18 and triggered by 0366, and was left stale by 0367 the same day. The one before that was dated
 2026-10-18 and triggered by 0365, and was left stale by 0366 the same day. The one before that was dated
 2026-10-18 and triggered by 0364, and was left stale by 0365 the same day. The one before that was dated
 2026-10-18 and triggered by 0363, and was left stale by 0364 the same day. The one before that was dated
@@ -775,6 +776,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-18 — [# of People under People, in Branch's place](docs/decisions/0364-number-of-people-under-people.md)
 - 2026-10-18 — [No cards above the Primaries' 12](docs/decisions/0365-no-cards-above-the-primaries-twelve.md)
 - 2026-10-18 — [The Cells page's tabs](docs/decisions/0366-the-cells-pages-tabs.md)
+- 2026-10-18 — [Correct sex and Change category](docs/decisions/0367-correct-sex-and-change-category-screens.md)
 
 ### Open — awaiting a ruling
 
