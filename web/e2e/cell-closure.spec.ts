@@ -3,10 +3,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockSignedIn } from './mock-api';
 
 /**
- * Closing a Cell and the *No meeting in 3 months* filter (SKILL.md sections 10 and 15,
- * decision 0355): only an account that may close is offered *Close this Cell*, the filter is
- * read-only for everyone else and carries no count, and every closure sends a reason, an
- * explanation and a decision about each member. Invented people throughout.
+ * Closing a Cell and the *No meeting in 3 months* list (SKILL.md sections 10 and 15,
+ * decision 0355), the administrator's *Inactive (3+ Months) Cells* tab (decision 0366): only
+ * an account that may close is offered the tab and *Close this Cell*, the tab carries no
+ * count, and every closure sends a reason, an explanation and a decision about each member.
+ * Invented people throughout.
  */
 
 const QUIET_CELL = {
@@ -143,20 +144,45 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
-  test('a Primary sees each month in words, with no count on the filter and no way to close', async ({
+  // The Inactive list is the administrator's (decision 0366): a Primary is offered Active
+  // Cells alone, and an address naming the list opens Active Cells.
+  test('a Primary is offered no Inactive tab, and its address opens Active Cells', async ({
     page,
   }) => {
     await mockSignedIn(page);
     const { asked } = await mockCellRoutes(page, { mayClose: false });
+    await page.goto('/cells?view=QUIET');
+
+    const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
+    await expect(tabs).toHaveText(['Active Cells']);
+    await expect(page.getByRole('table', { name: 'Cells you oversee' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Cells with no meeting held' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /No meeting in/ })).toHaveCount(0);
+    await expect
+      .poll(() => asked.some((url) => url.searchParams.get('no_meeting') === null))
+      .toBe(true);
+  });
+
+  test('the administrator sees each month in words, with no count on the tab', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCloser(page);
+    const { asked } = await mockCellRoutes(page, { mayClose: true });
     await page.goto('/cells');
 
-    const filter = page.getByRole('button', { name: 'No meeting in 3 months', exact: true });
-    await expect(filter).toHaveText('No meeting in 3 months');
-    await filter.click();
+    const tab = page.getByRole('button', { name: 'Inactive (3+ Months) Cells', exact: true });
+    await expect(tab).toHaveText('Inactive (3+ Months) Cells');
+    await tab.click();
+    await expect(page).toHaveURL(/view=QUIET/);
+    await expect(tab).toHaveAttribute('aria-pressed', 'true');
 
     const table = page.getByRole('table', { name: 'Cells with no meeting held' });
     await expect(table).toBeVisible();
     expect(asked.some((url) => url.searchParams.get('no_meeting') === 'true')).toBe(true);
+    // Its window is its own, so there are no month arrows, and the totals stay on Active Cells.
+    await expect(page.getByRole('button', { name: /^Show .* 2026$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Cells you lead/ })).toHaveCount(0);
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
@@ -164,11 +190,14 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
       'Jul 2026',
       'Aug 2026',
       'Sep 2026',
+      'Close',
     ]);
     const row = table.getByRole('row', { name: /Youth · Tue/ });
     await expect(row).toContainText('Did not meet 2 · Not recorded 2');
     await expect(row).toContainText('Not recorded 5');
-    await expect(page.getByRole('button', { name: /Close this Cell/ })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Close this Cell, Youth · Tue, led by Dario Velasco' }),
+    ).toBeVisible();
   });
 
   test('an administrator closes a Cell with a reason, an explanation and every member', async ({
@@ -177,7 +206,7 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await mockSignedIn(page);
     await mockCloser(page);
     const { closures } = await mockCellRoutes(page, { mayClose: true });
-    await page.goto('/cells?quiet=1');
+    await page.goto('/cells?view=QUIET');
 
     await page
       .getByRole('button', { name: 'Close this Cell, Youth · Tue, led by Dario Velasco' })
@@ -214,6 +243,7 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
 
   test('the closed view shows the explanation a closure carries', async ({ page }) => {
     await mockSignedIn(page);
+    await mockCloser(page);
     await mockCellRoutes(page, { mayClose: false });
     await page.goto('/cells?view=CLOSED');
 

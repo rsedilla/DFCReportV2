@@ -40,6 +40,10 @@ import { cn } from '@/lib/utils';
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
 
+/** The page's tabs, each a view of one address (decision 0366). */
+const VIEWS = ['ACTIVE', 'FEW', 'QUIET', 'CLOSED', 'APPROVE'] as const;
+type CellsView = (typeof VIEWS)[number];
+
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
@@ -90,12 +94,10 @@ function CellsIndex() {
   const month = search.get('month') ?? reportingMonthOf();
   const mineOnly = search.get('mine') === '1';
   const submitted = search.get('q') ?? '';
-  const fewOnly = search.get('few') === '1';
-  // Section 15's *No meeting in 3 months* (decision 0355).
-  const quietOnly = search.get('quiet') === '1';
   const viewParam = search.get('view');
-  const viewInAddress: 'ACTIVE' | 'CLOSED' | 'APPROVE' =
-    viewParam === 'CLOSED' || viewParam === 'APPROVE' ? viewParam : 'ACTIVE';
+  const viewInAddress: CellsView = VIEWS.includes(viewParam as CellsView)
+    ? (viewParam as CellsView)
+    : 'ACTIVE';
   // The radio follows the click at once and the address a moment later, because a control
   // that waits for a navigation to show what was chosen reads as a control that missed it.
   // The address still decides, which is what makes Back and a reload work: the block below
@@ -103,7 +105,7 @@ function CellsIndex() {
   const [view, setView] = useState(viewInAddress);
   const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
   // Any narrowing — including one arrived at by pressing Back — starts the list again.
-  const asked = `${month}|${String(mineOnly)}|${String(fewOnly)}|${String(quietOnly)}|${submitted}|${viewInAddress}`;
+  const asked = `${month}|${String(mineOnly)}|${submitted}|${viewInAddress}`;
   const pages = useCursorPages(asked);
 
   // Adjusted while rendering rather than in an effect, which is React's own answer for state
@@ -117,45 +119,72 @@ function CellsIndex() {
   const [restarting, setRestarting] = useState<CellSummary | null>(null);
   const [closing, setClosing] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
-  const closed = view === 'CLOSED';
   // Offered only where the route would answer; the route still decides (section 1, principle 4).
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
+  // **The administrator's lists** (decision 0366): *Under 3 Member Cells*, *Inactive (3+
+  // Months) Cells* and *Closed Cells* are offered to an account holding `cell.manage_lifecycle`
+  // at Whole Church, which is who closes a Cell (decision 0355) and the same answer the server
+  // gives as `may_close`. A Full view leader holds it over their own branch and sees Active
+  // Cells alone. Keyed on a capability's reach, never on a role (decision 0323, point 5).
+  const administers = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
   // Cells to Approve (decision 0352): for an account that may decide Cell leadership requests,
   // at Whole Church or, ticked Approves Cells, over its own branch.
   const approver = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.approve_leadership',
   );
+  const offered: readonly CellsView[] = [
+    'ACTIVE',
+    ...(administers ? (['FEW', 'QUIET', 'CLOSED'] as const) : []),
+    ...(approver ? (['APPROVE'] as const) : []),
+  ];
+  // A view the account is not offered opens Active Cells, once the server has named the
+  // account's screens; until then the address is taken at its word.
+  const shown: CellsView = me.data === undefined || offered.includes(view) ? view : 'ACTIVE';
+  const closed = shown === 'CLOSED';
+  const fewOnly = shown === 'FEW';
+  // Section 15's *No meeting in 3 months* (decision 0355).
+  const quietOnly = shown === 'QUIET';
+  // *Only my Cells* belongs to the two views carrying it: the cards on Active Cells and the
+  // button on Closed Cells.
+  const mineApplies = shown === 'ACTIVE' || closed;
   const approvals = useQuery({
     queryKey: ['cell-approvals'],
     queryFn: ({ signal }) => listApprovalRequests(signal),
     enabled: approver,
   });
   const cells = useQuery({
-    queryKey: ['cells', month, mineOnly, fewOnly, quietOnly, submitted, pages.cursor, PAGE_SIZE, view],
+    queryKey: ['cells', month, mineOnly && mineApplies, submitted, pages.cursor, PAGE_SIZE, shown],
     queryFn: ({ signal }) =>
       listCells(
         {
           month,
-          ledBy: mineOnly ? 'me' : undefined,
+          ledBy: mineOnly && mineApplies ? 'me' : undefined,
           q: submitted === '' ? undefined : submitted,
           cursor: pages.cursor,
           limit: PAGE_SIZE,
-          state: view === 'CLOSED' ? 'CLOSED' : 'ACTIVE',
-          fewerThanThree: view === 'ACTIVE' && fewOnly,
-          noMeeting: view === 'ACTIVE' && quietOnly,
+          state: closed ? 'CLOSED' : 'ACTIVE',
+          fewerThanThree: fewOnly,
+          noMeeting: quietOnly,
         },
         signal,
       ),
-    enabled: view !== 'APPROVE',
+    enabled: shown !== 'APPROVE',
   });
-  // The number in the label is the church-wide setting's (decision 0355), known once the
-  // filtered list has answered; three until then, which is the setting's seeded value and
-  // which nothing in the product can change today.
+  // The number is the church-wide setting's (decision 0355), known once the Inactive list has
+  // answered; three until then, which is the setting's seeded value and which nothing in the
+  // product can change today.
   const quietMonths = cells.data?.no_meeting_months ?? [];
-  const quietLabel = `${quietMonths.length || 3} months`;
-
-
+  const quietCount = (quietOnly ? quietMonths.length : 0) || 3;
+  const quietLabel = `${quietCount} months`;
+  const everyTab: [CellsView, string, number | null][] = [
+    ['ACTIVE', 'Active Cells', null],
+    ['FEW', 'Under 3 Member Cells', null],
+    ['QUIET', `Inactive (${quietCount}+ Months) Cells`, null],
+    ['CLOSED', 'Closed Cells', null],
+    ['APPROVE', 'Cells to Approve', approvals.data?.length ?? null],
+  ];
+  const tabs = everyTab.filter(([key]) => offered.includes(key));
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -172,32 +201,30 @@ function CellsIndex() {
       </div>
 
       {/*
-        **Two views of one list, never a mixed one** (decision 0266): every count of Cells
-        means active Cells unless it says otherwise (section 10), so a closed Cell is shown
-        only where the reader has asked for closed ones. They are the screen's two tabs, and
-        the chosen one opens into the pane holding everything of it (owner's choice of
-        2026-10-05). Buttons pressed and unpressed, as Record's lists are: each is a view of
-        this one address.
+        **Views of one list, never a mixed one** (decision 0266): every count of Cells means
+        active Cells unless it says otherwise (section 10), so a closed Cell is shown only
+        where the reader has asked for closed ones. Section 15's two lists are tabs of their
+        own beside them, the administrator's (decision 0366), and the chosen tab opens into
+        the pane holding everything of it (owner's choice of 2026-10-05). Buttons pressed and
+        unpressed, as Record's lists are: each is a view of this one address. **The row wraps**,
+        so on a phone no tab runs off the edge. None until the server names the account's
+        screens, so no account sees another's tabs flash.
       */}
-      <div role="group" aria-label="Which Cells" className={cn('mt-6 flex', TAB_ROW)}>
-        {(
-          [
-            ['ACTIVE', 'Running Cells', null],
-            ['CLOSED', 'Closed Cells', null],
-            ...(approver
-              ? ([['APPROVE', 'Cells to Approve', approvals.data?.length ?? null]] as const)
-              : []),
-          ] as const
-        ).map(([key, label, count]) => (
+      <div
+        role="group"
+        aria-label="Which Cells"
+        className={cn('mt-6 flex min-h-11 flex-wrap items-end', TAB_ROW)}
+      >
+        {me.data === undefined ? null : tabs.map(([key, label, count]) => (
           <button
             key={key}
             type="button"
-            aria-pressed={view === key}
+            aria-pressed={shown === key}
             onClick={() => {
               setView(key);
-              go({ view: key === 'ACTIVE' ? null : key, few: null, quiet: null });
+              go({ view: key === 'ACTIVE' ? null : key, mine: null });
             }}
-            className={cn(tabClasses(view === key), 'inline-flex items-center gap-2')}
+            className={cn(tabClasses(shown === key), 'inline-flex items-center gap-2')}
           >
             {label}
             {/* A count of 0 shows no box, as on Record's tabs (decision 0349). */}
@@ -211,7 +238,7 @@ function CellsIndex() {
       </div>
 
       <div className={TAB_PANE}>
-        {view === 'APPROVE' ? (
+        {shown === 'APPROVE' ? (
           <CellApprovals wholeChurch={holdsWholeChurch(me.data, 'cell.approve_leadership')} />
         ) : (
         <>
@@ -259,7 +286,7 @@ function CellsIndex() {
             />
           )}
           {/*
-            One control per job (owner's choice of 2026-10-05): among running Cells the cards
+            One control per job (owner's choice of 2026-10-05): among active Cells the cards
             below are the filter, so this is offered for closed Cells alone.
           */}
           {closed ? (
@@ -271,37 +298,17 @@ function CellsIndex() {
             >
               {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
             </Button>
-          ) : (
-            // Section 15's two filters (decisions 0353 and 0355): lists to look at, carrying
-            // no count, and nothing happens to a Cell because it is on one.
-            <>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-pressed={fewOnly}
-                onClick={() => go({ few: fewOnly ? null : '1' })}
-              >
-                {fewOnly ? 'Showing fewer than 3 members' : 'Fewer than 3 members'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-pressed={quietOnly}
-                onClick={() => go({ quiet: quietOnly ? null : '1' })}
-              >
-                {quietOnly ? `Showing no meeting in ${quietLabel}` : `No meeting in ${quietLabel}`}
-              </Button>
-            </>
-          )}
+          ) : null}
         </div>
 
-        <CellTotals
-          current={!closed && !fewOnly && !quietOnly && submitted === '' && month === reportingMonthOf()}
-          mineOnly={mineOnly}
-          onChoose={(mine) =>
-            go({ mine: mine ? '1' : null, month: null, view: null, q: null, few: null, quiet: null })
-          }
-        />
+        {/* The totals belong to Active Cells, the list they count (decision 0366). */}
+        {shown === 'ACTIVE' ? (
+          <CellTotals
+            current={submitted === '' && month === reportingMonthOf()}
+            mineOnly={mineOnly}
+            onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
+          />
+        ) : null}
 
         <div className="mt-8">
           <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
@@ -314,14 +321,14 @@ function CellsIndex() {
             {submitted !== ''
               ? `No Cell you oversee matches “${submitted}”.`
               : closed
-                ? mineOnly
+                ? mineOnly && mineApplies
                   ? 'No Cell you led has closed.'
                   : 'No Cell you oversee has closed.'
                 : quietOnly
                   ? `No Cell you oversee has gone the last ${quietLabel} without a meeting. A Cell newer than that, or whose leader still has time to record, is not listed.`
                   : fewOnly
                   ? 'Every Cell you oversee has at least 3 members.'
-                  : mineOnly
+                  : mineOnly && mineApplies
                 ? 'You do not lead a Cell this month.'
                 : 'There are no Cells you oversee this month.'}
           </p>

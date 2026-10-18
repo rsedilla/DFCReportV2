@@ -546,6 +546,52 @@ export async function mockCellApprover(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
+/**
+ * The same account ticked *Approves Cells* (decision 0352): `cell.approve_leadership` over its
+ * own branch, below itself, as a Full view leader is given it.
+ */
+export async function mockTickedApprover(page: Page): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES,
+    {
+      capability: 'cell.approve_leadership',
+      scope_type: 'SUBTREE_EXCL_SELF',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
+/**
+ * The same account, also holding `cell.manage_lifecycle` at Whole Church, as Admin does: the
+ * Cells page then offers the administrator's lists (decision 0366). `approver` adds
+ * `cell.approve_leadership` at Whole Church too, which Admin also holds.
+ */
+export async function mockCellAdministrator(
+  page: Page,
+  { approver = false }: { approver?: boolean } = {},
+): Promise<void> {
+  const grant = (capability: string) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES,
+    grant('cell.manage_lifecycle'),
+    ...(approver ? [grant('cell.approve_leadership')] : []),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
 export const CREATED_CELL = { id: '3f1b7c6e-0000-4000-8000-000000000199', cell_id: 'CELL-000031' };
 
 /** `POST /cells`, accepted. Returns every body sent. */

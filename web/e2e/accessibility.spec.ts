@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAdministrator,
   mockAwaitingReassignment,
+  mockCellAdministrator,
   mockCellApprover,
   mockCellChoices,
   searchCells,
@@ -489,12 +490,15 @@ const SCANS = [
     },
   },
   {
-    // Section 15's *No meeting in 3 months* (decision 0355): each month in words, and Close
-    // this Cell for an account the server says may close.
+    // Section 15's *No meeting in 3 months* (decision 0355), the administrator's *Inactive (3+
+    // Months) Cells* tab (decision 0366): each month in words, and Close this Cell for an
+    // account the server says may close.
     name: 'cells, no meeting in 3 months',
-    route: '/cells?quiet=1',
+    route: '/cells?view=QUIET',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // The administrator's tab (decision 0366), so its five tabs are scanned with it.
+      await mockCellAdministrator(page, { approver: true });
       await mockQuietCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -507,9 +511,11 @@ const SCANS = [
     // Closing a Cell (decision 0355), the dialog over that list: a radio group of reasons, the
     // explanation, and what happens to the members.
     name: 'cells, closing a cell',
-    route: '/cells?quiet=1',
+    route: '/cells?view=QUIET',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // The administrator's tab (decision 0366), so its five tabs are scanned with it.
+      await mockCellAdministrator(page, { approver: true });
       await mockQuietCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1621,10 +1627,10 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // The two totals (decision 0289), the search box
-    // and its button, the two view radios, two month controls, a link per Cell in both
-    // the table and the cards (the hidden rendering is counted too), and the pager's two
-    // buttons: **fourteen**, since the totals became the running view's only "my Cells"
+    // The two totals (decision 0289), the search box and its button, the one tab a Primary
+    // has (decision 0366), two month controls, a link per Cell in both the table and the
+    // cards (the hidden rendering is counted too), and the pager's two
+    // buttons: **thirteen**, since the totals became the running view's only "my Cells"
     // filter on 2026-10-05 and the people-without-a-Cell link went (decision 0343). The
     // month controls are icon-only and are the reason this state is measured rather than
     // exempted: an icon button is where a 24px target goes wrong. The totals are the
@@ -1633,7 +1639,7 @@ const TARGET_SWEEP = [
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 14,
+    minimum: 13,
   },
   {
     // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
@@ -1901,9 +1907,9 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'cells, no meeting in 3 months',
     why:
-      'The measured "cells" with its other filter pressed. Its controls are the same search box ' +
-      'and Button, the two filter Buttons, the totals and the Cell links measured there, and ' +
-      'Close this Cell is the same Button primitive, measured on every screen.',
+      'The administrator’s Inactive tab beside the measured "cells". Its controls are the same ' +
+      'search box and Button, tab buttons of the one tabClasses measured there, and the Cell ' +
+      'links; Close this Cell is the same Button primitive, measured on every screen.',
   },
   {
     name: 'cells, closing a cell',

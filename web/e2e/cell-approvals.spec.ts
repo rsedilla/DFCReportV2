@@ -1,12 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { MEMBER_CHOICES, PERSON_IN_SCOPE, mockCellApprover, mockSignedIn } from './mock-api';
+import {
+  MEMBER_CHOICES,
+  PERSON_IN_SCOPE,
+  mockCellAdministrator,
+  mockCellApprover,
+  mockSignedIn,
+  mockTickedApprover,
+} from './mock-api';
 import { mockCells } from './mock-attendance';
 
 /**
- * Cells to Approve, the Cells page's third tab (SKILL.md section 10, decisions 0352 and 0353),
- * and section 15's *Fewer than 3 members* on the running Cells. The route decides what the
- * reader may approve; these cases pin what the screen shows and sends.
+ * Cells to Approve, a tab of the Cells page (SKILL.md section 10, decisions 0352 and 0353),
+ * section 15's *Fewer than 3 members* as the administrator's *Under 3 Member Cells* tab, and
+ * which tabs each account is offered (decision 0366). The route decides what the reader may
+ * approve; these cases pin what the screen shows and sends.
  */
 
 function json(body: unknown, status = 200) {
@@ -71,17 +79,20 @@ async function mockQueue(page: Page): Promise<{ path: string; body: unknown }[]>
 }
 
 test.describe('Cells to Approve (decision 0352)', () => {
-  test('is a third tab, with its count, for an account that may approve', async ({ page }) => {
+  test('is the administrator’s fifth tab, with its count', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
-    await mockCellApprover(page);
+    await mockCellAdministrator(page, { approver: true });
     await mockQueue(page);
 
     await page.goto('/cells');
 
+    // The administrator's five tabs (decision 0366).
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
-      'Running Cells',
+      'Active Cells',
+      'Under 3 Member Cells',
+      'Inactive (3+ Months) Cells',
       'Closed Cells',
       /^Cells to Approve\s*1$/,
     ]);
@@ -134,23 +145,60 @@ test.describe('Cells to Approve (decision 0352)', () => {
     ]);
   });
 
-  test('is not offered to an account that may not approve', async ({ page }) => {
+  // A Primary sees Active Cells alone (decision 0366).
+  test('is not offered to a Primary who may not approve, who has one tab', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
 
     await page.goto('/cells');
 
     await expect(page.getByRole('group', { name: 'Which Cells' }).getByRole('button')).toHaveText([
-      'Running Cells',
-      'Closed Cells',
+      'Active Cells',
     ]);
+    // The totals stay with the list they count.
+    await expect(page.getByRole('button', { name: /^Cells you oversee/ })).toBeVisible();
+  });
+
+  test('is a Primary’s second tab once they are ticked Approves Cells', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockTickedApprover(page);
+    await mockQueue(page);
+
+    await page.goto('/cells');
+
+    const tabs = page.getByRole('group', { name: 'Which Cells' });
+    await expect(tabs.getByRole('button')).toHaveText(['Active Cells', /^Cells to Approve\s*1$/]);
+    await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
+    await expect(page).toHaveURL(/view=APPROVE/);
+    await expect(page.getByRole('listitem').filter({ hasText: 'New Cell led by' })).toBeVisible();
+  });
+
+  test('an address naming an administrator’s list opens a Primary’s Active Cells', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockTickedApprover(page);
+    await mockQueue(page);
+
+    for (const view of ['FEW', 'QUIET', 'CLOSED']) {
+      await page.goto(`/cells?view=${view}`);
+      await expect(page.getByRole('button', { name: 'Active Cells' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByRole('table', { name: 'Cells you oversee' })).toBeVisible();
+    }
   });
 });
 
-test.describe('Fewer than 3 members (decision 0353)', () => {
-  test('narrows the running Cells, and asks the server for them', async ({ page }) => {
+test.describe('Under 3 Member Cells (decisions 0353 and 0366)', () => {
+  test('is the administrator’s tab, and asks the server for those Cells', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
     await mockCells(page);
+    await mockCellAdministrator(page);
     const asked: URL[] = [];
     await page.route('**/api/v1/cells?*', (route) => {
       asked.push(new URL(route.request().url()));
@@ -158,17 +206,50 @@ test.describe('Fewer than 3 members (decision 0353)', () => {
     });
 
     await page.goto('/cells');
-    const button = page.getByRole('button', { name: 'Fewer than 3 members' });
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
-    await button.click();
+    // The filters left the bar and became tabs.
+    await expect(page.getByRole('button', { name: /fewer than 3 members/i })).toHaveCount(0);
+    const tab = page.getByRole('button', { name: 'Under 3 Member Cells' });
+    await expect(tab).toHaveAttribute('aria-pressed', 'false');
+    await tab.click();
 
-    await expect(page).toHaveURL(/few=1/);
-    await expect(page.getByRole('button', { name: 'Showing fewer than 3 members' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(page).toHaveURL(/view=FEW/);
+    await expect(tab).toHaveAttribute('aria-pressed', 'true');
     await expect
       .poll(() => asked.some((url) => url.searchParams.get('fewer_than_three') === 'true'))
       .toBe(true);
+    // It keeps its month arrows, its Recorded column being the month's, and no totals.
+    await expect(page.getByRole('button', { name: 'Show May 2026' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Cells you oversee/ })).toHaveCount(0);
   });
+});
+
+test.describe('the Cells tabs on a phone (decision 0366)', () => {
+  for (const width of [320, 390]) {
+    test(`wrap at ${width}px, with every tab inside the screen and no sideways scroll`, async ({
+      page,
+    }) => {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellAdministrator(page, { approver: true });
+      await mockQueue(page);
+      await page.setViewportSize({ width, height: 800 });
+
+      await page.goto('/cells');
+      const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
+      await expect(tabs).toHaveCount(5);
+
+      const tops = new Set<number>();
+      for (const tab of await tabs.all()) {
+        const box = await tab.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+        tops.add(Math.round(box!.y));
+      }
+      expect(tops.size).toBeGreaterThan(1);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    });
+  }
 });

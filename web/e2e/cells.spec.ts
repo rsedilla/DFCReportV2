@@ -6,6 +6,7 @@ import {
   MEMBER_CHOICES,
   PERSON_IN_SCOPE,
   chooseThreeMembers,
+  mockCellAdministrator,
   mockCellApprover,
   mockCellChoices,
   mockCellCreated,
@@ -214,21 +215,24 @@ test.describe('the Cells totals (decision 0289)', () => {
     await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the closed view is not what the totals count, and pressing one returns to running Cells', async ({
-    page,
-  }) => {
+  // The totals belong to Active Cells alone (decision 0366).
+  test('the totals show on Active Cells only, and return with it', async ({ page }) => {
     await mockSignedIn(page);
+    await mockCellAdministrator(page);
     await mockCellTotals(page);
     await page.goto('/cells');
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
 
-    await page.getByRole('button', { name: 'Closed Cells' }).click();
-    await expect(page).toHaveURL(/view=CLOSED/);
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
+    for (const name of ['Closed Cells', 'Under 3 Member Cells', 'Inactive (3+ Months) Cells']) {
+      await page.getByRole('button', { name, exact: true }).click();
+      await expect(page).toHaveURL(/view=/);
+      await expect(scope(page)).toHaveCount(0);
+      await expect(lead(page)).toHaveCount(0);
+    }
 
-    await scope(page).click();
+    await page.getByRole('button', { name: 'Active Cells' }).click();
     await expect(page).not.toHaveURL(/view=/);
-    await expect(page.getByRole('button', { name: 'Running Cells' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Active Cells' })).toHaveAttribute('aria-pressed', 'true');
     await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -290,6 +294,7 @@ test.describe('the Cells totals (decision 0289)', () => {
 test.describe('the browser Back button on the Cells list', () => {
   test('steps back through the search, the filter and the closed view', async ({ page }) => {
     await mockSignedIn(page);
+    await mockCellAdministrator(page);
     await mockCellsWithClosed(page);
     await page.goto('/cells');
 
@@ -536,6 +541,8 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     page,
   }) => {
     await mockSignedIn(page);
+    // Closed Cells is the administrator's list (decision 0366).
+    await mockCellAdministrator(page);
     await mockCellsWithClosed(page);
     await mockMemberSearch(page);
 
@@ -598,6 +605,7 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
 
   test('offers no restart where the server says none may be asked for', async ({ page }) => {
     await mockSignedIn(page);
+    await mockCellAdministrator(page);
     await mockCellsWithClosed(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells');

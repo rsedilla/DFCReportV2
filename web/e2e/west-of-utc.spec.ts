@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { mockSignedIn } from './mock-api';
+import { mockCellAdministrator, mockSignedIn } from './mock-api';
 import { mockCellsWithClosed, mockDccRoster } from './mock-attendance';
 
 /**
@@ -22,6 +22,8 @@ test('a Sunday reads as that Sunday', async ({ page }) => {
 
 test('a closed Cell reads the day it closed', async ({ page }) => {
   await mockSignedIn(page);
+  // Closed Cells is the administrator's tab (decision 0366).
+  await mockCellAdministrator(page);
   await mockCellsWithClosed(page);
 
   await page.setViewportSize({ width: 1280, height: 800 });
