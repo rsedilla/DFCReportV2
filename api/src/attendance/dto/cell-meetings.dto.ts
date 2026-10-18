@@ -1,5 +1,9 @@
-import { IsIn, IsOptional } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
+import type { NetworkName } from '../../database/schema';
+import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
@@ -53,4 +57,50 @@ export class AwaitingMeetingsQueryDto extends CellMeetingsQueryDto {
   @IsOptional()
   @IsIn(['mine', 'branch'], { message: 'whose must be mine or branch' })
   whose?: 'mine' | 'branch';
+}
+
+/**
+ * `GET /api/v1/cells/meetings/pending` (SKILL.md section 19; decision 0368): Record's
+ * Pending CG Records, the Cells of the reader's scope with a meeting still to record whose
+ * week is open, paged by the leader's name, as `GET /dcc/pending-leaders` is.
+ */
+export class CellPendingQueryDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /** The `next_cursor` of the previous page, passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+
+  /**
+   * Narrows the list to Cells whose Cell ID contains the term, or whose leader's name,
+   * normalized, or Member ID does. Two characters minimum, counted again by the service on
+   * the term as searched (decision 0261).
+   */
+  @IsOptional()
+  @IsString()
+  @Length(2, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
+  q?: string;
+
+  /** Narrows the list to the Cells whose leader is in one Network now. */
+  @IsOptional()
+  @IsIn(['MENS', 'WOMENS'], { message: 'network accepts MENS or WOMENS (SKILL.md section 22).' })
+  network?: NetworkName;
+
+  /**
+   * `true` keeps only the meetings past their deadline whose week is still open, and the
+   * Cells with one (decision 0368). Anything but `true` or `false` is refused.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  late?: boolean;
 }

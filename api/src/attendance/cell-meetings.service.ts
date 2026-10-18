@@ -10,6 +10,7 @@ import {
   NotFoundError,
   ResourceBusyError,
   ScopeDeniedError,
+  ValidationFailedError,
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
 import {
@@ -40,6 +41,11 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
+import { compareRosterKeys, decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
+import type { NetworkName } from '../database/schema';
+import { NetworksService } from '../networks/networks.service';
+import { normalizeName } from '../people/duplicate-matching';
+import { containsInOrder, previousMonth } from './dcc-coverage.service';
 import { canonicalId } from '../common/identifiers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { type RecordedMeetingsPort } from '../cells/recorded-meetings.port';
@@ -457,6 +463,9 @@ type CellMeetingSubmissionResponse = {
  * import and a service call, and declaring a port here would buy an indirection, a
  * binding module and a fail-closed branch for nothing.
  */
+/** One scheduled meeting with no record yet, as the awaiting query answers it. */
+type Awaiting = Awaited<ReturnType<CellsReadService['meetingsAwaitingFor']>>[number];
+
 @Injectable()
 export class CellMeetingsService implements RecordedMeetingsPort {
   constructor(
@@ -474,6 +483,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     private readonly accounts: AccountsRepository,
     // The branch view walks the pastoral tree as it stands now (decision 0258).
     private readonly hierarchy: HierarchyService,
+    // Pending CG Records' Network filter (decision 0368), as Pending DCC Records reads it.
+    private readonly networks: NetworksService,
   ) {}
 
   /**
@@ -614,6 +625,183 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     });
 
     return { reporting_month: reportingMonth, open: true, whose, meetings };
+  }
+
+  /**
+   * `GET /api/v1/cells/meetings/pending` — Record's *Pending CG Records* (decision 0368):
+   * one row per Cell and filing leader of the reader's `cell.view_subtree` scope now with a
+   * meeting that has come, has no record and whose week is still open (decision 0335), each
+   * such meeting oldest first. Laid out and paged as `GET /dcc/pending-leaders` is (decision
+   * 0336).
+   *
+   * **The scope is the grant's, not a walk of the tree**: a Full view leader's whole branch
+   * and an Admin's whole church, as Pending DCC Records reads it. A Cell is in it where the
+   * leader who files its meetings is — the current leader of an `ACTIVE` Cell, whoever led a
+   * closed one on the meeting's date (section 7), which {@link CellsReadService.meetingsAwaitingFor}
+   * already decides — so a closed Cell stays listed while its weeks are open.
+   *
+   * **Record follows the oldest meeting**, offered where the reader may record it: their own,
+   * or one they may record on the leader's behalf (section 14, decision 0192), measured as
+   * {@link awaitingFor} measures it.
+   *
+   * Ordered by the leader's name and then the Cell ID, and paged by that key; never by how
+   * much is owed (decision 0009). A leader of two Cells has two rows, so the Cell ID rides in
+   * the cursor's Member ID, which keeps the key unique without a second cursor shape; two
+   * leaders of one closed Cell differ by their own Member IDs.
+   */
+  async pendingCells(
+    actor: Actor,
+    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName; late?: boolean },
+  ): Promise<Record<string, unknown>> {
+    const after = decodeRosterCursor(query.cursor);
+    const term = query.q === undefined ? null : normalizeName(query.q);
+
+    // Counted on the term as it is searched, as the Cells list counts it (decision 0261).
+    if (term !== null && term.replace(/\s+/g, '').length < 2) {
+      throw new ValidationFailedError('Enter at least two letters of a Cell ID or a name.', {
+        field: 'q',
+      });
+    }
+
+    const now = await databaseNow(this.db);
+    const view = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
+    const leaders = view.kind === 'WHOLE_CHURCH' ? null : [...view.personIds];
+
+    // A meeting still open is in this month or the last: a week closes about two weeks after
+    // its due Monday (decision 0335). Each month is asked for while it is open.
+    const current = reportingMonthOf(manilaDayOf(now));
+    const months: string[] = [];
+    for (const month of [previousMonth(current), current]) {
+      if (await isMonthOpen(this.db, month)) {
+        months.push(month);
+      }
+    }
+
+    const outstanding: (Awaiting & { reportingMonth: string })[] = [];
+    for (const month of months) {
+      const scheduled = await this.cells.meetingsAwaitingFor(this.db, leaders, month);
+      const recorded = await this.recordedDatesIn(
+        [...new Set(scheduled.map((entry) => entry.cellId))],
+        month,
+      );
+
+      for (const entry of scheduled) {
+        const due = recordDueAt(entry.scheduledDate);
+        if (
+          now.getTime() < recordClosesAt(entry.scheduledDate).getTime() &&
+          !recorded.has(`${entry.cellId}|${entry.scheduledDate}`) &&
+          // *Late only* keeps the meetings past their deadline (decision 0368); a meeting
+          // before the weekly rule has no deadline and is never late.
+          (query.late !== true || (due !== null && now.getTime() > due.getTime()))
+        ) {
+          outstanding.push({ ...entry, reportingMonth: month });
+        }
+      }
+    }
+
+    // **One row per Cell and the leader who files its meetings**, each meeting oldest first.
+    // A closed Cell handed from one leader to another names each meeting's own leader, so its
+    // meetings are two rows rather than one row naming somebody who cannot file the others
+    // (section 15: each meeting appears for the leader it names).
+    const byCell = new Map<string, (Awaiting & { reportingMonth: string })[]>();
+    for (const entry of outstanding.sort((left, right) =>
+      left.scheduledDate.localeCompare(right.scheduledDate),
+    )) {
+      const key = `${entry.cellId}|${canonicalId(entry.leaderPersonId)}`;
+      byCell.set(key, [...(byCell.get(key) ?? []), entry]);
+    }
+
+    const leaderIds = [
+      ...new Set([...byCell.values()].map((entries) => entries[0].leaderPersonId)),
+    ];
+    const names = await this.people.forDecisions(leaderIds);
+    const inNetwork =
+      query.network === undefined
+        ? null
+        : new Set(
+            [...(await this.networks.networksOf(this.db, leaderIds, now))]
+              .filter(([, network]) => network === query.network)
+              .map(([id]) => canonicalId(id)),
+          );
+    const code = (query.q ?? '').trim().toUpperCase();
+
+    const rows = [...byCell.values()]
+      .map((entries) => {
+        const leader = names.get(entries[0].leaderPersonId);
+
+        return {
+          entries,
+          leaderId: entries[0].leaderPersonId,
+          memberId: leader?.memberId ?? '',
+          fullName: leader?.fullName ?? '',
+          lastName: leader?.lastName ?? '',
+          firstName: leader?.firstName ?? '',
+          key: {
+            lastName: leader?.lastName ?? '',
+            firstName: leader?.firstName ?? '',
+            memberId: `${leader?.memberId ?? ''} ${entries[0].cellCode}`,
+          },
+        };
+      })
+      .filter(
+        (row) =>
+          (inNetwork === null || inNetwork.has(canonicalId(row.leaderId))) &&
+          (term === null ||
+            row.entries[0].cellCode.toUpperCase().includes(code) ||
+            // The name fields alone, never the title (section 3, decision 0271).
+            containsInOrder(normalizeName(`${row.firstName} ${row.lastName}`), term) ||
+            row.memberId.toUpperCase().includes(code)),
+      )
+      .sort((left, right) => compareRosterKeys(left.key, right.key))
+      .filter((row) => after === null || compareRosterKeys(row.key, after) > 0);
+
+    const limit = query.limit ?? 50;
+    const page = rows.slice(0, limit);
+    const more = rows.length > limit;
+
+    const isActor = (id: string) => canonicalId(id) === canonicalId(actor.personId);
+    const covers = (membership: ScopeMembership, id: string) =>
+      membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(id));
+    const [onBehalf, takeAttendance] = await Promise.all([
+      this.authorization.scopeMembership(actor, Capability.CellSubmitOnBehalf),
+      this.authorization.scopeMembership(actor, Capability.CellTakeAttendance),
+    ]);
+    const last = page.at(-1);
+
+    return {
+      data: page.map((row) => {
+        const oldest = row.entries[0];
+
+        return {
+          cell: {
+            id: oldest.cellId,
+            cell_code: oldest.cellCode,
+            category: oldest.category,
+            day_of_week: oldest.dayOfWeek,
+            closed_on: oldest.cellClosedOn,
+          },
+          leader: {
+            person_id: row.leaderId,
+            member_id: row.memberId,
+            full_name: row.fullName,
+            last_name: row.lastName,
+            first_name: row.firstName,
+            is_actor: isActor(row.leaderId),
+          },
+          meetings: row.entries.map((entry) => ({
+            scheduled_date: entry.scheduledDate,
+            scheduled_time: entry.scheduledTime,
+            reporting_month: entry.reportingMonth,
+            due_at: recordDueAt(entry.scheduledDate)?.toISOString() ?? null,
+            closes_at: recordClosesAt(entry.scheduledDate).toISOString(),
+          })),
+          may_record:
+            isActor(row.leaderId) ||
+            (covers(onBehalf, row.leaderId) && covers(takeAttendance, row.leaderId)),
+        };
+      }),
+      next_cursor: more && last !== undefined ? encodeRosterCursor(last.key) : null,
+    };
   }
 
   /**

@@ -268,13 +268,20 @@ export interface PendingDccLeader {
 }
 
 export async function getPendingDccLeaders(
-  options: { cursor?: string | null; q?: string; network?: 'MENS' | 'WOMENS' | null },
+  options: {
+    cursor?: string | null;
+    q?: string;
+    network?: 'MENS' | 'WOMENS' | null;
+    /** Only the Sundays past their deadline, and the leaders who owe one (decision 0368). */
+    late?: boolean;
+  },
   signal?: AbortSignal,
 ): Promise<{ data: PendingDccLeader[]; next_cursor: string | null }> {
   const query = new URLSearchParams();
   if (options.cursor) query.set('cursor', options.cursor);
   if (options.q) query.set('q', options.q);
   if (options.network) query.set('network', options.network);
+  if (options.late) query.set('late', 'true');
   const text = query.toString();
 
   return authenticatedRequest(`/api/v1/dcc/pending-leaders${text ? `?${text}` : ''}`, { signal });

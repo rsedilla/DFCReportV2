@@ -759,7 +759,7 @@ export class DccCoverageService {
    */
   async pendingLeaders(
     actor: Actor,
-    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName },
+    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName; late?: boolean },
   ): Promise<Record<string, unknown>> {
     const after = decodeRosterCursor(query.cursor);
     const term = query.q === undefined ? null : normalizeName(query.q);
@@ -807,6 +807,13 @@ export class DccCoverageService {
     events.forEach((event, index) => {
       const met = recorded.get(canonicalId(event.id)) ?? new Set<string>();
       const owing = new Set(edgesAt[index].map((edge) => canonicalId(edge.leaderId)));
+
+      // *Late only* keeps the Sundays past their deadline whose week is still open (decision
+      // 0368); a Sunday before the weekly rule has no deadline and is never late.
+      const due = recordDueAt(event.eventDate);
+      if (query.late === true && (due === null || now.getTime() <= due.getTime())) {
+        return;
+      }
 
       for (const leader of owing) {
         if (met.has(leader) || (covered !== null && !covered.has(leader))) {
@@ -1380,7 +1387,7 @@ function leadersOf(membership: ScopeMembership): readonly string[] | null {
  * Whether each word of the term appears in the name, in order: a space in the term matches
  * anything, as the People and Cells searches read one (`dave paz` finds Dave Dela Paz).
  */
-function containsInOrder(name: string, term: string): boolean {
+export function containsInOrder(name: string, term: string): boolean {
   let from = 0;
   for (const word of term.split(' ')) {
     const at = name.indexOf(word, from);
@@ -1393,7 +1400,7 @@ function containsInOrder(name: string, term: string): boolean {
 }
 
 /** The first of the month before this one, as a `YYYY-MM-01` Manila date. */
-function previousMonth(reportingMonth: string): string {
+export function previousMonth(reportingMonth: string): string {
   const [year, month] = reportingMonth.split('-').map(Number);
 
   return month === 1
