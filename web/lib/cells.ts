@@ -816,6 +816,22 @@ export async function changeCellSchedule(
 }
 
 /**
+ * `PUT /cells/{id}/category`. Unlike a schedule change it takes effect the day it is made,
+ * since nothing counts meetings from a category (section 10), and the Cell keeps its ID.
+ */
+export async function changeCellCategory(
+  cellId: string,
+  category: CellCategory,
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${encodeURIComponent(cellId)}/category`, {
+    method: 'PUT',
+    body: { category },
+    idempotencyKey,
+  });
+}
+
+/**
  * A person's current Cell, with its leader, and the Cells they lead (decision 0248).
  *
  * **The two halves are kept apart, and a screen keeps them apart too.** A Cell's

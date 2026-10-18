@@ -159,8 +159,8 @@
     },
     {
       "route": "PUT /api/v1/people/:id/sex",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Admin-only (§7, people.correct_sex), and it forces a Network change. It belongs to the Admin surface §19 describes, which the pilot does not need."
+      "reason": "Admin-only (§7, people.correct_sex), and it forces a Network change. Correct, beside Sex on the person page, opens this dialog (decision 0367).",
+      "screen": "web/components/correct-sex-dialog.tsx"
     },
     {
       "route": "GET /api/v1/accounts/for-person/:person_id",
@@ -334,12 +334,12 @@
     },
     {
       "route": "PUT /api/v1/cells/:id/category",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Configuration rather than operation (§10). Nothing in one pilot month requires changing a category."
+      "reason": "Configuration, under the meeting time's capability (§10). Change category, beside Change when it meets on the Cell's page, opens this dialog (decision 0367).",
+      "screen": "web/components/cell-category-dialog.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/closure",
-      "reason": "Only an administrator closes a Cell, after talking it through with the Senior Pastors (decision 0355): offered on the Cell's members page and on the Cells page's No meeting filter, to an account that may close.",
+      "reason": "Only an administrator closes a Cell, after talking it through with the Senior Pastors (decision 0355): offered on the Cell's members page and on the Cells page's Inactive (3+ Months) Cells tab (decision 0366), to an account that may close.",
       "screen": "web/components/close-cell-dialog.tsx"
     },
     {
@@ -352,18 +352,18 @@
     },
     {
       "route": "GET /api/v1/cells/leadership-requests",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "The Admin queue §19 describes. It pairs with the approve and decline routes below."
+      "reason": "The queue §19 describes, on the Cells page's Cells to Approve tab (decision 0352).",
+      "screen": "web/components/cell-approvals.tsx"
     },
     {
       "route": "POST /api/v1/cells/leadership-requests/:request_id/approve",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "The Admin queue's action (§10). A pending request changes nothing until it is decided."
+      "reason": "The queue's action (§10), Approve on Cells to Approve (decision 0352).",
+      "screen": "web/components/cell-approvals.tsx"
     },
     {
       "route": "POST /api/v1/cells/leadership-requests/:request_id/decline",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "The other outcome of the queue, and a decision is final (decision 0147)."
+      "reason": "The other outcome of the queue, and a decision is final (decision 0147). Decline on Cells to Approve (decision 0352).",
+      "screen": "web/components/cell-approvals.tsx"
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly",

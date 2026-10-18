@@ -592,6 +592,29 @@ export async function mockCellAdministrator(
   );
 }
 
+/**
+ * The same account, also holding `people.correct_sex` and `records.backdate_effective_date`
+ * at Whole Church, as Admin does: the person page then offers Correct sex (decision 0367).
+ */
+export async function mockSexCorrector(page: Page): Promise<void> {
+  const grant = (capability: string) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES,
+    grant('people.correct_sex'),
+    grant('records.backdate_effective_date'),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
 export const CREATED_CELL = { id: '3f1b7c6e-0000-4000-8000-000000000199', cell_id: 'CELL-000031' };
 
 /** `POST /cells`, accepted. Returns every body sent. */

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CorrectSexDialog } from '@/components/correct-sex-dialog';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { PersonAccount } from '@/components/person-account';
 import { PersonCells } from '@/components/person-cells';
@@ -24,7 +25,7 @@ import {
   type PastoralPath,
   type PathEntry,
 } from '@/lib/hierarchy';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
 import { cn } from '@/lib/utils';
@@ -95,6 +96,7 @@ function PersonDetail() {
     retry: false,
   });
   const [moving, setMoving] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
 
   const own = me.data?.person_id === id;
   const mayMove =
@@ -111,6 +113,10 @@ function PersonDetail() {
   const mayTickFullView = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'roles.manage',
   );
+  // Correct sex, the Admin's alone (section 4, decision 0367); the API checks it again.
+  const mayCorrectSex = holdsWholeChurch(me.data, 'people.correct_sex');
+  const mayBackdate = holdsWholeChurch(me.data, 'records.backdate_effective_date');
+  const pathEntries = path.data?.data ?? [];
 
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
@@ -194,7 +200,15 @@ function PersonDetail() {
             <Detail label="First name" value={person.data.first_name} />
             <Detail label="Middle name" value={person.data.middle_name} />
             <Detail label="Last name" value={person.data.last_name} />
-            <Detail label="Sex" value={sexLabel(person.data.sex)} />
+            <Detail
+              label="Sex"
+              value={sexLabel(person.data.sex)}
+              action={
+                mayCorrectSex && path.data
+                  ? { label: 'Correct', name: 'Correct sex', onClick: () => setCorrecting(true) }
+                  : null
+              }
+            />
             <Detail label="Civil status" value={civilStatusLabel(person.data.civil_status)} />
             <Detail
               label="Birthday"
@@ -233,6 +247,20 @@ function PersonDetail() {
           ) : null}
           </div>
           </div>
+
+          {mayCorrectSex && path.data ? (
+            <CorrectSexDialog
+              open={correcting}
+              onClose={() => setCorrecting(false)}
+              personId={id}
+              personName={person.data.full_name}
+              sex={person.data.sex}
+              isRoot={pathEntries.length === 1 && pathEntries[0].network_root === true}
+              leaderName={directLeaderOf(pathEntries)?.full_name ?? null}
+              cells={cells.data}
+              mayBackdate={mayBackdate}
+            />
+          ) : null}
 
           {mayMove ? (
             <MoveLeaderDialog
@@ -316,12 +344,15 @@ function Detail({
   value,
   absent = '—',
   add = null,
+  action = null,
 }: {
   label: string;
   value: string | null;
   absent?: string;
   /** Offered only where the value is absent and the reader may edit it. */
   add?: { href: string; what: string } | null;
+  /** An action on the value itself, such as correcting a sex (decision 0367). */
+  action?: { label: string; name: string; onClick: () => void } | null;
 }) {
   return (
     <>
@@ -334,6 +365,19 @@ function Detail({
             <TextLink href={add.href} aria-label={`Add ${add.what}`}>
               Add
             </TextLink>
+          </>
+        ) : null}
+        {action ? (
+          <>
+            {' · '}
+            <button
+              type="button"
+              onClick={action.onClick}
+              aria-label={action.name}
+              className="focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              {action.label}
+            </button>
           </>
         ) : null}
       </dd>

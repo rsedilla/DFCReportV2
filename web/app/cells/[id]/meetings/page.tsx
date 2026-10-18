@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CellCategoryDialog } from '@/components/cell-category-dialog';
 import { CellScheduleDialog } from '@/components/cell-schedule-dialog';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
@@ -15,11 +16,13 @@ import { CONTROL_BAR, FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
 import {
+  categoryLabel,
   cellName,
   cellSubtitle,
   listCellMeetings,
   meetingStateLabel,
   timeLabel,
+  type CellCategory,
   type ScheduledMeeting,
 } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
@@ -71,6 +74,8 @@ function CellMeetings() {
   const month = search.get('month') ?? reportingMonthOf();
   const [changing, setChanging] = useState(false);
   const [savedFrom, setSavedFrom] = useState<string | null>(null);
+  const [changingCategory, setChangingCategory] = useState(false);
+  const [savedCategory, setSavedCategory] = useState<CellCategory | null>(null);
 
   const meetings = useQuery({
     queryKey: ['cell-meetings', params.id, month],
@@ -110,6 +115,13 @@ function CellMeetings() {
               Change when it meets
             </Button>
           ) : null}
+          {/* Beside it, under the same capability, and refused for a closed Cell the same way
+              (decision 0367). */}
+          {meetings.data && meetings.data.cell_closed_on == null ? (
+            <Button variant="secondary" onClick={() => setChangingCategory(true)}>
+              Change category
+            </Button>
+          ) : null}
         </div>
         {/*
           No `open` flag here: this route does not return one. It is shown on the
@@ -124,6 +136,20 @@ function CellMeetings() {
           Saved. It takes effect on 1 {monthLabel(savedFrom)}.
         </p>
       ) : null}
+      {savedCategory ? (
+        <p aria-live="polite" className="mt-4 text-sm font-medium">
+          Saved. It is a {categoryLabel(savedCategory)} Cell from today.
+        </p>
+      ) : null}
+
+      <CellCategoryDialog
+        open={changingCategory}
+        onClose={() => setChangingCategory(false)}
+        onSaved={setSavedCategory}
+        cellId={params.id}
+        cellHandle={handle}
+        current={meetings.data?.category ?? null}
+      />
 
       <CellScheduleDialog
         open={changing}

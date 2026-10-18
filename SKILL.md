@@ -1,4 +1,4 @@
-﻿# G12 Church Management System — Architecture Skill
+# G12 Church Management System — Architecture Skill
 
 ## Purpose
 Use this skill when designing, implementing, reviewing, or extending the G12 Church Management System. The system manages people, pastoral hierarchy, Men's and Women's Networks, DCC attendance, Cell Group attendance, Cell Leaders, network development, authentication, authorization, reporting, and drill-down analytics.
@@ -635,7 +635,7 @@ For Version 1, a person's initial network assignment becomes effective on the da
 
 A person's recorded sex may be corrected — most often an ordinary data-entry fix. Because sex determines Network, this is never an ordinary field edit and is explicitly outside `people.edit_basic` (Section 7).
 
-Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
+Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value. **It is made from the person's page, as its own action beside their Sex, never inside Edit details** (ruling of 2026-10-18, decision 0367): the dialog states the change and the Network it moves to, requires a reason, asks for a leader in the new Network when the person has one now, offers an earlier date only to an account that may backdate, and says before the form what refuses it.
 
 **A correction always carries a reason.** The `reason` column on `network_assignments` is nullable because an initial assignment has nothing to explain; a correction is the case it exists for. The reason is required by the operation, is written to the Network row, and appears in the audit entries the correction produces (Section 21).
 
@@ -2608,7 +2608,7 @@ Cell category is editable over time, e.g. Youth -> Young Pro.
 - **A closed Cell carries the category it held when it closed** (ruling of 2026-09-04). A closure ends the open category row on its effective date, so a Cell closed on 10 March has no category row valid at 31 March — and Section 12 evaluates a month's figures as of the end of the reporting month. The category valid at the time being reported is therefore read at the last instant the Cell existed, which is the same thing as the last category it held. *Excluding the Cell instead was the alternative and is refused: Section 10 says a Cell closed part-way through a month simply has fewer recorded meetings, not none, so dropping it from the month would discard meetings it did hold. This is the idiom Section 13 already uses at the same boundary — for a meeting's own lookups the closure instant is read as the end of that day.* Most reports never reach it, because a count of Cells or Cell categories means active Cells unless the report says otherwise.
 - Audit category changes.
 
-The capability is `cell.manage_configuration` (Section 7), which governs a Cell's schedule on the same terms. Unlike a schedule change, a category change takes effect on the date it is made: nothing derives a count of scheduled meetings from a category, so there is no figure a mid-month change would silently rewrite.
+The capability is `cell.manage_configuration` (Section 7), which governs a Cell's schedule on the same terms. Unlike a schedule change, a category change takes effect on the date it is made: nothing derives a count of scheduled meetings from a category, so there is no figure a mid-month change would silently rewrite. **It is changed from the Cell's page, beside the change of when it meets** (ruling of 2026-10-18, decision 0367), offered to whoever the server allows and never for a closed Cell, saying that it takes effect today.
 
 ### Schedule changes
 

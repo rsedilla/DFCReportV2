@@ -10,6 +10,7 @@ import {
   mockAwaitingReassignment,
   mockCellAdministrator,
   mockCellApprover,
+  mockSexCorrector,
   mockCellChoices,
   searchCells,
   mockCellCorrector,
@@ -307,6 +308,60 @@ const SCANS = [
       await page.getByRole('button', { name: 'Move to another leader' }).click();
       await expect(
         page.getByRole('dialog').getByLabel('Search for a leader by name'),
+      ).toBeVisible();
+    },
+  },
+  {
+    // Correct sex (decision 0367), the Admin's dialog over the person page: the change stated,
+    // the required reason, the leader search in the new Network and the optional earlier date.
+    name: 'person profile, correcting sex',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockSexCorrector(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+      await page.route('**/api/v1/leaders/*/children*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            person: {
+              id: PERSON_IN_SCOPE.id,
+              member_id: PERSON_IN_SCOPE.member_id,
+              full_name: PERSON_IN_SCOPE.full_name,
+              leads_anyone: false,
+              direct_reports: 0,
+              beneath: 0,
+            },
+            data: [],
+            next_cursor: null,
+          }),
+        }),
+      );
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Correct sex' }).click();
+      await expect(
+        page.getByRole('dialog').getByLabel('Why is it being corrected? (required)'),
+      ).toBeVisible();
+    },
+  },
+  {
+    // Change category (decision 0367), beside Change when it meets: the categories the Cell
+    // is not, as radios.
+    name: 'cell meetings, changing its category',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
+    pattern: '/cells/[id]/meetings',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellMeetings(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Change category' }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'Change the category of CELL-000007' }).getByRole('radio', { name: 'Couple' }),
       ).toBeVisible();
     },
   },
@@ -1904,6 +1959,21 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'person profile, correcting sex',
+    why:
+      'Opens the Correct sex dialog over the measured "person profile". Its controls are a ' +
+      'textarea as on the Growth save bar, the person picker’s search field and Find button, ' +
+      'measured under "add a person", a date Field, and two Buttons, the primitive measured on ' +
+      'every screen.',
+  },
+  {
+    name: 'cell meetings, changing its category',
+    why:
+      'Opens the Change category dialog over the measured "cell meetings". Its controls are ' +
+      'labelled radios as on "add a person" and two Buttons, the primitive measured on every ' +
+      'screen.',
+  },
   {
     name: 'cells, no meeting in 3 months',
     why:
