@@ -196,6 +196,66 @@ describe('Pending CG Records (decision 0368)', () => {
     }
   });
 
+  // Decision 0370: opened from a Recording Progress row, the list narrows to one leader's
+  // branch now, within the reader's scope.
+  it('narrows to one leader and everyone beneath them under leader_id', async () => {
+    await cellFor(raymond);
+    await cellFor(manuel);
+    await cellFor(mark);
+    await cellFor(ben);
+    const reader = await leaderAccount(raymond);
+
+    expect(leaders((await list(reader, { leader_id: manuel.id })).data)).toEqual([
+      manuel.id,
+      mark.id,
+    ]);
+    // The search still applies within it.
+    expect(leaders((await list(reader, { leader_id: manuel.id, q: 'Mark' })).data)).toEqual([
+      mark.id,
+    ]);
+  });
+
+  it('refuses a leader outside the reader’s scope, whether or not they exist', async () => {
+    await cellFor(ben);
+    const reader = await leaderAccount(manuel);
+
+    for (const leaderId of [ben.id, raymond.id, randomUUID()]) {
+      const body = await list(reader, { leader_id: leaderId }, 403);
+      expect(body).toMatchObject({
+        error: { code: 'SCOPE_DENIED', details: { field: 'leader_id' } },
+      });
+    }
+  });
+
+  it('answers a Whole Church reader naming nobody NOT_FOUND, and lists any branch for them', async () => {
+    await cellFor(hanna);
+    await cellFor(ben);
+    const reader = await admin();
+
+    const missing = await list(reader, { leader_id: randomUUID() }, 404);
+    expect(missing).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect(leaders((await list(reader, { leader_id: grace.id })).data)).toEqual([hanna.id]);
+  });
+
+  it('answers a leader absorbed by a merge NOT_FOUND, as the report routes do', async () => {
+    await cellFor(ben);
+    const reader = await admin();
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: manuel.id })
+      .where('id', '=', ben.id)
+      .execute();
+
+    const body = await list(reader, { leader_id: ben.id }, 404);
+    expect(body).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  });
+
+  it('refuses a leader_id that is not an identifier', async () => {
+    const reader = await leaderAccount(raymond);
+    const body = await list(reader, { leader_id: 'not-a-person' }, 422);
+    expect(body).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+  });
+
   it('drops a meeting once it is recorded, and the Cell once none is left', async () => {
     const yesterday = shift(await today(), -1);
     const cell = await cellFor(manuel);

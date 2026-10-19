@@ -755,6 +755,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Recording Progress' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
+    // No figure links anywhere: no Pending list sits beside it (decision 0370).
+    await expect(page.getByText('Celestino Ocampo').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Pending (CG|DCC) Records/ })).toHaveCount(0);
     // None of the other lists of section 19, and no month figures.
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
 
@@ -1108,6 +1111,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
               cell: column(1, 2),
               dcc: column(1, 1),
               status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+              opens_pending: { cell: true, dcc: true },
             },
           ],
           others: null,
@@ -1139,6 +1143,85 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
 
     expect(asked[0]?.get('scope')).toBe('LEADER');
     expect(asked[0]?.get('leader_id')).toBe(SIGNED_IN_PERSON_ID);
+  });
+
+  test('opens Pending CG Records for a row’s branch from its figure, and Show everyone clears it (decision 0370)', async ({
+    page,
+  }) => {
+    await mockFullRecord(page);
+    await mockGrants(page, ['reports.view_subtree']);
+    await page.route('**/api/v1/reports/recording-status/leader?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          kind: 'WEEK',
+          start: '2026-10-05',
+          end: '2026-10-11',
+          open: true,
+          branch: { cell: { ...column(1, 2), percent: 50 }, dcc: { ...column(1, 1), percent: 100 } },
+          previous: {
+            start: '2026-09-28',
+            end: '2026-10-04',
+            open: true,
+            cell: column(2, 2),
+            dcc: column(1, 1),
+          },
+          rows: [
+            {
+              leader: { id: PERSON_IN_SCOPE.id, member_id: 'M-000201', full_name: 'Ana Lim' },
+              cell: column(1, 2),
+              dcc: column(1, 1),
+              status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+              opens_pending: { cell: true, dcc: true },
+            },
+            {
+              // Named for the week, and moved out of the reader's branch since (decision 0370).
+              leader: { id: 'c0c0c0c0-0000-4000-8000-000000000777', member_id: 'M-000777', full_name: 'Ben Uy' },
+              cell: column(0, 1),
+              dcc: column(0, 1),
+              status: { kind: 'STILL_TO_RECORD', leaders: 1 },
+              opens_pending: { cell: false, dcc: false },
+            },
+          ],
+          others: null,
+        }),
+      }),
+    );
+    const pending: URLSearchParams[] = [];
+    await page.route('**/api/v1/cells/meetings/pending*', (route) => {
+      pending.push(new URL(route.request().url()).searchParams);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], next_cursor: null }),
+      });
+    });
+
+    await page.goto('/dashboard?list=status');
+    const table = page.getByRole('table', { name: 'My 12' });
+    // Somebody in Ana's branch has not recorded their Cell group, and everybody has their DCC.
+    const cellFigure = table.getByRole('button', { name: /Ana Lim’s branch in Pending CG Records/ });
+    await expect(cellFigure).toHaveText('1 of 2 leaders');
+    await expect(table.getByRole('button', { name: /Pending DCC Records/ })).toHaveCount(0);
+    // Ben was moved out of the branch since the week, so his figures are plain text.
+    await expect(table.getByRole('button', { name: /Ben Uy/ })).toHaveCount(0);
+    await expect(table.getByRole('row', { name: /Ben Uy/ })).toContainText('0 of 1 leader');
+
+    await cellFigure.click();
+    await expect(page).toHaveURL(/list=behind/);
+    await expect(page.getByText(/Ana Lim\s+and everyone beneath them/)).toBeVisible();
+    // Drawn for the table and for the phone list; one of the two is showing.
+    await expect(page.getByText('Nothing still to record in Ana Lim’s branch.').first()).toBeVisible();
+    await expect.poll(() => pending.at(-1)?.get('leader_id')).toBe(PERSON_IN_SCOPE.id);
+
+    await page.getByRole('button', { name: 'Show everyone' }).click();
+    await expect(page.getByText(/and everyone beneath them/)).toHaveCount(0);
+    // The whole list again, which was read before the figure was clicked.
+    await expect(
+      page.getByText('No Cell you oversee has a meeting still to record.').first(),
+    ).toBeVisible();
+    expect(pending.some((params) => !params.has('leader_id'))).toBe(true);
   });
 
   test('is not offered to a reader whose reports reach beyond their own branch', async ({

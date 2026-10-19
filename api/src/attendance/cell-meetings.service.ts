@@ -50,6 +50,7 @@ import { canonicalId } from '../common/identifiers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { type RecordedMeetingsPort } from '../cells/recorded-meetings.port';
 import { CellMeetingsScopeService } from './cell-meetings.scope.service';
+import { pendingBranch } from './pending-branch';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 import type { SubmitCellMeetingDto } from './dto/cell-meeting-submit.dto';
@@ -651,7 +652,14 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    */
   async pendingCells(
     actor: Actor,
-    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName; late?: boolean },
+    query: {
+      limit?: number;
+      cursor?: string;
+      q?: string;
+      network?: NetworkName;
+      late?: boolean;
+      leader_id?: string;
+    },
   ): Promise<Record<string, unknown>> {
     const after = decodeRosterCursor(query.cursor);
     const term = query.q === undefined ? null : normalizeName(query.q);
@@ -665,7 +673,22 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     const now = await databaseNow(this.db);
     const view = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
-    const leaders = view.kind === 'WHOLE_CHURCH' ? null : [...view.personIds];
+    // One leader's branch where Recording Progress asks for it (decision 0370).
+    const leaders =
+      query.leader_id !== undefined
+        ? [
+            ...(await pendingBranch(
+              this.db,
+              this.hierarchy,
+              this.people,
+              view,
+              Capability.CellViewSubtree,
+              query.leader_id,
+            )),
+          ]
+        : view.kind === 'WHOLE_CHURCH'
+          ? null
+          : [...view.personIds];
 
     // A meeting still open is in this month or the last: a week closes about two weeks after
     // its due Monday (decision 0335). Each month is asked for while it is open.

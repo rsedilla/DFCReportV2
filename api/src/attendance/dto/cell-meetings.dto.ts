@@ -1,5 +1,15 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
 import type { NetworkName } from '../../database/schema';
@@ -103,4 +113,12 @@ export class CellPendingQueryDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   late?: boolean;
+
+  /**
+   * Keeps only that leader's branch now: them and everyone beneath them, within the reader's
+   * scope (decision 0370). Opened from a Recording Progress row.
+   */
+  @IsOptional()
+  @IsUUID()
+  leader_id?: string;
 }

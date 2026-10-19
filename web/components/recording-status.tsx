@@ -23,6 +23,15 @@ import {
 
 type Kind = 'WEEK' | 'MONTH';
 
+/** Which Pending list a figure opens (decision 0370). */
+export type PendingList = 'cell' | 'dcc';
+
+/**
+ * Opens a Pending list narrowed to one leader's branch (decision 0370). Given only where the
+ * Pending lists are, so the Senior Pastors' Recording Progress carries no links.
+ */
+export type OpenPending = (list: PendingList, leader: { id: string; name: string }) => void;
+
 /**
  * The Senior Pastors' *Recording Progress* (SKILL.md section 19, decision 0325): whether the
  * church has recorded, for a week or a month, opening on the current week.
@@ -34,7 +43,7 @@ type Kind = 'WEEK' | 'MONTH';
  * **Completed is a pale red label** (point 5), an exception to sections 13, 17 and 19 for
  * this word on this screen alone; the word carries the meaning without the colour.
  */
-export function RecordingStatusPanel() {
+export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } = {}) {
   const today = todayInManila();
   const [kind, setKind] = useState<Kind>('WEEK');
   const current = rangeStartOf(kind, today);
@@ -125,6 +134,8 @@ export function RecordingStatusPanel() {
                   heading={`${table.root.full_name ?? 'A Network root'}’s leaders`}
                   rows={table.rows}
                   deadline={data.deadline === true}
+                  open={data.open}
+                  onPending={onPending}
                 />
               ))}
               {data.others ? (
@@ -160,7 +171,13 @@ export function RecordingStatusPanel() {
  * down, for the reader's own branch. Boxes for everyone beneath them, then one row per leader
  * of their 12, each counting that leader and everyone beneath. Week and Month, as above.
  */
-export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
+export function LeaderRecordingStatusPanel({
+  leaderId,
+  onPending,
+}: {
+  leaderId: string;
+  onPending?: OpenPending;
+}) {
   const today = todayInManila();
   const [kind, setKind] = useState<Kind>('WEEK');
   const current = rangeStartOf(kind, today);
@@ -249,6 +266,8 @@ export function LeaderRecordingStatusPanel({ leaderId }: { leaderId: string }) {
                 titled={false}
                 rows={data.rows}
                 deadline={data.deadline === true}
+                open={data.open}
+                onPending={onPending}
               />
             ) : data.others ? null : (
               <p className="text-muted mt-6 text-sm">Nobody is under you this {unit}.</p>
@@ -396,10 +415,15 @@ function LeaderTable({
   deadline,
   nameHeader = 'Primaries',
   titled = true,
+  open,
+  onPending,
 }: {
   heading: string;
   rows: readonly RecordingRow[];
   deadline: boolean;
+  /** Whether the period shown is still open, so something in it can still be recorded. */
+  open: boolean;
+  onPending?: OpenPending;
   nameHeader?: string;
   /** False where the column heading already names the table (owner, 2026-10-12). */
   titled?: boolean;
@@ -425,8 +449,12 @@ function LeaderTable({
               <td className="px-3 py-3 align-top">
                 <BranchLink row={row} />
               </td>
-              <td className="px-3 py-3 align-top tabular-nums">{rowFigure(row.cell, deadline)}</td>
-              <td className="px-3 py-3 align-top tabular-nums">{rowFigure(row.dcc, deadline)}</td>
+              <td className="px-3 py-3 align-top tabular-nums">
+                <RowFigure row={row} list="cell" deadline={deadline} open={open} onPending={onPending} />
+              </td>
+              <td className="px-3 py-3 align-top tabular-nums">
+                <RowFigure row={row} list="dcc" deadline={deadline} open={open} onPending={onPending} />
+              </td>
               <td className="px-3 py-3 align-top">
                 <StatusLabel status={row.status} />
               </td>
@@ -441,10 +469,12 @@ function LeaderTable({
           <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
             <BranchLink row={row} />
             <p className="text-muted text-sm">
-              Cell group recorded: {rowFigure(row.cell, deadline)}
+              Cell group recorded:{' '}
+              <RowFigure row={row} list="cell" deadline={deadline} open={open} onPending={onPending} />
             </p>
             <p className="text-muted text-sm">
-              DCC checklist recorded: {rowFigure(row.dcc, deadline)}
+              DCC checklist recorded:{' '}
+              <RowFigure row={row} list="dcc" deadline={deadline} open={open} onPending={onPending} />
             </p>
             <p className="mt-1 text-sm">
               <StatusLabel status={row.status} />
@@ -453,6 +483,52 @@ function LeaderTable({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * A row's Cell group or DCC figure, which opens that Pending list for the row's leader and
+ * everyone beneath them (decision 0370), where the period is still open, somebody in it has not
+ * recorded, and the leader is under the reader now. Otherwise, and where no Pending list is
+ * beside it, plain text.
+ */
+function RowFigure({
+  row,
+  list,
+  deadline,
+  open,
+  onPending,
+}: {
+  row: RecordingRow;
+  list: PendingList;
+  deadline: boolean;
+  open: boolean;
+  onPending?: OpenPending;
+}) {
+  const column = list === 'cell' ? row.cell : row.dcc;
+  const text = rowFigure(column, deadline);
+  if (
+    onPending === undefined ||
+    !open ||
+    column.recorded >= column.owed ||
+    // A leader moved out of the reader's branch since the period: the list would refuse them.
+    !row.opens_pending[list]
+  ) {
+    return <>{text}</>;
+  }
+  const name = row.leader.full_name ?? row.leader.member_id ?? 'A leader';
+  const where = list === 'cell' ? 'Pending CG Records' : 'Pending DCC Records';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPending(list, { id: row.leader.id, name })}
+      // The figure leads the name, so what is seen is what is said (2.5.3).
+      aria-label={`${text}: ${name}’s branch in ${where}`}
+      className="text-accent focus-visible:outline-accent inline-flex min-h-6 cursor-pointer items-center text-left underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      {text}
+    </button>
   );
 }
 

@@ -175,6 +175,38 @@ describe('A leader’s Recording Status (decision 0334)', () => {
     await db.updateTable('accounts').set({ created_at: LONG_AGO }).execute();
   });
 
+  // Decision 0370: a row says whether its leader is under the reader now, so its figures may
+  // link to the Pending lists. It reads a month that has ended, so the row is named at that
+  // month's end whatever day the suite runs on, and the move below comes after it.
+  it('says per row whether its leader is still under the reader for the Pending lists', async () => {
+    const now = await today();
+    const start = `${shift(`${now.slice(0, 7)}-01`, -1).slice(0, 7)}-01`;
+    await cellOf(ana, 2);
+    await cellOf(ben, 3);
+
+    // Ana moves to the root now, after the month read: named for it, outside the branch now.
+    await db.transaction().execute(async (trx) => {
+      const at = new Date();
+      await trx
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: at })
+        .where('person_id', '=', ana.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('pastoral_assignments')
+        .values({ person_id: ana.id, leader_id: oriel.id, started_at: at })
+        .execute();
+    });
+
+    const response = await status(reader, primo.id, start, 'MONTH').expect(200);
+    const rows = (response.body as { rows: (Row & { opens_pending: unknown })[] }).rows;
+    const byId = new Map(rows.map((row) => [row.leader.id, row.opens_pending]));
+
+    expect(byId.get(ana.id)).toEqual({ cell: false, dcc: false });
+    expect(byId.get(ben.id)).toEqual({ cell: true, dcc: true });
+  });
+
   it('counts everyone beneath the reader, one row per leader of their 12, and the rows add up to the boxes', async () => {
     const monday = await lastMonday();
     // Ana and Ben recorded; Carl did not; the reader's own Cell is not in their boxes.

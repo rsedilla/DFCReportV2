@@ -274,6 +274,8 @@ export async function getPendingDccLeaders(
     network?: 'MENS' | 'WOMENS' | null;
     /** Only the Sundays past their deadline, and the leaders who owe one (decision 0368). */
     late?: boolean;
+    /** Only this leader's branch now (decision 0370). */
+    leaderId?: string | null;
   },
   signal?: AbortSignal,
 ): Promise<{ data: PendingDccLeader[]; next_cursor: string | null }> {
@@ -282,6 +284,7 @@ export async function getPendingDccLeaders(
   if (options.q) query.set('q', options.q);
   if (options.network) query.set('network', options.network);
   if (options.late) query.set('late', 'true');
+  if (options.leaderId) query.set('leader_id', options.leaderId);
   const text = query.toString();
 
   return authenticatedRequest(`/api/v1/dcc/pending-leaders${text ? `?${text}` : ''}`, { signal });

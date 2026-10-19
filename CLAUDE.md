@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-19, the trigger being decision 0369: of 368 files, 367 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0369 each moved the first two and
+2026-10-19, the trigger being decision 0370: of 369 files, 368 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0370 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-19 and triggered by 0369, and was left stale by 0370 the same day. The one before that was dated
 2026-10-18 and triggered by 0368, and was left stale by 0369 the next day. The one before that was dated
 2026-10-18 and triggered by 0367, and was left stale by 0368 the same day. The one before that was dated
 2026-10-18 and triggered by 0366, and was left stale by 0367 the same day. The one before that was dated
@@ -781,6 +782,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-18 — [Correct sex and Change category](docs/decisions/0367-correct-sex-and-change-category-screens.md)
 - 2026-10-18 — [Pending CG Records laid out as Pending DCC Records, and Late only](docs/decisions/0368-pending-records-one-design.md)
 - 2026-10-19 — [A new Cell's three members are people the leader asking oversees](docs/decisions/0369-new-cell-members-are-people-you-oversee.md)
+- 2026-10-19 — [Recording Progress links each count to its Pending list](docs/decisions/0370-recording-progress-links-to-pending.md)
 
 ### Open — awaiting a ruling
 

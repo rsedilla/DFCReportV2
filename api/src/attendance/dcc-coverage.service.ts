@@ -33,6 +33,7 @@ import { normalizeName } from '../people/duplicate-matching';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { type NotRecordable } from './dcc-attendance.service';
+import { pendingBranch } from './pending-branch';
 import { recordingInstant } from './recording-instant';
 
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
@@ -759,7 +760,14 @@ export class DccCoverageService {
    */
   async pendingLeaders(
     actor: Actor,
-    query: { limit?: number; cursor?: string; q?: string; network?: NetworkName; late?: boolean },
+    query: {
+      limit?: number;
+      cursor?: string;
+      q?: string;
+      network?: NetworkName;
+      late?: boolean;
+      leader_id?: string;
+    },
   ): Promise<Record<string, unknown>> {
     const after = decodeRosterCursor(query.cursor);
     const term = query.q === undefined ? null : normalizeName(query.q);
@@ -785,10 +793,24 @@ export class DccCoverageService {
       .filter((event) => event.notRecordable === null);
 
     const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
+    // The reader's scope, which also decides whether a row names its recorder.
     const covered =
       membership.kind === 'WHOLE_CHURCH'
         ? null
         : new Set([...membership.personIds].map((id) => canonicalId(id)));
+    // One leader's branch where Recording Progress asks for it (decision 0370): which rows are
+    // listed, and nothing else, so a narrowed row says what it says unnarrowed.
+    const listed =
+      query.leader_id !== undefined
+        ? await pendingBranch(
+            this.db,
+            this.hierarchy,
+            this.people,
+            membership,
+            Capability.DccViewSubtree,
+            query.leader_id,
+          )
+        : covered;
 
     // Each leader's open Sundays, from one read of the edges and one of the records.
     const edgesAt = await this.hierarchy.edgesAsOfEach(
@@ -816,7 +838,7 @@ export class DccCoverageService {
       }
 
       for (const leader of owing) {
-        if (met.has(leader) || (covered !== null && !covered.has(leader))) {
+        if (met.has(leader) || (listed !== null && !listed.has(leader))) {
           continue;
         }
         sundaysOf.set(leader, [...(sundaysOf.get(leader) ?? []), event]);

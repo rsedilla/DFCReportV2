@@ -341,6 +341,8 @@ export async function getPendingCgCells(
     q?: string;
     network?: 'MENS' | 'WOMENS' | null;
     late?: boolean;
+    /** Only this leader's branch now (decision 0370). */
+    leaderId?: string | null;
   },
   signal?: AbortSignal,
 ): Promise<{ data: PendingCgCell[]; next_cursor: string | null }> {
@@ -349,6 +351,7 @@ export async function getPendingCgCells(
   if (options.q) query.set('q', options.q);
   if (options.network) query.set('network', options.network);
   if (options.late) query.set('late', 'true');
+  if (options.leaderId) query.set('leader_id', options.leaderId);
   const text = query.toString();
 
   return authenticatedRequest(`/api/v1/cells/meetings/pending${text ? `?${text}` : ''}`, {
