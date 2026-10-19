@@ -7,7 +7,11 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { LeaderRecordingStatusPanel, RecordingStatusPanel } from '@/components/recording-status';
+import {
+  LeaderRecordingStatusPanel,
+  RecordingStatusPanel,
+  type OpenPending,
+} from '@/components/recording-status';
 import { SentRequests } from '@/components/sent-requests';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -303,7 +307,13 @@ function Dashboard() {
   // the server. Undated: it asks about now.
   const [pendingFilter, setPendingFilter] = useState<PendingFilter>(NO_PENDING_FILTER);
   const pendingDccPages = useInfiniteQuery({
-    queryKey: ['dcc-pending-leaders', pendingFilter.q, pendingFilter.network, pendingFilter.late],
+    queryKey: [
+      'dcc-pending-leaders',
+      pendingFilter.q,
+      pendingFilter.network,
+      pendingFilter.late,
+      pendingFilter.leader?.id ?? null,
+    ],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       getPendingDccLeaders(
@@ -312,6 +322,7 @@ function Dashboard() {
           q: pendingFilter.q === '' ? undefined : pendingFilter.q,
           network: pendingFilter.network,
           late: pendingFilter.late,
+          leaderId: pendingFilter.leader?.id ?? null,
         },
         signal,
       ),
@@ -325,7 +336,7 @@ function Dashboard() {
   // filtered on the server. It replaced four reads of every Cell in the reader's scope.
   const [cgFilter, setCgFilter] = useState<PendingFilter>(NO_PENDING_FILTER);
   const pendingCgPages = useInfiniteQuery({
-    queryKey: ['cg-pending', cgFilter.q, cgFilter.network, cgFilter.late],
+    queryKey: ['cg-pending', cgFilter.q, cgFilter.network, cgFilter.late, cgFilter.leader?.id ?? null],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       getPendingCgCells(
@@ -334,6 +345,7 @@ function Dashboard() {
           q: cgFilter.q === '' ? undefined : cgFilter.q,
           network: cgFilter.network,
           late: cgFilter.late,
+          leaderId: cgFilter.leader?.id ?? null,
         },
         signal,
       ),
@@ -341,6 +353,17 @@ function Dashboard() {
     enabled: fullRecord,
   });
   const pendingCg = pendingCgPages.data?.pages.flatMap((page) => page.data);
+
+  // **A Recording Progress figure opens its Pending list for that leader's branch** (decision
+  // 0370), filtered afresh so a search or Late only left from before does not hide it.
+  const openPending: OpenPending = (list, leader) => {
+    if (list === 'cell') {
+      setCgFilter({ ...NO_PENDING_FILTER, leader });
+    } else {
+      setPendingFilter({ ...NO_PENDING_FILTER, leader });
+    }
+    go({ list: list === 'cell' ? 'behind' : 'dcc' });
+  };
 
   // **One request per open month**, replacing two index calls and one per Cell. The
   // key is the month and whose view is shown (decision 0258).
@@ -595,9 +618,9 @@ function Dashboard() {
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
             {churchStatus ? (
-              <RecordingStatusPanel />
+              <RecordingStatusPanel onPending={openPending} />
             ) : (
-              <LeaderRecordingStatusPanel leaderId={me.data.person_id} />
+              <LeaderRecordingStatusPanel leaderId={me.data.person_id} onPending={openPending} />
             )}
           </div>
         ) : null}
@@ -773,6 +796,7 @@ function Dashboard() {
               value={cgFilter}
               onChange={setCgFilter}
             />
+            <BranchNote filter={cgFilter} onClear={() => setCgFilter({ ...cgFilter, leader: null })} />
             {pendingCgPages.isPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
             ) : pendingCg ? (
@@ -780,7 +804,9 @@ function Dashboard() {
                 <PendingCgList
                   rows={pendingCg}
                   empty={
-                    cgFilter.late
+                    cgFilter.leader !== null
+                      ? `Nothing still to record in ${cgFilter.leader.name}’s branch.`
+                      : cgFilter.late
                       ? 'No Cell you oversee has a meeting past its deadline.'
                       : cgFilter.q !== '' || cgFilter.network !== null
                         ? 'No Cell matching this has a meeting still to record.'
@@ -811,6 +837,10 @@ function Dashboard() {
               value={pendingFilter}
               onChange={setPendingFilter}
             />
+            <BranchNote
+              filter={pendingFilter}
+              onClear={() => setPendingFilter({ ...pendingFilter, leader: null })}
+            />
             {pendingDccPages.isPending ? (
               <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
             ) : pendingDcc ? (
@@ -818,7 +848,9 @@ function Dashboard() {
                 <PendingDccList
                   rows={pendingDcc}
                   empty={
-                    pendingFilter.late
+                    pendingFilter.leader !== null
+                      ? `Nothing still to record in ${pendingFilter.leader.name}’s branch.`
+                      : pendingFilter.late
                       ? 'No leader you oversee has a Sunday past its deadline.'
                       : pendingFilter.q !== '' || pendingFilter.network !== null
                         ? 'No leader matching this is behind on DCC.'
@@ -1610,9 +1642,34 @@ interface PendingFilter {
   q: string;
   network: 'MENS' | 'WOMENS' | null;
   late: boolean;
+  /** One leader's branch, from a Recording Progress figure (decision 0370). */
+  leader: { id: string; name: string } | null;
 }
 
-const NO_PENDING_FILTER: PendingFilter = { q: '', network: null, late: false };
+const NO_PENDING_FILTER: PendingFilter = { q: '', network: null, late: false, leader: null };
+
+/** Says whose branch a Pending list is narrowed to, with the way back (decision 0370). */
+function BranchNote({ filter, onClear }: { filter: PendingFilter; onClear: () => void }) {
+  if (filter.leader === null) {
+    return null;
+  }
+
+  return (
+    <div className="border-edge mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border px-4 py-3 text-sm">
+      <p>
+        <span className="font-bold">{filter.leader.name}</span> and everyone beneath them,
+        from Recording Progress.
+      </p>
+      <button
+        type="button"
+        onClick={onClear}
+        className="text-accent focus-visible:outline-accent inline-flex min-h-6 cursor-pointer items-center font-bold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        Show everyone
+      </button>
+    </div>
+  );
+}
 
 /**
  * The two Pending lists' controls, one bar for both (decision 0368): the search, the Network

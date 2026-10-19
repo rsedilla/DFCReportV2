@@ -274,6 +274,11 @@ export interface RecordingRow {
   cell: RecordingColumn;
   dcc: RecordingColumn;
   status: RecordingRowStatus;
+  /**
+   * Whether the row's leader is under the reader now for each Pending list, so its figure may
+   * link there (decision 0370). A leader moved since the period is named and not linked.
+   */
+  opens_pending: { cell: boolean; dcc: boolean };
 }
 
 /** `GET /reports/recording-status` (decision 0325). The percentages are the server's. */

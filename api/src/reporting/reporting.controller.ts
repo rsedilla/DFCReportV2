@@ -354,8 +354,12 @@ export class ReportingController {
    */
   @Get('recording-status')
   @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
-  async recordingStatus(@Query() query: RecordingStatusDto): Promise<Record<string, unknown>> {
+  async recordingStatus(
+    @Query() query: RecordingStatusDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
     const status = await this.reporting.recordingStatus(query.kind, query.start, query.period);
+    const opensPending = await this.pendingReachOf(actor);
 
     const ids = [
       ...(status.tables ?? []).flatMap((table) => [
@@ -443,10 +447,39 @@ export class ReportingController {
                 network: table.network,
                 rows: [...table.rows]
                   .sort((left, right) => byName(left.leaderId, right.leaderId))
-                  .map((row) => ({ leader: person(row.leaderId), ...figures(row.figures) })),
+                  .map((row) => ({
+                    leader: person(row.leaderId),
+                    ...figures(row.figures),
+                    opens_pending: opensPending(row.leaderId),
+                  })),
               })),
       others: status.others === null ? null : figures(status.others),
     };
+  }
+
+  /**
+   * Whether a row's leader is under the reader now for each Pending list (decision 0370), so a
+   * figure links only where the list would open: a row is named for its period, and a leader
+   * moved since then is outside the list's scope now. Read after the report's transaction, as
+   * the rows' names are (section 24).
+   */
+  private async pendingReachOf(
+    actor: Actor,
+  ): Promise<(leaderId: string) => { cell: boolean; dcc: boolean }> {
+    const [cell, dcc] = await Promise.all([
+      this.authorization.scopeMembership(actor, Capability.CellViewSubtree),
+      this.authorization.scopeMembership(actor, Capability.DccViewSubtree),
+    ]);
+    const reach = (membership: typeof cell) =>
+      membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : new Set([...membership.personIds].map((id) => canonicalId(id)));
+    const [cells, dccs] = [reach(cell), reach(dcc)];
+
+    return (leaderId) => ({
+      cell: cells === null || cells.has(canonicalId(leaderId)),
+      dcc: dccs === null || dccs.has(canonicalId(leaderId)),
+    });
   }
 
   /**
@@ -510,6 +543,7 @@ export class ReportingController {
 
     let rows: Record<string, unknown>[] | null = null;
     let others: Record<string, unknown> | null = null;
+    const opensPending = await this.pendingReachOf(actor);
     if (status.rows !== null) {
       const admitted = await this.authorization.coversEach(
         actor,
@@ -532,6 +566,7 @@ export class ReportingController {
         .map(({ identity, row }) => ({
           leader: { id: row.leaderId, member_id: identity.memberId, full_name: identity.fullName },
           ...figures(row.figures),
+          opens_pending: opensPending(row.leaderId),
         }));
 
       // The rows' people are disjoint, so the lines not shown add up as columns do.

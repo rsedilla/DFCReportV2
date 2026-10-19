@@ -191,6 +191,50 @@ describe('Pending DCC Records (decision 0336)', () => {
     expect(ids((await list(reader)).data)).toEqual([angelo.id, jhoemar.id, raymond.id]);
   });
 
+  // Decision 0370: opened from a Recording Progress row, the list narrows to one leader's
+  // branch now, within the reader's scope.
+  it('narrows to one leader and everyone beneath them under leader_id', async () => {
+    await createEvent(await recentSunday());
+    const reader = await leader(raymond);
+
+    const all = ids((await list(reader)).data);
+    expect(all).toEqual(expect.arrayContaining([jhoemar.id, dave.id, angelo.id]));
+    expect(ids((await list(reader, { leader_id: dave.id })).data)).toEqual([angelo.id, dave.id]);
+  });
+
+  it('refuses a leader outside the reader’s scope, whether or not they exist', async () => {
+    await createEvent(await recentSunday());
+    const reader = await leader(dave);
+
+    for (const leaderId of [raymond.id, grace.id, randomUUID()]) {
+      const body = await list(reader, { leader_id: leaderId }, 403);
+      expect(body).toMatchObject({
+        error: { code: 'SCOPE_DENIED', details: { field: 'leader_id' } },
+      });
+    }
+  });
+
+  it('names who records a row just as the whole list does, when narrowed', async () => {
+    await createEvent(await recentSunday());
+    // Jhoemar has no account, so Raymond, above the branch asked for, records for him.
+    await leader(raymond);
+    const reader = await admin();
+
+    const whole = rowOf((await list(reader)).data, jhoemar);
+    const narrowed = rowOf((await list(reader, { leader_id: jhoemar.id })).data, jhoemar);
+    expect(whole?.recorded_by?.person_id).toBe(raymond.id);
+    expect(narrowed?.recorded_by).toEqual(whole?.recorded_by);
+  });
+
+  it('answers a Whole Church reader naming nobody NOT_FOUND', async () => {
+    await createEvent(await recentSunday());
+    const reader = await admin();
+
+    const missing = await list(reader, { leader_id: randomUUID() }, 404);
+    expect(missing).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect(ids((await list(reader, { leader_id: grace.id })).data)).toEqual([grace.id]);
+  });
+
   it('gives an Admin outside the tree both Networks, with Record wherever a recorder exists', async () => {
     const sunday = await recentSunday();
     await createEvent(sunday);

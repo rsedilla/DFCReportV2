@@ -260,6 +260,14 @@ export class DccPendingLeadersDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   late?: boolean;
+
+  /**
+   * Keeps only that leader's branch now: them and everyone beneath them, within the reader's
+   * scope (decision 0370). Opened from a Recording Progress row.
+   */
+  @IsOptional()
+  @IsUUID()
+  leader_id?: string;
 }
 
 /**
