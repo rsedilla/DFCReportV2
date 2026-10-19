@@ -589,9 +589,19 @@ function Dashboard() {
         <FailureNotice failure={failure} />
       </div>
 
-      {/* A Recording-only account has one list, so no tabs (decision 0323). None until the
-          server names the account's screens, so no account sees another's tabs flash. */}
-      {me.data === undefined || recordingOnly ? null : seniorPastor ? (
+      {/* A Recording-only account has one list (decision 0323), shown as one tab in the same
+          frame as everyone else's (owner, 2026-10-19), so the screen does not float on the page.
+          None until the server names the account's screens, so no account sees another's tabs
+          flash. */}
+      {me.data === undefined ? null : recordingOnly ? (
+        <TabBar
+          label="Record"
+          className={cn('mt-6', TAB_ROW)}
+          tabs={[tabs[0]]}
+          current="awaiting"
+          onChoose={() => go({ list: null })}
+        />
+      ) : seniorPastor ? (
         <TabBar
           label="Record"
           className={cn('mt-6', TAB_ROW)}
@@ -613,7 +623,7 @@ function Dashboard() {
       )}
 
       {/* The chosen list's pane. */}
-      <div className={recordingOnly ? 'mt-6' : TAB_PANE}>
+      <div className={TAB_PANE}>
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
@@ -625,25 +635,9 @@ function Dashboard() {
           </div>
         ) : null}
         {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
-          // The tab names the list, so its pane repeats no heading (decision 0362). A
-          // Recording-only account has no tabs, so it keeps the heading and its line.
-          <section
-            aria-labelledby={recordingOnly ? 'awaiting-heading' : undefined}
-            aria-label={recordingOnly ? undefined : 'Update Records'}
-            className={LIST}
-          >
-            {recordingOnly ? (
-              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
-                  Update Records
-                </h2>
-                <p className="text-muted text-sm">
-                  Still to record this month
-                  {inCloseWeek ? ', and last month while it is open' : ''}, oldest first.
-                </p>
-              </div>
-            ) : null}
-
+          // The tab names the list, so its pane repeats no heading (decision 0362), for a
+          // Recording-only account too, whose one tab names it.
+          <section aria-label="Update Records" className={LIST}>
             <ViewSwitch
               label="Update Records"
               options={[

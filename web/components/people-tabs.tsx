@@ -32,13 +32,13 @@ export function PeopleTabs({
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  // **The recording screens have the People tab alone** (decision 0323); *# of People* and Family
-  // Tree are the Full view screens' (decisions 0341 and 0364), keyed on the screens the server
-  // names and never on a capability. No tabs until the server names the screens either, so no
-  // tab flashes (owner,
+  // **The recording screens have the People tab alone** (decision 0323), as one tab in the same
+  // frame (owner, 2026-10-19); *# of People* and Family Tree are the Full view screens'
+  // (decisions 0341 and 0364), keyed on the screens the server names and never on a
+  // capability. No tabs until the server names the screens either, so no tab flashes (owner,
   // 2026-10-11). The pane stays where it is either way, so the screen inside it is not
   // remounted when the answer arrives and nothing typed into it is lost.
-  const tabbed = !me.isPending && me.data?.screens !== 'RECORDING';
+  const tabbed = !me.isPending;
 
   return (
     <>

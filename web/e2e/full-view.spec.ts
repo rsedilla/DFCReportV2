@@ -140,9 +140,12 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/dashboard?list=behind');
 
     await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
-    // No tab row names the list here, so its heading and line stay (decision 0362).
-    await expect(page.getByRole('heading', { level: 2, name: 'Update Records' })).toBeVisible();
-    await expect(page.getByText(/^Still to record this month/)).toBeVisible();
+    // One tab names the list, in the frame every account has (owner, 2026-10-19), so the pane
+    // repeats no heading (decision 0362).
+    await expect(page.getByRole('group', { name: 'Record', exact: true }).getByRole('button')).toHaveText([
+      /^Update Records/,
+    ]);
+    await expect(page.getByRole('heading', { level: 2, name: 'Update Records' })).toHaveCount(0);
     await expect(page.getByText('What still needs a record.')).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
@@ -219,7 +222,10 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/people');
 
     await expect(mainNavigation(page).getByRole('link', { name: 'My Cell' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'People' })).toHaveCount(0);
+    // The People tab alone, in the same frame (owner, 2026-10-19).
+    await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
+      'Add People',
+    ]);
     await expect(page.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
   });
 
@@ -236,7 +242,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ]);
   });
 
-  test('SUYNL is reached from its own item, with no Growth tabs', async ({ page }) => {
+  test('SUYNL is reached from its own item, with SUYNL its one Growth tab', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockPeople(page);
@@ -248,7 +254,9 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page).toHaveURL(/\/growth\/suynl$/);
     await expect(page.getByRole('heading', { level: 1, name: 'SUYNL' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Growth' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Growth' }).getByRole('link')).toHaveText([
+      'SUYNL',
+    ]);
     await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('SUYNL');
   });
 });
@@ -266,6 +274,10 @@ test.describe('My Cell (decision 0323)', () => {
     await page.goto('/my-cell');
 
     await expect(page.getByRole('heading', { level: 1, name: 'My Cell' })).toBeVisible();
+    // One tab and its pane, as every account's screens have (owner, 2026-10-19).
+    await expect(page.getByRole('navigation', { name: 'Cells' }).getByRole('link')).toHaveText([
+      'My Cell',
+    ]);
     await expect(page.getByText('The Cells you lead, in June 2026.')).toBeVisible();
     await expect(page.getByRole('heading', { level: 2 })).toHaveText([
       'Youth · Sat',
