@@ -53,9 +53,9 @@ const CSS = fileURLToPath(new URL('../app/globals.css', import.meta.url));
  * in *both* themes. `ink`, `muted` and `edge` each fall below that in both, each is
  * one Tailwind class away, and none can be caught here.
  *
- * *`line` clears 4.5:1 on neither green accent (1.94 light, 2.78 dark), and it is a
+ * *`line` clears 4.5:1 on neither green accent (1.92 light, 2.40 dark), and it is a
  * decorative divider rather than a text token in any case. These describe the green
- * palette of 2026-10-19: recompute them when a token moves.*
+ * palette and borders of 2026-10-19: recompute them when a token moves.*
  */
 const TEXT_PAIRS = [
   ['ink', 'surface'],

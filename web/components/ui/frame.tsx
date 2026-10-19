@@ -21,13 +21,14 @@ export const TAB_PANE = 'border-accent flow-root min-w-0 border-2 border-t-0 px-
 /**
  * One tab of a tab row, the same on every screen (owner's choice of 2026-10-10): sized to
  * its words, the chosen one filled, its words in title case (decision 0332). `px-3` below `sm` lets three tabs fit a 320px phone.
+ * The others' words are in the accent (owner, 2026-10-19), so a tab never reads as body text.
  */
 export function tabClasses(active: boolean): string {
   return [
     'focus-visible:outline-accent inline-flex min-h-11 items-center gap-2 border border-b-0 px-3 sm:px-4',
     'text-sm font-bold',
     'focus-visible:outline-2 focus-visible:-outline-offset-2',
-    active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
+    active ? 'bg-accent text-surface border-accent' : 'border-line text-accent hover:bg-raised',
   ].join(' ');
 }
 

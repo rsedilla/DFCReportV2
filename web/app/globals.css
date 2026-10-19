@@ -37,7 +37,7 @@
  * WCAG 1.4.11 because removing it loses nothing. `edge` is for anything whose
  * boundary carries meaning: the outline of an input, a checkbox, a button. That
  * needs 3:1 against its background, and `edge` meets it in both themes while
- * `line` does not. Reaching for `line` on a form field is the mistake this pair
+ * `line` is not held to it (it misses it in the light theme). Reaching for `line` on a form field is the mistake this pair
  * exists to prevent.
  *
  * `field-invalid` is the one token named for a state, and SKILL.md section 23
@@ -107,9 +107,16 @@
   --raised: #f7f7f7;
   --ink: #111111;
   --muted: #6b6b6b;
-  /* Darkened from #d6d6d6 so boxes and rules are plain to see (owner, 2026-10-09). */
-  --line: #9a9a9a;
-  --edge: #111111;
+  /*
+   * A soft green, as plain to see as the grey it replaced (owner, 2026-10-19, after darkening
+   * it from #d6d6d6 on 2026-10-09). Decorative, so 1.4.11 does not bind it.
+   */
+  --line: #6fa585;
+  /*
+   * Emerald, the sidebar's colour (owner, 2026-10-19), on fields, buttons and boxes. A focused
+   * one stays distinct: its accent ring sits 2px outside the border, past a gap of surface.
+   */
+  --edge: #006b35;
   /*
    * A step darker than the church website's `#00853E` (owner, 2026-10-19). The
    * website's green clears 4.5:1 on `surface` and misses it on `raised` (4.43), so
@@ -158,8 +165,8 @@
     --raised: #1c1c1c;
     --ink: #f2f2f2;
     --muted: #a6a6a6;
-    --line: #666666;
-    --edge: #9a9a9a;
+    --line: #4a7a5c;
+    --edge: #3f9a66;
     /* The church website's own light green. */
     --accent: #1dce78;
     --accent-tint: #0f3320;
