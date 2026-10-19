@@ -407,7 +407,7 @@ function RecordMeeting() {
       </p>
 
       {/*
-        **The date is red** (owner's choices of 2026-09-15 and 2026-09-19, dates in the
+        **The date is in the accent** (owner's choices of 2026-09-15 and 2026-09-19, dates in the
         accent). It is the thing a leader must get right before marking anybody. A date
         is not a meeting status, a coverage figure or a leader, which is all sections
         13, 17 and 19 forbid encoding in colour.

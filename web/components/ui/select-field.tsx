@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 /**
  * A labelled choice from a list too long for radios, on the native `<select>`.
  *
- * The same shape as `Field`: a red label, a description tied to the control with
+ * The same shape as `Field`: an accented label, a description tied to the control with
  * `aria-describedby`, and an error given in words. The boundary is `edge` for the
  * reason `Field` gives: the edge of a control is not decorative (1.4.11).
  */

@@ -373,7 +373,8 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
   switch (status.kind) {
     case 'COMPLETED':
       return (
-        <span className="bg-accent-tint text-accent inline-block px-2 py-0.5 text-xs font-bold tracking-[0.08em] uppercase">
+        // Its own red, which section 19 names, now that the accent is green.
+        <span className="bg-tag-red-tint text-tag-red inline-block px-2 py-0.5 text-xs font-bold tracking-[0.08em] uppercase">
           Completed
         </span>
       );
@@ -460,7 +461,7 @@ function BranchLink({ row }: { row: RecordingRow }) {
     <Link
       // The person's page, Branch having left People (decision 0364).
       href={`/people/${row.leader.id}`}
-      // Red, as every Primary's name on Reports (owner, 2026-10-09).
+      // The accent, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {row.leader.full_name ?? row.leader.member_id ?? 'A leader'}

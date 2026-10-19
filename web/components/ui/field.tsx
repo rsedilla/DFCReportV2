@@ -26,8 +26,8 @@ import { cn } from '@/lib/utils';
  * nothing else: it is never applied to a meeting status, a coverage figure or a
  * leader, whatever it would seem to fit.
  *
- * **The error changes shape, not only colour.** Labels are red (`field-label` in
- * `app/globals.css`), so red text would no longer stand out as a refusal. An
+ * **The error changes shape, not only colour.** Labels take the accent (`field-label` in
+ * `app/globals.css`), so coloured text would not stand out as a refusal. An
  * invalid field instead takes a heavier border, and its message is set in `ink`
  * beside a `field-invalid` icon. The padding shrinks by the border's extra pixel so
  * the text does not shift when the state changes.
@@ -45,8 +45,8 @@ export type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'cla
   /** When set, the field is invalid and this is why, in words. */
   error?: string | null;
   /**
-   * A small grey label rather than the red one, for a box inside a group whose legend
-   * already carries the red label (`NameFields`), so two rows of red capitals do not stack.
+   * A small grey label rather than the accented one, for a box inside a group whose legend
+   * already carries the accented label (`NameFields`), so two rows of accented capitals do not stack.
    */
   quietLabel?: boolean;
   ref?: Ref<HTMLInputElement>;

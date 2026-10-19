@@ -87,7 +87,7 @@ function TrendsScreen() {
         <p className="text-muted text-sm">The last 12 months, one point a month.</p>
       </div>
 
-      {/* The same tabs and red pane as Reports (owner, 2026-10-09), so the two read as one kind
+      {/* The same tabs and accented pane as Reports (owner, 2026-10-09), so the two read as one kind
           of page. Links, as on Reports: each figure keeps an address of its own. */}
       <nav aria-label="Which figure" className={cn('mt-6 grid grid-cols-2 sm:grid-cols-5', TAB_ROW)}>
         {FIGURES.map((entry) => {

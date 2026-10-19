@@ -53,9 +53,9 @@ const CSS = fileURLToPath(new URL('../app/globals.css', import.meta.url));
  * in *both* themes. `ink`, `muted` and `edge` each fall below that in both, each is
  * one Tailwind class away, and none can be caught here.
  *
- * *`line` clears 4.5:1 on the dark accent and not on the light one, so it is not a
- * third safe foreground, and it is a decorative divider rather than a text token in
- * any case. These describe this palette: recompute them when a token moves.*
+ * *`line` clears 4.5:1 on neither green accent (1.94 light, 2.78 dark), and it is a
+ * decorative divider rather than a text token in any case. These describe the green
+ * palette of 2026-10-19: recompute them when a token moves.*
  */
 const TEXT_PAIRS = [
   ['ink', 'surface'],
@@ -73,10 +73,20 @@ const TEXT_PAIRS = [
   // A selected segment of the Reports switches is a filled block: `surface` text on
   // `ink`, listed because an unlisted position is one this check cannot see.
   ['surface', 'ink'],
-  // The current sidebar item: `accent` text on its tint (owner's choice, 2026-09-22).
+  // A current tab, and the account icon's current state on a phone: `accent` on its tint.
   ['accent', 'accent-tint'],
+  // The sidebar, and a phone's top bar and tab bar (owner, 2026-10-19): mint items on
+  // emerald, the current item white on a darker emerald, and the application's name and
+  // the section name in white on emerald.
+  ['sidebar-ink', 'sidebar'],
+  // A mint item under the pointer takes the current item's darker emerald.
+  ['sidebar-ink', 'sidebar-current'],
+  ['sidebar-current-ink', 'sidebar-current'],
+  ['sidebar-current-ink', 'sidebar'],
+  // *Completed* on Recording Progress, the pale red label SKILL.md section 19 names.
+  ['tag-red', 'tag-red-tint'],
   // `field-invalid` is held to the body-text ratio although no message is set in
-  // it any more: since labels became red, a refusal's words render in `ink` beside
+  // it any more: since labels took the accent, a refusal's words render in `ink` beside
   // a `field-invalid` icon (`components/ui/field.tsx`). The pair stays so that a
   // later return to coloured message text cannot drop below AA with this check
   // still green.
@@ -94,6 +104,10 @@ const NON_TEXT_PAIRS = [
   // field may carry it, but the rule it has to meet is this one.
   ['field-invalid', 'surface'],
   ['field-invalid', 'raised'],
+  // The bar marking the current sidebar item, and the focus ring on an emerald bar:
+  // `sidebar-current-ink`, because the accent all but vanishes on emerald (1.4.11).
+  ['sidebar-current-ink', 'sidebar-current'],
+  ['sidebar-current-ink', 'sidebar'],
   // The Trends lines are graphical objects needed to read the graph (1.4.11).
   ['chart-green', 'surface'],
   ['chart-blue', 'surface'],

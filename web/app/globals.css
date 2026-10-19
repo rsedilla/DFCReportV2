@@ -16,11 +16,17 @@
  * attention is surfaced by putting it on an attention list (section 15), never by
  * colouring it as a failure.
  *
- * **The accent is red, and that is why the paragraph above matters more here, not
- * less.** It is the accent of a primary button, a link, a focus ring and a field
- * label, and of a tag stating a neutral fact. It is never the colour of a record awaiting entry, a
+ * **The accent is the church's green, and that is why the paragraph above matters
+ * more here, not less** (owner, 2026-10-19, matching the church's website). It is the
+ * accent of a primary button, a link, a focus ring and a field label, and of a tag
+ * stating a neutral fact. It is never the colour of a record awaiting entry, a
  * meeting status, a coverage figure or a leader: those are words, in an outlined
- * tag or in plain text (`docs/DESIGN_RECONCILIATION.md`).
+ * tag or in plain text (`docs/DESIGN_RECONCILIATION.md`). A green accent reads as
+ * "done" more readily than the red one it replaced, which is a reason to hold that
+ * line harder, not a licence to use it.
+ *
+ * The sidebar is emerald with mint items and a white current item, and on a phone
+ * the top bar and the tab bar take the same colours (owner, 2026-10-19).
  *
  * `@theme inline` maps each token to a custom property, so the utilities Tailwind
  * generates follow the values below into dark mode rather than being frozen at
@@ -61,6 +67,12 @@
   --color-edge: var(--edge);
   --color-accent: var(--accent);
   --color-accent-tint: var(--accent-tint);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-current: var(--sidebar-current);
+  --color-sidebar-current-ink: var(--sidebar-current-ink);
+  --color-tag-red: var(--tag-red);
+  --color-tag-red-tint: var(--tag-red-tint);
   --color-field-invalid: var(--field-invalid);
   --color-chart-green: var(--chart-green);
   --color-chart-blue: var(--chart-blue);
@@ -99,13 +111,30 @@
   --line: #9a9a9a;
   --edge: #111111;
   /*
-   * A step darker than the design's `#e4002b`, chosen by the owner on 2026-09-15.
-   * The design's red cleared 4.5:1 on `raised` by 0.02, so any nudge toward the
-   * design would have failed the build; this one looks the same and has room.
+   * A step darker than the church website's `#00853E` (owner, 2026-10-19). The
+   * website's green clears 4.5:1 on `surface` and misses it on `raised` (4.43), so
+   * it would fail the build on every grey panel; this one looks the same and has
+   * the room the red it replaced had.
    */
-  --accent: #d20028;
-  /* Behind the current sidebar item, under `accent` text (owner's choice, 2026-09-22). */
-  --accent-tint: #fdecef;
+  --accent: #007a39;
+  /* Behind the current tab on a page and the account icon on a phone, under `accent` text. */
+  --accent-tint: #eaf6ef;
+  /*
+   * The sidebar, and on a phone the top bar and the tab bar (owner, 2026-10-19): emerald,
+   * with mint items, and the current item white on a darker emerald with a white bar. One
+   * set for both themes; the dark theme inherits it.
+   */
+  --sidebar: #006b35;
+  --sidebar-ink: #c8f0d8;
+  --sidebar-current: #00552a;
+  --sidebar-current-ink: #ffffff;
+  /*
+   * *Completed* on Recording Progress is a pale red label (SKILL.md section 19, decisions
+   * 0325 and 0334), the one status shown by colour. It kept its red when the accent became
+   * green, because the section names the colour; these are the red accent's old values.
+   */
+  --tag-red: #d20028;
+  --tag-red-tint: #fdecef;
   --field-invalid: #a2001e;
   /*
    * The three Trends lines: the whole church, the Men's root's branch and the Women's
@@ -131,8 +160,11 @@
     --muted: #a6a6a6;
     --line: #666666;
     --edge: #9a9a9a;
-    --accent: #ff6b80;
-    --accent-tint: #3a1219;
+    /* The church website's own light green. */
+    --accent: #1dce78;
+    --accent-tint: #0f3320;
+    --tag-red: #ff6b80;
+    --tag-red-tint: #3a1219;
     --field-invalid: #ffb3be;
     --chart-green: #5fd08a;
     --chart-blue: #7fb2f0;
@@ -145,8 +177,8 @@
  * tracked, and in the accent (the owner's choice of 2026-09-15). One utility rather
  * than a class string pasted per screen, so a label written next month matches.
  *
- * A red label is structure, not a judgement, and it is why an invalid field no
- * longer signals itself with red text alone: its border thickens and its message
+ * An accented label is structure, not a judgement, and it is why an invalid field
+ * does not signal itself with coloured text alone: its border thickens and its message
  * sits in `ink` beside a `field-invalid` icon (`components/ui/field.tsx`).
  */
 @utility field-label {
