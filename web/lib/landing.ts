@@ -1,12 +1,12 @@
-import { getMe, holdsWholeChurch, type SessionDescription } from './me';
+import { getMe, type SessionDescription } from './me';
 
 /**
- * Where a signed-in person lands, and which arrangement of the sidebar they see
- * (SKILL.md section 19, ruling of 2026-09-14).
+ * Where a signed-in person lands (SKILL.md section 19, ruling of 2026-10-19, decision 0372).
  *
- * **Read off the reach of `reports.view_subtree`, never a role**, because section 7
- * makes a capability and its scope the thing that decides. A whole-church reader
- * starts on Reports; everyone else starts on Record, which is the Dashboard.
+ * **Read off the screens the server names, never a role** (decision 0323, point 5): the
+ * Senior Pastors' screens start on Reports, and every other account starts on Record, which
+ * is the Dashboard. Reading the whole church is not enough to land on Reports: the Admin
+ * reads it too, and the Admin's work is on Record.
  *
  * Nothing here authorizes anything. Landing somewhere is courtesy, and the screen
  * still shows only what the API returns (section 1, principle 4).
@@ -22,12 +22,8 @@ export const RECORD_PATH = '/dashboard';
  */
 export const REPORTS_PATH = '/reports/dcc';
 
-export function readsWholeChurch(me: SessionDescription | undefined): boolean {
-  return holdsWholeChurch(me, 'reports.view_subtree');
-}
-
 export function landingPath(me: SessionDescription | undefined): string {
-  return readsWholeChurch(me) ? REPORTS_PATH : RECORD_PATH;
+  return me?.screens === 'SENIOR_PASTOR' ? REPORTS_PATH : RECORD_PATH;
 }
 
 /**
