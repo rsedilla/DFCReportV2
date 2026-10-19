@@ -40,7 +40,7 @@ export function FailureNotice({ failure }: { failure: Failure | null }) {
       {failure ? (
         // A refusal of input carries `field-invalid` on its icon and sets its words
         // in `ink`, the same shape as the message beside a field (`FieldError`):
-        // labels are red, so red text would not read as a refusal.
+        // labels take the accent, so coloured text would not read as a refusal.
         <p
           className={
             'text-ink flex items-start gap-2 text-sm leading-relaxed ' +

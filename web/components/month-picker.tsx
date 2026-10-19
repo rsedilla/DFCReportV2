@@ -81,7 +81,7 @@ export function MonthPicker({
       */}
       <p aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm">
         {/*
-          Red and bold (owner's choice of 2026-09-15): every figure below is read against
+          In the accent and bold (owner's choice of 2026-09-15): every figure below is read against
           this month. It is a period, not a status or a coverage figure.
         */}
         <span className="text-accent font-bold">{monthLabel(month)}</span>

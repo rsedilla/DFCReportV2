@@ -226,7 +226,7 @@ function BranchLink({
     <Link
       // The person's page, Branch having left People (decision 0364).
       href={`/people/${leader.id}`}
-      // Red, as every Primary's name on Reports (owner, 2026-10-09).
+      // The accent, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {leader.full_name ?? leader.member_id ?? 'A leader'}

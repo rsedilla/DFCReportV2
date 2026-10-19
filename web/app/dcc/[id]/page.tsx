@@ -243,7 +243,7 @@ function DccChecklist() {
         <TextLink href="/dcc">Back to your month</TextLink>
       </p>
 
-      {/* Red for the reason the Cell meeting screen gives. */}
+      {/* The accent, for the reason the Cell meeting screen gives. */}
       <h1 className="text-accent text-2xl font-bold tracking-tight">
         {event ? dayLabel(event.event_date) : 'DCC attendance'}
       </h1>

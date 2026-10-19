@@ -243,7 +243,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         // information (1.4.1).
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'focus-visible:outline-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
+          // White, as the current item is: the accent all but vanishes on emerald.
+          'focus-visible:outline-sidebar-current-ink focus-visible:outline-2 focus-visible:-outline-offset-2',
           'lg:focus-visible:outline-offset-2',
           // **A tab below `lg`**: an equal share of the bar, the icon over the word,
           // and 56px tall against the 44px minimum a phone held standing up needs
@@ -257,13 +258,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
           'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
           'lg:text-[0.8125rem] lg:tracking-[0.08em] lg:uppercase',
-          // **The current item is red on a pale red, with a bar** (owner's choice,
-          // 2026-09-22): along the top of a tab, down the left of a sidebar row. The bar
-          // is a change of shape and not of hue alone (1.4.1), and `accent` on
-          // `accent-tint` is listed in `check-contrast.mjs` for both themes.
+          // **The current item is white on a darker emerald, with a white bar, and the
+          // others mint on emerald** (owner, 2026-10-19, replacing red on pale red): the bar
+          // along the top of a tab, down the left of a sidebar row. The bar is a change of
+          // shape and not of hue alone (1.4.1), and each pair is listed in
+          // `check-contrast.mjs`.
           active
-            ? 'bg-accent-tint text-accent shadow-[inset_0_3px_0_var(--accent)] lg:shadow-[inset_3px_0_0_var(--accent)]'
-            : 'text-ink hover:bg-raised',
+            ? 'bg-sidebar-current text-sidebar-current-ink shadow-[inset_0_3px_0_var(--sidebar-current-ink)] lg:shadow-[inset_3px_0_0_var(--sidebar-current-ink)]'
+            : 'text-sidebar-ink hover:bg-sidebar-current',
         )}
       >
         <Icon aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 lg:hidden" />
@@ -283,7 +285,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           name is a paragraph rather than a heading: every screen carries its own
           `h1`, and a second heading above it would be announced as the page's title.
         */}
-        <header className="bg-surface border-line sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b pr-1.5 pl-5 lg:hidden">
+        <header className="bg-sidebar border-sidebar text-sidebar-current-ink sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b pr-1.5 pl-5 lg:hidden">
           <p className="truncate text-base font-bold tracking-tight">
             {current?.label ?? APPLICATION_NAME}
           </p>
@@ -291,11 +293,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             href={ACCOUNT.href}
             aria-current={accountActive ? 'page' : undefined}
             className={cn(
-              'focus-visible:outline-accent inline-flex size-11 shrink-0 items-center justify-center',
+              'focus-visible:outline-sidebar-current-ink inline-flex size-11 shrink-0 items-center justify-center',
               'focus-visible:outline-2 focus-visible:-outline-offset-2',
               accountActive
-                ? 'bg-accent-tint text-accent shadow-[inset_0_-3px_0_var(--accent)]'
-                : 'text-ink hover:bg-raised',
+                ? 'bg-sidebar-current text-sidebar-current-ink shadow-[inset_0_-3px_0_var(--sidebar-current-ink)]'
+                : 'text-sidebar-current-ink hover:bg-sidebar-current',
             )}
           >
             <CircleUserRound aria-hidden="true" strokeWidth={1.5} className="size-6" />
@@ -303,16 +305,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </header>
 
-        <div className="lg:border-line lg:w-60 lg:shrink-0 lg:border-r">
+        <div className="lg:bg-sidebar lg:w-60 lg:shrink-0">
           <div className="lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto lg:px-3 lg:py-6">
-            <p className="hidden px-3 pb-6 text-lg leading-tight font-bold tracking-tight lg:block">
+            <p className="text-sidebar-current-ink hidden px-3 pb-6 text-lg leading-tight font-bold tracking-tight lg:block">
               {APPLICATION_NAME}
             </p>
 
             <nav
               aria-label="Main"
               className={cn(
-                'bg-surface border-edge fixed inset-x-0 bottom-0 z-30 flex border-t',
+                'bg-sidebar border-sidebar fixed inset-x-0 bottom-0 z-30 flex border-t',
                 // The phone's home indicator sits over the bottom few pixels; the
                 // inset is zero wherever there is none.
                 'pb-[env(safe-area-inset-bottom)]',
@@ -327,17 +329,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               it sits under the person's name at the foot of the sidebar; below `lg` it
               is the button in the bar across the top, and this block is not rendered.
             */}
-            <div className="lg:border-line hidden lg:mt-auto lg:flex lg:flex-col lg:border-t lg:pt-4">
+            <div className="lg:border-sidebar-ink/40 hidden lg:mt-auto lg:flex lg:flex-col lg:border-t lg:pt-4">
               {me.data?.first_name ? (
-                <p className="text-ink px-3 text-sm">{me.data.first_name}</p>
+                <p className="text-sidebar-current-ink px-3 text-sm">{me.data.first_name}</p>
               ) : null}
               <Link
                 href={ACCOUNT.href}
                 aria-current={accountActive ? 'page' : undefined}
                 className={cn(
-                  'focus-visible:outline-accent inline-flex min-h-11 items-center px-3 text-xs',
+                  'focus-visible:outline-sidebar-current-ink inline-flex min-h-11 items-center px-3 text-xs',
                   'underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2',
-                  accountActive ? 'text-ink font-medium' : 'text-muted hover:text-ink',
+                  accountActive
+                    ? 'text-sidebar-current-ink font-medium'
+                    : 'text-sidebar-ink hover:text-sidebar-current-ink',
                 )}
               >
                 {ACCOUNT.label}
