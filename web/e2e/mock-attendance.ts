@@ -654,9 +654,94 @@ export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<
     asked.push(new URL(route.request().url()).search);
     return route.fulfill(json({ data: rows, next_cursor: null }));
   });
+  // Pending CG Records' count is read on arrival too (decision 0368), so every Record screen
+  // gets an empty one here; `mockPendingCg`, installed after, overrides it.
+  await page.route('**/api/v1/cells/meetings/pending*', (route) =>
+    route.fulfill(json({ data: [], next_cursor: null })),
+  );
 
   return asked;
 }
+
+/** Record's Pending CG Records (decision 0368). Returns the query strings asked for. */
+export async function mockPendingCg(page: Page, rows: unknown[] = PENDING_CG_ROWS): Promise<string[]> {
+  const asked: string[] = [];
+
+  await page.route('**/api/v1/cells/meetings/pending*', (route) => {
+    asked.push(new URL(route.request().url()).search);
+    return route.fulfill(json({ data: rows, next_cursor: null }));
+  });
+
+  return asked;
+}
+
+/**
+ * Two Cells for Pending CG Records in the API's first-name order (decision 0359): another
+ * leader's, which the reader may record, and a closed one the reader may only see.
+ */
+export const PENDING_CG_ROWS = [
+  {
+    cell: {
+      id: '3f1b7c6e-0000-4000-8000-000000000101',
+      cell_code: 'CELL-000007',
+      category: 'YOUTH',
+      day_of_week: 6,
+      closed_on: null,
+    },
+    leader: {
+      person_id: '3f1b7c6e-0000-4000-8000-000000000611',
+      member_id: 'M-000711',
+      full_name: 'Carlo Reyes',
+      last_name: 'Reyes',
+      first_name: 'Carlo',
+      is_actor: false,
+    },
+    meetings: [
+      {
+        scheduled_date: '2026-06-06',
+        scheduled_time: '19:00',
+        reporting_month: '2026-06-01',
+        due_at: '2026-06-08T04:00:00.000Z',
+        closes_at: '2026-06-22T04:00:00.000Z',
+      },
+      {
+        scheduled_date: '2026-06-13',
+        scheduled_time: '19:00',
+        reporting_month: '2026-06-01',
+        due_at: '2026-06-15T04:00:00.000Z',
+        closes_at: '2026-06-29T04:00:00.000Z',
+      },
+    ],
+    may_record: true,
+  },
+  {
+    cell: {
+      id: '3f1b7c6e-0000-4000-8000-000000000102',
+      cell_code: 'CELL-000011',
+      category: 'COUPLE',
+      day_of_week: 3,
+      closed_on: '2026-06-12',
+    },
+    leader: {
+      person_id: '3f1b7c6e-0000-4000-8000-000000000612',
+      member_id: 'M-000712',
+      full_name: 'Herminia Lazaro',
+      last_name: 'Lazaro',
+      first_name: 'Herminia',
+      is_actor: false,
+    },
+    meetings: [
+      {
+        scheduled_date: '2026-06-10',
+        scheduled_time: '20:00',
+        reporting_month: '2026-06-01',
+        due_at: '2026-06-15T04:00:00.000Z',
+        closes_at: '2026-06-29T04:00:00.000Z',
+      },
+    ],
+    may_record: false,
+  },
+];
 
 /**
  * Two rows for Pending DCC Records in the API's first-name order (decision 0359): a leader

@@ -50,6 +50,7 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
   mockRecordingStatus,
+  mockPendingCg,
   mockPendingDcc,
 } from './mock-attendance';
 import {
@@ -923,14 +924,19 @@ const SCANS = [
     },
   },
   {
-    // Record's second list (decision 0290): a table from lg, a card per Cell below it.
+    // Record's second list (decision 0290), laid out as Pending DCC Records is (decision 0368):
+    // the filter bar with Late only, then a table from lg and a card per Cell below it.
     name: 'dashboard, cells behind',
     route: '/dashboard',
-    before: mockDashboard,
+    async before(page: import('@playwright/test').Page) {
+      await mockDashboard(page);
+      await mockPendingCg(page);
+    },
     async arrange(page: import('@playwright/test').Page) {
       await chooseRecordList(page, /^Pending CG Records/);
       await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Carlo Reyes' }).filter({ visible: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Late only' })).toBeVisible();
     },
   },
   {

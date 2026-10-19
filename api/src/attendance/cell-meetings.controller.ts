@@ -12,7 +12,11 @@ import { UuidParamPipe } from '../common/uuid-param.pipe';
 
 import { CellMeetingsService } from './cell-meetings.service';
 import { SubmitCellMeetingDto } from './dto/cell-meeting-submit.dto';
-import { AwaitingMeetingsQueryDto, CellMeetingsQueryDto } from './dto/cell-meetings.dto';
+import {
+  AwaitingMeetingsQueryDto,
+  CellMeetingsQueryDto,
+  CellPendingQueryDto,
+} from './dto/cell-meetings.dto';
 
 /**
  * `/api/v1/cells/{id}/meetings` (SKILL.md sections 12, 13 and 22).
@@ -84,6 +88,25 @@ export class CellMeetingsController {
     @Query() query: AwaitingMeetingsQueryDto,
   ): Promise<Record<string, unknown>> {
     return this.meetings.awaitingFor(actor, query.month, query.whose ?? 'mine');
+  }
+
+  /**
+   * Record's *Pending CG Records* (decision 0368): the Cells of the actor's scope with a
+   * meeting still to record whose week is open, one row per Cell and filing leader, paged by the leader's name.
+   *
+   * **`cell.view_subtree` against the actor**, narrowed to that scope in the service, as
+   * `GET /dcc/pending-leaders` is under `dcc.view_subtree`: a row names a Cell and its
+   * leader, which is what that capability governs, and whether Record is offered is decided
+   * per row by the capabilities the submit route checks. It names no period, so it asks
+   * about now (section 7). A literal path, so `:id/meetings` cannot take it either.
+   */
+  @Get('meetings/pending')
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
+  async pending(
+    @CurrentActor() actor: Actor,
+    @Query() query: CellPendingQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.meetings.pendingCells(actor, query);
   }
 
   /** This Cell's meetings for a reporting month, scheduled and recorded. */

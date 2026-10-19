@@ -83,6 +83,11 @@ describe('storable text is refused at the edge, on every field that takes text',
    *
    * *The one added with decision 0336 was checked the same way. `DccPendingLeadersDto.cursor`
    * is decoded by `decodeRosterCursor` and its keys are compared in memory by the service.*
+   *
+   * *The one added with decision 0368 was checked the same way. `CellPendingQueryDto.cursor`,
+   * Pending CG Records', is decoded by `decodeRosterCursor` and compared in memory by the
+   * service; its Member ID key carries the Cell ID beside it, which is still a string the
+   * decoder asks `isStorableText` of.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
@@ -98,6 +103,7 @@ describe('storable text is refused at the edge, on every field that takes text',
     'DccByLeaderDto.cursor',
     'CellByLeaderDto.cursor',
     'DccPendingLeadersDto.cursor',
+    'CellPendingQueryDto.cursor',
     'RefreshDto.refresh_token',
     'LogoutDto.refresh_token',
     'LoginDto.password',

@@ -1952,10 +1952,15 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * The scheduled derivation is {@link scheduledMeetingsWithLeaderIn}'s, day for day: a
    * series against the governing schedule row, inert rows excluded, the weekday tested
    * against that row alone. A change to one is a change to both.
+   *
+   * **`null` is every leader**, for a Whole Church reader of Record's Pending CG Records
+   * (decision 0368), whose scope holds no list of people to pass. That reader's read then
+   * crosses every Cell with the month's days, which the predicate below exists to avoid for
+   * everybody else; it is the cost of naming the whole church, paid on every request for each open month.
    */
   async meetingsAwaitingFor(
     executor: Db | Transaction<Database>,
-    leaderPersonIds: readonly string[],
+    leaderPersonIds: readonly string[] | null,
     reportingMonth: string,
   ): Promise<
     {
@@ -1970,11 +1975,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       memberCount: number;
     }[]
   > {
-    if (leaderPersonIds.length === 0) {
+    if (leaderPersonIds !== null && leaderPersonIds.length === 0) {
       return [];
     }
 
-    const leaders = [...leaderPersonIds];
+    const leaders = leaderPersonIds === null ? null : [...leaderPersonIds];
     const result = await sql<{
       cell_id: string;
       cell_code: string;
@@ -2045,7 +2050,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                     held.ended_at DESC NULLS FIRST,
                     held.id DESC
            LIMIT 1
-        ) AS leader ON leader.person_id = ANY(${leaders}::uuid[])
+        ) AS leader ON ${leaders === null ? sql`TRUE` : sql`leader.person_id = ANY(${leaders}::uuid[])`}
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
          AND day::date <= (now() AT TIME ZONE 'Asia/Manila')::date
          -- Cells this person has ever led. Implied by the join above, which keeps a row
@@ -2057,12 +2062,17 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
          -- rather than a filter inside the lateral: moving the person in there would
          -- pick the actor's own leadership row instead of the governing one, silently
          -- changing the rule from "is this meeting yours" to "did you ever lead it".
-         AND EXISTS (
-               SELECT 1
-                 FROM cell_leaderships AS ever
-                WHERE ever.cell_id = cell.id
-                  AND ever.person_id = ANY(${leaders}::uuid[])
-             )
+         -- Every leader (null) has no such predicate to apply.
+         AND ${
+           leaders === null
+             ? sql`TRUE`
+             : sql`EXISTS (
+                 SELECT 1
+                   FROM cell_leaderships AS ever
+                  WHERE ever.cell_id = cell.id
+                    AND ever.person_id = ANY(${leaders}::uuid[])
+               )`
+         }
        ORDER BY day, cell.id
     `.execute(executor);
 
