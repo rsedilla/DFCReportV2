@@ -11,7 +11,7 @@ import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
 import { CellApprovals } from '@/components/cell-approvals';
 import { CloseCellDialog } from '@/components/close-cell-dialog';
@@ -229,7 +229,7 @@ function CellsIndex() {
             {label}
             {/* A count of 0 shows no box, as on Record's tabs (decision 0349). */}
             {count ? (
-              <span className="inline-block min-w-5 border border-current px-1 text-center leading-4 tabular-nums">
+              <span className={countClasses(shown === key)}>
                 {count}
               </span>
             ) : null}
