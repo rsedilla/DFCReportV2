@@ -142,7 +142,7 @@ describe('Cell leadership approval (section 10)', () => {
       .where('person_id', '=', prospectiveLeaderId)
       .where('ended_at', 'is', null)
       .executeTakeFirstOrThrow();
-    return (await createRequestMembers(db, row.network)).ids;
+    return (await createRequestMembers(db, row.network, { under: prospectiveLeaderId })).ids;
   };
 
   const handoverBody = (prospectiveLeaderId: string, cellId: string) => ({

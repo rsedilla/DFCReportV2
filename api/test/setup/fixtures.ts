@@ -394,24 +394,30 @@ export function resetRateLimits(app: INestApplication): void {
  * prospective leader. Returned as Persons so a case can archive, move or enrol one of
  * them; `ids` is what a request body carries.
  *
+ * **`under` places each beneath that leader**, since the members must be beneath the leader
+ * asking (decision 0369): pass the prospective leader, or anybody else the requester
+ * oversees. Left out, they are beneath nobody, whom only a grant wider than the role reaches.
+ *
  * Invented names, like every fixture (CLAUDE.md, Secrets).
  */
 export async function createRequestMembers(
   db: Kysely<Database>,
   network: NetworkName,
-  options: { prefix?: string } = {},
+  options: { prefix?: string; under?: string } = {},
 ): Promise<{ people: TestPerson[]; ids: string[] }> {
   const prefix = options.prefix ?? 'Member';
   const people: TestPerson[] = [];
 
   for (const suffix of ['One', 'Two', 'Three']) {
-    people.push(
-      await createPerson(db, {
-        firstName: `${prefix}${suffix}`,
-        lastName: `Requestmember${randomUUID().slice(0, 6)}`,
-        network,
-      }),
-    );
+    const person = await createPerson(db, {
+      firstName: `${prefix}${suffix}`,
+      lastName: `Requestmember${randomUUID().slice(0, 6)}`,
+      network,
+    });
+    if (options.under !== undefined) {
+      await assignTo(db, person.id, options.under);
+    }
+    people.push(person);
   }
 
   return { people, ids: people.map((person) => person.id) };

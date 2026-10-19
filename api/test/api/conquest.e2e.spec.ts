@@ -551,7 +551,7 @@ describe('Conquest (section 27)', () => {
         day_of_week: 6,
         time_of_day: '18:00',
         // A new Cell names three members (decision 0353).
-        members: (await createRequestMembers(db, 'MENS')).ids,
+        members: (await createRequestMembers(db, 'MENS', { under: opener.id })).ids,
       });
       expect(asked.status).toBe(201);
       const approved = await approve(asked.body.id);

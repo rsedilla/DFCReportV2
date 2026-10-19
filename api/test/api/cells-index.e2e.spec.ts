@@ -1061,7 +1061,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
           time_of_day: '19:00',
           // A restart names three members (decision 0353), so a refusal below is about
           // the restart rather than the request's shape.
-          members: (await createRequestMembers(db, 'MENS')).ids,
+          members: (await createRequestMembers(db, 'MENS', { under: row.leader.person_id })).ids,
         });
 
       expect(accepted.status).toBe(201);
@@ -1088,7 +1088,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
           time_of_day: '19:00',
           // A restart names three members (decision 0353), so a refusal below is about
           // the restart rather than the request's shape.
-          members: (await createRequestMembers(db, 'MENS')).ids,
+          members: (await createRequestMembers(db, 'MENS', { under: row.leader.person_id })).ids,
         });
 
       expect(refused.status).toBeGreaterThanOrEqual(400);

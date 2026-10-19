@@ -322,7 +322,7 @@ test.describe('My Cell (decision 0323)', () => {
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
     await mockPeople(page);
-    await mockMemberSearch(page);
+    const memberSearches = await mockMemberSearch(page);
 
     let sentRequests: unknown[] = [];
     await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>
@@ -379,6 +379,12 @@ test.describe('My Cell (decision 0323)', () => {
     // Three members besides the leader are needed before it can be sent (decision 0353).
     await expect(send).toBeDisabled();
     await chooseThreeMembers(dialog);
+    // The members are people the leader oversees, so the search never reaches the church
+    // (decision 0369). The three pickers share one cached search for the same term.
+    expect(memberSearches.length).toBeGreaterThan(0);
+    for (const url of memberSearches) {
+      expect(url).not.toContain('church_wide');
+    }
     await send.click();
 
     await expect(dialog).toBeHidden();

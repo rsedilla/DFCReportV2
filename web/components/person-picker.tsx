@@ -58,6 +58,7 @@ export function PersonPicker({
   churchWide = true,
   network = null,
   networkReason = null,
+  excludeIds = [],
 }: {
   /**
    * Only this Network's people (decision 0299), where the operation's same-Network rule
@@ -82,10 +83,15 @@ export function PersonPicker({
   selectedName: string | null;
   onSelect: (person: { id: string; full_name: string } | null) => void;
   /**
-   * False where the searcher's own scope already reaches everyone the operation may name,
-   * so the search does not reach past it: New Cell, whose actor holds Whole Church scope.
+   * False to search the searcher's own reading scope rather than the church. That scope may be
+   * wider than whom the operation lets them name; the server refuses the rest.
    */
   churchWide?: boolean;
+  /**
+   * People never offered here, though the search returns them: the searcher, where an
+   * operation refuses naming yourself (decision 0369). A convenience only; the server refuses.
+   */
+  excludeIds?: readonly string[];
 }) {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
@@ -97,13 +103,14 @@ export function PersonPicker({
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.next_cursor ?? null,
     // **The pickers keep the church, and the People screen does not** (SKILL.md
-    // section 8, decision 0244). Each of the four surfaces using this component —
-    // Add a Person, Add a Cell member, naming a new pastoral leader on a
-    // reassignment, and who ran a Cell meeting — names one specific person for one operation rather than
-    // offering a place to look around. Section 10 makes Cell membership independent of pastoral assignment,
-    // so a Cell legitimately holds members its leader does not pastor: narrowing
-    // here would make exactly those people unaddable. A Network narrows two of them
-    // (decision 0299), because their operation refuses any other Network anyway.
+    // section 8, decision 0244). Add a Person, Add a Cell member, naming a new pastoral
+    // leader on a reassignment, and who ran a Cell meeting each name one specific person
+    // for one operation rather than offering a place to look around. Section 10 makes Cell
+    // membership independent of pastoral assignment, so a Cell legitimately holds members
+    // its leader does not pastor: narrowing here would make exactly those people
+    // unaddable. A new Cell's members are searched in the searcher's own scope (decision
+    // 0369). A Network narrows the Cell member, pastoral leader and new Cell member pickers
+    // (decisions 0299 and 0369), because their operation refuses any other Network anyway.
     queryFn: ({ pageParam, signal }) =>
       searchPeople(submitted, pageParam as string | null, signal, { churchWide, network }),
     enabled: submitted.trim().length > 0,
@@ -113,7 +120,9 @@ export function PersonPicker({
     // A failed Show more keeps the people already shown; only a failed first page
     // replaces the list with the notice.
     isError: pages.isError && !pages.isFetchNextPageError,
-    data: pages.data?.pages.flatMap((page) => page.data) ?? [],
+    data: (pages.data?.pages.flatMap((page) => page.data) ?? []).filter(
+      (person) => !excludeIds.includes(person.id),
+    ),
   };
   const minimum = churchWide ? MINIMUM_CHURCH_WIDE_SEARCH_LENGTH : MINIMUM_SEARCH_LENGTH;
 
