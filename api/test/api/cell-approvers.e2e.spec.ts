@@ -230,8 +230,8 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
 
   /**
    * An explicit Whole Church grant of `cell.request_leadership`, which only an Admin issues
-   * (section 7): the one way a requester reaches people beneath nobody, or of the other
-   * Network, and so the only way the member checks after the scope check are reached.
+   * (section 7). It reaches people beneath nobody and people of the other Network, which a
+   * role's own reach never does, so the member checks after the scope check are reached.
    */
   const widenRequests = async (account: TestAccount): Promise<TestAccount> => {
     await db
@@ -1151,6 +1151,50 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       });
       expect(await stateOf(id)).toBe('PENDING');
       expect(await db.selectFrom('cells').select('id').execute()).toHaveLength(cellsBefore.length);
+    });
+
+    it('refuses approval as the new leader, not as a member, where the new leader has moved and taken them along', async () => {
+      const { id } = await pendingNewCell(manuelAccount, mark.id);
+
+      // Mark moves to Ben's branch; the members beneath him go with him (section 5).
+      await db.transaction().execute(async (trx) => {
+        const at = new Date();
+        await trx
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', mark.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('pastoral_assignments')
+          .values({ person_id: mark.id, leader_id: pedro.id, started_at: at })
+          .execute();
+      });
+
+      const response = await approve(adminB, id);
+      expect(response.status).toBe(403);
+      expect(response.body.error.details).toEqual({
+        capability: 'cell.request_leadership',
+        subject: 'requester',
+        requested_by: manuelAccount.id,
+      });
+    });
+
+    it('refuses a restart naming a member outside the leader asking’s branch', async () => {
+      const markCell = await createCell(db, { leader: mark });
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_STOPPED_ATTENDING' });
+      const mine = await createRequestMembers(db, 'MENS', { under: mark.id });
+      const bens = await createRequestMembers(db, 'MENS', { under: pedro.id, prefix: 'Bens' });
+
+      const response = await submit(manuelAccount, {
+        ...newCellBody(mark.id, [mine.ids[0], bens.ids[0], mine.ids[2]]),
+        restart_of_cell_id: markCell.id,
+      });
+      expect({ status: response.status, code: response.body.error?.code }).toEqual({
+        status: 403,
+        code: 'SCOPE_DENIED',
+      });
+      expect(response.body.error.details).toMatchObject({ path: 'members[1]' });
     });
   });
 

@@ -240,8 +240,8 @@ export class CellsLeadershipRequestService {
         await this.assertRestartableWithin(trx, input, actor, authority);
       }
 
-      // Each member beneath the actor (decision 0369): a scope check, so with the others and
-      // before anything about the person is said.
+      // Each member beneath the actor (decision 0369), before anything about the person is
+      // said.
       await this.assertMembersWithinReachWithin(trx, actor, authority, members);
 
       // After the scope checks, so a refusal about a member is never what an actor
@@ -725,8 +725,17 @@ export class CellsLeadershipRequestService {
         );
       }
 
+      const decision = await this.assertApprovableWithin(trx, request, {
+        actor,
+        requester,
+        requesterAuthority,
+        outgoingBeforeLock,
+      });
+
       // Re-checked as at the request: the state at approval governs (decisions 0353 and
-      // 0369). Whose reach is the requester's, as for the prospective leader below.
+      // 0369). Whose reach is the requester's, as for the prospective leader above. After
+      // the prospective leader, so a leader moved out of reach, who takes the members
+      // beneath them along (section 5), is refused as the leader rather than as a member.
       await this.assertMembersWithinReachWithin(
         trx,
         requester,
@@ -735,13 +744,6 @@ export class CellsLeadershipRequestService {
         true,
       );
       await this.assertMembersQualifyWithin(trx, request.prospective_leader_id, memberIds, true);
-
-      const decision = await this.assertApprovableWithin(trx, request, {
-        actor,
-        requester,
-        requesterAuthority,
-        outgoingBeforeLock,
-      });
 
       // ------------------------------------------------------------------
       // The writes.

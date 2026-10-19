@@ -396,7 +396,7 @@ export function resetRateLimits(app: INestApplication): void {
  *
  * **`under` places each beneath that leader**, since the members must be beneath the leader
  * asking (decision 0369): pass the prospective leader, or anybody else the requester
- * oversees. Left out, they are beneath nobody, which only a Whole Church holder may name.
+ * oversees. Left out, they are beneath nobody, whom only a grant wider than the role reaches.
  *
  * Invented names, like every fixture (CLAUDE.md, Secrets).
  */

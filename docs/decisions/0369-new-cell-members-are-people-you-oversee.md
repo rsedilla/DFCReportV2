@@ -14,8 +14,8 @@ could find, and name, people in another leader's branch. On 19 Oct the owner, lo
    subtree excluding itself (Section 7), the Admin's included, so for a Cell leader that is
    the people under them and for a Primary their branch; only an explicit wider grant, which
    an Admin issues, reaches further. A member outside it is refused `SCOPE_DENIED`, naming the
-   line, with the scope checks and so before any check about the person (Section 7's
-   contents ordering, decision 0193).
+   line, before any check about the person, which Section 10 already puts after the scope
+   checks (decision 0353).
 2. **Nobody names themselves as one of the three**, at any scope, refused `SCOPE_DENIED`:
    "beneath the leader asking" excludes the leader asking, and a wider explicit grant, which
    may cover its own holder, must not undo that.
@@ -26,7 +26,9 @@ could find, and name, people in another leader's branch. On 19 Oct the owner, lo
 4. **The search reaches only the asker's own people.** The three member pickers search the
    searcher's own scope, narrowed to the prospective leader's Network, and no longer the
    church-wide directory, so a leader sees only those under them. Somebody not yet in the
-   application is added first, through Add People.
+   application is added first, through Add People. An Admin or Senior Pastor account sees
+   people across its reading scope, which is wider than whom it may name; the server refuses
+   the rest.
 5. **Everything else about the members stands**: three different people other than the
    prospective leader, each a current Person in the prospective leader's Network now, and
    somebody already in another Cell may be named and moves at approval (decision 0357).
