@@ -32,6 +32,20 @@ export function tabClasses(active: boolean): string {
   ].join(' ');
 }
 
+/**
+ * The count beside a tab's or a switch's words (owner's choice of 2026-10-19): filled in the
+ * accent, and the other way round on the chosen one, so it is the chosen tab's own two
+ * colours. Every count looks alike, so it marks how many and grades nothing (SKILL.md
+ * sections 13, 17 and 19). `shrink-0`, because a long label squeezed it narrower than its
+ * number, which then ran over the edge.
+ */
+export function countClasses(active: boolean): string {
+  return [
+    'inline-block min-w-6 shrink-0 border px-1.5 text-center leading-[1.375rem] tabular-nums',
+    active ? 'bg-surface text-accent border-surface' : 'bg-accent text-surface border-accent',
+  ].join(' ');
+}
+
 /** The report's controls, in one bar above the figures, so no control reads as a figure. */
 export const CONTROL_BAR =
   'border-line bg-raised flex flex-wrap items-end gap-x-6 gap-y-4 border p-4 *:mt-0';

@@ -1,5 +1,6 @@
 'use client';
 
+import { countClasses } from '@/components/ui/frame';
 import { cn } from '@/lib/utils';
 
 /**
@@ -67,7 +68,7 @@ export function ViewSwitch<Key extends string>({
           >
             {option.label}
             {option.count === undefined || option.count === null ? null : (
-              <span className="inline-block min-w-5 border border-current px-1 text-center leading-4 tabular-nums">
+              <span className={countClasses(pressed)}>
                 {option.count}
               </span>
             )}

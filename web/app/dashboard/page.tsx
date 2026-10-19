@@ -16,7 +16,7 @@ import { SentRequests } from '@/components/sent-requests';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
@@ -1014,7 +1014,7 @@ function TabBar<Key extends string>({
           {tab.label}
           {/* A count of 0 is left off (decision 0349): a row of zeros hid the lists with work. */}
           {tab.count === null || tab.count === '0' ? null : (
-            <span className="inline-block min-w-5 border border-current px-1 text-center leading-4 tabular-nums">
+            <span className={countClasses(tab.key === current)}>
               {tab.count}
             </span>
           )}
