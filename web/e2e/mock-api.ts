@@ -382,16 +382,26 @@ export const MEMBER_CHOICES = [
   { scope: 'IDENTITY_ONLY', id: '11111111-2222-4333-8444-000000000703', member_id: 'M-000703', full_name: 'Carla Navarro', sex: 'FEMALE', network: 'WOMENS' },
 ] as const;
 
+/** What `chooseThreeMembers` types into each member picker. */
+export const MEMBER_SEARCH_TERM = 'Members';
+
 /**
- * The church-wide search the three member pickers make (decisions 0353 and 0299), answering
- * `MEMBER_CHOICES`; any other search falls through to the routes installed before it.
+ * The search the three member pickers make (decision 0353), answering `MEMBER_CHOICES`; any
+ * other search falls through to the routes installed before it. It searches the searcher's own
+ * people and never the church (decision 0369), so the URLs it was asked are returned for a test
+ * to check.
  */
-export async function mockMemberSearch(page: Page): Promise<void> {
-  await page.route('**/api/v1/people?*', (route) =>
-    new URL(route.request().url()).searchParams.get('church_wide') === 'true'
-      ? route.fulfill(json({ data: MEMBER_CHOICES, next_cursor: null }))
-      : route.fallback(),
-  );
+export async function mockMemberSearch(page: Page): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route('**/api/v1/people?*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('q') !== MEMBER_SEARCH_TERM) {
+      return route.fallback();
+    }
+    asked.push(url.toString());
+    return route.fulfill(json({ data: MEMBER_CHOICES, next_cursor: null }));
+  });
+  return asked;
 }
 
 /**
@@ -400,7 +410,7 @@ export async function mockMemberSearch(page: Page): Promise<void> {
  */
 export async function chooseThreeMembers(dialog: Locator): Promise<void> {
   for (const slot of [0, 1, 2]) {
-    await dialog.getByLabel(`Search for member ${slot + 1} by name`).fill('Santos');
+    await dialog.getByLabel(`Search for member ${slot + 1} by name`).fill(MEMBER_SEARCH_TERM);
     // Earlier pickers have collapsed to their choice, so the first Search left is this one's.
     await dialog.getByRole('button', { name: 'Search people' }).first().click();
     await dialog.getByRole('button', { name: 'Choose', exact: true }).nth(slot).click();

@@ -58,6 +58,7 @@ export function PersonPicker({
   churchWide = true,
   network = null,
   networkReason = null,
+  excludeIds = [],
 }: {
   /**
    * Only this Network's people (decision 0299), where the operation's same-Network rule
@@ -83,9 +84,15 @@ export function PersonPicker({
   onSelect: (person: { id: string; full_name: string } | null) => void;
   /**
    * False where the searcher's own scope already reaches everyone the operation may name,
-   * so the search does not reach past it: New Cell, whose actor holds Whole Church scope.
+   * so the search does not reach past it: New Cell, whose actor holds Whole Church scope, and
+   * a new Cell's three members, who must be beneath the searcher (decision 0369).
    */
   churchWide?: boolean;
+  /**
+   * People never offered here, though the search returns them: the searcher, where an
+   * operation refuses naming yourself (decision 0369). A convenience only; the server refuses.
+   */
+  excludeIds?: readonly string[];
 }) {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
@@ -113,7 +120,9 @@ export function PersonPicker({
     // A failed Show more keeps the people already shown; only a failed first page
     // replaces the list with the notice.
     isError: pages.isError && !pages.isFetchNextPageError,
-    data: pages.data?.pages.flatMap((page) => page.data) ?? [],
+    data: (pages.data?.pages.flatMap((page) => page.data) ?? []).filter(
+      (person) => !excludeIds.includes(person.id),
+    ),
   };
   const minimum = churchWide ? MINIMUM_CHURCH_WIDE_SEARCH_LENGTH : MINIMUM_SEARCH_LENGTH;
 

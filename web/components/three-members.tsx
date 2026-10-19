@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { PersonPicker } from '@/components/person-picker';
+import { getMe } from '@/lib/me';
 import { getPerson, networkLabel, networkOfPerson } from '@/lib/people';
 
 export type ChosenMember = { id: string; full_name: string } | null;
@@ -21,8 +22,10 @@ export function membersReady(members: readonly ChosenMember[], leaderId: string 
 
 /**
  * The three members a new-Cell request names, besides its leader (decision 0353). Each
- * picker searches the leader's Network, because section 10 refuses a member of the other
- * one; the server decides who qualifies.
+ * picker searches the searcher's own people and not the church (decision 0369), because
+ * section 10 lets a leader name only people beneath them, narrowed to the leader's Network,
+ * because it refuses a member of the other one. The searcher is left out of the results,
+ * naming yourself being refused too; the server decides who qualifies.
  */
 export function ThreeMembers({
   leaderId,
@@ -39,25 +42,28 @@ export function ThreeMembers({
     enabled: leaderId !== null,
   });
   const network = leader.data ? networkOfPerson(leader.data) : null;
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const searcher = me.data?.person_id ?? null;
   const chosen = members.flatMap((member) => (member === null ? [] : [member.id]));
 
   return (
     <fieldset className="flex flex-col gap-4">
       <legend className="field-label">Three members</legend>
       <p className="text-muted text-sm leading-relaxed">
-        Three people who will be in the Cell, besides its leader. Each must be in the
-        leader&rsquo;s Network. Somebody already in a Cell stays there until this is
-        approved, then moves into the new Cell.
+        Three people you oversee who will be in the Cell, besides its leader. Each must be in
+        the leader&rsquo;s Network. Somebody already in a Cell stays there until this is
+        approved, then moves into the new Cell. Somebody new is added first, under Add People.
       </p>
       {[0, 1, 2].map((slot) => (
         <PersonPicker
           key={slot}
           legend={`Member ${slot + 1}`}
-          description="In the leader’s Network."
+          description="Somebody you oversee, in the leader’s Network."
           searchLabel={`Search for member ${slot + 1} by name`}
           selectedId={members[slot]?.id ?? null}
           selectedName={members[slot]?.full_name ?? null}
-          churchWide
+          churchWide={false}
+          excludeIds={searcher === null ? [] : [searcher]}
           network={network}
           networkReason={network === null ? null : `the leader is in the ${networkLabel(network)}`}
           onSelect={(person) =>

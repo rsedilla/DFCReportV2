@@ -83,7 +83,7 @@ describe('Cell leadership requests (section 10)', () => {
 
     // A pending request holds no membership, so one set of three may be named by every
     // request a case sends (decision 0353).
-    members = (await createRequestMembers(db, 'MENS')).ids;
+    members = (await createRequestMembers(db, 'MENS', { under: mark.id })).ids;
   });
 
   afterAll(async () => {

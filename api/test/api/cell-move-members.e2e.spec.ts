@@ -319,7 +319,7 @@ describe('Moving a Cell member (decision 0357)', () => {
 
   describe('a new-Cell request naming somebody already in a Cell', () => {
     const fresh = async (): Promise<string[]> =>
-      (await createRequestMembers(db, 'MENS')).ids.slice(0, 2);
+      (await createRequestMembers(db, 'MENS', { under: mia.id })).ids.slice(0, 2);
 
     it('is sent, leaves them in their Cell while it waits, and moves them when approved', async () => {
       const members = [marilou.id, ...(await fresh())];
@@ -355,30 +355,40 @@ describe('Moving a Cell member (decision 0357)', () => {
     });
 
     it('is refused SCOPE_DENIED to an approver whose branch does not hold that Cell, and leaves its queue', async () => {
-      const sent = await submit(corazonAccount, mia.id, [lito.id, ...(await fresh())]).expect(201);
+      // Beneath Corazon, so Corazon may name them (decision 0369), and in Rosa's Cell,
+      // outside Elena's branch: Cell membership does not follow the pastoral tree.
+      const crossing = await createPerson(db, { firstName: 'Crossing', network: 'MENS' });
+      await assignTo(db, crossing.id, mia.id);
+      await enrol(crossing.id, cellR.id);
+
+      const sent = await submit(corazonAccount, mia.id, [crossing.id, ...(await fresh())]).expect(
+        201,
+      );
       const id = sent.body.id as string;
 
       expect(await queueIds(elenaAccount)).not.toContain(id);
       expect(codeOf(await approve(elenaAccount, id).expect(403))).toBe('SCOPE_DENIED');
       expect(codeOf(await decline(elenaAccount, id).expect(403))).toBe('SCOPE_DENIED');
-      expect(await cellOf(lito.id)).toBe(cellR.id);
+      expect(await cellOf(crossing.id)).toBe(cellR.id);
 
       // It reaches the Admin, who moves them by approving it.
       expect(await queueIds(admin)).toContain(id);
       const approved = await approve(admin, id).expect(200);
-      expect(await cellOf(lito.id)).toBe(approved.body.cell_uuid);
+      expect(await cellOf(crossing.id)).toBe(approved.body.cell_uuid);
     });
 
     it('is refused CAPABILITY_DENIED to an approver who moves nobody, neither listed for it nor declinable', async () => {
-      const sent = await submit(rosaAccount, pablo.id, [marilou.id, ...(await fresh())]).expect(
-        201,
-      );
+      // Lito is beneath Rosa and in Rosa's Cell, which Gina may not move anybody out of.
+      const sent = await submit(rosaAccount, pablo.id, [
+        lito.id,
+        ...(await createRequestMembers(db, 'MENS', { under: pablo.id })).ids.slice(0, 2),
+      ]).expect(201);
       const id = sent.body.id as string;
 
       expect(await queueIds(ginaAccount)).not.toContain(id);
       expect(codeOf(await approve(ginaAccount, id).expect(403))).toBe('CAPABILITY_DENIED');
       expect(codeOf(await decline(ginaAccount, id).expect(403))).toBe('CAPABILITY_DENIED');
-      expect(await cellOf(marilou.id)).toBe(cellC.id);
+      expect(await cellOf(lito.id)).toBe(cellR.id);
     });
 
     it('locks each named member’s current Cell before writing anything', async () => {
@@ -470,7 +480,7 @@ describe('Moving a Cell member (decision 0357)', () => {
       const sent = await submit(
         rosaAccount,
         pablo.id,
-        (await createRequestMembers(db, 'MENS')).ids,
+        (await createRequestMembers(db, 'MENS', { under: pablo.id })).ids,
       ).expect(201);
       const id = sent.body.id as string;
 

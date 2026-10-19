@@ -776,7 +776,7 @@ describe('closing a Cell (section 10)', () => {
           day_of_week: 6,
           time_of_day: '17:00',
           restart_of_cell_id: benCell.id,
-          members: (await createRequestMembers(db, 'MENS')).ids,
+          members: (await createRequestMembers(db, 'MENS', { under: ben.id })).ids,
         });
 
       expect(restart.status).toBe(201);

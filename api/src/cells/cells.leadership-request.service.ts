@@ -240,6 +240,10 @@ export class CellsLeadershipRequestService {
         await this.assertRestartableWithin(trx, input, actor, authority);
       }
 
+      // Each member beneath the actor (decision 0369): a scope check, so with the others and
+      // before anything about the person is said.
+      await this.assertMembersWithinReachWithin(trx, actor, authority, members);
+
       // After the scope checks, so a refusal about a member is never what an actor
       // without the scope is answered (section 7, decision 0353).
       await this.assertMembersQualifyWithin(trx, input.prospectiveLeaderId, members);
@@ -721,7 +725,15 @@ export class CellsLeadershipRequestService {
         );
       }
 
-      // Re-checked as at the request: the state at approval governs (decision 0353).
+      // Re-checked as at the request: the state at approval governs (decisions 0353 and
+      // 0369). Whose reach is the requester's, as for the prospective leader below.
+      await this.assertMembersWithinReachWithin(
+        trx,
+        requester,
+        requesterAuthority,
+        memberIds,
+        true,
+      );
       await this.assertMembersQualifyWithin(trx, request.prospective_leader_id, memberIds, true);
 
       const decision = await this.assertApprovableWithin(trx, request, {
@@ -1763,6 +1775,61 @@ export class CellsLeadershipRequestService {
     }
 
     return members;
+  }
+
+  /**
+   * Each member a new-Cell request names is beneath the leader asking (decision 0369): within
+   * the scope of their `cell.request_leadership` grant, and never that leader themselves,
+   * which a Whole Church grant would otherwise cover. `SCOPE_DENIED`, naming the line; at
+   * approval the reach is the requester's, and the refusal names the person and the requester,
+   * as the prospective leader's does.
+   */
+  private async assertMembersWithinReachWithin(
+    trx: Transaction<Database>,
+    requester: Actor,
+    authority: ActorAuthority,
+    members: readonly string[],
+    atApproval = false,
+  ): Promise<void> {
+    for (const [index, personId] of members.entries()) {
+      const beneath =
+        !sameId(personId, requester.personId) &&
+        (await this.authorization.coversWith(
+          trx,
+          requester,
+          authority,
+          Capability.CellRequestLeadership,
+          { kind: 'person', personId },
+        ));
+
+      if (beneath) {
+        continue;
+      }
+
+      if (atApproval) {
+        throw new ScopeDeniedError(
+          'One of the members is no longer beneath the leader who requested this Cell. ' +
+            'Decline it; that leader may send another naming people they oversee (SKILL.md ' +
+            'section 10).',
+          {
+            capability: Capability.CellRequestLeadership,
+            subject: 'requester',
+            requested_by: requester.accountId,
+            person_id: personId,
+          },
+        );
+      }
+
+      throw new ScopeDeniedError(
+        'One of the members is not somebody you oversee. Name people beneath you (SKILL.md ' +
+          'section 10).',
+        {
+          capability: Capability.CellRequestLeadership,
+          field: 'members',
+          path: `members[${index}]`,
+        },
+      );
+    }
   }
 
   /**
