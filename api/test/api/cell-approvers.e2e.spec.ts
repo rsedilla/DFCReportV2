@@ -981,8 +981,8 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
     });
 
     it('refuses a Person of the other Network', async () => {
-      // Only a Whole Church grant reaches somebody of the other Network: nobody of it is
-      // beneath a requester, whose own refusal comes first (decision 0369).
+      // Nobody of the other Network is beneath a requester, whose own refusal would come
+      // first (decision 0369), so the requester holds a wider grant.
       const { ids } = await createRequestMembers(db, 'MENS', { under: mark.id });
       const other = await createPerson(db, { firstName: 'Lorna', network: 'WOMENS' });
       await refusedAt([ids[0], other.id, ids[2]], 1, await widenRequests(manuelAccount));
@@ -1172,12 +1172,16 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       });
 
       const response = await approve(adminB, id);
-      expect(response.status).toBe(403);
+      expect({ status: response.status, code: response.body.error?.code }).toEqual({
+        status: 403,
+        code: 'SCOPE_DENIED',
+      });
       expect(response.body.error.details).toEqual({
         capability: 'cell.request_leadership',
         subject: 'requester',
         requested_by: manuelAccount.id,
       });
+      expect(await stateOf(id)).toBe('PENDING');
     });
 
     it('refuses a restart naming a member outside the leader asking’s branch', async () => {
@@ -1316,9 +1320,8 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
     });
 
     it('refuses where a member has since moved Network', async () => {
-      // Beneath nobody, so a Network change needs no reassignment; only a Whole Church grant
-      // may name such a person (decision 0369). Beneath a requester, a Network change moves
-      // them out of the branch, which the reach check refuses first.
+      // Beneath nobody, so a Network change needs no reassignment, and named through a wider
+      // grant (decision 0369).
       const wide = await widenRequests(manuelAccount);
       const members = (await createRequestMembers(db, 'MENS')).ids;
       const sent = await submit(wide, newCellBody(mark.id, members)).expect(201);

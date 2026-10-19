@@ -245,7 +245,7 @@ export class CellsLeadershipRequestService {
       await this.assertMembersWithinReachWithin(trx, actor, authority, members);
 
       // After the scope checks, so a refusal about a member is never what an actor
-      // without the scope is answered (section 7, decision 0353).
+      // without the scope is answered (decision 0353).
       await this.assertMembersQualifyWithin(trx, input.prospectiveLeaderId, members);
 
       // **Two uniqueness rules, one per kind, and they are not the same rule** (section

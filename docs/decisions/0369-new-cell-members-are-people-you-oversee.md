@@ -22,7 +22,7 @@ could find, and name, people in another leader's branch. On 19 Oct the owner, lo
 3. **Approval re-checks it.** The state at approval governs (Section 10, *Approval
    revalidates the target*), so a member who has since moved out of the requester's reach
    refuses the approval `SCOPE_DENIED`, naming the person and the requester, as a prospective
-   leader who has moved out of it already does.
+   leader who has moved out of it already does. The prospective leader is checked first.
 4. **The search reaches only the asker's own people.** The three member pickers search the
    searcher's own scope, narrowed to the prospective leader's Network, and no longer the
    church-wide directory, so a leader sees only those under them. Somebody not yet in the

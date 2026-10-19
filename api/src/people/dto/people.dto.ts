@@ -496,7 +496,7 @@ export class SearchPeopleDto {
   /**
    * Only people whose Network is this one now (decision 0299). The pickers whose
    * operation the same-Network rule governs send it — adding a Cell member, naming a new
-   * pastoral leader, and naming a new Cell's members (decisions 0353 and 0369, in the
+   * pastoral leader, and naming a new Cell's members (decision 0369, in the
    * searcher's own scope) — keyed on the Cell or the person acted on, never on the
    * searcher. It narrows the rows and widens nothing.
    */

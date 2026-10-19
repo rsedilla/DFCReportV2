@@ -22,10 +22,8 @@ export function membersReady(members: readonly ChosenMember[], leaderId: string 
 
 /**
  * The three members a new-Cell request names, besides its leader (decision 0353). Each
- * picker searches the searcher's own people and not the church (decision 0369), because
- * section 10 lets a leader name only people beneath them, narrowed to the leader's Network,
- * because it refuses a member of the other one. The searcher is left out of the results,
- * naming yourself being refused too; the server decides who qualifies.
+ * picker searches the searcher's own scope and not the church (decision 0369), narrowed to
+ * the leader's Network, and leaves the searcher out; the server decides who qualifies.
  */
 export function ThreeMembers({
   leaderId,
