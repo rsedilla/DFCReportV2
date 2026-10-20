@@ -793,15 +793,16 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             // Equal buttons: every tab as wide as the others, within a pixel.
             expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
           } else {
-            // Sized to their words, from the left (decision 0361): Encounter Readiness is narrower than the first,
-            // and from `sm` the row leaves room after the last tab. On a phone the labels wrap
-            // and the three fill the row without passing its edge.
+            // Sized to their words, from the left (decision 0361): Encounter Readiness is narrower
+            // than the first. On a phone the four sit two by two without passing the row's edge.
             if (layout.width >= 640) {
               expect(widths[2], `${tab.path}: Encounter Readiness is stretched`).toBeLessThan(widths[0]);
             }
             const row = await which.evaluate((nav) => nav.getBoundingClientRect().right);
             const last = boxes[boxes.length - 1];
-            if (layout.width >= 640) {
+            // From `lg` the row leaves room after the last tab. At 768px Encounter Readiness can fill
+            // it exactly where a font renders wider (CI's Linux, decision 0378), so only the edge holds there.
+            if (layout.width >= 1024) {
               expect(last.left + last.width, `${tab.path}: the tabs fill the row`).toBeLessThan(row - 1);
             } else {
               expect(last.left + last.width, `${tab.path}: a tab passes the row`).toBeLessThanOrEqual(row + 0.5);
