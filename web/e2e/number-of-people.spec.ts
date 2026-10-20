@@ -4,11 +4,11 @@ import { mockAdministrator, mockPeople, mockScreens, mockSignedIn } from './mock
 import { mockBranchPeople, mockChurchCounts } from './mock-senior-pastor';
 
 /**
- * People › *# of People*, in Branch's place (SKILL.md section 19, decision 0364).
+ * Reports › *# of People* (SKILL.md section 19, decisions 0364 and 0376), moved from People.
  *
  * A Full view leader reads their own branch and opens a leader beneath them; the Admin reads the
- * Senior Pastors' whole-church figure; a Recording-only account is offered no such tab. Names are
- * invented (CLAUDE.md, Secrets).
+ * Senior Pastors' whole-church figure; People keeps no such tab, and the old address forwards.
+ * Names are invented (CLAUDE.md, Secrets).
  */
 
 /** 10:00 on 8 October 2026 in Manila. */
@@ -26,7 +26,7 @@ test.describe('a Full view leader’s # of People', () => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSignedIn(page);
     const asked = await mockBranchPeople(page);
-    await page.goto('/people/number-of-people');
+    await page.goto('/reports/number-of-people');
 
     await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Number of People' }).locator('dl')).toHaveText(
@@ -43,7 +43,13 @@ test.describe('a Full view leader’s # of People', () => {
     ]);
     expect(asked[0]).toMatchObject({ period: '2026-10-01' });
 
-    const tabs = page.getByRole('navigation', { name: 'People' });
+    const tabs = page.getByRole('navigation', { name: 'Which report' });
+    await expect(tabs.getByRole('link')).toHaveText([
+      'CG Attendance Reports',
+      'DCC Attendance Reports',
+      'SUYNL Reports',
+      '# of People',
+    ]);
     await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of People');
   });
 
@@ -51,14 +57,14 @@ test.describe('a Full view leader’s # of People', () => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSignedIn(page);
     const asked = await mockBranchPeople(page);
-    await page.goto('/people/number-of-people');
+    await page.goto('/reports/number-of-people');
 
     await table(page).getByRole('link', { name: 'Consuelo Bautista' }).click();
     await expect(page).toHaveURL(new RegExp(`[?&]leader=${CONSUELO}`));
     await expect.poll(() => asked.some((each) => each.leader === CONSUELO)).toBe(true);
     await expect(page.getByRole('link', { name: 'Back to your disciples' })).toHaveAttribute(
       'href',
-      '/people/number-of-people',
+      '/reports/number-of-people',
     );
   });
 
@@ -66,7 +72,7 @@ test.describe('a Full view leader’s # of People', () => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSignedIn(page);
     const asked = await mockBranchPeople(page);
-    await page.goto('/people/number-of-people');
+    await page.goto('/reports/number-of-people');
 
     await page.getByRole('button', { name: 'The period before' }).click();
     await expect.poll(() => asked.some((each) => each.period === '2026-09-01')).toBe(true);
@@ -79,10 +85,32 @@ test('the Admin’s # of People is the whole church, as the Senior Pastors read 
   await mockSignedIn(page);
   await mockAdministrator(page);
   await mockChurchCounts(page);
-  await page.goto('/people/number-of-people');
+  await page.goto('/reports/number-of-people');
 
   await expect(page.getByRole('heading', { name: 'Whole Church' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your Disciples' })).toHaveCount(0);
+});
+
+test('the old address under People forwards to Reports, keeping the month and leader', async ({ page }) => {
+  await page.clock.setFixedTime(OCTOBER_8);
+  await mockSignedIn(page);
+  await mockBranchPeople(page);
+  await page.goto(`/people/number-of-people?month=2026-09-01&leader=${CONSUELO}`);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/reports/number-of-people\\?month=2026-09-01&leader=${CONSUELO}$`),
+  );
+});
+
+test('People carries no # of People tab', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await page.goto('/people');
+
+  await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
+    'Add People',
+    'Family Tree',
+  ]);
 });
 
 test('a Recording-only account is offered no # of People', async ({ page }) => {

@@ -8,24 +8,37 @@ import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
-/** A whole-church reader's five (decision 0292; Filed Reports withdrawn, decision 0340). */
+/** The church's *# of People* tab, under Reports for every reader that has one (decision 0376). */
+const PEOPLE_TAB = {
+  key: 'number-of-people',
+  label: '# of People',
+  name: 'Number of people',
+  path: '/reports/number-of-people',
+} as const;
+
+/**
+ * A whole-church reader's six (decision 0292; Filed Reports withdrawn, decision 0340; *# of
+ * People* moved here from People, decision 0376).
+ */
 const TABS = [
   { key: 'cells', label: 'Cell Groups', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC', path: '/reports/dcc' },
   { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
   { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
+  PEOPLE_TAB,
 ] as const;
 
 /**
- * A Full view leader's three (decisions 0340 and 0360), each named a report (decision 0361), the
- * first two laid out as the Senior Pastors' are for the leader's own branch. Training and
- * Conquest are hidden, not withdrawn: their pages still open by address.
+ * A Full view leader's four (decisions 0340, 0360 and 0376), the first three each named a report
+ * (decision 0361), the first two laid out as the Senior Pastors' are for the leader's own
+ * branch. Training and Conquest are hidden, not withdrawn: their pages still open by address.
  */
 const BRANCH_TABS = [
   { key: 'cells', label: 'CG Attendance Reports', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC Attendance Reports', path: '/reports/dcc' },
   { key: 'suynl', label: 'SUYNL Reports', path: '/reports/suynl' },
+  PEOPLE_TAB,
 ] as const;
 
 /**
@@ -49,12 +62,7 @@ const SENIOR_PASTOR_TABS = [
     name: 'Number of Cell Leaders',
     path: '/reports/number-of-cell-leaders',
   },
-  {
-    key: 'number-of-people',
-    label: '# of People',
-    name: 'Number of people',
-    path: '/reports/number-of-people',
-  },
+  PEOPLE_TAB,
 ] as const;
 
 export type ReportTab =
@@ -107,8 +115,14 @@ export function ReportsTabs({
         <nav
           aria-label="Which report"
           className={cn(
-            // The five labels fit one row from a small screen up (owner, 2026-10-09).
-            branch ? 'mt-6 flex' : 'mt-6 grid grid-cols-2 sm:grid-cols-5',
+            // The five labels fit one row from a small screen up (owner, 2026-10-09); a
+            // whole-church reader's six take three a row on a phone. A Full view leader's four sit
+            // two by two on a phone, equal, and from `sm` in one row sized to their words.
+            branch
+              ? 'mt-6 grid grid-cols-2 sm:flex'
+              : tabs.length === 6
+                ? 'mt-6 grid grid-cols-3 sm:grid-cols-6'
+                : 'mt-6 grid grid-cols-2 sm:grid-cols-5',
             TAB_ROW,
           )}
         >

@@ -24,6 +24,7 @@ import {
   mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
+import { mockBranchPeople, mockChurchCounts } from './mock-senior-pastor';
 
 /**
  * What the Reports screens do, as opposed to what they look like (UI-6a).
@@ -64,8 +65,9 @@ async function expectReadOnly(page: Page) {
 }
 
 /**
- * A whole-church reader's five tabs, in order, and the address each opens (SKILL.md section
- * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340).
+ * A whole-church reader's six tabs, in order, and the address each opens (SKILL.md section
+ * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340), and # of
+ * People came from People (decision 0376). A `#` label keeps its words as the link's name.
  */
 const TABS = [
   { label: 'Cell Groups', path: '/reports/cells', dated: true },
@@ -73,16 +75,18 @@ const TABS = [
   { label: 'SUYNL', path: '/reports/suynl', dated: false },
   { label: 'Training', path: '/reports/training', dated: false },
   { label: 'Conquest', path: '/reports/conquest', dated: false },
+  { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
 ] as const;
 
 /**
- * A Full view leader's three (decisions 0340 and 0360): the shared account, which reads reports
- * over one Network. No Training or Conquest, and each named a report (decision 0361).
+ * A Full view leader's four (decisions 0340, 0360 and 0376): the shared account, which reads
+ * reports over one Network. No Training or Conquest, and the first three named a report (decision 0361).
  */
 const BRANCH_TABS = [
   { label: 'CG Attendance Reports', path: '/reports/cells', dated: true },
   { label: 'DCC Attendance Reports', path: '/reports/dcc', dated: true },
   { label: 'SUYNL Reports', path: '/reports/suynl', dated: false },
+  { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
 ] as const;
 
 /** Each reader, with the tabs they are shown. */
@@ -107,6 +111,8 @@ async function mockEveryReport(page: Page, { church = false }: { church?: boolea
   await mockEncounterSeasons(page);
   await mockTraining(page);
   await mockConquest(page);
+  await mockChurchCounts(page);
+  await mockBranchPeople(page);
 }
 
 test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
@@ -145,7 +151,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await page.goto('/reports/cells');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link')).toHaveCount(3);
+    await expect(which.getByRole('link')).toHaveCount(4);
     for (const name of ['Training', 'Conquest']) {
       await expect(which.getByRole('link', { name })).toHaveCount(0);
     }
@@ -185,7 +191,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link')).toHaveCount(BRANCH_TABS.length);
     for (const tab of BRANCH_TABS) {
-      await expect(which.getByRole('link', { name: tab.label, exact: true })).toHaveAttribute(
+      await expect(which.getByRole('link', { name: 'name' in tab ? tab.name : tab.label, exact: true })).toHaveAttribute(
         'href',
         tab.dated ? `${tab.path}?month=2026-05-01` : tab.path,
       );
@@ -206,7 +212,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link')).toHaveCount(TABS.length);
     for (const tab of TABS) {
-      await expect(which.getByRole('link', { name: tab.label, exact: true })).toHaveAttribute(
+      await expect(which.getByRole('link', { name: 'name' in tab ? tab.name : tab.label, exact: true })).toHaveAttribute(
         'href',
         tab.dated ? `${tab.path}?month=2026-05-01` : tab.path,
       );
@@ -724,19 +730,20 @@ test.describe('a Full view leader’s report controls', () => {
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
-   * A whole-church reader's five (decision 0292): equal, two across on a phone and one row from
-   * `sm`. A Full view leader's three (decision 0361): sized to their words, one row everywhere,
+   * A whole-church reader's six (decisions 0292 and 0376): equal, three across on a phone and one
+   * row from `sm`. A Full view leader's four (decisions 0361 and 0376): sized to their words, one row everywhere,
    * a label wrapping inside its tab on a phone.
    */
   const LAYOUTS = [
-    { width: 320, height: 640, columns: { five: 2, three: 3 }, rows: { five: 3, three: 1 } },
-    { width: 375, height: 812, columns: { five: 2, three: 3 }, rows: { five: 3, three: 1 } },
-    { width: 768, height: 1024, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
-    { width: 1280, height: 800, columns: { five: 5, three: 3 }, rows: { five: 1, three: 1 } },
+    // On a phone a Full view leader's four sit two by two, equal.
+    { width: 320, height: 640, columns: { six: 3, four: 2 }, rows: { six: 2, four: 2 } },
+    { width: 375, height: 812, columns: { six: 3, four: 2 }, rows: { six: 2, four: 2 } },
+    { width: 768, height: 1024, columns: { six: 6, four: 4 }, rows: { six: 1, four: 1 } },
+    { width: 1280, height: 800, columns: { six: 6, four: 4 }, rows: { six: 1, four: 1 } },
   ] as const;
 
   for (const { reader, church, tabs } of READERS) {
-    const count = tabs.length === 5 ? 'five' : 'three';
+    const count = tabs.length === 6 ? 'six' : 'four';
     for (const layout of LAYOUTS) {
       test(`for ${reader}, at ${layout.width}px the ${count} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
         page,
@@ -779,14 +786,16 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
           }
           const widths = boxes.map((box) => box.width);
-          if (count === 'five') {
+          if (count === 'six') {
             // Equal buttons: every tab as wide as the others, within a pixel.
             expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
           } else {
             // Sized to their words, from the left (decision 0361): SUYNL Reports is the narrowest,
             // and from `sm` the row leaves room after the last tab. On a phone the labels wrap
             // and the three fill the row without passing its edge.
-            expect(widths[2], `${tab.path}: SUYNL Reports is stretched`).toBeLessThan(widths[0]);
+            if (layout.width >= 640) {
+              expect(widths[2], `${tab.path}: SUYNL Reports is stretched`).toBeLessThan(widths[0]);
+            }
             const row = await which.evaluate((nav) => nav.getBoundingClientRect().right);
             const last = boxes[boxes.length - 1];
             if (layout.width >= 640) {

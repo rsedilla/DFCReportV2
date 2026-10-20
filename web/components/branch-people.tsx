@@ -16,7 +16,7 @@ import { getBranchPeople } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
- * A Full view leader's *# of People* under People (decision 0364): the Senior Pastors' figure
+ * A Full view leader's *# of People*, under Reports (decisions 0364 and 0376): the Senior Pastors' figure
  * one level down, for the reader's own branch or a leader beneath them.
  *
  * **A month at a time**, counted as theirs is: a month that has ended on its last day, the
@@ -74,7 +74,7 @@ export function BranchPeoplePanel({
 
       {leader !== null ? (
         <p className="mt-4 text-sm">
-          <TextLink href={month === current ? '/people/number-of-people' : `/people/number-of-people?month=${month}`}>
+          <TextLink href={month === current ? '/reports/number-of-people' : `/reports/number-of-people?month=${month}`}>
             Back to your disciples
           </TextLink>
         </p>
@@ -122,8 +122,8 @@ export function BranchPeoplePanel({
                         <Link
                           href={
                             month === current
-                              ? `/people/number-of-people?leader=${row.leader.id}`
-                              : `/people/number-of-people?month=${month}&leader=${row.leader.id}`
+                              ? `/reports/number-of-people?leader=${row.leader.id}`
+                              : `/reports/number-of-people?month=${month}&leader=${row.leader.id}`
                           }
                           className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                         >

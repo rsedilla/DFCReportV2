@@ -996,10 +996,10 @@ const SCANS = [
     },
   },
   {
-    // # of People under People (decision 0364): the month control, the box, a named row, an
-    // unnamed one, the reader's own row and the total.
+    // # of People under Reports (decisions 0364 and 0376): the month control, the box, a named
+    // row, an unnamed one, the reader's own row and the total.
     name: 'number of people',
-    route: '/people/number-of-people',
+    route: '/reports/number-of-people',
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
       await mockSignedIn(page);
@@ -1007,6 +1007,21 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
+    },
+  },
+  {
+    // The address # of People had under People (decision 0364) forwards to Reports (decision
+    // 0376); scanned where it lands.
+    name: 'number of people, old address',
+    route: '/people/number-of-people',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockBranchPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page).toHaveURL(/\/reports\/number-of-people$/);
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
@@ -1786,13 +1801,13 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
-    // The three People tabs, the month's two arrows, and the two named rows: **seven**.
+    // The four Reports tabs, the month's two arrows, and the two named rows: **eight**.
     // Settled on the last name, which renders from the data.
     name: 'number of people',
-    route: '/people/number-of-people',
+    route: '/reports/number-of-people',
     settleRole: 'link' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 7,
+    minimum: 8,
   },
   {
     // The three People tabs, the open and closed disclosure buttons, each name link and Show
@@ -1965,6 +1980,12 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'number of people, old address',
+    why:
+      'Forwards to /reports/number-of-people, measured as "number of people"; it renders nothing ' +
+      'of its own.',
+  },
   {
     name: 'person profile, correcting sex',
     why:
@@ -2626,13 +2647,13 @@ test('only the most specific navigation entry is marked as the current page', as
 
   await page.goto('/people');
 
-  // # of People is a tab of People (decision 0364): the tab is followed, and People stays the
-  // one current entry of the main navigation while the tab marks # of People.
+  // Family Tree is a tab of People (decision 0341): the tab is followed, and People stays the
+  // one current entry of the main navigation while the tab marks Family Tree.
   const navigation = page.getByRole('navigation', { name: 'Main' });
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await tabs.getByRole('link', { name: 'Number of People', exact: true }).click();
+  await tabs.getByRole('link', { name: 'Family Tree', exact: true }).click();
 
-  await expect(page).toHaveURL(/\/people\/number-of-people$/);
+  await expect(page).toHaveURL(/\/family-tree$/);
 
   const current = navigation.locator('a[aria-current="page"]');
 
@@ -2640,32 +2661,28 @@ test('only the most specific navigation entry is marked as the current page', as
     1,
   );
   await expect(current).toHaveText('People');
-  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of People');
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Family Tree');
 });
 
 /**
- * People carries People and # of People in Branch's place (decision 0364), each marked on its
- * own screen, and on Full view screens Family Tree (decision 0341).
+ * People carries People and, on Full view screens, Family Tree (decision 0341), each marked on
+ * its own screen. # of People is under Reports (decision 0376).
  */
-test('the People item carries People, # of People and Family Tree tabs', async ({ page }) => {
+test('the People item carries People and Family Tree tabs', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['Add People', '# of People', 'Family Tree']);
+  await expect(tabs.getByRole('link')).toHaveText(['Add People', 'Family Tree']);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
-  // The `#` label keeps its words as the link's name (section 23).
-  await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveAttribute(
-    'href',
-    '/people/number-of-people',
-  );
+  await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveCount(0);
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
 
   await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toBeFocused();
+  await expect(tabs.getByRole('link', { name: 'Family Tree', exact: true })).toBeFocused();
 });
 
 /**

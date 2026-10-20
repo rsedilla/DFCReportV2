@@ -229,7 +229,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
   });
 
-  test('a Full view account’s People carries # of People in Branch’s place (decision 0364)', async ({ page }) => {
+  test('a Full view account’s People carries Add People and Family Tree, # of People being under Reports (decision 0376)', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
 
@@ -237,7 +237,6 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
       'Add People',
-      '# of People',
       'Family Tree',
     ]);
   });
