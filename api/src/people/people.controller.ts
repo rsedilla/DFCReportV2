@@ -533,7 +533,13 @@ export class PeopleController {
       inView(person.id)
         ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
           // People list's leader column (decision 0259).
-          { ...fullProfile(person), direct_leader_name: leaderNames.get(person.id) ?? null }
+          // A list row's name has the middle name's initial (decision 0375); the person's own
+          // record, `GET /people/{id}`, keeps it whole.
+          {
+            ...fullProfile(person),
+            full_name: composeName(person),
+            direct_leader_name: leaderNames.get(person.id) ?? null,
+          }
         : this.read.identityOnly(
             person,
             networks.get(person.id) ?? null,

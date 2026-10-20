@@ -697,6 +697,8 @@ export interface RosterMember {
   member_id: string;
   first_name: string;
   last_name: string;
+  /** The name as a list shows it, with the middle name's initial (decision 0375). */
+  full_name: string;
   /**
    * The live mark, or `null` for a member nobody has marked.
    *

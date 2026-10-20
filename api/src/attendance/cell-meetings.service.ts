@@ -1064,6 +1064,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         member_id: member.memberId,
         first_name: member.firstName,
         last_name: member.lastName,
+        // The name as a list shows it, with the middle name's initial (decision 0375).
+        full_name: member.fullName,
         // **`present` alone, and no per-person version.** Decision 0164 has a Cell
         // submission carry *the meeting's* version and decision 0190 states that
         // `cell_attendance.version` "orders one person's chain and is not compared" — so

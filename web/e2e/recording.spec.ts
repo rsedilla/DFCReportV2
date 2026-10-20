@@ -208,6 +208,7 @@ test.describe('who ran a Cell meeting', () => {
               member_id: 'M-000701',
               first_name: 'Rosalinda',
               last_name: 'Ocampo',
+              full_name: 'Rosalinda Ocampo',
               record: null,
             },
           ],

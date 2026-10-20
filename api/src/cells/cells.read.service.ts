@@ -16,7 +16,7 @@ import type {
 import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
-import { ACCENTED, UNACCENTED, escapeLike } from '../people/people.shared';
+import { ACCENTED, UNACCENTED, composeName, escapeLike } from '../people/people.shared';
 import { normalizeName } from '../people/duplicate-matching';
 
 /**
@@ -423,14 +423,18 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     executor: Db | Transaction<Database>,
     cellId: string,
     on: string,
-  ): Promise<{ personId: string; memberId: string; firstName: string; lastName: string }[]> {
+  ): Promise<
+    { personId: string; memberId: string; firstName: string; lastName: string; fullName: string }[]
+  > {
     const rows = await executor
       .selectFrom('cell_memberships')
       .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
       .select([
         'cell_memberships.person_id as person_id',
         'persons.member_id as member_id',
+        'persons.title as title',
         'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
         'persons.last_name as last_name',
       ])
       .where('cell_memberships.cell_id', '=', cellId)
@@ -452,6 +456,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       memberId: row.member_id,
       firstName: row.first_name,
       lastName: row.last_name,
+      // As a list shows it, the middle name's initial (decision 0375).
+      fullName: composeName(row),
     }));
   }
 
@@ -709,9 +715,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     return rows.map((row) => ({
       person_id: row.person_id,
       member_id: row.member_id,
-      full_name: [row.title, row.first_name, row.middle_name, row.last_name]
-        .filter((part): part is string => part !== null && part !== '')
-        .join(' '),
+      // The middle name's initial, as every list shows a name (decision 0375).
+      full_name: composeName(row),
       last_name: row.last_name,
       first_name: row.first_name,
       started_at: row.started_at,

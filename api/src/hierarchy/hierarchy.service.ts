@@ -1640,7 +1640,8 @@ export class HierarchyService {
  * that one and as `fullNameOf` in the matcher -- a whitespace-only middle name
  * counts as absent -- and the three are kept in step by review rather than by the
  * compiler, which is the accepted cost of not creating that edge. The matcher's
- * copy takes no title, which is the point of it (decision 0271).
+ * copy takes no title, which is the point of it (decision 0271). Since decision 0375 this
+ * one, like `composeName`, gives the middle name's initial, and the matcher's keeps it whole.
  */
 function composeName(row: {
   title: string | null;
@@ -1648,7 +1649,11 @@ function composeName(row: {
   middle_name: string | null;
   last_name: string;
 }): string {
-  return [row.title, row.first_name, row.middle_name, row.last_name]
+  // The middle name's initial, as `people.shared.ts`'s `middleInitial` gives it (decision 0375).
+  const middle = Array.from(row.middle_name?.trim() ?? '')[0];
+  const initial = middle === undefined ? null : `${middle.toLocaleUpperCase()}.`;
+
+  return [row.title, row.first_name, initial, row.last_name]
     .filter((part): part is string => part !== null && part.trim() !== '')
     .join(' ');
 }

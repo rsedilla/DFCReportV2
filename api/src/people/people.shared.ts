@@ -123,7 +123,8 @@ export function fullProfile(person: PersonRecord): Record<string, unknown> {
     first_name: person.first_name,
     middle_name: person.middle_name,
     last_name: person.last_name,
-    full_name: composeName(person),
+    // The middle name whole on the person's own record (decision 0375).
+    full_name: composeFullName(person),
     // Section 3: age is derived, never persisted as authoritative data. It is not
     // returned at all — a client that needs it computes it from the birthday,
     // which is the one value that cannot go stale.
@@ -136,10 +137,34 @@ export function fullProfile(person: PersonRecord): Record<string, unknown> {
 }
 
 /**
- * The name as displayed, a title first where there is one (decision 0271). Display
- * only: duplicate matching and search compose from the name fields alone.
+ * The name as a list, a table or a picker shows it: a title first where there is one
+ * (decision 0271), then the first name, **the middle name's initial** and the last name
+ * (decision 0375), so `Juan Santos Dela Cruz` reads `Juan S. Dela Cruz`. Display only:
+ * duplicate matching and search compose from the name fields alone, and the person's own
+ * record keeps the middle name whole ({@link composeFullName}).
  */
 export function composeName(person: {
+  title?: string | null;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+}): string {
+  return [
+    person.title ?? null,
+    person.first_name,
+    middleInitial(person.middle_name),
+    person.last_name,
+  ]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
+}
+
+/**
+ * The name with the middle name whole, for the person's own record (decision 0375): where
+ * somebody looks at one person, the middle name, often the mother's surname, is what tells
+ * two people of one name apart.
+ */
+export function composeFullName(person: {
   title?: string | null;
   first_name: string;
   middle_name: string | null;
@@ -148,6 +173,18 @@ export function composeName(person: {
   return [person.title ?? null, person.first_name, person.middle_name, person.last_name]
     .filter((part): part is string => part !== null && part.trim() !== '')
     .join(' ');
+}
+
+/**
+ * A middle name as its initial and a full stop (decision 0375): `Santos` and `dela Cruz`
+ * both give one letter, raised, and a middle name already entered as `S.` stays `S.`.
+ * Null where there is none. The first character rather than the first UTF-16 unit, so a
+ * name beginning outside the basic plane is not split.
+ */
+export function middleInitial(middleName: string | null | undefined): string | null {
+  const first = Array.from(middleName?.trim() ?? '')[0];
+
+  return first === undefined ? null : `${first.toLocaleUpperCase()}.`;
 }
 
 export interface PersonRecord {
