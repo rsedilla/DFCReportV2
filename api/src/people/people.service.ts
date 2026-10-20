@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization/authorization.service';
+import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import { DuplicateAcknowledgementRequiredError, NotFoundError } from '../common/errors/api-error';
@@ -54,6 +56,7 @@ export class PeopleService {
     private readonly networks: NetworksService,
     private readonly idempotency: IdempotencyService,
     private readonly duplicates: PeopleDuplicatesService,
+    private readonly authorization: AuthorizationService,
   ) {}
 
   /**
@@ -119,6 +122,12 @@ export class PeopleService {
      */
     canSeeReasons: (personId: string) => Promise<boolean>,
   ): Promise<Record<string, unknown>> {
+    // **Only the Admin gives a title** (decision 0374): `people.set_title`, at Whole Church.
+    // A blank one is no title, so a form that sends an empty box is not refused.
+    if (input.title?.trim()) {
+      await this.authorization.assertHolds(actor, Capability.PeopleSetTitle);
+    }
+
     const network = this.networks.networkForSex(input.sex);
 
     // Section 3: never merges automatically, never blocks creation. A Tier 1
@@ -311,8 +320,9 @@ export class PeopleService {
   /**
    * Corrections to a person's own descriptive fields, and nothing else.
    *
-   * Section 7 is explicit about the boundary: `people.edit_basic` covers title, first,
-   * middle and last name, birthday, civil status and mobile number. **Not sex** —
+   * Section 7 is explicit about the boundary: `people.edit_basic` covers first,
+   * middle and last name, birthday, civil status and mobile number; a title also needs
+   * `people.set_title` (decision 0374). **Not sex** —
    * that determines Network, which determines which pastoral edges are legal, so
    * it has its own capability and its own audited path (section 4).
    */
@@ -327,7 +337,7 @@ export class PeopleService {
       civilStatus?: CivilStatus;
       mobileNumber?: string | null;
     },
-    actor: { accountId: string },
+    actor: { accountId: string; personId: string },
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
@@ -350,16 +360,31 @@ export class PeopleService {
           'mobile_number',
         ])
         .where('id', '=', personId)
+        // **Locked**, so `before` is the value immediately prior to this write: without it, an
+        // edit waiting on a concurrent one's row lock records that one's change as its own, and
+        // decision 0374's title check would read a title that changes underneath it.
+        .forNoKeyUpdate()
         .executeTakeFirst();
 
       if (before === undefined) {
         throw new NotFoundError('No such person.');
       }
 
+      // **Only the Admin sets, changes or clears a title** (decision 0374). Refused only where
+      // the title would change, so a form that sends back the one already recorded, as a page
+      // opened before the change still does, is not refused for it. **An unchanged title is
+      // then not written at all**: written back, it would undo a title the Admin changed after
+      // `before` was read, by an actor who may not set one.
+      const title = changes.title === undefined ? undefined : changes.title?.trim() || null;
+      const titleChanges = title !== undefined && title !== before.title;
+      if (titleChanges) {
+        await this.authorization.assertHolds(actor, Capability.PeopleSetTitle);
+      }
+
       const person = await trx
         .updateTable('persons')
         .set({
-          ...(changes.title === undefined ? {} : { title: changes.title?.trim() || null }),
+          ...(titleChanges ? { title } : {}),
           ...(changes.firstName === undefined ? {} : { first_name: changes.firstName.trim() }),
           ...(changes.middleName === undefined
             ? {}

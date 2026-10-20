@@ -45,8 +45,10 @@ export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = new Set([
   // behaviour for the whole church from one control; provisioning an account and
   // the role that qualifies it; archiving, which reduces a leader's own People
   // count and is the incentive section 3 guards against; and approving a Cell,
-  // which mints a Cell Leader and provisions their credentials.
+  // which mints a Cell Leader and provisions their credentials. A title is the church's
+  // recognition of an office, the same for a person wherever they sit (decision 0374).
   Capability.PeopleCorrectSex,
+  Capability.PeopleSetTitle,
   Capability.PeopleManageLifecycle,
   Capability.PeopleMerge,
   Capability.RecordsBackdateEffectiveDate,

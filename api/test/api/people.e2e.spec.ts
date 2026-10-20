@@ -414,7 +414,8 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
   describe('a title (SKILL.md section 3, decision 0271)', () => {
     it('is shown before the name and never matched as part of it', async () => {
-      const titled = await post(raymondAccount, randomUUID()).send(
+      // Only the Admin gives one (decision 0374).
+      const titled = await post(adminAccount, randomUUID()).send(
         personBody({
           pastoral_leader_id: manuel.id,
           title: 'Pastor',
@@ -446,6 +447,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
 
     it('stores a blank title as none, and an edit sets and clears one', async () => {
+      // A blank box is no title, so a leader's form that sends one is not refused.
       const created = await post(raymondAccount, randomUUID()).send(
         personBody({ pastoral_leader_id: manuel.id, title: '   ', first_name: 'Ramon' }),
       );
@@ -455,7 +457,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const edit = (body: Record<string, unknown>) =>
         request(app.getHttpServer())
           .patch(`/api/v1/people/${created.body.id}`)
-          .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+          .set('Authorization', `Bearer ${adminAccount.accessToken}`)
           .set('Idempotency-Key', randomUUID())
           .send(body);
 
@@ -467,6 +469,115 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(cleared.status).toBe(200);
       expect(cleared.body.title).toBeNull();
       expect(cleared.body.full_name).toMatch(/^Ramon /);
+    });
+
+    describe('is given by the Admin alone (decision 0374)', () => {
+      const editAs = (account: TestAccount, id: string, body: Record<string, unknown>) =>
+        request(app.getHttpServer())
+          .patch(`/api/v1/people/${id}`)
+          .set('Authorization', `Bearer ${account.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body);
+
+      it('refuses a leader adding a person with a title, and adds nobody', async () => {
+        const refused = await post(raymondAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, title: 'Pastor', first_name: 'Nilo' }),
+        );
+
+        expect(refused.status).toBe(403);
+        expect(refused.body.error.code).toBe('CAPABILITY_DENIED');
+        expect(refused.body.error.details.capability).toBe('people.set_title');
+        const nilo = await db
+          .selectFrom('persons')
+          .select('id')
+          .where('first_name', '=', 'Nilo')
+          .execute();
+        expect(nilo).toEqual([]);
+      });
+
+      it('refuses a leader setting, changing or clearing a title, and changes nothing', async () => {
+        const created = await post(adminAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, title: 'Pastor', first_name: 'Teofilo' }),
+        );
+        expect(created.status).toBe(201);
+
+        for (const title of ['Bishop', null]) {
+          const refused = await editAs(raymondAccount, created.body.id, {
+            title,
+            first_name: 'Teo',
+          });
+          expect(refused.status).toBe(403);
+          expect(refused.body.error.code).toBe('CAPABILITY_DENIED');
+        }
+
+        const stored = await db
+          .selectFrom('persons')
+          .select(['title', 'first_name'])
+          .where('id', '=', created.body.id)
+          .executeTakeFirstOrThrow();
+        expect(stored).toEqual({ title: 'Pastor', first_name: 'Teofilo' });
+      });
+
+      it('lets a leader edit the rest, keeping a title sent back unchanged or not sent', async () => {
+        const created = await post(adminAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, title: 'Pastor', first_name: 'Arnel' }),
+        );
+        expect(created.status).toBe(201);
+
+        // A page opened before the change still sends the title it was given.
+        const same = await editAs(raymondAccount, created.body.id, {
+          title: ' Pastor ',
+          first_name: 'Arnold',
+        });
+        expect(same.status).toBe(200);
+        expect(same.body.title).toBe('Pastor');
+
+        const without = await editAs(raymondAccount, created.body.id, { first_name: 'Arnie' });
+        expect(without.status).toBe(200);
+        expect(without.body.title).toBe('Pastor');
+        expect(without.body.full_name).toBe('Pastor Arnie Newcomer');
+      });
+      it('cannot undo the Admin changing a title meanwhile, nor be recorded as having changed it', async () => {
+        const created = await post(adminAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, title: 'Pastor', first_name: 'Celso' }),
+        );
+        expect(created.status).toBe(201);
+
+        // The Admin's change to the title, uncommitted, holds the row. The leader's edit, sending
+        // back the title its page was given, waits on the row, then reads the Admin's title.
+        let leaderEdit: Promise<request.Response> | undefined;
+        await db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('persons')
+            .set({ title: 'Bishop' })
+            .where('id', '=', created.body.id)
+            .execute();
+          leaderEdit = editAs(raymondAccount, created.body.id, {
+            title: 'Pastor',
+            first_name: 'Celestino',
+          }).then((response) => response);
+          await new Promise((resolve) => setTimeout(resolve, 750));
+        });
+
+        // Its title now differs from the one recorded, which a leader may not set: refused, and
+        // nothing written, rather than the Admin's title undone or the change put in its name.
+        const answered = await leaderEdit!;
+        expect(answered.status).toBe(403);
+        expect(answered.body.error.code).toBe('CAPABILITY_DENIED');
+        const stored = await db
+          .selectFrom('persons')
+          .select(['title', 'first_name'])
+          .where('id', '=', created.body.id)
+          .executeTakeFirstOrThrow();
+        expect(stored).toEqual({ title: 'Bishop', first_name: 'Celso' });
+        const leaderEntries = await db
+          .selectFrom('audit_log')
+          .select('id')
+          .where('target_id', '=', created.body.id)
+          .where('actor_id', '=', raymondAccount.id)
+          .execute();
+        expect(leaderEntries).toEqual([]);
+      });
     });
 
     it('is refused blank by the database, not only by the service', async () => {

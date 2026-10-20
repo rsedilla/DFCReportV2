@@ -42,6 +42,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     LEADER: null,
   },
   'people.correct_sex': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  'people.set_title': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'dcc.take_attendance': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',

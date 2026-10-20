@@ -418,7 +418,7 @@ Validation must support legitimate names containing spaces, hyphens, apostrophes
 
 **The four are a closed list.** A qualification that is not one of them — a degree, a profession, an honorific, a church title — is not a suffix and is not stored in a name field, because anything put there is compared as though it were part of the person's name.
 
-**A title has a field of its own, `title`, shown before the name and never compared** (ruling of 2026-09-22, decision 0271). Bishop, Pastora and the like. It is optional, and blank is stored as absent. Duplicate matching and search read the name fields alone, so `Pastora Lina Ocampo` and `Lina Ocampo` are the same person to the matcher. It holds the current title only and is not effective-dated: it is for display, and no report counts it.
+**A title has a field of its own, `title`, shown before the name and never compared** (ruling of 2026-09-22, decision 0271). Bishop, Pastora and the like. It is optional, and blank is stored as absent. Duplicate matching and search read the name fields alone, so `Pastora Lina Ocampo` and `Lina Ocampo` are the same person to the matcher. It holds the current title only and is not effective-dated: it is for display, and no report counts it. **Only the Admin gives, changes or clears a title** (ruling of 2026-10-20, decision 0374), under `people.set_title` (Section 7): Add a Person and Edit details show the Title box to that holder alone, and the server refuses a title from anyone else. A title already recorded stays, is shown before the name, and is left as it is by an edit that sends it back unchanged or does not send it.
 
 ### Duplicate prevention
 
@@ -1645,6 +1645,7 @@ The capabilities are exactly:
 - `people.manage_lifecycle`
 - `people.manage_pastoral_assignment`
 - `people.correct_sex`
+- `people.set_title`
 - `dcc.take_attendance`
 - `dcc.view_subtree`
 - `dcc.submit_on_behalf`
@@ -1700,7 +1701,7 @@ Admins may have system-wide operational permissions even if they are not pastora
 
 ### Scope of `people.edit_basic`
 
-`people.edit_basic` covers corrections to a person's own descriptive fields only: title, first name, middle name, last name, birthday, civil status, and mobile number.
+`people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, civil status, and mobile number. A title is given, changed or cleared under `people.set_title` instead (ruling of 2026-10-20, decision 0374); an edit that sends back the title already recorded, or sends none, needs `people.edit_basic` alone.
 
 It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability — sex and the Network change it forces by `people.correct_sex`.
 
@@ -1718,6 +1719,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `people.manage_lifecycle` | — | Whole Church | — |
 | `people.manage_pastoral_assignment` | Whole Church | Whole Church | own/subtree, with Moves people and Full view |
 | `people.correct_sex` | — | Whole Church | — |
+| `people.set_title` | — | Whole Church | — |
 | `dcc.take_attendance` | Whole Church | Whole Church | own/subtree |
 | `dcc.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `dcc.submit_on_behalf` | — | Whole Church | — |
@@ -1750,7 +1752,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `training.confirm` | — | Whole Church | own/subtree, with Full view |
 | `training.confirm_on_behalf` | — | Whole Church | own/subtree, with Full view |
 
-Seven of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
+Eight of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
 **Senior Pastors do not hold `roles.manage` or `accounts.manage`.** Granting permissions and administering accounts is Admin's operational responsibility; Senior Pastor and Admin are different responsibilities even where their visibility overlaps (Section 19). Keeping grant-making out of the Senior Pastor role means the two highest-visibility accounts in the church cannot escalate their own authority, and every permission change has a second party involved.
 
@@ -1759,6 +1761,8 @@ Seven of these defaults are deliberate and must not be widened for convenience. 
 **Senior Pastors do not hold `people.merge`.** Section 3 places it at Whole Church scope as an Admin capability. A merge is irreversible, crosses both Networks, and can lower totals for periods already reported, so it stays with the role whose job is data correction.
 
 **`people.correct_sex` is Admin-only, and Senior Pastors do not hold it.** Correcting a person's sex moves them between Networks, which can change totals for periods that have already been reported — the same property that keeps `people.merge` and `records.backdate_effective_date` with the role whose job is data correction. It also forces the pastoral reassignment in Section 4, so granting it to a leader would be a route to moving people between Networks without ever invoking `people.manage_pastoral_assignment`.
+
+**`people.set_title` is Admin-only, and neither the Senior Pastors nor a Leader hold it** (ruling of 2026-10-20, decision 0374). A title is the church's recognition of an office, the same for a person whoever encodes them, so it is given by the Admin rather than by the leader adding or editing them. It exists at Whole Church and at no narrower scope (below).
 
 **Leaders and Senior Pastors do not hold `dcc.submit_on_behalf`, `cell.submit_on_behalf` or `suynl.confirm_on_behalf`** (ruling of 2026-10-07, decision 0322). Reporting is done on the ground: each Leader records and corrects only the records they owe (Section 14), and the leaders above see whether it is done. Only Admin steps in.
 
@@ -1954,9 +1958,9 @@ It is self-perpetuating, which is why it is a constraint rather than a caution: 
 
 **`roles.manage` and `accounts.manage` are never held by an account holding `SENIOR_PASTOR`, by role or by explicit grant.** A grant of either against such an account is rejected, and so is a `SENIOR_PASTOR` row on an account already carrying one. An endpoint that issues a grant or a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error. No endpoint issues a capability grant at all today, and the one that issues a role does so only on an account created in the same transaction, which can carry no grants — so this is the contract the first endpoint to reach it owes.
 
-**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` is withheld by the table and argued nowhere above, and so is `cell.approve_leadership`, which a Leader account holds over its own branch only when an administrator ticks *Approves Cells* (decision 0352).
+**The stopping point is two rather than everything this section withholds, and what it withholds is not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the rest and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` is withheld by the table and argued nowhere above, and so is `cell.approve_leadership`, which a Leader account holds over its own branch only when an administrator ticks *Approves Cells* (decision 0352). `people.set_title` is withheld because a title is the Admin's to give (decision 0374), and each use of it is likewise a single audited edit.
 
-So the other five remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
+So the others remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
 
 **Enforced in both directions, and in two places.** The rule spans `account_roles` and `capability_grants`, so no index reaches it and the database half is a pair of constraint triggers: enforcing on grants alone would be walkable from the other side — grant first, add the role second — so whichever row arrives second is the one refused. Each path takes `FOR NO KEY UPDATE` on the account before it looks, because a deferred trigger sees only its own transaction's commit-time state and two concurrent transactions writing the role and the grant would otherwise each see nothing and both commit, which is the defect this section's own Senior Pastor cap was corrected for.
 
@@ -2037,7 +2041,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The thirty-seven divide cleanly:
+**`read_only` is valid only on a read capability.** The thirty-eight divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`, `conquest.view_subtree`, `suynl.view_subtree`, `training.view_subtree`
 - **Write:** every other capability in the list
@@ -2096,7 +2100,7 @@ also held narrower through *Approves Cells* (decision 0352), which is a role def
 tick selects and not a grant; an explicit grant of it narrower than Whole Church still
 covers nothing. `people.manage_pastoral_assignment` has had the same shape since *Moves people*
 (decision 0356), and whether an explicit grant of it narrower than Whole Church covers nothing,
-as this rule reads, is recorded as open in `CLAUDE.md` rather than settled by that reading, and `cell.move_members` has had it since decision 0357, under the same open question.
+as this rule reads, is recorded as open in `CLAUDE.md` rather than settled by that reading, and `cell.move_members` has had it since decision 0357, under the same open question. `people.set_title` has been Whole Church only since it was created (decision 0374).
 
 **`audit.view` is deliberately not among them**, and the two lines above say why:
 an audit entry resolves through its target, which is machinery with no purpose

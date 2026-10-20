@@ -18,7 +18,7 @@ import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { addCellMember, cellShortName, type CellSummary, membershipFailure } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -113,6 +113,8 @@ function NewPersonForm() {
   // is not offered. An administrator outside the pastoral structure is not offered at all,
   // which `CLAUDE.md` records as open. The picker still changes it.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  // **Only the Admin is shown the title and sends it** (decision 0374): `people.set_title`.
+  const mayTitle = holdsWholeChurch(me.data, 'people.set_title');
   const myPath = useQuery({
     queryKey: ['pastoral-path', me.data?.person_id],
     queryFn: ({ signal }) => getPastoralPath(me.data?.person_id ?? '', signal),
@@ -239,7 +241,7 @@ function NewPersonForm() {
     mutationFn: ({ acknowledgedIds, key }: { acknowledgedIds: string[]; key: string }) =>
       createPerson(
         {
-          title: values.title.trim() || null,
+          ...(mayTitle ? { title: values.title.trim() || null } : {}),
           first_name: values.first_name.trim(),
           middle_name: values.middle_name.trim() || null,
           last_name: values.last_name.trim(),
@@ -416,6 +418,7 @@ function NewPersonForm() {
           errors={fieldErrors}
           onChange={(key, value) => set(key, value)}
           note="Middle name is optional. A generational suffix such as Jr or III belongs with the last name."
+          showTitle={mayTitle}
         />
 
         {/*

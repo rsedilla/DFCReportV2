@@ -130,6 +130,8 @@ export async function mockAdministrator(page: Page): Promise<void> {
     ),
     wholeChurch('settings.manage'),
     wholeChurch('suynl.view_subtree'),
+    // A title is the Admin's alone to give (decision 0374).
+    wholeChurch('people.set_title'),
   ];
 
   await page.route('**/api/v1/auth/me', (route) =>
