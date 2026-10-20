@@ -1,21 +1,29 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { ReportsHeading, ReportsTabs, type ReportTab } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { CONTROL_BAR } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
-import { cn } from '@/lib/utils';
 import { rangeLabel } from '@/lib/report-range';
 import { getChurchCounts, getTrends, type TrendFigure, type Trends } from '@/lib/reports';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+
+/** Each figure's Reports tab (decision 0377). */
+const TAB_OF: Record<TrendFigure, ReportTab> = {
+  CG: 'cells',
+  DCC: 'dcc',
+  CELLS: 'number-of-cells',
+  CELL_LEADERS: 'number-of-cell-leaders',
+  PEOPLE: 'number-of-people',
+};
 
 /** The same five names as Reports (owner, 2026-10-09); a `#` label keeps its words as its name. */
 const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: string }[] = [
@@ -82,39 +90,11 @@ function TrendsScreen() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Trends</h1>
-        <p className="text-muted text-sm">The last 12 months, one point a month.</p>
-      </div>
+      <ReportsHeading line="The last 12 months, one point a month." />
 
-      {/* The same tabs and accented pane as Reports (owner, 2026-10-09), so the two read as one kind
-          of page. Links, as on Reports: each figure keeps an address of its own. */}
-      <nav aria-label="Which figure" className={cn('mt-6 grid grid-cols-2 sm:grid-cols-5', TAB_ROW)}>
-        {FIGURES.map((entry) => {
-          const active = entry.key === figure;
-          const query = new URLSearchParams({
-            ...(entry.key === 'CG' ? {} : { figure: entry.key }),
-            ...(leader ? { leader } : {}),
-          }).toString();
-
-          return (
-            <Link
-              key={entry.key}
-              href={query ? `/trends?${query}` : '/trends'}
-              aria-current={active ? 'page' : undefined}
-              aria-label={entry.name}
-              className={cn(
-                'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
-                active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
-              )}
-            >
-              {entry.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className={TAB_PANE}>
+      {/* The Senior Pastors' twelve months are a view of Reports (decision 0377): the same tabs,
+          and the switch back to By period above the controls. */}
+      <ReportsTabs current={TAB_OF[figure]} view="trend" leader={leader}>
         <div className={`mt-4 ${CONTROL_BAR}`}>
           <div>
             <label htmlFor="trends-show" className="field-label block">
@@ -157,7 +137,7 @@ function TrendsScreen() {
           singleTone={singleTone}
         />
         ) : null}
-      </div>
+      </ReportsTabs>
     </main>
   );
 }

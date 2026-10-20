@@ -2,10 +2,13 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
+import type { TrendFigure } from '@/lib/reports';
 import { cn } from '@/lib/utils';
 
 /** The church's *# of People* tab, under Reports for every reader that has one (decision 0376). */
@@ -69,6 +72,24 @@ export type ReportTab =
   | (typeof TABS)[number]['key']
   | (typeof SENIOR_PASTOR_TABS)[number]['key'];
 
+/** A Senior Pastor's tab as a figure of the twelve-month view (decision 0377). */
+const TREND_FIGURE: Record<(typeof SENIOR_PASTOR_TABS)[number]['key'], TrendFigure> = {
+  cells: 'CG',
+  dcc: 'DCC',
+  'number-of-cells': 'CELLS',
+  'number-of-cell-leaders': 'CELL_LEADERS',
+  'number-of-people': 'PEOPLE',
+};
+
+/** The address of one figure's twelve months, keeping the leader drawn. */
+export function trendHref(figure: TrendFigure, leader?: string | null): string {
+  const query = new URLSearchParams({
+    ...(figure === 'CG' ? {} : { figure }),
+    ...(leader ? { leader } : {}),
+  }).toString();
+  return query ? `/trends?${query}` : '/trends';
+}
+
 /**
  * Which report is on screen, and the way to the others (SKILL.md section 19; decision 0292).
  *
@@ -91,12 +112,22 @@ export type ReportTab =
 export function ReportsTabs({
   current,
   month,
+  view = 'period',
+  leader,
   children,
 }: {
   current: ReportTab;
   month?: string;
+  /**
+   * The Senior Pastors' two views of one figure (decision 0377): by period, or its last twelve
+   * months, the screen that was `Trends`. Only their screens offer the switch.
+   */
+  view?: 'period' | 'trend';
+  /** The leader a twelve-month view draws, kept from tab to tab. */
+  leader?: string | null;
   children: ReactNode;
 }) {
+  const router = useRouter();
   // Which tabs follow the screens the server names (decision 0323, point 5), never a role.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
@@ -128,6 +159,7 @@ export function ReportsTabs({
         >
           {tabs.map((tab) => {
             const active = tab.key === current;
+            const trend = seniorPastor && view === 'trend';
             const dated =
               tab.key === 'cells' ||
               tab.key === 'dcc' ||
@@ -138,7 +170,13 @@ export function ReportsTabs({
             return (
               <Link
                 key={tab.key}
-                href={month && dated ? `${tab.path}?month=${month}` : tab.path}
+                href={
+                  trend
+                    ? trendHref(TREND_FIGURE[tab.key as keyof typeof TREND_FIGURE], leader)
+                    : month && dated
+                      ? `${tab.path}?month=${month}`
+                      : tab.path
+                }
                 aria-current={active ? 'page' : undefined}
                 aria-label={tab.name}
                 className={
@@ -159,7 +197,26 @@ export function ReportsTabs({
           })}
         </nav>
       ) : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
+      <div className={tabbed ? TAB_PANE : 'mt-6'}>
+        {/* The Senior Pastors' figure by period or over its last twelve months, one tab row for
+            both (decision 0377), so the sidebar carries no second item for the same five. */}
+        {seniorPastor && current in TREND_FIGURE ? (
+          <ViewSwitch
+            label="Which view"
+            even="content"
+            options={[
+              { key: 'period', label: 'By period' },
+              { key: 'trend', label: 'Last 12 months' },
+            ]}
+            value={view}
+            onChange={(next) => {
+              const tab = SENIOR_PASTOR_TABS.find((each) => each.key === current)!;
+              router.push(next === 'trend' ? trendHref(TREND_FIGURE[tab.key]) : tab.path);
+            }}
+          />
+        ) : null}
+        {children}
+      </div>
     </>
   );
 }

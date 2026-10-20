@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   ChartColumn,
-  ChartLine,
   CircleUserRound,
   ClipboardCheck,
   LayoutGrid,
@@ -69,7 +68,8 @@ const REPORTS: NavEntry = {
   href: REPORTS_PATH,
   label: 'Reports',
   icon: ChartColumn,
-  matches: ['/reports'],
+  // The Senior Pastors' twelve months are a view of Reports (decision 0377), at `/trends`.
+  matches: ['/reports', '/trends'],
 };
 /** People, Network and Family Tree, one item with a tab each (decisions 0288 and 0341). */
 const PEOPLE: NavEntry = {
@@ -104,13 +104,6 @@ const SUYNL: NavEntry = {
   label: 'SUYNL',
   icon: Sprout,
   matches: ['/growth'],
-};
-/** The Senior Pastors' twelve months of one figure (decision 0326, point 4). */
-const TRENDS: NavEntry = {
-  href: '/trends',
-  label: 'Trends',
-  icon: ChartLine,
-  matches: ['/trends'],
 };
 const ACCOUNT: NavEntry = {
   href: '/session',
@@ -167,7 +160,7 @@ export const PAGE_WIDTH = {
  * scope and period that make it readable.
  *
  * **A Recording-only account has four items** (decisions 0323 and 0371): `Record · People ·
- * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have three**, `Record · Reports · Trends` (decision 0326).
+ * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have two**, `Record · Reports` (decisions 0326 and 0377), their twelve months being a view of Reports.
  * Every other account has the five. Where a person lands still follows the reach
  * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
@@ -196,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     : me.data?.screens === 'RECORDING'
       ? [RECORD, PEOPLE, MY_CELL, SUYNL]
       : me.data?.screens === 'SENIOR_PASTOR'
-        ? [RECORD, REPORTS, TRENDS]
+        ? [RECORD, REPORTS]
         : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
