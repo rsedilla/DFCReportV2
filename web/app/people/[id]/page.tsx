@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { CorrectSexDialog } from '@/components/correct-sex-dialog';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { PersonAccount } from '@/components/person-account';
@@ -130,6 +131,7 @@ function PersonDetail() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
+      <SectionFrame section="people">
       <p className="text-sm">
         <TextLink href="/people">Back to people</TextLink>
       </p>
@@ -149,7 +151,7 @@ function PersonDetail() {
         </div>
       ) : (
         <>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">{person.data.full_name}</h1>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight">{person.data.full_name}</h1>
           <p className="text-muted mt-1 text-sm">
             <span className="font-mono">{person.data.member_id}</span>
             {cells.data ? ` · ${cellLine(cells.data)}` : null}
@@ -273,6 +275,7 @@ function PersonDetail() {
           ) : null}
         </>
       )}
+      </SectionFrame>
     </main>
   );
 }

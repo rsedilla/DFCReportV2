@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { AddMemberDialog } from '@/components/add-member-dialog';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -129,6 +130,7 @@ function CellMembers() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
+      <SectionFrame section="cells">
       <p className="mb-4">
         <TextLink href={`/cells/${params.id}/meetings`}>
           Back to this Cell&rsquo;s meetings
@@ -137,7 +139,7 @@ function CellMembers() {
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {cell.data ? cellName(cell.data) : 'Members'}
           </h1>
           {cell.data ? (
@@ -310,6 +312,7 @@ function CellMembers() {
           </div>
         </>
       ) : null}
+    </SectionFrame>
     </main>
   );
 }

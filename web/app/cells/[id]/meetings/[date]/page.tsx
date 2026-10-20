@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -400,6 +401,7 @@ function RecordMeeting() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
+      <SectionFrame section="record">
       <p className="mb-4">
         <TextLink href={`/cells/${params.id}/meetings`}>
           Back to this Cell&rsquo;s meetings
@@ -412,7 +414,7 @@ function RecordMeeting() {
         is not a meeting status, a coverage figure or a leader, which is all sections
         13, 17 and 19 forbid encoding in colour.
       */}
-      <h1 className="text-accent text-2xl font-bold tracking-tight">{dayLabel(params.date)}</h1>
+      <h1 className="text-accent text-xl font-bold tracking-tight">{dayLabel(params.date)}</h1>
       {roster.data ? (
         <p className="text-muted mt-1 text-sm">
           {cell.data?.category
@@ -708,6 +710,7 @@ function RecordMeeting() {
           )}
         </>
       ) : null}
+    </SectionFrame>
     </main>
   );
 }

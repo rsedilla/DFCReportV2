@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
@@ -96,7 +97,8 @@ function SessionDetail() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
-      <h1 className="text-2xl font-semibold tracking-tight">Account and session</h1>
+      <SectionFrame section="account">
+      <h1 className="text-xl font-semibold tracking-tight">Account and session</h1>
 
       {/*
         The greeting comes from `/auth/me`, so it names the person the server
@@ -269,6 +271,7 @@ function SessionDetail() {
           </div>
         </div>
       ) : null}
+    </SectionFrame>
     </main>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { PersonPicker } from '@/components/person-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -67,8 +68,9 @@ function NewCellForm() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
+      <SectionFrame section="cells">
       <TextLink href="/cells">Back to Cells</TextLink>
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight">New Cell</h1>
+      <h1 className="mt-4 text-xl font-semibold tracking-tight">New Cell</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         For setting up the church&rsquo;s Cells. It gets a Cell ID when you create it, and its
         leader can then be given a Leader account from their record.
@@ -143,6 +145,7 @@ function NewCellForm() {
           </Link>
         </div>
       </form>
+    </SectionFrame>
     </main>
   );
 }

@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
@@ -239,12 +240,13 @@ function DccChecklist() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
+      <SectionFrame section="record">
       <p className="mb-4">
         <TextLink href="/dcc">Back to your month</TextLink>
       </p>
 
       {/* The accent, for the reason the Cell meeting screen gives. */}
-      <h1 className="text-accent text-2xl font-bold tracking-tight">
+      <h1 className="text-accent text-xl font-bold tracking-tight">
         {event ? dayLabel(event.event_date) : 'DCC attendance'}
       </h1>
       {/*
@@ -465,6 +467,7 @@ function DccChecklist() {
           ) : null}
         </>
       ) : null}
+    </SectionFrame>
     </main>
   );
 }

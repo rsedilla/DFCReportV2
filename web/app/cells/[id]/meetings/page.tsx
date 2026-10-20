@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { CellCategoryDialog } from '@/components/cell-category-dialog';
 import { CellScheduleDialog } from '@/components/cell-schedule-dialog';
 import { CoverageFigure } from '@/components/coverage-figure';
@@ -87,11 +88,12 @@ function CellMeetings() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
+      <SectionFrame section="record">
       <p className="mb-4">
         <TextLink href="/cells">Back to Cells</TextLink>
       </p>
 
-      <h1 className="text-2xl font-semibold tracking-tight">
+      <h1 className="text-xl font-semibold tracking-tight">
         {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
       </h1>
       {meetings.data ? (
@@ -241,6 +243,7 @@ function CellMeetings() {
           )}
         </section>
       ) : null}
+    </SectionFrame>
     </main>
   );
 }
