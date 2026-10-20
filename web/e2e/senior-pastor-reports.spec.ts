@@ -132,7 +132,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await expect(page.getByText('as at today, so far')).toBeVisible();
     // A month that has not begun is not reported (decision 0216).
     await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: /month/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^month/i })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'The period before' }).click();
 
@@ -230,6 +230,32 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
   });
 });
 
+test('Reports switches a figure between By period and its last 12 months, keeping the tab (decision 0377)', async ({
+  page,
+}) => {
+  await seniorPastor(page);
+  await mockChurchCounts(page);
+  await mockTrends(page);
+
+  await page.goto('/reports/number-of-cell-leaders');
+  const view = page.getByRole('group', { name: 'Which view' });
+  await expect(view.getByRole('button')).toHaveText(['By period', 'Last 12 months']);
+  await expect(view.getByRole('button', { name: 'By period' })).toHaveAttribute('aria-pressed', 'true');
+
+  await view.getByRole('button', { name: 'Last 12 months' }).click();
+  await expect(page).toHaveURL(/\/trends\?figure=CELL_LEADERS$/);
+  await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+  const tabs = page.getByRole('navigation', { name: 'Which report' });
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of Cell Leaders');
+  // The sidebar marks Reports; there is no Trends item.
+  const main = page.getByRole('navigation', { name: 'Main' });
+  await expect(main.getByRole('link')).toHaveText(['Record', 'Reports']);
+  await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
+
+  await page.getByRole('group', { name: 'Which view' }).getByRole('button', { name: 'By period' }).click();
+  await expect(page).toHaveURL(/\/reports\/number-of-cell-leaders$/);
+});
+
 test.describe('Trends (decisions 0326 and 0327)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
@@ -242,7 +268,7 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
     await page.goto(`/trends?leader=${SP_PRIMARIES.abad.id}`);
 
-    const tabs = page.getByRole('navigation', { name: 'Which figure' }).getByRole('link');
+    const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
     await expect(tabs).toHaveText([
       'CG Attendance',
       'DCC Attendance',
