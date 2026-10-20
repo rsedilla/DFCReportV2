@@ -21,9 +21,14 @@ const archivo = Archivo({
   variable: '--font-archivo',
 });
 
+/**
+ * DREAMS, Doulos Reporting, Evaluation, And Management System (owner's choice of 2026-10-19).
+ * The tab and home-screen icons are `app/icon.png` and `app/apple-icon.png`, the DfC globe.
+ */
 export const metadata: Metadata = {
-  title: 'DFC Reporting Management System',
-  description: 'People, pastoral hierarchy, DCC and Cell attendance, and reporting.',
+  title: 'DREAMS',
+  applicationName: 'DREAMS',
+  description: 'Doulos Reporting, Evaluation, And Management System.',
 };
 
 /**

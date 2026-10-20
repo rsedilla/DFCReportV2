@@ -11,12 +11,14 @@ import {
   Sprout,
   Users,
 } from 'lucide-react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { RequireSession } from '@/components/require-session';
 import { SessionHaltBanner } from '@/components/session-halt-banner';
+import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH } from '@/lib/landing';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
@@ -115,9 +117,6 @@ const ACCOUNT: NavEntry = {
   icon: CircleUserRound,
   matches: ['/session'],
 };
-
-/** The application's name, at the top of the sidebar (owner's choice, 2026-09-15). */
-const APPLICATION_NAME = 'DFC Reporting Management System';
 
 /**
  * How wide a screen's content is allowed to get, and why there are two.
@@ -307,8 +306,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="lg:bg-sidebar lg:w-60 lg:shrink-0">
           <div className="lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto lg:px-3 lg:py-6">
-            <p className="text-sidebar-current-ink hidden px-3 pb-6 text-lg leading-tight font-bold tracking-tight lg:block">
-              {APPLICATION_NAME}
+            {/* The DfC globe beside the name (owner's choice of 2026-10-19). The image is
+                decorative: the name beside it says the same, so it is announced once. */}
+            <p className="text-sidebar-current-ink hidden items-center gap-3 px-3 pb-6 lg:flex">
+              <Image
+                src={LOGO_PATH}
+                alt=""
+                width={48}
+                height={48}
+                unoptimized
+                className="size-12 shrink-0 rounded-xl"
+              />
+              <span>
+                <span className="block text-xl leading-tight font-bold tracking-wide">
+                  {APPLICATION_NAME}
+                </span>
+                <span className="mt-0.5 block text-[0.6875rem] leading-snug font-medium">
+                  {APPLICATION_FULL_NAME}
+                </span>
+              </span>
             </p>
 
             <nav
