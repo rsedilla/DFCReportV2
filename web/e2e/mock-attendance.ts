@@ -535,6 +535,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
             member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
+            full_name: 'Rosalinda Ocampo',
             record: null,
           },
           {
@@ -542,6 +543,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
             member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
+            full_name: 'Bienvenido Trinidad',
             record: null,
           },
         ],
@@ -923,6 +925,7 @@ export async function mockRecordedMeetingRoster(
             member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
+            full_name: 'Rosalinda Ocampo',
             record: held ? { present: true } : null,
           },
           {
@@ -930,6 +933,7 @@ export async function mockRecordedMeetingRoster(
             member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
+            full_name: 'Bienvenido Trinidad',
             record: held ? { present: false } : null,
           },
         ],

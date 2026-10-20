@@ -412,6 +412,33 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  describe('a name with a middle name (SKILL.md section 3, decision 0375)', () => {
+    it('reads with its initial in a list, and whole on the person’s own record', async () => {
+      const lito = await createPerson(db, {
+        firstName: 'Lito',
+        middleName: 'Santos',
+        lastName: 'Fixturo',
+        network: 'MENS',
+      });
+      await assignTo(db, lito.id, manuel.id);
+
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ q: 'Lito Fixturo' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+      expect(list.status).toBe(200);
+      const row = (list.body.data as { id: string; full_name: string }[]).find(
+        (candidate) => candidate.id === lito.id,
+      );
+      expect(row?.full_name).toBe('Lito S. Fixturo');
+
+      const record = await request(app.getHttpServer())
+        .get(`/api/v1/people/${lito.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+      expect(record.status).toBe(200);
+      expect(record.body.full_name).toBe('Lito Santos Fixturo');
+    });
+  });
   describe('a title (SKILL.md section 3, decision 0271)', () => {
     it('is shown before the name and never matched as part of it', async () => {
       // Only the Admin gives one (decision 0374).

@@ -452,7 +452,7 @@ function RecordMeeting() {
               : save.isError
                 ? describeLineFailure(save.error, 'attendance', (index) => {
                     const member = members[index];
-                    return member ? `${member.first_name} ${member.last_name}` : null;
+                    return member ? member.full_name : null;
                   })
                 : me.isError
                   ? describeFailure(me.error)
@@ -728,7 +728,7 @@ function MemberMark({
   return (
     <li className="border-line border-b py-4">
       <RadioGroup
-        legend={`${member.first_name} ${member.last_name}`}
+        legend={member.full_name}
         // Kept until Save, so a first tap does not shift the rows beneath it; nothing is
         // recorded until then, as the DCC checklist says too.
         description={recorded ? undefined : 'Not recorded yet'}

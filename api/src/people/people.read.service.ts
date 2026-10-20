@@ -669,15 +669,11 @@ export class PeopleReadService {
 
     const people = await this.db
       .selectFrom('persons')
-      .select(['id', 'title', 'first_name', 'last_name'])
+      .select(['id', 'title', 'first_name', 'middle_name', 'last_name'])
       .where('id', 'in', [...new Set(leaders.values())])
       .execute();
-    const names = new Map(
-      people.map((row) => [
-        row.id,
-        [row.title, row.first_name, row.last_name].filter((part) => part !== null).join(' '),
-      ]),
-    );
+    // As every list shows a name, the middle name's initial included (decision 0375).
+    const names = new Map(people.map((row) => [row.id, composeName(row)]));
 
     const result = new Map<string, string>();
     for (const [personId, leaderId] of leaders) {

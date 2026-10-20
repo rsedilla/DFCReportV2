@@ -408,7 +408,7 @@ A Person created offline therefore has a UUID immediately and no Member ID until
 
 ### Name handling
 
-Do not store only one free-form `full_name` as the canonical structure. Keep first, middle, and last names separately. Display a composed full name in the UI.
+Do not store only one free-form `full_name` as the canonical structure. Keep first, middle, and last names separately. Display a composed full name in the UI. **A list, a table or a picker shows the middle name as its initial** (ruling of 2026-10-20, decision 0375): `Juan Santos Dela Cruz` reads `Juan S. Dela Cruz`, the initial being the middle name's first letter, raised, with a full stop, so `dela Rosa` gives `D.` and a middle name already entered as `S.` stays `S.`; with no middle name it is `Juan Dela Cruz`, and a title still comes first. **The person's own page and the duplicate check keep the middle name whole**, because where somebody is deciding who one person is, the middle name, often the mother's surname, is what tells two people of one name apart. Only the display changes: search still finds a person by their whole middle name, and sorting and matching read the name fields as before.
 
 Validation must support legitimate names containing spaces, hyphens, apostrophes, and Unicode characters. Do not use simplistic "letters only" validation.
 
