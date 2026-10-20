@@ -35,7 +35,7 @@ import { mockSuynl } from './mock-growth';
  * The screens an account has, as the server names them (SKILL.md sections 7 and 19,
  * decisions 0323 and 0325).
  *
- * A Recording-only account (`screens: 'RECORDING'`) has `Record · People · My Cell · SUYNL`,
+ * A Recording-only account (`screens: 'RECORDING'`) has `Record · People · Cells · SUYNL`,
  * one list on Record, no Branch tab, its own Cells with no removal, and SUYNL as an item of
  * its own. A Senior Pastor (`screens: 'SENIOR_PASTOR'`) opens Record on Recording Progress. Full
  * view is ticked on the person page by a holder of `roles.manage`.
@@ -72,7 +72,7 @@ function mainNavigation(page: Page) {
 }
 
 test.describe('a Recording-only account (decision 0323)', () => {
-  test('has Record, People, My Cell and SUYNL in the sidebar, and nothing else', async ({
+  test('has Record, People, Cells and SUYNL in the sidebar, and nothing else', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -82,8 +82,8 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/people');
 
     const links = mainNavigation(page).getByRole('link');
-    await expect(links).toHaveText(['Record', 'People', 'My Cell', 'SUYNL']);
-    await expect(mainNavigation(page).getByRole('link', { name: 'My Cell' })).toHaveAttribute(
+    await expect(links).toHaveText(['Record', 'People', 'Cells', 'SUYNL']);
+    await expect(mainNavigation(page).getByRole('link', { name: 'Cells' })).toHaveAttribute(
       'href',
       '/my-cell',
     );
@@ -218,7 +218,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await page.goto('/people');
 
-    await expect(mainNavigation(page).getByRole('link', { name: 'My Cell' })).toBeVisible();
+    await expect(mainNavigation(page).getByRole('link', { name: 'Cells' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'People' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
   });
@@ -265,6 +265,7 @@ test.describe('My Cell (decision 0323)', () => {
 
     await page.goto('/my-cell');
 
+    // The page keeps its title while its sidebar item reads Cells (decision 0371).
     await expect(page.getByRole('heading', { level: 1, name: 'My Cell' })).toBeVisible();
     await expect(page.getByText('The Cells you lead, in June 2026.')).toBeVisible();
     await expect(page.getByRole('heading', { level: 2 })).toHaveText([
@@ -288,7 +289,7 @@ test.describe('My Cell (decision 0323)', () => {
       `/cells/${CELL_WITH_MEETINGS.id}/meetings?month=2026-06-01`,
     );
 
-    await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('My Cell');
+    await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('Cells');
 
     // The account's own Cells, not every Cell of its scope.
     const index = asked.filter((request) => request.startsWith('GET /api/v1/cells?'));
@@ -420,7 +421,7 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await page.goto(MEMBERS);
 
     // The sidebar's own items prove the account has loaded before Remove's absence is read.
-    await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('My Cell');
+    await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('Cells');
     await expect(page.getByRole('link', { name: 'Rosalinda Ocampo' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
@@ -536,7 +537,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     // Approves Cells is offered only with Full view (decision 0352).
     await expect(page.getByRole('checkbox', { name: /^Approves Cells/ })).toHaveCount(0);
     await expect(
-      page.getByText('Marilou sees the recording screens: Record, People, My Cell and SUYNL.'),
+      page.getByText('Marilou sees the recording screens: Record, People, Cells and SUYNL.'),
     ).toBeVisible();
 
     // `click` rather than `check`: the box is controlled, and shows the new value once the
@@ -1053,7 +1054,7 @@ test('a Recording-only account never sees the five items while the server answer
   await expect(mainNavigation(page).getByRole('link')).toHaveText([
     'Record',
     'People',
-    'My Cell',
+    'Cells',
     'SUYNL',
   ]);
 });

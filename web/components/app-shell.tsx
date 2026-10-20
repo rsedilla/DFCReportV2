@@ -87,11 +87,12 @@ const GROWTH: NavEntry = {
 /**
  * A Recording-only account's own Cells (decision 0323): its members, this month's meetings
  * and asking for a new Cell. A Cell's own pages are under `/cells/`, so they are this item's
- * on the recording screens, where there is no Cells item.
+ * on the recording screens, where there is no other Cells item. Labelled `Cells` and the page
+ * still titled *My Cell* (decision 0371).
  */
 const MY_CELL: NavEntry = {
   href: '/my-cell',
-  label: 'My Cell',
+  label: 'Cells',
   icon: LayoutGrid,
   matches: ['/my-cell', '/cells'],
 };
@@ -166,8 +167,8 @@ export const PAGE_WIDTH = {
  * navigation has to be computed on every page load and arrives stripped of the
  * scope and period that make it readable.
  *
- * **A Recording-only account has four items** (decision 0323): `Record · People · My Cell ·
- * SUYNL`. **The two Senior Pastors have three**, `Record · Reports · Trends` (decision 0326).
+ * **A Recording-only account has four items** (decisions 0323 and 0371): `Record · People ·
+ * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have three**, `Record · Reports · Trends` (decision 0326).
  * Every other account has the five. Where a person lands still follows the reach
  * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
