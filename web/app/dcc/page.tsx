@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import {
@@ -195,7 +196,8 @@ function YourMonth() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Your month</h1>
+      <SectionFrame section="record">
+      <h1 className="text-xl font-semibold tracking-tight">Your month</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Every date you owe a record: your own Cells&rsquo; meetings and your own DCC checklist. Each
         opens its record.
@@ -230,6 +232,7 @@ function YourMonth() {
           <MonthList items={shown} />
         </>
       )}
+    </SectionFrame>
     </main>
   );
 }

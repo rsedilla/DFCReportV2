@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getPastoralPath } from '@/lib/hierarchy';
 import { describeFailure } from '@/lib/messages';
@@ -43,11 +44,12 @@ function PastoralNetwork() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
+      <SectionFrame section="people">
       <p className="mb-4">
         <TextLink href={`/people/${params.id}`}>Back to this person</TextLink>
       </p>
 
-      <h1 className="text-2xl font-semibold tracking-tight">
+      <h1 className="text-xl font-semibold tracking-tight">
         {person ? `${person.full_name} in the tree` : 'Where they sit'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
@@ -105,6 +107,7 @@ function PastoralNetwork() {
           ) : null}
         </>
       )}
+      </SectionFrame>
     </main>
   );
 }

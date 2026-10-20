@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { NameFields } from '@/components/name-fields';
 import { PersonCells } from '@/components/person-cells';
 import { Button, buttonClasses } from '@/components/ui/button';
@@ -70,11 +71,12 @@ function EditPersonForm() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
+      <SectionFrame section="people">
       <p className="text-sm">
         <TextLink href={`/people/${id}`}>Back to this person</TextLink>
       </p>
 
-      <h1 className="mt-6 text-2xl font-semibold tracking-tight">Edit details</h1>
+      <h1 className="mt-4 text-xl font-semibold tracking-tight">Edit details</h1>
 
       {person.isPending ? (
         <p className="text-muted mt-6 text-sm">Loading…</p>
@@ -93,6 +95,7 @@ function EditPersonForm() {
         */
         <Fields person={person.data} id={id} />
       )}
+      </SectionFrame>
     </main>
   );
 }

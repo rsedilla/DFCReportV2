@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { SectionFrame } from '@/components/section-frame';
 import { CellPicker } from '@/components/cell-picker';
 import { NameFields } from '@/components/name-fields';
 import { PersonPicker } from '@/components/person-picker';
@@ -309,7 +310,8 @@ function NewPersonForm() {
   if (cellRefused) {
     return (
       <main id="main" className={PAGE_WIDTH.READING}>
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <SectionFrame section="people">
+        <h1 className="text-xl font-semibold tracking-tight">
           {cellRefused.person.full_name} was added
         </h1>
         <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
@@ -329,6 +331,7 @@ function NewPersonForm() {
             Open their record
           </Link>
         </div>
+      </SectionFrame>
       </main>
     );
   }
@@ -336,7 +339,8 @@ function NewPersonForm() {
   if (candidates) {
     return (
       <main id="main" className={PAGE_WIDTH.READING}>
-        <h1 className="text-2xl font-semibold tracking-tight">Is this someone already recorded?</h1>
+      <SectionFrame section="people">
+        <h1 className="text-xl font-semibold tracking-tight">Is this someone already recorded?</h1>
         <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
           Before {values.first_name} {values.last_name} is added, check these. Recording one
           person twice splits their history in two, and the two records are hard to put back
@@ -399,13 +403,18 @@ function NewPersonForm() {
             Go back and change the details
           </Button>
         </div>
+      </SectionFrame>
       </main>
     );
   }
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
-      <h1 className="text-2xl font-semibold tracking-tight">Add a person</h1>
+      <SectionFrame section="people">
+      <p className="text-sm">
+        <TextLink href="/people">Back to people</TextLink>
+      </p>
+      <h1 className="mt-4 text-xl font-semibold tracking-tight">Add a person</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Search first — most &ldquo;new&rdquo; people already have a record somewhere in the church.
       </p>
@@ -566,6 +575,7 @@ function NewPersonForm() {
           </Button>
         </div>
       </form>
-    </main>
+    </SectionFrame>
+      </main>
   );
 }
