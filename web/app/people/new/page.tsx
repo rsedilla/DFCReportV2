@@ -126,12 +126,20 @@ function NewPersonForm() {
     retry: false,
   });
   const myEntries = myPath.data?.data ?? [];
-  // **Sex starts on the adder's own** (section 4, decision 0305) when they hold an assignment
-  // under a leader, so a path of two or more: their default leader is them, and a leader leads
-  // only within their own Network. A Network root and anybody outside the tree add people to
-  // both Networks, so nothing is chosen for them. Decided by the tree, never by the role.
-  const defaultSex: Sex | '' = myEntries.length >= 2 && mine.data !== undefined ? mine.data.sex : '';
-  const sex: Sex | '' = values.sex !== '' ? values.sex : defaultSex;
+  // **Sex is already decided for a leader under a leader** (section 4, decision 0373, replacing
+  // decision 0305's pre-selected choice): a path of two or more. Everyone they may place the new
+  // person under is in their own Network (section 5), so the server accepts their own sex alone
+  // and a choice could only be refused. A Network root and anybody outside the tree add people
+  // to both Networks, so they choose. Decided by the tree, never by the role.
+  const decidedSex: Sex | null =
+    myEntries.length >= 2 && mine.data !== undefined ? mine.data.sex : null;
+  const sex: Sex | '' = decidedSex ?? values.sex;
+  // Until the tree has answered, neither is shown, so a leader never sees the choice flash.
+  const sexSettled =
+    !me.isPending &&
+    (me.data?.person_id === undefined ||
+      ((myPath.isSuccess || myPath.isError) &&
+        (myEntries.length < 2 || mine.isSuccess || mine.isError)));
   const self =
     (myEntries.length >= 2 || myEntries[0]?.network_root) &&
     mine.data !== undefined &&
@@ -215,11 +223,11 @@ function NewPersonForm() {
     beginNewWrite();
   }
 
-  // The pre-selected sex arrives after the page loads and changes the body, so it takes a new
-  // key like any other change (see `writeKey`), adjusted during render rather than in an effect.
-  const [keyedDefaultSex, setKeyedDefaultSex] = useState(defaultSex);
-  if (keyedDefaultSex !== defaultSex) {
-    setKeyedDefaultSex(defaultSex);
+  // The decided sex arrives after the page loads and changes the body, so it takes a new key
+  // like any other change (see `writeKey`), adjusted during render rather than in an effect.
+  const [keyedDecidedSex, setKeyedDecidedSex] = useState(decidedSex);
+  if (keyedDecidedSex !== decidedSex) {
+    setKeyedDecidedSex(decidedSex);
     beginNewWrite();
   }
 
@@ -416,15 +424,35 @@ function NewPersonForm() {
           than as a step to confirm. A confirmation of a tautology gets clicked
           unread.
         */}
-        <RadioGroup
-          legend="Sex"
-          name="sex"
-          required
-          description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
-          options={SEX_OPTIONS}
-          value={sex}
-          onChange={(next) => set('sex', next)}
-        />
+        {!sexSettled ? (
+          <div>
+            <p className="field-label">Sex</p>
+            <p className="text-muted mt-1.5 text-sm">Loading&hellip;</p>
+          </div>
+        ) : decidedSex !== null ? (
+          // Stated, not offered (decision 0373): the one answer the server would accept.
+          <div>
+            <p className="field-label">Sex</p>
+            <p className="mt-1.5">
+              <strong>{decidedSex === 'MALE' ? 'Male' : 'Female'}</strong> ·{' '}
+              {networkLabel(networkOfSex(decidedSex))}
+            </p>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Set from your Network. A {decidedSex === 'MALE' ? 'woman' : 'man'} is added by a
+              leader in the {networkLabel(networkOfSex(decidedSex === 'MALE' ? 'FEMALE' : 'MALE'))}.
+            </p>
+          </div>
+        ) : (
+          <RadioGroup
+            legend="Sex"
+            name="sex"
+            required
+            description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
+            options={SEX_OPTIONS}
+            value={sex}
+            onChange={(next) => set('sex', next)}
+          />
+        )}
 
         <RadioGroup
           legend="Civil status"
