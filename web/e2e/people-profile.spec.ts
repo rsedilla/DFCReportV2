@@ -602,14 +602,10 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
     await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
     await expect(page.getByText('None yet — it’s worked out from their Sundays.')).toBeVisible();
-
-    // A man cannot be led from the Women's Network, so the default is withdrawn.
-    await page.getByRole('radio', { name: 'Male', exact: true }).check();
-    await expect(page.getByText('Rosalinda Ocampo (you)')).toHaveCount(0);
   });
 
-  // Decision 0305: Sex starts on the adder's own where they hold an assignment under a leader,
-  // decided by the tree and never by the account's role.
+  // Decision 0373, replacing decision 0305's pre-selected choice: Sex is already decided where
+  // the adder holds an assignment under a leader, decided by the tree and never by the role.
   async function adderIs(page: Page, sex: 'MALE' | 'FEMALE') {
     await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
       route.fulfill({ json: { ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID, sex } }),
@@ -632,7 +628,7 @@ test.describe('the Add and Edit person forms', () => {
       }),
     );
 
-  test('start Sex on the adder’s own for a leader under a leader, and send it', async ({
+  test('state Sex as already decided for a leader under a leader, and send it', async ({
     page,
   }) => {
     await signedInWithPeople(page);
@@ -649,8 +645,13 @@ test.describe('the Add and Edit person forms', () => {
     await page.goto('/people/new');
 
     await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Female' })).toBeChecked();
-    await expect(page.getByRole('radio', { name: 'Male', exact: true })).not.toBeChecked();
+    // Stated, with its Network and where a man is added instead; no choice is offered.
+    await expect(page.getByText("Female · Women's Network")).toBeVisible();
+    await expect(
+      page.getByText("Set from your Network. A man is added by a leader in the Men's Network."),
+    ).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Female' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Male', exact: true })).toHaveCount(0);
 
     await page.getByLabel('First name').fill('Marilou');
     await page.getByLabel('Last name').fill('Santos');
@@ -662,16 +663,19 @@ test.describe('the Add and Edit person forms', () => {
     expect(bodies[0].sex).toBe('FEMALE');
   });
 
-  test('keep the encoder’s own choice of Sex over the default', async ({ page }) => {
+  test('let a Network root choose either Sex, withdrawing themselves as leader for the other', async ({
+    page,
+  }) => {
     await signedInWithPeople(page);
-    await mockPastoralPath(page);
+    await onePath(page, true);
     await adderIs(page, 'FEMALE');
     await page.goto('/people/new');
 
-    await expect(page.getByRole('radio', { name: 'Female' })).toBeChecked();
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
     await page.getByRole('radio', { name: 'Male', exact: true }).check();
     await expect(page.getByRole('radio', { name: 'Male', exact: true })).toBeChecked();
-    await expect(page.getByRole('radio', { name: 'Female' })).not.toBeChecked();
+    // A man cannot be led from the Women's Network, so the default leader is withdrawn.
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toHaveCount(0);
   });
 
   for (const [who, root] of [
