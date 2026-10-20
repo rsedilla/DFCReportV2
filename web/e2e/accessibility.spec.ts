@@ -2828,16 +2828,17 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
 });
 
 /**
- * The home page lands a whole-church reader on Reports, which opens on the DCC figures.
+ * The home page lands the Senior Pastors' screens on Reports, which opens on the DCC figures
+ * (decision 0372).
  *
  * **Asserted on the address, not on the navigation.** The navigation reads the Reports
  * path directly and never asks where to land, so a case on its links cannot notice the
  * landing rule going wrong. The home page and sign-in both ask `resolveLanding`, and
  * this is the one of the two that needs no credentials typed.
  */
-test('the home page lands a whole-church reader on Reports', async ({ page }) => {
+test('the home page lands the Senior Pastors on Reports', async ({ page }) => {
   await mockSignedIn(page);
-  await mockWholeChurchReader(page);
+  await mockScreens(page, 'SENIOR_PASTOR');
   await mockDccReport(page);
 
   await page.goto('/');
@@ -2846,9 +2847,22 @@ test('the home page lands a whole-church reader on Reports', async ({ page }) =>
 });
 
 /**
+ * The Admin reads the whole church and lands on Record, where its work is (decision 0372):
+ * reading the whole church no longer decides it.
+ */
+test('the home page lands the Admin, a whole-church reader, on Record', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockAdministrator(page);
+
+  await page.goto('/');
+
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+/**
  * The home page lands everyone else on Record, which is the Dashboard.
  *
- * The pair to the case above, so that a landing rule answering the same thing for
+ * The pair to the Senior Pastors' case, so that a landing rule answering the same thing for
  * everybody fails one of the two whichever way it errs.
  */
 test('the home page lands a reader without a whole-church grant on Record', async ({ page }) => {

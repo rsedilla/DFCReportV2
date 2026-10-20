@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-19, the trigger being decision 0371: of 370 files, 369 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0371 each moved the first two and
+2026-10-19, the trigger being decision 0372: of 371 files, 370 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0372 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-19 and triggered by 0371, and was left stale by 0372 the same day. The one before that was dated
 2026-10-19 and triggered by 0370, and was left stale by 0371 the same day. The one before that was dated
 2026-10-19 and triggered by 0369, and was left stale by 0370 the same day. The one before that was dated
 2026-10-18 and triggered by 0368, and was left stale by 0369 the next day. The one before that was dated
@@ -785,6 +786,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-19 — [A new Cell's three members are people the leader asking oversees](docs/decisions/0369-new-cell-members-are-people-you-oversee.md)
 - 2026-10-19 — [Recording Progress links each count to its Pending list](docs/decisions/0370-recording-progress-links-to-pending.md)
 - 2026-10-19 — [The recording screens' My Cell item is labelled Cells](docs/decisions/0371-the-recording-screens-cells-item.md)
+- 2026-10-19 — [The Senior Pastors open on Reports, and every other account on Record](docs/decisions/0372-the-senior-pastors-open-on-reports-and-everyone-else-on-record.md)
 
 ### Open — awaiting a ruling
 
