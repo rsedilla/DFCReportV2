@@ -16,7 +16,6 @@ import {
   READINESS_LEADER,
   READINESS_MENS_ROOT_ID,
   READINESS_WOMENS_ROOT_ID,
-  SUYNL_COUNTS,
   TRAINING_COUNTS,
   mockConquest,
   mockEncounterSeasons,
@@ -72,7 +71,7 @@ async function expectReadOnly(page: Page) {
 const TABS = [
   { label: 'Cell Groups', path: '/reports/cells', dated: true },
   { label: 'DCC', path: '/reports/dcc', dated: true },
-  { label: 'SUYNL', path: '/reports/suynl', dated: false },
+  { label: 'Encounter Readiness', path: '/reports/suynl', dated: false },
   { label: 'Training', path: '/reports/training', dated: false },
   { label: 'Conquest', path: '/reports/conquest', dated: false },
   { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
@@ -85,7 +84,7 @@ const TABS = [
 const BRANCH_TABS = [
   { label: 'CG Attendance Reports', path: '/reports/cells', dated: true },
   { label: 'DCC Attendance Reports', path: '/reports/dcc', dated: true },
-  { label: 'SUYNL Reports', path: '/reports/suynl', dated: false },
+  { label: 'Encounter Readiness', path: '/reports/suynl', dated: false },
   { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
 ] as const;
 
@@ -491,7 +490,6 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
 
 test.describe('the Growth reports: counts only, as of now (decision 0292)', () => {
   for (const report of [
-    { path: '/reports/suynl', counts: '**/api/v1/suynl/counts' },
     { path: '/reports/training', counts: '**/api/v1/training/counts' },
     { path: '/reports/conquest', counts: '**/api/v1/conquest/counts' },
   ]) {
@@ -524,7 +522,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     });
   }
 
-  test('SUYNL shows its three counts, read only, and sends ticking to Growth', async ({ page }) => {
+  test('Encounter Readiness shows no counts of its own, and sends ticking to Growth (decision 0378)', async ({ page }) => {
     await mockSignedIn(page);
     await mockSuynl(page);
     await mockEncounterSeasons(page);
@@ -533,11 +531,11 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     await expect(
       page.getByText('Who is getting ready for the next Encounter God Weekend, as of today.'),
     ).toBeVisible();
-    await expectCards(page, [
-      ['Not started', SUYNL_COUNTS.not_started],
-      ['In progress', SUYNL_COUNTS.in_progress],
-      ['Graduated', SUYNL_COUNTS.graduated],
-    ]);
+    // Growth's SUYNL carries the three counts; this page repeats none of them.
+    await expect(page.locator('main dl')).toHaveCount(0);
+    for (const label of ['Not started', 'In progress']) {
+      await expect(page.locator('main').getByText(label, { exact: true })).toHaveCount(0);
+    }
     // The readiness table's names open the people behind a row (decision 0297), so they
     // are the one kind of button here, and none of them files anything.
     const main = page.locator('main');
@@ -625,7 +623,12 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
     for (const path of ['/reports/suynl', '/reports/training', '/reports/conquest']) {
       await page.goto(`${path}?month=2026-05-01`);
-      await expect(page.locator('main dl').getByRole('definition').first()).not.toHaveText('–');
+      // Encounter Readiness carries no count cards (decision 0378); its readiness table loads.
+      await expect(
+        path === '/reports/suynl'
+          ? page.getByRole('table').first()
+          : page.locator('main dl').getByRole('definition').first(),
+      ).not.toHaveText('–');
       // As of now: no month is offered, because these are never counted by period.
       await expect(page.getByRole('button', { name: /^Show / })).toHaveCount(0);
       await expect(page.getByText('May 2026')).toHaveCount(0);
@@ -790,15 +793,16 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             // Equal buttons: every tab as wide as the others, within a pixel.
             expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
           } else {
-            // Sized to their words, from the left (decision 0361): SUYNL Reports is the narrowest,
-            // and from `sm` the row leaves room after the last tab. On a phone the labels wrap
-            // and the three fill the row without passing its edge.
+            // Sized to their words, from the left (decision 0361): Encounter Readiness is narrower
+            // than the first. On a phone the four sit two by two without passing the row's edge.
             if (layout.width >= 640) {
-              expect(widths[2], `${tab.path}: SUYNL Reports is stretched`).toBeLessThan(widths[0]);
+              expect(widths[2], `${tab.path}: Encounter Readiness is stretched`).toBeLessThan(widths[0]);
             }
             const row = await which.evaluate((nav) => nav.getBoundingClientRect().right);
             const last = boxes[boxes.length - 1];
-            if (layout.width >= 640) {
+            // From `lg` the row leaves room after the last tab. At 768px Encounter Readiness can fill
+            // it exactly where a font renders wider (CI's Linux, decision 0378), so only the edge holds there.
+            if (layout.width >= 1024) {
               expect(last.left + last.width, `${tab.path}: the tabs fill the row`).toBeLessThan(row - 1);
             } else {
               expect(last.left + last.width, `${tab.path}: a tab passes the row`).toBeLessThanOrEqual(row + 0.5);

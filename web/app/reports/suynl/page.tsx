@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Fragment, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { CountCards, ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
+import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -19,7 +19,6 @@ import {
 } from '@/lib/encounters';
 import {
   getReadinessPeople,
-  getSuynlCounts,
   getSuynlReadiness,
   type ReadinessFigures,
   type ReadinessPerson,
@@ -30,9 +29,10 @@ import { describeFailure } from '@/lib/messages';
 import { todayInManila } from '@/lib/reporting-month';
 
 /**
- * SUYNL under Reports (decisions 0292, 0296 and 0297): the next Encounter season as four
- * steps, who is getting ready for its LC Party row by row, and
- * the Growth tab's three counts, all read only and as of now. Lessons are ticked under Growth.
+ * *Encounter Readiness* under Reports (decisions 0292, 0296, 0297 and 0378): the next Encounter
+ * season as four steps and who is getting ready for its LC Party row by row, read only and as of
+ * now. The Growth tab's three counts are on Growth's SUYNL alone (decision 0378), where lessons
+ * are ticked.
  */
 export default function Page() {
   return (
@@ -58,7 +58,6 @@ const shortDay = (date: string) =>
 function Suynl() {
   const today = todayInManila();
   const leader = useSearchParams().get('leader');
-  const counts = useQuery({ queryKey: ['suynl-counts'], queryFn: ({ signal }) => getSuynlCounts(signal) });
   const seasons = useQuery({
     queryKey: ['encounter-seasons'],
     queryFn: ({ signal }) => listEncounterSeasons(signal),
@@ -96,9 +95,7 @@ function Suynl() {
             failure={
               readiness.isError
                 ? describeFailure(readiness.error)
-                : counts.isError
-                  ? describeFailure(counts.error)
-                  : seasons.isError
+                : seasons.isError
                     ? describeFailure(seasons.error)
                     : null
             }
@@ -144,13 +141,6 @@ function Suynl() {
           <ReadinessTable readiness={readiness.data} opened={leader !== null} />
         ) : null}
 
-        <CountCards
-          cards={[
-            { label: 'Not started', count: counts.data?.not_started },
-            { label: 'In progress', count: counts.data?.in_progress },
-            { label: 'Graduated', count: counts.data?.graduated },
-          ]}
-        />
         <p className="mt-6 text-sm">
           <Link href="/growth/suynl" className={link}>
             Tick lessons in Growth
