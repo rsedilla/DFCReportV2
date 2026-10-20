@@ -13,6 +13,7 @@ const CAPABILITY_LABELS: [string, string][] = [
   ['people.manage_pastoral_assignment', "Change a person's pastoral leader"],
   ['people.manage_lifecycle', 'Archive or restore a person'],
   ['people.correct_sex', "Correct a person's recorded sex"],
+  ['people.set_title', "Give, change or clear a person's title"],
   ['people.merge', 'Merge two records of one person'],
   ['dcc.take_attendance', 'Record DCC attendance'],
   ['dcc.submit_on_behalf', 'Record DCC for a leader under you'],

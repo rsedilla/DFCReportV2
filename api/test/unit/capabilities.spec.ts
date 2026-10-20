@@ -22,6 +22,7 @@ describe('the capability enumeration the application declares', () => {
     'people.manage_lifecycle',
     'people.manage_pastoral_assignment',
     'people.correct_sex',
+    'people.set_title',
     'dcc.take_attendance',
     'dcc.view_subtree',
     'dcc.submit_on_behalf',
@@ -80,7 +81,7 @@ describe('the capability enumeration the application declares', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(29);
+    expect(writes).toHaveLength(30);
   });
 });
 

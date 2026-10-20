@@ -23,18 +23,22 @@ export interface NameValues {
  * hears "First name" rather than "First" on its own.
  *
  * **Title comes first and is optional** (decision 0271): Bishop, Pastora. It is stored
- * apart from the name, so it is never compared as part of it.
+ * apart from the name, so it is never compared as part of it. **Only the Admin is shown it**
+ * (decision 0374): `showTitle` is the caller's reading of `people.set_title`, and the server
+ * refuses a title from anyone else whatever the screen shows.
  */
 export function NameFields({
   values,
   errors,
   onChange,
   note,
+  showTitle,
 }: {
   values: NameValues;
   errors: Record<string, string | null>;
   onChange: (key: keyof NameValues, value: string) => void;
   note: string;
+  showTitle: boolean;
 }) {
   const noteId = useId();
 
@@ -58,17 +62,19 @@ export function NameFields({
     <fieldset className="flex flex-col gap-1.5" aria-describedby={noteId}>
       <legend className="field-label">Full name</legend>
 
-      <div className="mt-1 grid gap-4 sm:grid-cols-4">
-        <Field
-          label="Title"
-          quietLabel
-          aria-label="Title, optional"
-          name="title"
-          autoComplete="off"
-          placeholder="Optional"
-          value={values.title}
-          onChange={(event) => onChange('title', event.target.value)}
-        />
+      <div className={showTitle ? 'mt-1 grid gap-4 sm:grid-cols-4' : 'mt-1 grid gap-4 sm:grid-cols-3'}>
+        {showTitle ? (
+          <Field
+            label="Title"
+            quietLabel
+            aria-label="Title, optional"
+            name="title"
+            autoComplete="off"
+            placeholder="Optional"
+            value={values.title}
+            onChange={(event) => onChange('title', event.target.value)}
+          />
+        ) : null}
         <Field
           label="First"
           quietLabel

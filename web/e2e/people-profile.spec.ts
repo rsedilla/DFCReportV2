@@ -7,6 +7,7 @@ import {
   PERSON_IN_SCOPE,
   PERSON_WITHHELD,
   SIGNED_IN_PERSON_ID,
+  mockAdministrator,
   mockCellChoices,
   mockGrants,
   mockMembershipAdd,
@@ -383,7 +384,9 @@ test.describe('editing a person', () => {
 
   test('one Save shows the change on the profile at once', async ({ page }) => {
     // The server holds what was last saved, so a profile showing its older cached copy fails.
+    // As the Admin, the one account given the Title box (decision 0374).
     await signedInWithPeople(page);
+    await mockAdministrator(page);
     let current: Record<string, unknown> = { ...PERSON_IN_SCOPE };
     await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
       if (route.request().method() === 'PATCH') {
@@ -708,8 +711,9 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page.getByRole('button', { name: /Correct this stage/ })).toHaveCount(0);
   });
 
-  test('sends a title apart from the name (decision 0271)', async ({ page }) => {
+  test('sends a title apart from the name (decision 0271), as the Admin', async ({ page }) => {
     await signedInWithPeople(page);
+    await mockAdministrator(page);
     await mockPastoralPath(page);
 
     const sent: Record<string, unknown>[] = [];
@@ -732,6 +736,41 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ title: 'Bishop', first_name: PERSON_IN_SCOPE.first_name });
+  });
+  // Decision 0374: only the Admin is shown the Title box and sends a title. Anybody else edits
+  // the rest and leaves a recorded title as it is.
+  test('show a leader no Title box on Add or Edit, and send no title from them', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'GET') {
+        return route.fallback();
+      }
+      await route.fulfill({ json: { ...PERSON_IN_SCOPE, title: 'Pastor' } });
+    });
+    const sent: Record<string, unknown>[] = [];
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ...PERSON_IN_SCOPE, title: 'Pastor' } });
+    });
+
+    await page.goto('/people/new');
+    await expect(page.getByLabel('First name')).toBeVisible();
+    await expect(page.getByLabel('Title, optional')).toHaveCount(0);
+
+    await page.goto(`${PROFILE}/edit`);
+    await expect(page.getByLabel('First name')).toBeVisible();
+    await expect(page.getByLabel('Title, optional')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).not.toHaveProperty('title');
   });
 });
 

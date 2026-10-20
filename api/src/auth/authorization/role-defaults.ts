@@ -89,6 +89,9 @@ const ADMIN: RoleDefaults = {
   // can change totals for periods already reported, which is the same reason
   // people.merge and records.backdate_effective_date are Admin-only.
   [Capability.PeopleCorrectSex]: ScopeType.WholeChurch,
+  // Admin alone (decision 0374): a title is the church's recognition of an office, given by
+  // the Admin rather than by the leader encoding the person.
+  [Capability.PeopleSetTitle]: ScopeType.WholeChurch,
   [Capability.DccTakeAttendance]: ScopeType.WholeChurch,
   [Capability.DccViewSubtree]: ScopeType.WholeChurch,
   [Capability.DccSubmitOnBehalf]: ScopeType.WholeChurch,

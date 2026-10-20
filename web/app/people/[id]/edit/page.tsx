@@ -17,6 +17,7 @@ import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { classificationLabel, getPersonDccAttendance } from '@/lib/dcc';
 import { directLeaderOf, getPastoralPath, noLeaderLabel } from '@/lib/hierarchy';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -99,6 +100,10 @@ function EditPersonForm() {
 function Fields({ person, id }: { person: PersonFull; id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  // **Only the Admin is shown the title and sends it** (decision 0374). Anybody else edits the
+  // rest and leaves a title already recorded as it is.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayTitle = holdsWholeChurch(me.data, 'people.set_title');
 
   const [values, setValues] = useState({
     title: person.title ?? '',
@@ -162,7 +167,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     setFieldErrors({});
 
     const changes: PersonEdit = {
-      title: values.title.trim() || null,
+      ...(mayTitle ? { title: values.title.trim() || null } : {}),
       first_name: values.first_name.trim(),
       middle_name: values.middle_name.trim() || null,
       last_name: values.last_name.trim(),
@@ -217,6 +222,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             errors={fieldErrors}
             onChange={(key, value) => edit(key, value)}
             note="Middle name is optional."
+            showTitle={mayTitle}
           />
 
           {/* The three facts this form cannot change, in one box (owner's choice, 2026-09-22). */}

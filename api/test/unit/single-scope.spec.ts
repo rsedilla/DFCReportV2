@@ -22,6 +22,7 @@ describe('capabilities held only at Whole Church (section 7)', () => {
         Capability.CellApproveLeadership,
         Capability.PeopleCorrectSex,
         Capability.PeopleManageLifecycle,
+        Capability.PeopleSetTitle,
         Capability.PeopleMerge,
         Capability.RecordsBackdateEffectiveDate,
         Capability.RolesManage,
