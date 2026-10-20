@@ -94,7 +94,8 @@ export default function SignInPage() {
 
   return (
     <AuthCard
-      title="Sign in"
+      brand
+      title="Welcome. Sign in to continue."
       footer={
         <TextLink href="/forgot-password">I have forgotten my password</TextLink>
       }
