@@ -17,6 +17,7 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   categoryLabel,
@@ -71,41 +72,50 @@ function MyCell() {
         <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
       </div>
 
-      {cells.isPending ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : cells.data && cells.data.data.length === 0 ? (
-        <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-          You do not lead a Cell. Ask for a new one, and it is sent for approval.
-        </p>
-      ) : (
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2">
-          {(cells.data?.data ?? []).map((cell) => (
-            <li key={cell.id} className="border-line rounded-md border p-4">
-              <h2 className="text-lg font-bold tracking-tight">
-                {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-              </h2>
-              <p className="text-muted mt-1 text-sm">
-                {cell.cell_id} · {dayOfWeekLabel(cell.schedule.day_of_week)}s at{' '}
-                {cell.schedule.time_of_day} · {cell.member_count}{' '}
-                {cell.member_count === 1 ? 'member' : 'members'}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Link href={`/cells/${cell.id}/members`} className={buttonClasses('secondary')}>
-                  Members
-                </Link>
-                <Link
-                  href={`/cells/${cell.id}/meetings?month=${month}`}
-                  className={buttonClasses('secondary')}
-                >
-                  This month&rsquo;s meetings
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* One tab and its pane, the frame every other account's screens have (owner,
+          2026-10-19), so the Cells do not float on the page. */}
+      <nav aria-label="Cells" className={`mt-6 flex ${TAB_ROW}`}>
+        <Link href="/my-cell" aria-current="page" className={tabClasses(true)}>
+          My Cell
+        </Link>
+      </nav>
+      <div className={TAB_PANE}>
+        {cells.isPending ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : cells.data && cells.data.data.length === 0 ? (
+          <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
+            You do not lead a Cell. Ask for a new one, and it is sent for approval.
+          </p>
+        ) : (
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+            {(cells.data?.data ?? []).map((cell) => (
+              <li key={cell.id} className="border-line rounded-md border p-4">
+                <h2 className="text-lg font-bold tracking-tight">
+                  {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
+                </h2>
+                <p className="text-muted mt-1 text-sm">
+                  {cell.cell_id} · {dayOfWeekLabel(cell.schedule.day_of_week)}s at{' '}
+                  {cell.schedule.time_of_day} · {cell.member_count}{' '}
+                  {cell.member_count === 1 ? 'member' : 'members'}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link href={`/cells/${cell.id}/members`} className={buttonClasses('secondary')}>
+                    Members
+                  </Link>
+                  <Link
+                    href={`/cells/${cell.id}/meetings?month=${month}`}
+                    className={buttonClasses('secondary')}
+                  >
+                    This month&rsquo;s meetings
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      <SentRequests />
+        <SentRequests />
+      </div>
 
       <AskForNewCell open={asking} onClose={() => setAsking(false)} />
     </main>
