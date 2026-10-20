@@ -25,13 +25,13 @@ function peopleTabs(page: Page) {
   return page.getByRole('navigation', { name: 'People' });
 }
 
-test('a Full view account has the Family Tree tab, after People and # of People', async ({ page }) => {
+test('a Full view account has the Family Tree tab, after People', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', '# of People', 'Family Tree']);
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Family Tree']);
   await expect(peopleTabs(page).getByRole('link', { name: 'Family Tree' })).toHaveAttribute(
     'href',
     '/family-tree',

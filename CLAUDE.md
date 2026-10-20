@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-20, the trigger being decision 0375: of 374 files, 373 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0375 each moved the first two and
+2026-10-20, the trigger being decision 0376: of 375 files, 374 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0376 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-20 and triggered by 0375, and was left stale by 0376 the same day. The one before that was dated
 2026-10-20 and triggered by 0374, and was left stale by 0375 the same day. The one before that was dated
 2026-10-20 and triggered by 0373, and was left stale by 0374 the same day. The one before that was dated
 2026-10-19 and triggered by 0372, and was left stale by 0373 the next day. The one before that was dated
@@ -793,6 +794,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-20 — [Add a Person states the Sex as already decided for a leader under a leader](docs/decisions/0373-add-a-person-states-the-sex-already-decided.md)
 - 2026-10-20 — [Only the Admin gives a title](docs/decisions/0374-only-the-admin-gives-a-title.md)
 - 2026-10-20 — [A list shows a person's middle name as its initial](docs/decisions/0375-a-list-shows-the-middle-initial.md)
+- 2026-10-20 — [# of People under Reports, for everyone who has it](docs/decisions/0376-number-of-people-under-reports.md)
 
 ### Open — awaiting a ruling
 
