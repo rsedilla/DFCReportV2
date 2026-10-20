@@ -56,7 +56,7 @@ test('a Recording-only account has no Family Tree tab', async ({ page }) => {
 
   await page.goto('/people');
 
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'My Cell' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Cells' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Family Tree' })).toHaveCount(0);
 });
 

@@ -233,7 +233,7 @@ export function PersonAccount({
                 describe={(shown) =>
                   shown
                     ? `${firstName} sees Record, Reports, People, Cells and Growth over their branch.`
-                    : `${firstName} sees the recording screens: Record, People, My Cell and SUYNL.`
+                    : `${firstName} sees the recording screens: Record, People, Cells and SUYNL.`
                 }
               />
               {/* Offered only with Full view (decision 0352). */}
