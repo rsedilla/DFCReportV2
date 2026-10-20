@@ -47,7 +47,7 @@ test.describe('a Full view leader’s # of People', () => {
     await expect(tabs.getByRole('link')).toHaveText([
       'CG Attendance Reports',
       'DCC Attendance Reports',
-      'SUYNL Reports',
+      'Encounter Readiness',
       '# of People',
     ]);
     await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of People');

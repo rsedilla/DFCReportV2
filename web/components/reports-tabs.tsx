@@ -26,21 +26,22 @@ const PEOPLE_TAB = {
 const TABS = [
   { key: 'cells', label: 'Cell Groups', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC', path: '/reports/dcc' },
-  { key: 'suynl', label: 'SUYNL', path: '/reports/suynl' },
+  // Named for what it shows (decision 0378); Growth's SUYNL is where lessons are ticked.
+  { key: 'suynl', label: 'Encounter Readiness', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
   { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
   PEOPLE_TAB,
 ] as const;
 
 /**
- * A Full view leader's four (decisions 0340, 0360 and 0376), the first three each named a report
- * (decision 0361), the first two laid out as the Senior Pastors' are for the leader's own
+ * A Full view leader's four (decisions 0340, 0360 and 0376), the first two each named a report
+ * (decision 0361) and the third for what it shows (decision 0378), the first two laid out as the Senior Pastors' are for the leader's own
  * branch. Training and Conquest are hidden, not withdrawn: their pages still open by address.
  */
 const BRANCH_TABS = [
   { key: 'cells', label: 'CG Attendance Reports', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC Attendance Reports', path: '/reports/dcc' },
-  { key: 'suynl', label: 'SUYNL Reports', path: '/reports/suynl' },
+  { key: 'suynl', label: 'Encounter Readiness', path: '/reports/suynl' },
   PEOPLE_TAB,
 ] as const;
 
