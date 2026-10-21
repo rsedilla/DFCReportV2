@@ -893,11 +893,11 @@ const SCANS = [
       await expect(
         page.getByRole('link', { name: /^Record Young Pro · Sat,/ }),
       ).toBeVisible();
-      // **The heading renders before any query resolves**, so the scan waits for the last of the four buttons' counts too: without them
-      // axe would scan buttons whose count boxes had not arrived.
+      // **The heading renders before any query resolves**, so the scan waits for the buttons'
+      // counts too: without them axe would scan buttons whose count boxes had not arrived.
       const lists = page.getByRole('group', { name: 'Outstanding work' });
-      await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2$/ })).toBeVisible();
-      await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2$/ })).toBeVisible();
+      await expect(lists.getByRole('button', { name: /^Update Records\s*\d+$/ })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -947,22 +947,21 @@ const SCANS = [
   },
   {
     // Record's third list, section 20's attention list (decisions 0232 and 0290).
-    name: 'dashboard, needs a new leader',
-    route: '/dashboard',
+    name: 'people, awaiting leader assignment',
+    route: '/people/awaiting-leader',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Awaiting Leader Assignment/);
-      await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+      // A tab of People since decision 0381.
+      await expect(page.getByRole('link', { name: 'Amihan Bacani' }).first()).toBeVisible();
     },
   },
   {
-    // Record's fourth list, section 15's people-without-a-Cell list (decisions 0233, 0290).
-    name: 'dashboard, not in a cell',
-    route: '/dashboard',
+    // Section 15's people-without-a-Cell list (decision 0233), a tab of Cells since decision 0381.
+    name: 'cells, awaiting cg assignment',
+    route: '/cells?view=NOCELL',
     before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Awaiting CG Assignment/);
-      await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Bituin Carreon' }).first()).toBeVisible();
     },
   },
   {
@@ -1824,7 +1823,24 @@ const TARGET_SWEEP = [
     // so **thirteen**.
     settleRole: 'link' as const,
     settle: 'Record Young Pro · Sat',
-    minimum: 13,
+    // Two list buttons fewer since decision 0381.
+    minimum: 11,
+  },
+  {
+    // Since decision 0381: the People tabs, then a name link per person. Settled on a name.
+    name: 'people, awaiting leader assignment',
+    route: '/people/awaiting-leader',
+    settleRole: 'link' as const,
+    settle: 'Amihan Bacani',
+    minimum: 5,
+  },
+  {
+    // Since decision 0381: the Cells tabs, then a name link per person. Settled on a name.
+    name: 'cells, awaiting cg assignment',
+    route: '/cells?view=NOCELL',
+    settleRole: 'link' as const,
+    settle: 'Bituin Carreon',
+    minimum: 4,
   },
   {
     // Back link and three people in the chain. The move moved to the profile.
@@ -2145,19 +2161,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Reached by pressing Cells behind, which this sweep cannot do. Beyond the measured ' +
       '"dashboard" buttons and month cards its only controls are a Cell link per row, carrying ' +
       'min-h-6 as the name links measured on "cells" do.',
-  },
-  {
-    name: 'dashboard, needs a new leader',
-    why:
-      'Reached by pressing Needs a new leader, which this sweep cannot do. Its controls are a ' +
-      'min-h-6 name link per person, as on "cells", and Show more when there is another page, ' +
-      'the secondary Button primitive measured on every screen.',
-  },
-  {
-    name: 'dashboard, not in a cell',
-    why:
-      'Reached by pressing Not in a Cell, which this sweep cannot do. The same controls as ' +
-      '"dashboard, needs a new leader": a min-h-6 name link per person and Show more.',
   },
   {
     name: 'person profile, moving to another cell',
@@ -2720,19 +2723,22 @@ test('only the most specific navigation entry is marked as the current page', as
  * People carries People and, on Full view screens, Family Tree (decision 0341), each marked on
  * its own screen. # of People is under Reports (decision 0376).
  */
-test('the People item carries People and Family Tree tabs', async ({ page }) => {
+test('the People item carries People, Awaiting Leader Assignment and Family Tree tabs', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  await expect(tabs.getByRole('link')).toHaveText(['Add People', 'Family Tree']);
+  // Awaiting Leader Assignment between them since decision 0381.
+  await expect(tabs.getByRole('link')).toHaveText(['Add People', /^Awaiting Leader Assignment/, 'Family Tree']);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
   await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveCount(0);
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
 
   await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(tabs.getByRole('link', { name: /^Awaiting Leader Assignment/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(tabs.getByRole('link', { name: 'Family Tree', exact: true })).toBeFocused();
 });

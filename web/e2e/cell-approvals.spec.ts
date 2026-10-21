@@ -79,7 +79,7 @@ async function mockQueue(page: Page): Promise<{ path: string; body: unknown }[]>
 }
 
 test.describe('Cells to Approve (decision 0352)', () => {
-  test('is the administrator’s fifth tab, with its count', async ({ page }) => {
+  test('is the administrator’s last tab, with its count', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
     await mockCellAdministrator(page, { approver: true });
@@ -87,10 +87,11 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await page.goto('/cells');
 
-    // The administrator's five tabs (decision 0366).
+    // The administrator's six tabs (decisions 0366 and 0381).
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
       'Active Cells',
+      /^Awaiting CG Assignment/,
       'Under 3 Member Cells',
       'Inactive (3+ Months) Cells',
       'Closed Cells',
@@ -146,20 +147,22 @@ test.describe('Cells to Approve (decision 0352)', () => {
   });
 
   // A Primary sees Active Cells alone (decision 0366).
-  test('is not offered to a Primary who may not approve, who has one tab', async ({ page }) => {
+  test('is not offered to a Primary who may not approve', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
 
     await page.goto('/cells');
 
+    // Awaiting CG Assignment beside it since decision 0381.
     await expect(page.getByRole('group', { name: 'Which Cells' }).getByRole('button')).toHaveText([
       'Active Cells',
+      /^Awaiting CG Assignment/,
     ]);
     // The totals stay with the list they count.
     await expect(page.getByRole('button', { name: /^Cells you oversee/ })).toBeVisible();
   });
 
-  test('is a Primary’s second tab once they are ticked Approves Cells', async ({ page }) => {
+  test('is a Primary’s tab once they are ticked Approves Cells', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
     await mockTickedApprover(page);
@@ -168,7 +171,11 @@ test.describe('Cells to Approve (decision 0352)', () => {
     await page.goto('/cells');
 
     const tabs = page.getByRole('group', { name: 'Which Cells' });
-    await expect(tabs.getByRole('button')).toHaveText(['Active Cells', /^Cells to Approve\s*1$/]);
+    await expect(tabs.getByRole('button')).toHaveText([
+      'Active Cells',
+      /^Awaiting CG Assignment/,
+      /^Cells to Approve\s*1$/,
+    ]);
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
     await expect(page).toHaveURL(/view=APPROVE/);
     await expect(page.getByRole('listitem').filter({ hasText: 'New Cell led by' })).toBeVisible();
@@ -236,7 +243,7 @@ test.describe('the Cells tabs on a phone (decision 0366)', () => {
 
       await page.goto('/cells');
       const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
-      await expect(tabs).toHaveCount(5);
+      await expect(tabs).toHaveCount(6);
 
       const tops = new Set<number>();
       for (const tab of await tabs.all()) {

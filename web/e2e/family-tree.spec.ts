@@ -31,7 +31,7 @@ test('a Full view account has the Family Tree tab, after People', async ({ page 
 
   await page.goto('/people');
 
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'Family Tree']);
+  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', /^Awaiting Leader Assignment/, 'Family Tree']);
   await expect(peopleTabs(page).getByRole('link', { name: 'Family Tree' })).toHaveAttribute(
     'href',
     '/family-tree',

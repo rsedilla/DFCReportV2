@@ -4,19 +4,22 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { useAwaitingLeader } from '@/components/awaiting-lists';
+import { TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
 /**
- * The tabs of the People item: People, then Family Tree (decision 0341) on Full view screens
- * alone. *# of People* is a report and is under Reports (decision 0376). Each is its own
+ * The tabs of the People item: People, then Awaiting Leader Assignment (decision 0381) and
+ * Family Tree (decision 0341) on Full view screens alone. *# of People* is a report and is under Reports (decision 0376). Each is its own
  * address, so Back, a reload and every existing link keep working. The chosen tab opens into
  * the pane that holds everything of it (owner's choice of 2026-10-05).
  */
 const TABS = [
   // Named for what the tab is for (owner, 2026-10-15, decision 0354); the sidebar item stays People.
   { href: '/people', label: 'Add People', name: undefined, fullOnly: false },
+  // Moved here from Record (decision 0381), with its count.
+  { href: '/people/awaiting-leader', label: 'Awaiting Leader Assignment', name: undefined, fullOnly: true },
   { href: '/family-tree', label: 'Family Tree', name: undefined, fullOnly: true },
 ] as const;
 
@@ -32,6 +35,7 @@ export function PeopleTabs({
   children: ReactNode;
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const awaiting = useAwaitingLeader(me.data?.screens === 'FULL');
 
   // **The recording screens have the People tab alone** (decision 0323), as one tab in the same
   // frame (owner, 2026-10-19); Family Tree is the Full view screens' (decision 0341), keyed
@@ -54,9 +58,15 @@ export function PeopleTabs({
                 href={tab.href}
                 aria-current={active && !within ? 'page' : undefined}
                 aria-label={tab.name}
-                className={tabClasses(active)}
+                className={cn(tabClasses(active), 'inline-flex items-center gap-2')}
               >
                 {tab.label}
+                {/* Its count, as it had on Record; a 0 shows no box (decision 0349). */}
+                {tab.href === '/people/awaiting-leader' &&
+                awaiting.count !== null &&
+                awaiting.count !== '0' ? (
+                  <span className={countClasses(active)}>{awaiting.count}</span>
+                ) : null}
               </Link>
             );
           })}

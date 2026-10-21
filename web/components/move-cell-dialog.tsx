@@ -75,7 +75,7 @@ export function MoveCellDialog({
       addCellMember(cell.id, personId, idempotencyKeyFor('add', cell.id, personId)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['person-cells', personId] });
-      // A placed person leaves Record's Awaiting CG Assignment.
+      // A placed person leaves Cells' Awaiting CG Assignment (decision 0381).
       await queryClient.invalidateQueries({ queryKey: ['people-without-a-cell'] });
       close();
     },

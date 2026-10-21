@@ -964,7 +964,7 @@ test.describe('the Record queue', () => {
       awaitingHalves(page).getByRole('button', { name: 'DCC', exact: true }),
     ).toBeVisible();
     // The lists whose reads succeeded still count, so the absence above is the failure's.
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment\s*2$/ })).toBeVisible();
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*1$/ })).toBeVisible();
   });
 
   /**
@@ -1052,7 +1052,6 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment\s*2$/ })).toBeVisible();
     await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records\s*1$/ })).toBeVisible();
     await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
 
@@ -1599,7 +1598,7 @@ test.describe('recording a Sunday for another leader (decision 0313)', () => {
  * and a card per row below it, and the two lists of people show everybody, fifty at a
  * time, with Show more.
  */
-test.describe('Record’s four lists (decision 0290)', () => {
+test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
   /** 10:00 on 20 June 2026 in Manila. */
   const JUNE_20 = new Date('2026-06-20T02:00:00Z');
 
@@ -1627,8 +1626,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await mockRecord(page);
     await page.goto('/dashboard');
 
-    await chooseList(page, /^Awaiting Leader Assignment/);
-    await expect(page).toHaveURL(/list=leader/);
+    await chooseList(page, /^Pending CG Records/);
+    await expect(page).toHaveURL(/list=behind/);
 
     await chooseList(page, /^Update Records/);
     await expect(page).not.toHaveURL(/list=/);
@@ -1652,7 +1651,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
       awaitingHalves(page).getByRole('button', { name: /^Cell Group/ }),
     ).toHaveAttribute('aria-pressed', 'true');
     await page.goBack();
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting Leader Assignment/ })).toHaveAttribute(
+    await expect(recordLists(page).getByRole('button', { name: /^Pending CG Records/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1695,20 +1694,8 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await expect(page).toHaveURL(/\/dashboard(\?kind=dcc)?$/);
   });
 
-  const person = (n: number, name: string) => ({
-    id: `3f1b7c6e-0000-4000-8000-0000000009${String(n).padStart(2, '0')}`,
-    member_id: `M-0019${String(n).padStart(2, '0')}`,
-    full_name: name,
-  });
-  const FORMER = {
-    person_id: '3f1b7c6e-0000-4000-8000-000000000903',
-    member_id: 'M-001003',
-    full_name: 'Rogelio Mendoza',
-  };
-
   /**
-   * One of the two people lists over two pages: the first carries a cursor, the second
-   * does not. Every cursor asked for is kept, so a case can say a second page was read.
+   * A list over two pages: the first carries a cursor, the second does not. Every cursor asked for is kept, so a case can say a second page was read.
    */
   async function mockTwoPages(
     page: Page,
@@ -1733,17 +1720,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     return cursors;
   }
 
-  async function mockEmpty(page: Page, pattern: string) {
-    await page.route(pattern, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ data: [], next_cursor: null }),
-      }),
-    );
-  }
-
-  test('opens on five buttons of one size, each with its count, Update Records chosen', async ({
+  test('opens on three buttons of one size, each with its count, Update Records chosen', async ({
     page,
   }) => {
     await page.clock.setFixedTime(JUNE_20);
@@ -1753,16 +1730,14 @@ test.describe('Record’s four lists (decision 0290)', () => {
     await page.goto('/dashboard');
 
     const lists = recordLists(page);
-    await expect(lists.getByRole('button')).toHaveCount(5);
+    await expect(lists.getByRole('button')).toHaveCount(3);
     // Two meetings of the reader's own and two Sundays; one Cell behind; no leader behind on
-    // DCC; two people on each of the people lists.
+    // DCC. The two people lists are on Cells and People (decision 0381).
     for (const name of [
       /^Update Records\s*4$/,
       /^Pending CG Records\s*1$/,
       // A count of 0 is left off (decision 0349).
       /^Pending DCC Records$/,
-      /^Awaiting Leader Assignment\s*2$/,
-      /^Awaiting CG Assignment\s*2$/,
     ]) {
       await expect(lists.getByRole('button', { name })).toBeVisible();
     }
@@ -1773,13 +1748,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
     for (const name of [
       /^Pending CG Records/,
       /^Pending DCC Records/,
-      /^Awaiting Leader Assignment/,
-      /^Awaiting CG Assignment/,
     ]) {
       await expect(lists.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
     }
 
-    // One size, as wide as the longest label (decision 0332): one row of five, all equal.
+    // One size, as wide as the longest label (decision 0332): one row of three, all equal.
     const { widths, tops } = await lists.evaluate((group) => {
       const buttons = [...group.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
       return {
@@ -1859,21 +1832,6 @@ test.describe('Record’s four lists (decision 0290)', () => {
   }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockRecord(page);
-    await mockTwoPages(
-      page,
-      '**/api/v1/people/awaiting-reassignment*',
-      [
-        { ...person(1, 'Amihan Bacani'), former_leader: FORMER },
-        { ...person(2, 'Teodoro Cruz'), former_leader: FORMER },
-      ],
-      [{ ...person(3, 'Zenaida Flores'), former_leader: FORMER }],
-    );
-    await mockTwoPages(
-      page,
-      '**/api/v1/cells/people-without-a-cell*',
-      [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
-      [person(13, 'Soledad Aquino')],
-    );
     // Pending CG Records is read fifty at a time too (decision 0368).
     await mockTwoPages(page, '**/api/v1/cells/meetings/pending*', [PENDING_CG_ROWS[0]], [PENDING_CG_ROWS[1]]);
 
@@ -1881,8 +1839,6 @@ test.describe('Record’s four lists (decision 0290)', () => {
 
     const lists = recordLists(page);
     await expect(lists.getByRole('button', { name: /^Pending CG Records\s*1\+$/ })).toBeVisible();
-    await expect(lists.getByRole('button', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
-    await expect(lists.getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
     // The queue is read whole, so its count carries no "+".
     await expect(lists.getByRole('button', { name: /^Update Records\s*4$/ })).toBeVisible();
   });
@@ -1914,122 +1870,14 @@ test.describe('Record’s four lists (decision 0290)', () => {
       /^\/cells\/3f1b7c6e-0000-4000-8000-000000000101\/meetings\?month=\d{4}-\d{2}-01$/,
     );
 
-    await chooseList(page, /^Awaiting Leader Assignment/);
-    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
-    const unplaced = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
-    await expect(
-      unplaced.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
-    ).toHaveText(['Amihan Bacani', 'Rogelio Mendoza']);
-    // Why they are listed, in plain words (UI label audit, Medium 3).
-    await expect(
-      page.getByText('People you oversee whose pastoral leader is not in the pastoral tree.'),
-    ).toBeVisible();
-    // The action that resolves an entry is the reassignment (section 19), on the person page.
-    await expect(unplaced.getByRole('link', { name: 'Amihan Bacani' })).toHaveAttribute(
-      'href',
-      '/people/3f1b7c6e-0000-4000-8000-000000000901',
-    );
-
-    await chooseList(page, /^Awaiting CG Assignment/);
-    await expect(page.getByRole('heading', { name: 'Awaiting Leader Assignment' })).toHaveCount(0);
-    const withoutACell = page.getByRole('table', { name: 'Awaiting CG Assignment' });
-    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name']);
-    await expect(withoutACell.getByRole('link', { name: 'Bituin Carreon' })).toHaveAttribute(
-      'href',
-      '/people/3f1b7c6e-0000-4000-8000-000000000921',
-    );
-    // The retired screen is linked from nowhere on Record.
-    await expect(page.locator('a[href="/people/awaiting-reassignment"]')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Open the full list|See everyone/ })).toHaveCount(0);
+    // The two people lists left Record (decision 0381).
+    for (const name of [/^Awaiting Leader Assignment/, /^Awaiting CG Assignment/]) {
+      await expect(recordLists(page).getByRole('button', { name })).toHaveCount(0);
+    }
 
     await chooseList(page, /^Update Records/);
     await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Awaiting CG Assignment' })).toHaveCount(0);
-  });
-
-  for (const list of [
-    {
-      button: /^Awaiting Leader Assignment/,
-      pattern: '**/api/v1/people/awaiting-reassignment*',
-      first: [
-        { ...person(1, 'Amihan Bacani'), former_leader: FORMER },
-        { ...person(2, 'Teodoro Cruz'), former_leader: FORMER },
-      ],
-      second: [{ ...person(3, 'Zenaida Flores'), former_leader: FORMER }],
-      table: 'Awaiting Leader Assignment',
-      added: 'Zenaida Flores',
-    },
-    {
-      button: /^Awaiting CG Assignment/,
-      pattern: '**/api/v1/cells/people-without-a-cell*',
-      first: [person(11, 'Bituin Carreon'), person(12, 'Rodolfo Villamor')],
-      second: [person(13, 'Soledad Aquino')],
-      table: 'Awaiting CG Assignment',
-      added: 'Soledad Aquino',
-    },
-  ]) {
-    test(`${list.table}: Show more reads the next page in place, and stops at the last`, async ({
-      page,
-    }) => {
-      await page.clock.setFixedTime(JUNE_20);
-      await mockRecord(page);
-      await page.setViewportSize({ width: 1280, height: 800 });
-      const cursors = await mockTwoPages(page, list.pattern, list.first, list.second);
-
-      await page.goto('/dashboard');
-      await chooseList(page, list.button);
-
-      const table = page.getByRole('table', { name: list.table });
-      await expect(table.getByRole('link')).toHaveCount(2);
-      await expect(table.getByRole('link', { name: list.added })).toHaveCount(0);
-
-      await page.getByRole('button', { name: 'Show more' }).click();
-
-      await expect(table.getByRole('link', { name: list.added })).toBeVisible();
-      await expect(table.getByRole('link')).toHaveCount(3);
-      expect(cursors).toContain('page-two');
-      // The last page carries no cursor, so there is nothing more to show and the count
-      // is now a figure rather than "N+".
-      await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
-      await expect(
-        recordLists(page).getByRole('button', { name: new RegExp(`${list.button.source}\\s*3$`) }),
-      ).toBeVisible();
-      // Every page the list reads is fifty.
-      expect(cursors.length).toBeGreaterThanOrEqual(2);
-    });
-  }
-
-  test('an empty people list keeps its table and says so in one row', async ({ page }) => {
-    await page.clock.setFixedTime(JUNE_20);
-    await mockRecord(page);
-    await mockEmpty(page, '**/api/v1/people/awaiting-reassignment*');
-    await mockEmpty(page, '**/api/v1/cells/people-without-a-cell*');
-    await page.setViewportSize({ width: 1280, height: 800 });
-
-    await page.goto('/dashboard');
-    // A count of 0 is left off (decision 0349).
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting Leader Assignment$/ })).toBeVisible();
-    await expect(recordLists(page).getByRole('button', { name: /^Awaiting CG Assignment$/ })).toBeVisible();
-
-    await chooseList(page, /^Awaiting Leader Assignment/);
-    const unplaced = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
-    await expect(unplaced.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
-    // The header row and the one row saying so.
-    await expect(unplaced.getByRole('row')).toHaveCount(2);
-    await expect(unplaced.getByRole('cell')).toHaveText(['Nobody you oversee is waiting for a new leader.']);
-    await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
-
-    await chooseList(page, /^Awaiting CG Assignment/);
-    const withoutACell = page.getByRole('table', { name: 'Awaiting CG Assignment' });
-    await expect(withoutACell.getByRole('columnheader')).toHaveText(['Name']);
-    await expect(withoutACell.getByRole('row')).toHaveCount(2);
-    await expect(withoutACell.getByRole('cell')).toHaveText(['Everybody you oversee is in a Cell.']);
-
-    // Below lg the same sentence stands in for the cards.
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(withoutACell).toBeHidden();
-    await expect(page.getByRole('listitem').filter({ hasText: 'Everybody you oversee is in a Cell.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
   });
 
   // A long tab label squeezed its count narrower than the number, which ran over the box's
@@ -2099,23 +1947,11 @@ test.describe('Record’s four lists (decision 0290)', () => {
       }));
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 
-      // The other three lists are cards too.
+      // Pending CG Records is cards too.
       await chooseList(page, /^Pending CG Records/);
       await expect(page.getByRole('table', { name: 'Pending CG Records' })).toBeHidden();
       await expect(
         page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Carlo Reyes' }) }),
-      ).toBeVisible();
-
-      await chooseList(page, /^Awaiting Leader Assignment/);
-      await expect(page.getByRole('table', { name: 'Awaiting Leader Assignment' })).toBeHidden();
-      await expect(
-        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Amihan Bacani' }) }),
-      ).toContainText(/Previous Cell Leader\s*Rogelio Mendoza/);
-
-      await chooseList(page, /^Awaiting CG Assignment/);
-      await expect(page.getByRole('table', { name: 'Awaiting CG Assignment' })).toBeHidden();
-      await expect(
-        page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Bituin Carreon' }) }),
       ).toBeVisible();
     });
   }
@@ -2133,7 +1969,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
     // The one visible Record button for that meeting is the table's.
     await expect(record.locator('xpath=ancestor::table')).toHaveCount(1);
 
-    for (const name of ['Pending CG Records', 'Awaiting Leader Assignment', 'Awaiting CG Assignment']) {
+    for (const name of ['Pending CG Records']) {
       await chooseList(page, new RegExp(`^${name}`));
       const table = page.getByRole('table', { name });
       await expect(table).toBeVisible();
@@ -2143,7 +1979,7 @@ test.describe('Record’s four lists (decision 0290)', () => {
   });
 });
 
-/** Record's four list buttons (decision 0290). */
+/** Record's list buttons (decisions 0290 and 0381). */
 function recordLists(page: Page) {
   return page.getByRole('group', { name: 'Outstanding work', exact: true });
 }
@@ -2640,7 +2476,7 @@ test.describe('Awaiting Leader Assignment for a reader who may not move people (
 
   test('lists the people read-only, saying their Primary chooses a new leader', async ({ page }) => {
     await mockList(page);
-    await page.goto('/dashboard?list=leader');
+    await page.goto('/people/awaiting-leader');
 
     await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
     await expect(page.getByText('A new leader is chosen by your Primary.')).toBeVisible();
@@ -2649,7 +2485,7 @@ test.describe('Awaiting Leader Assignment for a reader who may not move people (
   test('does not say so to a reader who may move them', async ({ page }) => {
     await mockList(page);
     await mockGrants(page, ['people.manage_pastoral_assignment']);
-    await page.goto('/dashboard?list=leader');
+    await page.goto('/people/awaiting-leader');
 
     await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
     await expect(page.getByText('A new leader is chosen by your Primary.')).toHaveCount(0);

@@ -118,6 +118,7 @@ test('People carries no # of People tab', async ({ page }) => {
 
   await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
     'Add People',
+    /^Awaiting Leader Assignment/,
     'Family Tree',
   ]);
 });

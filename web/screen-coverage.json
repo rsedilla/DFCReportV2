@@ -110,7 +110,8 @@
     },
     {
       "route": "GET /api/v1/people/awaiting-reassignment",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/components/awaiting-lists.tsx",
+      "note": "People's Awaiting Leader Assignment tab (decision 0381)."
     },
     {
       "route": "GET /api/v1/people/:id/pastoral-path",
@@ -257,8 +258,8 @@
     },
     {
       "route": "GET /api/v1/cells/people-without-a-cell",
-      "screen": "web/app/dashboard/page.tsx",
-      "note": "Record's Awaiting CG Assignment; the page of its own is withdrawn (decision 0343)."
+      "screen": "web/components/awaiting-lists.tsx",
+      "note": "Cells' Awaiting CG Assignment tab (decision 0381), Record's until then; the page of its own is withdrawn (decision 0343)."
     },
     {
       "route": "GET /api/v1/dcc/events",

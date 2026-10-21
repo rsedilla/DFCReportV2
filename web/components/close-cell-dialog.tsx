@@ -34,7 +34,7 @@ const EXPLANATION_MAX = 500;
  *
  * **A reason, an explanation and a decision about every member.** The explanation is what the
  * Senior Pastors read on the closed Cell. Section 10 asks that members be dealt with
- * explicitly: here they are all left without a Cell, to appear on *Awaiting CG Assignment*, or
+ * explicitly: here they are all left without a Cell, to appear on Cells' *Awaiting CG Assignment* (decision 0381), or
  * all moved to one Cell the administrator finds by its ID or leader.
  *
  * **A closure is never reversed** (section 10), so the button says what it does.
@@ -209,7 +209,7 @@ export function CloseCellDialog({
         {members.data && members.data.length > 0 ? (
           <p className="text-muted text-sm leading-relaxed">
             {members.data.map((member) => member.full_name).join(', ')}.
-            {where === 'NONE' ? ' They will appear under Awaiting CG Assignment on Record.' : null}
+            {where === 'NONE' ? ' They will appear under Awaiting CG Assignment on Cells.' : null}
           </p>
         ) : null}
 
