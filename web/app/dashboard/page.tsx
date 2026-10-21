@@ -13,6 +13,7 @@ import {
   RecordingStatusPanel,
   type OpenPending,
 } from '@/components/recording-status';
+import { isBranchReader } from '@/components/reports-tabs';
 import { SentRequests } from '@/components/sent-requests';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -254,7 +255,11 @@ function Dashboard() {
     recordingOnly || seniorPastor || (tab === 'status' && !leaderStatus && !churchStatus)
       ? 'awaiting'
       : tab;
-  const mayOversee = me.data?.people_i_oversee !== false;
+  // **Leaders Under Me is hidden from a Full view leader** (decision 0382): their branch's work
+  // is on Pending CG Records and Pending DCC Records. Hidden rather than removed, the owner
+  // planning it as a feature later. The Admin keeps it, and a Leader without Full view sees it
+  // while a leader holding an account sits directly beneath them (decision 0323).
+  const mayOversee = me.data?.people_i_oversee !== false && !isBranchReader(me.data);
   const shownWhose: Whose = mayOversee ? whose : 'mine';
   const branchView = shownWhose === 'branch';
   // The branch is asked for only once the account says the reader may have one.
