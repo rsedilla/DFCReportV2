@@ -253,6 +253,21 @@ export class TrendsDto {
 }
 
 /**
+ * `GET /reports/counts/branch`: *# of Cell Groups* and *# of Cell Leaders* for one leader's
+ * branch (decision 0380), with the selector `people/branch` takes.
+ */
+export class BranchCountsDto extends BranchPeopleDto {}
+
+/**
+ * `GET /reports/trends/branch`: twelve months of one figure for one leader's branch (decision
+ * 0380), ending at `period`, under the report guard on a `LEADER` selector.
+ */
+export class BranchTrendsDto extends BranchPeopleDto {
+  @IsIn(TREND_FIGURES)
+  figure!: TrendFigure;
+}
+
+/**
  * `GET /reports/recording-status`: the Senior Pastors' *Recording status* over a week or a
  * month (decision 0325), named by its first day.
  */

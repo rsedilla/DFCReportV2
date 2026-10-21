@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { BranchPeoplePanel } from '@/components/branch-people';
+import { BranchCountsPanel } from '@/components/branch-people';
 import { ChurchCountsPanel } from '@/components/church-counts';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -14,8 +14,8 @@ import { monthFromQuery } from '@/lib/reporting-month';
  * *# of People* under Reports for every reader that has it (SKILL.md sections 16 and 19;
  * decisions 0326 and 0376): everyone in a branch on a month's last day, whether or not they
  * attended. A whole-church reader, the Senior Pastors and the Admin, sees the whole church and
- * each root's direct leaders; a Full view leader sees their own branch and can open a leader
- * beneath them (decision 0364's figure, moved here from People).
+ * each root's direct leaders; a Full view leader sees their own branch, its names plain text
+ * (decision 0364's figure, moved here from People; decision 0380).
  */
 export default function NumberOfPeoplePage() {
   return (
@@ -41,7 +41,7 @@ function NumberOfPeople() {
         ) : wholeChurch ? (
           <ChurchCountsPanel figure="PEOPLE" month={month} />
         ) : (
-          <BranchPeoplePanel readerId={me.data.person_id} leader={leader} month={month} />
+          <BranchCountsPanel figure="PEOPLE" readerId={me.data.person_id} leader={leader} month={month} />
         )}
       </ReportsTabs>
     </main>

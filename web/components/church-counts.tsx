@@ -12,9 +12,11 @@ import { monthFromQuery } from '@/lib/reporting-month';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 
-type Figure = 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
+export type CountFigure = 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
+type Figure = CountFigure;
 
-const COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
+/** Each # tab's columns, shared with a Full view leader's branch (decision 0380). */
+export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
   CELLS: [
     // Every Cell is Youth, Young Pro or Couple, so the Cell Groups are their total (owner, 2026-10-09).
     ['cell_groups', 'Total'],
@@ -95,7 +97,7 @@ export function ChurchCountsPanel({
                 : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
             }
           >
-            {COLUMNS[figure].map(([key, label]) => (
+            {COUNT_COLUMNS[figure].map(([key, label]) => (
               <div key={key} className="border-line border p-3">
                 <dt className="text-ink text-sm font-bold">{label}</dt>
                 <dd className="mt-1 text-xl font-bold tabular-nums">
@@ -160,11 +162,11 @@ function CountTable({
           <tr>
             <HeaderCell style={{ width: '36%' }}>Primaries</HeaderCell>
             {/* The figures share the rest of the row equally (owner, 2026-10-09). */}
-            {COLUMNS[figure].map(([key, label]) => (
+            {COUNT_COLUMNS[figure].map(([key, label]) => (
               <HeaderCell
                 key={key}
                 className="text-right"
-                style={{ width: `${64 / COLUMNS[figure].length}%` }}
+                style={{ width: `${64 / COUNT_COLUMNS[figure].length}%` }}
               >
                 {label}
               </HeaderCell>
@@ -178,7 +180,7 @@ function CountTable({
               <td className="px-3 py-3">
                 <BranchLink leader={row.leader} />
               </td>
-              {COLUMNS[figure].map(([key]) => (
+              {COUNT_COLUMNS[figure].map(([key]) => (
                 <td key={key} className="px-3 py-3 text-right tabular-nums">
                   {row[key]}
                 </td>
@@ -194,7 +196,7 @@ function CountTable({
           <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
             <BranchLink leader={row.leader} />
             <p className="text-muted text-sm tabular-nums">
-              {COLUMNS[figure].map(([key, label]) => `${label} ${row[key]}`).join(' · ')}
+              {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${row[key]}`).join(' · ')}
             </p>
           </li>
         ))}
@@ -211,7 +213,7 @@ function OthersLine({ figure, others }: { figure: Figure; others: ChurchCountFig
         The two Network roots, and anyone in neither table.
       </p>
       <p className="mt-2 text-sm tabular-nums">
-        {COLUMNS[figure].map(([key, label]) => `${label} ${others[key]}`).join(' · ')}
+        {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${others[key]}`).join(' · ')}
       </p>
     </div>
   );

@@ -33,27 +33,8 @@ const TABS = [
   PEOPLE_TAB,
 ] as const;
 
-/**
- * A Full view leader's four (decisions 0340, 0360 and 0376), the first two each named a report
- * (decision 0361) and the third for what it shows (decision 0378), the first two laid out as the Senior Pastors' are for the leader's own
- * branch. Training and Conquest are hidden, not withdrawn: their pages still open by address.
- */
-const BRANCH_TABS = [
-  { key: 'cells', label: 'CG Attendance Reports', path: '/reports/cells' },
-  { key: 'dcc', label: 'DCC Attendance Reports', path: '/reports/dcc' },
-  { key: 'suynl', label: 'Encounter Readiness', path: '/reports/suynl' },
-  PEOPLE_TAB,
-] as const;
-
-/**
- * The two Senior Pastors' five tabs (decision 0326, point 3), in place of the six. The first
- * two are the same reports under the names the church uses. **A `#` label keeps its words as
- * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
- * "hash" (section 23).
- */
-const SENIOR_PASTOR_TABS = [
-  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
-  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
+/** The two # tabs the Senior Pastors and a Full view leader share (decisions 0326 and 0380). */
+const CELL_COUNT_TABS = [
   {
     key: 'number-of-cells',
     label: '# of Cell Groups',
@@ -66,6 +47,30 @@ const SENIOR_PASTOR_TABS = [
     name: 'Number of Cell Leaders',
     path: '/reports/number-of-cell-leaders',
   },
+] as const;
+
+/**
+ * A Full view leader's five (decision 0380): the Senior Pastors' five, for the leader's own
+ * branch. Encounter Readiness, Training and Conquest are hidden, not withdrawn: their pages
+ * still open by address.
+ */
+const BRANCH_TABS = [
+  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
+  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
+  ...CELL_COUNT_TABS,
+  PEOPLE_TAB,
+] as const;
+
+/**
+ * The two Senior Pastors' five tabs (decision 0326, point 3), in place of the six. The first
+ * two are the same reports under the names the church uses. **A `#` label keeps its words as
+ * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
+ * "hash" (section 23).
+ */
+const SENIOR_PASTOR_TABS = [
+  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
+  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
+  ...CELL_COUNT_TABS,
   PEOPLE_TAB,
 ] as const;
 
@@ -94,12 +99,12 @@ export function trendHref(figure: TrendFigure, leader?: string | null): string {
 /**
  * Which report is on screen, and the way to the others (SKILL.md section 19; decision 0292).
  *
- * **Five links for a whole-church reader, the Senior Pastors' five (decision 0326), or a Full
- * view leader's three (decisions 0340 and 0360), not ARIA tabs.** Each report keeps an address of its own, so the landing page
+ * **Six links for a whole-church reader, the Senior Pastors' five (decision 0326), or a Full
+ * view leader's five (decision 0380), not ARIA tabs.** Each report keeps an address of its own, so the landing page
  * decision 0245 gives a whole-church reader, the sidebar and a saved link all still work, and
  * something that navigates is announced as a link. Equal widths in the Record screen's style
  * (decision 0290): one row from a small screen up, and two on a phone. **A Full view leader's
- * three are sized to their words instead** (decision 0361), in the tab style every other tab row
+ * five are sized to their words instead** (decision 0361), in the tab style every other tab row
  * uses, a long label wrapping inside its tab on a phone.
  *
  * **The month travels** to the reports that have one, so switching from the DCC figures for
@@ -121,7 +126,8 @@ export function ReportsTabs({
   month?: string;
   /**
    * The Senior Pastors' two views of one figure (decision 0377): by period, or its last twelve
-   * months, the screen that was `Trends`. Only their screens offer the switch.
+   * months, the screen that was `Trends`. Their screens and a Full view leader's offer the
+   * switch (decision 0380).
    */
   view?: 'period' | 'trend';
   /** The leader a twelve-month view draws, kept from tab to tab. */
@@ -148,7 +154,7 @@ export function ReportsTabs({
           aria-label="Which report"
           className={cn(
             // The five labels fit one row from a small screen up (owner, 2026-10-09); a
-            // whole-church reader's six take three a row on a phone. A Full view leader's four sit
+            // whole-church reader's six take three a row on a phone. A Full view leader's five sit
             // two by two on a phone, equal, and from `sm` in one row sized to their words.
             branch
               ? 'mt-6 grid grid-cols-2 sm:flex'
@@ -160,7 +166,7 @@ export function ReportsTabs({
         >
           {tabs.map((tab) => {
             const active = tab.key === current;
-            const trend = seniorPastor && view === 'trend';
+            const trend = (seniorPastor || branch) && view === 'trend';
             const dated =
               tab.key === 'cells' ||
               tab.key === 'dcc' ||
@@ -200,8 +206,9 @@ export function ReportsTabs({
       ) : null}
       <div className={tabbed ? TAB_PANE : 'mt-6'}>
         {/* The Senior Pastors' figure by period or over its last twelve months, one tab row for
-            both (decision 0377), so the sidebar carries no second item for the same five. */}
-        {seniorPastor && current in TREND_FIGURE ? (
+            both (decision 0377), so the sidebar carries no second item for the same five; a Full
+            view leader's the same, for their own branch (decision 0380). */}
+        {(seniorPastor || branch) && current in TREND_FIGURE ? (
           <ViewSwitch
             label="Which view"
             even="content"

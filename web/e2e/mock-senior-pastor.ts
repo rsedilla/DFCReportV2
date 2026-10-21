@@ -131,6 +131,49 @@ export async function mockBranchPeople(page: Page): Promise<{ leader: string; pe
   return asked;
 }
 
+/**
+ * `GET /reports/counts/branch` (decision 0380): a Full view leader's *# of Cell Groups* and *# of
+ * Cell Leaders*, with the same disciples as {@link mockBranchPeople}. The rows and the reader's
+ * own row add up to the box. Returns the leader and period asked. Names are invented.
+ */
+export async function mockBranchCounts(page: Page): Promise<{ leader: string; period: string }[]> {
+  const asked: { leader: string; period: string }[] = [];
+  const figures = (youth: number, youngPro: number, couple: number, leaders: number, people: number) => ({
+    cell_groups: youth + youngPro + couple,
+    youth,
+    young_pro: youngPro,
+    couple,
+    cell_leaders: leaders,
+    people,
+  });
+  await page.route('**/api/v1/reports/counts/branch?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const period = params.get('period') ?? '';
+    asked.push({ leader: params.get('leader_id') ?? '', period });
+    return route.fulfill(
+      json({
+        period,
+        current: period === '2026-10-01',
+        at: '2026-10-08T02:00:00.000Z',
+        total: figures(5, 3, 2, 7, 42),
+        own: figures(1, 0, 0, 1, 1),
+        rows: [
+          {
+            leader: { id: '3f1b7c6e-0000-4000-8000-000000000701', member_id: 'M-000801', full_name: 'Consuelo Bautista' },
+            ...figures(2, 1, 1, 3, 14),
+          },
+          {
+            leader: { id: '3f1b7c6e-0000-4000-8000-000000000702', member_id: 'M-000802', full_name: 'Efren Dimaculangan' },
+            ...figures(1, 1, 0, 2, 10),
+          },
+          { leader: null, ...figures(1, 1, 1, 1, 17) },
+        ],
+      }),
+    );
+  });
+  return asked;
+}
+
 const MONTHS = [
   '2025-11-01',
   '2025-12-01',
@@ -181,6 +224,38 @@ export async function mockTrends(
                 { leader: SP_MENS_ROOT, network: 'MENS', values: series(1.5) },
               ]
             : [{ leader, network: null, values: series(0.5) }],
+      }),
+    );
+  });
+  return asked;
+}
+
+/**
+ * `GET /reports/trends/branch` (decision 0380): a Full view leader's own branch, one line over
+ * the twelve months ending with October 2026, March a gap. Returns the queries asked.
+ */
+export async function mockBranchTrends(page: Page): Promise<URLSearchParams[]> {
+  const asked: URLSearchParams[] = [];
+  await page.route('**/api/v1/reports/trends/branch?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    asked.push(params);
+    return route.fulfill(
+      json({
+        figure: params.get('figure') ?? 'CG',
+        months: MONTHS,
+        current: '2026-10-01',
+        open: MONTHS.map((month) => month === '2026-10-01'),
+        lines: [
+          {
+            leader: {
+              id: params.get('leader_id'),
+              member_id: 'M-000700',
+              full_name: 'Teodora Reyes',
+            },
+            network: null,
+            values: MONTHS.map((_, index) => (index === 4 ? null : index + 2)),
+          },
+        ],
       }),
     );
   });

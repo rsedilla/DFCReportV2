@@ -28,7 +28,9 @@ import type { NetworkName } from '../database/schema';
 import { PeopleReadService } from '../people/people.read.service';
 
 import {
+  BranchCountsDto,
   BranchPeopleDto,
+  BranchTrendsDto,
   CellByLeaderDto,
   CellMonthlyReportDto,
   CellTwelveDto,
@@ -741,6 +743,204 @@ export class ReportingController {
               )
               .map((entry) => entry.row),
     };
+  }
+
+  /**
+   * `GET /api/v1/reports/counts/branch` -- *# of Cell Groups* and *# of Cell Leaders* for one
+   * leader's branch over a month (decision 0380): the box, one row per direct disciple, and the
+   * leader's own row.
+   *
+   * **Guarded and named exactly as `people/branch` is** (decision 0364): the report guard on a
+   * `LEADER` selector dated at the month, the actor's reach checked again at the instant the
+   * figures were counted, and a row named only where its leader would be admitted as a selector
+   * then; any other stays a row, unnamed, so the rows still add up. In first-name order.
+   */
+  @Get('counts/branch')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    periodFrom: 'query.period',
+  })
+  async branchCounts(
+    @Query() query: BranchCountsDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    if (query.scope !== 'LEADER' || query.leader_id === undefined) {
+      throw new ValidationFailedError(
+        'This counts one leader’s branch: send scope LEADER with leader_id.',
+        { field: 'scope', value: query.scope },
+      );
+    }
+    const leaderId = query.leader_id;
+    await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
+    const counts = await this.reporting.branchCounts(leaderId, query.period);
+
+    const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
+      {
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: leaderId },
+        at: counts.at,
+      },
+    ]);
+    if (!reaches) {
+      throw new ScopeDeniedError('This report is outside your scope for the period asked.', {
+        scope: 'LEADER',
+      });
+    }
+
+    const rows = counts.rows ?? [];
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      rows.map((row) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: row.leaderId },
+        at: counts.at,
+      })),
+    );
+    const identities = await this.people.forDecisions(
+      rows.filter((_, index) => admitted[index]).map((row) => row.leaderId),
+    );
+
+    return {
+      period: counts.period,
+      current: counts.current,
+      at: counts.at.toISOString(),
+      total: counts.total === null ? null : countFigures(counts.total),
+      own: counts.own === null ? null : countFigures(counts.own),
+      rows:
+        counts.rows === null
+          ? null
+          : rows
+              .map((row, index) => {
+                const identity = admitted[index] ? identities.get(row.leaderId) : undefined;
+
+                return {
+                  key: identity === undefined ? null : rosterKeyOf(identity),
+                  row: {
+                    leader:
+                      identity === undefined
+                        ? null
+                        : {
+                            id: row.leaderId,
+                            member_id: identity.memberId,
+                            full_name: identity.fullName,
+                          },
+                    ...countFigures(row.figures),
+                  },
+                };
+              })
+              .sort((left, right) =>
+                left.key === null
+                  ? 1
+                  : right.key === null
+                    ? -1
+                    : compareRosterKeys(left.key, right.key),
+              )
+              .map((entry) => entry.row),
+    };
+  }
+
+  /**
+   * `GET /api/v1/reports/trends/branch` -- a Full view leader's *Last 12 months* (decision
+   * 0380): one figure for one leader's branch, month by month, the twelve months ending at
+   * `period`, the last *so far* while it runs.
+   *
+   * **Each month is authorized at its own instant**, as a report for that month would be
+   * (decisions 0207 and 0214): the guard admits the selector at `period`, and every earlier
+   * month is checked again at its final millisecond. A month the actor could not have read the
+   * branch for is a gap rather than a figure, so the line never shows a month a by-period
+   * report would refuse. One line, the branch's own, and never the church's or another's.
+   */
+  @Get('trends/branch')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    periodFrom: 'query.period',
+  })
+  async branchTrends(
+    @Query() query: BranchTrendsDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    if (query.scope !== 'LEADER' || query.leader_id === undefined) {
+      throw new ValidationFailedError(
+        'This draws one leader’s branch: send scope LEADER with leader_id.',
+        { field: 'scope', value: query.scope },
+      );
+    }
+    const leaderId = canonicalId(query.leader_id);
+    await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
+    const months = Array.from({ length: 12 }, (_, index) => shiftMonth(query.period, index - 11));
+
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      months.map((month) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: leaderId },
+        at: reportingPeriodBounds(month).end,
+      })),
+    );
+
+    // A period that has not begun is refused as every report refuses it (decision 0216), before
+    // any month is read; after that, any month that cannot be read is a gap (decision 0257),
+    // the asked one included.
+    await this.reporting.assertReportable(query.period);
+
+    const values: (number | null)[] = [];
+    const open: boolean[] = [];
+    for (const [index, month] of months.entries()) {
+      const point = admitted[index]
+        ? await this.branchTrendPoint(query.figure, month, leaderId).catch(refusalAsNull)
+        : null;
+      values.push(point?.value ?? null);
+      open.push(point?.open ?? false);
+    }
+
+    const { person } = await this.namer([leaderId]);
+
+    return {
+      figure: query.figure,
+      months,
+      current: months[months.length - 1],
+      open,
+      lines: [{ leader: person(leaderId), network: null, values }],
+    };
+  }
+
+  /** One month of a branch's *Last 12 months*, with whether that month is still open. */
+  private async branchTrendPoint(
+    figure: TrendFigure,
+    month: string,
+    leaderId: string,
+  ): Promise<{ value: number | null; open: boolean }> {
+    if (figure === 'CELLS' || figure === 'CELL_LEADERS' || figure === 'PEOPLE') {
+      const counts = await this.reporting.branchCounts(leaderId, month);
+      const total = counts.total;
+
+      return {
+        value:
+          total === null
+            ? null
+            : figure === 'CELLS'
+              ? total.cellGroups
+              : figure === 'CELL_LEADERS'
+                ? total.cellLeaders
+                : total.people,
+        // A count is taken on the month's last day, so only the month still running is *so far*.
+        open: counts.current,
+      };
+    }
+
+    const scope = { kind: 'LEADER' as const, person_id: leaderId };
+    const report =
+      figure === 'CG'
+        ? await this.reporting.cellMonthly(scope, month)
+        : await this.reporting.dccMonthly(scope, month);
+
+    return { value: report.unique_people, open: report.open };
   }
 
   /**

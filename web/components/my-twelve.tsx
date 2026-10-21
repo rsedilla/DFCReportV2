@@ -47,9 +47,12 @@ export function PeriodTabs({
   onChange,
   inBar = false,
   labelled = false,
+  kinds,
 }: {
   value: RangeKind;
   onChange: (value: RangeKind) => void;
+  /** The lengths offered, all four unless named: a Full view leader's two (decision 0380). */
+  kinds?: readonly RangeKind[];
   /** Inside the control bar, beside the period it chooses (the Senior Pastors, owner 2026-10-09). */
   inBar?: boolean;
   /**
@@ -62,7 +65,9 @@ export function PeriodTabs({
   return (
     <ViewSwitch
       label="Report period"
-      options={PERIODS.map(([key, label]) => ({ key, label }))}
+      options={PERIODS.filter(([key]) => kinds === undefined || kinds.includes(key)).map(
+        ([key, label]) => ({ key, label }),
+      )}
       even={labelled ? 'content' : true}
       className={labelled ? 'mt-2' : inBar ? 'mt-0 w-auto' : undefined}
       value={value}
@@ -346,7 +351,6 @@ export function BranchTwelve({
   twelve,
   kind,
   subjectName,
-  openHref,
 }: {
   twelve: Omit<CellTwelve, 'own' | 'coverage'> & {
     own: (TwelveFigure & { cells?: number }) | null;
@@ -354,7 +358,6 @@ export function BranchTwelve({
   kind: RangeKind;
   /** Null for the reader's own branch; the leader's name when one was opened. */
   subjectName: string | null;
-  openHref: (leaderId: string) => string;
 }) {
   const cell = 'px-3 py-3 text-right tabular-nums';
   const own = twelve.own;
@@ -402,12 +405,8 @@ export function BranchTwelve({
                   {row.leader === null ? (
                     <span className="text-muted">A leader you don’t oversee</span>
                   ) : (
-                    <Link
-                      href={openHref(row.leader.id)}
-                      className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {row.leader.full_name}
-                    </Link>
+                    // A name, not a link (decision 0380).
+                    row.leader.full_name
                   )}
                 </td>
                 {figures(row)}
@@ -456,12 +455,7 @@ export function BranchTwelve({
               {row.leader === null ? (
                 <span className="text-muted text-sm">A leader you don’t oversee</span>
               ) : (
-                <Link
-                  href={openHref(row.leader.id)}
-                  className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  {row.leader.full_name}
-                </Link>
+                <span>{row.leader.full_name}</span>
               )}
               <p className="text-muted text-sm tabular-nums">{phoneFigures(row)}</p>
             </li>

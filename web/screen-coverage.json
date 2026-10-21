@@ -219,7 +219,15 @@
       "screen": "web/components/branch-people.tsx"
     },
     {
+      "route": "GET /api/v1/reports/counts/branch",
+      "screen": "web/components/branch-people.tsx"
+    },
+    {
       "route": "GET /api/v1/reports/trends",
+      "screen": "web/app/trends/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/reports/trends/branch",
       "screen": "web/app/trends/page.tsx"
     },
     {

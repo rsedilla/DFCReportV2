@@ -491,6 +491,36 @@ export async function getBranchPeople(
   );
 }
 
+/**
+ * `GET /reports/counts/branch`: *# of Cell Groups* and *# of Cell Leaders* for one leader's
+ * branch (decision 0380), counted as the Senior Pastors' are. Null where the placement graph is
+ * refused (section 20).
+ */
+export interface BranchCounts {
+  period: string;
+  current: boolean;
+  at: string;
+  total: ChurchCountFigures | null;
+  own: ChurchCountFigures | null;
+  rows:
+    | (ChurchCountFigures & {
+        /** Null for a leader the reader may not read; the row still counts. */
+        leader: { id: string; member_id: string | null; full_name: string | null } | null;
+      })[]
+    | null;
+}
+
+export async function getBranchCounts(
+  leaderId: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<BranchCounts> {
+  return authenticatedRequest<BranchCounts>(
+    `/api/v1/reports/counts/branch?${new URLSearchParams({ period, scope: 'LEADER', leader_id: leaderId }).toString()}`,
+    { signal },
+  );
+}
+
 export type TrendFigure = 'CG' | 'DCC' | 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 
 /** `GET /reports/trends`: twelve months of one figure (decision 0326, point 4). */
@@ -520,4 +550,20 @@ export async function getTrends(
     params.set('leader_id', leaderId);
   }
   return authenticatedRequest<Trends>(`/api/v1/reports/trends?${params.toString()}`, { signal });
+}
+
+/**
+ * `GET /reports/trends/branch`: a Full view leader's twelve months of one figure for their own
+ * branch, ending at `period` (decision 0380). One line; a month they could not read is null.
+ */
+export async function getBranchTrends(
+  figure: TrendFigure,
+  leaderId: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<Trends> {
+  const params = new URLSearchParams({ figure, scope: 'LEADER', leader_id: leaderId, period });
+  return authenticatedRequest<Trends>(`/api/v1/reports/trends/branch?${params.toString()}`, {
+    signal,
+  });
 }

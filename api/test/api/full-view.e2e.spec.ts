@@ -121,6 +121,12 @@ describe('Full view (decision 0323)', () => {
       'GET /reports/trends': get('reports/trends', { figure: 'CELLS' }),
       // # of People for one leader's branch, under People (decision 0364).
       'GET /reports/people/branch': get('reports/people/branch', leaderScope),
+      // # of Cell Groups, # of Cell Leaders and Last 12 months for one leader's branch (decision 0380).
+      'GET /reports/counts/branch': get('reports/counts/branch', leaderScope),
+      'GET /reports/trends/branch': get('reports/trends/branch', {
+        ...leaderScope,
+        figure: 'CELLS',
+      }),
       'GET /training/counts': get('training/counts'),
       'GET /training/people': get('training/people'),
       'POST /training/submit': (token) =>

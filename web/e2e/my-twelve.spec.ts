@@ -198,8 +198,9 @@ test.describe('the four periods (decision 0293)', () => {
     ).toBe(true);
   });
 
+  // A whole-church reader's, the one with Figures for (decision 0380).
   test('Back steps back through the period, the length and the leader', async ({ page }) => {
-    await arrange(page);
+    await arrange(page, { church: true });
     await page.goto('/reports/cells');
     await expect(periodLabel(page, 'June 2026')).toBeVisible();
 
@@ -207,8 +208,8 @@ test.describe('the four periods (decision 0293)', () => {
     await expect(periodLabel(page, '15 Jun – 21 Jun 2026')).toBeVisible();
     await page.getByRole('button', { name: 'The period before' }).click();
     await expect(page).toHaveURL(/[?&]start=2026-06-08/);
-    await page.getByLabel('Figures for').selectOption(TWELVE.consuelo.id);
-    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.consuelo.id}`));
+    await page.getByLabel('Figures for').selectOption(TWELVE.aurora.id);
+    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.aurora.id}`));
 
     await page.goBack();
     await expect(page).not.toHaveURL(/leader=/);
@@ -290,13 +291,11 @@ test.describe('My 12', () => {
     const names = [TWELVE.consuelo, TWELVE.efren, TWELVE.teresita];
     for (const [index, leader] of names.entries()) {
       const row = rows.nth(index);
-      // No row number: the first cell is the name and nothing else.
+      // No row number: the first cell is the name and nothing else, and it opens nothing
+      // (decision 0380).
       await expect(row.getByRole('cell').first()).toHaveText(leader.full_name);
-      await expect(row.getByRole('link', { name: leader.full_name })).toHaveAttribute(
-        'href',
-        `/reports/cells?month=2026-06-01&leader=${leader.id}`,
-      );
     }
+    await expect(table.getByRole('link')).toHaveCount(0);
     expect(await cellsOf(rows.nth(0))).toEqual(['Consuelo Bautista', '4', '1', '1', '0', '1', '1']);
     expect(await cellsOf(rows.nth(1))).toEqual(['Efren Dimaculangan', '0', '0', '0', '0', '0', '0']);
     expect(await cellsOf(rows.nth(2))).toEqual(['Teresita Alcantara', '3', '1', '0', '1', '0', '1']);
@@ -331,15 +330,11 @@ test.describe('My 12', () => {
     await expect(table.getByRole('columnheader', { name: /^(#|No\.?|Rank)$/ })).toHaveCount(0);
   });
 
-  test('opening a name shows that leader’s branch and 12, and their own row carries no numbers when they lead no Cell', async ({
+  test('a leader in the address shows that leader’s branch and 12, and their own row carries no numbers when they lead no Cell', async ({
     page,
   }) => {
     const asked = await arrange(page);
-    await page.goto('/reports/cells');
-
-    await twelveTable(page).getByRole('link', { name: TWELVE.consuelo.full_name }).click();
-    await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.consuelo.id}`));
-    await expect(page).toHaveURL(/[?&]month=2026-06-01/);
+    await page.goto(`/reports/cells?month=2026-06-01&leader=${TWELVE.consuelo.id}`);
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' })).toBeVisible();
@@ -350,10 +345,8 @@ test.describe('My 12', () => {
     await expect(rows).toHaveCount(3);
     // Her branch's figures are the Total row, there being no cards above (decision 0365).
     expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
-    await expect(rows.nth(0).getByRole('link', { name: TWELVE.lourdes.full_name })).toHaveAttribute(
-      'href',
-      `/reports/cells?month=2026-06-01&leader=${TWELVE.lourdes.id}`,
-    );
+    await expect(rows.nth(0).getByRole('cell').first()).toHaveText(TWELVE.lourdes.full_name);
+    await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
     const own = rows.nth(1);
     await expect(own.getByRole('cell').first()).toHaveText(
       'Consuelo Bautista · no Cell of their own',
@@ -366,7 +359,8 @@ test.describe('My 12', () => {
     await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
     expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
 
-    await expect(page.getByLabel('Figures for')).toHaveValue(TWELVE.consuelo.id);
+    // A Full view leader has no Figures for (decision 0380).
+    await expect(page.getByLabel('Figures for')).toHaveCount(0);
   });
 
   test('says on every period but Monthly that periods are never added together', async ({
@@ -386,16 +380,12 @@ test.describe('My 12', () => {
     );
   });
 
-  test('a name opens the same period it was read in', async ({ page }) => {
+  test('a name opens nothing on Weekly either (decision 0380)', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/cells?period=week&start=2026-06-08');
 
-    await expect(
-      twelveTable(page).getByRole('link', { name: TWELVE.efren.full_name }),
-    ).toHaveAttribute(
-      'href',
-      `/reports/cells?period=week&start=2026-06-08&leader=${TWELVE.efren.id}`,
-    );
+    await expect(twelveTable(page).getByText(TWELVE.efren.full_name)).toBeVisible();
+    await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
   });
 
   for (const [cells, label] of [
@@ -445,25 +435,15 @@ test.describe('My 12', () => {
 });
 
 test.describe('Figures for', () => {
-  test('offers everyone the reader oversees, then their direct 12 by name, and nothing else', async ({
+  test('a Full view leader has none: they read their own branch (decision 0380)', async ({
     page,
   }) => {
     await arrange(page);
     await page.goto('/reports/cells');
 
-    const select = page.getByLabel('Figures for');
-    await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
-    await expect(select.locator('option')).toHaveText([
-      'People you oversee',
-      'Consuelo Bautista',
-      'Efren Dimaculangan',
-      'Teresita Alcantara',
-    ]);
-
-    await select.selectOption({ label: 'Teresita Alcantara' });
-    await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.teresita.id}`));
-    await select.selectOption('');
-    await expect(page).not.toHaveURL(/leader=/);
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
+    await expect(page.getByLabel('Figures for')).toHaveCount(0);
+    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly']);
   });
 
   test('offers a whole-church reader everyone in scope and the two pastors by name', async ({
@@ -665,7 +645,7 @@ test.describe('what decision 0293 took off this page', () => {
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByText('People who attended')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
-    await expect(page.getByLabel('Figures for').locator('option')).toHaveCount(4);
+    await expect(page.getByLabel('Figures for')).toHaveCount(0);
   });
 });
 
@@ -678,7 +658,8 @@ test.describe('at a phone, a tablet and a desktop', () => {
       await page.setViewportSize({ width, height: 900 });
       await arrange(page);
 
-      for (const each of PERIODS) {
+      // A Full view leader's two lengths (decision 0380).
+      for (const each of PERIODS.filter((period) => period.kind === 'WEEK' || period.kind === 'MONTH')) {
         await page.goto(`/reports/cells?${each.address}`);
         await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
         await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
@@ -696,7 +677,6 @@ test.describe('at a phone, a tablet and a desktop', () => {
           ...(await periodGroup(page).getByRole('button').all()),
           page.getByRole('button', { name: 'The period before' }),
           page.getByRole('button', { name: 'The period after' }),
-          page.getByLabel('Figures for'),
         ];
         for (const control of controls) {
           const box = await control.boundingBox();

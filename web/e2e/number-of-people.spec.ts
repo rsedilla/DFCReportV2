@@ -6,7 +6,7 @@ import { mockBranchPeople, mockChurchCounts } from './mock-senior-pastor';
 /**
  * Reports › *# of People* (SKILL.md section 19, decisions 0364 and 0376), moved from People.
  *
- * A Full view leader reads their own branch and opens a leader beneath them; the Admin reads the
+ * A Full view leader reads their own branch, its names plain text (decision 0380); the Admin reads the
  * Senior Pastors' whole-church figure; People keeps no such tab, and the old address forwards.
  * Names are invented (CLAUDE.md, Secrets).
  */
@@ -45,22 +45,31 @@ test.describe('a Full view leader’s # of People', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which report' });
     await expect(tabs.getByRole('link')).toHaveText([
-      'CG Attendance Reports',
-      'DCC Attendance Reports',
-      'Encounter Readiness',
+      'CG Attendance',
+      'DCC Attendance',
+      '# of Cell Groups',
+      '# of Cell Leaders',
       '# of People',
     ]);
     await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of People');
   });
 
-  test('a name opens that leader’s count, with a way back', async ({ page }) => {
+  test('a name is plain text and opens nothing (decision 0380)', async ({ page }) => {
+    await page.clock.setFixedTime(OCTOBER_8);
+    await mockSignedIn(page);
+    await mockBranchPeople(page);
+    await page.goto('/reports/number-of-people');
+
+    await expect(table(page).getByText('Consuelo Bautista')).toBeVisible();
+    await expect(table(page).getByRole('link')).toHaveCount(0);
+  });
+
+  test('a leader in the address still reads their count, with a way back', async ({ page }) => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSignedIn(page);
     const asked = await mockBranchPeople(page);
-    await page.goto('/reports/number-of-people');
+    await page.goto(`/reports/number-of-people?leader=${CONSUELO}`);
 
-    await table(page).getByRole('link', { name: 'Consuelo Bautista' }).click();
-    await expect(page).toHaveURL(new RegExp(`[?&]leader=${CONSUELO}`));
     await expect.poll(() => asked.some((each) => each.leader === CONSUELO)).toBe(true);
     await expect(page.getByRole('link', { name: 'Back to your disciples' })).toHaveAttribute(
       'href',
