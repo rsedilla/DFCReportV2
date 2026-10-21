@@ -62,7 +62,13 @@ import {
   mockSuynlReadiness,
   mockTraining,
 } from './mock-growth';
-import { mockBranchPeople, mockChurchCounts, mockTrends } from './mock-senior-pastor';
+import {
+  mockBranchCounts,
+  mockBranchPeople,
+  mockBranchTrends,
+  mockChurchCounts,
+  mockTrends,
+} from './mock-senior-pastor';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -1007,7 +1013,38 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
+      // A name, not a link (decision 0380).
+      await expect(page.getByRole('cell', { name: 'Consuelo Bautista' })).toBeVisible();
+    },
+  },
+  {
+    // A Full view leader's # of Cell Groups (decision 0380): the month control, the four boxes,
+    // the named rows, an unnamed one, the reader's own row and the total.
+    name: 'number of cell groups, own branch',
+    route: '/reports/number-of-cells',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockBranchCounts(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Consuelo Bautista' })).toBeVisible();
+    },
+  },
+  {
+    // A Full view leader's Last 12 months (decision 0380): the view switch, one line and the
+    // closed figures.
+    name: 'last 12 months, own branch',
+    route: '/trends',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockBranchTrends(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'CG Attendance · Your branch' })).toBeVisible();
+      await expect(page.getByText('Show the figures')).toBeVisible();
     },
   },
   {
@@ -1022,7 +1059,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page).toHaveURL(/\/reports\/number-of-people$/);
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
   {
@@ -1163,7 +1200,7 @@ const SCANS = [
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-      ).toHaveText('CG Attendance Reports');
+      ).toHaveText('CG Attendance');
     },
   },
   {
@@ -1183,18 +1220,20 @@ const SCANS = [
     },
   },
   {
-    // My 12 over a quarter (decision 0293), its period button pressed.
+    // My 12 over a quarter (decision 0293), its period button pressed: a whole-church reader's,
+    // a Full view leader having no quarter (decision 0380).
     name: 'cell attendance report, quarter',
     route: '/reports/cells?period=quarter',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockWholeChurchReader(page);
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1398,11 +1437,13 @@ const SCANS = [
     route: '/reports/dcc?period=year&month=2026-06-01',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader has no year (decision 0380).
+      await mockWholeChurchReader(page);
       await mockDccReport(page);
       await mockDccTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1414,12 +1455,13 @@ const SCANS = [
     route: '/reports/cells?period=year',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockWholeChurchReader(page);
       await mockCellReport(page);
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       // My 12 over the year, and its month-by-month table beneath (decisions 0257, 0293).
-      await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1801,13 +1843,13 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
-    // The four Reports tabs, the month's two arrows, and the two named rows: **eight**.
-    // Settled on the last name, which renders from the data.
+    // The five Reports tabs, the two views and the month's two arrows: **nine**; the names open
+    // nothing (decision 0380). Settled on the last name, which renders from the data.
     name: 'number of people',
     route: '/reports/number-of-people',
-    settleRole: 'link' as const,
+    settleRole: 'cell' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 8,
+    minimum: 9,
   },
   {
     // The three People tabs, the open and closed disclosure buttons, each name link and Show
@@ -1828,38 +1870,17 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's three report tabs (decisions 0340 and 0360), the four
-    // period buttons, the navigator's two, the Figures for select and the three names of
-    // their 12 (decision 0293): **thirteen**. Settled on the last name, which renders from
-    // the data.
+    // A Full view leader's five report tabs and the two views (decision 0380), the two period
+    // buttons and the navigator's two: **eleven**. No Figures for, and the names of their 12
+    // open nothing. Settled on the last name, which renders from the data.
     name: 'cell attendance report',
     route: '/reports/cells',
-    settleRole: 'link' as const,
+    settleRole: 'cell' as const,
     settle: 'Teresita Alcantara',
-    minimum: 13,
+    minimum: 11,
   },
   {
-    // The same controls as "dcc figures report": **thirteen** (decision 0294). The
-    // month-by-month table holds no control.
-    name: 'dcc figures report, year',
-    route: '/reports/dcc?period=year&month=2026-06-01',
-    settleRole: 'heading' as const,
-    settle: 'Month by month',
-    minimum: 13,
-  },
-  {
-    // The same controls as "cell attendance report": **thirteen**. The month-by-month table
-    // holds no control.
-    name: 'cell attendance report, year',
-    route: '/reports/cells?period=year',
-    settleRole: 'heading' as const,
-    settle: 'Month by month',
-    minimum: 13,
-  },
-  {
-    // The three report tabs, the four period buttons, the navigator's
-    // two, the Figures for select, the Back link and the one name in that leader's 12:
-    // **twelve**.
+    // The same controls, and the Back link: **twelve**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
@@ -1867,14 +1888,29 @@ const TARGET_SWEEP = [
     minimum: 12,
   },
   {
-    // The three report tabs, the four period buttons, the navigator's
-    // two, the Figures for select and the three names of the reader's 12 (decision 0294):
-    // **thirteen**, as CG Attendance.
+    // The same eleven as CG Attendance (decisions 0294 and 0380).
     name: 'dcc figures report',
     route: '/reports/dcc',
-    settleRole: 'link' as const,
+    settleRole: 'cell' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 13,
+    minimum: 11,
+  },
+  {
+    // The five report tabs, the two views and the month's two arrows: **nine** (decision 0380).
+    name: 'number of cell groups, own branch',
+    route: '/reports/number-of-cells',
+    settleRole: 'cell' as const,
+    settle: 'Efren Dimaculangan',
+    minimum: 9,
+  },
+  {
+    // The five report tabs and the two views: **seven** (decision 0380). Show the figures is a
+    // `summary`, which this count does not take.
+    name: 'last 12 months, own branch',
+    route: '/trends',
+    settleRole: 'heading' as const,
+    settle: 'CG Attendance · Your branch',
+    minimum: 7,
   },
   {
     // A Full view leader's three report tabs (decisions 0340 and 0360), the Next Encounter
@@ -2244,14 +2280,28 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'cell attendance report, week',
     why:
-      'The same controls as the measured "cell attendance report" -- the four period buttons, ' +
-      'the navigator, Figures for and the My 12 links -- with Weekly pressed rather than Monthly.',
+      'The same controls as the measured "cell attendance report" -- the tabs, the two views, ' +
+      'the two period buttons and the navigator -- with Weekly pressed rather than Monthly.',
   },
   {
     name: 'cell attendance report, quarter',
     why:
-      'The controls of the measured "cell attendance report", with Quarterly pressed. ' +
-      'Measuring it would re-measure controls already covered.',
+      'A whole-church reader’s, a Full view leader having no quarter (decision 0380): the ' +
+      'controls of "cell attendance report, whole church" with Quarterly pressed. It needs a ' +
+      'second /auth/me mock.',
+  },
+  {
+    name: 'cell attendance report, year',
+    why:
+      'A whole-church reader’s, a Full view leader having no year (decision 0380): the controls ' +
+      'of "cell attendance report, whole church" with Year pressed, the month-by-month table ' +
+      'holding none. It needs a second /auth/me mock.',
+  },
+  {
+    name: 'dcc figures report, year',
+    why:
+      'A whole-church reader’s, as "cell attendance report, year", for DCC. It needs a second ' +
+      '/auth/me mock.',
   },
   {
     name: 'dcc figures report, one network',
@@ -2377,6 +2427,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
   await mockPersonGrowth(page);
   await mockBranchPeople(page);
+  await mockBranchCounts(page);
+  await mockBranchTrends(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

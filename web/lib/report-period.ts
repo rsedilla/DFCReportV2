@@ -49,14 +49,22 @@ export function useReportPeriod(
   const go = useScreenAddress();
   const today = todayInManila();
 
-  const kind: RangeKind = PERIOD_PARAM[search.get('period') ?? ''] ?? 'MONTH';
-  const current = rangeStartOf(kind, today);
-
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
   // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
   // server's screens and never by a role.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  // A Full view leader is offered Weekly and Monthly only (decision 0380), so an address naming a
+  // quarter or a year opens the month instead. Keyed as `isBranchReader` keys it.
+  const branchReader =
+    me.data !== undefined &&
+    !seniorPastor &&
+    !wholeChurch &&
+    me.data.capabilities.some((grant) => grant.capability === 'reports.view_subtree');
+  const askedKind: RangeKind = PERIOD_PARAM[search.get('period') ?? ''] ?? 'MONTH';
+  const kind: RangeKind =
+    branchReader && (askedKind === 'QUARTER' || askedKind === 'YEAR') ? 'MONTH' : askedKind;
+  const current = rangeStartOf(kind, today);
   const finishedKind = kind === 'QUARTER' || kind === 'YEAR' ? kind : null;
   const finishedOnly = finishedKind !== null && me.data !== undefined && !wholeChurch;
   const latest = latestFinished(kind, today);

@@ -140,10 +140,11 @@ test.describe('the four periods (decision 0294)', () => {
     }
   });
 
+  // A whole-church reader's: a Full view leader has no quarter or year (decision 0380).
   test('a closed period is read as of its last month, and one not begun opens the current one', async ({
     page,
   }) => {
-    const asked = await arrange(page);
+    const asked = await arrange(page, { church: true });
 
     await page.goto('/reports/dcc?period=quarter&start=2026-01-01');
     await expectAsked(asked, { kind: 'QUARTER', start: '2026-01-01', period: '2026-03-01' });
@@ -265,11 +266,9 @@ test.describe('My 12 on DCC', () => {
     // First-name order as sent (decision 0359), which is 4, 0, 3 by Total.
     for (const [index, leader] of [TWELVE.consuelo, TWELVE.efren, TWELVE.teresita].entries()) {
       await expect(rows.nth(index).getByRole('cell').first()).toHaveText(leader.full_name);
-      await expect(rows.nth(index).getByRole('link', { name: leader.full_name })).toHaveAttribute(
-        'href',
-        `/reports/dcc?month=2026-06-01&leader=${leader.id}`,
-      );
     }
+    // A name opens nothing (decision 0380).
+    await expect(table.getByRole('link')).toHaveCount(0);
     // The reader alone, labelled "You" with no Cell count: nobody records their own DCC.
     expect(await cellsOf(rows.nth(3))).toEqual(['You', '1', '0', '1', '0', '0', '0']);
     expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
@@ -287,14 +286,11 @@ test.describe('My 12 on DCC', () => {
     await expect(table).not.toContainText('%');
   });
 
-  test('opening a name shows that leader’s branch and 12, with their own row named and its zeros shown', async ({
+  test('a leader in the address shows that leader’s branch and 12, with their own row named and its zeros shown', async ({
     page,
   }) => {
     const asked = await arrange(page);
-    await page.goto('/reports/dcc');
-
-    await twelveTable(page).getByRole('link', { name: TWELVE.consuelo.full_name }).click();
-    await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.consuelo.id}`));
+    await page.goto(`/reports/dcc?month=2026-06-01&leader=${TWELVE.consuelo.id}`);
     await expectAsked(asked, { scope: 'LEADER', leader_id: TWELVE.consuelo.id });
 
     await expect(page.getByRole('region', { name: 'Consuelo Bautista’s Disciples' })).toBeVisible();
@@ -303,10 +299,8 @@ test.describe('My 12 on DCC', () => {
     ).toBeVisible();
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(3);
-    await expect(rows.nth(0).getByRole('link', { name: TWELVE.lourdes.full_name })).toHaveAttribute(
-      'href',
-      `/reports/dcc?month=2026-06-01&leader=${TWELVE.lourdes.id}`,
-    );
+    await expect(rows.nth(0).getByRole('cell').first()).toHaveText(TWELVE.lourdes.full_name);
+    await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
     // She did not come, and the row says 0 rather than leaving the numbers out.
     expect(await cellsOf(rows.nth(1))).toEqual(['Consuelo Bautista', '0', '0', '0', '0', '0', '0']);
     expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
@@ -316,16 +310,12 @@ test.describe('My 12 on DCC', () => {
     );
   });
 
-  test('a name opens the same period it was read in', async ({ page }) => {
+  test('a name opens nothing on Weekly either (decision 0380)', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/dcc?period=week&start=2026-06-08');
 
-    await expect(
-      twelveTable(page).getByRole('link', { name: TWELVE.efren.full_name }),
-    ).toHaveAttribute(
-      'href',
-      `/reports/dcc?period=week&start=2026-06-08&leader=${TWELVE.efren.id}`,
-    );
+    await expect(twelveTable(page).getByText(TWELVE.efren.full_name)).toBeVisible();
+    await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
   });
 
   test('a whole-church reader’s rows are the two pastors, each with their Network, and no own row', async ({
@@ -416,21 +406,17 @@ test.describe('My 12 on DCC', () => {
     await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
     await expectAsked(asked, { scope: 'LEADER', leader_id: READER });
     expect(asked.some((query) => query.get('scope') === 'NETWORK')).toBe(false);
-    await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
   });
 
-  test('Figures for offers the reader’s direct 12 by name', async ({ page }) => {
+  test('a Full view leader has no Figures for, and Weekly and Monthly alone (decision 0380)', async ({
+    page,
+  }) => {
     await arrange(page);
     await page.goto('/reports/dcc');
 
-    const select = page.getByLabel('Figures for');
-    await expect(select.locator('optgroup')).toHaveAttribute('label', 'My 12');
-    await expect(select.locator('option')).toHaveText([
-      'People you oversee',
-      'Consuelo Bautista',
-      'Efren Dimaculangan',
-      'Teresita Alcantara',
-    ]);
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
+    await expect(page.getByLabel('Figures for')).toHaveCount(0);
+    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly']);
   });
 });
 
@@ -450,11 +436,10 @@ test.describe('How often people came, and Year', () => {
       often.getByText('3 Sundays carried a service this month.', { exact: false }),
     ).toBeVisible();
 
-    for (const each of PERIODS.filter((period) => period.kind !== 'MONTH')) {
-      await page.goto(`/reports/dcc?${each.address}`);
-      await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
-      await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
-    }
+    // A Full view leader's other length is Weekly (decision 0380).
+    await page.goto('/reports/dcc?period=week');
+    await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
   });
 
   test('Year keeps its month-by-month table beneath My 12, and no other period shows one', async ({

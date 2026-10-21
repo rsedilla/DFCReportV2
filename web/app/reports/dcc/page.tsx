@@ -132,7 +132,13 @@ export function DccReport() {
           {branchReader ? (
             <div>
               <p className="field-label">Show</p>
-              <PeriodTabs labelled value={kind} onChange={period.choosePeriodKind} />
+              {/* Weekly and Monthly only (decision 0380). */}
+              <PeriodTabs
+                labelled
+                kinds={['WEEK', 'MONTH']}
+                value={kind}
+                onChange={period.choosePeriodKind}
+              />
             </div>
           ) : null}
           {reach?.kind === 'none' ? null : (
@@ -147,6 +153,8 @@ export function DccReport() {
               onChange={period.choosePeriodStart}
             />
           )}
+          {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
+          {branchReader ? null : (
           <div>
             <label htmlFor="dcc-scope" className="field-label block">
               Figures for
@@ -183,6 +191,7 @@ export function DccReport() {
               ) : null}
             </select>
           </div>
+          )}
           {/* A Full view leader's note under the controls (decision 0363): the Sundays the period
               counts, any with no service (section 9), and whether it is still open. */}
           {branchReader && twelve.data ? (
@@ -279,12 +288,7 @@ export function DccReport() {
                 openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
               />
             ) : branchReader ? (
-              <BranchTwelve
-                twelve={twelve.data}
-                kind={kind}
-                subjectName={subjectName}
-                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
-              />
+              <BranchTwelve twelve={twelve.data} kind={kind} subjectName={subjectName} />
             ) : (
               <TwelveTable
                 twelve={twelve.data}

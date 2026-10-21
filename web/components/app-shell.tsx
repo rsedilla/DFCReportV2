@@ -68,7 +68,7 @@ const REPORTS: NavEntry = {
   href: REPORTS_PATH,
   label: 'Reports',
   icon: ChartColumn,
-  // The Senior Pastors' twelve months are a view of Reports (decision 0377), at `/trends`.
+  // The twelve months are a view of Reports (decisions 0377 and 0380), at `/trends`.
   matches: ['/reports', '/trends'],
 };
 /** People, Network and Family Tree, one item with a tab each (decisions 0288 and 0341). */

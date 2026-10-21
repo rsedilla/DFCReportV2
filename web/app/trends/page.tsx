@@ -5,14 +5,26 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { ReportsHeading, ReportsTabs, type ReportTab } from '@/components/reports-tabs';
+import {
+  isBranchReader,
+  ReportsHeading,
+  ReportsTabs,
+  type ReportTab,
+} from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { rangeLabel } from '@/lib/report-range';
-import { getChurchCounts, getTrends, type TrendFigure, type Trends } from '@/lib/reports';
+import {
+  getBranchTrends,
+  getChurchCounts,
+  getTrends,
+  type TrendFigure,
+  type Trends,
+} from '@/lib/reports';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 
@@ -63,17 +75,26 @@ function TrendsScreen() {
   const search = useSearchParams();
   const go = useScreenAddress();
   const figure = (FIGURES.find((entry) => entry.key === search.get('figure'))?.key ?? 'CG') as TrendFigure;
-  const leader = search.get('leader');
   const chosen = FIGURES.find((entry) => entry.key === figure)!;
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  // A Full view leader draws their own branch alone (decision 0380): no Show list, no bars.
+  const branch = isBranchReader(me.data);
+  const leader = branch ? null : search.get('leader');
+  const current = monthFromQuery(null);
 
   const trends = useQuery({
-    queryKey: ['trends', figure, leader],
-    queryFn: ({ signal }) => getTrends(figure, leader, signal),
+    queryKey: ['trends', figure, branch ? me.data!.person_id : leader, current],
+    queryFn: ({ signal }) =>
+      branch
+        ? getBranchTrends(figure, me.data!.person_id, current, signal)
+        : getTrends(figure, leader, signal),
+    enabled: me.data !== undefined,
   });
   // The roots' direct leaders for the *Show* list, from this month's tables.
   const roster = useQuery({
-    queryKey: ['church-counts', monthFromQuery(null)],
-    queryFn: ({ signal }) => getChurchCounts(monthFromQuery(null), signal),
+    queryKey: ['church-counts', current],
+    queryFn: ({ signal }) => getChurchCounts(current, signal),
+    enabled: me.data !== undefined && !branch,
   });
 
   const data = trends.data;
@@ -95,6 +116,7 @@ function TrendsScreen() {
       {/* The Senior Pastors' twelve months are a view of Reports (decision 0377): the same tabs,
           and the switch back to By period above the controls. */}
       <ReportsTabs current={TAB_OF[figure]} view="trend" leader={leader}>
+        {branch ? null : (
         <div className={`mt-4 ${CONTROL_BAR}`}>
           <div>
             <label htmlFor="trends-show" className="field-label block">
@@ -122,6 +144,7 @@ function TrendsScreen() {
             </select>
           </div>
         </div>
+        )}
 
         <div className="mt-4">
           <FailureNotice failure={trends.isError ? describeFailure(trends.error) : null} />
@@ -135,6 +158,7 @@ function TrendsScreen() {
           label={chosen.name ?? chosen.label}
           what={chosen.what}
           singleTone={singleTone}
+          ownBranch={branch}
         />
         ) : null}
       </ReportsTabs>
@@ -184,21 +208,25 @@ function TrendsChart({
   label,
   what,
   singleTone,
+  ownBranch = false,
 }: {
   data: Trends;
   label: string;
   what: string;
   /** One leader's colour: their pastor's branch, or ink for a leader in neither table. */
   singleTone: string;
+  /** A Full view leader's own branch (decision 0380): a line alone, named *Your branch*. */
+  ownBranch?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   const frame = useRef<HTMLDivElement>(null);
   const [drawn, setDrawn] = useState(720);
   // Line or bars, and which of the three are ticked, kept on this device (owner, 2026-10-09).
   // Read when the graph first draws, which is only ever in the browser, after its figures load.
-  const [kind, setKind] = useState<Kind>(() =>
+  const [chosenKind, setKind] = useState<Kind>(() =>
     remembered<Kind>('trends-kind', 'LINE') === 'BARS' ? 'BARS' : 'LINE',
   );
+  const kind: Kind = ownBranch ? 'LINE' : chosenKind;
   const [hidden, setHidden] = useState<number[]>(() => {
     const stored = remembered<unknown>('trends-hidden', []);
     const kept = Array.isArray(stored) ? stored.filter((n): n is number => n === 0 || n === 1 || n === 2) : [];
@@ -220,7 +248,7 @@ function TrendsChart({
   const single = data.lines.length === 1 && data.lines[0].leader !== null;
   const all = data.lines.map((line, index) => ({
     index,
-    name: lineName(line, single),
+    name: ownBranch ? 'Your branch' : lineName(line, single),
     church: line.leader === null,
     values: line.values,
     // Lines are told apart by weight and dash as well as colour, because lines cross (1.4.1).
@@ -297,10 +325,11 @@ function TrendsChart({
         <div>
           <h2 id="trends-heading" className="text-base font-bold tracking-tight">
             {label}
-            {single ? ` · ${all[0].name} and their branch` : null}
+            {ownBranch ? ' · Your branch' : single ? ` · ${all[0].name} and their branch` : null}
           </h2>
           <p className="text-muted text-xs">Each point counts {what}.</p>
         </div>
+        {ownBranch ? null : (
         <ViewSwitch
           label="Graph"
           className="mt-0"
@@ -314,6 +343,7 @@ function TrendsChart({
             remember('trends-kind', next);
           }}
         />
+        )}
       </div>
 
       {single ? null : (

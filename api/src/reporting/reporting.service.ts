@@ -202,6 +202,21 @@ export interface BranchPeople {
   rows: { leaderId: string; people: number }[] | null;
 }
 
+/**
+ * *# of Cell Groups* and *# of Cell Leaders* for one leader's branch over a month (decision
+ * 0380): the Senior Pastors' figures one level down, counted as {@link BranchPeople} is. A Cell
+ * counts towards the leader it had then, so the rows and `own` add up to `total`. All three are
+ * null where section 20 refuses the graph.
+ */
+export interface BranchCounts {
+  period: string;
+  at: Date;
+  current: boolean;
+  total: ChurchCountFigures | null;
+  own: ChurchCountFigures | null;
+  rows: { leaderId: string; figures: ChurchCountFigures }[] | null;
+}
+
 /** Per leader, how many records they owed in a run of days and how many have none. */
 type OwedByLeader = Map<string, { owed: number; unrecorded: number; late: number }>;
 
@@ -1414,6 +1429,70 @@ export class ReportingService {
         rows: graph.children(leaderId).map((id) => ({
           leaderId: id,
           people: count(graph.subtree(id)),
+        })),
+      };
+    });
+  }
+
+  /**
+   * Refuses a period no report may cover (decisions 0185 and 0216), computing nothing, through
+   * the seam every report takes, so a route asking for several months can refuse the one it was
+   * asked for before reading any of them (decision 0380).
+   */
+  async assertReportable(period: string): Promise<void> {
+    await this.overPeriod(period, () => Promise.resolve(undefined));
+  }
+
+  /**
+   * *# of Cell Groups* and *# of Cell Leaders* for one leader's branch (decision 0380), a Full
+   * view leader's under Reports.
+   *
+   * **The Senior Pastors' figures one level down**, counted as {@link churchCounts} counts a
+   * root's row: at the month's final millisecond where it has ended and now where it has not, a
+   * Cell towards the leader it had then, a Cell closed `CREATED_IN_ERROR` in no month (decision
+   * 0330), nobody outside the pastoral tree (decision 0339), and placed on section 20's placement
+   * graph for the month, so a row here is the figure a root's row would give that leader. Which
+   * instant places the current month's rows is open in `CLAUDE.md`, as it is for
+   * {@link churchCounts}.
+   */
+  async branchCounts(leaderId: string, period: string): Promise<BranchCounts> {
+    return this.overPeriod(period, async (trx, bounds) => {
+      const now = await databaseNow(trx);
+      const current = now.getTime() < bounds.end.getTime();
+      const at = current ? now : bounds.end;
+
+      const cells = await this.cells.cellsInForceAt(trx, at);
+      const outside = await this.people.outsideTreeAt(trx, at);
+      const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
+
+      const figuresOf = (ids: readonly string[]): ChurchCountFigures => {
+        const members = new Set(ids.map((id) => canonicalId(id)));
+        const counted = cells.filter((cell) => members.has(canonicalId(cell.leaderId)));
+
+        return {
+          cellGroups: counted.length,
+          youth: counted.filter((cell) => cell.category === 'YOUTH').length,
+          youngPro: counted.filter((cell) => cell.category === 'YOUNG_PRO').length,
+          couple: counted.filter((cell) => cell.category === 'COUPLE').length,
+          cellLeaders: new Set(counted.map((cell) => canonicalId(cell.leaderId))).size,
+          people: people.filter((id) => members.has(canonicalId(id))).length,
+        };
+      };
+
+      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      if (graph.refused) {
+        return { period, at, current, total: null, own: null, rows: null };
+      }
+
+      return {
+        period,
+        at,
+        current,
+        total: figuresOf(graph.subtree(leaderId)),
+        own: figuresOf([leaderId]),
+        rows: graph.children(leaderId).map((id) => ({
+          leaderId: id,
+          figures: figuresOf(graph.subtree(id)),
         })),
       };
     });
