@@ -2,11 +2,12 @@
 
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { NAME_LINK, ShowMore } from '@/components/awaiting-lists';
 import {
   LeaderRecordingStatusPanel,
   RecordingStatusPanel,
@@ -26,7 +27,6 @@ import {
   getPendingCgCells,
   listMeetingsAwaiting,
   type CellCategory,
-  peopleWithoutACell,
   type AwaitingMeetings,
   type PendingCgCell,
 } from '@/lib/cells';
@@ -43,7 +43,6 @@ import {
 } from '@/lib/dcc';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { awaitingReassignment } from '@/lib/people';
 import {
   dayLabel,
   monthLabel,
@@ -60,10 +59,11 @@ import { cn } from '@/lib/utils';
  * Where a signed-in leader lands (SKILL.md section 19).
  *
  * **Outstanding work, and that is the whole design.** Section 19 is blunt about it:
- * "A dashboard of counts tells a leader nothing to act on." So the screen opens on five
- * lists of outstanding work, one at a time, each with its count (decisions 0290 and 0336):
- * what awaits a record, the Cells behind, the leaders behind on DCC, the people needing a
- * new leader and the people not in a Cell. It carries no month figures (decision 0343).
+ * "A dashboard of counts tells a leader nothing to act on." So the screen opens on three
+ * lists of recording work, one at a time, each with its count (decisions 0290 and 0336):
+ * what awaits a record, the Cells behind and the leaders behind on DCC. The people needing a
+ * new leader and the people not in a Cell are on People and Cells (decision 0381). It carries
+ * no month figures (decision 0343).
  *
  * **The queue shows the leader's own work by default, and their branch's on request**
  * (decision 0258, reversing the owner's choice of 2026-09-15).
@@ -219,11 +219,17 @@ function Dashboard() {
     setWhose(whoseInAddress);
   }
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  // Who may move the people on Awaiting Leader Assignment: a Leader only when ticked Moves people
-  // (decision 0356). The API decides each move again.
-  const mayMove = (me.data?.capabilities ?? []).some(
-    (grant) => grant.capability === 'people.manage_pastoral_assignment',
-  );
+  const router = useRouter();
+  // **The two Awaiting lists left Record** (decision 0381): an address that still names one,
+  // a saved link or Back, opens it where it now is.
+  const moved = search.get('list');
+  useEffect(() => {
+    if (moved === 'nocell') {
+      router.replace('/cells?view=NOCELL');
+    } else if (moved === 'leader') {
+      router.replace('/people/awaiting-leader');
+    }
+  }, [moved, router]);
 
   // **A Recording-only account sees Awaiting a record and nothing else** (section 19,
   // decision 0323): no other list, and Leaders Under Me only while the
@@ -264,43 +270,6 @@ function Dashboard() {
     setChosenFor(`${filter}|${whose}`);
     setChosenLeader(null);
   }
-
-  // Section 20's attention list (decision 0232). It takes no month: the list asks
-  // about now.
-  //
-  // The whole list, fifty at a time, with Show more in place of a link to another
-  // screen (decision 0290).
-  const unplacedPages = useInfiniteQuery({
-    queryKey: ['awaiting-reassignment', 'dashboard'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ signal, pageParam }) =>
-      awaitingReassignment({ limit: 50, cursor: pageParam }, signal),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: fullRecord,
-  });
-  const unplaced = {
-    isPending: unplacedPages.isPending,
-    isError: unplacedPages.isError,
-    error: unplacedPages.error,
-    data: unplacedPages.data?.pages.flatMap((page) => page.data),
-  };
-
-  // Section 15's other attention list (decision 0233), and undated for the same
-  // reason: it asks who is not in a Cell now.
-  const withoutACellPages = useInfiniteQuery({
-    queryKey: ['people-without-a-cell', 'dashboard'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ signal, pageParam }) =>
-      peopleWithoutACell({ limit: 50, cursor: pageParam }, signal),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: fullRecord,
-  });
-  const withoutACell = {
-    isPending: withoutACellPages.isPending,
-    isError: withoutACellPages.isError,
-    error: withoutACellPages.error,
-    data: withoutACellPages.data?.pages.flatMap((page) => page.data),
-  };
 
   // **Pending DCC Records** (decision 0336): the leaders in the reader's whole scope whose 12
   // are unrecorded for a Sunday whose week is open, fifty at a time, searched and filtered on
@@ -514,12 +483,8 @@ function Dashboard() {
             ? describeFailure(owedFailure.error)
           : pendingCgPages.isError
               ? describeFailure(pendingCgPages.error)
-              : unplaced.isError
-                ? describeFailure(unplaced.error)
               : pendingDccPages.isError
                 ? describeFailure(pendingDccPages.error)
-                    : withoutACell.isError
-                      ? describeFailure(withoutACell.error)
                       : me.isError
                         ? describeFailure(me.error)
                         : null;
@@ -547,18 +512,6 @@ function Dashboard() {
       key: 'dcc',
       label: 'Pending DCC Records',
       count: pendingDcc ? `${pendingDcc.length}${pendingDccPages.hasNextPage ? '+' : ''}` : null,
-    },
-    {
-      key: 'leader',
-      label: 'Awaiting Leader Assignment',
-      count: unplaced.data ? `${unplaced.data.length}${unplacedPages.hasNextPage ? '+' : ''}` : null,
-    },
-    {
-      key: 'nocell',
-      label: 'Awaiting CG Assignment',
-      count: withoutACell.data
-        ? `${withoutACell.data.length}${withoutACellPages.hasNextPage ? '+' : ''}`
-        : null,
     },
     ...(leaderStatus || churchStatus
       ? [{ key: 'status' as const, label: 'Recording Progress', count: null }]
@@ -862,84 +815,6 @@ function Dashboard() {
           </section>
         ) : null}
 
-        {/*
-          Section 19's fifth outstanding-work entry, and section 20 requires the list
-          behind it (decision 0232). Undated: it asks about now.
-        */}
-        {listTab === 'leader' ? (
-          <section className={LIST} aria-labelledby="unplaced-heading">
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
-                Awaiting Leader Assignment
-              </h2>
-              <p className="text-muted text-sm">
-                People you oversee whose pastoral leader is not in the pastoral tree.
-              </p>
-            </div>
-            {/* Read only for a reader who may not move them (owner, 2026-10-16, decision 0356). */}
-            {me.data && !mayMove ? (
-              <p className="text-muted mt-2 text-sm">A new leader is chosen by your Primary.</p>
-            ) : null}
-            {unplaced.isPending ? (
-              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
-            ) : unplaced.data ? (
-              <>
-                {/* The action that resolves an entry is the reassignment (section 19). */}
-                <ListTable
-                  caption="Awaiting Leader Assignment"
-                  columns={['Name', 'Previous Cell Leader']}
-                  empty="Nobody you oversee is waiting for a new leader."
-                  rows={unplaced.data.map((person) => ({
-                    key: person.id,
-                    cells: [
-                      // The person page, where Move to another leader is.
-                      <Link key="name" href={`/people/${person.id}`} className={NAME_LINK}>
-                        {person.full_name}
-                      </Link>,
-                      person.former_leader.full_name,
-                    ],
-                  }))}
-                />
-                <ShowMore pages={unplacedPages} />
-              </>
-            ) : null}
-          </section>
-        ) : null}
-
-        {/*
-          Section 19's third outstanding-work entry, which section 15 requires and
-          section 10's closure flow fills (decision 0233). Undated: it asks about now.
-        */}
-        {listTab === 'nocell' ? (
-          <section className={LIST} aria-labelledby="without-cell-heading">
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
-                Awaiting CG Assignment
-              </h2>
-              <p className="text-muted text-sm">People you oversee who are not in a Cell or leading one.</p>
-            </div>
-            {withoutACell.isPending ? (
-              <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
-            ) : withoutACell.data ? (
-              <>
-                <ListTable
-                  caption="Awaiting CG Assignment"
-                  columns={['Name']}
-                  empty="Everybody you oversee is in a Cell."
-                  rows={withoutACell.data.map((person) => ({
-                    key: person.id,
-                    cells: [
-                      <Link key="name" href={`/people/${person.id}`} className={NAME_LINK}>
-                        {person.full_name}
-                      </Link>,
-                    ],
-                  }))}
-                />
-                <ShowMore pages={withoutACellPages} />
-              </>
-            ) : null}
-          </section>
-        ) : null}
       </div>
 
       {/* The reader's own requests, below their own work (decision 0269); on the recording
@@ -950,16 +825,12 @@ function Dashboard() {
 }
 
 /** Which of Record's lists, or Recording Progress, is open (decisions 0290 and 0336). */
-const RECORD_TABS = ['awaiting', 'behind', 'dcc', 'leader', 'nocell', 'status'] as const;
+const RECORD_TABS = ['awaiting', 'behind', 'dcc', 'status'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
 
-/** One of the five lists, inside the pane its button opens. */
+/** One of the three lists, inside the pane its button opens. */
 const LIST = 'min-w-0 pt-5';
-
-/** A name that opens its record: 24px tall at least, which 2.5.8 measures. */
-const NAME_LINK =
-  'focus-visible:outline-accent inline-flex min-h-6 items-center font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
 function queueKey(item: QueueItem): string {
   return `${item.month}-${item.kind}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`;
@@ -1017,98 +888,6 @@ function TabBar<Key extends string>({
       </div>
     </div>
   );
-}
-
-/**
- * A list as a table from `lg` and as cards below it, the shape the Cells page uses. An
- * empty list keeps its table and says so in one row (owner's choice of 2026-09-25).
- */
-function ListTable({
-  caption,
-  columns,
-  empty,
-  rows,
-}: {
-  caption: string;
-  columns: readonly string[];
-  empty: string;
-  rows: readonly { key: string; cells: readonly ReactNode[] }[];
-}) {
-  return (
-    <>
-      <Table caption={caption} className="mt-3 hidden lg:block">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <HeaderCell key={column}>{column}</HeaderCell>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="text-muted px-3 py-3">
-                {empty}
-              </td>
-            </tr>
-          ) : (
-            rows.map((row) => (
-              <tr key={row.key} className={rowClasses}>
-                {row.cells.map((cell, index) => (
-                  <td
-                    key={columns[index]}
-                    className={cn('px-3 py-3 align-top', index > 0 && 'text-muted')}
-                  >
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </Table>
-
-      <ul className="mt-3 flex flex-col gap-3 lg:hidden">
-        {rows.length === 0 ? (
-          <li className="border-line text-muted border p-4 text-sm">{empty}</li>
-        ) : (
-          rows.map((row) => (
-            <li key={row.key} className="border-line border p-4">
-              <p className="text-base">{row.cells[0]}</p>
-              <dl className="text-muted mt-2 grid gap-y-1 text-sm">
-                {row.cells.slice(1).map((cell, index) => (
-                  <div key={columns[index + 1]} className="flex flex-wrap gap-x-2">
-                    <dt>{columns[index + 1]}</dt>
-                    <dd className="text-ink">{cell}</dd>
-                  </div>
-                ))}
-              </dl>
-            </li>
-          ))
-        )}
-      </ul>
-    </>
-  );
-}
-
-/** The next fifty, in place, so nobody on a list is out of reach (decision 0290). */
-function ShowMore({
-  pages,
-}: {
-  pages: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown };
-}) {
-  return pages.hasNextPage ? (
-    <p className="mt-4">
-      <button
-        type="button"
-        onClick={() => void pages.fetchNextPage()}
-        disabled={pages.isFetchingNextPage}
-        className={buttonClasses('secondary')}
-      >
-        {pages.isFetchingNextPage ? 'Loading…' : 'Show more'}
-      </button>
-    </p>
-  ) : null;
 }
 
 /** What an awaiting entry is, who records it and how long it has waited, in words. */

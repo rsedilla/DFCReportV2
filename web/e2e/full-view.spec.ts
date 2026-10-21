@@ -238,6 +238,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
       'Add People',
+      /^Awaiting Leader Assignment/,
       'Family Tree',
     ]);
   });
@@ -1135,7 +1136,8 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
-    await expect(tabs).toHaveCount(6);
+    // The three recording lists, then Recording Progress (decisions 0334 and 0381).
+    await expect(tabs).toHaveCount(4);
     await expect(tabs.last()).toHaveText('Recording Progress');
     await tabs.last().click();
 
@@ -1246,7 +1248,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await page.goto('/dashboard');
 
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
-    await expect(tabs).toHaveCount(5);
+    await expect(tabs).toHaveCount(3);
     await expect(page.getByRole('button', { name: 'Recording Progress' })).toHaveCount(0);
   });
 });

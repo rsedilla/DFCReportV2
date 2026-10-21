@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { AwaitingCgList, useWithoutACell } from '@/components/awaiting-lists';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
@@ -40,8 +41,8 @@ import { cn } from '@/lib/utils';
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
 
-/** The page's tabs, each a view of one address (decision 0366). */
-const VIEWS = ['ACTIVE', 'FEW', 'QUIET', 'CLOSED', 'APPROVE'] as const;
+/** The page's tabs, each a view of one address (decisions 0366 and 0381). */
+const VIEWS = ['ACTIVE', 'NOCELL', 'FEW', 'QUIET', 'CLOSED', 'APPROVE'] as const;
 type CellsView = (typeof VIEWS)[number];
 
 const LINK =
@@ -133,8 +134,13 @@ function CellsIndex() {
   const approver = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.approve_leadership',
   );
+  // *Awaiting CG Assignment* (decision 0381), moved here from Record: on the Full view screens,
+  // a Full view leader's and the Admin's, keyed on the screens the server names.
+  const fullScreens = me.data?.screens === 'FULL';
+  const withoutACell = useWithoutACell(fullScreens);
   const offered: readonly CellsView[] = [
     'ACTIVE',
+    ...(fullScreens ? (['NOCELL'] as const) : []),
     ...(administers ? (['FEW', 'QUIET', 'CLOSED'] as const) : []),
     ...(approver ? (['APPROVE'] as const) : []),
   ];
@@ -169,7 +175,7 @@ function CellsIndex() {
         },
         signal,
       ),
-    enabled: shown !== 'APPROVE',
+    enabled: shown !== 'APPROVE' && shown !== 'NOCELL',
   });
   // The number is the church-wide setting's (decision 0355), known once the Inactive list has
   // answered; three until then, which is the setting's seeded value and which nothing in the
@@ -177,8 +183,9 @@ function CellsIndex() {
   const quietMonths = cells.data?.no_meeting_months ?? [];
   const quietCount = (quietOnly ? quietMonths.length : 0) || 3;
   const quietLabel = `${quietCount} months`;
-  const everyTab: [CellsView, string, number | null][] = [
+  const everyTab: [CellsView, string, number | string | null][] = [
     ['ACTIVE', 'Active Cells', null],
+    ['NOCELL', 'Awaiting CG Assignment', withoutACell.count],
     ['FEW', 'Under 3 Member Cells', null],
     ['QUIET', `Inactive (${quietCount}+ Months) Cells`, null],
     ['CLOSED', 'Closed Cells', null],
@@ -228,7 +235,7 @@ function CellsIndex() {
           >
             {label}
             {/* A count of 0 shows no box, as on Record's tabs (decision 0349). */}
-            {count ? (
+            {count && count !== '0' ? (
               <span className={countClasses(shown === key)}>
                 {count}
               </span>
@@ -240,6 +247,8 @@ function CellsIndex() {
       <div className={TAB_PANE}>
         {shown === 'APPROVE' ? (
           <CellApprovals wholeChurch={holdsWholeChurch(me.data, 'cell.approve_leadership')} />
+        ) : shown === 'NOCELL' ? (
+          <AwaitingCgList />
         ) : (
         <>
         {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}

@@ -154,7 +154,7 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await page.goto('/cells?view=QUIET');
 
     const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
-    await expect(tabs).toHaveText(['Active Cells']);
+    await expect(tabs).toHaveText(['Active Cells', /^Awaiting CG Assignment/]);
     await expect(page.getByRole('table', { name: 'Cells you oversee' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Cells with no meeting held' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /No meeting in/ })).toHaveCount(0);
