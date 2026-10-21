@@ -8,6 +8,7 @@ import {
   mockPeople,
   mockPeopleWithoutACell,
   mockSignedIn,
+  mockWholeChurchReader,
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
@@ -1145,12 +1146,52 @@ test.describe('the Record queue', () => {
 
 });
 
+test.describe('Update Records for a Full view leader (decision 0382)', () => {
+  /** 10:00 on 20 June 2026 in Manila. */
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
+
+  test('has no Whose switch, and shows the reader’s own work even when the address asks for the branch', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page);
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockPendingDcc(page);
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/cells/meetings/awaiting')) {
+        asked.push(new URL(request.url()).searchParams.get('whose') ?? 'mine');
+      }
+    });
+
+    await page.goto('/dashboard?whose=branch');
+
+    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first()).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);
+    expect(asked).not.toContain('branch');
+    // Their branch's work is on the two Pending lists, still offered.
+    for (const name of [/^Pending CG Records/, /^Pending DCC Records/]) {
+      await expect(recordLists(page).getByRole('button', { name })).toBeVisible();
+    }
+  });
+});
+
 test.describe('the Record queue as the owner designed it (decision 0258)', () => {
   /** 10:00 on 20 June 2026 in Manila. */
   const JUNE_20 = new Date('2026-06-20T02:00:00Z');
 
   async function mockQueue(page: Page) {
     await mockSignedIn(page);
+    // The Admin's reach, who keeps Leaders Under Me (decision 0382).
+    await mockWholeChurchReader(page);
     await mockCells(page);
     await mockCellMeetings(page);
     await mockCellReport(page);
@@ -1624,6 +1665,8 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
   }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockRecord(page);
+    // A whole-church reader, who has Whose (decision 0382).
+    await mockWholeChurchReader(page);
     await page.goto('/dashboard');
 
     await chooseList(page, /^Pending CG Records/);
@@ -1662,6 +1705,7 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
   }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockRecord(page);
+    await mockWholeChurchReader(page);
     await page.goto('/dashboard');
     await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toBeVisible();
 

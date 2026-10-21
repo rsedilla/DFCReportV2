@@ -901,10 +901,14 @@ const SCANS = [
     },
   },
   {
-    // The queue's branch view (decision 0258): a downline leader's meeting.
+    // The queue's branch view (decision 0258): a downline leader's meeting. A whole-church
+    // reader's, a Full view leader having none (decision 0382).
     name: 'dashboard, people I oversee',
     route: '/dashboard',
-    before: mockDashboard,
+    async before(page: import('@playwright/test').Page) {
+      await mockDashboard(page);
+      await mockWholeChurchReader(page);
+    },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('radio', { name: 'Leaders Under Me' }).check();
       // Opened, so the scan reaches a leader's rows as well as the lines (decision 0311).
@@ -1823,8 +1827,8 @@ const TARGET_SWEEP = [
     // so **thirteen**.
     settleRole: 'link' as const,
     settle: 'Record Young Pro · Sat',
-    // Two list buttons fewer since decision 0381.
-    minimum: 11,
+    // Two list buttons fewer since decision 0381, and the two Whose radios since decision 0382.
+    minimum: 9,
   },
   {
     // Since decision 0381: the People tabs, then a name link per person. Settled on a name.
