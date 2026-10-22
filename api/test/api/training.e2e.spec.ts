@@ -618,6 +618,8 @@ describe('Training (section 28)', () => {
         sol_2: 0,
         sol_3: 0,
         all_five: 0,
+        // Timothy, Mark's disciple, is deeper than Manuel's direct disciples (decision 0384).
+        beyond_direct_disciples: 1,
       });
 
       const listed = await allPages(manuelAccount, 'limit=200');

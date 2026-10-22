@@ -19,7 +19,11 @@ import {
   seenIsCurrent,
   uniqueIds,
 } from '../common/growth/growth-submit';
-import { growthPage, growthPopulation } from '../common/growth/growth-list';
+import {
+  beyondDirectDisciplesCount,
+  growthPage,
+  growthPopulation,
+} from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { manilaDayOf } from '../common/time/manila';
@@ -104,9 +108,12 @@ export class TrainingService {
 
   /**
    * `GET /api/v1/training/counts`: a card per school and one for people with none yet
-   * (decision 0281), as things stand now. The school cards overlap.
+   * (decision 0281), as things stand now. The school cards overlap. `beyond_direct_disciples`
+   * is not a card: how many listed are other than the actor and the actor's direct
+   * disciples (decision 0384).
    */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
+    const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.TrainingViewSubtree);
     const held = await this.currentPrograms(population);
     const people = await this.people.countCurrent(population);
@@ -119,7 +126,20 @@ export class TrainingService {
     );
 
     // `all_five` is not a card: it is how many the list's opening view leaves out (decision 0287).
-    return { people, not_started: people - held.size, ...perProgram, all_five: allFive(held).size };
+    return {
+      people,
+      not_started: people - held.size,
+      ...perProgram,
+      all_five: allFive(held).size,
+      beyond_direct_disciples: await beyondDirectDisciplesCount(
+        this.deps,
+        this.db,
+        actor,
+        population,
+        people,
+        now,
+      ),
+    };
   }
 
   /** `GET /api/v1/training/people`: the tab's list, one page (section 28). */

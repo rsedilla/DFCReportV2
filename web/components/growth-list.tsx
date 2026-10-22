@@ -143,12 +143,20 @@ export function GrowthListControls<Counts, Row extends PersonRow>({
   what: string;
 }) {
   const { q, mine, step, everyone, go } = list;
+  // **Only my disciples is offered where it would narrow the list** (decision 0384): once the
+  // counts say someone listed is neither the reader nor a direct disciple, or could not be
+  // read. It stays while it is on, so it can be turned off, and waits for the counts rather
+  // than flashing.
+  const counts = list.counts.data as { beyond_direct_disciples?: number } | undefined;
+  const offersMine =
+    mine || list.counts.isError || (counts !== undefined && counts.beyond_direct_disciples !== 0);
 
   return (
     <>
       <GrowthFilters
         submitted={q}
         mine={mine}
+        offersMine={offersMine}
         onSearch={(term) => go({ q: term })}
         onMine={(next) => go({ mine: next ? '1' : null })}
       />
