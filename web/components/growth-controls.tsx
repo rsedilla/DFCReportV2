@@ -177,15 +177,20 @@ export function StillToFinish({
   );
 }
 
-/** The search and the "only my disciples" toggle, in the grey bar every screen's controls sit in. */
+/**
+ * The search and the "only my disciples" toggle, in the grey bar every screen's controls sit
+ * in. The toggle is left out where it would change nothing (decision 0384).
+ */
 export function GrowthFilters({
   submitted,
   mine,
+  offersMine = true,
   onSearch,
   onMine,
 }: {
   submitted: string;
   mine: boolean;
+  offersMine?: boolean;
   onSearch: (term: string) => void;
   onMine: (mine: boolean) => void;
 }) {
@@ -214,9 +219,11 @@ export function GrowthFilters({
       <Button type="submit" disabled={tooShort}>
         {buttonLabel}
       </Button>
-      <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
-        {mine ? 'Showing only my disciples' : 'Only my disciples'}
-      </Button>
+      {offersMine ? (
+        <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
+          {mine ? 'Showing only my disciples' : 'Only my disciples'}
+        </Button>
+      ) : null}
     </form>
   );
 }

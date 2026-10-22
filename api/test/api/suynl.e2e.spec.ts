@@ -697,11 +697,47 @@ describe('SUYNL (section 28)', () => {
       const response = await get(manuelAccount, 'counts');
 
       expect(response.status).toBe(200);
-      // Manuel's subtree: Manuel, Mark, Nathan, Timothy. Silas is archived.
-      expect(response.body).toEqual({ people: 4, not_started: 2, in_progress: 1, graduated: 1 });
+      // Manuel's subtree: Manuel, Mark, Nathan, Timothy. Silas is archived. Timothy, Mark's
+      // disciple, is the one deeper than Manuel's direct disciples (decision 0384).
+      expect(response.body).toEqual({
+        people: 4,
+        not_started: 2,
+        in_progress: 1,
+        graduated: 1,
+        beyond_direct_disciples: 1,
+      });
 
       const listed = await allPages(manuelAccount, 'limit=200');
       expect(listed).toHaveLength(response.body.people);
+    });
+
+    // Decision 0384: what "Only my disciples" would leave out besides the reader.
+    it('counts nobody beyond the direct disciples of a leader who has only disciples', async () => {
+      const counts = (await get(markAccount, 'counts')).body;
+      // Mark's list is Mark and Timothy, Silas being archived: nobody deeper.
+      expect(counts.people).toBe(2);
+      expect(counts.beyond_direct_disciples).toBe(0);
+
+      const mine = await allPages(markAccount, 'mine=true&limit=200');
+      const listed = await allPages(markAccount, 'limit=200');
+      expect(idsOf(mine)).toEqual([timothy.id]);
+      expect(listed).toHaveLength(counts.people);
+    });
+
+    it('counts exactly whom Only my disciples leaves out besides the reader', async () => {
+      const counts = (await get(manuelAccount, 'counts')).body;
+      const listed = idsOf(await allPages(manuelAccount, 'limit=200'));
+      const mine = new Set(idsOf(await allPages(manuelAccount, 'mine=true&limit=200')));
+
+      const beyond = listed.filter((id) => id !== manuel.id && !mine.has(id));
+      expect(beyond).toEqual([timothy.id]);
+      expect(counts.beyond_direct_disciples).toBe(beyond.length);
+    });
+
+    it('counts everyone listed as beyond for a reader with no disciples of their own', async () => {
+      const counts = (await get(admin, 'counts')).body;
+      // Adele is outside the pastoral tree and leads nobody (decision 0339).
+      expect(counts.beyond_direct_disciples).toBe(counts.people);
     });
 
     it('reconciles for a Whole Church reader too', async () => {
@@ -760,7 +796,13 @@ describe('SUYNL (section 28)', () => {
       expect(response.status).toBe(201);
 
       const counts = (await get(manuelAccount, 'counts')).body;
-      expect(counts).toEqual({ people: 4, not_started: 2, in_progress: 2, graduated: 0 });
+      expect(counts).toEqual({
+        people: 4,
+        not_started: 2,
+        in_progress: 2,
+        graduated: 0,
+        beyond_direct_disciples: 1,
+      });
     });
   });
 
