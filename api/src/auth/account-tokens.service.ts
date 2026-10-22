@@ -1,6 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
+
+import { hashToken } from './tokens.service';
 
 import type { AccountTokenPurpose, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -146,20 +148,4 @@ export class AccountTokensService {
 
     return row?.account_id ?? null;
   }
-}
-
-/**
- * SHA-256, not Argon2, and the difference is deliberate.
- *
- * A password is low-entropy and chosen by a person, so it needs a slow hash to
- * survive an offline attack. These tokens are 256 bits from the CSPRNG, where
- * brute force is not a threat model — and a slow hash on the lookup path would put
- * an Argon2 verification between an unauthenticated request and its answer, which
- * is a denial-of-service surface rather than a defence.
- *
- * What the hash is for is the same thing `refresh_tokens` uses one for: a database
- * dump must not yield tokens somebody can present.
- */
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }

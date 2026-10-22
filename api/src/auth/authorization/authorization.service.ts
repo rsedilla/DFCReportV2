@@ -39,6 +39,13 @@ export interface ActorAuthority {
   grants: readonly EffectiveGrant[];
 }
 
+/** Whether the actor holds this capability at Whole Church (decision 0172). */
+export function holdsWholeChurch(authority: ActorAuthority, capability: Capability): boolean {
+  return authority.grants.some(
+    (grant) => grant.capability === capability && grant.scope.type === ScopeType.WholeChurch,
+  );
+}
+
 interface ActiveRoles {
   /** Roles whose row this system honours; the source of role defaults. */
   honoured: AccountRole[];

@@ -6,11 +6,11 @@ import { AuditService } from '../audit/audit.service';
 import { AccountsRepository } from '../auth/accounts.repository';
 import {
   AuthorizationService,
+  holdsWholeChurch,
   type Actor,
   type ActorAuthority,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
-import { ScopeType } from '../auth/authorization/scopes';
 import {
   ApiError,
   ApiErrorCode,
@@ -1550,13 +1550,6 @@ function pageOfLines(
     data: window.map(renderLine),
     next_cursor,
   };
-}
-
-/** Whether the actor holds this capability at Whole Church (decision 0172). */
-function holdsWholeChurch(authority: ActorAuthority, capability: Capability): boolean {
-  return authority.grants.some(
-    (grant) => grant.capability === capability && grant.scope.type === ScopeType.WholeChurch,
-  );
 }
 
 /**
