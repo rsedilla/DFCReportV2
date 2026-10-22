@@ -1,11 +1,11 @@
 import {
+  holdsWholeChurch,
   type Actor,
   type ActorAuthority,
   type AuthorizationService,
   type ScopeMembership,
 } from '../../auth/authorization/authorization.service';
 import { type Capability } from '../../auth/authorization/capabilities';
-import { ScopeType } from '../../auth/authorization/scopes';
 import {
   type ApiError,
   CapabilityDeniedError,
@@ -257,10 +257,4 @@ function denied(authority: ActorAuthority, capability: Capability, personId: str
         person_id: personId,
       })
     : new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
-}
-
-function holdsWholeChurch(authority: ActorAuthority, capability: Capability): boolean {
-  return authority.grants.some(
-    (grant) => grant.capability === capability && grant.scope.type === ScopeType.WholeChurch,
-  );
 }

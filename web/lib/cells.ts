@@ -34,11 +34,6 @@ export interface CellCoverage {
   behind: number;
 }
 
-/** How many meetings that have come still have no record (decision 0267). */
-export function behindOf(coverage: CellCoverage): number {
-  return coverage.behind;
-}
-
 export interface CellSchedule {
   day_of_week: number;
   time_of_day: string;
@@ -947,34 +942,6 @@ export interface CellCounts {
  */
 export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
   return authenticatedRequest<CellCounts>('/api/v1/cells/counts', { signal });
-}
-
-/**
- * Every Cell of one view for a month, with the month's `open` flag, following the cursor to
- * the end 200 at a time, the API's most: the index returns no total (section 22). Record's
- * *Pending CG Records* reads the whole branch this way, so it names every Cell behind
- * (decision 0340). The closed view stops at its first page once the month has shut, since
- * it then lists nothing behind (decision 0266).
- */
-export async function listEveryCell(
-  params: { month: string; state?: 'CLOSED' },
-  signal?: AbortSignal,
-): Promise<{ open: boolean; data: CellSummary[] }> {
-  const data: CellSummary[] = [];
-  let cursor: string | null = null;
-  let open = false;
-
-  do {
-    const page: CellIndexPage = await listCells({ ...params, cursor, limit: 200 }, signal);
-    open = page.open;
-    if (params.state === 'CLOSED' && !open) {
-      return { open, data: [] };
-    }
-    data.push(...page.data);
-    cursor = page.next_cursor;
-  } while (cursor !== null);
-
-  return { open, data };
 }
 
 /**

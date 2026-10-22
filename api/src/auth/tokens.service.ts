@@ -372,6 +372,18 @@ export class TokensService {
   }
 }
 
+/**
+ * SHA-256, not Argon2, and the difference is deliberate. One hash for refresh, activation,
+ * password-reset and second-step tokens alike.
+ *
+ * A password is low-entropy and chosen by a person, so it needs a slow hash to
+ * survive an offline attack. These tokens are 256 bits from the CSPRNG, where
+ * brute force is not a threat model — and a slow hash on the lookup path would put
+ * an Argon2 verification between an unauthenticated request and its answer, which
+ * is a denial-of-service surface rather than a defence.
+ *
+ * What the hash is for: a database dump must not yield tokens somebody can present.
+ */
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
