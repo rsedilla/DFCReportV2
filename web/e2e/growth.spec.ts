@@ -160,6 +160,63 @@ test.describe('the SUYNL tab', () => {
     await expect(page.getByRole('button', { name: 'Show everyone', exact: true })).toHaveCount(0);
   });
 
+  // Decision 0384: offered only where it would take away somebody besides the reader.
+  for (const [tab, mockTab, counts] of [
+    ['SUYNL', mockSuynl, { people: 3, not_started: 1, in_progress: 1, graduated: 1 }],
+    [
+      'Training',
+      mockTraining,
+      { people: 3, not_started: 1, encounter: 2, life_class: 1, sol_1: 0, sol_2: 0, sol_3: 0, all_five: 0 },
+    ],
+  ] as const) {
+    test(`${tab} leaves "Only my disciples" out where nobody listed is beyond the reader's direct disciples (decision 0384)`, async ({
+      page,
+    }) => {
+      await mockSignedIn(page);
+      if (tab === 'Training') await mockWholeChurchReader(page);
+      await mockTab(page, 'accepted', { counts: { ...counts, beyond_direct_disciples: 0 } });
+      await page.goto(`/growth/${tab.toLowerCase()}`);
+      await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
+
+      await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: /only my disciples/i })).toHaveCount(0);
+    });
+  }
+
+  test('keeps "Only my disciples" while it is on, so it can be turned off (decision 0384)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockSuynl(page, 'accepted', {
+      counts: { people: 3, not_started: 1, in_progress: 1, graduated: 1, beyond_direct_disciples: 0 },
+    });
+    await page.goto('/growth/suynl?mine=1');
+
+    const on = page.getByRole('button', { name: 'Showing only my disciples' });
+    await expect(on).toHaveAttribute('aria-pressed', 'true');
+    await on.click();
+    await expect(page).not.toHaveURL(/[?&]mine=1\b/);
+    await expect(page.getByRole('button', { name: /only my disciples/i })).toHaveCount(0);
+  });
+
+  test('offers "Only my disciples" where the counts could not be read (decision 0384)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockSuynl(page);
+    await page.route('**/api/v1/suynl/counts', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'INTERNAL', message: 'Something went wrong.' } }),
+      }),
+    );
+    await page.goto('/growth/suynl');
+    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
+
+    await expect(page.getByRole('button', { name: 'Only my disciples' })).toBeVisible();
+  });
+
   test('saves a tick as a lesson done, against no saved row, with an idempotency key', async ({
     page,
   }) => {

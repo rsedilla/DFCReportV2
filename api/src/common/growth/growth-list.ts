@@ -87,6 +87,27 @@ export async function growthPage(
   return { rows, nextCursor: encodeCursor(nextCursor) };
 }
 
+/**
+ * How many of a Growth tab's `people` are other than the actor, whom their own grant lists,
+ * and the actor's direct disciples (decision 0384). Zero is exactly when "Only my disciples"
+ * would leave nobody out but the actor, and the screen then leaves it out. Counted as `people`
+ * is, so it never exceeds it.
+ */
+export async function beyondDirectDisciplesCount(
+  deps: { people: PeopleReadService; hierarchy: HierarchyService },
+  executor: Db,
+  actor: Actor,
+  population: ReadonlySet<string> | null,
+  people: number,
+  now: Date,
+): Promise<number> {
+  const near = new Set([
+    canonicalId(actor.personId),
+    ...(await deps.hierarchy.directChildrenAsOf(executor, actor.personId, now)).map(canonicalId),
+  ]);
+  return people - (await deps.people.countCurrent(intersect(population, near)));
+}
+
 function intersect(
   left: ReadonlySet<string> | null,
   right: ReadonlySet<string>,

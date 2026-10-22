@@ -78,8 +78,17 @@ export const SUYNL_NOT_MINE = {
   may_file: false,
 };
 
-/** The three cards, adding up to the four people listed (decision 0281). */
-export const SUYNL_COUNTS = { people: 4, not_started: 1, in_progress: 2, graduated: 1 };
+/**
+ * The three cards, adding up to the four people listed (decision 0281), and Bayani, not the
+ * reader's to record, the one deeper than their direct disciples (decision 0384).
+ */
+export const SUYNL_COUNTS = {
+  people: 4,
+  not_started: 1,
+  in_progress: 2,
+  graduated: 1,
+  beyond_direct_disciples: 1,
+};
 
 export const TRAINING_TWO = {
   person_id: IN_PROGRESS_ID,
@@ -133,6 +142,8 @@ export const TRAINING_COUNTS = {
   sol_3: 1,
   /** Not a card: how many the opening view leaves out (decision 0287). */
   all_five: 1,
+  /** Not a card: Bayani, neither the reader nor one of their direct disciples (decision 0384). */
+  beyond_direct_disciples: 1,
 };
 
 export interface GrowthTraffic {
