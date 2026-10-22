@@ -31,6 +31,7 @@ import {
 } from '@/lib/cells';
 import { listApprovalRequests } from '@/lib/cell-approvals';
 import { useCursorPages } from '@/lib/cursor-pages';
+import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
@@ -159,8 +160,11 @@ function CellsIndex() {
     queryFn: ({ signal }) => listApprovalRequests(signal),
     enabled: approver,
   });
+  const cellsKey = ['cells', month, mineOnly && mineApplies, submitted, pages.cursor, PAGE_SIZE, shown];
   const cells = useQuery({
-    queryKey: ['cells', month, mineOnly && mineApplies, submitted, pages.cursor, PAGE_SIZE, shown],
+    queryKey: cellsKey,
+    // The page shown stays, faded, while the next one of the same list loads.
+    placeholderData: keepPreviousPage(cellsKey, 4),
     queryFn: ({ signal }) =>
       listCells(
         {
@@ -177,6 +181,10 @@ function CellsIndex() {
       ),
     enabled: shown !== 'APPROVE' && shown !== 'NOCELL',
   });
+  // A kept page's cursor is the one already being loaded.
+  const nextPage = () => {
+    if (!cells.isPlaceholderData) pages.next(cells.data?.next_cursor);
+  };
   // The number is the church-wide setting's (decision 0355), known once the Inactive list has
   // answered; three until then, which is the setting's seeded value and which nothing in the
   // product can change today.
@@ -323,6 +331,7 @@ function CellsIndex() {
           <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
         </div>
 
+        <div {...pageTurnProps(cells.isPlaceholderData)}>
         {cells.isPending ? (
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : cells.data && cells.data.data.length === 0 ? (
@@ -403,7 +412,7 @@ function CellsIndex() {
               page={pages.page}
               nextCursor={cells.data.next_cursor}
               onPrevious={pages.previous}
-              onNext={() => pages.next(cells.data?.next_cursor)}
+              onNext={nextPage}
             />
           </>
         ) : cells.data && quietOnly ? (
@@ -419,7 +428,7 @@ function CellsIndex() {
               page={pages.page}
               nextCursor={cells.data.next_cursor}
               onPrevious={pages.previous}
-              onNext={() => pages.next(cells.data?.next_cursor)}
+              onNext={nextPage}
             />
           </>
         ) : cells.data ? (
@@ -473,10 +482,11 @@ function CellsIndex() {
               page={pages.page}
               nextCursor={cells.data.next_cursor}
               onPrevious={pages.previous}
-              onNext={() => pages.next(cells.data?.next_cursor)}
+              onNext={nextPage}
             />
           </>
         ) : null}
+        </div>
 
         {restarting ? (
           <RestartCellDialog

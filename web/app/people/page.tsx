@@ -15,6 +15,7 @@ import { Field } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
+import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
@@ -95,10 +96,13 @@ function PeopleList() {
   // Offered only to an account holding `people.create`, a Senior Pastor holding none (decision 0350).
   const mayAdd = (me.data?.capabilities ?? []).some((grant) => grant.capability === 'people.create');
 
+  const resultsKey = ['people', submitted, pages.cursor, PAGE_SIZE];
   const results = useQuery({
-    queryKey: ['people', submitted, pages.cursor, PAGE_SIZE],
+    queryKey: resultsKey,
     queryFn: ({ signal }) => searchPeople(submitted, pages.cursor, signal, { limit: PAGE_SIZE }),
     enabled: me.data !== undefined && !awaitingSearch,
+    // The page shown stays, faded, while the next one loads.
+    placeholderData: keepPreviousPage(resultsKey, 2),
   });
 
   const rows = results.data?.data ?? [];
@@ -203,7 +207,7 @@ function PeopleList() {
               </div>
             )
           ) : (
-            <>
+            <div {...pageTurnProps(results.isPlaceholderData)}>
               <Table caption="People you oversee" className="hidden sm:block">
                 <thead>
                   <tr>
@@ -241,9 +245,12 @@ function PeopleList() {
                 page={pages.page}
                 nextCursor={results.data.next_cursor}
                 onPrevious={pages.previous}
-                onNext={() => pages.next(results.data.next_cursor)}
+                // A kept page's cursor is the one already being loaded.
+                onNext={() => {
+                  if (!results.isPlaceholderData) pages.next(results.data.next_cursor);
+                }}
               />
-            </>
+            </div>
           )}
         </div>
       </PeopleTabs>
