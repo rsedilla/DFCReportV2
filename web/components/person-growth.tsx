@@ -42,11 +42,12 @@ export function PersonGrowth({ personId, memberId }: { personId: string; memberI
     enabled: holds('suynl.view_subtree'),
     retry: false,
   });
+  // A Full view leader's Training is hidden, as its Growth tab is (decision 0360).
+  const seesTraining = holds('training.view_subtree') && !isBranchReader(me.data);
   const training = useQuery({
     queryKey: ['person-training', memberId],
     queryFn: ({ signal }) => listTrainingPeople({ q: memberId, limit: 1 }, signal),
-    // A Full view leader's Training is hidden, as its Growth tab is (decision 0360).
-    enabled: holds('training.view_subtree') && !isBranchReader(me.data),
+    enabled: seesTraining,
     retry: false,
   });
 
@@ -60,15 +61,19 @@ export function PersonGrowth({ personId, memberId }: { personId: string; memberI
   }
 
   const search = `?q=${encodeURIComponent(memberId)}`;
+  // **A reader who is never shown Training reads the frame as SUYNL** (decision 0383): the
+  // frame then holds SUYNL alone, as their sidebar item does, so its heading names it and the
+  // row does not name it a second time.
+  const suynlOnly = !seesTraining;
 
   return (
     <section aria-labelledby={headingId} className={FRAME}>
       <h2 id={headingId} className="field-label">
-        Growth
+        {suynlOnly ? 'SUYNL' : 'Growth'}
       </h2>
       <dl className="mt-3 flex flex-col gap-4">
         {suynlRow ? (
-          <Suynl row={suynlRow} href={`/growth/suynl${search}`} />
+          <Suynl row={suynlRow} href={`/growth/suynl${search}`} named={!suynlOnly} />
         ) : suynlFailed ? (
           <Unavailable label="SUYNL" />
         ) : null}
@@ -95,7 +100,7 @@ function failed(error: unknown): boolean {
 
 const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
-function Suynl({ row, href }: { row: SuynlPerson; href: string }) {
+function Suynl({ row, href, named }: { row: SuynlPerson; href: string; named: boolean }) {
   const latest = row.lessons.reduce<string | null>(
     (day, lesson) => (day === null || lesson.filed_on > day ? lesson.filed_on : day),
     null,
@@ -103,7 +108,8 @@ function Suynl({ row, href }: { row: SuynlPerson; href: string }) {
 
   return (
     <div>
-      <dt className="text-sm font-medium">SUYNL</dt>
+      {/* The term stays for a screen reader when the heading already says it. */}
+      <dt className={named ? 'text-sm font-medium' : 'sr-only'}>SUYNL</dt>
       <dd className="mt-1 text-sm">
         {latest === null ? (
           <span className="text-muted">No lessons yet</span>

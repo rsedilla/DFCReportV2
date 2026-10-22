@@ -67,8 +67,9 @@ async function settled(
   );
 }
 
-function frame(page: Page): Locator {
-  return page.getByRole('region', { name: 'Growth' });
+/** The frame, headed `SUYNL` for a reader never shown Training (decision 0383). */
+function frame(page: Page, name: 'Growth' | 'SUYNL' = 'Growth'): Locator {
+  return page.getByRole('region', { name, exact: true });
 }
 
 /** The ten lesson boxes, as their accessible text reads: a tick and a spoken state. */
@@ -150,24 +151,35 @@ test.describe('when the frame, or half of it, is left out', () => {
     await expect(page.getByRole('heading', { name: 'Growth' })).toHaveCount(0);
   });
 
-  test('shows only SUYNL to a reader holding only suynl.view_subtree', async ({ page }) => {
+  test('shows only SUYNL, headed SUYNL, to a reader holding only suynl.view_subtree (decision 0383)', async ({
+    page,
+  }) => {
     const traffic = await openProfile(page, ['suynl.view_subtree']);
-    await expect(frame(page).getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
+    const suynl = frame(page, 'SUYNL');
+    await expect(suynl.getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
     await settled(page, traffic, { suynl: traffic.suynl.length, training: 0 });
 
-    await expect(frame(page).getByText('Training', { exact: true })).toHaveCount(0);
-    await expect(frame(page).getByRole('link', { name: 'Open Training' })).toHaveCount(0);
+    await expect(suynl.getByRole('heading', { name: 'SUYNL' })).toBeVisible();
+    await expect(frame(page)).toHaveCount(0);
+    await expect(suynl.getByText('Training', { exact: true })).toHaveCount(0);
+    await expect(suynl.getByRole('link', { name: 'Open Training' })).toHaveCount(0);
   });
 
-  test('shows a Full view leader SUYNL and no Training, and asks for none (decision 0360)', async ({
+  test('shows a Full view leader SUYNL and no Training, headed SUYNL once, and asks for none (decisions 0360 and 0383)', async ({
     page,
   }) => {
     const traffic = await openProfile(page, BOTH, {}, { wholeChurch: false });
-    await expect(frame(page).getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
+    const suynl = frame(page, 'SUYNL');
+    await expect(suynl.getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
     await settled(page, traffic, { suynl: traffic.suynl.length, training: 0 });
 
-    await expect(frame(page).getByText('Training', { exact: true })).toHaveCount(0);
-    await expect(frame(page).getByRole('link', { name: 'Open Training' })).toHaveCount(0);
+    await expect(suynl.getByRole('heading', { name: 'SUYNL' })).toBeVisible();
+    await expect(frame(page)).toHaveCount(0);
+    // Named once on screen: the row's own term is kept for a screen reader alone.
+    await expect(suynl.getByText('SUYNL', { exact: true })).toHaveCount(2);
+    await expect(suynl.locator('dt.sr-only')).toHaveText('SUYNL');
+    await expect(suynl.getByText('Training', { exact: true })).toHaveCount(0);
+    await expect(suynl.getByRole('link', { name: 'Open Training' })).toHaveCount(0);
   });
 
   test('shows only Training to a reader holding only training.view_subtree', async ({ page }) => {
