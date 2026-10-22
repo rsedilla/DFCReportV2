@@ -19,7 +19,11 @@ import {
   seenIsCurrent,
   uniqueIds,
 } from '../common/growth/growth-submit';
-import { growthPage, growthPopulation } from '../common/growth/growth-list';
+import {
+  beyondDirectDisciplesCount,
+  growthPage,
+  growthPopulation,
+} from '../common/growth/growth-list';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { compareRosterKeys } from '../common/roster-cursor';
@@ -97,9 +101,11 @@ export class SuynlService {
 
   /**
    * `GET /api/v1/suynl/counts`: the three cards, which add up to everyone the tab lists
-   * (decision 0281), as things stand now.
+   * (decision 0281), as things stand now, and how many of them are other than the actor and
+   * the actor's direct disciples (decision 0384), which is not a card.
    */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
+    const now = await databaseNow(this.db);
     const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
     const progress = await this.currentProgress(population);
     const people = await this.people.countCurrent(population);
@@ -112,6 +118,14 @@ export class SuynlService {
       not_started: people - progress.size,
       in_progress: inProgress,
       graduated,
+      beyond_direct_disciples: await beyondDirectDisciplesCount(
+        this.deps,
+        this.db,
+        actor,
+        population,
+        people,
+        now,
+      ),
     };
   }
 

@@ -36,6 +36,8 @@ export interface SuynlCounts {
   not_started: number;
   in_progress: number;
   graduated: number;
+  /** Not a card: how many listed are other than the reader and their direct disciples (decision 0384). */
+  beyond_direct_disciples: number;
 }
 
 export interface SuynlLesson {
@@ -187,6 +189,8 @@ export interface TrainingCounts {
   sol_3: number;
   /** Not a card: how many the list's opening view leaves out (decision 0287). */
   all_five: number;
+  /** Not a card: how many listed are other than the reader and their direct disciples (decision 0384). */
+  beyond_direct_disciples: number;
 }
 
 export interface TrainingGraduation {
