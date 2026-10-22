@@ -94,12 +94,15 @@ test.describe('the Growth tabs', () => {
     await expect(tabs.locator('a[aria-current="page"]')).toHaveCount(0);
   });
 
-  test('sit under the Growth item of the sidebar, which is the current page', async ({ page }) => {
+  test('sit under a Full view leader’s SUYNL item of the sidebar, which is the current page (decision 0383)', async ({
+    page,
+  }) => {
     await openSuynl(page);
 
     const current = page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]');
     await expect(current).toHaveCount(1);
-    await expect(current).toHaveText('Growth');
+    await expect(current).toHaveText('SUYNL');
+    await expect(page.getByRole('heading', { name: 'SUYNL', level: 1 })).toBeVisible();
   });
 });
 

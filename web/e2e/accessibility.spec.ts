@@ -2811,7 +2811,8 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
     'Reports',
     'People',
     'Cells',
-    'Growth',
+    // A Full view leader's Growth holds SUYNL alone, and is named for it (decision 0383).
+    'SUYNL',
   ]);
 });
 
@@ -2822,13 +2823,19 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
  * element's overflow does not reach the document's scroll width, so a label pushed past its
  * tab reads green there. Worse, each label is `truncate`d, so a label that no longer fits is
  * clipped to an ellipsis rather than overflowing anything: the failure is silent by design.
- * Growth made it six items in 320px, and decision 0288 five; this pins it on both engines.
+ * Growth made it six items in 320px, and decision 0288 five; this pins it on both engines,
+ * for a whole-church reader's `Growth` and a Full view leader's `SUYNL` (decision 0383).
  */
-test('at 320px the tab bar fits all five items, none of them clipped', { tag: [CROSS_BROWSER_TAG] }, async ({
-  page,
-}) => {
+for (const [reader, last] of [
+  ['a whole-church reader', 'Growth'],
+  ['a Full view leader', 'SUYNL'],
+] as const) {
+test(`at 320px the tab bar fits all five items, none of them clipped, for ${reader}`, {
+  tag: [CROSS_BROWSER_TAG],
+}, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await mockSignedIn(page);
+  if (last === 'Growth') await mockWholeChurchReader(page);
   await mockSuynl(page);
 
   await page.goto('/growth/suynl');
@@ -2841,7 +2848,7 @@ test('at 320px the tab bar fits all five items, none of them clipped', { tag: [C
     'Reports',
     'People',
     'Cells',
-    'Growth',
+    last,
   ]);
 
   const tabs = await navigation.getByRole('link').evaluateAll((links) =>
@@ -2877,6 +2884,7 @@ test('at 320px the tab bar fits all five items, none of them clipped', { tag: [C
     'a tab label is truncated to an ellipsis',
   ).toEqual([]);
 });
+}
 
 /**
  * A whole-church reader sees the same order (decision 0277), and Reports opens on the DCC

@@ -93,8 +93,26 @@ test.describe('a Recording-only account (decision 0323)', () => {
     );
   });
 
-  test('a Full view account keeps Record, Reports, People, Cells and Growth', async ({ page }) => {
+  test('a Full view account has Record, Reports, People, Cells and SUYNL (decision 0383)', async ({
+    page,
+  }) => {
     await mockSignedIn(page);
+    await mockPeople(page);
+
+    await page.goto('/people');
+
+    await expect(mainNavigation(page).getByRole('link')).toHaveText([
+      'Record',
+      'Reports',
+      'People',
+      'Cells',
+      'SUYNL',
+    ]);
+  });
+
+  test('a whole-church reader, as the Admin is, keeps Growth (decision 0383)', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['reports.view_subtree', 'suynl.view_subtree'], { wholeChurch: true });
     await mockPeople(page);
 
     await page.goto('/people');
@@ -558,7 +576,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await box.click();
     await expect(box).toBeChecked();
     await expect(
-      page.getByText('Marilou sees Record, Reports, People, Cells and Growth over their branch.'),
+      page.getByText('Marilou sees Record, Reports, People, Cells and SUYNL over their branch.'),
     ).toBeVisible();
     await expect.poll(() => sent.length).toBe(1);
     await expect(box).toBeEnabled();

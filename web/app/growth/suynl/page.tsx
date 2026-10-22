@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { GrowthSaveBar, GrowthTabs, longDay } from '@/components/growth-controls';
+import { isBranchReader } from '@/components/reports-tabs';
 import {
   GrowthFailure,
   GrowthListControls,
@@ -158,8 +159,13 @@ function SuynlTab() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
-          {/* SUYNL is an item of its own on the recording screens (decision 0323). */}
-          {me.isPending ? null : me.data?.screens === 'RECORDING' ? 'SUYNL' : 'Growth'}
+          {/* SUYNL is an item of its own on the recording screens (decision 0323) and for a
+              Full view leader (decision 0383). */}
+          {me.isPending
+            ? null
+            : me.data?.screens === 'RECORDING' || isBranchReader(me.data)
+              ? 'SUYNL'
+              : 'Growth'}
         </h1>
         <p className="text-muted text-sm">
           {counts.data

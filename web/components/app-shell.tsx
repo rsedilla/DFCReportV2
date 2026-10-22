@@ -15,6 +15,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { isBranchReader } from '@/components/reports-tabs';
 import { RequireSession } from '@/components/require-session';
 import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
@@ -98,7 +99,10 @@ const MY_CELL: NavEntry = {
   icon: LayoutGrid,
   matches: ['/my-cell', '/cells'],
 };
-/** The Growth SUYNL tab as an item of its own on the recording screens (decision 0323). */
+/**
+ * The Growth SUYNL tab as an item of its own on the recording screens (decision 0323), and
+ * for a Full view leader, whose Growth holds SUYNL alone (decision 0383).
+ */
 const SUYNL: NavEntry = {
   href: '/growth/suynl',
   label: 'SUYNL',
@@ -161,7 +165,7 @@ export const PAGE_WIDTH = {
  *
  * **A Recording-only account has four items** (decisions 0323 and 0371): `Record · People ·
  * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have two**, `Record · Reports` (decisions 0326 and 0377), their twelve months being a view of Reports.
- * Every other account has the five. Where a person lands still follows the reach
+ * Every other account has the five, a Full view leader's fifth reading `SUYNL` (decision 0383). Where a person lands still follows the reach
  * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
@@ -190,7 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? [RECORD, PEOPLE, MY_CELL, SUYNL]
       : me.data?.screens === 'SENIOR_PASTOR'
         ? [RECORD, REPORTS]
-        : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH];
+        : [RECORD, REPORTS, PEOPLE, CELLS, isBranchReader(me.data) ? SUYNL : GROWTH];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

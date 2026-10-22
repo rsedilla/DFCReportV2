@@ -232,7 +232,7 @@ export function PersonAccount({
                 save={(next) => setFullView(current.id, next, crypto.randomUUID())}
                 describe={(shown) =>
                   shown
-                    ? `${firstName} sees Record, Reports, People, Cells and Growth over their branch.`
+                    ? `${firstName} sees Record, Reports, People, Cells and SUYNL over their branch.`
                     : `${firstName} sees the recording screens: Record, People, Cells and SUYNL.`
                 }
               />

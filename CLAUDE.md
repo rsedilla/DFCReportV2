@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-21, the trigger being decision 0382: of 380 files, 379 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0382, each moved the first two and
+2026-10-22, the trigger being decision 0383: of 381 files, 380 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0383, each moved the first two and
 neither of the others, none of them carrying a `Next:`; 0379 is held by work not yet merged. The recount before this one was dated
+2026-10-21 and triggered by 0382, and was left stale by 0383 the next day. The one before that was dated
 2026-10-21 and triggered by 0381, and was left stale by 0382 the same day. The one before that was dated
 2026-10-21 and triggered by 0380, and was left stale by 0381 the same day. The one before that was dated
 2026-10-20 and triggered by 0378, and was left stale by 0380 the next day. The one before that was dated
@@ -805,6 +806,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-21 — [A Full view leader's Reports are the Senior Pastors' five, for their own branch](docs/decisions/0380-primaries-reports-as-the-senior-pastors.md)
 - 2026-10-21 — [The two Awaiting lists leave Record, for Cells and People](docs/decisions/0381-awaiting-lists-leave-record.md)
 - 2026-10-21 — [Leaders Under Me is hidden from a Full view leader](docs/decisions/0382-leaders-under-me-hidden-from-full-view.md)
+- 2026-10-22 — [A Full view leader's Growth is labelled SUYNL](docs/decisions/0383-a-full-view-leaders-growth-is-labelled-suynl.md)
 
 ### Open — awaiting a ruling
 
