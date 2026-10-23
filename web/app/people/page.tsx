@@ -57,14 +57,12 @@ import { cn } from '@/lib/utils';
  * 13, 17 and 19 forbid the last of those, and section 23 keeps the one state
  * token for form fields.
  *
- * **It opens on everyone the searcher oversees, ten a page, A to Z by first name** (decision
- * 0259, the owner's design adjusted), **for an account on the Recording screens alone**. An
- * Admin, a Senior Pastor and a Full view leader oversee too many people to browse ten at a
- * time, so their tab opens on the search and lists only what a search finds (decision 0348).
- * Which screens an account has is the server's answer (decision 0323, point 5); a Full view
- * leader browses their branch by its structure on the Family Tree tab instead. Each row names the person's pastoral
- * leader and Cell; a search narrows it by name or Member ID. The design's journey stage
- * and "Last recorded" columns are not here: each needs a ruling first.
+ * **It opens on the search, for every account** (decision 0385, extending decision 0348 to the
+ * recording screens): nothing is listed until a search, which finds people in the searcher's
+ * scope by name or Member ID, ten a page, A to Z by first name. The tab is for finding or adding
+ * one person; a leader reaches their own people on the Cells, SUYNL and Record screens. Each
+ * row names the person's pastoral leader and Cell. The design's journey stage and "Last
+ * recorded" columns are not here: each needs a ruling first.
  *
  * **No result count and no page numbers.** Section 22 paginates by cursor and
  * returns no total, so both would be invented.
@@ -90,9 +88,8 @@ function PeopleList() {
   const pages = useCursorPages(submitted);
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const searchOnly = me.data !== undefined && me.data.screens !== 'RECORDING';
-  // Nothing is listed until a search, for an account that opens on one (decision 0348).
-  const awaitingSearch = searchOnly && submitted === '';
+  // Nothing is listed until a search, for every account (decision 0385).
+  const awaitingSearch = submitted === '';
   // Offered only to an account holding `people.create`, a Senior Pastor holding none (decision 0350).
   const mayAdd = (me.data?.capabilities ?? []).some((grant) => grant.capability === 'people.create');
 
@@ -130,11 +127,7 @@ function PeopleList() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-        <p className="text-muted text-sm">
-          {searchOnly
-            ? 'Find someone by name or Member ID.'
-            : 'Everyone you oversee, you included.'}
-        </p>
+        <p className="text-muted text-sm">Find someone by name or Member ID.</p>
       </div>
 
       <PeopleTabs current="/people">
@@ -193,19 +186,15 @@ function PeopleList() {
           ) : results.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>
           ) : results.isError ? null : rows.length === 0 ? (
-            submitted === '' ? (
-              <p className="text-sm">Nobody you oversee yet.</p>
-            ) : (
-              <div>
-                <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
-                {mayAdd ? (
-                  <p className="text-muted mt-2 text-sm leading-relaxed">
-                    They may still be elsewhere in the church. Adding a person searches every branch
-                    as you type, so start there rather than assuming they are new.
-                  </p>
-                ) : null}
-              </div>
-            )
+            <div>
+              <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
+              {mayAdd ? (
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  They may still be elsewhere in the church. Adding a person searches every branch
+                  as you type, so start there rather than assuming they are new.
+                </p>
+              ) : null}
+            </div>
           ) : (
             <div {...pageTurnProps(results.isPlaceholderData)}>
               <Table caption="People you oversee" className="hidden sm:block">
