@@ -107,7 +107,7 @@ test.describe('the Growth tabs', () => {
 });
 
 test.describe('the SUYNL tab', () => {
-  test('shows the three counts, and a card narrows the list and the address', async ({ page }) => {
+  test('shows two counts, and a card narrows the list and the address', async ({ page }) => {
     const traffic = await openSuynl(page);
 
     await expect(page.getByText('4 people you oversee, as of today.')).toBeVisible();
@@ -115,13 +115,13 @@ test.describe('the SUYNL tab', () => {
     await expect(page.getByText('SUYNL is Start Up Your New Life, ten lessons taken one to one.')).toBeVisible();
     const notStarted = page.getByRole('button', { name: /^Not started/ });
     const inProgress = page.getByRole('button', { name: /^In progress/ });
-    const graduated = page.getByRole('button', { name: /^Graduated/ });
     await expect(notStarted).toContainText('1');
     await expect(inProgress).toContainText('2');
-    await expect(graduated).toContainText('1');
+    // Graduated is hidden (decision 0386): a graduate is reached by a search or Show everyone.
+    await expect(page.getByRole('button', { name: /^Graduated/ })).toHaveCount(0);
     // The opening view is those still to finish (decision 0287), which is no card.
     expect(lastList(traffic.lists).get('step')).toBe('STILL_TO_FINISH');
-    for (const card of [notStarted, inProgress, graduated]) {
+    for (const card of [notStarted, inProgress]) {
       await expect(card).toHaveAttribute('aria-pressed', 'false');
     }
 
@@ -516,8 +516,21 @@ test.describe('the SUYNL list opens on those still to finish (decision 0287)', (
 
     await expect(page.getByText(NOT_SHOWN, { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Show everyone', exact: true })).toBeVisible();
-    // The counts still cover everyone the tab lists.
-    await expect(page.getByRole('button', { name: /^Graduated/ })).toContainText('1');
+  });
+
+  // Decision 0386: the Graduated card is hidden, not withdrawn, so its address still lists them.
+  test('an address naming GRADUATED still lists the graduates, with no card pressed', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    const traffic = await mockSuynl(page);
+    await page.goto('/growth/suynl?step=GRADUATED');
+
+    await expect(page.getByRole('link', { name: 'Lualhati Dizon' })).toBeVisible();
+    expect(lastList(traffic.lists).get('step')).toBe('GRADUATED');
+    for (const name of [/^Not started/, /^In progress/]) {
+      await expect(page.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
+    }
   });
 
   test('says "have" and "are" for more than one', async ({ page }) => {
@@ -549,7 +562,7 @@ test.describe('the SUYNL list opens on those still to finish (decision 0287)', (
     await expect(page.getByRole('link', { name: 'Lualhati Dizon' })).toBeVisible();
     expect(lastList(traffic.lists).has('step')).toBe(false);
     await expect(page.getByText(SHOWING, { exact: true })).toBeVisible();
-    for (const card of [/^Not started/, /^In progress/, /^Graduated/]) {
+    for (const card of [/^Not started/, /^In progress/]) {
       await expect(page.getByRole('button', { name: card })).toHaveAttribute(
         'aria-pressed',
         'false',
@@ -588,18 +601,18 @@ test.describe('the SUYNL list opens on those still to finish (decision 0287)', (
   test('a card asks for its own step, clears all=1, and the line goes', async ({ page }) => {
     const traffic = await openSuynl(page, 'accepted', '/growth/suynl?all=1');
 
-    await page.getByRole('button', { name: /^Graduated/ }).click();
+    await page.getByRole('button', { name: /^Not started/ }).click();
 
-    await expect(page).toHaveURL(/[?&]step=GRADUATED\b/);
+    await expect(page).toHaveURL(/[?&]step=NOT_STARTED\b/);
     await expect(page).not.toHaveURL(/all=/);
-    await expect.poll(() => lastList(traffic.lists).get('step')).toBe('GRADUATED');
-    await expect(page.getByRole('link', { name: 'Lualhati Dizon' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toHaveCount(0);
+    await expect.poll(() => lastList(traffic.lists).get('step')).toBe('NOT_STARTED');
+    await expect(page.getByRole('link', { name: 'Ernani Pascual' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Lualhati Dizon' })).toHaveCount(0);
     await expect(page.getByText(SHOWING, { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Show everyone', exact: true })).toHaveCount(0);
 
     // Clearing the card lands on the opening view, not on everyone.
-    await page.getByRole('button', { name: /^Graduated/ }).click();
+    await page.getByRole('button', { name: /^Not started/ }).click();
 
     await expect(page).not.toHaveURL(/step=|all=/);
     await expect(page.getByRole('link', { name: 'Lualhati Dizon' })).toHaveCount(0);
@@ -615,7 +628,6 @@ test.describe('the SUYNL list opens on those still to finish (decision 0287)', (
     await page.goto('/growth/suynl');
 
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Graduated/ })).toContainText('0');
     expect(lastList(traffic.lists).get('step')).toBe('STILL_TO_FINISH');
     await expect(page.getByText(/finished all ten/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Show everyone', exact: true })).toHaveCount(0);

@@ -31,7 +31,9 @@ import {
  * it is made: a lesson filed is a dated statement naming a leader, so a mis-tap must not
  * file one. Nothing is typed as a date, because a lesson carries the day it was filed.
  *
- * **Three cards that add up to everyone listed**, each narrowing the list to its people.
+ * **Two cards, Not started and In progress, that add up to everyone still to finish**
+ * (decision 0386), each narrowing the list to its people. Graduated is hidden rather than
+ * withdrawn: a graduate is found by a search or Show everyone, and its address still answers.
  * A person who has done all ten folds to one line with the day the tenth was filed, and
  * an Edit lessons action that opens the ten boxes again, and Close to fold them back
  * while nothing has changed.
@@ -152,7 +154,6 @@ function SuynlTab() {
       label: 'In progress',
       count: counts.data?.in_progress,
     },
-    { step: 'GRADUATED', label: 'Graduated', count: counts.data?.graduated },
   ];
 
   return (

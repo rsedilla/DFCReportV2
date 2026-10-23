@@ -1535,7 +1535,7 @@ const SCANS = [
     },
   },
   {
-    // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
+    // SUYNL (section 28): two count cards (decision 0386), ten boxes a person, a graduated row folded to
     // its date with Edit lessons, and a row the reader may not file for, which shows marks.
     // Everyone, because the opening view leaves the graduated row out (decision 0287); the
     // opening view is the one "withdrawing a lesson" scans below.
