@@ -715,18 +715,10 @@ function Dashboard() {
 
             {/*
               **Record is where DCC attendance is recorded from** (section 19, ruling of
-              2026-09-14). The queue lists the Sundays with something outstanding; the
-              calendar is the way to every Sunday of the month, including one already
-              complete that a leader needs to look at again.
+              2026-09-14). The queue lists the Sundays with something outstanding. The month
+              of every Sunday at `/dcc` is not linked from here for now (owner, 2026-10-23):
+              hidden rather than withdrawn, it still opens by address.
             */}
-            <p className="mt-4">
-              <Link
-                href="/dcc"
-                className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                See the whole month
-              </Link>
-            </p>
           </section>
         ) : null}
 

@@ -242,7 +242,8 @@ function DccChecklist() {
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="record">
       <p className="mb-4">
-        <TextLink href="/dcc">Back to your month</TextLink>
+        {/* To Record's DCC list, as after a save: the month page is not linked for now. */}
+        <TextLink href="/dashboard?list=awaiting&kind=dcc">Back to Update Records</TextLink>
       </p>
 
       {/* The accent, for the reason the Cell meeting screen gives. */}

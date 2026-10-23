@@ -188,7 +188,7 @@ test.describe('a DCC checklist with marks not yet saved', () => {
       asked.push(dialog.message());
       await dialog.dismiss();
     });
-    await page.getByRole('link', { name: 'Back to your month' }).click();
+    await page.getByRole('link', { name: 'Back to Update Records' }).click();
 
     await expect.poll(() => asked.length).toBe(1);
     await expect(page).toHaveURL(SUNDAY);

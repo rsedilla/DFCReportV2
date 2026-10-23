@@ -405,10 +405,28 @@ test.describe('a Sunday with a mark already recorded', () => {
       .check();
     await page.getByRole('button', { name: 'Save marks', exact: true }).click();
 
+    // The line after Saved, beside the page's own link back, which goes to the same place.
+    await expect(page.getByText('Saved.').getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
+      'href',
+      '/dashboard?list=awaiting&kind=dcc',
+    );
+    for (const link of await page.getByRole('link', { name: 'Back to Update Records' }).all()) {
+      await expect(link).toHaveAttribute('href', '/dashboard?list=awaiting&kind=dcc');
+    }
+  });
+
+  // The page's own link back goes to Record's DCC list; the month page is not linked for now
+  // (owner, 2026-10-23).
+  test('links back to Update Records on DCC, not to the month', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.goto(SUNDAY);
+
     await expect(page.getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
       'href',
       '/dashboard?list=awaiting&kind=dcc',
     );
+    await expect(page.getByRole('link', { name: 'Back to your month' })).toHaveCount(0);
   });
 
   // Decision 0275: a refusal inside the records names its path, and the screen names the
@@ -2212,7 +2230,9 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await expect(page.getByText('Cell meetings appear once the month begins.')).toBeVisible();
   });
 
-  test('the queue links to it as the whole month', async ({ page }) => {
+  // Hidden rather than withdrawn (owner, 2026-10-23): the month page still opens by
+  // address, as the cases above show, and nothing on Record links to it for now.
+  test('the queue does not link to it for now', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockMonth(page);
     await mockCellReport(page);
@@ -2221,12 +2241,11 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await mockPeopleWithoutACell(page);
     await mockPendingDcc(page);
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard?kind=dcc');
 
-    await expect(page.getByRole('link', { name: 'See the whole month' })).toHaveAttribute(
-      'href',
-      '/dcc',
-    );
+    await expect(page.getByRole('heading', { name: /Your DCC checklist/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'See the whole month' })).toHaveCount(0);
+    await expect(page.locator('main a[href="/dcc"]')).toHaveCount(0);
   });
 });
 
