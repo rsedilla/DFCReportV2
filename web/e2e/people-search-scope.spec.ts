@@ -55,16 +55,15 @@ async function recordSearches(page: import('@playwright/test').Page): Promise<st
 }
 
 test.describe('which search each surface asks for', () => {
-  test('the People screen opens on everyone, with each leader and Cell (decision 0259)', async ({
-    page,
-  }) => {
-    // A leader without Full view, on the Recording screens, keeps the list (decision 0348).
+  // Decision 0385: a search still finds people in the searcher's own scope, ten a page, each
+  // row naming the person's leader and Cell, as the opening list of decision 0259 did.
+  test('a search lists each person with their leader and Cell', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockPeople(page);
     const searches = await recordSearches(page);
 
-    await page.goto('/people');
+    await page.goto('/people?q=Marilou');
 
     const table = page.getByRole('table', { name: 'People you oversee' });
     await expect(table.getByRole('row', { name: /Marilou Reyes Santos/ })).toContainText(
@@ -73,15 +72,15 @@ test.describe('which search each surface asks for', () => {
     await expect(table.getByRole('row', { name: /Marilou Reyes Santos/ })).toContainText(
       'Youth · Sat',
     );
-    // No term was typed, and the first request asked for ten of the searcher's own scope.
-    expect(searches[0]).not.toContain('q=');
+    expect(searches[0]).toContain('q=Marilou');
     expect(searches[0]).toContain('limit=10');
     expect(searches[0]).not.toContain('church_wide');
   });
 
-  // Decision 0348: an Admin, a Senior Pastor and a Full view leader oversee too many people to
-  // browse, so the tab opens on the search and asks for nobody until something is searched.
+  // Decisions 0348 and 0385: every account's tab opens on the search and asks for nobody until
+  // something is searched, the recording screens included.
   for (const [who, arrange] of [
+    ['a leader on the recording screens', async (page: import('@playwright/test').Page) => mockScreens(page, 'RECORDING')],
     ['a Full view leader', async () => undefined],
     ['a Senior Pastor', async (page: import('@playwright/test').Page) => mockScreens(page, 'SENIOR_PASTOR')],
     ['an Admin', async (page: import('@playwright/test').Page) => mockAdministrator(page)],
