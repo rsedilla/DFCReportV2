@@ -130,17 +130,18 @@ export function useGrowthSave<Counts, Row extends PersonRow, Entry, Change>({
   return { save, stale, reload };
 }
 
-/** The search bar, the cards, and what the opening view leaves out. */
+/**
+ * The search bar, the cards, and what the opening view leaves out. A tab that says nothing of
+ * those who have finished passes no `stillToFinish`, as SUYNL does (decision 0386).
+ */
 export function GrowthListControls<Counts, Row extends PersonRow>({
   list,
   cards,
-  finished,
-  what,
+  stillToFinish,
 }: {
   list: GrowthList<Counts, Row>;
   cards: GrowthCard[];
-  finished: number | undefined;
-  what: string;
+  stillToFinish?: { finished: number | undefined; what: string };
 }) {
   const { q, mine, step, everyone, go } = list;
   // **Only my disciples is offered where it would narrow the list** (decision 0384): once the
@@ -163,11 +164,11 @@ export function GrowthListControls<Counts, Row extends PersonRow>({
 
       <GrowthCards cards={cards} selected={step} onSelect={(next) => go({ step: next, all: null })} />
 
-      {step === null && q === '' && !mine ? (
+      {stillToFinish && step === null && q === '' && !mine ? (
         <StillToFinish
           everyone={everyone}
-          finished={finished}
-          what={what}
+          finished={stillToFinish.finished}
+          what={stillToFinish.what}
           onChange={(all) => go({ all: all ? '1' : null })}
         />
       ) : null}

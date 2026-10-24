@@ -77,10 +77,11 @@ export function GrowthTabs({
 
 /**
  * The cards fill the row on a wide screen, however many a tab has (owner's choice of
- * 2026-09-24): SUYNL's three, Conquest's four, Training's six. Spelled out whole so
- * Tailwind sees each class.
+ * 2026-09-24): SUYNL's two (decision 0386), Conquest's four, Training's six. Spelled out
+ * whole so Tailwind sees each class.
  */
 const COLUMNS: Record<number, string> = {
+  2: 'sm:grid-cols-2',
   3: 'sm:grid-cols-3',
   4: 'lg:grid-cols-4',
   6: 'sm:grid-cols-3 lg:grid-cols-6',
