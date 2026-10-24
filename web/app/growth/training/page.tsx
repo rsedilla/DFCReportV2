@@ -199,8 +199,7 @@ function TrainingTab() {
         <GrowthListControls
           list={list}
           cards={cards}
-          finished={counts.data?.all_five}
-          what="all five"
+          stillToFinish={{ finished: counts.data?.all_five, what: 'all five' }}
         />
 
         <GrowthFailure list={list} growthSave={growthSave} />

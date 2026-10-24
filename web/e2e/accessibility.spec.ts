@@ -1551,14 +1551,15 @@ const SCANS = [
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
       await expect(page.getByText('Not yours to record').filter({ visible: true })).toBeVisible();
+      // SUYNL says nothing of those who have finished, even on everyone (decision 0386).
       await expect(
         page.getByRole('button', { name: 'Show only those still to finish' }),
-      ).toBeVisible();
+      ).toHaveCount(0);
     },
   },
   {
     // An untick of a saved lesson, which renders the required reason box in the save bar.
-    // On the opening view, so its "not shown" line is scanned too (decision 0287).
+    // On the opening view, which says nothing of those who have finished (decision 0386).
     name: 'growth suynl, withdrawing a lesson',
     route: '/growth/suynl',
     async before(page: import('@playwright/test').Page) {
@@ -1570,7 +1571,7 @@ const SCANS = [
         .getByRole('checkbox', { name: 'Lesson 2, filed 6 September 2026, Dalisay Soriano' })
         .uncheck();
       await expect(page.getByLabel('Why is this being withdrawn or changed? (required)')).toBeVisible();
-      await expect(page.getByText('1 who has finished all ten is not shown.')).toBeVisible();
+      await expect(page.getByText(/finished all ten/)).toHaveCount(0);
     },
   },
   {
@@ -1993,15 +1994,15 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The one tab (decision 0360), three cards, the search, Search and the filter, the line's Show only
-    // those still to finish, four name links, twenty boxes across the two rows the reader
-    // may file for, Edit lessons on the graduated row, and the two pager buttons. Settled
-    // on Edit lessons, which renders from the data. Everyone, because the opening view
-    // leaves the graduated row out (decision 0287).
+    // The one tab (decision 0360), two cards (decision 0386), the search, Search and the filter,
+    // four name links, twenty boxes across the two rows the reader may file for, Edit lessons
+    // on the graduated row, and the two pager buttons. Settled on Edit lessons, which renders
+    // from the data. Everyone, by address, because the opening view leaves the graduated row
+    // out (decision 0287).
     name: 'growth suynl',
     route: '/growth/suynl?all=1',
     settle: 'Edit lessons',
-    minimum: 34,
+    minimum: 32,
   },
   {
     // The one tab (decision 0360), the link to the Encounter seasons (decision 0296), six cards, the search,

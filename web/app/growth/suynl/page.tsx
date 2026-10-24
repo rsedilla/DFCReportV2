@@ -33,7 +33,8 @@ import {
  *
  * **Two cards, Not started and In progress, that add up to everyone still to finish**
  * (decision 0386), each narrowing the list to its people. Graduated is hidden rather than
- * withdrawn: a graduate is found by a search or Show everyone, and its address still answers.
+ * withdrawn: the list says nothing of those who have finished and offers no Show everyone, a
+ * graduate is found by a search, and both addresses (`step=GRADUATED`, `all=1`) still answer.
  * A person who has done all ten folds to one line with the day the tenth was filed, and
  * an Edit lessons action that opens the ten boxes again, and Close to fold them back
  * while nothing has changed.
@@ -178,12 +179,8 @@ function SuynlTab() {
 
       <GrowthTabs current="/growth/suynl">
 
-        <GrowthListControls
-          list={list}
-          cards={cards}
-          finished={counts.data?.graduated}
-          what="all ten"
-        />
+        {/* No line counting those who have finished, and no Show everyone (decision 0386). */}
+        <GrowthListControls list={list} cards={cards} />
 
         <GrowthFailure list={list} growthSave={growthSave} />
 
