@@ -22,13 +22,13 @@ const archivo = Archivo({
 });
 
 /**
- * DREAMS, Doulos Reporting, Evaluation, And Management System (owner's choice of 2026-10-19).
+ * DREAMS, Doulos Reporting, Evaluation, And Monitoring System (owner's choice of 2026-10-19).
  * The tab and home-screen icons are `app/icon.png` and `app/apple-icon.png`, the DfC globe.
  */
 export const metadata: Metadata = {
   title: 'DREAMS',
   applicationName: 'DREAMS',
-  description: 'Doulos Reporting, Evaluation, And Management System.',
+  description: 'Doulos Reporting, Evaluation, And Monitoring System.',
 };
 
 /**
