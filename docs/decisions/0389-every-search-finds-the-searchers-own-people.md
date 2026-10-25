@@ -45,8 +45,9 @@ is accepted rather than widening the search for it.
 **6. No new API version** (owner, 2026-10-26). Section 22 asks for one when an existing value
 changes meaning, to protect a client that cannot be updated at once. `church_wide=true` sent below
 Whole Church now answers `SCOPE_DENIED` where it widened the rows; no native client exists, and the
-web client changes in the same release, so nothing relies on the old meaning. It narrows
-authorization and is decided here rather than versioned.
+web client changes in the same release, so nothing relies on the old meaning, as decision 0328
+allows `/api/v1` to narrow until the first native release. It narrows authorization and is
+decided here rather than versioned.
 
 **7. Decision 0303's bound and audit entry bind a request that asks for the church-wide
 directory**, as before (owner, 2026-10-26): a Whole Church reader's pickers send it, and their
@@ -59,8 +60,8 @@ already recorded under another branch, and narrowing it would let the same perso
 ## Why
 
 Three of the four church-wide pickers offered names that saving would refuse: a pastoral leader
-outside the searcher's subtree on Add a Person, a new leader outside it on a reassignment, and
-anybody already in another Cell on Add a member. The fourth case, adding somebody from another
+outside the searcher's subtree on Add a Person, a new leader outside it on a reassignment, and,
+on Add a member, anybody already in another Cell whom the searcher could not move. The fourth case, adding somebody from another
 branch who is in no Cell, let a Cell Leader take a person into their Cell without that branch's
 leaders knowing. A new visitor is added under the leader who met them, so they are already in that
 leader's tree; a person from another branch is better placed by the Admin, who sees both. And a
@@ -71,7 +72,8 @@ a refusal in the API closes.
 
 Decision 0244 where it keeps the church-wide directory in the person pickers, and its consequence
 in decisions 0274 and 0299 that those pickers search the church. Section 10's allowance that a
-leader may add somebody from outside their own subtree to their Cell. Sections 8, 10, 13 and 22 are
+leader may add somebody in no Cell from outside their own subtree to their Cell; moving a member,
+whoever pastors them, stays decision 0357's. Sections 8, 10, 13 and 22 are
 amended.
 
 Decision 0389, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)

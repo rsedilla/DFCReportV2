@@ -333,9 +333,9 @@ export class CellsController {
    * subtree, Admin, Senior Pastors — fall out of the scope rather than being
    * restated here.
    *
-   * **The person being added is checked too, in the domain layer** (decision 0389): the
+   * **Somebody in no Cell is checked too, in the domain layer** (decision 0389): the
    * actor's `cell.manage_membership` must cover them, so a leader adds only people they
-   * oversee. Membership may still differ from pastoral assignment, but somebody from
+   * oversee; somebody already in a Cell is moved, and the move check below decides. Membership may still differ from pastoral assignment, but somebody from
    * another branch is added by an actor whose grant reaches them. Adding somebody already
    * in another Cell is a move, which needs `cell.move_members` over both Cells (decision
    * 0357), checked in the domain layer (section 7).
