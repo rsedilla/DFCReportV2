@@ -16,7 +16,7 @@ import {
 } from '@/lib/cells';
 import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
-import { getPerson, networkLabel, networkOfSex } from '@/lib/people';
+import { getPerson, networkOfSex } from '@/lib/people';
 
 /**
  * Moving a person to another Cell, or placing them in one (SKILL.md section 10).
@@ -103,6 +103,12 @@ export function MoveCellDialog({
           }
         }}
       >
+        {/* What to do, said first (owner, 2026-10-25). */}
+        {!current ? (
+          <p className="text-sm leading-relaxed">
+            Choose the Cell Group {personName} will attend, then press Add.
+          </p>
+        ) : null}
         {current ? (
           <p className="text-sm leading-relaxed">
             Leaving {cellShortName(current)}
@@ -118,11 +124,11 @@ export function MoveCellDialog({
           <p className="text-muted text-sm">Loading&hellip;</p>
         ) : (
           <CellPicker
-            label="Cell"
+            label="Cell Group"
             description={
               network === null
-                ? 'The Cells you oversee.'
-                : `Only ${networkLabel(network)} Cells are listed: a member and their Cell’s leader share one Network.`
+                ? 'The Cell Groups you oversee.'
+                : `Only ${network === 'MENS' ? 'Men’s' : 'Women’s'} Cell Groups are shown.`
             }
             leaderId={leader?.id ?? null}
             leaderName={leader?.full_name ?? null}
@@ -136,7 +142,7 @@ export function MoveCellDialog({
         <p className="text-muted text-sm leading-relaxed">
           {current
             ? `It takes effect today. Past months keep counting them in ${cellShortName(current)}.`
-            : 'It takes effect today.'}
+            : 'They join this Cell Group from today.'}
         </p>
 
         <FailureNotice
@@ -161,6 +167,8 @@ export function MoveCellDialog({
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
+          {/* Why the button is not yet offered, said beside it (owner, 2026-10-25). */}
+          {!chosen ? <p className="text-muted text-sm lg:self-center">Choose a Cell Group first.</p> : null}
         </div>
       </form>
     </Dialog>
