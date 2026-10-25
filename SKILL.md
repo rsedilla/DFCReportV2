@@ -5231,7 +5231,7 @@ These are not deferred. They are cheap to design in and expensive to retrofit, a
 
 ### Deferred until required
 
-- offline draft storage on the device, with one exception (decision 0345): attendance marks made on a Cell meeting or a DCC Sunday and not yet saved are kept on the device, offered back with a Discard, and sent only when the leader saves. Marks only, for the person signed in, deleted when saved or discarded, when somebody signs out or signs in on the device, and when the server ends the session; they are not offered back after four weeks (decision 0387), by when the week they were for has closed, and a mark made against a record that has changed since is not offered back. Leaving with such marks by a link inside the application, or by closing or reloading the tab, asks first
+- offline draft storage on the device, with one exception (decision 0345): attendance marks made on a Cell meeting or a DCC Sunday and not yet saved are kept on the device, offered back with a Discard, and sent only when the leader saves. Marks only, for the person signed in, deleted when saved or discarded, when somebody signs out or signs in on the device, and when the server ends the session; they are not offered back after four weeks (decision 0387), about when the week they were for closes, and a mark made against a record that has changed since is not offered back. Leaving with such marks by a link inside the application, or by closing or reloading the tab, asks first
 - background sync and queueing
 - partial or delta synchronisation
 

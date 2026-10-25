@@ -14,8 +14,8 @@ import { useCallback, useEffect, useState } from 'react';
  * **Only marks are kept**, never a note, a reason or who ran a meeting, and each draft is keyed
  * on the screen and on the person signed in, so a draft is never offered to somebody else on a
  * shared phone. Signing out or in on this device, or the server ending the session, deletes
- * every draft (`clearMarkDrafts`), and one older than four weeks is not offered back: by then
- * the week it was for has closed (decisions 0335 and 0387).
+ * every draft (`clearMarkDrafts`), and one older than four weeks is not offered back, about when
+ * the week it was for closes (decisions 0335 and 0387).
  */
 
 const PREFIX = 'dfc.marks:';

@@ -29,8 +29,10 @@ current week as it did.
 
 **5. Unsaved attendance marks are kept on the device for four weeks** (owner, the same day),
 where decision 0345 kept them for three on the ground that the week had closed by then. A week
-now closes 28 days after its Monday, so a draft made on or after the day it is for lasts until
-its week has closed. Raised by `architecture-guardian` reviewing this ruling.
+now closes 28 days after its Monday at 12 noon, so four weeks is about when it closes. One
+narrow case is accepted (owner, the same day): marks for a Monday meeting last changed before
+noon that Monday drop up to twelve hours before the week closes. Raised by `architecture-guardian`
+reviewing this ruling.
 
 **Nothing else in decision 0335 changes.** The rule still starts with the week of 26 October
 2026; a record dated before it keeps the end of the 7th of the following month and is never

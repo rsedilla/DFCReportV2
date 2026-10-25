@@ -225,7 +225,7 @@ test.describe('a DCC checklist with marks not yet saved', () => {
     test(`${offered ? 'offers back' : 'does not offer back'} marks made ${days} days ago (decision 0387)`, async ({
       page,
     }) => {
-      // Four weeks, by when the week the marks were for has closed.
+      // Four weeks, about when the week the marks were for closes.
       await page.addInitScript(
         ([key, person, age]) => {
           window.localStorage.setItem(
