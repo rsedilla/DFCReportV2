@@ -8,8 +8,8 @@ import {
 } from '../../src/common/time/submission-window';
 
 /**
- * The weekly deadline's arithmetic (SKILL.md section 13, decision 0335), on the fixed dates
- * the ruling names: from the week of Monday 26 October 2026 a week is due at 12 noon the
+ * The weekly deadline's arithmetic (SKILL.md section 13, decisions 0335 and 0387), on the fixed dates
+ * the rulings name: from the week of Monday 26 October 2026 a week is due at 12 noon the second
  * Monday after it and closes two Mondays later; a week before keeps the end of the 7th.
  * Manila is UTC+8, so 12:00 Manila is 04:00Z.
  */
@@ -36,10 +36,10 @@ describe('The weekly deadline (decision 0335)', () => {
     expect(weekStartOf('2026-11-02')).toBe('2026-11-02');
   });
 
-  it('makes the first week due at noon on Monday 2 November and closes it on 16 November', () => {
+  it('makes the first week due at noon on Monday 9 November and closes it on 23 November', () => {
     for (const day of ['2026-10-26', '2026-10-30', '2026-11-01']) {
-      expect(recordDueAt(day)?.toISOString()).toBe('2026-11-02T04:00:00.000Z');
-      expect(recordClosesAt(day).toISOString()).toBe('2026-11-16T04:00:00.000Z');
+      expect(recordDueAt(day)?.toISOString()).toBe('2026-11-09T04:00:00.000Z');
+      expect(recordClosesAt(day).toISOString()).toBe('2026-11-23T04:00:00.000Z');
     }
   });
 
@@ -49,10 +49,10 @@ describe('The weekly deadline (decision 0335)', () => {
     expect(recordClosesAt('2026-10-25').toISOString()).toBe('2026-11-07T16:00:00.000Z');
   });
 
-  it('closes a month when its last week closes, between the 15th and the 21st', () => {
-    expect(monthClosesAt('2026-10-01').toISOString()).toBe('2026-11-16T04:00:00.000Z');
-    expect(monthClosesAt('2026-11-01').toISOString()).toBe('2026-12-21T04:00:00.000Z');
-    expect(monthClosesAt('2027-02-01').toISOString()).toBe('2027-03-15T04:00:00.000Z');
+  it('closes a month when its last week closes, between the 22nd and the 28th', () => {
+    expect(monthClosesAt('2026-10-01').toISOString()).toBe('2026-11-23T04:00:00.000Z');
+    expect(monthClosesAt('2026-11-01').toISOString()).toBe('2026-12-28T04:00:00.000Z');
+    expect(monthClosesAt('2027-02-01').toISOString()).toBe('2027-03-22T04:00:00.000Z');
     // A month before the rule keeps the 7th.
     expect(monthClosesAt('2026-09-01')).toEqual(windowClosesAt('2026-09-01'));
   });

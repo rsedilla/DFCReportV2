@@ -21,12 +21,12 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
 
 /**
- * The weekly deadline (SKILL.md section 13, decision 0335): a week is due at 12 noon the
- * Monday after it, a record first made after that is Late, and the week closes two Mondays
- * later.
+ * The weekly deadline (SKILL.md section 13, decisions 0335 and 0387): a week is due at 12 noon
+ * the second Monday after it, a record first made after that is Late, and the week closes two
+ * Mondays later.
  *
  * **The rule starts on 26 October 2026, and no real clock reaches a closed week of it before
- * 16 November**, so this file moves the start to a Monday ten weeks before the database's own
+ * 23 November**, so this file moves the start to a Monday ten weeks before the database's own
  * week through `WEEKLY_DEADLINE_FROM`, which only a test process reads. Every date is computed
  * from the database's day, as the other attendance suites do. Fixture names are invented.
  */
@@ -151,7 +151,7 @@ describe('The weekly deadline (decision 0335)', () => {
   const hours = (at: Date, by: number) => new Date(at.getTime() + by * 60 * 60 * 1000);
 
   it('counts a meeting first reported after its week’s deadline as late, and on time before it', async () => {
-    const last = week(1);
+    const last = week(2);
     const due = recordDueAt(last.day(3)) as Date;
     const ana = await leader('Ana', oriel);
     const ben = await leader('Ben', oriel);
@@ -171,7 +171,7 @@ describe('The weekly deadline (decision 0335)', () => {
   });
 
   it('counts a DCC Sunday late when the first record that counts it came after the deadline', async () => {
-    const last = week(1);
+    const last = week(2);
     const sunday = last.day(7);
     const due = recordDueAt(sunday) as Date;
     const ana = await leader('Ana', oriel);
@@ -233,8 +233,8 @@ describe('The weekly deadline (decision 0335)', () => {
         .set('Idempotency-Key', randomUUID())
         .send({ records: [{ person_id: bob.id, present: true, version: null }] });
 
-    // Four weeks back closed at noon on last Monday; last week closes in a fortnight.
-    const closed = await submit(await createEvent(week(4).day(7))).expect(409);
+    // Five weeks back closed at noon on last Monday; last week closes in three weeks.
+    const closed = await submit(await createEvent(week(5).day(7))).expect(409);
     expect(closed.body.error.code).toBe('PERIOD_CLOSED');
 
     await submit(await createEvent(week(1).day(7))).expect(201);
@@ -252,7 +252,7 @@ describe('The weekly deadline (decision 0335)', () => {
         .expect(200);
 
     const open = week(1).day(3);
-    const shut = week(4).day(3);
+    const shut = week(5).day(3);
     const months = [...new Set([open, shut].map((day) => `${day.slice(0, 7)}-01`))];
     const meetings = (await Promise.all(months.map(awaiting))).flatMap(
       (response) =>

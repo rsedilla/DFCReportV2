@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-23, the trigger being decision 0386: of 384 files, 383 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0386, each moved the first two and
+2026-10-25, the trigger being decision 0387: of 385 files, 384 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0387, each moved the first two and
 neither of the others, none of them carrying a `Next:`; 0379 is held by work not yet merged. The recount before this one was dated
+2026-10-23 and triggered by 0386, and was left stale by 0387 two days later. The one before that was dated
 2026-10-23 and triggered by 0385, and was left stale by 0386 the same day. The one before that was dated
 2026-10-22 and triggered by 0384, and was left stale by 0385 the next day. The one before that was dated
 2026-10-22 and triggered by 0383, and was left stale by 0384 the same day. The one before that was dated
@@ -813,6 +814,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-22 — ["Only my disciples" is offered where it narrows the list](docs/decisions/0384-only-my-disciples-where-it-narrows.md)
 - 2026-10-23 — [The People tab opens on the search for everyone](docs/decisions/0385-the-people-tab-opens-on-the-search-for-everyone.md)
 - 2026-10-23 — [SUYNL's Graduated card is hidden](docs/decisions/0386-suynl-shows-who-is-still-to-finish.md)
+- 2026-10-25 — [A week is due eight days after it ends](docs/decisions/0387-a-week-is-due-eight-days-after-it.md)
 
 ### Open — awaiting a ruling
 

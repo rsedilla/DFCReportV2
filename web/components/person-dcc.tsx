@@ -161,7 +161,7 @@ function monthName(month: string): string {
   return monthLabel(month).split(' ')[0];
 }
 
-/** "Open until Mon 16 Nov, 12NN": when the month's last week closes (decision 0335). */
+/** "Open until Mon 23 Nov, 12NN": when the month's last week closes (decision 0335). */
 function openUntil(month: string): string {
   return monthOpenUntilLabel(month);
 }
