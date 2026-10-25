@@ -131,6 +131,25 @@ export class CellsMembershipService {
         );
       }
 
+      // **The person must be inside the actor's own scope** (decision 0389): a Cell's
+      // membership may still differ from the pastoral tree, but a leader adds only people
+      // they oversee, and somebody from another branch is added by an actor whose grant
+      // reaches them. Decided before the person is read, so a refusal says nothing of
+      // whether they exist, are archived or belong to a Cell (section 8).
+      if (
+        !(await this.authorization.coversWith(
+          trx,
+          actor,
+          authority,
+          Capability.CellManageMembership,
+          { kind: 'person', personId },
+        ))
+      ) {
+        throw new ScopeDeniedError(
+          'You can add only somebody you oversee to a Cell (SKILL.md section 10).',
+        );
+      }
+
       const person = await this.people.forDecisionWithin(trx, personId);
 
       if (!person) {

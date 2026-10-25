@@ -101,6 +101,25 @@ export async function mockWholeChurchReader(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
+/**
+ * The same account reading people across the whole church, as the Admin and the Senior Pastors
+ * do, whose pickers ask for the church-wide directory (decision 0389). Only that grant is widened.
+ */
+export async function mockWholeChurchPeopleReader(page: Page): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES,
+    {
+      capability: 'people.view_subtree',
+      scope_type: 'WHOLE_CHURCH',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
 /** The same account without `people.edit_basic`, overriding `/auth/me` alone as above. */
 export async function mockWithoutEditBasic(page: Page): Promise<void> {
   const capabilities = CAPABILITIES.filter((grant) => grant.capability !== 'people.edit_basic');

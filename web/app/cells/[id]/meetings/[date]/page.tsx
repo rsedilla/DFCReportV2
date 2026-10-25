@@ -586,8 +586,9 @@ function RecordMeeting() {
               {ranBy === 'OTHER' ? (
                 <PersonPicker
                   legend="Who ran it"
-                  description="Anyone in the church: a disciple, an upline leader, or a visitor."
+                  description="Somebody you oversee, or a leader above you."
                   searchLabel="Search for a person by name"
+                  upline
                   selectedId={facilitator?.id ?? null}
                   selectedName={facilitator?.full_name ?? null}
                   onSelect={setFacilitator}

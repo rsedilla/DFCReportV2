@@ -333,12 +333,12 @@ export class CellsController {
    * subtree, Admin, Senior Pastors — fall out of the scope rather than being
    * restated here.
    *
-   * **Deliberately not the person being added.** Section 10 says membership need not
-   * mirror pastoral assignment, so a leader may add somebody from outside their own
-   * pastoral subtree to their Cell; resolving scope against the member would refuse
-   * exactly that. Adding somebody already in another Cell is a move, which needs
-   * `cell.move_members` over both Cells (decision 0357), checked in the domain layer
-   * (section 7).
+   * **The person being added is checked too, in the domain layer** (decision 0389): the
+   * actor's `cell.manage_membership` must cover them, so a leader adds only people they
+   * oversee. Membership may still differ from pastoral assignment, but somebody from
+   * another branch is added by an actor whose grant reaches them. Adding somebody already
+   * in another Cell is a move, which needs `cell.move_members` over both Cells (decision
+   * 0357), checked in the domain layer (section 7).
    */
   @Post(':id/members')
   @RequiresCapability(Capability.CellManageMembership, {

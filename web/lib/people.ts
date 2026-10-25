@@ -87,18 +87,17 @@ export const MINIMUM_CHURCH_WIDE_SEARCH_LENGTH = 3;
 /**
  * Search by name.
  *
- * **`churchWide` defaults to false, and the default is the rule rather than a
- * convenience** (SKILL.md section 8, decision 0244). The People screen shows the
- * people a leader pastors; the church-wide directory stays reachable from the
- * person pickers, where a task already names somebody specific. A caller that
- * says nothing gets the narrow answer, so a screen added later is private unless
- * it deliberately opts out.
+ * **Always the people the searcher oversees** (SKILL.md section 8, decisions 0244 and
+ * 0389), the church for a Whole Church reader. `upline` adds the leaders above the
+ * searcher, for naming who ran a Cell meeting. `churchWide` asks for the directory itself,
+ * which only a Whole Church reader's pickers send (decision 0389): it keeps decision 0303's
+ * page bound and audit entry on their searches, and the API refuses it to anybody else.
  */
 export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
-  options: { churchWide?: boolean; limit?: number; network?: Network | null } = {},
+  options: { upline?: boolean; churchWide?: boolean; limit?: number; network?: Network | null } = {},
 ): Promise<PersonPage> {
   // An empty term lists the searcher's own scope (decision 0259).
   const params = new URLSearchParams(q === '' ? {} : { q });
@@ -110,6 +109,8 @@ export async function searchPeople(
   }
   if (options.churchWide) {
     params.set('church_wide', 'true');
+  } else if (options.upline) {
+    params.set('upline', 'true');
   }
   // Only this Network's people, filtered by the API (decision 0299).
   if (options.network) {
