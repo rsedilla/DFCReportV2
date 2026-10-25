@@ -533,7 +533,11 @@ export interface Trends {
   /** Whole Church first (`leader` null), then each root's branch; or one leader's branch. */
   lines: {
     leader: { id: string; member_id: string | null; full_name: string | null } | null;
-    /** A root's branch names its Network; the church and one leader carry none. */
+    /**
+     * A root's branch names its Network, and so does a Full view leader's own branch, by the
+     * leader's Network now (decision 0388); the church and a leader chosen on the Senior
+     * Pastors' graph carry none.
+     */
     network: 'MENS' | 'WOMENS' | null;
     /** One per month; null for a month the figure could not be read for. */
     values: (number | null)[];

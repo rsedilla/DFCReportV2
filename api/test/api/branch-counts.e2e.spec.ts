@@ -280,7 +280,8 @@ describe('GET /reports/counts/branch and /reports/trends/branch (decision 0380)'
     expect(body.months[11]).toBe(period);
     expect(body.lines).toHaveLength(1);
     expect(body.lines[0].leader?.id).toBe(ana.id);
-    expect(body.lines[0].network).toBeNull();
+    // Named by the leader's Network, so the line takes that branch's colour (decision 0388).
+    expect(body.lines[0].network).toBe('MENS');
     expect(body.lines[0].values).toEqual(Array(12).fill(4));
     expect(body.open[11]).toBe(true);
     expect(body.open[10]).toBe(false);
@@ -292,6 +293,22 @@ describe('GET /reports/counts/branch and /reports/trends/branch (decision 0380)'
     expect(people.lines[0].values[11]).toBe(4);
     const cg = (await trends(anaAccount, 'CG', ana.id, period).expect(200)).body as Line;
     expect(cg.lines[0].values[11]).toBe(0);
+  });
+
+  it('names a Women’s leader’s line WOMENS, for the pink a Women’s branch is drawn in (decision 0388)', async () => {
+    const root = await db
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .where('root_network', '=', 'WOMENS')
+      .where('ended_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    const lea = await createPerson(db, { firstName: 'Lea', lastName: 'Cruz', network: 'WOMENS' });
+    await assignTo(db, lea.id, root.person_id);
+
+    const body = (await trends(pastor, 'CELLS', lea.id, await monthOffset(0)).expect(200))
+      .body as Line;
+
+    expect(body.lines[0].network).toBe('WOMENS');
   });
 
   it('refuses a leader above or beside the reader', async () => {
