@@ -531,9 +531,10 @@ function NewPersonForm() {
           birthDate={notGiven.birth_date ? '' : values.birth_date}
           mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
         />        <PersonPicker
-          legend="Cell Leader"
-          description="Who leads this person? Required, and it decides who can see and edit their details."
+          legend="Their leader"
+          description="The person who disciples them. Only this leader and the leaders above can see and edit their details."
           searchLabel="Search for a leader by name"
+          describeWhenChosen
           selectedId={chosenLeaderId}
           selectedName={chosenLeaderName}
           onSelect={(person) => {
@@ -550,12 +551,9 @@ function NewPersonForm() {
 
         {/* It follows the leader field above, so changing the leader changes whose Cells come first. */}
         <CellPicker
-          label="Cell Group Information"
-          description={
-            network === null
-              ? 'Optional. A Cell you oversee. They can also be added to a Cell later, from their record.'
-              : `Optional. A ${networkLabel(network)} Cell you oversee, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
-          }
+          label="Their Cell Group"
+          description="The Cell Group they will attend. Optional; you can add it later from their record."
+          describeWhenChosen
           leaderId={chosenLeaderId}
           leaderName={chosenLeaderSearchName}
           network={network}
@@ -566,7 +564,10 @@ function NewPersonForm() {
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
         <div className="flex flex-col gap-1.5">
           <p className="field-label">DCC stage</p>
-          <p className="text-muted text-sm">None yet — it&rsquo;s worked out from their Sundays.</p>
+          <p className="text-muted text-sm leading-relaxed">
+            None yet. VIP, 2nd Timer, up to Regular: set automatically from the Sundays they
+            attend, so there is nothing to choose.
+          </p>
         </div>
 
         <div>

@@ -59,6 +59,7 @@ export function PersonPicker({
   network = null,
   networkReason = null,
   excludeIds = [],
+  describeWhenChosen = false,
 }: {
   /**
    * Only this Network's people (decision 0299), where the operation's same-Network rule
@@ -92,6 +93,8 @@ export function PersonPicker({
    * operation refuses naming yourself (decision 0369). A convenience only; the server refuses.
    */
   excludeIds?: readonly string[];
+  /** Keep the description under the legend once somebody is chosen (owner, 2026-10-25). */
+  describeWhenChosen?: boolean;
 }) {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
@@ -142,6 +145,9 @@ export function PersonPicker({
     return (
       <div className="border-line rounded-md border p-4">
         <p className="field-label">{legend}</p>
+        {describeWhenChosen ? (
+          <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
+        ) : null}
         <p className="mt-1 text-sm">{selectedName}</p>
         <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
           Choose someone else

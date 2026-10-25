@@ -40,6 +40,7 @@ export function CellPicker({
   excludeId = null,
   selected,
   onSelect,
+  describeWhenChosen = false,
 }: {
   label: string;
   description: string;
@@ -50,6 +51,8 @@ export function CellPicker({
   excludeId?: string | null;
   selected: CellSummary | null;
   onSelect: (cell: CellSummary | null) => void;
+  /** Keep the description under the label once a Cell is chosen (owner, 2026-10-25). */
+  describeWhenChosen?: boolean;
 }) {
   const month = reportingMonthOf();
   const [term, setTerm] = useState('');
@@ -94,6 +97,9 @@ export function CellPicker({
     return (
       <div className="border-line rounded-md border p-4">
         <p className="field-label">{label}</p>
+        {describeWhenChosen ? (
+          <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
+        ) : null}
         <p className="mt-1 text-sm">{cellText(selected)}</p>
         <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
           Choose another Cell
