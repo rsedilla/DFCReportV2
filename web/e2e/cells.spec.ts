@@ -669,7 +669,7 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
     await page.getByRole('button', { name: 'Add to a Cell' }).click();
 
     const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
-    await expect(dialog.getByText('Their Cell Leader’s Cell', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Their leader’s Cell Group — usually the right one', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(1);
     await expect(dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` })).toBeVisible();
     // Nothing is chosen for them: the leader still picks.

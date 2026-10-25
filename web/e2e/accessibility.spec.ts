@@ -296,7 +296,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Move to another Cell' }).click();
-      await expect(page.getByRole('dialog').getByLabel('Search for a Cell')).toBeVisible();
+      await expect(page.getByRole('dialog').getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
     },
   },
   {

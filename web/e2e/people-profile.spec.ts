@@ -225,7 +225,12 @@ test.describe('a person’s Cell', () => {
     await page.getByRole('button', { name: 'Add to a Cell' }).click();
 
     const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
-    await expect(dialog.getByText('It takes effect today.')).toBeVisible();
+    await expect(dialog.getByText('They join this Cell Group from today.')).toBeVisible();
+    // What to do comes first, and why Add is not offered yet (owner, 2026-10-25).
+    await expect(
+      dialog.getByText(`Choose the Cell Group ${PERSON_IN_SCOPE.full_name} will attend, then press Add.`),
+    ).toBeVisible();
+    await expect(dialog.getByText('Choose a Cell Group first.')).toBeVisible();
   });
 
   test('moves a member to another Cell in one request, leaving the current Cell off the list', async ({
@@ -286,7 +291,7 @@ test.describe('a person’s Cell', () => {
     await expect(dialog.getByRole('button', { name: 'Choose CELL-000014' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Choose CELL-000019' })).toHaveCount(0);
     await expect(
-      dialog.getByText('Only Women\'s Network Cells are listed: a member and their Cell’s leader share one Network.'),
+      dialog.getByText('Only Women’s Cell Groups are shown.'),
     ).toBeVisible();
   });
 
@@ -569,7 +574,7 @@ test.describe('dialogs', () => {
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
+    await expect(dialog.getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
     const sheet = await dialog.boundingBox();
     expect(sheet).not.toBeNull();
     expect(sheet!.y + sheet!.height).toBeGreaterThanOrEqual(843);
@@ -580,7 +585,7 @@ test.describe('dialogs', () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole('button', { name: 'Move to another Cell' }).click();
-    await expect(dialog.getByLabel('Search for a Cell')).toBeVisible();
+    await expect(dialog.getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
     const centred = await dialog.boundingBox();
     expect(centred).not.toBeNull();
     expect(centred!.y + centred!.height).toBeLessThan(790);
