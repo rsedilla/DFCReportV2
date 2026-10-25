@@ -299,7 +299,7 @@ describe('a closed week inside an open month (decision 0335)', () => {
   /**
    * The Branch screen's two figures, for the current month (decision 0252): behind only while
    * the week is open. **Discriminating only once the month has a closed week**, from about
-   * the 19th to its end; before that every week of the month is open and both counts agree
+   * the 24th to its end; before that every week of the month is open and both counts agree
    * with the unbounded ones.
    */
   it('counts the Branch screen’s Cell meetings and DCC records behind only while the week is open', async () => {

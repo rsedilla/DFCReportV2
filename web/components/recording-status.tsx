@@ -333,8 +333,8 @@ function rowFigure(column: RecordingColumn, deadline: boolean): string {
 
 /**
  * The week a Recording Progress opens on: the one whose deadline last passed, 12 noon on the
- * Monday after it (decision 0335). Null before the first deadline, 2 November 2026, so the
- * screen opens on the current week as it did.
+ * second Monday after it (decisions 0335 and 0387). Null before the first deadline, 9 November
+ * 2026, so the screen opens on the current week as it did.
  */
 function openingWeek(now: Date): string | null {
   const today = todayInManila(now);
@@ -342,7 +342,7 @@ function openingWeek(now: Date): string | null {
   const hour = Number(
     new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', hourCycle: 'h23' }).format(now),
   );
-  const back = today === monday && hour < 12 ? 14 : 7;
+  const back = today === monday && hour < 12 ? 21 : 14;
   const [year, month, day] = monday.split('-').map(Number);
   const week = new Date(Date.UTC(year, month - 1, day - back)).toISOString().slice(0, 10);
 

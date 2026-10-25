@@ -196,8 +196,8 @@ function Dashboard() {
   const today = todayInManila();
   const previousMonth = shiftMonth(month, -1);
 
-  // **While last month may still be open**: until its last week closes, between the 15th
-  // and the 21st (section 13, decision 0335), or the 7th for a month before the weekly
+  // **While last month may still be open**: until its last week closes, between the 22nd
+  // and the 28th (section 13, decisions 0335 and 0387), or the 7th for a month before the weekly
   // rule. Section 13 has every leader see their own outstanding work "always" (owner's
   // choice of 2026-09-15). The browser's clock only decides whether to ask; the server's
   // `open` flag and each row's own week decide what is shown.

@@ -217,4 +217,38 @@ test.describe('a DCC checklist with marks not yet saved', () => {
     await expect(page.getByText(RESTORED)).toHaveCount(0);
     await expect.poll(() => stored(page, SUNDAY_KEY)).toBeNull();
   });
+
+  for (const [days, offered] of [
+    [27, true],
+    [29, false],
+  ] as const) {
+    test(`${offered ? 'offers back' : 'does not offer back'} marks made ${days} days ago (decision 0387)`, async ({
+      page,
+    }) => {
+      // Four weeks, about when the week the marks were for closes.
+      await page.addInitScript(
+        ([key, person, age]) => {
+          window.localStorage.setItem(
+            key,
+            JSON.stringify({
+              saved_at: Date.now() - Number(age) * 24 * 60 * 60 * 1000,
+              value: { [person]: { mark: 'absent', version: null } },
+            }),
+          );
+        },
+        [SUNDAY_KEY, BIENVENIDO.id, String(days)],
+      );
+      await mockSignedIn(page);
+      await mockDccRoster(page);
+      await page.goto(SUNDAY);
+
+      if (offered) {
+        await expect(page.getByText(RESTORED)).toBeVisible();
+        await expect(radio(page, BIENVENIDO, 'Absent')).toBeChecked();
+      } else {
+        await expect(radio(page, BIENVENIDO, 'Absent')).not.toBeChecked();
+        await expect(page.getByText(RESTORED)).toHaveCount(0);
+      }
+    });
+  }
 });

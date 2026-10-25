@@ -97,7 +97,7 @@ export function windowClosesAt(reportingMonth: string): Date {
  * keeps the monthly close and is never Late.
  *
  * **Movable in the test suite alone**, because no real clock reaches a closed week of the
- * new rule before 16 November 2026: `WEEKLY_DEADLINE_FROM` is read only where `NODE_ENV`
+ * new rule before 23 November 2026: `WEEKLY_DEADLINE_FROM` is read only where `NODE_ENV`
  * is `test`, and refused if it is not a Monday that exists.
  */
 export function weeklyDeadlineFrom(): string {
@@ -137,26 +137,27 @@ function noonOf(day: string): Date {
 }
 
 /**
- * When the record dated `day` is due: 12 noon on the Monday after its week (decision
- * 0335). Null for a week before {@link weeklyDeadlineFrom}, which had no deadline.
+ * When the record dated `day` is due: 12 noon on the second Monday after its week, eight days
+ * after its Sunday (decisions 0335 and 0387). Null for a week before
+ * {@link weeklyDeadlineFrom}, which had no deadline.
  */
 export function recordDueAt(day: string): Date | null {
   const week = weekStartOf(day);
 
-  return week < weeklyDeadlineFrom() ? null : noonOf(plusDays(week, 7));
+  return week < weeklyDeadlineFrom() ? null : noonOf(plusDays(week, 14));
 }
 
 /**
  * The first instant no leader may record or correct the record dated `day`: two Mondays
  * after its deadline at 12 noon, or for a week before the weekly rule the end of the
- * 7th of the month after its own (decision 0335).
+ * 7th of the month after its own (decisions 0335 and 0387).
  */
 export function recordClosesAt(day: string): Date {
   const week = weekStartOf(day);
 
   return week < weeklyDeadlineFrom()
     ? windowClosesAt(reportingMonthOf(day))
-    : noonOf(plusDays(week, 21));
+    : noonOf(plusDays(week, 28));
 }
 
 /**

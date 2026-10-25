@@ -94,7 +94,7 @@ export function monthLabel(reportingMonth: string): string {
 }
 
 /**
- * "Open until Mon 16 Nov, 12NN": an open month closes when its last week does, or for a
+ * "Open until Mon 23 Nov, 12NN": an open month closes when its last week does, or for a
  * month before the weekly rule at the end of the 7th of the month after (section 13,
  * decision 0335). One wording for every open tag.
  */

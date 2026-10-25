@@ -45,7 +45,7 @@ interface Row {
  * Women's is `Grace -> Hanna`. `Oscar` holds an Admin account and no place in the tree. Every
  * Cell meets on yesterday's weekday, so it owes yesterday's meeting and the one a week before,
  * and every date comes from the database's day. The weekly rule is moved to January 2026, so
- * a week closes two Mondays after it is due (decision 0335). Fixture names are invented
+ * a week closes two Mondays after it is due (decisions 0335 and 0387). Fixture names are invented
  * (CLAUDE.md, Secrets).
  */
 describe('Pending CG Records (decision 0368)', () => {
@@ -349,7 +349,7 @@ describe('Pending CG Records (decision 0368)', () => {
     const pastDue = (all?.meetings ?? []).filter(
       (meeting) => meeting.due_at !== null && new Date(meeting.due_at).getTime() < now,
     );
-    // The meeting a week before yesterday is past its Monday and its week still open.
+    // The meeting two weeks before yesterday is past its deadline and its week still open.
     expect(pastDue.length).toBeGreaterThan(0);
 
     const late = rowOf((await list(reader, { late: 'true' })).data, cell);
@@ -524,7 +524,7 @@ describe('Pending DCC Records, late only (decision 0368)', () => {
     const sunday = new Date(Date.UTC(y, m - 1, d - (weekday === 0 ? 7 : weekday)))
       .toISOString()
       .slice(0, 10);
-    const weekBefore = new Date(Date.UTC(y, m - 1, d - (weekday === 0 ? 14 : weekday + 7)))
+    const weekBefore = new Date(Date.UTC(y, m - 1, d - (weekday === 0 ? 21 : weekday + 14)))
       .toISOString()
       .slice(0, 10);
     for (const eventDate of [weekBefore, sunday]) {

@@ -34,8 +34,8 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  *
  * - the window is May, June and July 2026 (`cell_attention_months` is seeded 3);
  * - every Saturday of the window is closed to recording (Saturday 25 July's week closes
- *   at noon on Monday 10 August);
- * - Thursday 30 July's week closes at noon on Monday 17 August, so it is still open.
+ *   at noon on Monday 17 August);
+ * - Thursday 30 July's week closes at noon on Monday 24 August, so it is still open.
  *
  * Every fixture's history starts at `EPOCH` (2020), so the tree is in force at NOW.
  *
@@ -59,8 +59,8 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   let manuelAccount: TestAccount;
   let markAccount: TestAccount;
 
-  /** Wednesday 12 August 2026, 10:00 in Manila. */
-  const NOW = new Date('2026-08-12T10:00:00+08:00');
+  /** Wednesday 19 August 2026, 10:00 in Manila. */
+  const NOW = new Date('2026-08-19T10:00:00+08:00');
   const MONTH = '2026-08-01';
   const WINDOW = ['2026-05-01', '2026-06-01', '2026-07-01'];
 
@@ -284,8 +284,8 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
     let tomas: TestPerson;
 
     beforeEach(async () => {
-      // Thursdays: 30 July's week (from Monday 27 July) closes at noon on 17 August,
-      // after NOW; 23 July's closed at noon on 10 August, before it.
+      // Thursdays: 30 July's week (from Monday 27 July) closes at noon on 24 August,
+      // after NOW; 23 July's closed at noon on 17 August, before it.
       tomas = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
       await assignTo(db, tomas.id, manuel.id);
       thursdayCell = await createCell(db, { leader: tomas, dayOfWeek: 4, createdAt: CREATED });
@@ -314,7 +314,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
     });
 
     it('lists it once the week has closed, counting that meeting as Not recorded', async () => {
-      clock.mockResolvedValue(new Date('2026-08-17T12:00:00+08:00'));
+      clock.mockResolvedValue(new Date('2026-08-24T12:00:00+08:00'));
 
       const row = rowOf(await list(admin), thursdayCell.id);
 
