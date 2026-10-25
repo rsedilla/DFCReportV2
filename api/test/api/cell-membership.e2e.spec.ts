@@ -273,10 +273,11 @@ describe('cell membership (section 10)', () => {
       expect(written).toEqual([]);
     });
 
-    it('refuses before reading the person, so an outsider who is absent, archived, merged or already here answers alike', async () => {
+    it('refuses before reading the person, so an outsider who is absent, archived or merged answers alike', async () => {
       // Decided before the person is read (decision 0389, section 8): a leader learns
       // nothing about somebody outside their scope from the refusal, not whether they
-      // exist, are archived, were absorbed by a merge, or already belong to this Cell.
+      // exist, are archived or were absorbed by a merge. Somebody already in this Cell is
+      // on its roster, which the leader reads anyway, and is told so.
       const account = await createAccount(app, db, {
         person: mark,
         roles: ['LEADER'],
@@ -300,7 +301,7 @@ describe('cell membership (section 10)', () => {
       await addMember(admin, markCell.id, member.id).expect(201);
 
       const answers = [];
-      for (const personId of [randomUUID(), archived.id, absorbed.id, member.id]) {
+      for (const personId of [randomUUID(), archived.id, absorbed.id]) {
         const response = await addMember(account, markCell.id, personId).expect(403);
         answers.push({
           code: response.body.error.code as unknown,
@@ -313,6 +314,7 @@ describe('cell membership (section 10)', () => {
       for (const answer of answers) {
         expect(answer).toEqual(answers[0]);
       }
+      expect((await addMember(account, markCell.id, member.id)).status).toBe(409);
 
       // The Admin's scope covers them all, so each is told what is actually the matter.
       expect((await addMember(admin, markCell.id, randomUUID())).status).toBe(404);

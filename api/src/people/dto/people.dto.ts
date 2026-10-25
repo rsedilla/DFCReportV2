@@ -465,14 +465,12 @@ export class SearchPeopleDto {
    * Whether this search may return people outside the searcher's pastoral scope
    * (SKILL.md section 8, ruling of 2026-09-13, decision 0244).
    *
-   * **Absent means no, and that direction is the point.** Section 8 narrows the
-   * People *screen* to the searcher's own scope while keeping the church-wide
-   * directory reachable where a task names a specific person. Defaulting to the
-   * narrow answer means a surface added later is private unless somebody opts it
-   * out, rather than church-wide unless somebody remembers to opt it in.
+   * **Absent means no, and that direction is the point.** Defaulting to the narrow
+   * answer means a surface added later is private unless somebody opts it out, rather
+   * than church-wide unless somebody remembers to opt it in.
    *
-   * `true` restores exactly the previous behaviour: every match in the church, with
-   * the fields scoped per person rather than the rows.
+   * `true` asks for every match in the church, with the fields scoped per person rather
+   * than the rows.
    *
    * **Only a Whole Church scope may send it** (decision 0389). Below that it is refused
    * as `SCOPE_DENIED`: every picker searches the searcher's own scope, and the one that

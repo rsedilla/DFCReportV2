@@ -54,7 +54,8 @@ import { TextLink } from '@/components/ui/text-link';
  * Save the API would refuse.
  *
  * **Who ran it defaults to the leader** (decision 0274). "Someone else" opens the person
- * picker, which searches the church; the API refuses an archived or merged Person. It is
+ * picker, which searches the reader's own scope and the leaders above them (decision 0389);
+ * the API refuses an archived or merged Person. It is
  * asked on a first record of a meeting that met, since a correction does not change it.
  *
  * **A Cell that did not meet says why.** Section 13 requires a reason, and a reason of

@@ -131,12 +131,17 @@ export class CellsMembershipService {
         );
       }
 
-      // **The person must be inside the actor's own scope** (decision 0389): a Cell's
-      // membership may still differ from the pastoral tree, but a leader adds only people
-      // they oversee, and somebody from another branch is added by an actor whose grant
-      // reaches them. Decided before the person is read, so a refusal says nothing of
-      // whether they exist, are archived or belong to a Cell (section 8).
+      const current = await this.openMembershipWithin(trx, personId);
+
+      // **Somebody in no Cell must be inside the actor's own scope** (decision 0389): a
+      // Cell's membership may still differ from the pastoral tree, but a leader adds only
+      // people they oversee, and somebody from another branch is added by an actor whose
+      // grant reaches them. A move is left to `cell.move_members` over both Cells (decision
+      // 0357), so a ticked Primary still moves a member between two of their own Cells.
+      // Decided before the person is read, so the refusal says nothing of whether they
+      // exist or are archived (section 8).
       if (
+        !current &&
         !(await this.authorization.coversWith(
           trx,
           actor,
@@ -173,8 +178,6 @@ export class CellsMembershipService {
           { person_id: personId },
         );
       }
-
-      const current = await this.openMembershipWithin(trx, personId);
 
       // **`sameId`, not `===`.** This compares a client-supplied path value against
       // one out of a `uuid` column, and it fails **open**: a mis-cased identifier

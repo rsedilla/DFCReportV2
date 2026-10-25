@@ -45,8 +45,8 @@ import { isStorableText } from '../common/text/storable-text';
  * `/api/v1/people` (SKILL.md section 22).
  *
  * The interesting rule here is section 8, not section 7. A leader may search the
- * directory — narrowed to their own pastoral scope unless the request asks wider
- * (decision 0244), and it is `duplicate-candidates` below rather than this search
+ * directory — narrowed to their own pastoral scope, which only a Whole Church scope may
+ * widen (decisions 0244 and 0389), and it is `duplicate-candidates` below rather than this search
  * that makes duplicate prevention possible — and for a person outside their
  * pastoral scope they see only enough to
  * recognise an existing record. Everything else is withheld, and `fullProfile`
@@ -445,8 +445,8 @@ export class PeopleController {
     );
     // **The church-wide directory is a Whole Church searcher's alone** (decision 0389): a
     // leader searches the people they oversee, in every picker and from outside the app.
-    // Refused first, as a report answers scope before anything else (decision 0253), and before the
-    // rate limit, so a refused request spends nothing.
+    // Refused first in this handler, after only the request's own shape is checked, as a report
+    // answers scope first (decision 0253), and before the rate limit, so it spends nothing.
     if (query.church_wide && membership.kind !== 'WHOLE_CHURCH') {
       throw new ScopeDeniedError(
         'You can search only the people you oversee (SKILL.md section 8).',

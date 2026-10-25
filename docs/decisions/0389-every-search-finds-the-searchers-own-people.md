@@ -25,15 +25,34 @@ Church, before the rate limit, so a refused request spends nothing and writes no
 a Whole Church searcher, the Admin and the Senior Pastors, nothing changes: their scope is the
 church, and decision 0303's bound and audit entry still apply when they ask for it.
 
-**4. A Cell member must be within the actor's own scope.** `POST /api/v1/cells/{id}/members` now
-asks that the actor's `cell.manage_membership` cover the person as well as the Cell. Cell
-membership may still differ from pastoral assignment (Section 10), but a leader adds only people
-they oversee, and somebody from another branch is added by an actor whose grant reaches them, the
-Admin. It is decided before the person is read, so `SCOPE_DENIED` says nothing of whether they
-exist, are archived or belong to a Cell (Section 8). A move still needs `cell.move_members` over
-both Cells (decision 0357).
+**4. Somebody in no Cell, added to one, must be within the actor's own scope.**
+`POST /api/v1/cells/{id}/members` now asks that the actor's `cell.manage_membership` cover the
+person as well as the Cell when the person holds no membership. Cell membership may still differ
+from pastoral assignment (Section 10), but a leader adds only people they oversee, and somebody
+from another branch is added by an actor whose grant reaches them, the Admin. It is decided before
+the person is read, so `SCOPE_DENIED` says nothing of whether they exist or are archived
+(Section 8). **A move is not narrowed** (owner, 2026-10-26): somebody already in a Cell is moved,
+and `cell.move_members` over both Cells decides it as decision 0357 says, so a ticked Primary still
+moves a member between two of their own Cells whoever pastors them. **A new Cell's three members
+keep decision 0369's rule** (owner, the same day): the requester names people beneath them, and
+the approval adds them as before.
 
-**5. Section 3's duplicate-candidate lookup is unchanged** and still reaches the whole church, with
+**5. Who ran a Cell meeting may still be somebody the screen does not offer** (owner, 2026-10-26).
+A member another branch placed in the Cell is a valid facilitator under decision 0274 and is beyond
+the searcher's scope and upline. That is rare, follows only an Admin's cross-branch placement, and
+is accepted rather than widening the search for it.
+
+**6. No new API version** (owner, 2026-10-26). Section 22 asks for one when an existing value
+changes meaning, to protect a client that cannot be updated at once. `church_wide=true` sent below
+Whole Church now answers `SCOPE_DENIED` where it widened the rows; no native client exists, and the
+web client changes in the same release, so nothing relies on the old meaning. It narrows
+authorization and is decided here rather than versioned.
+
+**7. Decision 0303's bound and audit entry bind a request that asks for the church-wide
+directory**, as before (owner, 2026-10-26): a Whole Church reader's pickers send it, and their
+People screen, which never did, still does not.
+
+**8. Section 3's duplicate-candidate lookup is unchanged** and still reaches the whole church, with
 its limited fields and its audit entry (decision 0304). It is how a leader learns somebody is
 already recorded under another branch, and narrowing it would let the same person be entered twice.
 
@@ -52,10 +71,10 @@ a refusal in the API closes.
 
 Decision 0244 where it keeps the church-wide directory in the person pickers, and its consequence
 in decisions 0274 and 0299 that those pickers search the church. Section 10's allowance that a
-leader may add somebody from outside their own subtree to their Cell. Sections 8, 10 and 22 are
+leader may add somebody from outside their own subtree to their Cell. Sections 8, 10, 13 and 22 are
 amended.
 
 Decision 0389, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 8, 10 and 22.
+Sections 8, 10, 13 and 22.
 
 Previous: [2026-10-25 — A Primary's own line takes its Network's colour](0388-a-primarys-own-line-takes-its-networks-colour.md)

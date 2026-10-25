@@ -32,8 +32,8 @@ import { cn } from '@/lib/utils';
  *
  * **This screen narrows the directory, and that is the ruling rather than an
  * omission** (decision 0244). A leader opening People sees the people they
- * pastor; the church-wide directory stays reachable from the person pickers,
- * where a task already names somebody specific.
+ * pastor, and since decision 0389 so does every person picker; only a Whole Church
+ * reader reaches the church-wide directory.
  *
  * *This docblock said the opposite in terms — that the screen "must not narrow"
  * the directory, because scoping the rows "would have them create a second record

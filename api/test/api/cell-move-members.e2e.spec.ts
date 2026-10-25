@@ -247,21 +247,18 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(mia.id)).toBe(cellE.id);
     });
 
-    it('is refused SCOPE_DENIED adding somebody outside its scope, before anything about their Cell', async () => {
-      // Lito is beneath Rosa and in her Cell. The person check comes first (decision 0389),
-      // so the answer is the scope's, not the move's, and names neither Lito's Cell nor
-      // that he has one.
+    it('is refused somebody outside its scope: in a Cell as a move, in none as out of scope', async () => {
+      // Lito is beneath Rosa and in her Cell, so adding him is a move, refused by the move's
+      // capability (decision 0357) and naming no Cell. Decision 0389's person check is for
+      // somebody in no Cell: Teresa is Elena's, not Corazon's, and is refused SCOPE_DENIED.
       const response = await addMember(corazonAccount, cellC.id, lito.id).expect(403);
-      expect(codeOf(response)).toBe('SCOPE_DENIED');
-      expect(response.body.error.details).not.toEqual({ capability: 'cell.move_members' });
+      expect(codeOf(response)).toBe('CAPABILITY_DENIED');
       expect(JSON.stringify(response.body)).not.toContain(cellR.cellId);
       expect(await cellOf(lito.id)).toBe(cellR.id);
 
-      // And Teresa, in no Cell, is refused the same way: she is Elena's, not Corazon's.
       const teresaResponse = await addMember(corazonAccount, cellC.id, teresa.id).expect(403);
       expect(codeOf(teresaResponse)).toBe('SCOPE_DENIED');
-      expect(teresaResponse.body.error.details).toEqual(response.body.error.details);
-      expect(teresaResponse.body.error.message).toBe(response.body.error.message);
+      expect(teresaResponse.body.error.details).not.toEqual({ capability: 'cell.move_members' });
       expect(await cellOf(teresa.id)).toBeNull();
     });
 
@@ -305,20 +302,32 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(crossing.id)).toBe(cellR.id);
     });
 
-    it('is refused SCOPE_DENIED adding somebody outside its scope, before the move is asked', async () => {
-      // Lito is Rosa's, outside Elena's branch, so the person check refuses first (decision
-      // 0389) and the answer is the same whether or not he is in a Cell.
+    it('is refused somebody outside its scope: in another branch’s Cell by the move, in none by scope', async () => {
+      // Lito is Rosa's and in her Cell, outside Elena's branch: the move's own check over the
+      // source Cell refuses (decision 0357), naming no Cell. Pablo is in no Cell, so decision
+      // 0389's person check refuses him.
       const response = await addMember(elenaAccount, cellE.id, lito.id).expect(403);
       expect(codeOf(response)).toBe('SCOPE_DENIED');
-      expect(response.body.error.details).not.toEqual({ capability: 'cell.move_members' });
+      expect(response.body.error.details).toEqual({ capability: 'cell.move_members' });
       expect(JSON.stringify(response.body)).not.toContain(cellR.cellId);
       expect(await cellOf(lito.id)).toBe(cellR.id);
 
       const inNoCell = await addMember(elenaAccount, cellE.id, pablo.id).expect(403);
       expect(codeOf(inNoCell)).toBe('SCOPE_DENIED');
-      expect(inNoCell.body.error.message).toBe(response.body.error.message);
-      expect(inNoCell.body.error.details).toEqual(response.body.error.details);
+      expect(inNoCell.body.error.details).not.toEqual({ capability: 'cell.move_members' });
       expect(await cellOf(pablo.id)).toBeNull();
+    });
+
+    it('moves a member pastorally outside its branch between two of its own Cells (decision 0389)', async () => {
+      // An Admin placed somebody of Rosa's in Corazon's Cell; Elena oversees both Cells, so
+      // she may move them, though she does not pastor them.
+      const placed = await createPerson(db, { firstName: 'Placed', network: 'MENS' });
+      await assignTo(db, placed.id, lito.id);
+      await enrol(placed.id, cellC.id);
+
+      const moved = await addMember(elenaAccount, cellE.id, placed.id).expect(201);
+      expect(moved.body.moved_from_cell_id).toBe(cellC.cellId);
+      expect(await cellOf(placed.id)).toBe(cellE.id);
     });
 
     it('removes a member of a Cell in its branch, who then holds no Cell', async () => {
