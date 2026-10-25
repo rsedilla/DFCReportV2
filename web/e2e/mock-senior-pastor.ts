@@ -232,9 +232,13 @@ export async function mockTrends(
 
 /**
  * `GET /reports/trends/branch` (decision 0380): a Full view leader's own branch, one line over
- * the twelve months ending with October 2026, March a gap. Returns the queries asked.
+ * the twelve months ending with October 2026, March a gap, named the Women's Network unless
+ * `network` says otherwise (decision 0388). Returns the queries asked.
  */
-export async function mockBranchTrends(page: Page): Promise<URLSearchParams[]> {
+export async function mockBranchTrends(
+  page: Page,
+  network: 'MENS' | 'WOMENS' | null = 'WOMENS',
+): Promise<URLSearchParams[]> {
   const asked: URLSearchParams[] = [];
   await page.route('**/api/v1/reports/trends/branch?*', (route) => {
     const params = new URL(route.request().url()).searchParams;
@@ -252,7 +256,7 @@ export async function mockBranchTrends(page: Page): Promise<URLSearchParams[]> {
               member_id: 'M-000700',
               full_name: 'Teodora Reyes',
             },
-            network: null,
+            network,
             values: MONTHS.map((_, index) => (index === 4 ? null : index + 2)),
           },
         ],

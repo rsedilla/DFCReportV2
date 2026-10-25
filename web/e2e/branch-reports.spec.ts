@@ -98,6 +98,9 @@ test.describe('a Full view leader’s Last 12 months', () => {
     await expect(page.getByRole('button', { name: 'Bars' })).toHaveCount(0);
     await expect(page.locator('main svg[role="img"] polyline').first()).toBeVisible();
     await expect(page.locator('main svg[role="img"] rect')).toHaveCount(0);
+    // In their Network's colour, as the Senior Pastors' Trends draw that branch (decision
+    // 0388): the mock names the Women's Network.
+    await expect(page.locator('main svg[role="img"] g.text-chart-pink')).toHaveCount(1);
 
     // Its own route, for the reader, ending with the month running.
     await expect.poll(() => asked.length).toBeGreaterThan(0);
@@ -114,6 +117,23 @@ test.describe('a Full view leader’s Last 12 months', () => {
     await expect(figures.getByRole('columnheader')).toHaveText(['Month', 'Your branch']);
     await expect(figures.getByText('could not be read')).toHaveCount(1);
   });
+
+  for (const [network, tone] of [
+    ['MENS', 'text-chart-blue'],
+    [null, 'text-ink'],
+  ] as const) {
+    test(`draws a ${network ?? 'no-Network'} leader's branch in ${tone} (decision 0388)`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(OCTOBER_8);
+      await mockSignedIn(page);
+      await mockBranchTrends(page, network);
+      await page.goto('/trends?figure=CG');
+
+      await expect(page.locator('main svg[role="img"] polyline').first()).toBeVisible();
+      await expect(page.locator(`main svg[role="img"] g.${tone}`)).toHaveCount(1);
+    });
+  }
 
   test('never asks for the church or another leader, whatever the address says', async ({
     page,

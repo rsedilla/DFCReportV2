@@ -900,13 +900,16 @@ export class ReportingController {
     }
 
     const { person } = await this.namer([leaderId]);
+    // The leader's Network today, so the line takes the colour the Senior Pastors' Trends give
+    // that branch (decision 0388). It names the line and counts nothing.
+    const network = (await this.people.currentNetworksOf([leaderId])).get(leaderId) ?? null;
 
     return {
       figure: query.figure,
       months,
       current: months[months.length - 1],
       open,
-      lines: [{ leader: person(leaderId), network: null, values }],
+      lines: [{ leader: person(leaderId), network, values }],
     };
   }
 

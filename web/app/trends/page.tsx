@@ -59,7 +59,7 @@ const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: 
  * their Network beside (decision 0294); or one leader's branch chosen by name. **One leader is
  * drawn at a time, never two**, so the graph cannot rank them (sections 13 and 17). The lines
  * are told apart by weight and dash, and by colour beside them (owner, 2026-10-09): green the
- * church, blue the Men's root's branch, pink the Women's, a single leader's line in ink. Named in a key above the graph
+ * church, blue the Men's root's branch, pink the Women's, a single leader's line in their Network's colour, or ink where they have none. Named in a key above the graph
  * rather than at their ends, where two lines ending on one value overlapped (owner,
  * 2026-10-09); the same figures follow in a table. A month a figure could not be read for is a gap, and says so.
  */
@@ -98,16 +98,18 @@ function TrendsScreen() {
   });
 
   const data = trends.data;
-  // One Primary takes their pastor's branch colour, blue or pink (owner, 2026-10-09).
+  // One Primary takes their pastor's branch colour, blue or pink (owner, 2026-10-09), and so
+  // does a Full view leader's own branch, by the Network the server names (decision 0388).
   const leaderTable = (roster.data?.tables ?? []).find((table) =>
     table.rows.some((row) => row.leader.id === leader),
   );
+  const singleNetwork = branch ? (data?.lines[0]?.network ?? null) : (leaderTable?.network ?? null);
   const singleTone =
-    leaderTable === undefined
-      ? 'text-ink'
-      : leaderTable.network === 'WOMENS'
-        ? 'text-chart-pink'
-        : 'text-chart-blue';
+    singleNetwork === 'WOMENS'
+      ? 'text-chart-pink'
+      : singleNetwork === 'MENS'
+        ? 'text-chart-blue'
+        : 'text-ink';
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
