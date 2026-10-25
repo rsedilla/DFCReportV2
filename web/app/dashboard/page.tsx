@@ -536,10 +536,10 @@ function Dashboard() {
           {me.data === undefined
             ? null
             : recordingOnly
-              ? 'What still needs a record.'
+              ? 'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.'
               : seniorPastor
                 ? 'Whether the church has recorded, and your own work.'
-                : 'What needs doing first.'}
+                : 'Record your Cell Group meetings and DCC Sundays here, and see who in your branch still has to.'}
         </p>
       </div>
 
@@ -585,6 +585,11 @@ function Dashboard() {
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
+            <p className="text-sm leading-relaxed">
+              {churchStatus
+                ? 'How many leaders in the church recorded on time, week by week or month by month.'
+                : 'How many leaders in your branch recorded on time, week by week or month by month.'}
+            </p>
             {churchStatus ? (
               <RecordingStatusPanel onPending={openPending} />
             ) : (
@@ -596,6 +601,13 @@ function Dashboard() {
           // The tab names the list, so its pane repeats no heading (decision 0362), for a
           // Recording-only account too, whose one tab names it.
           <section aria-label="Update Records" className={LIST}>
+            {/* What the tab is for; a Recording-only account reads it in the heading above. */}
+            {recordingOnly ? null : (
+              <p className="mb-4 text-sm leading-relaxed">
+                Your own meetings and Sundays still to record. Each week is due by 12 noon on the
+                second Monday after it.
+              </p>
+            )}
             <ViewSwitch
               label="Update Records"
               options={[
@@ -672,7 +684,7 @@ function Dashboard() {
               <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-                Nothing to record.
+                Nothing to record. You&rsquo;re up to date.
               </p>
             ) : branchView ? (
               <LeaderGroups
@@ -729,8 +741,8 @@ function Dashboard() {
                 Pending CG Records
               </h2>
               <p className="text-muted text-sm">
-                Cells you oversee with a meeting still to record whose week is open, by the
-                leader&rsquo;s first name.
+                Cell Groups in your branch with a meeting not yet recorded. Press Record where it
+                is yours to record; for the rest, follow up with their leader.
               </p>
             </div>
             <PendingFilters
@@ -770,8 +782,8 @@ function Dashboard() {
                 Pending DCC Records
               </h2>
               <p className="text-muted text-sm">
-                Leaders you oversee whose 12 have no DCC record for a Sunday still open, by
-                first name.
+                Leaders in your branch who still owe a DCC Sunday. Press Record where it is yours
+                to record; for the rest, follow up with them.
               </p>
             </div>
             <PendingFilters
