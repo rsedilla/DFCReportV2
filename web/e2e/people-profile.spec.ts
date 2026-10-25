@@ -604,7 +604,18 @@ test.describe('the Add and Edit person forms', () => {
 
     await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
     await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
-    await expect(page.getByText('None yet — it’s worked out from their Sundays.')).toBeVisible();
+    await expect(page.getByText(/^None yet\. VIP, 2nd Timer, up to Regular/)).toBeVisible();
+    // Each field says what it is about, and keeps saying it once chosen (owner, 2026-10-25).
+    await expect(page.getByText('Their leader', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(
+        'The person who disciples them. Only this leader and the leaders above can see and edit their details.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('Their Cell Group', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('The Cell Group they will attend. Optional; you can add it later from their record.'),
+    ).toBeVisible();
   });
 
   // Decision 0373, replacing decision 0305's pre-selected choice: Sex is already decided where
