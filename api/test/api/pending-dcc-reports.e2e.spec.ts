@@ -352,7 +352,9 @@ describe('Pending DCC Records (decision 0336)', () => {
     const sunday = await recentSunday();
     const reader = await leader(raymond);
     await createEvent(sunday);
-    await createEvent(shift(sunday, -21)); // its week closed a week ago (decision 0335)
+    // Its week closed at noon last Monday or earlier: a week closes 28 days after its Monday
+    // (decision 0387), so three weeks back is still open until noon on a Monday.
+    await createEvent(shift(sunday, -28));
     await createEvent(shift(sunday, 14)); // not held yet, on any day of the week
     const removed = await createEvent(shift(sunday, -7));
     const adminAccount = await admin();
