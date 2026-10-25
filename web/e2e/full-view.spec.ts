@@ -165,7 +165,12 @@ test.describe('a Recording-only account (decision 0323)', () => {
       /^Update Records/,
     ]);
     await expect(page.getByRole('heading', { level: 2, name: 'Update Records' })).toHaveCount(0);
-    await expect(page.getByText('What still needs a record.')).toBeVisible();
+    // What the page is for and when each week is due, said once (owner, 2026-10-26).
+    await expect(
+      page.getByText(
+        'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.',
+      ),
+    ).toBeVisible();
     await expect(
       page.getByRole('link', { name: /^Record Young Pro · Sat,/ }).first(),
     ).toBeVisible();
