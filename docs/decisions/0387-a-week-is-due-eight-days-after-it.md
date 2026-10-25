@@ -27,6 +27,11 @@ and the 28th of the following month. October 2026 is final at 12:00 on 23 Novemb
 before last. Nothing has passed before 12:00 on 9 November 2026, so until then it opens on the
 current week as it did.
 
+**5. Unsaved attendance marks are kept on the device for four weeks** (owner, the same day),
+where decision 0345 kept them for three on the ground that the week had closed by then. A week
+now closes 28 days after its Monday, so a draft made on or after the day it is for lasts until
+its week has closed. Raised by `architecture-guardian` reviewing this ruling.
+
 **Nothing else in decision 0335 changes.** The rule still starts with the week of 26 October
 2026; a record dated before it keeps the end of the 7th of the following month and is never
 Late; a correction never makes an on-time record late; Late is a word and never only a colour;
@@ -45,10 +50,10 @@ word Late.
 
 Decision 0335's points 1, 3 and 5 where they name the Monday after the week, its example dates
 (due 2 November, closed 16 November) and the 15th-to-21st range, point 6's opening week, and
-point 8's example labels.
-Sections 13 and 19 are amended.
+point 8's example labels, and the same example labels in decisions 0336 and 0363. Decision
+0345's three weeks. Sections 13, 19 and 23 are amended.
 
 Decision 0387, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 13 and 19.
+Sections 13, 19 and 23.
 
 Previous: [2026-10-23 — SUYNL's Graduated card is hidden](0386-suynl-shows-who-is-still-to-finish.md)
