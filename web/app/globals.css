@@ -145,12 +145,14 @@
   --field-invalid: #a2001e;
   /*
    * The three Trends lines: the whole church, the Men's root's branch and the Women's
-   * (owner, 2026-10-09). Named for the colour, not for what they mark, and never the only
-   * way the lines are told apart: weight, dash, a key and a table carry the same (1.4.1).
+   * (owner, 2026-10-09), toned to sit with the green theme on 2026-10-25: the whole church
+   * takes the accent, the Men's a softer blue and the Women's a rose. Named for the colour,
+   * not for what they mark, and never the only way the lines are told apart: weight, dash, a
+   * key and a table carry the same (1.4.1).
    */
-  --chart-green: #1e7a3c;
-  --chart-blue: #1f5fa8;
-  --chart-pink: #c2185b;
+  --chart-green: #007a39;
+  --chart-blue: #2b5d8c;
+  --chart-pink: #b0466f;
 }
 
 /*
@@ -173,9 +175,9 @@
     --tag-red: #ff6b80;
     --tag-red-tint: #3a1219;
     --field-invalid: #ffb3be;
-    --chart-green: #5fd08a;
-    --chart-blue: #7fb2f0;
-    --chart-pink: #f48fb1;
+    --chart-green: #1dce78;
+    --chart-blue: #8db4d9;
+    --chart-pink: #e39ab6;
   }
 }
 

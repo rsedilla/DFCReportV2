@@ -4,6 +4,6 @@
  * `app/layout.tsx` and `app/manifest.ts`, which Next.js reads by file name.
  */
 export const APPLICATION_NAME = 'DREAMS';
-export const APPLICATION_FULL_NAME = 'Doulos Reporting, Evaluation, And Management System';
+export const APPLICATION_FULL_NAME = 'Doulos Reporting, Evaluation, And Monitoring System';
 /** The DfC globe, cleaned from the church's poster: square, on its own dark ground. */
 export const LOGO_PATH = '/dreams-logo.png';
