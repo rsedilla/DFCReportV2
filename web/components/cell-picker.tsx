@@ -116,7 +116,9 @@ export function CellPicker({
       {leaders.length > 0 ? (
         <>
           <p className="text-muted mt-4 text-xs font-bold">
-            {leaders.length === 1 ? 'Their Cell Leader’s Cell' : 'Their Cell Leader’s Cells'}
+            {leaders.length === 1
+              ? 'Their leader’s Cell Group — usually the right one'
+              : 'Their leader’s Cell Groups — usually the right ones'}
           </p>
           <CellList cells={leaders} onSelect={onSelect} />
         </>
@@ -124,8 +126,8 @@ export function CellPicker({
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field
-          label="Search for a Cell"
-          description="A leader’s name or a Cell ID."
+          label={leaders.length > 0 ? 'Or find another Cell Group' : 'Search for a Cell Group'}
+          description="Type the leader’s name or the Cell ID, like CELL-000032."
           type="search"
           name="cell_q"
           autoComplete="off"
