@@ -159,7 +159,21 @@ export class CellsMembershipService {
       // people they oversee, and somebody from another branch is added by an actor whose
       // grant reaches them. A move is left to `cell.move_members` over both Cells (decision
       // 0357), so a ticked Primary still moves a member between two of their own Cells.
-      if (!current && !oversees) {
+      //
+      // **Somebody in a Cell whom the actor neither oversees nor may move is refused the
+      // same way** (decision 0390), so the answer for anybody outside the actor's scope is
+      // one answer whether or not they are in a Cell (section 8). Decided here, before the
+      // person is read and before the destination is re-checked, so no later refusal can
+      // tell the two apart. Only a move the actor may make goes on, and its Cells are ones
+      // the actor already sees.
+      if (
+        !oversees &&
+        (!current ||
+          (await moveMembersAnswer(trx, this.authorization, this.cells, actor, authority, [
+            current.cell_uuid,
+            cellId,
+          ])) !== 'ok')
+      ) {
         throw outsideScopeRefusal();
       }
 
@@ -221,37 +235,14 @@ export class CellsMembershipService {
 
       // **Somebody already in another Cell is moved, not added** (decision 0357): that needs
       // `cell.move_members` over both Cells, which a Leader holds only with Moves people.
-      // `cell.manage_membership` over the source is not asked; this replaces it.
-      //
-      // **A refused move of somebody the actor does not oversee is refused as above**
-      // (decision 0390), so that every refusal of such a person is one answer whether or not
-      // they are in a Cell (section 8). The move refusals' own words and details are kept for
-      // people the actor oversees, whose Cell `cell.view_subtree` already shows them.
+      // `cell.manage_membership` over the source is not asked; this replaces it. Its own
+      // refusals reach only somebody the actor oversees (decision 0390), whose Cell
+      // `cell.view_subtree` already shows them.
       if (current) {
-        const cellIds = [current.cell_uuid, cellId];
-
-        if (
-          !oversees &&
-          (await moveMembersAnswer(
-            trx,
-            this.authorization,
-            this.cells,
-            actor,
-            authority,
-            cellIds,
-          )) !== 'ok'
-        ) {
-          throw outsideScopeRefusal();
-        }
-
-        await assertMayMoveMembersWithin(
-          trx,
-          this.authorization,
-          this.cells,
-          actor,
-          authority,
-          cellIds,
-        );
+        await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
+          current.cell_uuid,
+          cellId,
+        ]);
       }
 
       const at = await this.nowWithin(trx);

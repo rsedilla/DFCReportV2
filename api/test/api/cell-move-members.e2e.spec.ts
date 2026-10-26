@@ -275,6 +275,32 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(teresa.id)).toBeNull();
     });
 
+    it('gives that one answer before anything about the person, absorbed or already in its Cell (decision 0390)', async () => {
+      // A merge does not end the absorbed record's membership (section 3), so somebody of
+      // Rosa's branch absorbed while in her Cell must not be told apart as "absorbed by a merge".
+      // Somebody of hers placed in Corazon's own Cell by the Admin is refused too, rather than told he
+      // is already there: Corazon may not move him, and the answer is decided first.
+      const absorbed = await createPerson(db, { firstName: 'Absorbed', network: 'MENS' });
+      await assignTo(db, absorbed.id, lito.id);
+      await enrol(absorbed.id, cellR.id);
+      await db
+        .updateTable('persons')
+        .set({ merged_into_id: pablo.id })
+        .where('id', '=', absorbed.id)
+        .execute();
+
+      const placed = await createPerson(db, { firstName: 'Placed', network: 'MENS' });
+      await assignTo(db, placed.id, lito.id);
+      await enrol(placed.id, cellC.id);
+
+      expect(refusalOf(await addMember(corazonAccount, cellC.id, absorbed.id).expect(403))).toEqual(
+        OUTSIDE_SCOPE,
+      );
+      expect(refusalOf(await addMember(corazonAccount, cellC.id, placed.id).expect(403))).toEqual(
+        OUTSIDE_SCOPE,
+      );
+    });
+
     it('is refused removing a member of its own Cell', async () => {
       const response = await removeMember(corazonAccount, cellC.id, marilou.id).expect(403);
       expect(codeOf(response)).toBe('CAPABILITY_DENIED');

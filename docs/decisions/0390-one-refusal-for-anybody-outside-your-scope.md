@@ -8,12 +8,14 @@ existence, for the one route it was asked about.
 
 **1. Adding somebody the actor does not oversee to a Cell is refused with one answer, whether or
 not they are in a Cell.** On `POST /api/v1/cells/{id}/members`, when the actor's
-`cell.manage_membership` does not cover the person, every refusal is `SCOPE_DENIED` with the words
-decision 0389 gave the in-no-Cell case and empty details. That covers somebody in no Cell, as
-before, and now somebody in a Cell whom the actor may not move: a Leader without *Moves people*,
-whose refusal was the move's `CAPABILITY_DENIED`, and a ticked leader whose `cell.move_members`
-does not reach the person's Cell, whose refusal was a `SCOPE_DENIED` with the move's own words and
-`details.capability`.
+`cell.manage_membership` does not cover the person and the actor may not move them, the answer is
+`SCOPE_DENIED` with the words decision 0389 gave the in-no-Cell case and empty details. That
+covers somebody in no Cell, as before, and now somebody in a Cell: for a Leader without *Moves
+people* the refusal was the move's `CAPABILITY_DENIED`, and for a ticked leader whose
+`cell.move_members` does not reach the person's Cell a `SCOPE_DENIED` with the move's own words
+and `details.capability`. It is decided before the person is read and before any other refusal that
+concerns them, so nothing that follows, not that the person is already in this Cell, nor that a merge
+absorbed them, can tell the two apart.
 
 **2. A move the actor may make is unchanged.** A ticked Primary still moves a member between two
 Cells of their own branch whoever pastors them (decision 0389). That answer differs from the
