@@ -150,6 +150,78 @@ test.describe('a recorded Cell meeting', () => {
     ).toBeVisible();
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Met' })).toHaveCount(0);
+    // Nothing to mark, so neither the roster nor the instruction to mark everyone.
+    await expect(page.getByRole('heading', { name: 'Who was there' })).toHaveCount(0);
+    await expect(page.getByText(/every one needs a mark/)).toHaveCount(0);
+  });
+
+  // The roster is read again when the reader comes back to the tab. If the week closed
+  // meanwhile, the edit ends rather than leaving marks nobody can save under words saying
+  // they are stored.
+  test('ends an edit in progress when the week closes while the page is open', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Absent' }).first().check();
+
+    // The reader leaves the tab past the week's close and comes back: the roster is stale
+    // after thirty seconds (`components/providers.tsx`) and is read again on return.
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+    await page.clock.fastForward(31_000);
+    // TanStack Query listens for `visibilitychange` on `window`.
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+    await expect(
+      page.getByText('This week is closed, so this meeting can no longer be changed.'),
+    ).toBeVisible();
+    await expect(page.getByText('Editing the recorded meeting')).toHaveCount(0);
+    await expect(page.getByLabel('Why is this changing? (optional)')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+    // The stored marks show again, not the unsaved one.
+    await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeChecked();
+  });
+
+  // 2.4.11: a refusal makes the pinned bar taller, and the page's bottom scroll padding grows
+  // with it, so a control focused after it never scrolls into view underneath.
+  test('raises the bottom scroll padding with the bar when a refusal makes it taller', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'VERSION_CONFLICT',
+            message: 'This record changed after you opened it.',
+            details: {},
+          },
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Absent' }).first().check();
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect(page.getByText('This record changed after you opened it.')).toBeVisible();
+
+    const clear = await page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>('div.sticky');
+      const padding = parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom);
+      const covered = bar ? window.innerHeight - bar.getBoundingClientRect().top : 0;
+      return { padding, covered };
+    });
+    expect(clear.padding).toBeGreaterThanOrEqual(clear.covered);
   });
 
   // A refused save is said beside Save, in the pinned bar, not at the top of the page where

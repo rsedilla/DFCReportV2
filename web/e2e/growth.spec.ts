@@ -361,6 +361,24 @@ test.describe('the SUYNL tab', () => {
     // Still made against what is stored, so the tick survives the reload.
     await expect(page.getByRole('button', { name: 'Save 1 change' })).toBeVisible();
   });
+
+  test('keeps a lost race’s refusal and Reload when the draft is emptied instead', async ({
+    page,
+  }) => {
+    await openSuynl(page, 'conflict');
+
+    const tick = page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' });
+    await tick.check();
+    await page.getByRole('button', { name: 'Save 1 change' }).click();
+    await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
+
+    await tick.uncheck();
+
+    await expect(
+      page.locator('main').getByRole('alert').filter({ hasText: 'lesson 3 was changed' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
+  });
 });
 
 test.describe('the Training tab', () => {

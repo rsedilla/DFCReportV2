@@ -25,6 +25,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
+import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -101,6 +102,9 @@ export default function RecordMeetingPage() {
 
 type Mark = 'present' | 'absent';
 
+/** The marks a closed week shows over what is stored: none. One object, so memos hold. */
+const NO_EDITS: Record<string, Mark> = {};
+
 type NotHeldReason =
   | 'LEADER_UNAVAILABLE'
   | 'WEATHER_OR_CALAMITY'
@@ -132,12 +136,12 @@ function RecordMeeting() {
     queryFn: ({ signal }) => getMeetingRoster(params.id, params.date, signal),
   });
 
-  const [edits, setEdits] = useState<Record<string, Mark>>({});
+  const [editState, setEdits] = useState<Record<string, Mark>>({});
   const [statusChoice, setStatusChoice] = useState<'HELD' | 'NOT_HELD' | null>(null);
   const [notHeldReason, setNotHeldReason] = useState<NotHeldReason | ''>('');
   const [note, setNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [editingState, setEditing] = useState(false);
   // Who ran it, on a first record: the leader unless somebody else is chosen.
   const [ranBy, setRanBy] = useState<'LEADER' | 'OTHER'>('LEADER');
   const [facilitator, setFacilitator] = useState<{ id: string; full_name: string } | null>(null);
@@ -174,6 +178,13 @@ function RecordMeeting() {
   // A meeting whose week has closed (decision 0335): the save would be refused, so it is
   // shown and nothing on it is offered, as the DCC checklist shows a closed Sunday.
   const weekClosed = roster.data?.week_open === false;
+
+  // **A week that closes while the page is open ends any edit in progress.** The roster is
+  // read again when the reader returns to the tab, and once it says the week has closed no
+  // save can succeed, so an edit left open would show marks nobody can keep under words
+  // saying they are what is stored. Derived rather than reset, so nothing is set in render.
+  const editing = editingState && !weekClosed;
+  const edits = weekClosed ? NO_EDITS : editState;
 
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
   const locked = (correcting && !editing) || followOnly || weekClosed;
@@ -379,6 +390,8 @@ function RecordMeeting() {
     resetForm();
     save.reset();
   }
+
+  const barRef = usePinnedBarPadding<HTMLDivElement>();
 
   const markedCount = members.length - unmarked.length;
 
@@ -643,7 +656,9 @@ function RecordMeeting() {
                 </div>
               </div>
             ) : null
-          ) : (
+          ) : weekClosed && recorded === null ? null : (
+            // A meeting nobody recorded before its week closed has no marks to show and
+            // takes none, so its roster and the instruction to mark it are not shown.
             <section className="mt-8" aria-labelledby="roster-heading">
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 id="roster-heading" className="text-lg font-bold tracking-tight">
@@ -704,20 +719,24 @@ function RecordMeeting() {
             screen above the tab bar below `lg`, and to the bottom at `lg`, so a leader
             tapping down a long roster never scrolls back to find it. It says what is
             still needed, because a greyed button says only that something is wrong.
-            The page's scroll padding (`app/layout.tsx`) keeps a focused control clear
-            of it.
+            The page's scroll padding (`app/layout.tsx`, raised to the bar's height by
+            `usePinnedBarPadding` when the bar grows) keeps a focused control clear of it.
           */}
           {locked ? null : (
-            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0">
+            <div
+              ref={barRef}
+              className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0"
+            >
               {/*
                 **A refused save is said here, beside Save**, not at the top of the page,
                 where on a phone it sat off-screen and Save looked as if it did nothing.
+                The live region is mounted with the bar, before anything goes wrong, so a
+                screen reader announces the refusal when it arrives; empty, it takes no
+                room.
               */}
-              {save.isError ? (
-                <div className="sm:basis-full">
-                  <FailureNotice failure={saveFailure} />
-                </div>
-              ) : null}
+              <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
+                <FailureNotice failure={saveFailure} />
+              </div>
               <p aria-live="polite" className="text-sm">
                 {saveHint}
               </p>

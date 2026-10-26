@@ -265,6 +265,7 @@ function TrainingTab() {
 
         <GrowthSaveBar
           failure={<GrowthSaveFailure growthSave={growthSave} />}
+          failing={growthSave.save.isError}
           summary={
             entries.length > 0
               ? `${entries.length === 1 ? '1 graduation' : `${entries.length} graduations`} changed, not saved yet.`

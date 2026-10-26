@@ -9,6 +9,7 @@ import { Field } from '@/components/ui/field';
 import { isBranchReader } from '@/components/reports-tabs';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
+import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
 
@@ -244,6 +245,7 @@ export function GrowthSaveBar({
   onDiscard,
   saving,
   failure,
+  failing = false,
 }: {
   /** Null where there is nothing to say, which hides the bar. */
   summary: ReactNode | null;
@@ -256,17 +258,24 @@ export function GrowthSaveBar({
   saving: boolean;
   /** A refused save, said here beside Save rather than at the top of the page. */
   failure?: ReactNode;
+  /** Whether a refusal is standing, which keeps the bar up until it is resolved. */
+  failing?: boolean;
 }) {
   const missingReason = needsReason && reason.trim() === '';
+  const barRef = usePinnedBarPadding<HTMLDivElement>();
 
   // Nothing pinned over the list until there is something to say: a bar reading "nothing
-  // to save" takes a phone's screen from the rows it would be saving.
-  if (count === 0 && summary === null) {
+  // to save" takes a phone's screen from the rows it would be saving. A standing refusal
+  // is something to say, with its Reload, even once the draft is emptied.
+  if (count === 0 && summary === null && !failing) {
     return null;
   }
 
   return (
-    <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-3 border-t px-5 py-3 lg:bottom-0">
+    <div
+      ref={barRef}
+      className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-3 border-t px-5 py-3 lg:bottom-0"
+    >
       {failure}
       <p aria-live="polite" className="text-sm">
         {summary}

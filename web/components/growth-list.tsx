@@ -210,13 +210,11 @@ export function GrowthSaveFailure({
 }) {
   const { save, stale, reload } = growthSave;
 
-  if (!save.isError) {
-    return null;
-  }
-
+  // The live region is mounted with the bar, before anything goes wrong, so a screen
+  // reader announces the refusal when it arrives; empty, it takes no room.
   return (
-    <div>
-      <FailureNotice failure={describeFailure(save.error)} />
+    <div className={save.isError ? undefined : 'sr-only'}>
+      <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
       {stale ? (
         <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
           Reload

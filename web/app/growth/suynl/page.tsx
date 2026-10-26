@@ -279,6 +279,7 @@ function SuynlTab() {
 
         <GrowthSaveBar
           failure={<GrowthSaveFailure growthSave={growthSave} />}
+          failing={growthSave.save.isError}
           summary={
             entries.length > 0
               ? `${entries.length === 1 ? '1 lesson' : `${entries.length} lessons`} ticked or unticked, not saved yet.`
