@@ -62,9 +62,10 @@ export function slotsClash(a: Slot, b: Slot): boolean {
   return secondsApart(a, b) < MINIMUM_GAP_SECONDS;
 }
 
-/** `HH:MM`, whatever precision the column or the request carried. */
+/** `HH:MM`, or `HH:MM:SS` where the seconds are not zero, so a gap read to the second shows. */
 function hhmm(timeOfDay: string): string {
-  return timeOfDay.slice(0, 5);
+  const seconds = timeOfDay.slice(6, 8);
+  return seconds === '' || seconds === '00' ? timeOfDay.slice(0, 5) : timeOfDay.slice(0, 8);
 }
 
 /**
@@ -98,11 +99,10 @@ interface Visibility {
 }
 
 /**
- * Whether the asker may be told what a clash is (decision 0392). A Cell is named where the
- * asker's `cell.view_subtree` covers its leader; a pending new-Cell request where the asker
- * sent it or may approve it. Anything else is said to exist and never named, because section 8
- * withholds a Cell outside the reader's scope, and a request's existence is the sender's and
- * its approvers' to know.
+ * Whether the asker may be told what a clash is (decision 0392). A Cell, or a pending handover
+ * of one, is named where the asker's `cell.view_subtree` covers its current leader; a pending
+ * new-Cell request where the asker sent it or approves Cells church-wide. Anything else is said
+ * to exist and never named, because section 8 withholds a Cell outside the reader's scope.
  */
 export type ClashViewer = (clash: Visibility & { leaderId: string }) => Promise<boolean>;
 
@@ -113,7 +113,7 @@ export function clashViewerFor(
   actor: Actor,
   authority: ActorAuthority,
 ): ClashViewer {
-  return async ({ cellLeaderId, requestedBy, leaderId }) => {
+  return async ({ cellLeaderId, requestedBy }) => {
     if (cellLeaderId !== null) {
       return authorization.coversWith(executor, actor, authority, Capability.CellViewSubtree, {
         kind: 'person',
@@ -123,9 +123,10 @@ export function clashViewerFor(
     if (requestedBy !== null && sameId(requestedBy, actor.accountId)) {
       return true;
     }
+    // Church-wide only: a ticked approver's queue leaves out requests it may not decide
+    // (decision 0352), so reach over the leader is not enough to have seen this one.
     return authorization.coversWith(executor, actor, authority, Capability.CellApproveLeadership, {
-      kind: 'person',
-      personId: leaderId,
+      kind: 'church',
     });
   };
 }

@@ -24,9 +24,9 @@ cannot both pass.
 
 **5. The refusal names what the asker may see** (owner, 2026-10-26, chosen from screenshots
 after review): `INVARIANT_VIOLATION`, with `details.clashes` listing each Cell or request it clashes
-with by Cell ID where it has one, category, day and time, where the asker may see it: a Cell where
-their `cell.view_subtree` covers its leader, a pending new-Cell request where they sent it or may
-approve it. Anything else is said only to exist, with `details.others` true: "This leader already
+with by Cell ID where it has one, category, day and time, where the asker may see it: a Cell, or a
+pending handover of one, where their `cell.view_subtree` covers its current leader, and a pending
+new-Cell request where they sent it or approve Cells church-wide. Anything else is said only to exist, with `details.others` true: "This leader already
 has a Cell Group, or a request for one, starting less than 2 hours from this time." Section 8
 withholds a Cell outside the reader's scope, and decision 0390 refuses the same way for the same
 reason. Naming every clash was the first version, and the review found it named a Cell being handed
