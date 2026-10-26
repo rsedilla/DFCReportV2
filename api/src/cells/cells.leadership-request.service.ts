@@ -233,8 +233,9 @@ export class CellsLeadershipRequestService {
 
     return this.db.transaction().execute(async (trx) => {
       // The prospective leader's lock before anything is read, so two requests for one
-      // leader decide the two-hour rule one after the other (decision 0392). No `cells` row
-      // lock is taken on this path, so section 5's order is kept.
+      // leader decide the two-hour rule one after the other (decision 0392). First, so it
+      // comes before the key-share lock a handover's insert takes on its Cell's row through
+      // the foreign key, which is section 5's order.
       await boundLockWaitsWithin(trx);
       await lockPersonsWithin(trx, [input.prospectiveLeaderId]);
 

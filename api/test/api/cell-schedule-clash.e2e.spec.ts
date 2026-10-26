@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { slotsClash } from '../../src/cells/schedule-clash';
+import { holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -42,6 +45,15 @@ describe('one leader’s Cells start two hours apart (decision 0392)', () => {
       ).toBe(false);
       expect(
         slotsClash({ dayOfWeek: 6, timeOfDay: '19:00' }, { dayOfWeek: 6, timeOfDay: '20:59' }),
+      ).toBe(true);
+    });
+
+    it('counts seconds, so 12:00:59 to 14:00 is less than two hours', () => {
+      expect(
+        slotsClash(
+          { dayOfWeek: 7, timeOfDay: '12:00:59' },
+          { dayOfWeek: 7, timeOfDay: '14:00:00' },
+        ),
       ).toBe(true);
     });
 
@@ -299,5 +311,90 @@ describe('one leader’s Cells start two hours apart (decision 0392)', () => {
 
       expect([a.status, b.status].sort()).toEqual([200, 409]);
     });
+
+    it('decides a request and a schedule change for one leader one after the other', async () => {
+      // A new Cell for Juan on Monday at 19:00, and his Wednesday Cell moving to Monday at
+      // 20:00, sent together. One may land; both may not.
+      const body = await newCell(juan.id, 1, '19:00');
+
+      const [a, b] = await Promise.all([
+        post(admin, '/api/v1/cells/leadership-requests', body),
+        put(admin, `/api/v1/cells/${juanCell.id}/schedule`, {
+          day_of_week: 1,
+          time_of_day: '20:00',
+        }),
+      ]);
+
+      expect([a.status, b.status].sort()).toEqual(a.status === 201 ? [201, 409] : [200, 409]);
+    });
+
+    it('answers RESOURCE_BUSY when the Cell changes hands while its change waits for the leader', async () => {
+      // The change reads Juan as the leader, then waits for his lock. Meanwhile the Cell is
+      // handed to Mark. Deciding under Juan's lock would check the wrong leader's Cells.
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+
+      try {
+        await blocker.query('BEGIN');
+        await holdPersonLock(blocker, juan.id);
+        const pid = Number(
+          (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as string,
+        );
+
+        const pending = put(admin, `/api/v1/cells/${juanCell.id}/schedule`, {
+          day_of_week: 2,
+          time_of_day: '19:00',
+        }).then((response) => response);
+        await waitForBlockedBy(db, pid);
+
+        await db.transaction().execute(async (trx) => {
+          const at = (await sql<{ at: Date }>`SELECT clock_timestamp() AS at`.execute(trx)).rows[0]
+            .at;
+          await trx
+            .updateTable('cell_leaderships')
+            .set({ ended_at: at })
+            .where('cell_id', '=', juanCell.id)
+            .where('ended_at', 'is', null)
+            .execute();
+          await trx
+            .insertInto('cell_leaderships')
+            .values({ person_id: mark.id, cell_id: juanCell.id, started_at: at })
+            .execute();
+        });
+
+        await blocker.query('ROLLBACK');
+
+        const response = await pending;
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+        // This refusal, not a lock that timed out, which answers the same code.
+        expect(response.body.error.details).toEqual({ cell_id: juanCell.cellId });
+      } finally {
+        try {
+          await blocker.query('ROLLBACK');
+        } finally {
+          await blocker.end();
+        }
+      }
+    }, 30000);
   });
 });
+
+/** Polls until a backend is waiting on `blockerPid`; 2s, under the service's 3s lock bound. */
+async function waitForBlockedBy(db: Kysely<Database>, blockerPid: number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await sql<{ count: string }>`
+      SELECT count(*) AS count
+        FROM pg_stat_activity
+       WHERE ${blockerPid}::int = ANY (pg_blocking_pids(pid))
+    `.execute(db);
+
+    if (Number(waiting.rows[0].count) > 0) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  throw new Error(`Nothing ever blocked on backend ${blockerPid}.`);
+}

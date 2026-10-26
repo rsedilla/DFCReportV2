@@ -98,20 +98,23 @@ export class CellsIndexService {
   ) {}
 
   /**
-   * `GET /api/v1/cells/counts` (decision 0309): how many running Cells the list would show
-   * now, for the reader's scope and for the Cells they lead. The same scope and the same
-   * filter as {@link list}, counted rather than paged, so the Cells page's totals do not
-   * read every Cell with its figures to count it.
-   */
-  /**
    * `GET /api/v1/cells/schedule-clashes`: leaders whose running Cells start less than two
-   * hours apart (section 10, decision 0392), each with those Cells, closest first.
+   * hours apart (section 10, decision 0392), each with those Cells. Ordered as every list of
+   * people is, first name, surname and Member ID, and never by how close (decision 0359).
    */
   async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
     const clashes = await scheduleClashesWithin(this.db);
     const names = await this.people.namesOf(clashes.map((clash) => clash.leaderId));
+    const key = (leaderId: string) => {
+      const name = names.get(leaderId);
+      return [name?.firstName ?? '', name?.lastName ?? '', name?.memberId ?? ''];
+    };
 
-    const data = clashes
+    const data = [...clashes]
+      .sort((a, b) => {
+        const [x, y] = [key(a.leaderId), key(b.leaderId)];
+        return x[0].localeCompare(y[0]) || x[1].localeCompare(y[1]) || x[2].localeCompare(y[2]);
+      })
       .map((clash) => ({
         leader: {
           person_id: clash.leaderId,
@@ -126,15 +129,17 @@ export class CellsIndexService {
           day_of_week: cell.day_of_week,
           time_of_day: cell.time_of_day,
         })),
-      }))
-      .sort(
-        (a, b) =>
-          a.minutes_apart - b.minutes_apart || a.leader.full_name.localeCompare(b.leader.full_name),
-      );
+      }));
 
     return { data };
   }
 
+  /**
+   * `GET /api/v1/cells/counts` (decision 0309): how many running Cells the list would show
+   * now, for the reader's scope and for the Cells they lead. The same scope and the same
+   * filter as {@link list}, counted rather than paged, so the Cells page's totals do not
+   * read every Cell with its figures to count it.
+   */
   async counts(actor: Actor): Promise<{ in_scope: number; led_by_me: number }> {
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const now = await databaseNow(this.db);

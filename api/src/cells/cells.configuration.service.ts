@@ -440,9 +440,10 @@ export class CellsConfigurationService {
    * schedule row on a CLOSED Cell — the state section 10 now forbids. Unreachable
    * today, since no operation closes a Cell yet.
    *
-   * **It takes one row lock and no advisory locks**, so it raises none of the
-   * cross-class ordering question section 5 records as open — that section puts the
-   * demonstration burden on an operation needing both classes.
+   * **It takes one row lock.** A category change calls it holding nothing. A schedule change
+   * calls it holding the leader's person lock (decision 0392), which section 5 orders before
+   * any `cells` row lock, so that path takes both classes in the order every other writer
+   * does: the person, then the Cell.
    *
    * **Two earlier versions of this argument were over-broad and both are recorded.**
    * The first was "it takes its first lock while holding nothing", which is true of
@@ -452,18 +453,18 @@ export class CellsConfigurationService {
    * section 5 names in as many words and which any other write endpoint can hold
    * without ever touching `cells`.
    *
-   * The argument that holds is per-lock rather than general. This transaction takes
-   * three: the `cells` row, which it takes first while holding nothing; the
+   * The argument that holds is per-lock rather than general. Beyond a schedule change's
+   * person lock, taken before any other, this transaction takes three: the `cells` row; the
    * configuration rows, reachable only through the Cell it already holds; and the
    * idempotency key, last. A holder of that key row is at its own final statement —
    * section 22 requires the completion to be the last statement in the transaction —
    * so it wants nothing further and cannot be waiting on this one. A membership write
    * holds an advisory lock on a person and waits for `FOR SHARE` on this Cell at
-   * commit, and this service never wants a person lock, so those two wait rather than
-   * cycle. Adding a statement above the `cells` lock that takes a lock ends the first
-   * clause and the argument with it. The bound comes
-   * first because section 5 requires an operation taking row locks and no advisory
-   * locks to set it itself; `SET LOCAL` takes no locks, so it cannot be what waits.
+   * commit; this service takes a person lock only before its `cells` lock, never while
+   * holding one, so those two wait rather than cycle. Taking a lock after the `cells` lock
+   * that another writer takes before one would end that argument. The bound comes
+   * first because section 5 requires an operation taking row locks to set it itself where it
+   * may take no advisory lock; `SET LOCAL` takes no locks, so it cannot be what waits.
    */
   private async lockAndReadCellWithin(
     trx: Transaction<Database>,

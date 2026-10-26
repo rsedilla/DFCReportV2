@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 
 import { InvariantViolationError } from '../common/errors/api-error';
+import { sameId } from '../common/identifiers';
 
 import type { Db } from '../database/database.module';
 import type { CellCategory, Database } from '../database/schema';
@@ -10,9 +11,9 @@ import type { Transaction } from 'kysely';
  * The least distance between the starts of two Cells one person leads (SKILL.md section
  * 10, decision 0392). Two hours exactly is allowed.
  */
-export const MINIMUM_GAP_MINUTES = 120;
+export const MINIMUM_GAP_SECONDS = 2 * 60 * 60;
 
-const MINUTES_IN_A_WEEK = 7 * 24 * 60;
+const SECONDS_IN_A_WEEK = 7 * 24 * 60 * 60;
 
 /** A day of the week (ISO, 1 is Monday) and a Manila wall-clock time, as a schedule holds them. */
 export interface Slot {
@@ -32,11 +33,19 @@ export interface Clash {
 }
 
 /**
- * Minutes from Monday 00:00 (section 20's Manila wall clock), so that distance can wrap.
+ * Seconds from Monday 00:00 (section 20's Manila wall clock), so that distance can wrap. In
+ * seconds rather than minutes, because a time may carry them and 12:00:59 to 14:00 is less
+ * than two hours.
  */
-function minuteOfWeek(slot: Slot): number {
-  const [hours, minutes] = slot.timeOfDay.split(':').map(Number);
-  return (slot.dayOfWeek - 1) * 24 * 60 + hours * 60 + minutes;
+function secondOfWeek(slot: Slot): number {
+  const [hours = 0, minutes = 0, seconds = 0] = slot.timeOfDay.split(':').map(Number);
+  return (slot.dayOfWeek - 1) * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60 + seconds;
+}
+
+/** How far apart two starts are, the shorter way around the week, in seconds. */
+function secondsApart(a: Slot, b: Slot): number {
+  const apart = Math.abs(secondOfWeek(a) - secondOfWeek(b));
+  return Math.min(apart, SECONDS_IN_A_WEEK - apart);
 }
 
 /**
@@ -44,8 +53,7 @@ function minuteOfWeek(slot: Slot): number {
  * 23:00 and Sunday 00:30 clash, and so do Sunday 23:30 and Monday 00:30 (decision 0392).
  */
 export function slotsClash(a: Slot, b: Slot): boolean {
-  const apart = Math.abs(minuteOfWeek(a) - minuteOfWeek(b));
-  return Math.min(apart, MINUTES_IN_A_WEEK - apart) < MINIMUM_GAP_MINUTES;
+  return secondsApart(a, b) < MINIMUM_GAP_SECONDS;
 }
 
 /** `HH:MM`, whatever precision the column or the request carried. */
@@ -72,7 +80,7 @@ export async function slotsOfCellWithin(
     .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', eb.ref('started_at'))]))
     .execute();
 
-  return rows.map((row) => ({ dayOfWeek: row.day_of_week, timeOfDay: hhmm(row.time_of_day) }));
+  return rows.map((row) => ({ dayOfWeek: row.day_of_week, timeOfDay: row.time_of_day }));
 }
 
 /**
@@ -145,7 +153,7 @@ async function commitmentsOfWithin(
   const commitments: Array<Clash & Slot> = [];
 
   for (const row of cellRows) {
-    if (except.cellId && row.uuid === except.cellId) {
+    if (except.cellId && sameId(row.uuid, except.cellId)) {
       continue;
     }
     const time = hhmm(row.time_of_day);
@@ -156,12 +164,12 @@ async function commitmentsOfWithin(
       day_of_week: row.day_of_week,
       time_of_day: time,
       dayOfWeek: row.day_of_week,
-      timeOfDay: time,
+      timeOfDay: row.time_of_day,
     });
   }
 
   for (const row of requestRows) {
-    if (except.requestId && row.id === except.requestId) {
+    if (except.requestId && sameId(row.id, except.requestId)) {
       continue;
     }
     if (row.kind === 'NEW_CELL') {
@@ -176,11 +184,11 @@ async function commitmentsOfWithin(
         day_of_week: row.requested_day,
         time_of_day: time,
         dayOfWeek: row.requested_day,
-        timeOfDay: time,
+        timeOfDay: row.requested_time,
       });
     } else {
       if (
-        (except.cellId && row.uuid === except.cellId) ||
+        (except.cellId && row.uuid !== null && sameId(row.uuid, except.cellId)) ||
         row.cell_day === null ||
         row.cell_time === null
       ) {
@@ -194,7 +202,7 @@ async function commitmentsOfWithin(
         day_of_week: row.cell_day,
         time_of_day: time,
         dayOfWeek: row.cell_day,
-        timeOfDay: time,
+        timeOfDay: row.cell_time,
       });
     }
   }
@@ -245,9 +253,7 @@ export async function assertNoScheduleClashWithin(
   });
 
   const clashes = commitments.filter((commitment) =>
-    params.slots.some((slot) =>
-      slotsClash({ dayOfWeek: slot.dayOfWeek, timeOfDay: hhmm(slot.timeOfDay) }, commitment),
-    ),
+    params.slots.some((slot) => slotsClash(slot, commitment)),
   );
 
   if (clashes.length === 0) {
@@ -272,7 +278,7 @@ export async function assertNoScheduleClashWithin(
 /** One leader's Cells that start less than two hours apart, for Admin's list (decision 0392). */
 export interface LeaderClash {
   leaderId: string;
-  /** The least distance, in minutes, between any two of these Cells' starts. */
+  /** The least distance, in whole minutes, between any two of these Cells' starts. */
   closestMinutes: number;
   cells: Array<{
     uuid: string;
@@ -324,13 +330,12 @@ export async function scheduleClashesWithin(executor: Db): Promise<LeaderClash[]
     let closest = Number.POSITIVE_INFINITY;
     for (let i = 0; i < cells.length; i += 1) {
       for (let j = i + 1; j < cells.length; j += 1) {
-        const a = { dayOfWeek: cells[i].day_of_week, timeOfDay: hhmm(cells[i].time_of_day) };
-        const b = { dayOfWeek: cells[j].day_of_week, timeOfDay: hhmm(cells[j].time_of_day) };
+        const a = { dayOfWeek: cells[i].day_of_week, timeOfDay: cells[i].time_of_day };
+        const b = { dayOfWeek: cells[j].day_of_week, timeOfDay: cells[j].time_of_day };
         if (slotsClash(a, b)) {
           involved.add(cells[i].uuid);
           involved.add(cells[j].uuid);
-          const apart = Math.abs(minuteOfWeek(a) - minuteOfWeek(b));
-          closest = Math.min(closest, apart, MINUTES_IN_A_WEEK - apart);
+          closest = Math.min(closest, Math.floor(secondsApart(a, b) / 60));
         }
       }
     }

@@ -6,7 +6,7 @@ confirmed again the same day from screenshots of the built screens' design.
 ## The ruling
 
 **1. Two Cells led by one person never start less than two hours apart.** Measured by day of
-week and start time as minutes around the week, so it wraps past midnight and past the week's end:
+week and start time, to the second, around the week, so it wraps past midnight and past the week's end:
 Saturday 23:00 and Sunday 00:30 clash. Two hours exactly is allowed.
 
 **2. What is compared.** The leader's `ACTIVE` Cells, by every schedule row not yet over, so the
@@ -17,7 +17,8 @@ Cell it hands over. A closed Cell and a decided request do not count.
 **3. Where it is checked.** Sending a new-Cell request, a restart included, and approving it;
 requesting and approving a handover, against the incoming leader's other Cells; changing a Cell's
 day or time, against its leader's other Cells; and Admin's direct creation. Each write takes the
-leader's person lock before it reads, so two writes for one leader cannot both pass.
+leader's person lock before any Cell's row lock and decides under it, so two writes for one leader
+cannot both pass.
 
 **4. No exception.** Not for Admin, and not because somebody else runs one of the meetings.
 
@@ -27,8 +28,9 @@ says which Cell and when, and that a leader's Cells on one day must start at lea
 
 **6. Existing clashes keep working.** Nothing already clashing is stopped or changed. Admin sees
 them on the Cells page under **Same Leader, Same Time**, read from `GET
-/api/v1/cells/schedule-clashes` under `cell.manage_lifecycle` at Whole Church, and fixes each by
-changing a day or time or handing a Cell to the person who really leads it.
+/api/v1/cells/schedule-clashes` under `cell.manage_lifecycle` at Whole Church, by the times in
+force now, in first-name order, and unpaged, the rule keeping the list from growing. Admin fixes
+each by changing a day or time or handing a Cell to the person who really leads it.
 
 ## Why
 

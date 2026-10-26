@@ -364,7 +364,9 @@ export class PeopleReadService {
    */
   async namesOf(
     personIds: readonly string[],
-  ): Promise<Map<string, { memberId: string; fullName: string }>> {
+  ): Promise<
+    Map<string, { memberId: string; fullName: string; firstName: string; lastName: string }>
+  > {
     if (personIds.length === 0) {
       return new Map();
     }
@@ -376,7 +378,16 @@ export class PeopleReadService {
       .execute();
 
     return new Map(
-      rows.map((row) => [row.id, { memberId: row.member_id, fullName: composeName(row) }]),
+      rows.map((row) => [
+        row.id,
+        {
+          memberId: row.member_id,
+          fullName: composeName(row),
+          // The parts a list orders by, the title never among them (decisions 0271, 0359).
+          firstName: row.first_name,
+          lastName: row.last_name,
+        },
+      ]),
     );
   }
 
