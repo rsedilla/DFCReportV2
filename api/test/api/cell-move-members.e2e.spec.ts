@@ -191,6 +191,20 @@ describe('Moving a Cell member (decision 0357)', () => {
 
   const codeOf = (response: request.Response): unknown => response.body.error?.code;
 
+  /** Everything a refusal says: its code, its words and its details. */
+  const refusalOf = (response: request.Response): unknown => ({
+    code: response.body.error?.code,
+    message: response.body.error?.message,
+    details: response.body.error?.details,
+  });
+
+  /** The one refusal of adding somebody the actor does not oversee (decisions 0389, 0390). */
+  const OUTSIDE_SCOPE = {
+    code: 'SCOPE_DENIED',
+    message: 'You can add only somebody you oversee to a Cell (SKILL.md section 10).',
+    details: {},
+  };
+
   /** The Cell a person is a member of now, or null. */
   const cellOf = async (personId: string): Promise<string | null> => {
     const row = await db
@@ -247,18 +261,17 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(mia.id)).toBe(cellE.id);
     });
 
-    it('is refused somebody outside its scope: in a Cell as a move, in none as out of scope', async () => {
-      // Lito is beneath Rosa and in her Cell, so adding him is a move, refused by the move's
-      // capability (decision 0357) and naming no Cell. Decision 0389's person check is for
-      // somebody in no Cell: Teresa is Elena's, not Corazon's, and is refused SCOPE_DENIED.
-      const response = await addMember(corazonAccount, cellC.id, lito.id).expect(403);
-      expect(codeOf(response)).toBe('CAPABILITY_DENIED');
-      expect(JSON.stringify(response.body)).not.toContain(cellR.cellId);
-      expect(await cellOf(lito.id)).toBe(cellR.id);
+    it('is refused somebody outside its scope with one answer, in a Cell or in none (decision 0390)', async () => {
+      // Lito is beneath Rosa and in her Cell; Teresa is Elena's, not Corazon's, and in no
+      // Cell. Until decision 0390 Lito's refusal was the move's CAPABILITY_DENIED and
+      // Teresa's SCOPE_DENIED, which told Corazon which of the two was in a Cell.
+      const inACell = await addMember(corazonAccount, cellC.id, lito.id).expect(403);
+      const inNoCell = await addMember(corazonAccount, cellC.id, teresa.id).expect(403);
 
-      const teresaResponse = await addMember(corazonAccount, cellC.id, teresa.id).expect(403);
-      expect(codeOf(teresaResponse)).toBe('SCOPE_DENIED');
-      expect(teresaResponse.body.error.details).not.toEqual({ capability: 'cell.move_members' });
+      expect(refusalOf(inACell)).toEqual(OUTSIDE_SCOPE);
+      expect(refusalOf(inNoCell)).toEqual(OUTSIDE_SCOPE);
+      expect(JSON.stringify(inACell.body)).not.toContain(cellR.cellId);
+      expect(await cellOf(lito.id)).toBe(cellR.id);
       expect(await cellOf(teresa.id)).toBeNull();
     });
 
@@ -302,19 +315,17 @@ describe('Moving a Cell member (decision 0357)', () => {
       expect(await cellOf(crossing.id)).toBe(cellR.id);
     });
 
-    it('is refused somebody outside its scope: in another branch’s Cell by the move, in none by scope', async () => {
-      // Lito is Rosa's and in her Cell, outside Elena's branch: the move's own check over the
-      // source Cell refuses (decision 0357), naming no Cell. Pablo is in no Cell, so decision
-      // 0389's person check refuses him.
-      const response = await addMember(elenaAccount, cellE.id, lito.id).expect(403);
-      expect(codeOf(response)).toBe('SCOPE_DENIED');
-      expect(response.body.error.details).toEqual({ capability: 'cell.move_members' });
-      expect(JSON.stringify(response.body)).not.toContain(cellR.cellId);
-      expect(await cellOf(lito.id)).toBe(cellR.id);
-
+    it('is refused somebody outside its scope with one answer, in another branch’s Cell or in none (decision 0390)', async () => {
+      // Lito is Rosa's and in her Cell, outside Elena's branch; Pablo is Rosa's and in no
+      // Cell. Until decision 0390 the two were both SCOPE_DENIED and told apart by the
+      // message and `details.capability`.
+      const inACell = await addMember(elenaAccount, cellE.id, lito.id).expect(403);
       const inNoCell = await addMember(elenaAccount, cellE.id, pablo.id).expect(403);
-      expect(codeOf(inNoCell)).toBe('SCOPE_DENIED');
-      expect(inNoCell.body.error.details).not.toEqual({ capability: 'cell.move_members' });
+
+      expect(refusalOf(inACell)).toEqual(OUTSIDE_SCOPE);
+      expect(refusalOf(inNoCell)).toEqual(OUTSIDE_SCOPE);
+      expect(JSON.stringify(inACell.body)).not.toContain(cellR.cellId);
+      expect(await cellOf(lito.id)).toBe(cellR.id);
       expect(await cellOf(pablo.id)).toBeNull();
     });
 
