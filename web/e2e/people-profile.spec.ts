@@ -1172,6 +1172,70 @@ test.describe('typing a name', () => {
     await first.press('Tab');
     await expect(first).toHaveValue('Roy Sam');
   });
+
+  // Owner, 2026-10-27: a capital first letter and the rest small, however it was typed.
+  test('writes the rest of each word small, with the suffix, Mc, hyphen and apostrophe kept', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+
+    // A fresh form for each, because retyping the same letters in a box just written is
+    // a change by hand, which the next test pins.
+    const cases: [string, string][] = [
+      ['AAAA', 'Aaaa'],
+      ['aAaA', 'Aaaa'],
+      ['aaaaa', 'Aaaaa'],
+      ['MA. CRISTINA', 'Ma. Cristina'],
+      ['dE gUZMAN', 'De Guzman'],
+      ['santos-reyes iii', 'Santos-Reyes III'],
+      ["o'BRIEN jr", "O'Brien Jr"],
+      ['MCDONALD IV', 'McDonald IV'],
+    ];
+    const last = page.getByLabel('Last name');
+    for (const [typed, written] of cases) {
+      await page.goto('/people/new');
+      await last.fill(typed);
+      await last.press('Tab');
+      await expect(last).toHaveValue(written);
+    }
+  });
+
+  test('keeps a name changed by hand to capitals the rule would lower', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.goto('/people/new');
+
+    const last = page.getByLabel('Last name');
+    await last.fill('devera');
+    await last.press('Tab');
+    await expect(last).toHaveValue('Devera');
+    await last.fill('DeVera');
+    await last.press('Tab');
+    await expect(last).toHaveValue('DeVera');
+  });
+
+  // A saved name is written over only where it is typed in, so passing through its box on
+  // Edit details leaves a spelling the family uses alone.
+  test('leaves a saved name alone on Edit details unless it is typed in', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, last_name: 'DeVera' }),
+      }),
+    );
+    await page.goto(`${PROFILE}/edit`);
+
+    const last = page.getByLabel('Last name');
+    await expect(last).toHaveValue('DeVera');
+    await last.focus();
+    await last.press('Tab');
+    await expect(last).toHaveValue('DeVera');
+
+    await last.fill('DEVERA');
+    await last.press('Tab');
+    await expect(last).toHaveValue('Devera');
+  });
 });
 
 test.describe('adding a person with a Cell', () => {
