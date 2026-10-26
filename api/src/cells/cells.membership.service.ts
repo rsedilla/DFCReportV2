@@ -20,12 +20,23 @@ import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
-import { assertMayMoveMembersWithin } from './move-members';
+import { assertMayMoveMembersWithin, moveMembersAnswer } from './move-members';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
+
+/**
+ * The one refusal of adding somebody the actor does not oversee (decisions 0389 and 0390):
+ * the same code, words and empty details whether or not they are in a Cell, so it carries
+ * nothing about their membership (section 8).
+ */
+function outsideScopeRefusal(): ScopeDeniedError {
+  return new ScopeDeniedError(
+    'You can add only somebody you oversee to a Cell (SKILL.md section 10).',
+  );
+}
 
 /**
  * Cell membership (SKILL.md section 10, Cell Membership and Managing Cell
@@ -131,6 +142,16 @@ export class CellsMembershipService {
         );
       }
 
+      // **Whether the actor oversees the person**, decided before the person is read, so
+      // a refusal says nothing of whether they exist or are archived (section 8).
+      const oversees = await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.CellManageMembership,
+        { kind: 'person', personId },
+      );
+
       const current = await this.openMembershipWithin(trx, personId);
 
       // **Somebody in no Cell must be inside the actor's own scope** (decision 0389): a
@@ -138,21 +159,22 @@ export class CellsMembershipService {
       // people they oversee, and somebody from another branch is added by an actor whose
       // grant reaches them. A move is left to `cell.move_members` over both Cells (decision
       // 0357), so a ticked Primary still moves a member between two of their own Cells.
-      // Decided before the person is read, so the refusal says nothing of whether they
-      // exist or are archived (section 8).
+      //
+      // **Somebody in a Cell whom the actor neither oversees nor may move is refused the
+      // same way** (decision 0390), so the answer for anybody outside the actor's scope is
+      // one answer whether or not they are in a Cell (section 8). Decided here, before the
+      // person is read and before the destination is re-checked, so no later refusal can
+      // tell the two apart. Only a move the actor may make goes on, and its Cells are ones
+      // the actor already sees.
       if (
-        !current &&
-        !(await this.authorization.coversWith(
-          trx,
-          actor,
-          authority,
-          Capability.CellManageMembership,
-          { kind: 'person', personId },
-        ))
+        !oversees &&
+        (!current ||
+          (await moveMembersAnswer(trx, this.authorization, this.cells, actor, authority, [
+            current.cell_uuid,
+            cellId,
+          ])) !== 'ok')
       ) {
-        throw new ScopeDeniedError(
-          'You can add only somebody you oversee to a Cell (SKILL.md section 10).',
-        );
+        throw outsideScopeRefusal();
       }
 
       const person = await this.people.forDecisionWithin(trx, personId);
@@ -213,7 +235,9 @@ export class CellsMembershipService {
 
       // **Somebody already in another Cell is moved, not added** (decision 0357): that needs
       // `cell.move_members` over both Cells, which a Leader holds only with Moves people.
-      // `cell.manage_membership` over the source is not asked; this replaces it.
+      // `cell.manage_membership` over the source is not asked; this replaces it. Its own
+      // refusals reach only somebody the actor oversees (decision 0390), whose Cell
+      // `cell.view_subtree` already shows them.
       if (current) {
         await assertMayMoveMembersWithin(trx, this.authorization, this.cells, actor, authority, [
           current.cell_uuid,
