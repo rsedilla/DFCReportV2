@@ -176,16 +176,16 @@ export function GrowthListControls<Counts, Row extends PersonRow>({
   );
 }
 
-/** The first failure of the two reads and the save, with Reload after a stale save. */
+/**
+ * The first failure of the two reads. A refused save is said in the save bar instead
+ * ({@link GrowthSaveFailure}), beside Save, where the reader is looking.
+ */
 export function GrowthFailure<Counts, Row extends PersonRow>({
   list,
-  growthSave,
 }: {
   list: GrowthList<Counts, Row>;
-  growthSave: { save: { isError: boolean; error: unknown }; stale: boolean; reload: () => Promise<void> };
 }) {
   const { people, counts } = list;
-  const { save, stale, reload } = growthSave;
 
   return (
     <div className="mt-8">
@@ -195,11 +195,26 @@ export function GrowthFailure<Counts, Row extends PersonRow>({
             ? describeFailure(people.error)
             : counts.isError
               ? describeFailure(counts.error)
-              : save.isError
-                ? describeFailure(save.error)
-                : null
+              : null
         }
       />
+    </div>
+  );
+}
+
+/** A refused save, with Reload after a stale one, for the save bar to show. */
+export function GrowthSaveFailure({
+  growthSave,
+}: {
+  growthSave: { save: { isError: boolean; error: unknown }; stale: boolean; reload: () => Promise<void> };
+}) {
+  const { save, stale, reload } = growthSave;
+
+  // The live region is mounted with the bar, before anything goes wrong, so a screen
+  // reader announces the refusal when it arrives; empty, it takes no room.
+  return (
+    <div className={save.isError ? undefined : 'sr-only'}>
+      <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
       {stale ? (
         <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
           Reload

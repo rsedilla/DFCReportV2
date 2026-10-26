@@ -22,6 +22,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
+import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -76,6 +77,9 @@ export default function DccRosterPage() {
 
 type Mark = 'present' | 'absent';
 
+/** The marks a Sunday that takes no record shows over what is stored: none. */
+const NO_EDITS: Record<string, Mark> = {};
+
 function DccChecklist() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -94,13 +98,19 @@ function DccChecklist() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const [edits, setEdits] = useState<Record<string, Mark>>({});
-  const [editing, setEditing] = useState(false);
+  const [editState, setEdits] = useState<Record<string, Mark>>({});
+  const [editingState, setEditing] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
 
   const lines = useMemo(() => roster.data?.data ?? [], [roster.data]);
   const event = roster.data?.event ?? null;
   const recordable = event?.recordable ?? false;
+
+  // **A Sunday that stops taking records while the page is open ends any edit in
+  // progress**, as on the Cell meeting screen: no save can succeed, so marks left over
+  // would show where nobody can keep or discard them. Derived, so nothing is set in render.
+  const edits = recordable ? editState : NO_EDITS;
+  const editing = editingState && recordable;
   const recordedCount = lines.filter((line) => line.record !== null).length;
 
   // Held at any scope. Whether it covers each person is the API's to decide.
@@ -238,6 +248,17 @@ function DccChecklist() {
     },
   });
 
+  // Save is pinned to the bottom, so a refused save is said beside it; at the top only
+  // where there is no bar to say it in.
+  const saveBar = recordable && lines.length > 0;
+  const barRef = usePinnedBarPadding<HTMLDivElement>();
+  const saveFailure = save.isError
+    ? describeLineFailure(save.error, 'records', (index) => {
+        const personId = records[index]?.person_id;
+        return lines.find((line) => line.person_id === personId)?.full_name ?? null;
+      })
+    : null;
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="record">
@@ -284,11 +305,8 @@ function DccChecklist() {
           failure={
             roster.isError
               ? describeFailure(roster.error)
-              : save.isError
-                ? describeLineFailure(save.error, 'records', (index) => {
-                    const personId = records[index]?.person_id;
-                    return lines.find((line) => line.person_id === personId)?.full_name ?? null;
-                  })
+              : save.isError && !saveBar
+                ? saveFailure
                 : null
           }
         />
@@ -442,8 +460,15 @@ function DccChecklist() {
           ) : null}
 
           {/* Pinned for the reason the Cell meeting screen gives. */}
-          {recordable && lines.length > 0 ? (
-            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
+          {saveBar ? (
+            <div
+              ref={barRef}
+              className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0"
+            >
+              {/* A refused save is said beside Save, where the reader is looking. */}
+              <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
+                <FailureNotice failure={saveFailure} />
+              </div>
               <p aria-live="polite" className="text-sm">
                 {!changed && unmarkedCount === 0
                   ? 'Everyone here is recorded.'

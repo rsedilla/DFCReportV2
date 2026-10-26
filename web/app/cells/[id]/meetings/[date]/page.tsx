@@ -25,6 +25,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
+import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -101,6 +102,9 @@ export default function RecordMeetingPage() {
 
 type Mark = 'present' | 'absent';
 
+/** The marks a closed week shows over what is stored: none. One object, so memos hold. */
+const NO_EDITS: Record<string, Mark> = {};
+
 type NotHeldReason =
   | 'LEADER_UNAVAILABLE'
   | 'WEATHER_OR_CALAMITY'
@@ -132,12 +136,12 @@ function RecordMeeting() {
     queryFn: ({ signal }) => getMeetingRoster(params.id, params.date, signal),
   });
 
-  const [edits, setEdits] = useState<Record<string, Mark>>({});
+  const [editState, setEdits] = useState<Record<string, Mark>>({});
   const [statusChoice, setStatusChoice] = useState<'HELD' | 'NOT_HELD' | null>(null);
   const [notHeldReason, setNotHeldReason] = useState<NotHeldReason | ''>('');
   const [note, setNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [editingState, setEditing] = useState(false);
   // Who ran it, on a first record: the leader unless somebody else is chosen.
   const [ranBy, setRanBy] = useState<'LEADER' | 'OTHER'>('LEADER');
   const [facilitator, setFacilitator] = useState<{ id: string; full_name: string } | null>(null);
@@ -171,8 +175,19 @@ function RecordMeeting() {
   // reader may not record it, so it is shown and nothing on it is changeable.
   const followOnly = roster.data?.may_record === false;
 
+  // A meeting whose week has closed (decision 0335): the save would be refused, so it is
+  // shown and nothing on it is offered, as the DCC checklist shows a closed Sunday.
+  const weekClosed = roster.data?.week_open === false;
+
+  // **A week that closes while the page is open ends any edit in progress.** The roster is
+  // read again when the reader returns to the tab, and once it says the week has closed no
+  // save can succeed, so an edit left open would show marks nobody can keep under words
+  // saying they are what is stored. Derived rather than reset, so nothing is set in render.
+  const editing = editingState && !weekClosed;
+  const edits = weekClosed ? NO_EDITS : editState;
+
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
-  const locked = (correcting && !editing) || followOnly;
+  const locked = (correcting && !editing) || followOnly || weekClosed;
 
   /**
    * What is stored, overlaid with what the leader has changed since.
@@ -196,7 +211,11 @@ function RecordMeeting() {
 
   // The leader's choice on a first record; the recorded status, or its correction, after.
   const status: CellMeetingStatus =
-    (statusEditable ? statusFix : null) ?? recorded?.status ?? statusChoice ?? 'HELD';
+    (statusEditable ? statusFix : null) ??
+    recorded?.status ??
+    // A choice made before the week closed is an edit in progress too, and ends with it.
+    (weekClosed ? null : statusChoice) ??
+    'HELD';
   const statusChanged = recorded !== null && status !== recorded.status;
   const reasonMissing = statusChanged && correctionReason.trim() === '';
   const askRanBy = recorded === null && status === 'HELD';
@@ -296,7 +315,7 @@ function RecordMeeting() {
 
   const draft = useMarkDraft<{ version: number | null; marks: Record<string, Mark> }>({
     key:
-      me.data && roster.data && !followOnly && !notYet
+      me.data && roster.data && !followOnly && !notYet && !weekClosed
         ? `cell:${params.id}:${params.date}:${me.data.person_id}`
         : null,
     draft: unsaved,
@@ -376,7 +395,17 @@ function RecordMeeting() {
     save.reset();
   }
 
+  const barRef = usePinnedBarPadding<HTMLDivElement>();
+
   const markedCount = members.length - unmarked.length;
+
+  // Said beside Save in the pinned bar; at the top only where there is no bar.
+  const saveFailure = save.isError
+    ? describeLineFailure(save.error, 'attendance', (index) => {
+        const member = members[index];
+        return member ? member.full_name : null;
+      })
+    : null;
 
   // What Save is still waiting for, said rather than left to a greyed button.
   let saveHint: string;
@@ -437,8 +466,16 @@ function RecordMeeting() {
         <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
           {followOnly
             ? recorded === null
-              ? 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
+              ? weekClosed
+                ? 'Not recorded. Its week has closed, so it can no longer be recorded.'
+                : 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
               : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
+            : weekClosed
+            ? recorded === null
+              ? 'This meeting was not recorded before its week closed, so it can no longer be recorded.'
+              : recordedNotHeld
+                ? 'This meeting is recorded: the Cell did not meet.'
+                : 'This meeting has been recorded. The marks below are what is stored.'
             : recordedNotHeld
             ? 'This meeting is recorded: the Cell did not meet.'
             : correcting
@@ -452,11 +489,8 @@ function RecordMeeting() {
           failure={
             roster.isError
               ? describeFailure(roster.error)
-              : save.isError
-                ? describeLineFailure(save.error, 'attendance', (index) => {
-                    const member = members[index];
-                    return member ? member.full_name : null;
-                  })
+              : save.isError && locked
+                ? saveFailure
                 : me.isError
                   ? describeFailure(me.error)
                   : null
@@ -538,7 +572,11 @@ function RecordMeeting() {
                       </p>
                     </>
                   )}
-                  {me.data && !followOnly ? (
+                  {weekClosed ? (
+                    <p className="text-muted mt-1 text-sm leading-relaxed">
+                      This week is closed, so this meeting can no longer be changed.
+                    </p>
+                  ) : me.data && !followOnly ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
                         Edit meeting
@@ -556,7 +594,7 @@ function RecordMeeting() {
           ) : null}
 
           {/* On a first record, and while correcting a Met or Did-not-meet record. */}
-          {(correcting && !statusEditable) || followOnly ? null : (
+          {(correcting && !statusEditable) || followOnly || weekClosed ? null : (
             <div className="mt-8">
               <RadioGroup
                 legend="Did the meeting take place?"
@@ -572,7 +610,7 @@ function RecordMeeting() {
             </div>
           )}
 
-          {askRanBy && !followOnly ? (
+          {askRanBy && !followOnly && !weekClosed ? (
             <div className="mt-6 flex flex-col gap-4">
               <RadioGroup
                 legend="Who ran the meeting?"
@@ -624,7 +662,9 @@ function RecordMeeting() {
                 </div>
               </div>
             ) : null
-          ) : (
+          ) : weekClosed && recorded === null ? null : (
+            // A meeting nobody recorded before its week closed has no marks to show and
+            // takes none, so its roster and the instruction to mark it are not shown.
             <section className="mt-8" aria-labelledby="roster-heading">
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 id="roster-heading" className="text-lg font-bold tracking-tight">
@@ -685,11 +725,24 @@ function RecordMeeting() {
             screen above the tab bar below `lg`, and to the bottom at `lg`, so a leader
             tapping down a long roster never scrolls back to find it. It says what is
             still needed, because a greyed button says only that something is wrong.
-            The page's scroll padding (`app/layout.tsx`) keeps a focused control clear
-            of it.
+            The page's scroll padding (`app/layout.tsx`, raised to the bar's height by
+            `usePinnedBarPadding` when the bar grows) keeps a focused control clear of it.
           */}
           {locked ? null : (
-            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
+            <div
+              ref={barRef}
+              className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0"
+            >
+              {/*
+                **A refused save is said here, beside Save**, not at the top of the page,
+                where on a phone it sat off-screen and Save looked as if it did nothing.
+                The live region is mounted with the bar, before anything goes wrong, so a
+                screen reader announces the refusal when it arrives; empty, it takes no
+                room.
+              */}
+              <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
+                <FailureNotice failure={saveFailure} />
+              </div>
               <p aria-live="polite" className="text-sm">
                 {saveHint}
               </p>

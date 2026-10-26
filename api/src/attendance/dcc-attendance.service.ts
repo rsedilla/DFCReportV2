@@ -1596,8 +1596,7 @@ function refusalFor(event: EventForRecording): ApiError {
       // an Admin may amend it (sections 13 and 20).
       return new ApiError(
         ApiErrorCode.PERIOD_CLOSED,
-        'This week is closed. Only an Admin may amend it, with a reason (SKILL.md sections 13 ' +
-          'and 20).',
+        'This week is closed. Only an Admin may amend it, with a reason.',
         { event_id: event.id, event_date: event.eventDate },
       );
   }
