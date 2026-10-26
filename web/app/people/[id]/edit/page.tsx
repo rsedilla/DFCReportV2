@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 
@@ -19,6 +19,7 @@ import { ApiRequestError } from '@/lib/api-client';
 import { classificationLabel, getPersonDccAttendance } from '@/lib/dcc';
 import { directLeaderOf, getPastoralPath, noLeaderLabel } from '@/lib/hierarchy';
 import { getMe, holdsWholeChurch } from '@/lib/me';
+import { formatMobile } from '@/lib/mobile';
 import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -136,6 +137,8 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
    * replayed. Replaced when the values change, because that is a different write.
    */
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
+
+  const mobileTyped = useRef(false);
 
   function edit<K extends keyof typeof values>(key: K, value: (typeof values)[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -314,7 +317,22 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             autoComplete="off"
             value={values.mobile_number}
             error={fieldErrors.mobile_number}
-            onChange={(event) => edit('mobile_number', event.target.value)}
+            onChange={(event) => {
+              mobileTyped.current = true;
+              edit('mobile_number', event.target.value);
+            }}
+            onBlur={(event) => {
+              // Only a number typed in is written with hyphens (lib/mobile.ts), so passing
+              // through the box leaves a saved number exactly as it was saved.
+              if (!mobileTyped.current) {
+                return;
+              }
+              mobileTyped.current = false;
+              const next = formatMobile(event.target.value);
+              if (next !== event.target.value) {
+                edit('mobile_number', next);
+              }
+            }}
           />
 
           <div className="flex flex-wrap gap-3">

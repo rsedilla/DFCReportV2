@@ -1172,8 +1172,139 @@ test.describe('typing a name', () => {
     await first.press('Tab');
     await expect(first).toHaveValue('Roy Sam');
   });
+
+  // Owner, 2026-10-27: a capital first letter and the rest small, however it was typed.
+  test('writes the rest of each word small, with the suffix, Mc, hyphen and apostrophe kept', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+
+    // A fresh form for each, because retyping the same letters in a box just written is
+    // a change by hand, which the next test pins.
+    const cases: [string, string][] = [
+      ['AAAA', 'Aaaa'],
+      ['aAaA', 'Aaaa'],
+      ['aaaaa', 'Aaaaa'],
+      ['MA. CRISTINA', 'Ma. Cristina'],
+      ['dE gUZMAN', 'De Guzman'],
+      ['santos-reyes iii', 'Santos-Reyes III'],
+      ["o'BRIEN jr", "O'Brien Jr"],
+      ['MCDONALD IV', 'McDonald IV'],
+    ];
+    const last = page.getByLabel('Last name');
+    for (const [typed, written] of cases) {
+      await page.goto('/people/new');
+      await last.fill(typed);
+      await last.press('Tab');
+      await expect(last).toHaveValue(written);
+    }
+  });
+
+  test('keeps a name changed by hand to capitals the rule would lower', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.goto('/people/new');
+
+    const last = page.getByLabel('Last name');
+    await last.fill('devera');
+    await last.press('Tab');
+    await expect(last).toHaveValue('Devera');
+    await last.fill('DeVera');
+    await last.press('Tab');
+    await expect(last).toHaveValue('DeVera');
+  });
+
+  // A saved name is written over only where it is typed in, so passing through its box on
+  // Edit details leaves a spelling the family uses alone.
+  test('leaves a saved name alone on Edit details unless it is typed in', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, last_name: 'DeVera' }),
+      }),
+    );
+    await page.goto(`${PROFILE}/edit`);
+
+    const last = page.getByLabel('Last name');
+    await expect(last).toHaveValue('DeVera');
+    await last.focus();
+    await last.press('Tab');
+    await expect(last).toHaveValue('DeVera');
+
+    await last.fill('DEVERA');
+    await last.press('Tab');
+    await expect(last).toHaveValue('Devera');
+  });
 });
 
+// Owner, 2026-10-27: a Philippine mobile number is written with hyphens as its box is left,
+// and a saved one is shown that way, on one line. Any other number stays as typed.
+test.describe('typing a mobile number', () => {
+  test('writes 09 and +63 numbers with hyphens and leaves any other as typed', async ({ page }) => {
+    await signedInWithPeople(page);
+
+    const cases: [string, string][] = [
+      ['09171234567', '0917-123-4567'],
+      ['0917 123 4567', '0917-123-4567'],
+      ['+639171234567', '+63-917-123-4567'],
+      ['639171234567', '+63-917-123-4567'],
+      ['+63 917 123 4567', '+63-917-123-4567'],
+      ['0917123456', '0917123456'],
+      ['(02) 8123 4567', '(02) 8123 4567'],
+      ['+1 415 555 0100', '+1 415 555 0100'],
+    ];
+    const mobile = page.getByLabel('Mobile number (required)');
+    for (const [typed, written] of cases) {
+      await page.goto('/people/new');
+      await mobile.fill(typed);
+      await mobile.press('Tab');
+      await expect(mobile).toHaveValue(written);
+    }
+  });
+
+  test('leaves a saved number alone on Edit details unless it is typed in', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, mobile_number: '09171234567' }),
+      }),
+    );
+    await page.goto(`${PROFILE}/edit`);
+
+    const mobile = page.getByLabel('Mobile number (optional)');
+    await expect(mobile).toHaveValue('09171234567');
+    await mobile.focus();
+    await mobile.press('Tab');
+    await expect(mobile).toHaveValue('09171234567');
+
+    await mobile.fill('09181234567');
+    await mobile.press('Tab');
+    await expect(mobile).toHaveValue('0918-123-4567');
+  });
+
+  test('shows a saved number with hyphens, on one line, on the person page', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, mobile_number: '+639171234567' }),
+      }),
+    );
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(PROFILE);
+
+    const number = page.getByText('+63-917-123-4567', { exact: true });
+    await expect(number).toBeVisible();
+    await expect(number).toHaveCSS('white-space', 'nowrap');
+    const box = await number.boundingBox();
+    // One line: no taller than the line beside it.
+    expect(box!.height).toBeLessThan(30);
+  });
+});
 test.describe('adding a person with a Cell', () => {
   async function fillTheForm(page: Page) {
     await page.goto('/people/new');
