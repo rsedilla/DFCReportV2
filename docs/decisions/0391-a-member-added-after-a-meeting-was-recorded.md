@@ -13,13 +13,13 @@ leader saved, is on that meeting's roster with no mark, and the leader may still
 **2. The roster read says who they are.** Each member on `GET
 /api/v1/cells/{id}/meetings/{meetingId}/roster` carries `joined_after_recorded`: true where the
 membership's `started_at` is later than the meeting's first `submitted_at`, false otherwise and
-on a meeting not yet recorded. Both are stamped by the database's clock. It is an additive field
+on a meeting not yet recorded. It is an additive field
 and a reading aid only: no roster, mark, figure or submission rule moves.
 
 **3. The screen asks rather than calling them not marked.** While such a member has no mark, the
 recorded meeting counts them as "added after it was recorded" rather than "not marked", says
 "*Name* joined the Cell after this was recorded. Was *first name* at this meeting?", adds "Press
-Edit meeting to add a mark." only where an edit would be accepted, and says "Joined the Cell after
+Edit meeting to add a mark." wherever the Edit meeting button is offered, and says "Joined the Cell after
 this was recorded" under their name.
 
 ## Why

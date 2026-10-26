@@ -3377,7 +3377,7 @@ somebody added that evening, after the leader saved, is on it with no mark. Each
 carries `joined_after_recorded`: true where the membership's `started_at` is later than the
 meeting's first `submitted_at`. It is a reading aid and moves no roster, mark or figure. While such a
 member has no mark, the screen counts them as "added after it was recorded", asks whether they came,
-and offers Edit meeting only where an edit would be accepted. A membership backdated before the
+and tells the reader to press Edit meeting wherever that button is offered. A membership backdated before the
 record, or added in the instant of the first save, is not flagged and reads as before.
 
 **The mark carries no per-person version**, which is where a copy of the DCC line would

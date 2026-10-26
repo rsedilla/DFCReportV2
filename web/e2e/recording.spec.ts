@@ -1346,7 +1346,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.getByText('Nothing to record. You’re up to date.')).toBeVisible();
-    // Each tab says what it is for (decision 0391).
+    // Each tab says what it is for (owner, 2026-10-26).
     await expect(
       page.getByText(
         'Your own meetings and Sundays still to record. Each week is due by 12 noon on the second Monday after it.',
