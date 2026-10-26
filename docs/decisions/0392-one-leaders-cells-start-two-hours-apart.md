@@ -22,9 +22,15 @@ cannot both pass.
 
 **4. No exception.** Not for Admin, and not because somebody else runs one of the meetings.
 
-**5. The refusal names the clash**: `INVARIANT_VIOLATION`, with `details.clashes` listing each
-Cell or request it clashes with by Cell ID where it has one, category, day and time. The screen
-says which Cell and when, and that a leader's Cells on one day must start at least two hours apart.
+**5. The refusal names what the asker may see** (owner, 2026-10-26, chosen from screenshots
+after review): `INVARIANT_VIOLATION`, with `details.clashes` listing each Cell or request it clashes
+with by Cell ID where it has one, category, day and time, where the asker may see it: a Cell where
+their `cell.view_subtree` covers its leader, a pending new-Cell request where they sent it or may
+approve it. Anything else is said only to exist, with `details.others` true: "This leader already
+has a Cell Group, or a request for one, starting less than 2 hours from this time." Section 8
+withholds a Cell outside the reader's scope, and decision 0390 refuses the same way for the same
+reason. Naming every clash was the first version, and the review found it named a Cell being handed
+over from a branch the asker cannot see.
 
 **6. Existing clashes keep working.** Nothing already clashing is stopped or changed. Admin sees
 them on the Cells page under **Same Leader, Same Time**, read from `GET

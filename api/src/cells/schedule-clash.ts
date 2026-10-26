@@ -1,5 +1,11 @@
 import { sql } from 'kysely';
 
+import {
+  type Actor,
+  type ActorAuthority,
+  type AuthorizationService,
+} from '../auth/authorization/authorization.service';
+import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError } from '../common/errors/api-error';
 import { sameId } from '../common/identifiers';
 
@@ -83,6 +89,47 @@ export async function slotsOfCellWithin(
   return rows.map((row) => ({ dayOfWeek: row.day_of_week, timeOfDay: row.time_of_day }));
 }
 
+/** Who decides whether a clash may be named to the asker (decision 0392, section 8). */
+interface Visibility {
+  /** The leader of the Cell it names, for a running Cell or a handover; null for a new Cell. */
+  cellLeaderId: string | null;
+  /** The account that sent it, for a pending request. */
+  requestedBy: string | null;
+}
+
+/**
+ * Whether the asker may be told what a clash is (decision 0392). A Cell is named where the
+ * asker's `cell.view_subtree` covers its leader; a pending new-Cell request where the asker
+ * sent it or may approve it. Anything else is said to exist and never named, because section 8
+ * withholds a Cell outside the reader's scope, and a request's existence is the sender's and
+ * its approvers' to know.
+ */
+export type ClashViewer = (clash: Visibility & { leaderId: string }) => Promise<boolean>;
+
+/** The ordinary viewer, the asker's own grants deciding. */
+export function clashViewerFor(
+  authorization: AuthorizationService,
+  executor: Db | Transaction<Database>,
+  actor: Actor,
+  authority: ActorAuthority,
+): ClashViewer {
+  return async ({ cellLeaderId, requestedBy, leaderId }) => {
+    if (cellLeaderId !== null) {
+      return authorization.coversWith(executor, actor, authority, Capability.CellViewSubtree, {
+        kind: 'person',
+        personId: cellLeaderId,
+      });
+    }
+    if (requestedBy !== null && sameId(requestedBy, actor.accountId)) {
+      return true;
+    }
+    return authorization.coversWith(executor, actor, authority, Capability.CellApproveLeadership, {
+      kind: 'person',
+      personId: leaderId,
+    });
+  };
+}
+
 /**
  * What the leader is already committed to: their `ACTIVE` Cells by every schedule row not
  * over, and their `PENDING` requests, a new Cell or restart by the day and time it asks for
@@ -95,7 +142,7 @@ async function commitmentsOfWithin(
   trx: Transaction<Database>,
   leaderId: string,
   except: { cellId?: string | null; requestId?: string | null },
-): Promise<Array<Clash & Slot>> {
+): Promise<Array<Clash & Slot & Visibility>> {
   const cellRows = await trx
     .selectFrom('cell_leaderships as l')
     .innerJoin('cells as c', 'c.id', 'l.cell_id')
@@ -134,9 +181,15 @@ async function commitmentsOfWithin(
     .leftJoin('cell_categories as k', (join) =>
       join.onRef('k.cell_id', '=', 'r.cell_id').on('k.ended_at', 'is', null),
     )
+    // A handover's Cell, by whom it is led now, which is what decides who may see it.
+    .leftJoin('cell_leaderships as cl', (join) =>
+      join.onRef('cl.cell_id', '=', 'r.cell_id').on('cl.ended_at', 'is', null),
+    )
     .select([
       'r.id',
       'r.kind',
+      'r.requested_by',
+      'cl.person_id as cell_leader_id',
       'r.cell_id as uuid',
       'c.cell_id',
       'r.category as requested_category',
@@ -150,7 +203,7 @@ async function commitmentsOfWithin(
     .where('r.state', '=', 'PENDING')
     .execute();
 
-  const commitments: Array<Clash & Slot> = [];
+  const commitments: Array<Clash & Slot & Visibility> = [];
 
   for (const row of cellRows) {
     if (except.cellId && sameId(row.uuid, except.cellId)) {
@@ -165,6 +218,8 @@ async function commitmentsOfWithin(
       time_of_day: time,
       dayOfWeek: row.day_of_week,
       timeOfDay: row.time_of_day,
+      cellLeaderId: leaderId,
+      requestedBy: null,
     });
   }
 
@@ -185,6 +240,8 @@ async function commitmentsOfWithin(
         time_of_day: time,
         dayOfWeek: row.requested_day,
         timeOfDay: row.requested_time,
+        cellLeaderId: null,
+        requestedBy: row.requested_by,
       });
     } else {
       if (
@@ -203,6 +260,8 @@ async function commitmentsOfWithin(
         time_of_day: time,
         dayOfWeek: row.cell_day,
         timeOfDay: row.cell_time,
+        cellLeaderId: row.cell_leader_id,
+        requestedBy: row.requested_by,
       });
     }
   }
@@ -245,6 +304,8 @@ export async function assertNoScheduleClashWithin(
     slots: readonly Slot[];
     exceptCellId?: string | null;
     exceptRequestId?: string | null;
+    /** Who is asking, so that only what they may see is named (decision 0392). */
+    viewer: ClashViewer;
   },
 ): Promise<void> {
   const commitments = await commitmentsOfWithin(trx, params.leaderId, {
@@ -260,18 +321,27 @@ export async function assertNoScheduleClashWithin(
     return;
   }
 
-  const named: Clash[] = clashes.map(({ source, cell_id, category, day_of_week, time_of_day }) => ({
-    source,
-    cell_id,
-    category,
-    day_of_week,
-    time_of_day,
-  }));
+  const named: Clash[] = [];
+  let unnamed = false;
+  for (const clash of clashes) {
+    if (await params.viewer({ ...clash, leaderId: params.leaderId })) {
+      const { source, cell_id, category, day_of_week, time_of_day } = clash;
+      named.push({ source, cell_id, category, day_of_week, time_of_day });
+    } else {
+      unnamed = true;
+    }
+  }
+
+  // What the asker may not see is said to exist, once, and never which or how many.
+  const what =
+    named.length === 0
+      ? 'a Cell Group, or a request for one, starting less than 2 hours from this time'
+      : named.map(describe).join(' and ') +
+        (unnamed ? ', and another Cell Group or request starting less than 2 hours from this' : '');
 
   throw new InvariantViolationError(
-    `This leader already has ${named.map(describe).join(' and ')}. A leader's Cell Groups ` +
-      'must start at least 2 hours apart.',
-    { leader_id: params.leaderId, clashes: named },
+    `This leader already has ${what}. A leader's Cell Groups must start at least 2 hours apart.`,
+    { leader_id: params.leaderId, clashes: named, others: unnamed },
   );
 }
 

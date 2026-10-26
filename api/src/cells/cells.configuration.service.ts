@@ -20,7 +20,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 
 import { CellsReadService } from './cells.read.service';
-import { assertNoScheduleClashWithin } from './schedule-clash';
+import { assertNoScheduleClashWithin, clashViewerFor } from './schedule-clash';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
@@ -252,6 +252,7 @@ export class CellsConfigurationService {
         leaderId: leader,
         slots: [{ dayOfWeek, timeOfDay }],
         exceptCellId: cellId,
+        viewer: clashViewerFor(this.authorization, trx, actor, authority),
       });
 
       const at = await this.nowWithin(trx);

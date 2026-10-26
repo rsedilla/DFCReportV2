@@ -253,6 +253,50 @@ describe('one leader’s Cells start two hours apart (decision 0392)', () => {
       ]);
     });
 
+    it('names only what the asker may see, and says the rest exists (decision 0392, section 8)', async () => {
+      // Carlo leads a Thursday 20:00 Cell in Ben's branch, outside Mark's, and Admin asks
+      // for it to be handed to Juan, beneath Mark.
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const carlo = await createPerson(db, { firstName: 'Carlo', network: 'MENS' });
+      await assignTo(db, carlo.id, ben.id);
+      const carloCell = await createCell(db, { leader: carlo, dayOfWeek: 4, timeOfDay: '20:00' });
+      await post(admin, '/api/v1/cells/leadership-requests', {
+        kind: 'HANDOVER',
+        prospective_leader_id: juan.id,
+        cell_id: carloCell.id,
+      }).expect(201);
+
+      // Mark asks for a new Cell for Juan an hour before it: told only that something clashes.
+      const asMark = await post(
+        markAccount,
+        '/api/v1/cells/leadership-requests',
+        await newCell(juan.id, 4, '19:00'),
+      );
+      expect(asMark.status).toBe(409);
+      expect(asMark.body.error.details).toEqual({ leader_id: juan.id, clashes: [], others: true });
+      expect(asMark.body.error.message).not.toContain(carloCell.cellId);
+      expect(asMark.body.error.message).toContain('a Cell Group, or a request for one');
+
+      // Admin, who sees the whole church, is told which.
+      const asAdmin = await post(
+        admin,
+        '/api/v1/cells/leadership-requests',
+        await newCell(juan.id, 4, '19:00'),
+      );
+      expect(asAdmin.status).toBe(409);
+      expect(asAdmin.body.error.details.clashes).toEqual([
+        {
+          source: 'REQUEST',
+          cell_id: carloCell.cellId,
+          category: 'YOUTH',
+          day_of_week: 4,
+          time_of_day: '20:00',
+        },
+      ]);
+      expect(asAdmin.body.error.details.others).toBe(false);
+    });
+
     it('lists clashes that already exist for Admin, and to nobody else', async () => {
       // Entered before the rule: Juan leads Wednesday 19:00 and 19:30.
       const second = await createCell(db, {

@@ -28,7 +28,7 @@ import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
 import { insertCellWithin } from './insert-cell';
-import { assertNoScheduleClashWithin, slotsOfCellWithin } from './schedule-clash';
+import { assertNoScheduleClashWithin, clashViewerFor, slotsOfCellWithin } from './schedule-clash';
 import { moveMembersAnswer } from './move-members';
 import {
   decodeLeadershipRequestCursor,
@@ -274,6 +274,7 @@ export class CellsLeadershipRequestService {
             ? [{ dayOfWeek: input.dayOfWeek as number, timeOfDay: input.timeOfDay as string }]
             : await slotsOfCellWithin(trx, input.cellId as string),
         exceptCellId: input.kind === 'HANDOVER' ? input.cellId : null,
+        viewer: clashViewerFor(this.authorization, trx, actor, authority),
       });
 
       // The Cell a handover or a restart names, as it stands now, kept on the request so
@@ -780,6 +781,7 @@ export class CellsLeadershipRequestService {
             : await slotsOfCellWithin(trx, request.cell_id as string),
         exceptCellId: request.cell_id,
         exceptRequestId: request.id,
+        viewer: clashViewerFor(this.authorization, trx, actor, actorAuthority),
       });
 
       // ------------------------------------------------------------------

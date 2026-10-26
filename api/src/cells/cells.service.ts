@@ -123,6 +123,8 @@ export class CellsService {
       await assertNoScheduleClashWithin(trx, {
         leaderId: input.cellLeaderId,
         slots: [{ dayOfWeek: input.dayOfWeek, timeOfDay: input.timeOfDay }],
+        // Only Admin creates directly, checked above, and Admin sees the whole church.
+        viewer: () => Promise.resolve(true),
       });
 
       const created = await insertCellWithin(trx, input, actor.accountId);
