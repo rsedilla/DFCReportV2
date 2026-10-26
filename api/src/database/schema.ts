@@ -237,6 +237,9 @@ export type AuditAction =
   | 'account.created'
   | 'account.activated'
   | 'account.activation_resent'
+  // A reset link sent to an account in use by an administrator (decision 0393), to the
+  // account's own address. Targets the account; the reset itself is `password.reset`.
+  | 'account.password_reset_sent'
   | 'account.email_corrected'
   // Disabled and re-enabled by an administrator (decision 0307); section 21's
   // "disablement" and "Account reactivation". Each targets the account.

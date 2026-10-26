@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-26, the trigger being decision 0390: of 388 files, 387 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0390, each moved the first two and
-neither of the others, none of them carrying a `Next:`; 0379 is held by work not yet merged. The recount before this one was dated
+2026-10-27, the trigger being decision 0393: of 389 files, 388 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0378, 0380 to 0390, and 0393 each moved the first two and
+neither of the others, none of them carrying a `Next:`; 0379, 0391 and 0392 are held by work not yet merged. The recount before this one was dated
+2026-10-26 and triggered by 0390, and was left stale by 0393 the next day. The one before that was dated
 2026-10-25 and triggered by 0389, and was left stale by 0390 the next day. The one before that was dated
 2026-10-25 and triggered by 0388, and was left stale by 0389 the same day. The one before that was dated
 2026-10-25 and triggered by 0387, and was left stale by 0388 the same day. The one before that was dated
@@ -821,6 +822,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-25 — [A Primary's own line takes its Network's colour](docs/decisions/0388-a-primarys-own-line-takes-its-networks-colour.md)
 - 2026-10-25 — [Every search finds the searcher's own people](docs/decisions/0389-every-search-finds-the-searchers-own-people.md)
 - 2026-10-26 — [One refusal for anybody outside your scope](docs/decisions/0390-one-refusal-for-anybody-outside-your-scope.md)
+- 2026-10-27 — [An administrator sends a password reset to an account in use](docs/decisions/0393-an-administrator-sends-a-password-reset.md)
 
 ### Open — awaiting a ruling
 
