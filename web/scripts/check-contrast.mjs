@@ -75,6 +75,9 @@ const TEXT_PAIRS = [
   ['surface', 'ink'],
   // A current tab, and the account icon's current state on a phone: `accent` on its tint.
   ['accent', 'accent-tint'],
+  // The Cell picker's box of their leader's Cells, and its "listed above" line: `ink` text on
+  // the tint, with `accent` filled buttons and an `accent` link in it (owner, 2026-10-26).
+  ['ink', 'accent-tint'],
   // The sidebar, and a phone's top bar and tab bar (owner, 2026-10-19): mint items on
   // emerald, the current item white on a darker emerald, and the application's name and
   // the section name in white on emerald.
