@@ -705,7 +705,7 @@ export interface RosterMember {
    */
   record: { present: boolean } | null;
   /**
-   * Added to the Cell after the meeting was first recorded (owner, 2026-10-26), so the
+   * Added to the Cell after the meeting was first recorded (decision 0391), so the
    * screen asks whether they came rather than calling them "not marked". Optional only
    * so test fixtures written before it need not carry it.
    */

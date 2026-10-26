@@ -780,8 +780,8 @@ function joinedAfter(member: RosterMember): boolean {
 }
 
 /**
- * Asks whether people added to the Cell after the meeting was recorded came to it (owner,
- * 2026-10-26). The roster is everyone in the Cell on the meeting's date (section 12), so a
+ * Asks whether people added to the Cell after the meeting was recorded came to it (decision
+ * 0391). The roster is everyone in the Cell on the meeting's date (section 12), so a
  * person added that evening is on it with no mark; in G12 they usually came that night,
  * which is why they were added. "Not marked" read as the leader having skipped them.
  */

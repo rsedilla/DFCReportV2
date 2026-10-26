@@ -427,7 +427,7 @@ test.describe('a recorded Cell meeting', () => {
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
   });
 
-  // Owner, 2026-10-26: somebody added to the Cell after the meeting was recorded was
+  // Decision 0391: somebody added to the Cell after the meeting was recorded was
   // called "not marked", which read as the leader having skipped them.
   test('asks whether a member added after it was recorded came, rather than calling them not marked', async ({
     page,
@@ -1346,7 +1346,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.getByText('Nothing to record. You’re up to date.')).toBeVisible();
-    // Each tab says what it is for (owner, 2026-10-26).
+    // Each tab says what it is for (decision 0391).
     await expect(
       page.getByText(
         'Your own meetings and Sundays still to record. Each week is due by 12 noon on the second Monday after it.',

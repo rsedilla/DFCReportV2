@@ -368,7 +368,7 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
     });
   });
 
-  // Owner, 2026-10-26: somebody added to the Cell that evening, after the leader saved, is
+  // Decision 0391: somebody added to the Cell that evening, after the leader saved, is
   // on the meeting's roster with no mark, and the screen called them "not marked".
   describe('who joined after the meeting was recorded', () => {
     it('names a member added after the first save, and nobody added before it', async () => {
