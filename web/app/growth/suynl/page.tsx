@@ -10,6 +10,7 @@ import {
   GrowthListControls,
   GrowthPersonName,
   GrowthRows,
+  GrowthSaveFailure,
   useGrowthList,
   useGrowthSave,
 } from '@/components/growth-list';
@@ -182,7 +183,7 @@ function SuynlTab() {
         {/* No line counting those who have finished, and no Show everyone (decision 0386). */}
         <GrowthListControls list={list} cards={cards} />
 
-        <GrowthFailure list={list} growthSave={growthSave} />
+        <GrowthFailure list={list} />
 
         <GrowthRows list={list}>
           <Table caption="SUYNL lessons for the people you oversee" className="hidden lg:block">
@@ -277,6 +278,7 @@ function SuynlTab() {
         </GrowthRows>
 
         <GrowthSaveBar
+          failure={<GrowthSaveFailure growthSave={growthSave} />}
           summary={
             entries.length > 0
               ? `${entries.length === 1 ? '1 lesson' : `${entries.length} lessons`} ticked or unticked, not saved yet.`

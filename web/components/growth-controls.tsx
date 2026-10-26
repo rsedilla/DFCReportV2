@@ -243,6 +243,7 @@ export function GrowthSaveBar({
   onSave,
   onDiscard,
   saving,
+  failure,
 }: {
   /** Null where there is nothing to say, which hides the bar. */
   summary: ReactNode | null;
@@ -253,6 +254,8 @@ export function GrowthSaveBar({
   onSave: () => void;
   onDiscard: () => void;
   saving: boolean;
+  /** A refused save, said here beside Save rather than at the top of the page. */
+  failure?: ReactNode;
 }) {
   const missingReason = needsReason && reason.trim() === '';
 
@@ -264,6 +267,7 @@ export function GrowthSaveBar({
 
   return (
     <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-3 border-t px-5 py-3 lg:bottom-0">
+      {failure}
       <p aria-live="polite" className="text-sm">
         {summary}
       </p>

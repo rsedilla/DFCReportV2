@@ -10,6 +10,7 @@ import {
   GrowthListControls,
   GrowthPersonName,
   GrowthRows,
+  GrowthSaveFailure,
   useGrowthList,
   useGrowthSave,
 } from '@/components/growth-list';
@@ -202,7 +203,7 @@ function TrainingTab() {
           stillToFinish={{ finished: counts.data?.all_five, what: 'all five' }}
         />
 
-        <GrowthFailure list={list} growthSave={growthSave} />
+        <GrowthFailure list={list} />
 
         <GrowthRows list={list}>
           <Table
@@ -263,6 +264,7 @@ function TrainingTab() {
         </GrowthRows>
 
         <GrowthSaveBar
+          failure={<GrowthSaveFailure growthSave={growthSave} />}
           summary={
             entries.length > 0
               ? `${entries.length === 1 ? '1 graduation' : `${entries.length} graduations`} changed, not saved yet.`

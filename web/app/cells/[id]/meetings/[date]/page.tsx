@@ -171,8 +171,12 @@ function RecordMeeting() {
   // reader may not record it, so it is shown and nothing on it is changeable.
   const followOnly = roster.data?.may_record === false;
 
+  // A meeting whose week has closed (decision 0335): the save would be refused, so it is
+  // shown and nothing on it is offered, as the DCC checklist shows a closed Sunday.
+  const weekClosed = roster.data?.week_open === false;
+
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
-  const locked = (correcting && !editing) || followOnly;
+  const locked = (correcting && !editing) || followOnly || weekClosed;
 
   /**
    * What is stored, overlaid with what the leader has changed since.
@@ -296,7 +300,7 @@ function RecordMeeting() {
 
   const draft = useMarkDraft<{ version: number | null; marks: Record<string, Mark> }>({
     key:
-      me.data && roster.data && !followOnly && !notYet
+      me.data && roster.data && !followOnly && !notYet && !weekClosed
         ? `cell:${params.id}:${params.date}:${me.data.person_id}`
         : null,
     draft: unsaved,
@@ -378,6 +382,14 @@ function RecordMeeting() {
 
   const markedCount = members.length - unmarked.length;
 
+  // Said beside Save in the pinned bar; at the top only where there is no bar.
+  const saveFailure = save.isError
+    ? describeLineFailure(save.error, 'attendance', (index) => {
+        const member = members[index];
+        return member ? member.full_name : null;
+      })
+    : null;
+
   // What Save is still waiting for, said rather than left to a greyed button.
   let saveHint: string;
   if (reasonMissing) {
@@ -439,6 +451,12 @@ function RecordMeeting() {
             ? recorded === null
               ? 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
               : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
+            : weekClosed
+            ? recorded === null
+              ? 'This meeting was not recorded before its week closed, so it can no longer be recorded.'
+              : recordedNotHeld
+                ? 'This meeting is recorded: the Cell did not meet.'
+                : 'This meeting has been recorded. The marks below are what is stored.'
             : recordedNotHeld
             ? 'This meeting is recorded: the Cell did not meet.'
             : correcting
@@ -452,11 +470,8 @@ function RecordMeeting() {
           failure={
             roster.isError
               ? describeFailure(roster.error)
-              : save.isError
-                ? describeLineFailure(save.error, 'attendance', (index) => {
-                    const member = members[index];
-                    return member ? member.full_name : null;
-                  })
+              : save.isError && locked
+                ? saveFailure
                 : me.isError
                   ? describeFailure(me.error)
                   : null
@@ -538,7 +553,11 @@ function RecordMeeting() {
                       </p>
                     </>
                   )}
-                  {me.data && !followOnly ? (
+                  {weekClosed ? (
+                    <p className="text-muted mt-1 text-sm leading-relaxed">
+                      This week is closed, so this meeting can no longer be changed.
+                    </p>
+                  ) : me.data && !followOnly ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
                         Edit meeting
@@ -556,7 +575,7 @@ function RecordMeeting() {
           ) : null}
 
           {/* On a first record, and while correcting a Met or Did-not-meet record. */}
-          {(correcting && !statusEditable) || followOnly ? null : (
+          {(correcting && !statusEditable) || followOnly || weekClosed ? null : (
             <div className="mt-8">
               <RadioGroup
                 legend="Did the meeting take place?"
@@ -572,7 +591,7 @@ function RecordMeeting() {
             </div>
           )}
 
-          {askRanBy && !followOnly ? (
+          {askRanBy && !followOnly && !weekClosed ? (
             <div className="mt-6 flex flex-col gap-4">
               <RadioGroup
                 legend="Who ran the meeting?"
@@ -689,7 +708,16 @@ function RecordMeeting() {
             of it.
           */}
           {locked ? null : (
-            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
+            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0">
+              {/*
+                **A refused save is said here, beside Save**, not at the top of the page,
+                where on a phone it sat off-screen and Save looked as if it did nothing.
+              */}
+              {save.isError ? (
+                <div className="sm:basis-full">
+                  <FailureNotice failure={saveFailure} />
+                </div>
+              ) : null}
               <p aria-live="polite" className="text-sm">
                 {saveHint}
               </p>

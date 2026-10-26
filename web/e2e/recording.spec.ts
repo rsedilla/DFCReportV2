@@ -86,6 +86,105 @@ test.describe('a recorded Cell meeting', () => {
     expect(sent[0]).not.toHaveProperty('submitted_version');
   });
 
+  // A closed week refuses every save (decision 0335), so the screen offers none, as the DCC
+  // checklist does for a closed Sunday.
+  test('offers no edit once its week has closed, and says why', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText('This week is closed, so this meeting can no longer be changed.'),
+    ).toBeVisible();
+    await expect(page.getByText('The marks below are what is stored.')).toBeVisible();
+    await expect(page.getByText(/A correction replaces the whole roster/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeDisabled();
+  });
+
+  test('says a meeting not recorded before its week closed cannot be recorded now', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    // Registered last, so it is the one matched: an unrecorded meeting whose week closed.
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: true,
+          week_open: false,
+          meeting: null,
+          members: [
+            {
+              person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+              member_id: 'M-000701',
+              first_name: 'Rosalinda',
+              last_name: 'Ocampo',
+              full_name: 'Rosalinda Ocampo',
+              record: null,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText(
+        'This meeting was not recorded before its week closed, so it can no longer be recorded.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Met' })).toHaveCount(0);
+  });
+
+  // A refused save is said beside Save, in the pinned bar, not at the top of the page where
+  // on a phone it sat off-screen and Save looked as if it did nothing.
+  test('says a refused correction beside Save, in view on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'PERIOD_CLOSED',
+            message: 'This week is closed. Only an Admin may amend it, with a reason.',
+            details: {},
+          },
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Absent' }).first().check();
+    const save = page.getByRole('button', { name: 'Save correction' });
+    await save.click();
+
+    const refusal = page.getByText('This week is closed. Only an Admin may amend it, with a reason.');
+    await expect(refusal).toHaveCount(1);
+    await expect(refusal).toBeInViewport();
+    await expect(save).toBeInViewport();
+  });
+
   // Decision 0273: whether it met may be corrected, with a reason, and the reason is
   // what Save waits for.
   test('corrects Met to Did not meet, asking why before it saves', async ({ page }) => {
@@ -383,6 +482,39 @@ test.describe('a Sunday with a mark already recorded', () => {
         { person_id: UNRECORDED.id, present: true, version: null },
       ],
     });
+  });
+
+  // As on the Cell meeting screen: a refused save is said in the pinned bar, beside Save.
+  test('says a refused save beside Save, in view on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'PERIOD_CLOSED',
+            message: 'This week is closed. Only an Admin may amend it, with a reason.',
+            details: {},
+          },
+        }),
+      }),
+    );
+
+    await page.goto(SUNDAY);
+    await page
+      .getByRole('group', { name: UNRECORDED.name })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    const save = page.getByRole('button', { name: 'Save marks', exact: true });
+    await save.click();
+
+    const refusal = page.getByText('This week is closed. Only an Admin may amend it, with a reason.');
+    await expect(refusal).toHaveCount(1);
+    await expect(refusal).toBeInViewport();
+    await expect(save).toBeInViewport();
   });
 
   // Decision 0338: the Sunday says what is left in Not recorded's words, and once saved its

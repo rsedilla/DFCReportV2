@@ -339,11 +339,18 @@ test.describe('the SUYNL tab', () => {
     await page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }).check();
     await page.getByRole('button', { name: 'Save 1 change' }).click();
 
-    await expect(page.locator('main').getByRole('alert')).toContainText(
+    // Said in the save bar, beside Save, so it is in view wherever the list was scrolled.
+    const refusal = page
+      .locator('main')
+      .getByRole('alert')
+      .filter({ hasText: 'lesson 3 was changed' });
+    await expect(refusal).toContainText(
       'Dalisay Soriano · lesson 3 was changed by Rosario Magbanua after this page loaded. Reload to see it, then decide again.',
     );
+    await expect(refusal).toBeInViewport();
     const reload = page.getByRole('button', { name: 'Reload' });
     await expect(reload).toBeVisible();
+    await expect(reload).toBeInViewport();
     expect(traffic.submitted).toHaveLength(1);
 
     const before = traffic.lists.length;

@@ -528,6 +528,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
         roster_date: '2026-06-27',
         responsible_leader_id: LEADER_ID,
         may_record: true,
+        week_open: true,
         meeting: null,
         members: [
           {
@@ -890,6 +891,7 @@ export async function mockDccOwed(page: Page): Promise<void> {
 export async function mockRecordedMeetingRoster(
   page: Page,
   status: 'HELD' | 'NOT_HELD',
+  { weekOpen = true }: { weekOpen?: boolean } = {},
 ): Promise<void> {
   const held = status === 'HELD';
 
@@ -904,6 +906,8 @@ export async function mockRecordedMeetingRoster(
         reporting_month: '2026-06-01',
         roster_date: '2026-06-27',
         responsible_leader_id: LEADER_ID,
+        may_record: true,
+        week_open: weekOpen,
         meeting: {
           id: '3f1b7c6e-0000-4000-8000-000000000301',
           status,

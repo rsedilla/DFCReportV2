@@ -718,6 +718,8 @@ export interface MeetingRoster {
   responsible_leader_id: string;
   /** Whether this reader may record or correct it; false where they only follow it up (decision 0322). */
   may_record: boolean;
+  /** Whether the meeting's week is still open; once it closes nothing on it is saved. */
+  week_open: boolean;
   meeting: RecordedMeeting | null;
   members: RosterMember[];
 }

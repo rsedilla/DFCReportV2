@@ -238,6 +238,16 @@ function DccChecklist() {
     },
   });
 
+  // Save is pinned to the bottom, so a refused save is said beside it; at the top only
+  // where there is no bar to say it in.
+  const saveBar = recordable && lines.length > 0;
+  const saveFailure = save.isError
+    ? describeLineFailure(save.error, 'records', (index) => {
+        const personId = records[index]?.person_id;
+        return lines.find((line) => line.person_id === personId)?.full_name ?? null;
+      })
+    : null;
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="record">
@@ -284,11 +294,8 @@ function DccChecklist() {
           failure={
             roster.isError
               ? describeFailure(roster.error)
-              : save.isError
-                ? describeLineFailure(save.error, 'records', (index) => {
-                    const personId = records[index]?.person_id;
-                    return lines.find((line) => line.person_id === personId)?.full_name ?? null;
-                  })
+              : save.isError && !saveBar
+                ? saveFailure
                 : null
           }
         />
@@ -442,8 +449,14 @@ function DccChecklist() {
           ) : null}
 
           {/* Pinned for the reason the Cell meeting screen gives. */}
-          {recordable && lines.length > 0 ? (
-            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
+          {saveBar ? (
+            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0">
+              {/* A refused save is said beside Save, where the reader is looking. */}
+              {save.isError ? (
+                <div className="sm:basis-full">
+                  <FailureNotice failure={saveFailure} />
+                </div>
+              ) : null}
               <p aria-live="polite" className="text-sm">
                 {!changed && unmarkedCount === 0
                   ? 'Everyone here is recorded.'

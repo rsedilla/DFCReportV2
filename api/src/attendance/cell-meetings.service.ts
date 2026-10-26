@@ -1058,6 +1058,10 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       roster_date: rosterDate,
       responsible_leader_id: responsibleLeaderId,
       may_record: mayRecord,
+      // **Whether the meeting's week is still open**, by the check the submission makes
+      // (decision 0335), so a screen offers no edit the save would refuse with
+      // `PERIOD_CLOSED`. The DCC checklist says the same of a Sunday as `recordable`.
+      week_open: await isRecordOpen(this.db, meetingId),
       meeting: recorded,
       members: members.map((member) => ({
         person_id: member.personId,
@@ -1314,8 +1318,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         if (amendment === undefined) {
           throw new ApiError(
             ApiErrorCode.PERIOD_CLOSED,
-            'This week is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
-              'sections 13 and 20).',
+            'This week is closed. Only an Admin may amend it, with a reason.',
             { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
           );
         }

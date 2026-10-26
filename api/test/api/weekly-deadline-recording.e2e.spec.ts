@@ -170,6 +170,31 @@ describe('a closed week inside an open month (decision 0335)', () => {
     expect(await audited('cell_attendance.amended')).toBe(1);
   });
 
+  it('says on the meeting read whether its week is open, as the save decides it', async () => {
+    const one = await member('Aurelio');
+    const roster = (date: string) =>
+      request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/meetings/${date}/roster`)
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .expect(200);
+
+    // Ten weeks back has closed whatever today is; the latest Saturday has not.
+    const open = await openSaturday();
+    const longClosed = shift(open, -70);
+    expect((await roster(open)).body.week_open).toBe(true);
+    expect((await roster(longClosed)).body.week_open).toBe(false);
+
+    // And the refusal it spares a screen from offering speaks to a leader, not to the spec.
+    const refused = await submitCell(markAccount, longClosed, {
+      status: 'HELD',
+      attendance: [{ person_id: one.id, present: true }],
+    }).expect(409);
+    expect(refused.body.error).toMatchObject({
+      code: 'PERIOD_CLOSED',
+      message: 'This week is closed. Only an Admin may amend it, with a reason.',
+    });
+  });
+
   it('refuses an amendment of a week that is still open', async () => {
     const one = await member('Aurelio');
     const response = await submitCell(admin, await openSaturday(), {
