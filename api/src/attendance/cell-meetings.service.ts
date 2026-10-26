@@ -1015,6 +1015,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     const members = await this.cells.membersAsOfWithin(this.db, cellId, rosterDate);
 
+    // When the meeting was first recorded, so a member added to the Cell after it can be
+    // told apart from one the leader left unmarked (owner, 2026-10-26).
+    const firstRecordedAt =
+      recorded !== null && recorded.submitted_at instanceof Date ? recorded.submitted_at : null;
+
     // **The marks the caller is being asked to resubmit** (decision 0223). A `HELD`
     // submission carries the whole roster rather than the lines being changed, so a
     // correction screen that could not read what is recorded would render every member
@@ -1096,6 +1101,13 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         // decision 0223 names is a different case: overwriting a `present: true` mark with
         // a blank.*
         record: marks.get(member.personId) ?? null,
+        // **Added to the Cell after the meeting was first recorded** (owner, 2026-10-26).
+        // The roster is everyone in the Cell on the meeting's date (section 12), so a
+        // person added that evening, after the leader saved, is on it with no mark, and a
+        // screen saying "not marked" read as the leader having skipped them. The screen
+        // asks whether they came instead. Only a reading aid: the roster, the marks and
+        // every figure are unchanged, and the leader may still mark them.
+        joined_after_recorded: firstRecordedAt !== null && member.joinedAt > firstRecordedAt,
       })),
     };
   }

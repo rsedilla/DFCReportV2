@@ -367,4 +367,49 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
       expect(response.body.meeting.version).toBe(1);
     });
   });
+
+  // Owner, 2026-10-26: somebody added to the Cell that evening, after the leader saved, is
+  // on the meeting's roster with no mark, and the screen called them "not marked".
+  describe('who joined after the meeting was recorded', () => {
+    it('names a member added after the first save, and nobody added before it', async () => {
+      const before = await member('Aaron', CREATED);
+      // The same day, so on the roster, but after the meeting was saved.
+      const after = await member('Bea', new Date('2026-09-12T22:00:00+08:00'));
+
+      await db
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: markCell.id,
+          scheduled_date: '2026-09-12',
+          scheduled_time: '19:00',
+          week_starting: '2026-09-07',
+          reporting_month: '2026-09-01',
+          status: 'HELD',
+          responsible_leader_id: mark.id,
+          submitted_by: markAccount.id,
+          submitted_at: new Date('2026-09-12T21:00:00+08:00'),
+        } as never)
+        .execute();
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+      const lines = response.body.members as {
+        person_id: string;
+        joined_after_recorded: boolean;
+      }[];
+
+      expect(lines.find((line) => line.person_id === after.id)?.joined_after_recorded).toBe(true);
+      expect(lines.find((line) => line.person_id === before.id)?.joined_after_recorded).toBe(false);
+    });
+
+    it('names nobody on a meeting not yet recorded', async () => {
+      await member('Aaron', new Date('2026-09-12T22:00:00+08:00'));
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+
+      expect(response.body.meeting).toBeNull();
+      expect(
+        (response.body.members as { joined_after_recorded: boolean }[])[0].joined_after_recorded,
+      ).toBe(false);
+    });
+  });
 });

@@ -427,6 +427,48 @@ test.describe('a recorded Cell meeting', () => {
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
   });
 
+  // Owner, 2026-10-26: somebody added to the Cell after the meeting was recorded was
+  // called "not marked", which read as the leader having skipped them.
+  test('asks whether a member added after it was recorded came, rather than calling them not marked', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText(/^First recorded on/)).toHaveText(
+      'First recorded on 27 Jun · 1 present, 1 absent, 1 added after it was recorded',
+    );
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting? Press Edit meeting to add a mark.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Joined the Cell after this was recorded', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/not marked/)).toHaveCount(0);
+  });
+
+  test('does not ask for an edit the closed week refuses', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true, weekOpen: false });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting?',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Press Edit meeting/)).toHaveCount(0);
+  });
+
   test('corrects Did not meet to Met, with the whole roster and a reason', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellCorrector(page);
