@@ -11,9 +11,11 @@ import {
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
+import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { insertCellWithin } from './insert-cell';
+import { assertNoScheduleClashWithin } from './schedule-clash';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
@@ -83,6 +85,11 @@ export class CellsService {
     await this.assertActorHoldsBothCapabilities(actor);
 
     return this.db.transaction().execute(async (trx) => {
+      // The leader's lock first, so this and any other write for the same leader decide the
+      // two-hour rule one after the other (decision 0392).
+      await boundLockWaitsWithin(trx);
+      await lockPersonsWithin(trx, [input.cellLeaderId]);
+
       await this.assertEncodingPhaseOpen(trx);
       await this.assertActorIsAdmin(trx, actor);
 
@@ -110,6 +117,13 @@ export class CellsService {
           { cell_leader_id: input.cellLeaderId },
         );
       }
+
+      // One leader's Cells start at least two hours apart, Admin included (section 10,
+      // decision 0392).
+      await assertNoScheduleClashWithin(trx, {
+        leaderId: input.cellLeaderId,
+        slots: [{ dayOfWeek: input.dayOfWeek, timeOfDay: input.timeOfDay }],
+      });
 
       const created = await insertCellWithin(trx, input, actor.accountId);
 

@@ -84,7 +84,9 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
 
     raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     await assignTo(db, raymond.id, root.id);
-    raymondCell = await createCell(db, { leader: raymond });
+    // On a Wednesday, so handing it to somebody also taking a Saturday Cell is no clash
+    // (decision 0392).
+    raymondCell = await createCell(db, { leader: raymond, dayOfWeek: 3 });
     raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
     await tick(raymondAccount, true);
 
@@ -165,7 +167,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
     prospective_leader_id: prospectiveLeaderId,
     category: 'YOUTH',
     day_of_week: 6,
-    time_of_day: '18:00',
+    time_of_day: '16:00',
     members,
   });
 
@@ -607,7 +609,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
         .post('/api/v1/cells')
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ cell_leader_id: mark.id, category: 'YOUTH', day_of_week: 6, time_of_day: '18:00' })
+        .send({ cell_leader_id: mark.id, category: 'YOUTH', day_of_week: 6, time_of_day: '16:00' })
         .expect(403);
 
       expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -784,7 +786,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
         branch_of: { person_id: raymond.id },
       });
       expect(row?.prospective_leader.member_id).toMatch(/^M-\d+$/);
-      expect(row?.cell.time_of_day).toMatch(/^18:00/);
+      expect(row?.cell.time_of_day).toMatch(/^16:00/);
       expect(row?.members.map((member) => member.person_id).sort()).toEqual(
         [...decidableNew.members].sort(),
       );
@@ -1338,7 +1340,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
           requested_by: manuelAccount.id,
           category: 'YOUTH',
           day_of_week: 6,
-          time_of_day: '18:00',
+          time_of_day: '16:00',
         })
         .returning('id')
         .executeTakeFirstOrThrow();

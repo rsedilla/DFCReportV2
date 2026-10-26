@@ -2678,6 +2678,17 @@ An earlier draft made the trigger advisory, on the reasoning that it could not s
 
 Changing a Cell's schedule is governed by `cell.manage_configuration` (Section 7), and is audited as a category change is.
 
+### One leader's Cells start at least two hours apart
+
+**Two Cells led by one person never start less than two hours apart** (ruling of 2026-10-26, decision 0392). One leader cannot be at two Cell meetings at once, and the owner found one leader on live leading a Cell on Sunday at 12:00 and another at 12:15.
+
+- **What is compared.** The leader's `ACTIVE` Cells, by every schedule row not yet over: the day and time in force and a change waiting for next month (Schedule changes, above) both count. So do the leader's `PENDING` requests: a new-Cell request, a restart included, by the day and time it asks for, and a handover by the schedule rows of the Cell it hands over. A closed Cell and a declined or approved request do not count.
+- **How it is measured.** By day of week and start time, as minutes around the week, so the distance wraps past midnight and past the week's end: Saturday 23:00 and Sunday 00:30 are ninety minutes apart and clash. Two hours exactly is allowed.
+- **Where it is checked.** When a new-Cell request is sent and again when it is approved, a restart being one; when a handover is requested and approved, comparing the Cell's schedule against the incoming leader's; when a Cell's day or time changes, against its leader's other Cells; and when Admin creates a Cell directly. Each takes the leader's person lock first (Section 5), so two writes for one leader are decided one after the other.
+- **No exception.** Not for Admin, and not for somebody else running one of the meetings: a Cell's leader is the person responsible for it.
+- **The refusal names the clash.** It answers `INVARIANT_VIOLATION`, and its `details.clashes` names each Cell or request it clashes with, by its Cell ID where it has one, its category, day and time.
+- **Existing clashes stay as they are.** Nothing that already clashes stops working, and nothing already recorded changes. Admin is shown them on the Cells page, under **Same Leader, Same Time**, through `GET /api/v1/cells/schedule-clashes` under `cell.manage_lifecycle` at Whole Church, and fixes each by changing a day or time or by handing a Cell to the person who really leads it. A clash is only ever reached that way from data entered before this rule.
+
 ### Creating a Cell
 
 A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **an approver of that branch, or Admin, approves** (decision 0352). **No actor may approve a request they submitted.**

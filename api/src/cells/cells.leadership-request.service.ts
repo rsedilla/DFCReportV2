@@ -28,6 +28,7 @@ import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
 import { insertCellWithin } from './insert-cell';
+import { assertNoScheduleClashWithin, slotsOfCellWithin } from './schedule-clash';
 import { moveMembersAnswer } from './move-members';
 import {
   decodeLeadershipRequestCursor,
@@ -231,6 +232,12 @@ export class CellsLeadershipRequestService {
     const members = this.membersOfShape(input);
 
     return this.db.transaction().execute(async (trx) => {
+      // The prospective leader's lock before anything is read, so two requests for one
+      // leader decide the two-hour rule one after the other (decision 0392). No `cells` row
+      // lock is taken on this path, so section 5's order is kept.
+      await boundLockWaitsWithin(trx);
+      await lockPersonsWithin(trx, [input.prospectiveLeaderId]);
+
       const cell =
         input.kind === 'HANDOVER'
           ? await this.assertHandoverCellWithin(trx, input, actor, authority)
@@ -255,6 +262,18 @@ export class CellsLeadershipRequestService {
       // recording. A race still lands on the index, which is the lesser half and is why
       // neither check is itself the enforcement.
       await this.assertNoConflictingPendingWithin(trx, input);
+
+      // One leader's Cells start at least two hours apart (section 10, decision 0392): a
+      // new Cell or restart by the day and time it asks for, a handover by the Cell's
+      // schedule against the incoming leader's other Cells.
+      await assertNoScheduleClashWithin(trx, {
+        leaderId: input.prospectiveLeaderId,
+        slots:
+          input.kind === 'NEW_CELL'
+            ? [{ dayOfWeek: input.dayOfWeek as number, timeOfDay: input.timeOfDay as string }]
+            : await slotsOfCellWithin(trx, input.cellId as string),
+        exceptCellId: input.kind === 'HANDOVER' ? input.cellId : null,
+      });
 
       // The Cell a handover or a restart names, as it stands now, kept on the request so
       // the sender's list can name it later from their own record (decision 0346).
@@ -744,6 +763,23 @@ export class CellsLeadershipRequestService {
         true,
       );
       await this.assertMembersQualifyWithin(trx, request.prospective_leader_id, memberIds, true);
+
+      // Re-checked as at the request, the state at approval governing (decision 0392).
+      // Under the prospective leader's lock, taken above.
+      await assertNoScheduleClashWithin(trx, {
+        leaderId: request.prospective_leader_id,
+        slots:
+          request.kind === 'NEW_CELL'
+            ? [
+                {
+                  dayOfWeek: request.day_of_week as number,
+                  timeOfDay: request.time_of_day as string,
+                },
+              ]
+            : await slotsOfCellWithin(trx, request.cell_id as string),
+        exceptCellId: request.cell_id,
+        exceptRequestId: request.id,
+      });
 
       // ------------------------------------------------------------------
       // The writes.

@@ -10,14 +10,17 @@ import { Capability } from '../auth/authorization/capabilities';
 import {
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { sameId } from '../common/identifiers';
 import { manilaDayOf, startOfManilaDay, startOfNextManilaMonth } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
-import { boundLockWaitsWithin } from '../database/person-lock';
+import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 
 import { CellsReadService } from './cells.read.service';
+import { assertNoScheduleClashWithin } from './schedule-clash';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
@@ -197,8 +200,27 @@ export class CellsConfigurationService {
     const authority = await this.authorization.authorityFor(actor.accountId);
 
     return this.db.transaction().execute(async (trx) => {
+      // The leader's lock before the Cell's row lock, as section 5 orders them, so this and
+      // any other write for the same leader decide the two-hour rule one after the other
+      // (decision 0392). Whom to lock is read first and checked again under the locks.
+      const leaderBeforeLock = await this.cells.leaderForScopeWithin(trx, cellId);
+      await boundLockWaitsWithin(trx);
+      if (leaderBeforeLock !== null) {
+        await lockPersonsWithin(trx, [leaderBeforeLock]);
+      }
+
       const cell = await this.lockAndReadCellWithin(trx, cellId);
       await this.assertStillInScopeWithin(trx, actor, authority, cellId);
+
+      const leader = await this.cells.leaderForScopeWithin(trx, cellId);
+      if (leader === null || leaderBeforeLock === null || !sameId(leader, leaderBeforeLock)) {
+        // A handover committed between the read and the lock. The same body retried
+        // succeeds, so this is a stale premise rather than a refusal (section 22).
+        throw new ResourceBusyError(
+          { cell_id: cell.cell_id },
+          'This Cell changed hands while its schedule was being changed. Retry in a moment.',
+        );
+      }
 
       const current = await trx
         .selectFrom('cell_schedules')
@@ -223,6 +245,14 @@ export class CellsConfigurationService {
           { cell_id: cell.cell_id, day_of_week: dayOfWeek, time_of_day: timeOfDay },
         );
       }
+
+      // One leader's Cells start at least two hours apart (section 10, decision 0392),
+      // against the leader's other Cells and pending requests.
+      await assertNoScheduleClashWithin(trx, {
+        leaderId: leader,
+        slots: [{ dayOfWeek, timeOfDay }],
+        exceptCellId: cellId,
+      });
 
       const at = await this.nowWithin(trx);
 

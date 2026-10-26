@@ -23,6 +23,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { decodeCellIndexCursor, encodeCellIndexCursor } from './cell-index-cursor';
 import { CellsReadService } from './cells.read.service';
 import { RECORDED_MEETINGS_PORT, type RecordedMeetingsPort } from './recorded-meetings.port';
+import { scheduleClashesWithin } from './schedule-clash';
 import { ValidationFailedError } from '../common/errors/api-error';
 import { normalizeName } from '../people/duplicate-matching';
 
@@ -102,6 +103,38 @@ export class CellsIndexService {
    * filter as {@link list}, counted rather than paged, so the Cells page's totals do not
    * read every Cell with its figures to count it.
    */
+  /**
+   * `GET /api/v1/cells/schedule-clashes`: leaders whose running Cells start less than two
+   * hours apart (section 10, decision 0392), each with those Cells, closest first.
+   */
+  async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
+    const clashes = await scheduleClashesWithin(this.db);
+    const names = await this.people.namesOf(clashes.map((clash) => clash.leaderId));
+
+    const data = clashes
+      .map((clash) => ({
+        leader: {
+          person_id: clash.leaderId,
+          member_id: names.get(clash.leaderId)?.memberId ?? null,
+          full_name: names.get(clash.leaderId)?.fullName ?? '',
+        },
+        minutes_apart: clash.closestMinutes,
+        cells: clash.cells.map((cell) => ({
+          cell_uuid: cell.uuid,
+          cell_id: cell.cell_id,
+          category: cell.category,
+          day_of_week: cell.day_of_week,
+          time_of_day: cell.time_of_day,
+        })),
+      }))
+      .sort(
+        (a, b) =>
+          a.minutes_apart - b.minutes_apart || a.leader.full_name.localeCompare(b.leader.full_name),
+      );
+
+    return { data };
+  }
+
   async counts(actor: Actor): Promise<{ in_scope: number; led_by_me: number }> {
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const now = await databaseNow(this.db);
