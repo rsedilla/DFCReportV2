@@ -211,7 +211,11 @@ function RecordMeeting() {
 
   // The leader's choice on a first record; the recorded status, or its correction, after.
   const status: CellMeetingStatus =
-    (statusEditable ? statusFix : null) ?? recorded?.status ?? statusChoice ?? 'HELD';
+    (statusEditable ? statusFix : null) ??
+    recorded?.status ??
+    // A choice made before the week closed is an edit in progress too, and ends with it.
+    (weekClosed ? null : statusChoice) ??
+    'HELD';
   const statusChanged = recorded !== null && status !== recorded.status;
   const reasonMissing = statusChanged && correctionReason.trim() === '';
   const askRanBy = recorded === null && status === 'HELD';
@@ -462,7 +466,9 @@ function RecordMeeting() {
         <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
           {followOnly
             ? recorded === null
-              ? 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
+              ? weekClosed
+                ? 'Not recorded. Its week has closed, so it can no longer be recorded.'
+                : 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
               : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
             : weekClosed
             ? recorded === null

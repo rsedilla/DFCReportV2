@@ -186,6 +186,84 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeChecked();
   });
 
+  test('ends a first record’s Did not meet when the week closes while the page is open', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+
+    await page.goto(MEETING);
+    await page.getByRole('radio', { name: 'Did not meet' }).check();
+    await expect(page.getByText('Why did it not meet?')).toBeVisible();
+
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: true,
+          week_open: false,
+          meeting: null,
+          members: [],
+        }),
+      }),
+    );
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+    await expect(
+      page.getByText(
+        'This meeting was not recorded before its week closed, so it can no longer be recorded.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('Why did it not meet?')).toHaveCount(0);
+    await expect(page.getByLabel(/What happened\?/)).toHaveCount(0);
+  });
+
+  test('tells a follow-up reader an unrecorded meeting in a closed week can no longer be recorded', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: false,
+          week_open: false,
+          meeting: null,
+          members: [],
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText('Not recorded. Its week has closed, so it can no longer be recorded.'),
+    ).toBeVisible();
+    await expect(page.getByText(/you can see it here to follow up/)).toHaveCount(0);
+  });
+
   // 2.4.11: a refusal makes the pinned bar taller, and the page's bottom scroll padding grows
   // with it, so a control focused after it never scrolls into view underneath.
   test('raises the bottom scroll padding with the bar when a refusal makes it taller', async ({
@@ -194,7 +272,48 @@ test.describe('a recorded Cell meeting', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await mockSignedIn(page);
     await mockCellCorrector(page);
-    await mockRecordedMeetingRoster(page, 'HELD');
+    // Twelve members, so the roster is longer than the screen and focus has to scroll.
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: true,
+          week_open: true,
+          meeting: {
+            id: '3f1b7c6e-0000-4000-8000-000000000301',
+            status: 'HELD',
+            scheduled_date: '2026-06-27',
+            scheduled_time: '19:00',
+            actual_date: null,
+            actual_time: null,
+            not_held_reason: null,
+            not_held_note: null,
+            facilitated_by: null,
+            responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+            submitted_by: '3f1b7c6e-0000-4000-8000-000000000299',
+            submitted_at: '2026-06-27T13:00:00.000Z',
+            version: 3,
+          },
+          members: Array.from({ length: 12 }, (_, i) => ({
+            person_id: `3f1b7c6e-0000-4000-8000-0000000006${String(10 + i)}`,
+            member_id: `M-0007${String(10 + i)}`,
+            first_name: `Member${i + 1}`,
+            last_name: 'Invented',
+            full_name: `Member${i + 1} Invented`,
+            record: { present: i % 2 === 0 },
+          })),
+        }),
+      }),
+    );
     await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
       route.fulfill({
         status: 409,
@@ -215,13 +334,20 @@ test.describe('a recorded Cell meeting', () => {
     await page.getByRole('button', { name: 'Save correction' }).click();
     await expect(page.getByText('This record changed after you opened it.')).toBeVisible();
 
+    // With the roster scrolled under the bar, the page's bottom scroll padding (what the
+    // browser keeps clear when it scrolls a focused control into view) covers everything the
+    // bar and the tab bar hide. The fixed padding alone is 160px; the bar with the refusal
+    // hides about 208px at this size, which is the gap that left focus under it.
+    await page.getByRole('radio', { name: 'Absent' }).nth(5).scrollIntoViewIfNeeded();
     const clear = await page.evaluate(() => {
       const bar = document.querySelector<HTMLElement>('div.sticky');
-      const padding = parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom);
-      const covered = bar ? window.innerHeight - bar.getBoundingClientRect().top : 0;
-      return { padding, covered };
+      return {
+        padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+        hidden: bar ? window.innerHeight - bar.getBoundingClientRect().top : 0,
+      };
     });
-    expect(clear.padding).toBeGreaterThanOrEqual(clear.covered);
+    expect(clear.hidden).toBeGreaterThan(160);
+    expect(clear.padding).toBeGreaterThanOrEqual(clear.hidden);
   });
 
   // A refused save is said beside Save, in the pinned bar, not at the top of the page where
@@ -473,6 +599,37 @@ test('a Sunday that takes no record still shows what was recorded, and cannot be
   await expect(present).toBeChecked();
   await expect(present).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+});
+
+// As on the Cell meeting screen: once the Sunday takes no record, an edit in progress ends
+// and the stored marks show again, rather than marks nobody can save or discard.
+test('ends a DCC edit in progress when the Sunday stops taking records', async ({ page }) => {
+  await page.clock.install();
+  await mockSignedIn(page);
+  await mockGrants(page, ['dcc.correct_subtree']);
+  await mockDccRoster(page);
+
+  await page.goto('/dcc/3f1b7c6e-0000-4000-8000-000000000501');
+  await page.getByRole('button', { name: 'Edit marks' }).click();
+  await page
+    .getByRole('group', { name: 'Rosalinda Ocampo' })
+    .getByRole('radio', { name: 'Absent' })
+    .check();
+  await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toBeVisible();
+
+  await page.unroute('**/api/v1/dcc/events/*/roster*');
+  await mockClosedDccRoster(page);
+  await page.clock.fastForward(31_000);
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+  await expect(page.getByText('This Sunday takes no record')).toBeVisible();
+  const present = page.getByRole('group', { name: 'Rosalinda Ocampo' }).getByRole('radio', {
+    name: 'Present',
+  });
+  await expect(present).toBeChecked();
+  await expect(present).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
 });
 
 // Changing a recorded DCC mark is a correction, which the API refuses without

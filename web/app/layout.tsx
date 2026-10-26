@@ -48,7 +48,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // over the page rather than underneath it. Below `lg` that is the bar across the
     // top, and along the bottom the tab bar with a recording screen's Save bar
     // stacked above it. At `lg` the sidebar sits beside the page, so only the Save
-    // bar remains, at the bottom.
+    // bar remains, at the bottom. These are sized for the Save bar as it usually is;
+    // `usePinnedBarPadding` (`lib/pinned-bar.ts`) raises the bottom while a bar is taller.
     <html
       lang="en"
       className={`${archivo.variable} scroll-pt-16 scroll-pb-40 lg:scroll-pt-0 lg:scroll-pb-28`}

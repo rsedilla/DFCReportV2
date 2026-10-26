@@ -77,6 +77,9 @@ export default function DccRosterPage() {
 
 type Mark = 'present' | 'absent';
 
+/** The marks a Sunday that takes no record shows over what is stored: none. */
+const NO_EDITS: Record<string, Mark> = {};
+
 function DccChecklist() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -95,13 +98,19 @@ function DccChecklist() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const [edits, setEdits] = useState<Record<string, Mark>>({});
-  const [editing, setEditing] = useState(false);
+  const [editState, setEdits] = useState<Record<string, Mark>>({});
+  const [editingState, setEditing] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
 
   const lines = useMemo(() => roster.data?.data ?? [], [roster.data]);
   const event = roster.data?.event ?? null;
   const recordable = event?.recordable ?? false;
+
+  // **A Sunday that stops taking records while the page is open ends any edit in
+  // progress**, as on the Cell meeting screen: no save can succeed, so marks left over
+  // would show where nobody can keep or discard them. Derived, so nothing is set in render.
+  const edits = recordable ? editState : NO_EDITS;
+  const editing = editingState && recordable;
   const recordedCount = lines.filter((line) => line.record !== null).length;
 
   // Held at any scope. Whether it covers each person is the API's to decide.

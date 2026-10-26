@@ -258,15 +258,18 @@ export function GrowthSaveBar({
   saving: boolean;
   /** A refused save, said here beside Save rather than at the top of the page. */
   failure?: ReactNode;
-  /** Whether a refusal is standing, which keeps the bar up until it is resolved. */
+  /**
+   * Whether a lost race stands, which keeps the bar up with its Reload even once the draft
+   * is emptied. Any other refusal concerns the draft, and goes with it.
+   */
   failing?: boolean;
 }) {
   const missingReason = needsReason && reason.trim() === '';
   const barRef = usePinnedBarPadding<HTMLDivElement>();
 
   // Nothing pinned over the list until there is something to say: a bar reading "nothing
-  // to save" takes a phone's screen from the rows it would be saving. A standing refusal
-  // is something to say, with its Reload, even once the draft is emptied.
+  // to save" takes a phone's screen from the rows it would be saving. A lost race is
+  // something to say, with its Reload, even once the draft is emptied.
   if (count === 0 && summary === null && !failing) {
     return null;
   }
