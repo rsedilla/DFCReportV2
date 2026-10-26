@@ -8,10 +8,11 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import {
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { unresolvableCursor } from '../common/cursor';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   CurrentIdempotency,
@@ -44,8 +45,8 @@ import { isStorableText } from '../common/text/storable-text';
  * `/api/v1/people` (SKILL.md section 22).
  *
  * The interesting rule here is section 8, not section 7. A leader may search the
- * directory — narrowed to their own pastoral scope unless the request asks wider
- * (decision 0244), and it is `duplicate-candidates` below rather than this search
+ * directory — narrowed to their own pastoral scope, which only a Whole Church scope may
+ * widen (decisions 0244 and 0389), and it is `duplicate-candidates` below rather than this search
  * that makes duplicate prevention possible — and for a person outside their
  * pastoral scope they see only enough to
  * recognise an existing record. Everything else is withheld, and `fullProfile`
@@ -421,10 +422,9 @@ export class PeopleController {
    * The argument had been written into the code as the design's reason, so a reader
    * checking the reasoning would have found it here and agreed with it.*
    *
-   * **The capability is unchanged and so is what it authorizes.** `church_wide`
-   * does not widen a grant; it chooses whether the grant's scope filters rows as
-   * well as fields. A Leader sending it receives what section 8 already publishes
-   * church-wide and nothing further.
+   * **`church_wide` is a Whole Church searcher's alone** (decision 0389), and below that is
+   * refused; `upline` adds the searcher's own leaders, as five fields each, for naming who
+   * ran a Cell meeting. Neither widens a grant.
    *
    * The scope set is fetched once and handed to the query, rather than the page
    * being filtered after it returns — see `searchByName` for why that distinction
@@ -436,6 +436,22 @@ export class PeopleController {
     @Query() query: SearchPeopleDto,
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    // Read once, and used three times: to refuse a church-wide search below Whole Church, to
+    // restrict the rows of a search of the searcher's own scope, and to decide each row's
+    // fields. Whole Church is a sentinel, so the widest scope materialises nothing.
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.PeopleViewSubtree,
+    );
+    // **The church-wide directory is a Whole Church searcher's alone** (decision 0389): a
+    // leader searches the people they oversee, in every picker and from outside the app.
+    // Refused first in this handler, after only the request's own shape is checked, as a report
+    // answers scope first (decision 0253), and before the rate limit, so it spends nothing.
+    if (query.church_wide && membership.kind !== 'WHOLE_CHURCH') {
+      throw new ScopeDeniedError(
+        'You can search only the people you oversee (SKILL.md section 8).',
+      );
+    }
     // **The minimum is counted on the term as it is searched, not as it was typed.** The
     // DTO's bound reads the raw string, and `normalizeName` turns a hyphen or an apostrophe
     // into a separator and drops Jr, Sr, II and III. So `a-`, `a'` and ` a` each passed it
@@ -485,15 +501,20 @@ export class PeopleController {
       }
     }
 
-    // Read once, and used twice: to restrict the rows of a search of the searcher's own
-    // scope, and to decide each row's fields in either mode. Whole Church is a sentinel, so
-    // the widest scope materialises nothing.
-    const membership = await this.authorization.scopeMembership(
-      actor,
-      Capability.PeopleViewSubtree,
-    );
+    // The leaders above the searcher join the rows when asked (decision 0389), for naming who
+    // ran a Cell meeting; they are outside the scope, so `inView` below gives them five fields.
+    const upline =
+      query.upline && membership.kind !== 'WHOLE_CHURCH'
+        ? (await this.hierarchy.pastoralPathOf(actor.personId)).ids.filter(
+            (id) => !sameId(id, actor.personId),
+          )
+        : [];
     const scoped =
-      query.church_wide || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+      query.church_wide || membership.kind === 'WHOLE_CHURCH'
+        ? null
+        : upline.length === 0
+          ? membership.personIds
+          : new Set([...membership.personIds, ...upline.map(canonicalId)]);
     // A Network narrows the rows in the query rather than the page (decision 0299), so a page
     // is never short of people who match.
     const inNetwork =

@@ -54,7 +54,8 @@ import { TextLink } from '@/components/ui/text-link';
  * Save the API would refuse.
  *
  * **Who ran it defaults to the leader** (decision 0274). "Someone else" opens the person
- * picker, which searches the church; the API refuses an archived or merged Person. It is
+ * picker, which searches the reader's own scope and the leaders above them (decision 0389);
+ * the API refuses an archived or merged Person. It is
  * asked on a first record of a meeting that met, since a correction does not change it.
  *
  * **A Cell that did not meet says why.** Section 13 requires a reason, and a reason of
@@ -586,8 +587,9 @@ function RecordMeeting() {
               {ranBy === 'OTHER' ? (
                 <PersonPicker
                   legend="Who ran it"
-                  description="Anyone in the church: a disciple, an upline leader, or a visitor."
+                  description="Somebody you oversee, or a leader above you."
                   searchLabel="Search for a person by name"
+                  upline
                   selectedId={facilitator?.id ?? null}
                   selectedName={facilitator?.full_name ?? null}
                   onSelect={setFacilitator}

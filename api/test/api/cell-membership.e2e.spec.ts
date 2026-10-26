@@ -246,12 +246,11 @@ describe('cell membership (section 10)', () => {
       await addMember(account, cell.id, juan.id).expect(201);
     });
 
-    it('adds somebody from outside the actor own pastoral subtree', async () => {
-      // **Section 10 in terms**: "Cell membership does not have to mirror pastoral
-      // assignment. A person may be pastorally under one leader and a member of
-      // another leader's Cell." Resolving the guard's scope against the *member*
-      // rather than the Cell would refuse exactly this, which is why it resolves
-      // against the Cell.
+    it('refuses SCOPE_DENIED adding somebody from outside the actor own pastoral subtree, and writes nothing', async () => {
+      // **Decision 0389**, amending section 10: the person added must be covered by the
+      // actor's `cell.manage_membership` as well as the Cell. Pedro is Oriel's, a sibling
+      // of Mark, so Mark may not add him to his own Cell. This case pinned the opposite
+      // until that ruling.
       const stranger = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
       await assignTo(db, stranger.id, root.id);
 
@@ -261,7 +260,98 @@ describe('cell membership (section 10)', () => {
         grantedBy: admin.id,
       });
 
-      await addMember(account, markCell.id, stranger.id).expect(201);
+      const response = await addMember(account, markCell.id, stranger.id).expect(403);
+
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(await openMembership(stranger.id)).toEqual([]);
+      const written = await db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('target_id', '=', stranger.id)
+        .where('action', 'in', ['cell_membership.added', 'cell_membership.moved'])
+        .execute();
+      expect(written).toEqual([]);
+    });
+
+    it('refuses before reading the person, so an outsider who is absent, archived or merged answers alike', async () => {
+      // Decided before the person is read (decision 0389, section 8): a leader learns
+      // nothing about somebody outside their scope from the refusal, not whether they
+      // exist, are archived or were absorbed by a merge. Somebody already in this Cell is
+      // on its roster, which the leader reads anyway, and is told so.
+      const account = await createAccount(app, db, {
+        person: mark,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+
+      const archived = await createPerson(db, {
+        firstName: 'Ana',
+        network: 'MENS',
+        archived: true,
+      });
+      const survivor = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
+      const absorbed = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
+      await db
+        .updateTable('persons')
+        .set({ merged_into_id: survivor.id })
+        .where('id', '=', absorbed.id)
+        .execute();
+      const member = await createPerson(db, { firstName: 'Lino', network: 'MENS' });
+      await assignTo(db, member.id, root.id);
+      await addMember(admin, markCell.id, member.id).expect(201);
+
+      const answers = [];
+      for (const personId of [randomUUID(), archived.id, absorbed.id]) {
+        const response = await addMember(account, markCell.id, personId).expect(403);
+        answers.push({
+          code: response.body.error.code as unknown,
+          message: response.body.error.message as unknown,
+          details: response.body.error.details as unknown,
+        });
+      }
+
+      expect(answers[0].code).toBe('SCOPE_DENIED');
+      for (const answer of answers) {
+        expect(answer).toEqual(answers[0]);
+      }
+      expect((await addMember(account, markCell.id, member.id)).status).toBe(409);
+
+      // The Admin's scope covers them all, so each is told what is actually the matter.
+      expect((await addMember(admin, markCell.id, randomUUID())).status).toBe(404);
+      expect((await addMember(admin, markCell.id, member.id)).status).toBe(409);
+    });
+
+    it('still lets membership differ from pastoral assignment, for an actor who oversees both', async () => {
+      // **Section 10 in terms**: "Cell membership does not have to mirror pastoral
+      // assignment. A person may be pastorally under one leader and a member of another
+      // leader's Cell." Oriel oversees Pedro and Mark's Cell, so he may put his own
+      // disciple in a Cell Mark leads.
+      const pedro = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
+      await assignTo(db, pedro.id, root.id);
+
+      const account = await createAccount(app, db, {
+        person: root,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+
+      await addMember(account, markCell.id, pedro.id).expect(201);
+      expect(await openMembership(pedro.id)).toEqual([
+        { cell_id: markCell.id, started_at: expect.any(Date) as unknown },
+      ]);
+    });
+
+    it('lets the Admin add anybody to any Cell', async () => {
+      // Whole Church covers every person, so somebody from another branch is added by
+      // the Admin (decision 0389).
+      const pedro = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
+      await assignTo(db, pedro.id, root.id);
+      const unassigned = await createPerson(db, { firstName: 'Nilo', network: 'MENS' });
+
+      await addMember(admin, markCell.id, pedro.id).expect(201);
+      await addMember(admin, markCell.id, unassigned.id).expect(201);
+      expect(await openMembership(pedro.id)).toHaveLength(1);
+      expect(await openMembership(unassigned.id)).toHaveLength(1);
     });
   });
 

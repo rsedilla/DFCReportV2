@@ -60,7 +60,6 @@ export function ThreeMembers({
           searchLabel={`Search for member ${slot + 1} by name`}
           selectedId={members[slot]?.id ?? null}
           selectedName={members[slot]?.full_name ?? null}
-          churchWide={false}
           excludeIds={searcher === null ? [] : [searcher]}
           network={network}
           networkReason={network === null ? null : `the leader is in the ${networkLabel(network)}`}

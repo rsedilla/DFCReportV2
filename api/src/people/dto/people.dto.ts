@@ -465,21 +465,18 @@ export class SearchPeopleDto {
    * Whether this search may return people outside the searcher's pastoral scope
    * (SKILL.md section 8, ruling of 2026-09-13, decision 0244).
    *
-   * **Absent means no, and that direction is the point.** Section 8 narrows the
-   * People *screen* to the searcher's own scope while keeping the church-wide
-   * directory reachable where a task names a specific person. Defaulting to the
-   * narrow answer means a surface added later is private unless somebody opts it
-   * out, rather than church-wide unless somebody remembers to opt it in.
+   * **Absent means no, and that direction is the point.** Defaulting to the narrow
+   * answer means a surface added later is private unless somebody opts it out, rather
+   * than church-wide unless somebody remembers to opt it in.
    *
-   * `true` restores exactly the previous behaviour: every match in the church, with
-   * the fields scoped per person rather than the rows. It is what the person pickers
-   * send, and nothing else should.
+   * `true` asks for every match in the church, with the fields scoped per person rather
+   * than the rows.
    *
-   * **It widens no authority.** The capability guarding this route is unchanged and
-   * its scope still decides what a `true` here can reach; the flag chooses only
-   * whether that scope filters the rows as well as the fields. A Leader sending
-   * `true` gets what section 8 already publishes church-wide — five fields for a
-   * person outside their scope — and nothing more.
+   * **Only a Whole Church scope may send it** (decision 0389). Below that it is refused
+   * as `SCOPE_DENIED`: every picker searches the searcher's own scope, and the one that
+   * needs more, who ran a Cell meeting, sends `upline` instead. For a Whole Church
+   * searcher the rows are the church either way, and the flag keeps decision 0303's
+   * bound and audit entry.
    */
   @IsOptional()
   // **Anything but `true` or `false` is left alone so `@IsBoolean()` refuses it.**
@@ -492,6 +489,17 @@ export class SearchPeopleDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   church_wide?: boolean;
+
+  /**
+   * The searcher's own scope **and the leaders above them** (decision 0389), for naming who
+   * ran a Cell meeting: an upline leader who stepped in is outside the searcher's scope.
+   * Those leaders come back as `identityOnly`, as anybody outside the scope does. It widens
+   * nothing for a Whole Church searcher, whose scope is the church.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  upline?: boolean;
 
   /**
    * Only people whose Network is this one now (decision 0299). The pickers whose

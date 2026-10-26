@@ -81,21 +81,23 @@ describe('people search narrowed to one Network (decision 0299)', () => {
     await db.destroy();
   });
 
-  describe('church-wide, as the pickers ask', () => {
+  // Only a Whole Church searcher may send `church_wide` (decision 0389), so the church-wide
+  // cases run as the administrator; a Leader's pickers send `network` to their own scope.
+  describe('church-wide, as a Whole Church searcher asks', () => {
     it('returns men only for MENS and women only for WOMENS, for a term matching both', async () => {
-      const everyone = await search(raymondAccount, 'Testfixture', { churchWide: true });
+      const everyone = await search(adminAccount, 'Testfixture', { churchWide: true });
       expect(everyone.status).toBe(200);
       // The term does match both Networks, or the two cases below prove nothing.
       expect(idsOf(everyone).sort()).toEqual([...MEN(), ...WOMEN()].sort());
 
-      const men = await search(raymondAccount, 'Testfixture', {
+      const men = await search(adminAccount, 'Testfixture', {
         churchWide: true,
         network: 'MENS',
       });
       expect(men.status).toBe(200);
       expect(idsOf(men).sort()).toEqual(MEN().sort());
 
-      const women = await search(raymondAccount, 'Testfixture', {
+      const women = await search(adminAccount, 'Testfixture', {
         churchWide: true,
         network: 'WOMENS',
       });
@@ -105,14 +107,19 @@ describe('people search narrowed to one Network (decision 0299)', () => {
 
     it('narrows the rows and never widens the fields', async () => {
       // Section 8: somebody outside the searcher's scope carries the minimal identity
-      // whatever else the request asks. Juan is outside Raymond's scope; Manuel is inside.
+      // whatever else the request asks. The upline search (decision 0389) is the one a
+      // Leader may send that returns somebody outside their scope: Oriel is above Raymond
+      // and outside his scope, Manuel is inside, and Juan, in a sibling branch, is in
+      // neither.
       const response = await search(raymondAccount, 'Testfixture', {
-        churchWide: true,
+        upline: true,
         network: 'MENS',
       });
+      expect(response.status).toBe(200);
       const rows = response.body.data as Record<string, unknown>[];
+      expect(idsOf(response).sort()).toEqual([oriel.id, raymond.id, manuel.id].sort());
 
-      const outside = rows.find((row) => row.id === juan.id);
+      const outside = rows.find((row) => row.id === oriel.id);
       expect(outside).toBeDefined();
       expect(Object.keys(outside as object).sort()).toEqual([
         'direct_leader_name',
@@ -217,7 +224,7 @@ describe('people search narrowed to one Network (decision 0299)', () => {
       async (value) => {
         const response = await request(app.getHttpServer())
           .get('/api/v1/people')
-          .query({ q: 'Testfixture', church_wide: true, network: value })
+          .query({ q: 'Testfixture', network: value })
           .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
         expect(response.status).toBe(422);
@@ -227,11 +234,21 @@ describe('people search narrowed to one Network (decision 0299)', () => {
     );
 
     it('changes nothing when network is absent', async () => {
-      const wide = await search(raymondAccount, 'Testfixture', { churchWide: true });
+      const wide = await search(adminAccount, 'Testfixture', { churchWide: true });
       expect(idsOf(wide).sort()).toEqual([...MEN(), ...WOMEN()].sort());
 
       const own = await search(raymondAccount, 'Testfixture');
       expect(idsOf(own).sort()).toEqual([raymond.id, manuel.id].sort());
+    });
+
+    it('widens nothing for a Leader: network beside church_wide is still refused', async () => {
+      const response = await search(raymondAccount, 'Testfixture', {
+        churchWide: true,
+        network: 'MENS',
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
   });
 
@@ -281,6 +298,7 @@ describe('people search narrowed to one Network (decision 0299)', () => {
     q: string,
     options: {
       churchWide?: boolean;
+      upline?: boolean;
       network?: string;
       limit?: number;
       cursor?: string;
@@ -289,6 +307,9 @@ describe('people search narrowed to one Network (decision 0299)', () => {
     const query: Record<string, string | number | boolean> = { q };
     if (options.churchWide) {
       query.church_wide = true;
+    }
+    if (options.upline) {
+      query.upline = true;
     }
     if (options.network !== undefined) {
       query.network = options.network;

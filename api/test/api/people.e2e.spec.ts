@@ -1187,10 +1187,20 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const response = await request(app.getHttpServer())
         .get('/api/v1/people')
         .query({ church_wide: true })
-        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('answers a Leader’s church-wide request with scope first, before the term (decision 0389)', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ church_wide: true })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
 
     it('finds a Member ID in the searcher own scope, and never church-wide', async () => {
@@ -1202,8 +1212,15 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const own = await search(raymondAccount, memberIdOf(manuel.id));
       expect((own.body.data as { id: string }[]).map((row) => row.id)).toEqual([manuel.id]);
 
-      const wide = await search(raymondAccount, memberIdOf(juan.id), { churchWide: true });
+      // Church-wide is a Whole Church searcher's alone (decision 0389), and even there a
+      // Member ID matches nobody, so a prefix cannot page the directory.
+      const wide = await search(adminAccount, memberIdOf(juan.id), { churchWide: true });
+      expect(wide.status).toBe(200);
       expect((wide.body.data as { id: string }[]).map((row) => row.id)).not.toContain(juan.id);
+
+      const leader = await search(raymondAccount, memberIdOf(juan.id), { churchWide: true });
+      expect(leader.status).toBe(403);
+      expect(leader.body.error.code).toBe('SCOPE_DENIED');
     });
 
     it('refuses a term under two characters in the searcher own scope too', async () => {
@@ -1227,8 +1244,19 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect((response.body.data as { id: string }[]).map((row) => row.id)).toContain(manuel.id);
     });
 
-    it('returns the church when asked, which is what the pickers ask', async () => {
-      const response = await search(raymondAccount, 'Testfixture', { churchWide: true });
+    it('refuses a Leader the church when asked, and names nobody (decision 0389)', async () => {
+      // The pickers asked for this until decision 0389; no picker does now, and a Leader
+      // sending it from outside the app is refused rather than answered.
+      const response = await search(raymondAccount, 'Juan', { churchWide: true });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.data).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain(juan.id);
+    });
+
+    it('returns the church to a Whole Church searcher who asks', async () => {
+      const response = await search(adminAccount, 'Testfixture', { churchWide: true });
 
       expect(response.status).toBe(200);
       const ids = (response.body.data as { id: string }[]).map((row) => row.id);
@@ -1237,15 +1265,15 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(ids).toContain(rico.id);
     });
 
-    it('widens the rows and never the fields', async () => {
-      // The load-bearing case. If `church_wide` ever came to mean "and show more
-      // about them", it would turn a display flag into a grant of authority.
-      // Section 8 permits five fields for somebody outside the actor scope,
-      // asserted here as the whole key set rather than a spot check.
-      const response = await search(raymondAccount, 'Juan', { churchWide: true });
+    it('widens the rows on the upline and never the fields', async () => {
+      // The load-bearing case. If `upline` ever came to mean "and show more about
+      // them", it would turn a picker's flag into a grant of authority. Section 8
+      // permits five fields for somebody outside the actor scope, asserted here as the
+      // whole key set rather than a spot check. Oriel is above Raymond (decision 0389).
+      const response = await search(raymondAccount, 'Oriel', { upline: true });
 
       const found = (response.body.data as Record<string, unknown>[]).find(
-        (row) => row.id === juan.id,
+        (row) => row.id === oriel.id,
       );
 
       expect(found).toBeDefined();
@@ -1405,14 +1433,111 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
 
     it('still accepts the two values it does define', async () => {
+      // Accepted, which is not the same as answered: a Leader's `true` passes the edge
+      // and is refused as out of scope (decision 0389), never as an undefined value.
+      const answers: Record<string, number> = {};
       for (const value of ['true', 'false']) {
         const response = await request(app.getHttpServer())
           .get('/api/v1/people')
           .query({ q: 'Testfixture', church_wide: value })
           .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
+        answers[value] = response.status;
+      }
+      expect(answers).toEqual({ true: 403, false: 200 });
+
+      const admin = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ q: 'Testfixture', church_wide: 'true' })
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`);
+      expect(admin.status).toBe(200);
+    });
+
+    it('refuses an upline value it does not define, and accepts the two it does', async () => {
+      const refused = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ q: 'Testfixture', upline: 'banana' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+      expect(refused.status).toBe(422);
+      expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+
+      for (const value of ['true', 'false']) {
+        const response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query({ q: 'Testfixture', upline: value })
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
         expect(response.status).toBe(200);
       }
+    });
+  });
+
+  describe('the upline (decision 0389)', () => {
+    let manuelAccount: TestAccount;
+
+    beforeEach(async () => {
+      manuelAccount = await createAccount(app, db, { person: manuel, roles: ['LEADER'] });
+    });
+
+    const rowsOf = (response: request.Response) =>
+      response.body.data as { id: string; scope: string }[];
+
+    it('adds the leaders above the searcher, five fields each, and no sibling branch', async () => {
+      const response = await search(manuelAccount, 'Testfixture', { upline: true });
+
+      expect(response.status).toBe(200);
+      const rows = rowsOf(response);
+      expect(rows.map((row) => row.id).sort()).toEqual([oriel.id, raymond.id, manuel.id].sort());
+      expect(rows.find((row) => row.id === manuel.id)?.scope).toBe('FULL');
+      for (const above of [oriel.id, raymond.id]) {
+        const row = rows.find((candidate) => candidate.id === above) as Record<string, unknown>;
+        expect(row.scope).toBe('IDENTITY_ONLY');
+        expect(row).not.toHaveProperty('birth_date');
+        expect(row).not.toHaveProperty('mobile_number');
+      }
+      // Rico and Juan are a sibling branch, Geraldine the other Network: none is above him.
+      expect(rows.map((row) => row.id)).not.toContain(rico.id);
+      expect(rows.map((row) => row.id)).not.toContain(juan.id);
+      expect(rows.map((row) => row.id)).not.toContain(geraldine.id);
+    });
+
+    it('adds nobody above the searcher unless asked', async () => {
+      const response = await search(manuelAccount, 'Testfixture');
+
+      expect(rowsOf(response).map((row) => row.id)).toEqual([manuel.id]);
+    });
+
+    it('records no church-wide search, and spends no church-wide count', async () => {
+      for (let n = 0; n < 31; n += 1) {
+        expect((await search(manuelAccount, 'Testfixture', { upline: true })).status).toBe(200);
+      }
+
+      const written = await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('action', '=', 'directory.searched')
+        .execute();
+      expect(written).toEqual([]);
+    });
+
+    it('changes nothing for a Whole Church searcher', async () => {
+      const plain = await search(adminAccount, 'Testfixture');
+      const withUpline = await search(adminAccount, 'Testfixture', { upline: true });
+
+      expect(withUpline.status).toBe(200);
+      expect(rowsOf(withUpline)).toEqual(rowsOf(plain));
+      expect(rowsOf(withUpline).every((row) => row.scope === 'FULL')).toBe(true);
+      expect(rowsOf(withUpline).map((row) => row.id)).toContain(juan.id);
+    });
+
+    it('does not open the church to a Leader who sends it beside church_wide', async () => {
+      const response = await search(manuelAccount, 'Testfixture', {
+        upline: true,
+        churchWide: true,
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
   });
 
@@ -1435,11 +1560,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       // Section 8 permits exactly Member ID, full name, sex, current Network and
       // the current direct leader's name. Everything else is withheld -- and the
       // assertion is on the whole key set, so a field added to the profile later
-      // cannot leak here unnoticed.
-      const response = await search(raymondAccount, 'Juan', { churchWide: true });
+      // cannot leak here unnoticed. The upline (decision 0389) is how a Leader's search
+      // reaches somebody outside it: Oriel, above Raymond.
+      const response = await search(raymondAccount, 'Oriel', { upline: true });
 
       const found = (response.body.data as Record<string, unknown>[]).find(
-        (row) => row.id === juan.id,
+        (row) => row.id === oriel.id,
       );
 
       expect(found).toBeDefined();
@@ -1452,27 +1578,28 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         'scope',
         'sex',
       ]);
+      // A Network root, so the leader's name is null rather than absent.
       expect(found).toMatchObject({
         scope: 'IDENTITY_ONLY',
         network: 'MENS',
-        direct_leader_name: expect.stringContaining('Rico'),
+        direct_leader_name: null,
       });
     });
 
-    it('the church-wide mode still reaches a person outside the searcher scope', async () => {
-      // What this pins is the wide mode, which the person pickers send. The rows a
-      // picker must reach are exactly these: section 10 makes Cell membership
-      // independent of pastoral assignment, so a Cell holds members its leader does
-      // not pastor.
+    it('reaches a person outside a Leader scope only for a Whole Church searcher', async () => {
+      // The pickers sent the wide mode until decision 0389, on the ground that a Cell
+      // may hold members its leader does not pastor. Since that ruling a leader adds
+      // only somebody they oversee, so no picker reaches past the scope, and the wide
+      // mode is a Whole Church searcher's alone.
       //
-      // *This case was named "still finds people outside the scope, because that is
-      // what prevents duplicates", and its comment said narrowing the rows "would
-      // defeat the purpose". That is the argument decision 0244 refutes, and a test
-      // name is printed by the runner on every CI run -- the loudest of the six
-      // places it stood, and the one a sweep of the source files did not reach.*
-      const response = await search(raymondAccount, 'Juan', { churchWide: true });
+      // *This case was once named "still finds people outside the scope, because that
+      // is what prevents duplicates" -- the argument decision 0244 refutes.*
+      const leader = await search(raymondAccount, 'Juan');
+      expect(leader.status).toBe(200);
+      expect(leader.body.data).toEqual([]);
 
-      expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
+      const admin = await search(adminAccount, 'Juan', { churchWide: true });
+      expect((admin.body.data as { id: string }[]).map((row) => row.id)).toEqual([juan.id]);
     });
 
     it('refuses a church-wide term that normalizes to fewer than three characters, naming the field', async () => {
@@ -1482,8 +1609,9 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       // term -- which the service answered with nothing rather than `%%`. The route now
       // counts the term as it is searched, church-wide mode included. Church-wide it
       // takes three (decision 0303), so a two-letter term is refused there too.
+      // As an administrator, the one kind of searcher the wide mode answers (decision 0389).
       for (const q of ['a-', "a'", ' a', 'Jr', 'II', '  ', 'Ma', 'Ma-']) {
-        const response = await search(raymondAccount, q, { churchWide: true });
+        const response = await search(adminAccount, q, { churchWide: true });
 
         expect(response.status).toBe(422);
         expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -1494,7 +1622,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
     it('still searches a three-letter term church-wide, and names written with a hyphen or apostrophe', async () => {
       for (const q of ['Mar', "O'Ma", 'Dela-Cruz']) {
-        const response = await search(raymondAccount, q, { churchWide: true });
+        const response = await search(adminAccount, q, { churchWide: true });
 
         expect(response.status).toBe(200);
       }
@@ -2073,7 +2201,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
   function search(
     actor: TestAccount,
     q: string,
-    options: { limit?: number; churchWide?: boolean } = {},
+    options: { limit?: number; churchWide?: boolean; upline?: boolean } = {},
   ) {
     const query: Record<string, string | number | boolean> = { q };
     if (options.limit !== undefined) {
@@ -2081,6 +2209,9 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     }
     if (options.churchWide) {
       query.church_wide = true;
+    }
+    if (options.upline) {
+      query.upline = true;
     }
 
     return request(app.getHttpServer())

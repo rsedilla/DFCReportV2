@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
   PERSON_IN_SCOPE,
   mockAdministrator,
+  mockWholeChurchPeopleReader,
   mockGrants,
   mockPeople,
   mockScreens,
@@ -17,15 +18,15 @@ import {
 } from './mock-attendance';
 
 /**
- * Which search each surface asks for (SKILL.md section 8, decision 0244).
+ * Which search each surface asks for (SKILL.md section 8, decisions 0244 and 0389).
  *
- * The People screen shows the people a leader pastors. The three person pickers —
- * Add a Person, Add a member to a Cell, and naming a new pastoral leader on a
- * reassignment — keep the church-wide directory, because each names one specific
- * person for one operation rather than offering a place to look around. Two of them
- * are then narrowed to one Network (decision 0299): adding a Cell member searches the
- * Cell's leader's Network, and naming a new pastoral leader the moved person's. Adding
- * a Person and naming who ran a Cell meeting are not narrowed.
+ * Every search a leader makes, the People screen and every person picker, finds only the
+ * people within their own scope (decision 0389), so no surface sends `church_wide`: the
+ * API keeps the church-wide directory for a Whole Church searcher and refuses it to anybody
+ * else. Naming who ran a Cell meeting adds the leaders above the searcher, sent as
+ * `upline`. Two pickers are narrowed to one Network (decision 0299): adding a Cell member
+ * searches the Cell's leader's Network, and naming a new pastoral leader the moved
+ * person's. Adding a Person and naming who ran a Cell meeting are not narrowed.
  *
  * **This asserts the request rather than the rendered rows, and that is the point.**
  * The narrowing is enforced by the API: the rows a leader may see are decided there,
@@ -36,8 +37,8 @@ import {
  * way. It is exactly the shape `session.spec.ts` exists for one domain over.
  *
  * The API-layer cases in `api/test/api/people.e2e.spec.ts` cover the other half:
- * that the flag narrows rows, never widens fields, and spends a page limit on rows
- * it returns.
+ * that the scope narrows rows, `upline` never widens fields, a Leader's `church_wide`
+ * is refused, and a page limit is spent on rows it returns.
  */
 
 /** Every `/api/v1/people?…` request the page made, in order. */
@@ -143,7 +144,27 @@ test.describe('which search each surface asks for', () => {
     }
   });
 
-  test('adding a person searches the whole church, so a duplicate is found', async ({ page }) => {
+  // Decision 0389: a Whole Church reader's picker asks for the directory itself, so decision
+  // 0303's page bound and audit entry still apply to it.
+  test('a Whole Church reader’s picker asks for the church-wide directory', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockWholeChurchPeopleReader(page);
+    await mockPeople(page);
+    const searches = await recordSearches(page);
+
+    await page.goto('/people/new');
+    await page.getByLabel('Search for a leader by name').fill('Bautista');
+    await page.getByRole('button', { name: 'Search people' }).click();
+
+    await expect
+      .poll(() => searches.length, { message: 'the picker never searched' })
+      .toBeGreaterThan(0);
+    for (const url of searches) {
+      expect(new URL(url).searchParams.get('church_wide')).toBe('true');
+    }
+  });
+
+  test('adding a person searches the searcher’s own scope, never the church', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);
     const searches = await recordSearches(page);
@@ -159,10 +180,13 @@ test.describe('which search each surface asks for', () => {
       .poll(() => searches.length, { message: 'the picker never searched' })
       .toBeGreaterThan(0);
 
-    expect(
-      searches.some((url) => url.includes('church_wide=true')),
-      'the picker narrowed itself to the actor scope, which would make a person in another branch unreachable',
-    ).toBe(true);
+    // Decision 0389: the leader named is one the searcher oversees, so the picker asks for
+    // the searcher's scope. Duplicates are found by section 3's duplicate-candidate lookup,
+    // a different route, never by this search.
+    for (const url of searches) {
+      expect(url, 'Add a Person asked for the church-wide directory').not.toContain('church_wide');
+      expect(url, 'Add a Person asked for the upline').not.toContain('upline');
+    }
     // Decision 0299 narrows two pickers and not this one: the new person has no Network
     // until their sex is chosen.
     for (const url of searches) {
@@ -241,11 +265,13 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'Marilou')) {
       const params = new URL(url).searchParams;
       expect(params.get('network')).toBe('MENS');
-      expect(params.get('church_wide')).toBe('true');
+      // The person added must be one the searcher oversees (decision 0389).
+      expect(params.get('church_wide')).toBeNull();
+      expect(params.get('upline')).toBeNull();
     }
   });
 
-  test('adding a Cell member stays church-wide, with no note, when the leader cannot be read', async ({
+  test('adding a Cell member searches the searcher’s scope, with no Network and no note, when the leader cannot be read', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -280,7 +306,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     expect(searches.length).toBeGreaterThan(0);
     for (const url of searches) {
       expect(url, 'a search was narrowed with no Network read').not.toContain('network=');
-      expect(url).toContain('church_wide=true');
+      expect(url).not.toContain('church_wide');
     }
     await expect(dialog.getByText(/Network only, because/)).toHaveCount(0);
   });
@@ -321,11 +347,15 @@ test.describe('which Network a picker searches (decision 0299)', () => {
       })
       .toBeGreaterThan(0);
     for (const url of searches.filter((u) => new URL(u).searchParams.get('q') === 'ann')) {
-      expect(new URL(url).searchParams.get('network')).toBe('WOMENS');
+      const params = new URL(url).searchParams;
+      expect(params.get('network')).toBe('WOMENS');
+      // The new leader must be one the searcher oversees (decision 0389).
+      expect(params.get('church_wide')).toBeNull();
+      expect(params.get('upline')).toBeNull();
     }
   });
 
-  test('naming who ran a Cell meeting searches the whole church, in both Networks', async ({
+  test('naming who ran a Cell meeting searches the searcher’s scope and the leaders above, in both Networks', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -341,8 +371,13 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     await expect(page.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
     expect(searches.length).toBeGreaterThan(0);
     for (const url of searches) {
+      const params = new URL(url).searchParams;
       expect(url, 'who ran the meeting was narrowed to one Network').not.toContain('network=');
+      // An upline leader who stepped in is outside the searcher's scope (decision 0389).
+      expect(params.get('upline')).toBe('true');
+      expect(params.get('church_wide')).toBeNull();
     }
+    await expect(page.getByText('Somebody you oversee, or a leader above you.')).toBeVisible();
     await expect(page.getByText(/Network only, because/)).toHaveCount(0);
   });
 });
@@ -439,12 +474,13 @@ test.describe('what the People screen says when a term is too short once tidied'
 });
 
 /**
- * A church-wide picker takes three letters and pages 20 at a time with Show more
- * (SKILL.md section 8, decision 0303). The API enforces both; the picker owes not
- * offering Find for a term the API refuses, and reaching past the first page.
+ * A picker searches the searcher's own scope (decision 0389), so it takes the two letters
+ * that search takes rather than the church-wide three of decision 0303, and reaches past
+ * its first page with Show more. The API enforces the minimum; the picker owes not
+ * offering Find for a term the API refuses.
  */
-test.describe('a church-wide picker is bounded (decision 0303)', () => {
-  test('asks for three letters, and reads the next page with Show more', async ({ page }) => {
+test.describe('a picker takes two letters and pages with Show more (decision 0389)', () => {
+  test('asks for two letters, and reads the next page with Show more', async ({ page }) => {
     await mockSignedIn(page);
     const person = (n: number) => ({
       ...PERSON_IN_SCOPE,
@@ -469,9 +505,9 @@ test.describe('a church-wide picker is bounded (decision 0303)', () => {
     const box = page.getByLabel('Search for a leader by name');
     const find = page.getByRole('button', { name: 'Search people' });
 
-    await box.fill('Cr');
+    await box.fill('C');
     await expect(find).toBeDisabled();
-    await box.fill('Cro');
+    await box.fill('Cr');
     await expect(find).toBeEnabled();
     await find.click();
 
@@ -484,7 +520,8 @@ test.describe('a church-wide picker is bounded (decision 0303)', () => {
 
     expect(searches.some((url) => url.includes('cursor=next-page'))).toBe(true);
     for (const url of searches) {
-      expect(url, 'the picker asked for more than the API allows').not.toContain('limit=');
+      expect(url, 'the picker set its own page size').not.toContain('limit=');
+      expect(url, 'the picker asked for the church-wide directory').not.toContain('church_wide');
     }
   });
 

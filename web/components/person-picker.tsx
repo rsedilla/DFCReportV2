@@ -1,12 +1,13 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { describeFailure } from '@/lib/messages';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import {
   MINIMUM_CHURCH_WIDE_SEARCH_LENGTH,
   MINIMUM_SEARCH_LENGTH,
@@ -27,8 +28,8 @@ import {
  * oversee. A request without one has no target to authorize.
  *
  * **It is a person picker rather than a leader picker**, and was named for its
- * first caller until a second arrived. What it does is search the church-wide
- * directory and hand back one person; who that person may be is a different
+ * first caller until a second arrived. What it does is search the people the searcher
+ * oversees (decision 0389) and hand back one person; who that person may be is a different
  * question on every screen that uses it — a pastoral leader here, a Cell member
  * there — and each of those is settled by the API on submission rather than by
  * this component.
@@ -38,11 +39,10 @@ import {
  * caller names the Network of the Cell or person acted on and the API filters by it; the
  * picker says so above the results.
  *
- * **Otherwise the search is church-wide, and the refusal comes from the server.** This
- * picker does not filter the list to people the viewer may place under, because
- * that would be the client deciding an authorization question section 7 reserves
- * to the API (section 1, principle 4). Choosing somebody out of scope is answered
- * with `SCOPE_DENIED` on submission, which is the honest place for it.
+ * **The search is the searcher's own scope, which the API decides** (decision 0389); for a
+ * Whole Church reader that is the church. Naming who ran a Cell meeting adds the leaders
+ * above the searcher (`upline`). Whom the operation then accepts is still the server's
+ * question, answered on submission (section 1, principle 4).
  *
  * Section 4 assigns Network from sex and section 5 forbids a cross-Network edge,
  * so some choices are refused for that reason too. Again by the server, and again
@@ -55,7 +55,7 @@ export function PersonPicker({
   selectedId,
   selectedName,
   onSelect,
-  churchWide = true,
+  upline = false,
   network = null,
   networkReason = null,
   excludeIds = [],
@@ -84,10 +84,10 @@ export function PersonPicker({
   selectedName: string | null;
   onSelect: (person: { id: string; full_name: string } | null) => void;
   /**
-   * False to search the searcher's own reading scope rather than the church. That scope may be
-   * wider than whom the operation lets them name; the server refuses the rest.
+   * Also offer the leaders above the searcher (decision 0389), for naming who ran a Cell
+   * meeting, where an upline leader who stepped in is outside the searcher's own scope.
    */
-  churchWide?: boolean;
+  upline?: boolean;
   /**
    * People never offered here, though the search returns them: the searcher, where an
    * operation refuses naming yourself (decision 0369). A convenience only; the server refuses.
@@ -98,24 +98,22 @@ export function PersonPicker({
 }) {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
+  // A Whole Church reader's pickers ask for the directory itself, so decision 0303's page bound
+  // and audit entry still apply to them (decision 0389); below that it would be refused.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const churchWide = holdsWholeChurch(me.data, 'people.view_subtree');
 
-  // Church-wide, the API returns 20 at a time and takes three letters (decision 0303), so
-  // the rest of a long list is reached with Show more rather than a bigger page.
+  // The rest of a long list is reached with Show more rather than a bigger page.
   const pages = useInfiniteQuery<PersonPage>({
-    queryKey: ['leader-search', submitted, churchWide, network],
+    queryKey: ['leader-search', submitted, upline, network, churchWide],
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.next_cursor ?? null,
-    // **The pickers keep the church, and the People screen does not** (SKILL.md
-    // section 8, decision 0244). Add a Person, Add a Cell member, naming a new pastoral
-    // leader on a reassignment, and who ran a Cell meeting each name one specific person
-    // for one operation rather than offering a place to look around. Section 10 makes Cell
-    // membership independent of pastoral assignment, so a Cell legitimately holds members
-    // its leader does not pastor: narrowing here would make exactly those people
-    // unaddable. A new Cell's members are searched in the searcher's own scope (decision
-    // 0369). A Network narrows the Cell member, pastoral leader and new Cell member pickers
+    // **Every picker searches the people the searcher oversees** (SKILL.md section 8,
+    // decision 0389), as the People screen does; who ran a Cell meeting adds the leaders above
+    // them. A Network narrows the Cell member, pastoral leader and new Cell member pickers
     // (decisions 0299 and 0369), because their operation refuses any other Network anyway.
     queryFn: ({ pageParam, signal }) =>
-      searchPeople(submitted, pageParam as string | null, signal, { churchWide, network }),
+      searchPeople(submitted, pageParam as string | null, signal, { upline, network, churchWide }),
     enabled: submitted.trim().length > 0,
   });
   const results = {

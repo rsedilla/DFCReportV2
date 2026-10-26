@@ -94,7 +94,6 @@ function NewCellForm() {
           searchLabel="Search for the leader by name"
           selectedId={leader?.id ?? null}
           selectedName={leader?.full_name ?? null}
-          churchWide={false}
           onSelect={(person) => {
             create.reset();
             setLeader(person);

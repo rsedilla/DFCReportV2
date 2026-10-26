@@ -201,7 +201,6 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
           searchLabel="Search for the leader by name"
           selectedId={leader?.id ?? null}
           selectedName={leader?.full_name ?? null}
-          churchWide={false}
           onSelect={(person) => {
             send.reset();
             setLeader(person);

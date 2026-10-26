@@ -85,8 +85,10 @@ async function mockBranchAndSearch(page: Page, disciples: { id: string; full_nam
       }),
     ),
   );
+  // The leader search is the one narrowed to the new Network (decision 0299), so it is told
+  // from the other reads by that.
   await page.route('**/api/v1/people?*', (route) =>
-    new URL(route.request().url()).searchParams.get('church_wide') === 'true'
+    new URL(route.request().url()).searchParams.get('network') === 'MENS'
       ? route.fulfill(json({ data: [MENS_LEADER], next_cursor: null }))
       : route.fallback(),
   );
@@ -116,6 +118,12 @@ test.describe('Correct sex (decision 0367)', () => {
       sent.push(route.request().postDataJSON());
       return route.fulfill(json({ ...PERSON_IN_SCOPE, sex: 'MALE', network: 'MENS' }));
     });
+    const searches: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/v1/people?')) {
+        searches.push(request.url());
+      }
+    });
     await page.goto(PROFILE);
 
     await page.getByRole('button', { name: 'Correct sex' }).click();
@@ -138,6 +146,12 @@ test.describe('Correct sex (decision 0367)', () => {
     expect(sent).toEqual([
       { sex: 'MALE', reason: 'Entered as female by mistake', pastoral_leader_id: MENS_LEADER.id },
     ]);
+    // An administrator's picker asks for the directory itself, so decision 0303's bound and
+    // audit entry apply to it (decision 0389).
+    expect(searches.length).toBeGreaterThan(0);
+    for (const url of searches) {
+      expect(new URL(url).searchParams.get('church_wide')).toBe('true');
+    }
   });
 
   test('says a Network root is not corrected here, and offers no form', async ({ page }) => {
