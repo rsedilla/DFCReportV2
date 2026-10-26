@@ -512,7 +512,7 @@ export async function mockCellChoices(
 
 /** Searches a Cell picker (owner's choice, 2026-09-30) within `scope`. */
 export async function searchCells(scope: Page | Locator, term: string): Promise<void> {
-  await scope.getByLabel('Search for a Cell').fill(term);
+  await scope.getByLabel(/Search for a Cell Group|Or find another Cell Group/).fill(term);
   await scope.getByRole('button', { name: 'Search Cells' }).click();
 }
 
