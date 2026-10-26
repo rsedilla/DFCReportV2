@@ -330,15 +330,15 @@ export class CellsController {
    * leader as of the period being viewed, falling back to its last leader where the
    * Cell is closed." That is what makes section 10's list of holders — the Cell's
    * current leader over their own Cells, any leader upline of them within their own
-   * subtree, Admin, Senior Pastors — fall out of the scope rather than being
-   * restated here.
+   * subtree, and Admin (a Senior Pastor holds none since decision 0326) — fall out of
+   * the scope rather than being restated here.
    *
-   * **Somebody in no Cell is checked too, in the domain layer** (decision 0389): the
-   * actor's `cell.manage_membership` must cover them, so a leader adds only people they
-   * oversee; somebody already in a Cell is moved, and the move check below decides. Membership may still differ from pastoral assignment, but somebody from
-   * another branch is added by an actor whose grant reaches them. Adding somebody already
-   * in another Cell is a move, which needs `cell.move_members` over both Cells (decision
-   * 0357), checked in the domain layer (section 7).
+   * **The person is checked too, in the domain layer** (decisions 0389 and 0390): the
+   * actor's `cell.manage_membership` must cover somebody in no Cell, so a leader adds only
+   * people they oversee. Adding somebody already in another Cell is a move, which needs
+   * `cell.move_members` over both Cells (decision 0357). Somebody the actor does not
+   * oversee is refused with one answer, in a Cell or in none, unless the actor may move
+   * them; membership may still differ from pastoral assignment.
    */
   @Post(':id/members')
   @RequiresCapability(Capability.CellManageMembership, {
