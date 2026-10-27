@@ -3606,6 +3606,66 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       }
     });
 
+    it('tells an actor who may not correct that someone recorded it first when their Did not meet carried a reason', async () => {
+      // With a reason the body is a status correction, a legal transition: `transitionWithin`
+      // sequentially and the transition branch of `lostRaceAnswer` when it races (decision 0394).
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const body = {
+        status: 'NOT_HELD',
+        not_held_reason: 'WEATHER_OR_CALAMITY',
+        correction_reason: 'Filed as met by mistake',
+      };
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        const attempt = submit(body, actor);
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const raced = await attempt;
+
+        expect(raced.status).toBe(409);
+        expect(raced.body.error.code).toBe('ALREADY_RECORDED');
+        expect(raced.body.error.details).toMatchObject({
+          submitted_version: null,
+          current_version: 1,
+        });
+
+        const sequential = await submit(body, actor);
+
+        expect(sequential.status).toBe(409);
+        expect(sequential.body.error.code).toBe('ALREADY_RECORDED');
+        expect(JSON.stringify(sequential.body)).not.toMatch(/present|current_status/);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('decides the on-behalf capability before telling anybody that someone recorded it first', async () => {
+      // Section 7: every capability but the amendment one is decided before anything stored
+      // changes the answer. Met against Did not meet, from an actor who may not record for the
+      // meeting's leader, is refused for that, never told the meeting was recorded.
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance']);
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+      await holder.query('COMMIT');
+      await holder.end();
+
+      const response = await submit(
+        { status: 'NOT_HELD', not_held_reason: 'WEATHER_OR_CALAMITY' },
+        actor,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.details.capability).toBe('cell.submit_on_behalf');
+    });
+
     it('asks no correction capability of an agreeing loser, which wrote nothing', async () => {
       // **The mirror of the case above, and the first fix introduced it.** Checking the
       // amendment capability before the comparison refused this actor 403 where the
