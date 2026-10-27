@@ -96,8 +96,8 @@ another leader since** (owner, 2026-10-28, on the second review): a leader recor
 they owed whatever has happened since. The reach is keyed on the checklist the leader was shown,
 and on nothing about the person's lifecycle or move, so a refusal tells nobody where somebody
 outside their scope sat on a past Sunday (the third review). It differs from an ACTIVE Cell,
-whose meetings pass to its new leader (Section 7): a DCC Sunday stays with the leader who owed
-it. A Sunday on or after the archive takes no record for them.
+whose meetings pass to its new leader (Section 7): a DCC Sunday stays on the checklist its
+leader is shown for it. A Sunday on or after the archive takes no record for them.
 
 **13. The list shows attendance dates under `people.view_subtree`** (owner, 2026-10-28). *Last
 at Cell* and *Last at DCC*, and being on the list at all, are attendance facts that decisions

@@ -476,7 +476,7 @@ describe('DCC recording (sections 9 and 14)', () => {
     });
 
     it('gives an upline who did not owe the Sunday the refusal anyone outside gets (decision 0397)', async () => {
-      // Paul holds an account, so the Sunday was his to record and not Manuel's. Quentin then
+      // Paul holds an account, so the Sunday is on his checklist and not Manuel's. Quentin then
       // moves out of Manuel's branch: Manuel was upline on the Sunday, and is answered exactly
       // as somebody who never was, so the refusal says nothing of where Quentin sat.
       await createAccount(app, db, { person: paul, roles: ['LEADER'] });

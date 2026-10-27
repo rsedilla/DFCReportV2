@@ -925,8 +925,8 @@ export class DccAttendanceService {
    * own checklist for it, the tree as it stood on the Sunday (owner, 2026-10-28, decision
    * 0397). So a leader records and corrects a Sunday they owed for somebody archived or moved
    * to another leader since. **Unlike an ACTIVE Cell**, whose meetings pass to its new leader
-   * (section 7), a DCC Sunday stays on the checklist of the leader who owed it, which section 9
-   * reads as of the Sunday. The actor must hold the capability at some scope, and the dated
+   * (section 7), a DCC Sunday stays on the checklist the leader is shown for it, which section 9
+   * walks through the tree as of the Sunday (account holders being read now). The actor must hold the capability at some scope, and the dated
    * walk never reaches the actor themself, who records no line of their own (decision 0322).
    */
   private async coversPersonWithin(
