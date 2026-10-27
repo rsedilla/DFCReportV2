@@ -434,6 +434,8 @@ Do not enforce a strict unique constraint on name + birthday because two differe
 
 If a possible match exists, show the user the existing record and allow authorized confirmation of whether it is the same person.
 
+**An edit is checked as creation is** (decision 0396). Where Edit details changes a name, the birthday or the mobile number, the same candidates are surfaced while typing and the same Tier 1 acknowledgement is asked before the save, against the record as it will read; the person being edited is never their own candidate, and an edit that changes none of those fields is not checked. Every rule this section states of creation — that the system never blocks, which candidates may gate, and what a refusal may show — applies to such an edit word for word: a Tier 1 candidate the editor may not see does not gate, and an acknowledged candidate the check found is recorded in the audit entry. A pair confirmed as different people is asked about again on a later edit; that answer is not stored for the pair.
+
 ### Matching rules
 
 Two rules bound everything below. The system **never** merges automatically, and the system **never** blocks creation. It surfaces candidates; a person decides. A matcher that blocks will be worked around by staff inventing spellings, which produces the duplicates it was meant to prevent.
@@ -5005,7 +5007,7 @@ One envelope, always:
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
 | `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
-| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
+| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created, or before an edit to a name, the birthday or the mobile number is saved (Section 3, decision 0396). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 | `RATE_LIMITED` | 429 | Too many requests within a minute (Section 24). Refused before any idempotency key is claimed: retry after a short delay, with the same key |
 | `RESOURCE_BUSY` | 503 | The write could not be serialized against another operation and reached no decision: the wait timed out, the database chose this transaction as a deadlock victim (Section 5), or a premise read before a lock no longer held under it (below). Transient: retry after a short delay, **with the same key** |

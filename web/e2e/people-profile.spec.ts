@@ -15,6 +15,7 @@ import {
   mockPersonCells,
   mockPersonCreated,
   mockPersonDccRefused,
+  mockPossibleMatches,
   mockSignedIn,
   mockWithoutEditBasic,
   searchCells,
@@ -360,6 +361,114 @@ test.describe('a person’s Cell', () => {
 });
 
 test.describe('editing a person', () => {
+  // Decision 0396: Edit details shows the "Someone similar" box Add Person shows, leaving out
+  // the person being edited, and a strong match is asked about before the save.
+  test('shows people similar to the details typed, and never the person themself', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    // Registered last, so it answers: the person being edited is among the matches.
+    await mockPossibleMatches(page);
+
+    await page.goto(`${PROFILE}/edit`);
+    const box = page.getByRole('region', { name: 'Someone similar is already recorded' });
+    // Nothing is looked up until a name, birthday or mobile number changes.
+    await expect(page.getByLabel('First name')).toBeVisible();
+    await expect(box).toHaveCount(0);
+    await page.getByLabel('Birthday (optional)').fill('1990-05-01');
+    await expect(box).toBeVisible();
+    await expect(box.getByText(/^Check before saving\./)).toBeVisible();
+    await expect(box.getByText(PERSON_WITHHELD.full_name)).toBeVisible();
+    await expect(box.getByText(PERSON_IN_SCOPE.full_name)).toHaveCount(0);
+  });
+
+  test('asks about a strong match before saving, then saves as different people', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    const sent: { body: Record<string, unknown>; key: string | undefined }[] = [];
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      sent.push({
+        body: route.request().postDataJSON(),
+        key: route.request().headers()['idempotency-key'],
+      });
+      if (sent.length === 1) {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
+              message: 'Someone with these details may already be recorded.',
+              details: {
+                candidates: [
+                  {
+                    id: '3f1b7c6e-0000-4000-8000-000000000777',
+                    member_id: 'M-000777',
+                    full_name: 'Marilou Reyes Santos',
+                    sex: 'FEMALE',
+                    tier: 1,
+                    reasons: ['Same name and birthday'],
+                  },
+                ],
+              },
+            },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ json: { ...PERSON_IN_SCOPE, birth_date: '1990-05-01' } });
+    });
+
+    await page.goto(`${PROFILE}/edit`);
+    await page.getByLabel('Birthday (optional)').fill('1990-05-01');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Is this someone already recorded?' })).toBeVisible();
+    await expect(page.getByText('M-000777')).toBeVisible();
+    await expect(page.getByText('Same name and birthday')).toBeVisible();
+    await page.getByRole('button', { name: 'These are different people — save anyway' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(sent).toHaveLength(2);
+    expect(sent[0].body).not.toHaveProperty('acknowledged_duplicate_ids');
+    expect(sent[1].body).toMatchObject({
+      birth_date: '1990-05-01',
+      acknowledged_duplicate_ids: ['3f1b7c6e-0000-4000-8000-000000000777'],
+    });
+    // A different body, so a different key (decision 0127).
+    expect(sent[1].key).not.toBe(sent[0].key);
+  });
+
+  test('goes back to the form from the question, keeping what was typed', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
+            message: 'Someone with these details may already be recorded.',
+            details: { candidates: [] },
+          },
+        }),
+      });
+    });
+
+    await page.goto(`${PROFILE}/edit`);
+    await page.getByLabel('Birthday (optional)').fill('1990-05-01');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Go back and change the details' }).click();
+    await expect(page.getByLabel('Birthday (optional)')).toHaveValue('1990-05-01');
+  });
+
   test('shows sex without changing it, and says a move is not part of Save', async ({ page }) => {
     await signedInWithPeople(page);
     await page.goto(`${PROFILE}/edit`);

@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-26, the trigger being decision 0391: of 389 files, 388 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0391, each moved the first two and
-neither of the others, none of them carrying a `Next:`; 0379 is held by work not yet merged. The recount before this one was dated
+2026-10-27, the trigger being decision 0396: of 390 files, 389 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0378, 0380 to 0391, and 0396 each moved the first two and
+neither of the others, none of them carrying a `Next:`; 0379 and 0392 to 0395 are held by work not yet merged. The recount before this one was dated
+2026-10-26 and triggered by 0391, and was left stale by 0396 the next day. The one before that was dated
 2026-10-26 and triggered by 0390, and was left stale by 0391 the same day. The one before that was dated
 2026-10-25 and triggered by 0389, and was left stale by 0390 the next day. The one before that was dated
 2026-10-25 and triggered by 0388, and was left stale by 0389 the same day. The one before that was dated
@@ -823,6 +824,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-25 — [Every search finds the searcher's own people](docs/decisions/0389-every-search-finds-the-searchers-own-people.md)
 - 2026-10-26 — [One refusal for anybody outside your scope](docs/decisions/0390-one-refusal-for-anybody-outside-your-scope.md)
 - 2026-10-26 — [A member added after a meeting was recorded is asked about, not called not marked](docs/decisions/0391-a-member-added-after-a-meeting-was-recorded.md)
+- 2026-10-27 — [An edit is checked for duplicates as creation is](docs/decisions/0396-an-edit-is-checked-for-duplicates-as-creation-is.md)
 
 ### Open — awaiting a ruling
 
