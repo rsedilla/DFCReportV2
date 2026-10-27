@@ -17,6 +17,7 @@ import { Field } from '@/components/ui/field';
 import { CellApprovals } from '@/components/cell-approvals';
 import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
+import { ScheduleClashes } from '@/components/schedule-clashes';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   categoryLabel,
@@ -25,6 +26,7 @@ import {
   closureReasonLabel,
   dayOfWeekLabel,
   getCellCounts,
+  getScheduleClashes,
   listCells,
   type CellSummary,
   type QuietMonth,
@@ -43,7 +45,7 @@ import { cn } from '@/lib/utils';
 const PAGE_SIZE = 10;
 
 /** The page's tabs, each a view of one address (decisions 0366 and 0381). */
-const VIEWS = ['ACTIVE', 'NOCELL', 'FEW', 'QUIET', 'CLOSED', 'APPROVE'] as const;
+const VIEWS = ['ACTIVE', 'NOCELL', 'FEW', 'QUIET', 'CLOSED', 'CLASH', 'APPROVE'] as const;
 type CellsView = (typeof VIEWS)[number];
 
 const LINK =
@@ -142,7 +144,7 @@ function CellsIndex() {
   const offered: readonly CellsView[] = [
     'ACTIVE',
     ...(fullScreens ? (['NOCELL'] as const) : []),
-    ...(administers ? (['FEW', 'QUIET', 'CLOSED'] as const) : []),
+    ...(administers ? (['FEW', 'QUIET', 'CLOSED', 'CLASH'] as const) : []),
     ...(approver ? (['APPROVE'] as const) : []),
   ];
   // A view the account is not offered opens Active Cells, once the server has named the
@@ -155,6 +157,12 @@ function CellsIndex() {
   // *Only my Cells* belongs to the two views carrying it: the cards on Active Cells and the
   // button on Closed Cells.
   const mineApplies = shown === 'ACTIVE' || closed;
+  // *Same Leader, Same Time* (decision 0392): the administrator's, as the route is.
+  const clashes = useQuery({
+    queryKey: ['schedule-clashes'],
+    queryFn: ({ signal }) => getScheduleClashes(signal),
+    enabled: administers,
+  });
   const approvals = useQuery({
     queryKey: ['cell-approvals'],
     queryFn: ({ signal }) => listApprovalRequests(signal),
@@ -179,7 +187,7 @@ function CellsIndex() {
         },
         signal,
       ),
-    enabled: shown !== 'APPROVE' && shown !== 'NOCELL',
+    enabled: shown !== 'APPROVE' && shown !== 'NOCELL' && shown !== 'CLASH',
   });
   // A kept page's cursor is the one already being loaded.
   const nextPage = () => {
@@ -197,6 +205,7 @@ function CellsIndex() {
     ['FEW', 'Under 3 Member Cells', null],
     ['QUIET', `Inactive (${quietCount}+ Months) Cells`, null],
     ['CLOSED', 'Closed Cells', null],
+    ['CLASH', 'Same Leader, Same Time', clashes.data?.length ?? null],
     ['APPROVE', 'Cells to Approve', approvals.data?.length ?? null],
   ];
   const tabs = everyTab.filter(([key]) => offered.includes(key));
@@ -257,6 +266,8 @@ function CellsIndex() {
           <CellApprovals wholeChurch={holdsWholeChurch(me.data, 'cell.approve_leadership')} />
         ) : shown === 'NOCELL' ? (
           <AwaitingCgList />
+        ) : shown === 'CLASH' ? (
+          <ScheduleClashes query={clashes} />
         ) : (
         <>
         {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}

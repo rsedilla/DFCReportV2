@@ -261,6 +261,11 @@
       "screen": "web/app/cells/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/schedule-clashes",
+      "screen": "web/components/schedule-clashes.tsx",
+      "note": "Cells' Same Leader, Same Time tab, the administrator's (decision 0392)."
+    },
+    {
       "route": "GET /api/v1/cells/people-without-a-cell",
       "screen": "web/components/awaiting-lists.tsx",
       "note": "Cells' Awaiting CG Assignment tab (decision 0381), Record's until then; the page of its own is withdrawn (decision 0343)."
