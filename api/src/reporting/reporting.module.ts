@@ -8,7 +8,6 @@ import { DatabaseClock } from '../database/database-clock';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
-import { AbsentPeopleService } from './absent-people.service';
 import { ReportingController } from './reporting.controller';
 import { ReportingService } from './reporting.service';
 
@@ -46,8 +45,7 @@ import { ReportingService } from './reporting.service';
   ],
   controllers: [ReportingController],
   // Decision 0326's Trends names the current month on the database's clock.
-  providers: [ReportingService, DatabaseClock, AbsentPeopleService],
-  // `AbsentPeopleService` only to be bound to `people`'s port (decision 0397).
-  exports: [ReportingService, AbsentPeopleService],
+  providers: [ReportingService, DatabaseClock],
+  exports: [ReportingService],
 })
 export class ReportingModule {}

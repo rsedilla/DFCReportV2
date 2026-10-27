@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { AbsenceService, type MonthDays } from '../attendance/absence.service';
+import { AbsenceService, type MonthDays } from './absence.service';
 import { CellsReadService } from '../cells/cells.read.service';
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';

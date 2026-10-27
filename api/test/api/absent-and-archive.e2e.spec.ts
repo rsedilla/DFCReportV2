@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
-import { lastFinishedMonths } from '../../src/reporting/absent-people.service';
+import { lastFinishedMonths } from '../../src/attendance/absent-people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   EPOCH,

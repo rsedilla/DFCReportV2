@@ -22,7 +22,7 @@ import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { AdminAccountsBindingModule } from './auth/admin-accounts.binding.module';
 import { PersonArchiveAccountsBindingModule } from './auth/person-archive.binding.module';
 import { PersonArchiveCellsBindingModule } from './cells/person-archive.binding.module';
-import { AbsentPeopleBindingModule } from './reporting/absent-people.binding.module';
+import { AbsentPeopleBindingModule } from './attendance/absent-people.binding.module';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
 import { AttendanceModule } from './attendance/attendance.module';

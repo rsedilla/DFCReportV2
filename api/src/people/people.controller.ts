@@ -321,7 +321,7 @@ export class PeopleController {
    *
    * **Read-only for whoever reads it.** A Full view leader reads their branch; the Admin's
    * Archive is a separate route under `people.manage_lifecycle`. Here, before `:id`, so the
-   * literal segment is not taken for an identifier. Composed in `reporting` behind a port,
+   * literal segment is not taken for an identifier. Composed in `attendance` behind a port,
    * because the marks and the Cells belong to modules that import this one.
    */
   @Get('absent')

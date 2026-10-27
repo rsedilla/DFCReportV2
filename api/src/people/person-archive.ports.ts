@@ -8,7 +8,7 @@ import type { Transaction } from 'kysely';
  * the module that composes it.
  *
  * **Ports, because each direction is a cycle**, which is the one case section 2 reserves
- * them for: `cells` and `auth` import `PeopleModule`, and `reporting` imports it too, so
+ * them for: `cells` and `auth` import `PeopleModule`, and `attendance` imports it too, so
  * `people` cannot import any of them back. Each is declared here, where `people` needs it,
  * implemented in the owning module, and bound by a `@Global()` binding module there, as
  * `ADMIN_ACCOUNTS_PORT` and `CELL_RELATIONSHIPS_PORT` are.

@@ -32,6 +32,7 @@ export class LifecycleListDto {
   @IsOptional()
   @IsString()
   @Length(1, CURSOR_MAX_LENGTH)
+  @IsStorableText()
   cursor?: string;
 
   @IsOptional()
