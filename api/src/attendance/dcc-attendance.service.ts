@@ -19,7 +19,10 @@ import {
   NotFoundError,
   ScopeDeniedError,
 } from '../common/errors/api-error';
-import { VersionConflictError } from '../common/errors/version-conflict';
+import {
+  RecordedFirstConflictError,
+  VersionConflictError,
+} from '../common/errors/version-conflict';
 import { sameId } from '../common/identifiers';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -91,6 +94,23 @@ interface EventForRecording {
 /** What one submitted line turned out to be, once compared with what is stored. */
 type LineOutcome = 'CREATE' | 'CORRECT' | 'UNCHANGED';
 
+/**
+ * A refusal of the amendment capability, or, where the line carried no version, what a
+ * person's first record is told when somebody else recorded them first (decision 0394).
+ */
+function recordedFirstOr(
+  denied: ScopeDeniedError,
+  submittedVersion: number | null,
+  storedVersion: number | null,
+  personId: string,
+): ScopeDeniedError | RecordedFirstConflictError {
+  return submittedVersion === null && storedVersion !== null
+    ? new RecordedFirstConflictError({
+        currentVersion: storedVersion,
+        details: { person_id: personId },
+      })
+    : denied;
+}
 /**
  * DCC recording (SKILL.md section 9; section 14).
  *
@@ -453,6 +473,8 @@ export class DccAttendanceService {
           personId,
           onChecklist: checklist.has(personId),
           outcome,
+          submittedVersion: record.version,
+          storedVersion: stored?.version ?? null,
         });
 
         // **Behind the capability check, and it was in front of it until 2026-09-03**
@@ -926,6 +948,8 @@ export class DccAttendanceService {
       personId: string;
       onChecklist: boolean;
       outcome: LineOutcome;
+      submittedVersion: number | null;
+      storedVersion: number | null;
     },
   ): Promise<void> {
     const { actor, authority, personId } = params;
@@ -983,10 +1007,15 @@ export class DccAttendanceService {
         target,
       ))
     ) {
-      throw new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
-        capability: Capability.DccCorrectSubtree,
-        person_id: personId,
-      });
+      throw recordedFirstOr(
+        new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
+          capability: Capability.DccCorrectSubtree,
+          person_id: personId,
+        }),
+        params.submittedVersion,
+        params.storedVersion,
+        personId,
+      );
     }
   }
 
@@ -1385,10 +1414,15 @@ export class DccAttendanceService {
     );
 
     if (!mayCorrect) {
-      return new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
-        capability: Capability.DccCorrectSubtree,
-        person_id: stale.record.person_id,
-      });
+      return recordedFirstOr(
+        new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
+          capability: Capability.DccCorrectSubtree,
+          person_id: stale.record.person_id,
+        }),
+        stale.record.version,
+        stale.stored?.version ?? null,
+        stale.record.person_id,
+      );
     }
 
     return this.conflictFor(

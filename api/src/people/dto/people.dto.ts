@@ -233,6 +233,13 @@ export class EditPersonDto {
   @Length(0, 40)
   @IsStorableText()
   mobile_number?: string | null;
+
+  /** Tier 1 candidates the actor has seen and passed over, as on create (section 3, decision 0396). */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(50)
+  acknowledged_duplicate_ids?: string[];
 }
 
 /**

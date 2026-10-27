@@ -26,7 +26,12 @@ import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
-import { describeFailure, describeLineFailure } from '@/lib/messages';
+import {
+  changedUnderNote,
+  describeFailure,
+  describeLineFailure,
+  staleSaveFailure,
+} from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
 
@@ -153,6 +158,16 @@ function RecordMeeting() {
   const [facilitator, setFacilitator] = useState<{ id: string; full_name: string } | null>(null);
   // A corrected answer to "did it meet", while editing a Met or Did-not-meet record.
   const [statusFix, setStatusFix] = useState<'HELD' | 'NOT_HELD' | null>(null);
+  // **The version the edit started from** (owner's choice of 2026-10-27), null for a meeting
+  // with no record, and what Save sends. The roster is read again in the background, on
+  // returning to the tab, and sending the version read *now* would let marks chosen against
+  // the old record overwrite a change the leader never saw. Null until the first change. The
+  // marks stored then are kept with it, so Reload can tell which lines somebody else changed.
+  const [startedFrom, setStartedFrom] = useState<{ version: number | null; marks: StoredMarks } | null>(
+    null,
+  );
+  // Lines somebody else changed while this edit was open, shown after Reload (decision 0394).
+  const [changedUnder, setChangedUnder] = useState<Record<string, ChangedLine>>({});
 
   // The Cell's category for the line under the date. Same capability as the roster, but
   // resolved against the Cell rather than the meeting, so a leader who led on the meeting's
@@ -194,6 +209,16 @@ function RecordMeeting() {
 
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
   const locked = (correcting && !editing) || followOnly || weekClosed;
+
+  /** Pins the version this edit is made against, once, at its first change. */
+  function begin() {
+    setStartedFrom(
+      (current) => current ?? { version: recorded?.version ?? null, marks: storedMarks(members) },
+    );
+  }
+
+  // What Save is checked against: the pinned version once the edit has begun.
+  const baseVersion = startedFrom ? (startedFrom.version ?? undefined) : recorded?.version;
 
   /**
    * What is stored, overlaid with what the leader has changed since.
@@ -247,7 +272,7 @@ function RecordMeeting() {
 
       return {
         status,
-        version: recorded?.version,
+        version: baseVersion,
         not_held_reason: notHeldReason,
         not_held_note: note.trim() || undefined,
         correction_reason: statusChanged ? correctionReason.trim() : undefined,
@@ -260,7 +285,7 @@ function RecordMeeting() {
 
     return {
       status,
-      version: recorded?.version,
+      version: baseVersion,
       attendance: members.map((member) => ({
         person_id: member.person_id,
         present: markFor(member) === 'present',
@@ -272,6 +297,7 @@ function RecordMeeting() {
     roster.data,
     status,
     recorded,
+    baseVersion,
     notHeldReason,
     noteRequired,
     note,
@@ -316,8 +342,8 @@ function RecordMeeting() {
 
     return changed.length === 0 || status === 'NOT_HELD'
       ? null
-      : { version: recorded?.version ?? null, marks: Object.fromEntries(changed) };
-  }, [edits, members, recorded, status, idempotencyKey, savedKey]);
+      : { version: baseVersion ?? null, marks: Object.fromEntries(changed) };
+  }, [edits, members, baseVersion, status, idempotencyKey, savedKey]);
 
   const draft = useMarkDraft<{ version: number | null; marks: Record<string, Mark> }>({
     key:
@@ -348,6 +374,7 @@ function RecordMeeting() {
         return false;
       }
       setEdits(marks);
+      setStartedFrom({ version: stored.version, marks: storedMarks(members) });
       if (recorded !== null) {
         setEditing(true);
       }
@@ -365,6 +392,8 @@ function RecordMeeting() {
     setNotHeldReason('');
     setNote('');
     setCorrectionReason('');
+    setStartedFrom(null);
+    setChangedUnder({});
   }
 
   const save = useMutation({
@@ -406,12 +435,55 @@ function RecordMeeting() {
   const markedCount = members.length - unmarked.length;
 
   // Said beside Save in the pinned bar; at the top only where there is no bar.
+  // Kept unless what is now stored is a record this reader may not correct (see `reload`).
+  const stale = save.isError ? staleSaveFailure(save.error, 'this meeting') : null;
   const saveFailure = save.isError
-    ? describeLineFailure(save.error, 'attendance', (index) => {
+    ? (stale ??
+      describeLineFailure(save.error, 'attendance', (index) => {
         const member = members[index];
         return member ? member.full_name : null;
-      })
+      }))
     : null;
+
+  /**
+   * **Reload after a refused correction** (decision 0394): the meeting is read again and the
+   * edit starts over from what is stored now. The leader's marks are kept, except on a line
+   * somebody else changed while the edit was open: there the saved mark shows, and a note
+   * under the name says what the leader had marked, so neither change is lost unseen. A
+   * meeting somebody else recorded first becomes a correction, which this reader may not make
+   * without the capability, so then their marks are let go.
+   */
+  async function reload() {
+    const fresh = await roster.refetch();
+    // A failed read resolves with the old data, so only a successful one re-pins.
+    if (!fresh.isSuccess) {
+      return;
+    }
+    const meeting = fresh.data.meeting;
+    if (meeting !== null && !canCorrect) {
+      resetForm();
+    } else {
+      const { kept, changed } = settleAfterReload(editState, startedFrom?.marks ?? {}, fresh.data.members);
+      setEdits(kept);
+      setChangedUnder(changed);
+      // A correction to Did not meet hides the marks; where somebody else changed one, the
+      // answer goes back to Met so the reader sees what changed before deciding again.
+      if (Object.keys(changed).length > 0) {
+        setStatusFix(null);
+      }
+      setStartedFrom({ version: meeting?.version ?? null, marks: storedMarks(fresh.data.members) });
+      if (meeting !== null) {
+        setEditing(true);
+      }
+    }
+    save.reset();
+  }
+
+  const reloadButton = stale ? (
+    <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
+      Reload
+    </Button>
+  ) : null;
 
   // What Save is still waiting for, said rather than left to a greyed button.
   let saveHint: string;
@@ -510,6 +582,7 @@ function RecordMeeting() {
                   : null
           }
         />
+        {save.isError && locked ? reloadButton : null}
       </div>
 
       {roster.isPending ? (
@@ -596,7 +669,11 @@ function RecordMeeting() {
                     </p>
                   ) : me.data && !followOnly ? (
                     canCorrect ? (
-                      <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
+                      <Button variant="secondary" className="mt-3" onClick={() => {
+                          begin();
+                          setEditing(true);
+                        }}
+                      >
                         Edit meeting
                       </Button>
                     ) : (
@@ -618,7 +695,10 @@ function RecordMeeting() {
                 legend="Did the meeting take place?"
                 name="status"
                 value={status === 'NOT_HELD' ? 'NOT_HELD' : 'HELD'}
-                onChange={correcting ? setStatusFix : setStatusChoice}
+                onChange={(value) => {
+                  begin();
+                  (correcting ? setStatusFix : setStatusChoice)(value);
+                }}
                 options={[
                   // Section 13 fixes these labels so wording cannot drift between screens.
                   { value: 'HELD', label: 'Met' },
@@ -634,7 +714,10 @@ function RecordMeeting() {
                 legend="Who ran the meeting?"
                 name="ran-by"
                 value={ranBy}
-                onChange={setRanBy}
+                onChange={(value) => {
+                  begin();
+                  setRanBy(value);
+                }}
                 options={[
                   { value: 'LEADER', label: 'The leader' },
                   { value: 'OTHER', label: 'Someone else' },
@@ -648,7 +731,10 @@ function RecordMeeting() {
                   upline
                   selectedId={facilitator?.id ?? null}
                   selectedName={facilitator?.full_name ?? null}
-                  onSelect={setFacilitator}
+                  onSelect={(person) => {
+                    begin();
+                    setFacilitator(person);
+                  }}
                 />
               ) : null}
             </div>
@@ -711,9 +797,14 @@ function RecordMeeting() {
                       mark={markFor(member)}
                       recorded={correcting}
                       disabled={locked}
-                      onChange={(value) =>
-                        setEdits((current) => ({ ...current, [member.person_id]: value }))
-                      }
+                      note={changedUnder[member.person_id]}
+                      onChange={(value) => {
+                        begin();
+                        setChangedUnder((current) =>
+                          Object.fromEntries(Object.entries(current).filter(([id]) => id !== member.person_id)),
+                        );
+                        setEdits((current) => ({ ...current, [member.person_id]: value }));
+                      }}
                     />
                   ))}
                 </ul>
@@ -760,6 +851,7 @@ function RecordMeeting() {
               */}
               <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
                 <FailureNotice failure={saveFailure} />
+                {reloadButton}
               </div>
               <p id="save-hint" tabIndex={-1} aria-live="polite" className="text-sm">
                 {saveHint}
@@ -857,12 +949,15 @@ function MemberMark({
   mark,
   recorded,
   disabled,
+  note,
   onChange,
 }: {
   member: RosterMember;
   mark: Mark | undefined;
   recorded: boolean;
   disabled: boolean;
+  /** Somebody else changed this line while the edit was open (decision 0394). */
+  note?: ChangedLine;
   onChange: (mark: Mark) => void;
 }) {
   return (
@@ -872,11 +967,13 @@ function MemberMark({
         // Kept until Save, so a first tap does not shift the rows beneath it; nothing is
         // recorded until then, as the DCC checklist says too.
         description={
-          recorded && joinedAfter(member)
-            ? 'Joined the Cell after this was recorded'
-            : recorded
-              ? undefined
-              : 'Not recorded yet'
+          note
+            ? changedUnderNote(note)
+            : recorded && joinedAfter(member)
+              ? 'Joined the Cell after this was recorded'
+              : recorded
+                ? undefined
+                : 'Not recorded yet'
         }
         name={`member-${member.person_id}`}
         value={mark ?? ''}
@@ -890,6 +987,54 @@ function MemberMark({
       />
     </li>
   );
+}
+
+type StoredMarks = Record<string, boolean | null>;
+
+/** Each member's stored mark, null where none is recorded. */
+function storedMarks(members: readonly RosterMember[]): StoredMarks {
+  return Object.fromEntries(members.map((member) => [member.person_id, member.record?.present ?? null]));
+}
+
+/** A line somebody else changed: their saved mark, and the reader's own where they made one. */
+type ChangedLine = { theirs: Mark; yours?: Mark };
+
+/**
+ * The marks to keep after Reload, and the lines somebody else changed (decision 0394). Every
+ * line whose stored mark moved since the edit began is named in a note, whether or not the
+ * reader marked it. Where the reader had marked it differently, the stored mark shows and the
+ * note names the reader's; where it moved to the reader's own mark, it needs no edit. The
+ * reader's other marks are kept.
+ */
+function settleAfterReload(
+  edits: Record<string, Mark>,
+  startedFrom: StoredMarks,
+  fresh: readonly RosterMember[],
+): { kept: Record<string, Mark>; changed: Record<string, ChangedLine> } {
+  const kept: Record<string, Mark> = {};
+  const changed: Record<string, ChangedLine> = {};
+
+  for (const member of fresh) {
+    const personId = member.person_id;
+    const now = member.record?.present ?? null;
+    const theirs: Mark | null = now === null ? null : now ? 'present' : 'absent';
+    const moved = theirs !== null && personId in startedFrom && now !== startedFrom[personId];
+    const yours = edits[personId];
+
+    if (yours === undefined) {
+      if (moved) {
+        changed[personId] = { theirs };
+      }
+    } else if (theirs === yours) {
+      // Already what the reader marked: nothing to keep, and nothing to say.
+    } else if (moved) {
+      changed[personId] = { theirs, yours };
+    } else {
+      kept[personId] = yours;
+    }
+  }
+
+  return { kept, changed };
 }
 
 /**

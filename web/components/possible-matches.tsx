@@ -51,17 +51,23 @@ function useDebounced<T>(value: T, delay: number): T {
  * field further out. The API marks such a candidate itself, and `isWithheld`
  * reads that flag — with a fail-closed fallback for a candidate carrying no
  * tier, which says less rather than more.
+ *
+ * **On Edit details it leaves out the person being edited** (decision 0396), who would
+ * otherwise match their own record, and says "saving" where Add Person says "adding".
  */
 export function PossibleMatches({
   firstName,
   lastName,
   birthDate,
   mobileNumber,
+  excludeId,
 }: {
   firstName: string;
   lastName: string;
   birthDate: string;
   mobileNumber: string;
+  /** The person being edited, who is never their own duplicate. */
+  excludeId?: string;
 }) {
   const headingId = useId();
   const first = firstName.trim();
@@ -110,7 +116,9 @@ export function PossibleMatches({
     enabled: ready,
   });
 
-  if (!ready || matches.isPending || matches.isError || matches.data.data.length === 0) {
+  const candidates = (matches.data?.data ?? []).filter((candidate) => candidate.id !== excludeId);
+
+  if (!ready || matches.isPending || matches.isError || candidates.length === 0) {
     // Silent when there is nothing to say, and never "nobody matches": a match resting on a
     // birthday or mobile number outside the reader's scope is withheld from them (section 3),
     // so an empty list is not evidence that nobody does. A failed lookup says nothing either.
@@ -123,8 +131,8 @@ export function PossibleMatches({
         Someone similar is already recorded
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        Check before adding. Recording one person twice splits their history in two, and putting
-        the two back together is harder than avoiding it.
+        Check before {excludeId ? 'saving' : 'adding'}. Recording one person twice splits their
+        history in two, and putting the two back together is harder than avoiding it.
       </p>
 
       {/*
@@ -140,7 +148,7 @@ export function PossibleMatches({
         API and reaches every client, so it is raised separately.
       */}
       <ul className="divide-line mt-3 divide-y">
-        {[...matches.data.data]
+        {[...candidates]
           .sort((a, b) => a.full_name.localeCompare(b.full_name))
           .map((candidate: DuplicateCandidate) => (
           <li key={candidate.id} className="py-3">

@@ -17,6 +17,12 @@ export const ApiErrorCode = {
   VALIDATION_FAILED: 'VALIDATION_FAILED',
   /** The record changed since it was read (section 14). */
   VERSION_CONFLICT: 'VERSION_CONFLICT',
+  /**
+   * A first record met one somebody else made, sent by an actor who may record and may not
+   * correct (decision 0394). Carries the versions and nothing of the record: unlike
+   * `VERSION_CONFLICT` it promises no two sides, because this actor may not choose between them.
+   */
+  ALREADY_RECORDED: 'ALREADY_RECORDED',
   /** The record's week is closed (section 13). */
   PERIOD_CLOSED: 'PERIOD_CLOSED',
   /** The key was already used for a different request. Never retry. */
@@ -69,6 +75,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   SCOPE_DENIED: 403,
   VALIDATION_FAILED: 422,
   VERSION_CONFLICT: 409,
+  ALREADY_RECORDED: 409,
   PERIOD_CLOSED: 409,
   IDEMPOTENCY_KEY_REUSED: 409,
   REQUEST_IN_FLIGHT: 409,
