@@ -89,6 +89,8 @@ test('a Senior Pastor’s person page links to no page they do not have', async 
   await page.goto(PERSON);
   await expect(page.getByRole('heading', { name: PERSON_IN_SCOPE.full_name })).toBeVisible();
   await expect(page.getByText(/of 10 lessons/)).toBeVisible();
+  // The Training row too, so its link's absence is not read before it could have drawn.
+  await expect(page.getByText(/of 5/)).toBeVisible();
 
   await expect(page.getByRole('link', { name: 'Back to people' })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'People' })).toHaveCount(0);
@@ -111,7 +113,10 @@ test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and 
   page,
 }) => {
   await as(page, 'SENIOR_PASTOR');
+  await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
   await page.goto(MEETINGS);
+  // A meeting row first, so the buttons' absence is read after the meetings arrived.
+  await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
     'href',
     '/dashboard?list=awaiting',
@@ -120,12 +125,16 @@ test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and 
   await expect(page.getByRole('button', { name: 'Change category' })).toHaveCount(0);
 
   await page.goto(MEMBERS);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByText('Loading\u2026')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Active Cells' })).toHaveCount(0);
 });
 
 test('the change buttons are offered only with cell.manage_configuration', async ({ page }) => {
   await as(page, 'FULL');
+  await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
   await page.goto(MEETINGS);
+  await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Back to Cells' })).toHaveAttribute('href', '/cells');
   await expect(page.getByRole('button', { name: 'Change when it meets' })).toHaveCount(0);
 
