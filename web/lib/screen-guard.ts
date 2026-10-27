@@ -1,4 +1,16 @@
-import { holdsWholeChurch, type SessionDescription } from './me';
+import { useQuery } from '@tanstack/react-query';
+
+import { getMe, holdsWholeChurch, type SessionDescription } from './me';
+
+/**
+ * Whether a link may be drawn: a page that does not open for this account is not offered as a
+ * link either (decision 0379), so no page of an account's screens leads to the note. Until the
+ * server names the screens, every link is drawn, as the page itself is.
+ */
+export function useOffered(): (href: string) => boolean {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  return (href) => me.data === undefined || pageIsOffered(me.data, href.split(/[?#]/)[0]);
+}
 
 /**
  * Whether a page belongs to the screens the server names for this account (decision 0379).
@@ -53,6 +65,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
       at(/^\/my-cell(\/|$)/) ||
       cellRecord ||
       at(/^\/growth\/suynl(\/|$)/) ||
+      // Kept for the SUYNL readers decision 0360 marks it for, though nothing links to it now.
       at(/^\/growth\/training\/encounters(\/|$)/)
     );
   }
@@ -61,8 +74,14 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/my-cell(\/|$)/)) {
     return false;
   }
+  // New Cell is offered from the Cells list to a Whole Church holder of
+  // `cell.approve_leadership` alone (sections 2 and 10).
+  if (at(/^\/cells\/new(\/|$)/)) {
+    return holdsWholeChurch(me, 'cell.approve_leadership');
+  }
   // A Full view leader, reading their own branch, has the five reports and SUYNL alone
-  // (decisions 0360, 0380 and 0383), though the Encounter seasons stay reachable from SUYNL.
+  // (decisions 0360, 0380 and 0383). The Encounter seasons page stays open: decision 0360 marks
+  // SUYNL on it for them, though nothing on their screens links to it now.
   const branchReader =
     me.capabilities.some((grant) => grant.capability === 'reports.view_subtree') &&
     !holdsWholeChurch(me, 'reports.view_subtree');

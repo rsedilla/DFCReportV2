@@ -215,10 +215,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   // on where the viewer came from — that reason was written here and is false, because
   // the page is reached from three places and one of them is the dashboard, which is
   // Record.*
+  // **A page not on this account's screens does not open** (decision 0379): a typed address or
+  // an old link meets a note naming the account's screens and the way to its start screen.
+  // Until the server names the screens the page shows, and the API decides as always: a halted
+  // session never gets that answer, and a blank screen there would hide the way to sign in again.
+  const offered = me.data === undefined || pageIsOffered(me.data, pathname);
+
   let current: NavEntry | null = null;
   let longest = -1;
 
-  for (const link of [...links, ACCOUNT]) {
+  // On the note no item is current: the page is none of them.
+  for (const link of offered ? [...links, ACCOUNT] : []) {
     for (const match of link.matches) {
       const length = matchedLength(pathname, match);
 
@@ -275,9 +282,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const accountActive = current?.href === ACCOUNT.href;
 
-  // **A page not on this account's screens does not open** (decision 0379): a typed address or
-  // an old link meets a note naming the account's screens and the way to its start screen.
-  const offered = me.data === undefined || pageIsOffered(me.data, pathname);
   const names = links.map((link) => link.label);
   const screensLine =
     names.length > 1

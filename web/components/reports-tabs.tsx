@@ -52,7 +52,7 @@ const CELL_COUNT_TABS = [
 /**
  * A Full view leader's five (decision 0380): the Senior Pastors' five, for the leader's own
  * branch. Encounter Readiness, Training and Conquest are hidden, not withdrawn: their pages
- * still open by address.
+ * are kept and do not open for them (decision 0379).
  */
 const BRANCH_TABS = [
   { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },

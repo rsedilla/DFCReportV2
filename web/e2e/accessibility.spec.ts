@@ -7,6 +7,7 @@ import {
   PERSON_IN_SCOPE,
   mockAccepted,
   mockAdministrator,
+  mockCellCreator,
   mockAwaitingReassignment,
   mockCellAdministrator,
   mockCellApprover,
@@ -1700,7 +1701,6 @@ const TARGET_SWEEP = [
   // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
   // its Find button, and the submit button.
   { name: 'add a person', route: '/people/new', settle: 'Add this person', minimum: 13 },
-  { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10 },
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
@@ -1990,6 +1990,9 @@ const TARGET_SWEEP = [
     minimum: 4,
     church: true,
   },
+  // New Cell is offered to a Whole Church holder of `cell.approve_leadership` alone (decision
+  // 0379), so it is measured as one, after the whole-church reader's routes.
+  { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10, creator: true },
   // My Cell is the recording screens' (decision 0323), so it is measured as one, last.
   {
     // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
@@ -2414,6 +2417,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     if ('church' in entry && entry.church && !church) {
       await mockWholeChurchReader(page);
       church = true;
+    }
+    if ('creator' in entry && entry.creator) {
+      await mockCellCreator(page);
     }
     if ('recording' in entry && entry.recording) {
       await mockScreens(page, 'RECORDING');

@@ -120,23 +120,23 @@
     },
     {
       "route": "GET /api/v1/network/my-tree",
-      "reason": "The branch the Network screen opens on: the signed-in person, their direct disciples by name, and the headcounts of the tree now (decision 0252).",
-      "screen": "web/app/network/page.tsx"
+      "reason": "The branch the Network screen opened on, and since decision 0341 the first generation of Family Tree: the signed-in person, their direct disciples by name, and the headcounts of the tree now (decision 0252).",
+      "screen": "web/app/family-tree/page.tsx"
     },
     {
       "route": "GET /api/v1/leaders/:id/children",
-      "reason": "Anybody else's branch, when the address names them — focusing a row, the breadcrumb, Up one level and a search result all land here (decision 0252).",
-      "screen": "web/app/network/page.tsx"
+      "reason": "Anybody else's branch: Family Tree opens a leader's disciples with it (decision 0341), as the Network screen did (decision 0252).",
+      "screen": "web/app/family-tree/page.tsx"
     },
     {
       "route": "GET /api/v1/leaders/:id/dcc-behind",
-      "reason": "DCC records behind for the current month on each row and on the focus person, under dcc.view_subtree (decision 0252).",
-      "screen": "web/app/network/page.tsx"
+      "reason": "DCC records behind for the current month on each row of the Branch screen (decision 0252). That screen opens for no account since decision 0379, and no ruling owes it another.",
+      "no_screen_owed": true
     },
     {
       "route": "GET /api/v1/leaders/:id/cell-figures",
-      "reason": "Cell Leaders beneath and Cell meetings behind for the current month, under cell.view_subtree (decision 0252).",
-      "screen": "web/app/network/page.tsx"
+      "reason": "Cell Leaders beneath and Cell meetings behind for the current month on the Branch screen (decision 0252). That screen opens for no account since decision 0379, and no ruling owes it another.",
+      "no_screen_owed": true
     },
     {
       "route": "GET /api/v1/leaders/:id/descendants",

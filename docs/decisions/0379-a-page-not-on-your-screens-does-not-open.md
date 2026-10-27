@@ -18,22 +18,31 @@ changed a Full view leader's Reports and Growth in between.
    (decision 0372).
 2. **An account's pages are those its sidebar items and tabs reach and the pages those open**:
    a Cell's meetings and members from Record, a person from a name, the Encounter seasons from
-   SUYNL. Which items an account has is the server's answer (decision 0323), never a role.
+   Training and Encounter Readiness. Which items an account has is the server's answer
+   (decision 0323), never a role. **A link to a page the account does not have is not drawn
+   either**, so no page of its screens leads to the note: a Senior Pastor's person page offers
+   no People tab, *Back to people*, SUYNL or Training link, and their Cell pages no Cells tab.
 3. **What this closes today:**
    - for every account, the `Branch` screen (decision 0364);
-   - for a Full view leader, Encounter Readiness, Training and Conquest under Reports, and
-     Training and Conquest under Growth (decisions 0360 and 0380);
+   - for a Full view leader, Encounter Readiness, Training and Conquest under Reports, Training
+     and Conquest under Growth (decisions 0360 and 0380), and My Cell. The Encounter seasons
+     page stays open to them and to the recording screens, as decision 0360 marks SUYNL on it
+     for such a reader, though nothing on their screens links to it now;
    - for the Senior Pastors, the People list, Add a person, Awaiting Leader Assignment, the
-     Cells list, Growth, Family Tree, My Cell, and the Reports tabs that are not theirs. A
-     person's page stays open to them until the owner rules on it;
-   - for a recording-screens account, Reports, the twelve months, the Cells list, Awaiting
-     Leader Assignment, Family Tree, Training and Conquest;
-   - for the Admin, My Cell and the twelve months, which are not on their screens.
+     Cells list, New Cell, Growth, Family Tree, My Cell, and the Reports tabs that are not
+     theirs. A person's page stays open to them until the owner rules on it;
+   - for a recording-screens account, Reports, the twelve months, the Cells list, New Cell,
+     Awaiting Leader Assignment, Family Tree, Training and Conquest;
+   - for the Admin, My Cell and the twelve months, which are not on their screens;
+   - New Cell, for any account but a Whole Church holder of `cell.approve_leadership`, to whom
+     alone the Cells list offers it.
 4. **A Cell's page offers *Change when it meets* and *Change category* only to an account that
    may change a Cell's configuration** (`cell.manage_configuration`), which the Senior Pastors
    do not hold (decision 0326). The route still decides the Cell's scope. Its back link returns
    to where the account's own screens reached it: *Back to Update Records* for the Senior
-   Pastors, and *Back to Cells* to My Cell on the recording screens.
+   Pastors, and *Back to Cells* to My Cell on the recording screens. *Edit details* on a
+   person's page is offered likewise only with `people.edit_basic`, which the Senior Pastors do
+   not hold either.
 5. **Nothing is deleted.** The pages stay in the code, so a later tier is given a screen by
    adding it to that account's screens rather than by building it again.
 

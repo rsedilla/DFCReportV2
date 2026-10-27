@@ -30,6 +30,7 @@ import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { formatMobile } from '@/lib/mobile';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
+import { useOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /**
@@ -91,6 +92,7 @@ function PersonDetail() {
   });
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const offered = useOffered();
   // The same read the Cell section below makes, so the header line costs no request.
   const cells = useQuery({
     queryKey: ['person-cells', id],
@@ -133,9 +135,11 @@ function PersonDetail() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <SectionFrame section="people">
-      <p className="text-sm">
-        <TextLink href="/people">Back to people</TextLink>
-      </p>
+      {offered('/people') ? (
+        <p className="text-sm">
+          <TextLink href="/people">Back to people</TextLink>
+        </p>
+      ) : null}
 
       {person.isPending ? (
         <p className="text-muted mt-6 text-sm">Loading…</p>
@@ -165,9 +169,13 @@ function PersonDetail() {
 
           {/* The actions in one bar under the name (owner's choice, 2026-09-22). */}
           <div className={`mt-6 ${CONTROL_BAR}`}>
-            <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
-              Edit details
-            </Link>
+            {/* Offered only to an account that may edit a person (decision 0379): a Senior
+                Pastor holds no `people.edit_basic` (decision 0326), and the route still decides. */}
+            {mayEdit ? (
+              <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
+                Edit details
+              </Link>
+            ) : null}
             {mayMove ? (
               <Button variant="secondary" onClick={() => setMoving(true)}>
                 Move to another leader

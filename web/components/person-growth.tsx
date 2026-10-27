@@ -17,6 +17,7 @@ import {
   type TrainingPerson,
 } from '@/lib/growth';
 import { getMe } from '@/lib/me';
+import { useOffered } from '@/lib/screen-guard';
 
 /**
  * One person's SUYNL and Training, read-only (SKILL.md section 28; owner's choice of
@@ -33,6 +34,7 @@ import { getMe } from '@/lib/me';
 export function PersonGrowth({ personId, memberId }: { personId: string; memberId: string }) {
   const headingId = useId();
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const offered = useOffered();
   const holds = (capability: string) =>
     (me.data?.capabilities ?? []).some((grant) => grant.capability === capability);
 
@@ -73,12 +75,19 @@ export function PersonGrowth({ personId, memberId }: { personId: string; memberI
       </h2>
       <dl className="mt-3 flex flex-col gap-4">
         {suynlRow ? (
-          <Suynl row={suynlRow} href={`/growth/suynl${search}`} named={!suynlOnly} />
+          <Suynl
+            row={suynlRow}
+            href={offered('/growth/suynl') ? `/growth/suynl${search}` : null}
+            named={!suynlOnly}
+          />
         ) : suynlFailed ? (
           <Unavailable label="SUYNL" />
         ) : null}
         {trainingRow ? (
-          <Training row={trainingRow} href={`/growth/training${search}`} />
+          <Training
+            row={trainingRow}
+            href={offered('/growth/training') ? `/growth/training${search}` : null}
+          />
         ) : trainingFailed ? (
           <Unavailable label="Training" />
         ) : null}
@@ -100,7 +109,16 @@ function failed(error: unknown): boolean {
 
 const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
-function Suynl({ row, href, named }: { row: SuynlPerson; href: string; named: boolean }) {
+function Suynl({
+  row,
+  href,
+  named,
+}: {
+  row: SuynlPerson;
+  /** Null where the Growth page is not on this account's screens (decision 0379). */
+  href: string | null;
+  named: boolean;
+}) {
   const latest = row.lessons.reduce<string | null>(
     (day, lesson) => (day === null || lesson.filed_on > day ? lesson.filed_on : day),
     null,
@@ -135,15 +153,17 @@ function Suynl({ row, href, named }: { row: SuynlPerson; href: string; named: bo
             );
           })}
         </ul>
-        <p className="mt-2">
-          <TextLink href={href}>Open SUYNL</TextLink>
-        </p>
+        {href ? (
+          <p className="mt-2">
+            <TextLink href={href}>Open SUYNL</TextLink>
+          </p>
+        ) : null}
       </dd>
     </div>
   );
 }
 
-function Training({ row, href }: { row: TrainingPerson; href: string }) {
+function Training({ row, href }: { row: TrainingPerson; href: string | null }) {
   const graduated = TRAINING_PROGRAMS.flatMap((program) =>
     row.graduations.filter((entry) => entry.program === program),
   );
@@ -171,9 +191,11 @@ function Training({ row, href }: { row: TrainingPerson; href: string }) {
             </ul>
           </>
         )}
-        <p className="mt-2">
-          <TextLink href={href}>Open Training</TextLink>
-        </p>
+        {href ? (
+          <p className="mt-2">
+            <TextLink href={href}>Open Training</TextLink>
+          </p>
+        ) : null}
       </dd>
     </div>
   );
