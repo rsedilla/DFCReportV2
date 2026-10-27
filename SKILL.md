@@ -538,15 +538,25 @@ Historical reports must remain reproducible: a report for a past period reflects
 
 "New Cell Leaders for a selected period" (Section 16) is period-based like attendance reporting and is not affected by a leader's later archival. "Leaders with 12+ Direct Leaders" (Section 16) is a current-state snapshot and does reflect current lifecycle state, for both the leader and the counted direct leaders.
 
-Archive reasons must use neutral, operational language — never judgmental concepts such as "for cause," "disciplined," "bad leader," or similar. Use:
+Archive reasons must use neutral, operational language — never judgmental concepts such as "for cause," "disciplined," "bad leader," or similar. Every new archive gives one of these (ruling of 2026-10-27, decision 0397):
 
-- `NO_LONGER_IN_CURRENT_NETWORK`
-- `RECORD_CREATED_IN_ERROR` — for a genuinely erroneous individual record, not a duplicate
-- `OTHER` — requires a note
+- `WORKING_AWAY` — *Working away*
+- `STUDYING_AWAY` — *Studying away*
+- `MOVED_AWAY` — *Moved away*
+- `ATTENDS_ANOTHER_CHURCH` — *Attends another church*
+- `PASSED_AWAY` — *Passed away*
+- `RECORD_CREATED_IN_ERROR` — *Record created in error*, for a genuinely erroneous individual record, not a duplicate
+- `OTHER` — requires a written comment
+
+`NO_LONGER_IN_CURRENT_NETWORK` was the first list's and stays on the rows that carry it; it is given for no new archive. The database refuses a new archive with no reason, with that one, or with `OTHER` and no comment (migration 0032).
 
 Duplicate Person records must be corrected through Person Merge (below), never through ordinary archiving with `RECORD_CREATED_IN_ERROR`.
 
 Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary leaders do not have unrestricted authority to archive people.
+
+**Only the Admin archives and restores, and nobody asks for it in the app** (decision 0397). The Admin talks to the Senior Pastors first. Archive is offered on People's *Absent 3+ Months* tab (Section 19) and on the person's page, at `POST /api/v1/people/{id}/archive`, so somebody who has not been away three months — who passed away last week, moved abroad, or was entered by mistake — is archived without waiting. It is effective at the moment it is made and is never backdated. It closes the `CURRENT` row and opens an `ARCHIVED` one with the reason and comment, ends the Person's open pastoral assignment with no replacement, so that their own disciples appear on *Awaiting Leader Assignment* (Section 5, decision 0232), and ends their Cell membership (Section 10). Where they have an account that is not disabled, the account-access decision of Section 6 is made in the same act. It is refused, `INVARIANT_VIOLATION`, for somebody who leads a Cell (below), for a Network root, whose seat Section 5 gives no succession, for the actor's own Person, and for somebody already archived or absorbed by a merge.
+
+**Restore** is `POST /api/v1/people/{id}/restore`: it returns the Person to `CURRENT` and nothing else, no account, Cell or pastoral leader coming back with them (Sections 5, 6 and 10). The Admin finds archived people on the tab's *Archived* view or on the person's page. **An archived person's page keeps a read-only line**, "Archived on 27 Oct 2026 · Moved away", with the comment beneath it where there is one, for every reader who may open the page.
 
 ### Archiving a Person who leads a Cell
 
@@ -1623,7 +1633,7 @@ An actor authorized only to assign Cell leadership may record the leadership ass
 
 Person lifecycle (Current/Archived, Section 3) and Account access status (e.g. Active/Disabled) are separate concepts. Account access must never be silently inferred from an archive reason.
 
-When an authorized user archives a Person who has an active account, the workflow must explicitly surface the account-access decision:
+When an authorized user archives a Person who has an active account, the workflow must explicitly surface the account-access decision. **"Active" here is any account that is not disabled** (decision 0397), so an account still awaiting activation is asked about too, since its activation link would otherwise still work. The Archive dialog asks it, and `POST /api/v1/people/{id}/archive` refuses, `VALIDATION_FAILED`, a body that leaves it out for such a Person:
 
 - `Disable account access` — default selection
 - `Keep account access` — requires explicit authorized selection
@@ -1779,7 +1789,7 @@ Eight of these defaults are deliberate and must not be widened for convenience. 
 
 **Senior Pastors read the church, record what they owe and move a person to a new leader, and change nothing else** (ruling of 2026-10-09, decision 0326). They hold none of `people.create`, `people.edit_basic`, `people.manage_lifecycle`, the two correction capabilities, the five Cell management capabilities (the fifth since decision 0357), or the Growth filing capabilities; an administrator does that work. They keep every read capability, `dcc.take_attendance`, `cell.take_attendance`, `cell.request_leadership` and `people.manage_pastoral_assignment`.
 
-**Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin.
+**Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is performed by Admin after talking with the Senior Pastors, and a leader asks outside the application: there is no in-app request (ruling of 2026-10-27, decision 0397, replacing "requested by a leader").
 
 A role is a starting set, never a ceiling or a substitute for the checks themselves. The API still evaluates capability and scope on every request (Section 7, above); it never infers permission from a role name.
 
@@ -1953,7 +1963,7 @@ account_roles
 - revoked_at         nullable
 ```
 
-`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role, **and at most one of `SENIOR_PASTOR` and `ADMIN` in total**.
+`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_pastoral_assignment` and `audit.view` — and, since decision 0326, not on `people.manage_lifecycle`, which this sentence still listed until decision 0397 — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role, **and at most one of `SENIOR_PASTOR` and `ADMIN` in total**.
 
 An account's effective authority is the union of its roles' defaults, and Admin's set is a superset of a Senior Pastor's — so an `ADMIN` row beside a `SENIOR_PASTOR` one does not produce a Senior Pastor who also helps with administration. It produces an account holding every capability in the system, for which every exclusion this section writes for the role is void.
 
@@ -2876,7 +2886,7 @@ Reversing an approval is a different operation and is not this one. A Cell creat
 
 **Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
 
-The same shape governs the other actions where a leader would benefit from the result. Archival reduces a leader's own People count, and is requested by a leader and performed by Admin. Person Merge lowers totals for periods already reported, and is Admin only — not held by Senior Pastors (Section 3, Section 7).
+The same shape governs the other actions where a leader would benefit from the result. Archival reduces a leader's own People count, and is performed by Admin, with no in-app request (decision 0397). Person Merge lowers totals for periods already reported, and is Admin only — not held by Senior Pastors (Section 3, Section 7).
 
 **What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the queue above, which is the workflow's own task surface; an approver deciding a request there is the workflow's one approval, not a tier added to it (decision 0352).
 
@@ -4084,6 +4094,8 @@ Archived people and Person records absorbed into another via Merge are excluded 
 
 Use neutral/factual language throughout. Do not label people as ghost, inactive, failed, lost, bad, or other judgmental terminology (Section 1, Principle 7).
 
+**People's *Absent 3+ Months* tab is not Participation** (decision 0397, Section 19). It uses the last three finished calendar months, not a rolling window, and lists somebody only where each month carries an Absent mark for them, so it is a list to act on rather than an attendance report. Each page that shows either says which it is.
+
 Reports must support authorized drill-down from Whole Church / Network / Leader to the actual people, consistent with every other Network Summary metric.
 
 ### Explaining changes in current totals
@@ -4124,6 +4136,8 @@ Whole Church
 **The Branch screen shows one person's branch of the pastoral tree as it stands now** (ruling of 2026-09-18), guarded by `people.view_subtree`: a breadcrumb, a focus block giving the person's member ID and where they sit, and their direct reports twenty at a time. **The focus block does not repeat who pastors the person**, which the breadcrumb shows (ruling of 2026-10-15, decision 0354); where nobody pastors them, it still says why (decision 0270). It carries headcounts of that tree — Cell Leaders beneath counting current Cell Leaders (Section 11) under `cell.view_subtree` — and, on each row, DCC records behind and Cell meetings behind for the current month, never added together: each a sum over that row's branch now of each leader's own unmet obligations (Section 20), DCC on events that have happened and a Cell on meetings whose day has begun, each only while its week is open (decision 0335), read under `dcc.view_subtree` and `cell.view_subtree` respectively, with the month named and marked open. Rows are ordered by name, and a filter may show only rows where either figure is above zero. A row's name and its Open control focus that person; Move is offered on each row to a reader holding `people.manage_pastoral_assignment`; search finds people by name. Its Still to record figures are plain numbers (ruling of 2026-10-13, decision 0340), and it hands Reports nothing. **It opens on the reader's own branch, and a reader holding no pastoral assignment opens instead on the Network roots their `people.view_subtree` reaches** (ruling of 2026-09-21), by name, each with its branch's headcounts and figures; a root is never moved (Section 5), so those rows offer Open alone.
 
 **A Full view leader and an Admin have `Family Tree` as a tab of People, after People** (ruling of 2026-10-13, decision 0341; *Awaiting Leader Assignment* between them since the ruling of 2026-10-21, decision 0381, moved from `Record`; *# of People*, between them from decision 0364, is under `Reports` since decision 0376); the Senior Pastors' screens and a Leader account without Full view do not. It is an outline of the reader's branch as it stands now: the reader first, opened on their direct disciples, each line opening that person's direct disciples in place, to any depth. Everyone is listed by name, whether or not they lead anybody; each line reads its direct disciples and everyone beneath (Section 5), or "leads nobody yet", and a name opens the person's page. It reads the Branch screen's routes under `people.view_subtree` and carries two of Branch's headcounts and no other figure or action. A reader holding no pastoral assignment starts at the Network roots their scope reaches, as Branch does.
+
+**A Full view leader and an Admin have `Absent 3+ Months` as a fourth tab of People, after Family Tree, with no count** (ruling of 2026-10-27, decision 0397). It lists, at `GET /api/v1/people/absent` under `people.view_subtree` against the actor, resolved now, in first-name order, the current people of the reader's scope (neither archived, merged, nor outside the pastoral tree, decision 0339) for whom **each** of the last three finished calendar months, in Asia/Manila: was one they were in a Cell, or under a pastoral leader, for the whole month; carries at least one Absent mark for them at a Cell meeting or DCC Sunday, on each record's current line; carries no Present mark for them at either; and holds no meeting, held or moved to a date in that month, of a Cell they lead, leading a Cell that met counting as being there. Its columns are the name, opening the person's page, their pastoral leader, their Cell or the Cell they lead, and *Last at Cell* and *Last at DCC*, each their latest Present mark or *Never*. The page names the three months. A Full view leader reads their whole branch with no action. For the Admin each row carries Archive (Section 3), except a row for somebody who leads a Cell, which carries none and reads "Leads CELL-000012 (3 members): hand it over or close it first", the Cell ID opening the Cell. **The Admin alone has an *Absent 3+ Months | Archived* switch on it**: *Archived*, at `GET /api/v1/people/archived` under `people.manage_lifecycle`, lists everyone archived, newest first, with their last pastoral leader and Cell, the date and the reason, each with Restore. A person's page carries Archive for the Admin, and for an archived person the read-only archived line, with Restore beside it for the Admin (Section 3).
 
 **Reports listed coverage by leader** (ruling of 2026-09-18), on Filed Reports, which is withdrawn (ruling of 2026-10-13, decision 0340); its routes remain and no screen reads them. As it stood: every leader who owns an obligation within the report's scope and period is a row, the reader first where they own one and the rest by name, and each row counts that leader's own obligations — the leader-events Section 9 counts for DCC and the scheduled meetings Section 12 counts for a Cell, each owned by one leader (Section 20), except a scheduled meeting whose Cell had no leader that day, which `CLAUDE.md` records as open — so the rows add up to the report's coverage. A row opens that leader's report, which counts their whole branch and so can show a larger figure than the row. A row is named only where the guard would admit that leader as a `LEADER` scope selector at the period's final millisecond, decided outside the report's snapshot (Section 24); the rest are counted in one line that names nobody, does not open, and is not shown when it counts nobody.
 
@@ -4244,7 +4258,7 @@ The sidebar has five items, the fifth labelled `SUYNL` for a Leader account with
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    Cell Groups, DCC, Encounter Readiness (the SUYNL report, decision 0378), Training, Conquest and # of People (a Full view leader: the Senior Pastors' five for their own branch, each by period or over its last 12 months, decision 0380; a Senior Pastor: five, each by period or over its last 12 months, decisions 0326 and 0377), and Network Summary when it is built (Section 16)
-People     My People and Search (Sections 3 and 8), Awaiting Leader Assignment on the Full view screens (decision 0381), and Family Tree, the pastoral tree (Section 5)
+People     My People and Search (Sections 3 and 8), Awaiting Leader Assignment on the Full view screens (decision 0381), Family Tree, the pastoral tree (Section 5), and Absent 3+ Months (decision 0397)
 Cells      the Cell Leaders module (Section 15): Active Cells; Awaiting CG Assignment on the Full view screens (decision 0381); for the Admin, Under 3 Member Cells, Inactive (3+ Months) Cells and Closed Cells (decision 0366); and Cells to Approve for an account holding cell.approve_leadership (decision 0352)
 Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 Cells      a Leader account without Full view: its own Cells, on the page titled My Cell (Section 15, decisions 0323 and 0371)

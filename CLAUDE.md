@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-27, the trigger being decision 0379: of 395 files, 394 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0396 each moved the first two and
+2026-10-27, the trigger being decision 0397: of 396 files, 395 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0397 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-27 and triggered by 0379, and was left stale by 0397 the same day. The one before that was dated
 2026-10-27 and triggered by 0394, and was left stale by 0379 the same day. The one before that was dated
 2026-10-27 and triggered by 0396, and was left stale by 0394 the same day. The one before that was dated
 2026-10-27 and triggered by 0395, and was left stale by 0396 the same day. The one before that was dated
@@ -835,6 +836,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-27 — [A refused correction offers Reload, and keeps the version the edit began from](docs/decisions/0394-a-refused-correction-offers-reload.md)
 - 2026-10-27 — [One button marks the rest Absent](docs/decisions/0395-one-button-marks-the-rest-absent.md)
 - 2026-10-27 — [An edit is checked for duplicates as creation is](docs/decisions/0396-an-edit-is-checked-for-duplicates-as-creation-is.md)
+- 2026-10-27 — [Absent 3+ Months, and archiving a person](docs/decisions/0397-absent-three-months-and-archiving.md)
 
 ### Open — awaiting a ruling
 
