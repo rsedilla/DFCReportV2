@@ -1802,6 +1802,14 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
+    // Decision 0397: the People tabs, then a name link per person. Settled on a name.
+    name: 'people, absent three months',
+    route: '/people/absent',
+    settleRole: 'link' as const,
+    settle: 'Dalisay Ocampo',
+    minimum: 6,
+  },
+  {
     // Since decision 0381: the Cells tabs, then a name link per person. Settled on a name.
     name: 'cells, awaiting cg assignment',
     route: '/cells?view=NOCELL',
@@ -2376,6 +2384,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-06-28T02:00:00Z'));
   await mockSignedIn(page);
   await mockPeople(page);
+  await mockAbsentPeople(page);
   // The attendance screens too, because the sweep counts the targets a route
   // renders and a route showing a failure notice renders fewer of them. The
   // `minimum` on each entry is what would catch that, but only if the data is

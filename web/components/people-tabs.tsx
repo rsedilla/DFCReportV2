@@ -58,7 +58,12 @@ export function PeopleTabs({
   return (
     <>
       {tabbed && shown.length > 0 ? (
-        <nav aria-label="People" className={cn('mt-6 flex', TAB_ROW)}>
+        // Four tabs sit two by two on a phone and in one row from `sm`, as a Full view leader's
+        // five reports do (decision 0361); three still fit one row at 320px.
+        <nav
+          aria-label="People"
+          className={cn(shown.length > 3 ? 'mt-6 grid grid-cols-2 sm:flex' : 'mt-6 flex', TAB_ROW)}
+        >
           {shown.map((tab) => {
             const active = tab.href === current;
 
@@ -68,7 +73,11 @@ export function PeopleTabs({
                 href={tab.href}
                 aria-current={active && !within ? 'page' : undefined}
                 aria-label={tab.name}
-                className={cn(tabClasses(active), 'inline-flex items-center gap-2')}
+                className={cn(
+                  tabClasses(active),
+                  'inline-flex items-center gap-2',
+                  shown.length > 3 && 'justify-center px-1.5 py-1 text-center sm:px-4',
+                )}
               >
                 {tab.label}
                 {/* Its count, as it had on Record; a 0 shows no box (decision 0349). */}

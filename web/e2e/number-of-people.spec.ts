@@ -120,6 +120,7 @@ test('People carries no # of People tab', async ({ page }) => {
     'Add People',
     /^Awaiting Leader Assignment/,
     'Family Tree',
+    'Absent 3+ Months',
   ]);
 });
 
