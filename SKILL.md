@@ -3382,6 +3382,15 @@ declaration (ruling of 2026-09-15). It is decision 0194's
 rule for the DCC roster — a leader marking a checklist must see who is already marked —
 applied to the domain that asks for more, not a new one.
 
+**A member added after the meeting was recorded is asked about, not called not marked** (ruling
+of 2026-10-26, decision 0391). The roster stays everyone in the Cell on the meeting's date, so
+somebody added that evening, after the leader saved, is on it with no mark. Each roster member
+carries `joined_after_recorded`: true where the membership's `started_at` is later than the
+meeting's first `submitted_at`. It is a reading aid and moves no roster, mark or figure. While such a
+member has no mark, the screen counts them as "added after it was recorded", asks whether they came,
+and tells the reader to press Edit meeting wherever that button is offered. A membership backdated before the
+record, or added in the instant of the first save, is not flagged and reads as before.
+
 **The mark carries no per-person version**, which is where a copy of the DCC line would
 have gone wrong: a Cell submission carries **the meeting's** version and the server compares
 that (decision 0164), while `cell_attendance.version` "orders one person's chain and is not

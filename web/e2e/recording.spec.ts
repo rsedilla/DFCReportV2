@@ -65,6 +65,30 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
   });
 
+  // Owner's choice of 2026-10-27: each mark draws a dot, filled when chosen, and on a page
+  // that cannot be changed the chosen mark keeps its full strength; only the others fade.
+  test('shows each mark with a dot, and keeps the chosen one clear when read only', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+
+    await page.goto(MEETING);
+
+    const group = page.getByRole('group', { name: 'Rosalinda Ocampo' });
+    const chosen = group.locator('label', { has: page.getByRole('radio', { name: 'Present' }) });
+    const other = group.locator('label', { has: page.getByRole('radio', { name: 'Absent' }) });
+
+    // A ring in each box, and the inner dot only in the chosen one.
+    await expect(chosen.locator('span[aria-hidden="true"]')).toHaveCount(1);
+    await expect(chosen.locator('span[aria-hidden="true"] > span')).toHaveCount(1);
+    await expect(other.locator('span[aria-hidden="true"]')).toHaveCount(1);
+    await expect(other.locator('span[aria-hidden="true"] > span')).toHaveCount(0);
+
+    await expect(chosen).toHaveCSS('opacity', '1');
+    await expect(other).toHaveCSS('opacity', '0.6');
+  });
+
   test('unlocks its marks for an account that may correct it, sending the meeting version', async ({
     page,
   }) => {
@@ -425,6 +449,48 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByText('Youth · 7:00 pm · CELL-000007')).toBeVisible();
     const summary = page.getByText(/^First recorded on/);
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
+  });
+
+  // Decision 0391: somebody added to the Cell after the meeting was recorded was
+  // called "not marked", which read as the leader having skipped them.
+  test('asks whether a member added after it was recorded came, rather than calling them not marked', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText(/^First recorded on/)).toHaveText(
+      'First recorded on 27 Jun · 1 present, 1 absent, 1 added after it was recorded',
+    );
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting? Press Edit meeting to add a mark.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Joined the Cell after this was recorded', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/not marked/)).toHaveCount(0);
+  });
+
+  test('does not ask for an edit the closed week refuses', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true, weekOpen: false });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting?',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Press Edit meeting/)).toHaveCount(0);
   });
 
   test('corrects Did not meet to Met, with the whole roster and a reason', async ({ page }) => {

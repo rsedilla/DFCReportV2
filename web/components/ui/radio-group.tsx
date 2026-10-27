@@ -60,8 +60,9 @@ export function RadioGroup<T extends string>({
   /**
    * `row` puts the choices beside the legend, one line per group, for a roster that
    * asks the same question of many people (the DCC checklist and a Cell meeting). The
-   * dot is hidden to fit a 320px phone; the native radio still carries the state,
-   * and a thicker border and bold label mark the choice without relying on colour.
+   * native radio covers the whole button invisibly, so a drawn dot shows the state, as
+   * the stacked layout's own dot does (owner's choice, 2026-10-27): a border and a
+   * faint fill alone were too hard to read, above all on a page that cannot be changed.
    */
   layout?: 'stacked' | 'row';
   /** Every choice the same width from `sm`, as wide as the longest (decision 0332). */
@@ -111,7 +112,7 @@ export function RadioGroup<T extends string>({
               className={cn(
                 'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
                 row
-                  ? 'relative w-[4.25rem] justify-center px-1 sm:w-24'
+                  ? 'relative w-[5.25rem] justify-center gap-1 px-1 sm:w-28 sm:gap-1.5'
                   : 'flex-1 gap-2.5 px-3 sm:flex-none sm:min-w-32',
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
@@ -121,7 +122,9 @@ export function RadioGroup<T extends string>({
                 // **Disabled looks disabled.** The pointer and the hover wash said "tap me"
                 // on a group that cannot change, so both follow the input's own state.
                 'has-[:enabled]:hover:bg-raised has-[:disabled]:cursor-not-allowed',
-                'has-[:disabled]:opacity-60',
+                // **What was chosen stays legible.** A read-only roster is read for its
+                // marks, so only the choices not taken fade there.
+                !checked && 'has-[:disabled]:opacity-60',
               )}
             >
               <input
@@ -142,6 +145,19 @@ export function RadioGroup<T extends string>({
                     : 'size-4 shrink-0'
                 }
               />
+              {row ? (
+                // Drawn, because the radio above it is invisible. Decorative: the radio
+                // itself is what a screen reader announces as checked.
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'flex size-3.5 shrink-0 items-center justify-center rounded-full border-2',
+                    checked ? 'border-accent' : 'border-edge',
+                  )}
+                >
+                  {checked ? <span className="bg-accent size-1.5 rounded-full" /> : null}
+                </span>
+              ) : null}
               {option.label}
             </label>
           );

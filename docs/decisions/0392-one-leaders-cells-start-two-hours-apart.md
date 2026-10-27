@@ -50,4 +50,4 @@ breaking the Cells that have them.
 Decision 0392, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 10.
 
-Previous: [2026-10-26 — One refusal for anybody outside your scope](0390-one-refusal-for-anybody-outside-your-scope.md)
+Previous: [2026-10-26 — A member added after a meeting was recorded is asked about, not called not marked](0391-a-member-added-after-a-meeting-was-recorded.md)
