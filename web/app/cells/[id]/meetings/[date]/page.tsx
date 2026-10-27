@@ -50,6 +50,12 @@ import { TextLink } from '@/components/ui/text-link';
  * nobody made — which on a correction would silently overwrite the marks the leader
  * came here to keep.
  *
+ * **The rest are marked Absent by one button the leader presses** (decision 0395). It is
+ * offered only once at least one member is marked; then "Mark the other 4 Absent" marks
+ * every member still unmarked, and says how many, so a count larger than expected shows
+ * somebody was missed. Save still waits until every member is marked, so every Absent is
+ * one the leader chose.
+ *
  * **A meeting whose day has not come offers no record.** Decision 0238 refuses one
  * before the day begins in Manila, so the screen says "Not yet" rather than offering a
  * Save the API would refuse.
@@ -429,6 +435,14 @@ function RecordMeeting() {
       unmarked.length === 1 ? '1 member still to mark.' : `${unmarked.length} members still to mark.`;
   }
 
+  // The members nobody has marked, marked Absent in one press (decision 0395). Offered only
+  // once at least one member is marked, so it is never the first thing pressed and its count
+  // is always of the rest: a larger count than expected shows somebody was missed.
+  const restAbsentLabel =
+    unmarked.length === 1 ? 'Mark the 1 left Absent' : `Mark the other ${unmarked.length} Absent`;
+  const offerRestAbsent =
+    status !== 'NOT_HELD' && unmarked.length > 0 && unmarked.length < members.length;
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="record">
@@ -743,12 +757,42 @@ function RecordMeeting() {
               <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
                 <FailureNotice failure={saveFailure} />
               </div>
-              <p aria-live="polite" className="text-sm">
+              <p id="save-hint" tabIndex={-1} aria-live="polite" className="text-sm">
                 {saveHint}
               </p>
               {/* One way back, the link at the top (owner's choice of 2026-10-05). */}
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                {offerRestAbsent ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    // Above Save on a phone, where the bar stacks in reverse; beside it from `sm`.
+                    className="order-last w-full sm:order-none sm:w-auto"
+                    onClick={() => {
+                      setEdits((current) => ({
+                        ...current,
+                        ...Object.fromEntries(
+                          unmarked.map((member) => [member.person_id, 'absent' as const]),
+                        ),
+                      }));
+                      // The button goes once nobody is left to mark, so focus moves on rather than
+                      // falling to the page (2.4.3): to Save, or, where Save still waits for
+                      // something, to the line saying what.
+                      requestAnimationFrame(() => {
+                        const saveButton = document.getElementById('save-meeting');
+                        if (saveButton instanceof HTMLButtonElement && !saveButton.disabled) {
+                          saveButton.focus();
+                        } else {
+                          document.getElementById('save-hint')?.focus();
+                        }
+                      });
+                    }}
+                  >
+                    {restAbsentLabel}
+                  </Button>
+                ) : null}
                 <Button
+                  id="save-meeting"
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => save.mutate()}
