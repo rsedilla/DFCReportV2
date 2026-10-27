@@ -149,12 +149,22 @@ export class AccountAccessService {
   ): Promise<void> {
     await this.accountTokens.supersedeAllWithin(trx, accountId);
 
-    const account = await trx
+    // The actor's row with the target's, in id order, and the actor still active, as
+    // `disable` takes them: two administrators each disabling the other, by either route,
+    // would otherwise both commit and leave nobody able to sign in.
+    const rows = await trx
       .selectFrom('accounts')
       .select(['id', 'status'])
-      .where('id', '=', accountId)
+      .where('id', 'in', [accountId, actorAccountId])
+      .orderBy('id')
       .forNoKeyUpdate()
-      .executeTakeFirst();
+      .execute();
+
+    if (rows.find((row) => row.id === actorAccountId)?.status !== 'ACTIVE') {
+      throw new UnauthenticatedError('Your session has ended. Sign in again.');
+    }
+
+    const account = rows.find((row) => row.id === accountId);
 
     if (!account || account.status === 'DISABLED') {
       return;

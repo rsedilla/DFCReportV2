@@ -96,6 +96,6 @@ somebody new, not somebody nobody recorded, and not a leader running a Cell ever
 is on the person's page too because the list can only show somebody after three months.
 
 Decision 0397, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 3, 6, 7, 10, 15, 16, 19, 21 and 22.
+Sections 3, 6, 7, 10, 16, 17 and 19.
 
 Previous: [2026-10-27 — An edit is checked for duplicates as creation is](0396-an-edit-is-checked-for-duplicates-as-creation-is.md)
