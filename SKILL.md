@@ -1400,14 +1400,23 @@ person's this way.
 - Invalidate token after use
 - Do not let admins know or choose another user's password
 
-**That last rule is not exempted on a development machine, and the development email
+**An administrator may send the holder of an account in use a reset link** (decision 0393). On
+the person page of an `ACTIVE` account, under `accounts.manage` against the Account, *Send a
+password reset email* mints the same reset token the forgot-password page does and emails it to
+the address already on the account, so the holder still chooses their own password and the
+administrator learns nothing they could sign in with. It allows 5 a minute, as asking for a reset does. It is refused for an account awaiting
+activation, which is sent its activation email again instead, and for a disabled one, which is
+re-enabled first. Sending is audited as `account.password_reset_sent`; using the link is still
+`password.reset`. It moves no address: where a reset link goes is the account's own email.
+
+**The rule that an administrator may not know or choose another user's password is not exempted on a development machine, and the development email
 transport is what it binds to** (ruling of 2026-09-11). That transport writes each message
 to a directory. It writes an **activation** token and **withholds a password-reset** one,
 recording the message without it.
 
 The distinction is not a matter of degree. An activation credential belongs to an account
 nobody has used; a reset credential takes over an account somebody is using, which is what
-the sentence above is about. The transport was justified by the first and never by the
+that rule is about. The transport was justified by the first and never by the
 second — it exists because a provisioned account cannot otherwise be activated at all — so
 withholding the reset token costs it nothing it was built for. The trade this section makes
 for `bootstrap:admin`, which prints its activation token, carries for the same reason and
@@ -1417,8 +1426,8 @@ stops at the same place: there the operator *is* the holder.
 was false.** It held that the operator already had the token anyway — that `account_tokens`
 was one query away and the service would mint either token on request. Neither is true.
 That table stores a SHA-256 digest and the schema says in terms that the token itself is
-never stored; of the four sites that mint one, three hand it only to this transport and the
-fourth refuses while any account exists. This section already said so where it introduces
+never stored; every site that mints one hands it only to this transport, except the
+bootstrap command, which refuses while any account exists. This section already said so where it introduces
 the transport: the token is stored only as a hash, *so there is no way back*. The outbox
 exists **because** the database yields nothing, and the amendment argued it was redundant
 **because** the database yields everything.
@@ -4260,7 +4269,7 @@ Admin focuses on platform operations:
 - **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
-- Accounts — given, their activation email resent, and disabled or re-enabled, from the person's page, where the section shows only to a holder of `accounts.manage` (decisions 0276 and 0307)
+- Accounts — given, their activation email resent, a password reset sent to one in use, and disabled or re-enabled, from the person's page, where the section shows only to a holder of `accounts.manage` (decisions 0276, 0307 and 0393)
 - Roles & Permissions
 - Audit Logs
 - System Settings
@@ -4612,6 +4621,7 @@ Audit important actions, including:
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
+- A password reset sent to an account in use by an administrator (decision 0393)
 - A username set or changed, with the old and the new (decision 0337)
 - A password changed by its holder while signed in (decision 0351)
 - Second sign-in step set up or reset, and a recovery code used
@@ -4732,6 +4742,7 @@ GET  /api/v1/auth/me
 GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles, email and username; `accounts.manage` (decisions 0276 and 0337)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
+POST /api/v1/accounts/{id}/password-reset-email   a reset link to an account in use, at its own address; `accounts.manage` (decision 0393)
 POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)
 POST /api/v1/accounts/{id}/reactivate    re-enables a disabled account; `accounts.manage` (decision 0307)
 
@@ -5270,7 +5281,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Database not publicly exposed
 - Input validation
 - Parameterized queries / safe ORM usage
-- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
+- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset, or an administrator sending one (decision 0393), allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
 - CORS restrictions
 - Secure secrets/environment handling
 - Automated backups, daily at minimum, with at least 30 days of retention

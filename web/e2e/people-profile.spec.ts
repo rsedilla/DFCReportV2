@@ -902,6 +902,56 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     expect(resent).toEqual([`/api/v1/accounts/${accountId}/activation-email`]);
   });
 
+  // Decision 0393: an account in use is sent a reset link at its own address, and only an
+  // account in use: one waiting is sent its activation email, and a disabled one is offered none.
+  test('sends a password reset email to an account in use, and only to one', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const accountId = '3f1b7c6e-0000-4000-8000-000000000901';
+    let status = 'ACTIVE';
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: accountId,
+            email: 'marilou@example.test',
+            status,
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+          },
+        }),
+      }),
+    );
+    const sent: string[] = [];
+    await page.route('**/api/v1/accounts/*/password-reset-email', async (route) => {
+      sent.push(new URL(route.request().url()).pathname);
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto(PROFILE);
+    await expect(
+      page.getByText(
+        /^For someone who cannot sign in\. It emails \w+ a link to choose a new password, at marilou@example\.test\. You never see or choose the password, and the link lasts 30 minutes\.$/,
+      ),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Send a password reset email' }).click();
+
+    await expect(page.getByText('Sent to marilou@example.test. The link lasts 30 minutes.')).toBeVisible();
+    expect(sent).toEqual([`/api/v1/accounts/${accountId}/password-reset-email`]);
+
+    for (const other of ['PENDING_ACTIVATION', 'DISABLED']) {
+      status = other;
+      await page.reload();
+      await expect(page.getByRole('heading', { name: /Account/ })).toBeVisible();
+      await expect(page.getByText(/^marilou@example\.test · Leader/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Send a password reset email' })).toHaveCount(0);
+    }
+  });
+
   test('corrects a mistyped address while the account waits (decision 0300)', async ({ page }) => {
     await signedInWithPeople(page);
     await mockGrants(page, ['accounts.manage']);

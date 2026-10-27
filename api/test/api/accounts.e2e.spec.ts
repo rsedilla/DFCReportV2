@@ -656,6 +656,160 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(resend.status).toBe(403);
     });
 
+    // Decision 0393: an administrator sends a reset link to an account in use, at the
+    // account's own address. The holder still chooses the password (section 6).
+    describe('a password reset sent by an administrator', () => {
+      async function activeEster(): Promise<string> {
+        const created = await provision({
+          person_id: ester.id,
+          email: 'ester@example.test',
+          role: 'ADMIN',
+        });
+        await request(app.getHttpServer())
+          .post('/api/v1/auth/activate')
+          .send({ token: outbox(app).last('ACTIVATION')?.token, password: PASSWORD })
+          .expect(204);
+        return created.body.id as string;
+      }
+
+      function sendReset(accountId: string, actor = admin, key: string = randomUUID()) {
+        return request(app.getHttpServer())
+          .post(`/api/v1/accounts/${accountId}/password-reset-email`)
+          .set('Authorization', `Bearer ${actor.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send({});
+      }
+
+      it('emails the holder a reset link that sets the password they choose, and audits it', async () => {
+        const accountId = await activeEster();
+
+        const sent = await sendReset(accountId);
+        expect(sent.status).toBe(204);
+        expect(sent.body).toEqual({});
+
+        const mail = outbox(app).last('PASSWORD_RESET');
+        expect(mail?.to.email).toBe('ester@example.test');
+
+        const reset = await request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .send({ token: mail?.token, password: `${PASSWORD}-new` });
+        expect(reset.status).toBe(204);
+
+        const login = await request(app.getHttpServer())
+          .post('/api/v1/auth/login')
+          .send({ email: 'ester@example.test', password: `${PASSWORD}-new` });
+        // Ester holds ADMIN, so a correct password is answered with the second step.
+        expect(login.status).toBe(200);
+
+        const audited = await db
+          .selectFrom('audit_log')
+          .select(['actor_id', 'target_type', 'target_id'])
+          .where('action', '=', 'account.password_reset_sent')
+          .execute();
+        expect(audited).toEqual([
+          { actor_id: admin.id, target_type: 'account', target_id: accountId },
+        ]);
+      });
+
+      it('supersedes the link sent before it, the forgot-password one included', async () => {
+        const accountId = await activeEster();
+        await request(app.getHttpServer())
+          .post('/api/v1/auth/forgot-password')
+          .send({ email: 'ester@example.test' })
+          .expect(204);
+        const forgotten = outbox(app).last('PASSWORD_RESET')?.token;
+        expect(forgotten).toBeDefined();
+
+        await sendReset(accountId).expect(204);
+        const refusedForgotten = await request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .send({ token: forgotten, password: `${PASSWORD}-new` });
+        expect(refusedForgotten.status).toBe(422);
+
+        const first = outbox(app).last('PASSWORD_RESET')?.token;
+        await sendReset(accountId).expect(204);
+
+        const stale = await request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .send({ token: first, password: `${PASSWORD}-new` });
+        expect(stale.status).toBe(422);
+      });
+
+      it('replays a retry rather than sending a second link', async () => {
+        const accountId = await activeEster();
+        const key = randomUUID();
+        await sendReset(accountId, admin, key).expect(204);
+        const first = outbox(app).last('PASSWORD_RESET')?.token;
+
+        await sendReset(accountId, admin, key).expect(204);
+        expect(outbox(app).last('PASSWORD_RESET')?.token).toBe(first);
+
+        const audited = await db
+          .selectFrom('audit_log')
+          .select('id')
+          .where('action', '=', 'account.password_reset_sent')
+          .execute();
+        expect(audited).toHaveLength(1);
+      });
+
+      it('still answers 204 when the email cannot be delivered', async () => {
+        const accountId = await activeEster();
+        outbox(app).failNext = true;
+
+        expect((await sendReset(accountId)).status).toBe(204);
+      });
+
+      it('refuses an account awaiting activation, and a disabled one', async () => {
+        const created = await provision({
+          person_id: ester.id,
+          email: 'ester@example.test',
+          role: 'ADMIN',
+        });
+
+        const pending = await sendReset(created.body.id);
+        expect(pending.status).toBe(409);
+        expect(pending.body.error.code).toBe('INVARIANT_VIOLATION');
+        expect(pending.body.error.details.status).toBe('PENDING_ACTIVATION');
+
+        await request(app.getHttpServer())
+          .post(`/api/v1/accounts/${created.body.id}/disable`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({})
+          .expect(200);
+
+        const disabled = await sendReset(created.body.id);
+        expect(disabled.status).toBe(409);
+        expect(disabled.body.error.details.status).toBe('DISABLED');
+        expect(outbox(app).last('PASSWORD_RESET')).toBeUndefined();
+      });
+
+      it('refuses an actor without accounts.manage, and sends nothing', async () => {
+        const accountId = await activeEster();
+        const leader = await createAccount(app, db, {
+          person: await createPerson(db, { firstName: 'Rico', network: 'MENS' }),
+          roles: ['LEADER'],
+        });
+
+        expect((await sendReset(accountId, leader)).status).toBe(403);
+        expect(outbox(app).last('PASSWORD_RESET')).toBeUndefined();
+      });
+
+      it('allows 5 a minute per administrator, as asking for a reset does (section 24)', async () => {
+        const accountId = await activeEster();
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          await sendReset(accountId).expect(204);
+        }
+
+        const limited = await sendReset(accountId);
+        expect(limited.status).toBe(429);
+        expect(limited.body.error.code).toBe('RATE_LIMITED');
+      });
+      it('answers 404 for an account that does not exist', async () => {
+        expect((await sendReset(randomUUID())).status).toBe(404);
+      });
+    });
+
     it('replays a retry rather than provisioning twice', async () => {
       const key = randomUUID();
       const body = { person_id: ester.id, email: 'ester@example.test', role: 'ADMIN' };
