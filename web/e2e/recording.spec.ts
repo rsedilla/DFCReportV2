@@ -65,6 +65,30 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
   });
 
+  // Owner's choice of 2026-10-27: each mark draws a dot, filled when chosen, and on a page
+  // that cannot be changed the chosen mark keeps its full strength; only the others fade.
+  test('shows each mark with a dot, and keeps the chosen one clear when read only', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+
+    await page.goto(MEETING);
+
+    const group = page.getByRole('group', { name: 'Rosalinda Ocampo' });
+    const chosen = group.locator('label', { has: page.getByRole('radio', { name: 'Present' }) });
+    const other = group.locator('label', { has: page.getByRole('radio', { name: 'Absent' }) });
+
+    // A ring in each box, and the inner dot only in the chosen one.
+    await expect(chosen.locator('span[aria-hidden="true"]')).toHaveCount(1);
+    await expect(chosen.locator('span[aria-hidden="true"] > span')).toHaveCount(1);
+    await expect(other.locator('span[aria-hidden="true"]')).toHaveCount(1);
+    await expect(other.locator('span[aria-hidden="true"] > span')).toHaveCount(0);
+
+    await expect(chosen).toHaveCSS('opacity', '1');
+    await expect(other).toHaveCSS('opacity', '0.6');
+  });
+
   test('unlocks its marks for an account that may correct it, sending the meeting version', async ({
     page,
   }) => {
