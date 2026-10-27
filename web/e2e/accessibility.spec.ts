@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAdministrator,
   mockCellCreator,
+  mockAbsentPeople,
   mockAwaitingReassignment,
   mockCellAdministrator,
   mockCellApprover,
@@ -112,6 +113,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
   await mockPendingDcc(page);
+  await mockAbsentPeople(page);
 }
 
 /**
@@ -940,6 +942,15 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       // A tab of People since decision 0381.
       await expect(page.getByRole('link', { name: 'Amihan Bacani' }).first()).toBeVisible();
+    },
+  },
+  {
+    // People's fourth tab (decision 0397), read-only for a Full view leader.
+    name: 'people, absent three months',
+    route: '/people/absent',
+    before: mockDashboard,
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Dalisay Ocampo' }).first()).toBeVisible();
     },
   },
   {
@@ -2709,7 +2720,12 @@ test('the People item carries People, Awaiting Leader Assignment and Family Tree
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
   // Awaiting Leader Assignment between them since decision 0381.
-  await expect(tabs.getByRole('link')).toHaveText(['Add People', /^Awaiting Leader Assignment/, 'Family Tree']);
+  await expect(tabs.getByRole('link')).toHaveText([
+      'Add People',
+      /^Awaiting Leader Assignment/,
+      'Family Tree',
+      'Absent 3+ Months',
+    ]);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
   await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveCount(0);
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);

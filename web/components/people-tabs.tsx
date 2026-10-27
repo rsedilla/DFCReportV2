@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
  * The tabs of the People item: People, then Awaiting Leader Assignment (decision 0381) and
  * Family Tree (decision 0341) on Full view screens alone. *# of People* is a report and is under Reports (decision 0376). Each is its own
  * address, so Back, a reload and every existing link keep working. The chosen tab opens into
- * the pane that holds everything of it (owner's choice of 2026-10-05).
+ * the pane that holds everything of it (owner's choice of 2026-10-05). *Absent 3+ Months* is the
+ * fourth, on the Full view screens too (decision 0397).
  */
 const TABS = [
   // Named for what the tab is for (owner, 2026-10-15, decision 0354); the sidebar item stays People.
@@ -22,6 +23,8 @@ const TABS = [
   // Moved here from Record (decision 0381), with its count.
   { href: '/people/awaiting-leader', label: 'Awaiting Leader Assignment', name: undefined, fullOnly: true },
   { href: '/family-tree', label: 'Family Tree', name: undefined, fullOnly: true },
+  // No count (owner, 2026-10-16, decision 0397).
+  { href: '/people/absent', label: 'Absent 3+ Months', name: undefined, fullOnly: true },
 ] as const;
 
 export function PeopleTabs({

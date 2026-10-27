@@ -1,3 +1,4 @@
+import type { ArchivedLine } from './lifecycle';
 import { authenticatedRequest } from './session';
 
 /**
@@ -50,6 +51,8 @@ export interface PersonFull {
   mobile_number: string | null;
   /** On a search row only (decision 0259); absent elsewhere. */
   direct_leader_name?: string | null;
+  /** On one person's record only: their archived line, null while current (decision 0397). */
+  archived?: ArchivedLine | null;
 }
 
 export type Person = PersonIdentity | PersonFull;
