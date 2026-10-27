@@ -114,7 +114,7 @@ is on the person's page too because the list can only show somebody after three 
 
 Points 8 (somebody who pastors people), 12 and 13 were settled on 2026-10-28 from
 `architecture-guardian`'s first review, which found that the built archive left a pastoral
-leader's disciples on nobody's screens, that a DCC Sunday before an archive could no longer be
+leader's disciples on no upline's screens and no DCC checklist, that a DCC Sunday before an archive could no longer be
 recorded while it still counted as owed, and that the list disclosed attendance under a people
 capability. The owner chose each from screenshots.
 

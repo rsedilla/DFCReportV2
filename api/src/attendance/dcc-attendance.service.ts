@@ -454,16 +454,11 @@ export class DccAttendanceService {
         }
 
         // A Person archived since this Sunday is reached through the tree as it stood on it,
-        // as a Cell meeting resolves through whoever led the Cell on its date (owner,
-        // 2026-10-28, decision 0397): the archive ended their edge today, so today's walk
-        // reaches them from nobody below the Whole Church.
-        await this.assertInScope(
-          trx,
-          actor,
-          authority,
-          personId,
-          identity.isArchived && !archivedThen.has(personId) ? event.at : null,
-        );
+        // as a Cell meeting resolves through whoever led the Cell on its date, for recording
+        // and correcting alike (owner, 2026-10-28, decision 0397): the archive ended their
+        // edge today, so today's walk reaches them from nobody below the Whole Church.
+        const archivedSince = identity.isArchived && !archivedThen.has(personId) ? event.at : null;
+        await this.assertInScope(trx, actor, authority, personId, archivedSince);
 
         // Decision 0322: nobody records their own DCC line, whatever capability they hold,
         // except the two Network roots, who have no leader (section 9). Decided on who is
@@ -492,6 +487,7 @@ export class DccAttendanceService {
           outcome,
           submittedVersion: record.version,
           storedVersion: stored?.version ?? null,
+          archivedSince,
         });
 
         // **Behind the capability check, and it was in front of it until 2026-09-03**
@@ -901,28 +897,14 @@ export class DccAttendanceService {
     /** For a Person archived since the Sunday: the Sunday's instant (decision 0397). */
     archivedSince: Date | null = null,
   ): Promise<void> {
-    const covered =
-      (await this.authorization.coversWith(
-        executor,
-        actor,
-        authority,
-        Capability.DccTakeAttendance,
-        { kind: 'person', personId },
-      )) ||
-      // The guard has confirmed the actor holds `dcc.take_attendance`; for such a Person the
-      // subtree it covers is read as of the Sunday rather than now. The actor themself is
-      // not reached this way, as nobody records their own line (decision 0322).
-      (archivedSince !== null &&
-        actor.personId !== null &&
-        (await this.hierarchy.isWithinSubtreeAsOf(
-          executor,
-          actor.personId,
-          personId,
-          archivedSince,
-          {
-            includeSelf: false,
-          },
-        )));
+    const covered = await this.coversPersonWithin(
+      executor,
+      actor,
+      authority,
+      Capability.DccTakeAttendance,
+      personId,
+      archivedSince,
+    );
 
     if (!covered) {
       throw new ScopeDeniedError('This person is outside your scope.', {
@@ -930,6 +912,41 @@ export class DccAttendanceService {
         person_id: personId,
       });
     }
+  }
+
+  /**
+   * Whether a capability the actor holds reaches this Person: today's tree, as every other
+   * check here, and for a Person archived since the Sunday also the tree as it stood on the
+   * Sunday (owner, 2026-10-28, decision 0397), as a Cell meeting resolves through whoever led
+   * the Cell on its date for recording and correcting. The actor must hold the capability at
+   * some scope; the dated walk only replaces today's walk for that one Person, and never
+   * reaches the actor themself, who records no line of their own (decision 0322).
+   */
+  private async coversPersonWithin(
+    executor: Db,
+    actor: Actor,
+    authority: ActorAuthority,
+    capability: Capability,
+    personId: string,
+    archivedSince: Date | null,
+  ): Promise<boolean> {
+    if (
+      await this.authorization.coversWith(executor, actor, authority, capability, {
+        kind: 'person',
+        personId,
+      })
+    ) {
+      return true;
+    }
+
+    return (
+      archivedSince !== null &&
+      actor.personId !== null &&
+      authority.grants.some((grant) => grant.capability === capability) &&
+      (await this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, archivedSince, {
+        includeSelf: false,
+      }))
+    );
   }
 
   /**
@@ -991,6 +1008,8 @@ export class DccAttendanceService {
       outcome: LineOutcome;
       submittedVersion: number | null;
       storedVersion: number | null;
+      /** For a Person archived since the Sunday: the Sunday's instant (decision 0397). */
+      archivedSince: Date | null;
     },
   ): Promise<void> {
     const { actor, authority, personId } = params;
@@ -1040,12 +1059,13 @@ export class DccAttendanceService {
     // resubmitting an identical checklist is submitting.
     if (
       params.outcome === 'CORRECT' &&
-      !(await this.authorization.coversWith(
+      !(await this.coversPersonWithin(
         executor,
         actor,
         authority,
         Capability.DccCorrectSubtree,
-        target,
+        target.personId,
+        params.archivedSince,
       ))
     ) {
       throw recordedFirstOr(
@@ -1446,12 +1466,24 @@ export class DccAttendanceService {
     // that actor `403` where the identical body sent sequentially answers `201` -- the
     // mirror defect, and the one the Cell path reproduced before this shape was settled.
     const authority = await this.authorization.authorityFor(actor.accountId);
-    const mayCorrect = await this.authorization.coversWith(
+    // The same dated reach as the transaction's own check, for a Person archived since the
+    // Sunday (decision 0397), so a lost race answers what the sequential request would.
+    const event = await this.eventForRecording(this.db, eventId);
+    const archivedThen = await this.people.archivedAtWithin(
+      this.db,
+      [stale.record.person_id],
+      event.at,
+    );
+    const mayCorrect = await this.coversPersonWithin(
       this.db,
       actor,
       authority,
       Capability.DccCorrectSubtree,
-      { kind: 'person', personId: stale.record.person_id },
+      stale.record.person_id,
+      identities.get(stale.record.person_id)?.isArchived === true &&
+        !archivedThen.has(stale.record.person_id)
+        ? event.at
+        : null,
     );
 
     if (!mayCorrect) {

@@ -251,7 +251,7 @@ function PersonDetail() {
           ) : mayArchive && !person.data.archived && (person.data.pastors ?? 0) > 0 ? (
             <p className="text-muted mt-3 text-sm">
               Pastors {person.data.pastors} {person.data.pastors === 1 ? 'person' : 'people'}: move
-              them to another leader before archiving.
+              them to another leader first.
             </p>
           ) : null}
           {mayArchive ? (

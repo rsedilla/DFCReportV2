@@ -400,6 +400,13 @@ describe('DCC recording (sections 9 and 14)', () => {
         { person_id: quentin.id, present: true, version: null },
       ]);
       expect(saved.status).toBeLessThan(300);
+
+      // And corrected, as a Cell meeting's leader on its date may correct it (section 7).
+      const [row] = await liveRows(eventId);
+      const corrected = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: false, version: row.version },
+      ]);
+      expect(corrected.status).toBeLessThan(300);
     });
 
     it('reads the tree as of the event date, not as of now', async () => {
