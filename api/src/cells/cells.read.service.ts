@@ -424,13 +424,22 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     cellId: string,
     on: string,
   ): Promise<
-    { personId: string; memberId: string; firstName: string; lastName: string; fullName: string }[]
+    {
+      personId: string;
+      memberId: string;
+      firstName: string;
+      lastName: string;
+      fullName: string;
+      /** When this membership began, the instant the person was added. */
+      joinedAt: Date;
+    }[]
   > {
     const rows = await executor
       .selectFrom('cell_memberships')
       .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
       .select([
         'cell_memberships.person_id as person_id',
+        'cell_memberships.started_at as started_at',
         'persons.member_id as member_id',
         'persons.title as title',
         'persons.first_name as first_name',
@@ -458,6 +467,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       lastName: row.last_name,
       // As a list shows it, the middle name's initial (decision 0375).
       fullName: composeName(row),
+      joinedAt: row.started_at,
     }));
   }
 

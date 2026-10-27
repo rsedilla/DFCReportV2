@@ -584,6 +584,10 @@ function RecordMeeting() {
                       <p className="text-muted mt-1 text-sm">
                         {recordedSummary(recorded, members)}
                       </p>
+                      <JoinedAfter
+                        members={members}
+                        mayEdit={!weekClosed && !followOnly && canCorrect}
+                      />
                     </>
                   )}
                   {weekClosed ? (
@@ -814,6 +818,40 @@ function RecordMeeting() {
   );
 }
 
+/** Added to the Cell after the meeting was first recorded, and so far unmarked. */
+function joinedAfter(member: RosterMember): boolean {
+  return member.joined_after_recorded === true && member.record === null;
+}
+
+/**
+ * Asks whether people added to the Cell after the meeting was recorded came to it (decision
+ * 0391). The roster is everyone in the Cell on the meeting's date (section 12), so a
+ * person added that evening is on it with no mark; in G12 they usually came that night,
+ * which is why they were added. "Not marked" read as the leader having skipped them.
+ */
+function JoinedAfter({ members, mayEdit }: { members: RosterMember[]; mayEdit: boolean }) {
+  const late = members.filter(joinedAfter);
+  if (late.length === 0) {
+    return null;
+  }
+
+  const one = late.length === 1;
+  const names = late.map((member) => member.full_name);
+  const list = one
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+  return (
+    <p className="border-accent text-ink mt-3 rounded-md border-2 px-3 py-2 text-sm leading-relaxed">
+      <span className="font-bold">
+        {list} joined the Cell after this was recorded.
+      </span>{' '}
+      {one ? `Was ${late[0].first_name} at this meeting?` : 'Were they at this meeting?'}
+      {mayEdit ? (one ? ' Press Edit meeting to add a mark.' : ' Press Edit meeting to add their marks.') : ''}
+    </p>
+  );
+}
+
 function MemberMark({
   member,
   mark,
@@ -833,7 +871,13 @@ function MemberMark({
         legend={member.full_name}
         // Kept until Save, so a first tap does not shift the rows beneath it; nothing is
         // recorded until then, as the DCC checklist says too.
-        description={recorded ? undefined : 'Not recorded yet'}
+        description={
+          recorded && joinedAfter(member)
+            ? 'Joined the Cell after this was recorded'
+            : recorded
+              ? undefined
+              : 'Not recorded yet'
+        }
         name={`member-${member.person_id}`}
         value={mark ?? ''}
         onChange={onChange}
@@ -859,8 +903,12 @@ function recordedSummary(
 ): string {
   const present = members.filter((member) => member.record?.present === true).length;
   const absent = members.filter((member) => member.record?.present === false).length;
-  const unmarked = members.length - present - absent;
-  const counts = `${present} present, ${absent} absent${unmarked > 0 ? `, ${unmarked} not marked` : ''}`;
+  const late = members.filter(joinedAfter).length;
+  const unmarked = members.length - present - absent - late;
+  const counts =
+    `${present} present, ${absent} absent` +
+    (unmarked > 0 ? `, ${unmarked} not marked` : '') +
+    (late > 0 ? `, ${late} added after it was recorded` : '');
 
   if (recorded.submitted_at === null) {
     return counts;
