@@ -176,6 +176,10 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/password-reset-email",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "POST /api/v1/accounts/:id/email",
       "screen": "web/components/person-account.tsx"
     },

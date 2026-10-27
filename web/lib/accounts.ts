@@ -52,6 +52,14 @@ export async function resendActivation(accountId: string, idempotencyKey: string
   });
 }
 
+/** Emails an account in use a password reset link, at its own address (decision 0393). */
+export async function sendPasswordReset(accountId: string, idempotencyKey: string): Promise<void> {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/password-reset-email`, {
+    method: 'POST',
+    idempotencyKey,
+  });
+}
+
 /** Corrects an unactivated account's address and sends the email there (decision 0300). */
 export async function correctAccountEmail(
   accountId: string,

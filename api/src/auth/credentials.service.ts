@@ -1,10 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
-import { ValidationFailedError } from '../common/errors/api-error';
+import {
+  InvariantViolationError,
+  NotFoundError,
+  ResourceBusyError,
+  ValidationFailedError,
+} from '../common/errors/api-error';
+import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
-import { EMAIL_PORT, type EmailPort } from '../email/email.port';
+import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.port';
 
 import { PeopleReadService } from '../people/people.read.service';
 
@@ -108,6 +114,108 @@ export class CredentialsService {
     } catch (error) {
       this.logger.error(
         `Could not send a password reset for account ${account.id}.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+  }
+
+  /**
+   * An administrator sends a reset link to an account in use, for its holder at the
+   * account's own address (section 6, decision 0393).
+   *
+   * **The administrator learns nothing they could sign in with.** The token goes only to the
+   * address already on the account and never into a response, so the holder still chooses
+   * their own password. Only an `ACTIVE` account: one awaiting activation is sent its
+   * activation email again, and a disabled one is re-enabled first, which section 6 makes a
+   * separate decision rather than something a reset link reopens.
+   *
+   * **Tokens first, then the account row**, the order setting a password, disabling and
+   * correcting an address take the two tables in, so none of them deadlocks with this. The
+   * account is read unlocked only to answer `NOT_FOUND`; its status is decided under the lock,
+   * and a refusal rolls the token back.
+   *
+   * Two sends at once both reach the mint before either locks the account; the second waits
+   * for the first and then meets the one-outstanding-token index. That is answered
+   * `RESOURCE_BUSY`, which releases the claim, so a retry sends again.
+   *
+   * Delivery is logged, not raised, after the commit, for the reason the activation re-send
+   * gives: raising would contradict the completion the store already holds.
+   */
+  async sendResetByAdministrator(
+    accountId: string,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<void> {
+    let outcome: OutboundEmail;
+    try {
+      outcome = await this.db.transaction().execute(async (trx) => {
+        const exists = await trx
+          .selectFrom('accounts')
+          .select('id')
+          .where('id', '=', accountId)
+          .executeTakeFirst();
+
+        if (!exists) {
+          throw new NotFoundError('No such account.');
+        }
+
+        const token = await this.tokens.mintWithin(
+          trx,
+          accountId,
+          'PASSWORD_RESET',
+          RESET_LIFETIME_MS,
+        );
+
+        const account = await trx
+          .selectFrom('accounts')
+          .select(['id', 'person_id', 'email', 'status'])
+          .where('id', '=', accountId)
+          .forNoKeyUpdate()
+          .executeTakeFirstOrThrow();
+
+        if (account.status !== 'ACTIVE') {
+          throw new InvariantViolationError(
+            account.status === 'PENDING_ACTIVATION'
+              ? 'This account has not been activated yet. Send its activation email again instead.'
+              : 'This account is disabled. Re-enable it before sending a password reset.',
+            { account_id: accountId, status: account.status },
+          );
+        }
+
+        const person = await this.people.forDecisionWithin(trx, account.person_id);
+
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'account.password_reset_sent',
+          targetType: 'account',
+          targetId: accountId,
+        });
+
+        // Last statement (CLAUDE.md, Write endpoints).
+        await this.idempotency.completeWithin(trx, { ...claim, status: 204, body: null });
+
+        return {
+          kind: 'PASSWORD_RESET' as const,
+          to: { email: account.email, name: person?.fullName ?? '' },
+          token: token.token,
+          expiresAt: token.expiresAt,
+        };
+      });
+    } catch (error) {
+      if (
+        isUniqueViolation(error) &&
+        violatedConstraint(error) === 'account_tokens_one_outstanding'
+      ) {
+        throw new ResourceBusyError({ account_id: accountId });
+      }
+      throw error;
+    }
+
+    try {
+      await this.email.send(outcome);
+    } catch (error) {
+      this.logger.error(
+        `Could not send a password reset for account ${accountId}.`,
         error instanceof Error ? error.stack : undefined,
       );
     }
@@ -280,9 +388,9 @@ export class CredentialsService {
       // overwrite", which is the lock-then-decide omission section 5 exists to
       // prevent, asserted rather than implemented.
       //
-      // `FOR NO KEY UPDATE` on `accounts` first, which is the order every other
-      // path takes these two tables in — the revocation below then takes the same
-      // row, so no new wait is introduced and no cycle is possible.
+      // `FOR NO KEY UPDATE` on `accounts` after the token row `redeemWithin` claimed above:
+      // tokens first, then the account, the order every other path takes these two tables
+      // in. The revocation below then takes the same row, so no new wait is introduced.
       const account = await trx
         .selectFrom('accounts')
         .select('status')
