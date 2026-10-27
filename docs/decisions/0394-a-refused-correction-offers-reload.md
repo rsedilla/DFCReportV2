@@ -35,9 +35,13 @@ time: the reader sees the saved mark and their own, and decides. Section 22's co
 carries both for a reader who may correct, and these screens do not render it.
 
 **5. A reader who may record and may not correct, beaten to a first record, is told somebody
-else recorded it.** The API answers `VERSION_CONFLICT` carrying the two versions and nothing of
+else recorded it.** The API answers `ALREADY_RECORDED`, a code of its own (owner, 2026-10-27), so
+that `VERSION_CONFLICT` keeps its promise of two sides. It carries the two versions and nothing of
 the record: not the stored marks and not who recorded them, which decision 0201 withholds from
 an actor without the correction capability, and which such a reader could not act on anyway.
+The same answer is given where the two disagree on whether the Cell met (owner, 2026-10-27): a
+first record saying *Did not meet* against one recorded as met, or the reverse, was refused as a
+status correction without a reason, which this reader may not make with one either.
 The screen says "Someone else recorded this meeting after you opened it. Reload to see it."
 ("a mark here" on the DCC checklist), and Reload shows the record as made, which this reader
 may not change. It was answered `403`, saying the correction was outside their scope, which

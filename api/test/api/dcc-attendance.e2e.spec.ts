@@ -1787,7 +1787,7 @@ describe('DCC recording (sections 9 and 14)', () => {
     };
 
     it('tells a disagreeing loser without dcc.correct_subtree that someone recorded it first, disclosing nothing', async () => {
-      // Decision 0394 changed the answer from 403 to a conflict carrying the versions alone,
+      // Decision 0394 changed the answer from 403 to `ALREADY_RECORDED`, carrying the versions alone,
       // and not what it withholds.
       // **The half DCC was missing.** Section 7 decides every other capability before the
       // stored contents can change what the caller is told, and the `VERSION_CONFLICT`
@@ -1812,7 +1812,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       const response = await raceAgainstStored(eventId, true, false);
 
       expect(response.status).toBe(409);
-      expect(response.body.error.code).toBe('VERSION_CONFLICT');
+      expect(response.body.error.code).toBe('ALREADY_RECORDED');
       expect(response.body.error.details).toMatchObject({
         submitted_version: null,
         current_version: 1,
@@ -1822,6 +1822,19 @@ describe('DCC recording (sections 9 and 14)', () => {
 
       // Nothing of the record reaches the refusal: not the stored value, not who wrote it.
       expect(JSON.stringify(response.body)).not.toMatch(/present|recorded_by|Adele/i);
+
+      // The same line sent now, against the record that won, answers the same.
+      const sequential = await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: false, version: null },
+      ]);
+
+      expect(sequential.status).toBe(409);
+      expect(sequential.body.error.code).toBe('ALREADY_RECORDED');
+      expect(sequential.body.error.details).toMatchObject({
+        submitted_version: null,
+        current_version: 1,
+      });
+      expect(JSON.stringify(sequential.body)).not.toMatch(/present|recorded_by|Adele/i);
     });
 
     it('answers an agreeing loser RESOURCE_BUSY, and asks it for no amendment capability', async () => {

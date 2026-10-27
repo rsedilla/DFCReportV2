@@ -127,21 +127,33 @@ export function describeFailure(
 }
 
 /**
- * A correction refused because somebody else changed the record after this screen read it
- * (owner's choice of 2026-10-27). The API's message says only that the record changed; the
- * leader is told what to do as well, beside a Reload.
+ * A save refused because somebody else changed the record after this screen read it
+ * (decision 0394). The API's message says only that the record changed; the leader is told
+ * what to do as well, beside a Reload.
  */
-export function staleSaveFailure(error: unknown, what: string, mayCorrect = true): Failure | null {
-  return error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT'
-    ? {
-        // A reader who may not correct is told only that it was recorded (decision 0394):
-        // after Reload it is shown as recorded, and there is nothing for them to change.
-        message: mayCorrect
-          ? `Someone else changed ${what} after you opened it. Reload to see it, then decide again. Your marks are kept.`
-          : `Someone else recorded ${what} after you opened it. Reload to see it.`,
+export function staleSaveFailure(error: unknown, what: string): Failure | null {
+  if (!(error instanceof ApiRequestError)) {
+    return null;
+  }
+
+  switch (error.code) {
+    case 'VERSION_CONFLICT':
+      return {
+        message: `Someone else changed ${what} after you opened it. Reload to see it, then decide again. Your marks are kept.`,
         aboutInput: false,
-      }
-    : null;
+      };
+
+    case 'ALREADY_RECORDED':
+      // A reader who may not correct, beaten to a first record: after Reload it is shown as
+      // recorded, and there is nothing for them to change.
+      return {
+        message: `Someone else recorded ${what} after you opened it. Reload to see it.`,
+        aboutInput: false,
+      };
+
+    default:
+      return null;
+  }
 }
 
 /**

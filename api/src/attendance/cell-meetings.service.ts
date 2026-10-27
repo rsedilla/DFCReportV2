@@ -1714,6 +1714,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     );
 
     if (operation.kind === 'refused') {
+      // **Met against Did not meet, on a first record** (decision 0394): somebody else
+      // recorded the meeting first and the two disagree on whether it took place. An actor
+      // who may not correct is told so, as `transitionWithin` tells them for every other
+      // first record beaten by somebody else; one who may is refused as before.
+      if (body.version === undefined && isStatusCorrection(existing.status, body.status)) {
+        await this.assertMayActForAnother(trx, params);
+        await this.assertMayAmend(trx, params, body.version, existing.version);
+      }
+
       throw operation.error;
     }
 
@@ -2592,7 +2601,27 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     if (committedOperation.kind === 'refused') {
       // Answer exactly what this body gets sequentially against the committed state, which
-      // is the property that stops timing deciding the answer.
+      // is the property that stops timing deciding the answer — including Met against Did
+      // not meet from an actor who may not correct (decision 0394), as `correctWithin` asks.
+      if (body.version === undefined && isStatusCorrection(meeting.status, body.status)) {
+        const authority = await this.authorization.authorityFor(actor.accountId);
+        try {
+          await this.assertMayCorrect(this.db, {
+            cellId,
+            meetingId,
+            existing: { responsible_leader_id: meeting.responsible_leader_id },
+            actor,
+            authority,
+          });
+        } catch (error) {
+          if (error instanceof ScopeDeniedError) {
+            return recordedFirstOr(error, body.version, meeting.version, cellId, meetingId);
+          }
+
+          throw error;
+        }
+      }
+
       return committedOperation.error;
     }
 

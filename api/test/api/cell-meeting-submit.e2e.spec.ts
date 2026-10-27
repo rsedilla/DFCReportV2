@@ -3428,7 +3428,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     it('tells an actor who may record but not correct that someone recorded it first, and nothing more', async () => {
       // **Decision 0394 changed the answer and not what it withholds.** This actor sent a
       // first record and lost; they may not correct, so they are told only that somebody
-      // else recorded the meeting (`VERSION_CONFLICT` with the versions alone), where they
+      // else recorded the meeting (`ALREADY_RECORDED`, with the versions alone), where they
       // were told the correction was outside their scope. Still nothing of the stored record.
       // **`lostRaceAnswer` was written downstream of `assertMayCorrect` and the new caller
       // skipped it** (decision 0100: reusing a shape requires re-deriving why it has that
@@ -3459,7 +3459,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         const response = await attempt;
 
         expect(response.status).toBe(409);
-        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+        expect(response.body.error.code).toBe('ALREADY_RECORDED');
         expect(response.body.error.details).toMatchObject({
           submitted_version: null,
           current_version: 1,
@@ -3475,6 +3475,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
           actor,
         );
         expect(sequential.status).toBe(409);
+        expect(sequential.body.error.code).toBe('ALREADY_RECORDED');
         expect(sequential.body.error.details).not.toHaveProperty('current');
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
@@ -3539,7 +3540,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
         // A first record (no version) that met one somebody else made: decision 0394.
         expect(raced.status).toBe(409);
-        expect(raced.body.error.code).toBe('VERSION_CONFLICT');
+        expect(raced.body.error.code).toBe('ALREADY_RECORDED');
         expect(raced.body.error.details).toMatchObject({
           submitted_version: null,
           current_version: 2,
@@ -3550,7 +3551,55 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         const sequential = await submit(body, actor);
 
         expect(sequential.status).toBe(409);
+        expect(sequential.body.error.code).toBe('ALREADY_RECORDED');
         expect(sequential.body.error.details).not.toHaveProperty('current');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('tells an actor who may not correct that someone recorded it first when the two disagree on Met against Did not meet', async () => {
+      // Decision 0394, owner's choice of 2026-10-27. Did not meet against a meeting recorded
+      // as met is a status correction, refused without a reason, and that refusal named a
+      // correction this actor may not make. They are told somebody else recorded it.
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const body = { status: 'NOT_HELD', not_held_reason: 'WEATHER_OR_CALAMITY' };
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        const attempt = submit(body, actor);
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const raced = await attempt;
+
+        expect(raced.status).toBe(409);
+        expect(raced.body.error.code).toBe('ALREADY_RECORDED');
+        expect(raced.body.error.details).toMatchObject({
+          submitted_version: null,
+          current_version: 1,
+        });
+        expect(JSON.stringify(raced.body)).not.toMatch(/present|current_status/);
+
+        // The same body sent now answers the same.
+        const sequential = await submit(body, actor);
+
+        expect(sequential.status).toBe(409);
+        expect(sequential.body.error.code).toBe('ALREADY_RECORDED');
+        expect(sequential.body.error.details).toMatchObject({
+          submitted_version: null,
+          current_version: 1,
+        });
+
+        // A leader who may correct is still asked for a reason, as before.
+        const corrector = await submit(body);
+
+        expect(corrector.body.error.code).toBe('INVARIANT_VIOLATION');
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();

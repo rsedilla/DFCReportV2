@@ -524,6 +524,78 @@ test.describe('a recorded Cell meeting', () => {
     expect(sent[1]).toMatchObject({ version: 1 });
   });
 
+  // Decision 0394, point 3: Did not meet hides the marks, so where a line changed, Reload puts
+  // the answer back to Met and the reader sees what changed before deciding again.
+  test('after Reload, puts a correction to Did not meet back to Met where a line changed', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Did not meet' }).check();
+    await page.getByRole('radio', { name: 'Leader could not be there' }).check();
+    await page.getByLabel('Why is this being corrected?').fill('Filed as met by mistake');
+
+    // Somebody else corrects the meeting meanwhile, marking Bienvenido present.
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 4, secondPresent: true });
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(page.getByRole('radio', { name: 'Met', exact: true })).toBeChecked();
+    await expect(
+      page.getByRole('group', { name: 'Bienvenido Trinidad' }).getByRole('radio', { name: 'Present' }),
+    ).toBeChecked();
+    await expect(
+      page.getByText('Changed by someone else after you opened it: Present.', { exact: true }),
+    ).toHaveCount(1);
+  });
+
+  test('clears the notes from a Reload when the edit is cancelled', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page
+      .getByRole('group', { name: 'Rosalinda Ocampo' })
+      .getByRole('radio', { name: 'Absent' })
+      .check();
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 4, secondPresent: true });
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await page.getByRole('button', { name: 'Reload' }).click();
+    await expect(page.getByText(/^Changed by someone else/)).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByText(/^Changed by someone else/)).toHaveCount(0);
+    // And a new edit starts with none.
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await expect(page.getByText(/^Changed by someone else/)).toHaveCount(0);
+  });
+
   // Decision 0394: a reader who may record and not correct, beaten to a first record, is told
   // somebody else recorded it, and Reload shows the meeting as recorded.
   test('tells a reader who may not correct that somebody else recorded it first, with Reload', async ({
@@ -537,7 +609,7 @@ test.describe('a recorded Cell meeting', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           error: {
-            code: 'VERSION_CONFLICT',
+            code: 'ALREADY_RECORDED',
             message: 'Someone else recorded this after you opened it.',
             details: { submitted_version: null, current_version: 1 },
           },
@@ -1088,7 +1160,7 @@ test.describe('a Sunday with a mark already recorded', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           error: {
-            code: 'VERSION_CONFLICT',
+            code: 'ALREADY_RECORDED',
             message: 'Someone else recorded this after you opened it.',
             details: { submitted_version: null, current_version: 1, person_id: UNRECORDED.id },
           },

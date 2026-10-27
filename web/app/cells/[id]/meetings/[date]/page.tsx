@@ -430,7 +430,7 @@ function RecordMeeting() {
 
   // Said beside Save in the pinned bar; at the top only where there is no bar.
   // Kept unless what is now stored is a record this reader may not correct (see `reload`).
-  const stale = save.isError ? staleSaveFailure(save.error, 'this meeting', canCorrect) : null;
+  const stale = save.isError ? staleSaveFailure(save.error, 'this meeting') : null;
   const saveFailure = save.isError
     ? (stale ??
       describeLineFailure(save.error, 'attendance', (index) => {

@@ -332,7 +332,7 @@ function DccChecklist() {
   // where there is no bar to say it in.
   const saveBar = recordable && lines.length > 0;
   const barRef = usePinnedBarPadding<HTMLDivElement>();
-  const stale = save.isError ? staleSaveFailure(save.error, 'a mark here', canCorrect) : null;
+  const stale = save.isError ? staleSaveFailure(save.error, 'a mark here') : null;
   const saveFailure = save.isError
     ? (stale ??
       describeLineFailure(save.error, 'records', (index) => {
