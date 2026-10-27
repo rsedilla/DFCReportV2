@@ -28,6 +28,7 @@ import {
 } from '@/lib/hierarchy';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
+import { formatMobile } from '@/lib/mobile';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
@@ -231,7 +232,8 @@ function PersonDetail() {
             />
             <Detail
               label="Mobile number"
-              value={person.data.mobile_number}
+              value={person.data.mobile_number && formatMobile(person.data.mobile_number)}
+              nowrap
               absent="Not recorded"
               add={
                 mayEdit ? { href: `/people/${id}/edit#mobile_number`, what: 'a mobile number' } : null
@@ -348,9 +350,12 @@ function Detail({
   absent = '—',
   add = null,
   action = null,
+  nowrap = false,
 }: {
   label: string;
   value: string | null;
+  /** Kept on one line, as a hyphenated mobile number is (lib/mobile.ts). */
+  nowrap?: boolean;
   absent?: string;
   /** Offered only where the value is absent and the reader may edit it. */
   add?: { href: string; what: string } | null;
@@ -361,7 +366,7 @@ function Detail({
     <>
       <dt className="text-sm font-medium">{label}</dt>
       <dd className={value ? 'text-sm' : 'text-muted text-sm'}>
-        {value || absent}
+        {value && nowrap ? <span className="whitespace-nowrap">{value}</span> : value || absent}
         {!value && add ? (
           <>
             {' · '}

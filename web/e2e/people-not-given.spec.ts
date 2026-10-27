@@ -53,7 +53,8 @@ test.describe('Add a person: Not given yet (decision 0328)', () => {
     expect(bodies[0]).toMatchObject({
       birth_date: null,
       birth_date_not_given: true,
-      mobile_number: '0917 555 0142',
+      // Written with hyphens as its box was left (lib/mobile.ts).
+      mobile_number: '0917-555-0142',
     });
     expect(bodies[0]).not.toHaveProperty('mobile_number_not_given');
   });
