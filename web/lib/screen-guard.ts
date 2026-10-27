@@ -33,7 +33,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/network(\/|$)/)) {
     return false;
   }
-  // Every account has its own Account page and Record.
+  // The DCC month page, hidden on 23 Oct and closed with the others (owner, 27 Oct).
+  if (at(/^\/dcc$/)) {
+    return false;
+  }
+  // Every account has its own Account page and Record, and a Sunday's checklist from Record.
   if (at(/^\/(session|dashboard|dcc)(\/|$)/)) {
     return true;
   }

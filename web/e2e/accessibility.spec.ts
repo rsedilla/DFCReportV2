@@ -681,26 +681,6 @@ const SCANS = [
     },
   },
   {
-    // The reader's month (owner's choice of 2026-09-19): their Cell meetings and their DCC
-    // checklist by date, a removed Sunday in its place with its reason, states in words.
-    name: 'your month',
-    route: '/dcc',
-    async before(page: import('@playwright/test').Page) {
-      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellMeetings(page);
-      await mockMeetingsAwaiting(page);
-      await mockDccEvents(page);
-      await mockDccRoster(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Your month' })).toBeVisible();
-      await expect(page.getByText(/^No service/).filter({ visible: true }).first()).toBeVisible();
-      await expect(page.getByText('Loading…')).toHaveCount(0);
-    },
-  },
-  {
     // The recording form, with a member nobody has marked. That row is the state
     // worth scanning: it is a third state beside present and absent, and it must
     // reach the leader as a choice rather than as a pre-selected Absent.
@@ -984,6 +964,18 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Corazon Villanueva' })).toBeVisible();
       await expect(page.getByText('Network root')).toBeVisible();
+    },
+  },
+  {
+    // The DCC month page, unlinked since 23 Oct and offered to no account since decision 0379
+    // (owner, 2026-10-27): its address shows the note.
+    name: 'your month',
+    route: '/dcc',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
     },
   },
   {
@@ -1748,14 +1740,6 @@ const TARGET_SWEEP = [
     minimum: 9,
   },
   {
-    // The two month controls, and a link per dated item the reader owes.
-    name: 'your month',
-    route: '/dcc',
-    settleRole: 'heading' as const,
-    settle: 'Your month',
-    minimum: 2,
-  },
-  {
     // Back link, two status radios, two radios per member across two members, and
     // Save.
     //
@@ -2333,6 +2317,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'It renders the back link and no other control: a meeting whose day has not come offers ' +
       'no marks and no Save bar.',
+  },
+  {
+    name: 'your month',
+    why:
+      'Offered to no account since decision 0379 (owner, 2026-10-27): it shows the same note ' +
+      'page as "network", for the same reason.',
   },
   {
     name: 'network',

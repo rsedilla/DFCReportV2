@@ -23,7 +23,8 @@ changed a Full view leader's Reports and Growth in between.
    either**, so no page of its screens leads to the note: a Senior Pastor's person page offers
    no People tab, *Back to people*, SUYNL or Training link, and their Cell pages no Cells tab.
 3. **What this closes today:**
-   - for every account, the `Branch` screen (decision 0364);
+   - for every account, the `Branch` screen (decision 0364) and the DCC month page, `/dcc`,
+     whose link Record dropped on 23 Oct (owner, 27 Oct). A Sunday's checklist stays open;
    - for a Full view leader, Encounter Readiness, Training and Conquest under Reports, Training
      and Conquest under Growth (decisions 0360 and 0380), and My Cell. The Encounter seasons
      page stays open to them and to the recording screens, as decision 0360 marks SUYNL on it

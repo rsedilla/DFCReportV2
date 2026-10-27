@@ -728,8 +728,8 @@ function Dashboard() {
             {/*
               **Record is where DCC attendance is recorded from** (section 19, ruling of
               2026-09-14). The queue lists the Sundays with something outstanding. The month
-              of every Sunday at `/dcc` is not linked from here for now (owner, 2026-10-23):
-              hidden rather than withdrawn, it still opens by address.
+              of every Sunday at `/dcc` is not linked from here (owner, 2026-10-23), and since
+              decision 0379 it opens for no account (owner, 2026-10-27).
             */}
           </section>
         ) : null}
