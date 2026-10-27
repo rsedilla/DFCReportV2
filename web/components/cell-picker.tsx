@@ -76,10 +76,13 @@ export function CellPicker({
       listCells({ month, q: submitted, cursor: pageParam as string | null, limit: 20 }, signal),
     enabled: submitted.trim().length >= 2,
   });
-  // A Cell already listed under their leader's is not listed again.
-  const found = (pages.data?.pages.flatMap((page) => page.data) ?? []).filter(
-    (cell) => offered(cell) && !leaders.some((mine) => mine.id === cell.id),
-  );
+  // A Cell already listed under their leader's is not listed again, and the search says it
+  // is listed above instead (owner, 2026-10-26): answering "no Cell matches" while the Cell
+  // sits just above read as the Cell not existing.
+  const matched = (pages.data?.pages.flatMap((page) => page.data) ?? []).filter(offered);
+  const found = matched.filter((cell) => !leaders.some((mine) => mine.id === cell.id));
+  const shownAbove = matched.length > found.length;
+  const leadersBox = useRef<HTMLDivElement>(null);
 
   // Show more disappears on the last page while it holds focus, so focus moves to the
   // first Cell it loaded rather than falling to the top of the page (section 23).
@@ -113,15 +116,17 @@ export function CellPicker({
       <p className="field-label">{label}</p>
       <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
 
+      {/* Set apart, with filled buttons, so it is seen before anyone reaches for the search
+          (owner, 2026-10-26). Still a grouping, not a ranking (decision 0009). */}
       {leaders.length > 0 ? (
-        <>
-          <p className="text-muted mt-4 text-xs font-bold">
+        <div ref={leadersBox} className="border-accent bg-accent-tint mt-4 rounded-md border-2 p-3">
+          <p className="text-ink text-sm font-bold">
             {leaders.length === 1
               ? 'Their leader’s Cell Group — usually the right one'
               : 'Their leader’s Cell Groups — usually the right ones'}
           </p>
-          <CellList cells={leaders} onSelect={onSelect} />
-        </>
+          <CellList cells={leaders} onSelect={onSelect} variant="primary" />
+        </div>
       ) : null}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -155,11 +160,22 @@ export function CellPicker({
       {submitted === '' ? null : pages.isPending ? (
         <p className="text-muted mt-3 text-sm">Searching…</p>
       ) : pages.isError && !pages.isFetchNextPageError ? null : found.length === 0 &&
+        !shownAbove &&
         !pages.hasNextPage ? (
         <p className="text-muted mt-3 text-sm">No Cell you oversee matches “{submitted}”.</p>
       ) : (
         <>
-          <CellList cells={found} onSelect={onSelect} listRef={list} />
+          {shownAbove ? (
+            <ListedAbove
+              count={leaders.length}
+              leaderName={leaders[0]?.leader.full_name ?? 'Their leader'}
+              onShow={() => {
+                leadersBox.current?.scrollIntoView({ block: 'center' });
+                leadersBox.current?.querySelector<HTMLButtonElement>('button')?.focus();
+              }}
+            />
+          ) : null}
+          {found.length > 0 ? <CellList cells={found} onSelect={onSelect} listRef={list} /> : null}
           {pages.hasNextPage ? (
             <Button
               variant="secondary"
@@ -179,14 +195,45 @@ export function CellPicker({
   );
 }
 
+/** The search found their leader's Cells, which are already listed above. */
+function ListedAbove({
+  count,
+  leaderName,
+  onShow,
+}: {
+  count: number;
+  leaderName: string;
+  onShow: () => void;
+}) {
+  return (
+    <p className="border-accent bg-accent-tint text-ink mt-3 rounded-md border-2 px-3 py-2 text-sm">
+      <span className="font-bold">
+        {count === 1
+          ? `${leaderName}’s Cell Group is listed above.`
+          : `${leaderName}’s Cell Groups are listed above.`}
+      </span>{' '}
+      Choose {count === 1 ? 'it' : 'one'} there.{' '}
+      <button
+        type="button"
+        onClick={onShow}
+        className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        Show {count === 1 ? 'it' : 'them'}
+      </button>
+    </p>
+  );
+}
+
 function CellList({
   cells,
   onSelect,
   listRef,
+  variant = 'secondary',
 }: {
   cells: CellSummary[];
   onSelect: (cell: CellSummary) => void;
   listRef?: React.Ref<HTMLUListElement>;
+  variant?: 'primary' | 'secondary';
 }) {
   return (
     <ul ref={listRef} className="divide-line mt-2 divide-y">
@@ -194,7 +241,7 @@ function CellList({
         <li key={cell.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
           <span className="text-sm">{cellText(cell)}</span>
           <Button
-            variant="secondary"
+            variant={variant}
             aria-label={`Choose ${cell.cell_id}`}
             onClick={() => onSelect(cell)}
           >
