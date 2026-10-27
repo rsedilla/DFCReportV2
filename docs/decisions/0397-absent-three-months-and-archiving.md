@@ -89,11 +89,14 @@ for every reader who may open the page, with the comment beneath it where there 
 
 **12. A DCC Sunday before the archive keeps them** (owner, 2026-10-28). Section 9's checklist
 reads whether somebody is archived as of the Sunday, so a Person archived on Tuesday stays on
-Sunday's checklist while its week is open. **Their leader on that Sunday may record them**, the
-save reaching them through the tree as it stood on the Sunday, as a Cell meeting resolves through
-whoever led the Cell on its date (Section 7): today's walk reaches them from nobody below the
-Whole Church, their edge having ended. This applies to a Person archived since the Sunday and
-to nobody else; a Sunday on or after the archive takes no record for them.
+Sunday's checklist while its week is open. **Their leader on that Sunday may record and correct
+them**, the save reaching them through the tree as it stood on the Sunday as well as today's,
+as a Cell meeting resolves through whoever led the Cell on its date (Section 7). **The same holds
+for somebody moved to another leader since** (owner, 2026-10-28, on the second review): a leader
+records the Sundays they owed whatever has happened since, and nothing about the person's
+lifecycle or move decides which rule applies, so a save tells a former leader nothing they could
+not see. The Sunday's checklist still limits who that leader is. A Sunday on or after the archive
+takes no record for them.
 
 **13. The list shows attendance dates under `people.view_subtree`** (owner, 2026-10-28). *Last
 at Cell* and *Last at DCC*, and being on the list at all, are attendance facts that decisions

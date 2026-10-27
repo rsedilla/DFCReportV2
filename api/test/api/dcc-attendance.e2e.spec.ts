@@ -437,6 +437,35 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(line).toBeDefined();
       expect(line?.responsible_leader_id).toBe(paul.id);
     });
+
+    it('lets the leader on the Sunday record somebody moved out of their branch since (decision 0397)', async () => {
+      // Two Sundays: Quentin moves to Otto, under Raymond and outside Manuel's branch, the day
+      // after the first, so the first is Manuel's to owe and the second is Otto's.
+      const sunday = shift(await recentSunday(), -7);
+      const eventId = await createEvent(sunday);
+      const otto = await createPerson(db, { firstName: 'Otto', network: 'MENS' });
+      await assignTo(db, otto.id, raymond.id);
+      const movedAt = startOfManilaDay(shift(sunday, 1));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: movedAt })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, quentin.id, otto.id, movedAt);
+
+      const saved = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(saved.status).toBeLessThan(300);
+
+      // A Sunday after the move is Otto's to owe, not Manuel's.
+      const later = await createEvent(await recentSunday());
+      const refused = await submit(manuelAccount, later, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(refused.status).toBe(403);
+    });
   });
 
   // ---------------------------------------------------------------------------
