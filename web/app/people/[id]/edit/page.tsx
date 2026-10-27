@@ -313,6 +313,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
               );
               setAcknowledged(union);
               setFailure(null);
+              // The form now sends this body, so it takes this key: going back and saving
+              // unchanged replays or reruns this answer rather than reusing the first key.
+              setWriteKey(answerKey);
               save.mutate({
                 changes: { ...pending, acknowledged_duplicate_ids: union },
                 key: answerKey,
@@ -321,7 +324,13 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
           >
             {save.isPending ? 'Saving…' : 'These are different people — save anyway'}
           </Button>
-          <Button variant="secondary" onClick={() => setCandidates(null)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCandidates(null);
+              setFailure(null);
+            }}
+          >
             Go back and change the details
           </Button>
         </div>

@@ -507,12 +507,81 @@ test.describe('editing a person', () => {
     await expect(page.getByText('The server is busy. Try again in a moment.')).toBeVisible();
     await expect(anyway).toBeEnabled();
     await anyway.click();
-
-    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
-    expect(sent).toHaveLength(3);
+    await expect.poll(() => sent.length).toBe(3);
     // The same answer again, so the same key: a lost response replays rather than saving twice.
     expect(sent[2].body).toEqual(sent[1].body);
     expect(sent[2].key).toBe(sent[1].key);
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+  });
+
+  test('going back after a failed "save anyway" drops the error and saves under the answer’s key', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    const sent: { body: Record<string, unknown>; key: string | undefined }[] = [];
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      sent.push({
+        body: route.request().postDataJSON(),
+        key: route.request().headers()['idempotency-key'],
+      });
+      if (sent.length === 1) {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
+              message: 'Someone with these details may already be recorded.',
+              details: {
+                candidates: [
+                  {
+                    id: '3f1b7c6e-0000-4000-8000-000000000777',
+                    member_id: 'M-000777',
+                    full_name: 'Marilou Reyes Santos',
+                    sex: 'FEMALE',
+                    tier: 1,
+                    reasons: ['Same name and birthday'],
+                  },
+                ],
+              },
+            },
+          }),
+        });
+        return;
+      }
+      if (sent.length === 2) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: { code: 'RESOURCE_BUSY', message: 'Busy.', details: {} },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ json: { ...PERSON_IN_SCOPE, birth_date: '1990-05-01' } });
+    });
+
+    await page.goto(`${PROFILE}/edit`);
+    await page.getByLabel('Birthday (optional)').fill('1990-05-01');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'These are different people — save anyway' }).click();
+    await expect(page.getByText('The server is busy. Try again in a moment.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Go back and change the details' }).click();
+    await expect(page.getByLabel('Birthday (optional)')).toHaveValue('1990-05-01');
+    await expect(page.getByText('The server is busy. Try again in a moment.')).toHaveCount(0);
+
+    // Saved again unchanged: the body the answer sent, so the answer's key, never the first.
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(sent).toHaveLength(3);
+    expect(sent[2].body).toEqual(sent[1].body);
+    expect(sent[2].key).toBe(sent[1].key);
+    expect(sent[2].key).not.toBe(sent[0].key);
   });
 
   test('goes back to the form from the question, keeping what was typed', async ({ page }) => {

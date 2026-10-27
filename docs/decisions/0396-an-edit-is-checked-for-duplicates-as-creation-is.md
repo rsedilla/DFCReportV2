@@ -24,7 +24,8 @@ editor may not see does not gate, as on creation: the refusal would ask them to 
 somebody they cannot be shown, and its answer would vary with a birthday Section 8 protects.
 
 **4. Recorded.** The candidates passed over are written into the `person.updated` audit entry:
-only the acknowledged ids that were candidates this check found, and always written, so an empty
+only the acknowledged ids that were candidates able to gate this save (Tier 1, visible to the
+editor, not the person themself), and always written, so an empty
 list says none was needed. Creation writes the acknowledged ids it was sent into
 `person.created` as they came; that is unchanged here.
 
