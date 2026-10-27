@@ -90,13 +90,14 @@ for every reader who may open the page, with the comment beneath it where there 
 **12. A DCC Sunday before the archive keeps them** (owner, 2026-10-28). Section 9's checklist
 reads whether somebody is archived as of the Sunday, so a Person archived on Tuesday stays on
 Sunday's checklist while its week is open. **Their leader on that Sunday may record and correct
-them**, the save reaching them through the tree as it stood on the Sunday as well as today's,
-as a Cell meeting resolves through whoever led the Cell on its date (Section 7). **The same holds
-for somebody moved to another leader since** (owner, 2026-10-28, on the second review): a leader
-records the Sundays they owed whatever has happened since, and nothing about the person's
-lifecycle or move decides which rule applies, so a save tells a former leader nothing they could
-not see. The Sunday's checklist still limits who that leader is. A Sunday on or after the archive
-takes no record for them.
+them**: for a person on that leader's own checklist for the Sunday, the save reaches them through
+the tree as it stood on the Sunday as well as today's. **The same holds for somebody moved to
+another leader since** (owner, 2026-10-28, on the second review): a leader records the Sundays
+they owed whatever has happened since. The reach is keyed on the checklist the leader was shown,
+and on nothing about the person's lifecycle or move, so a refusal tells nobody where somebody
+outside their scope sat on a past Sunday (the third review). It differs from an ACTIVE Cell,
+whose meetings pass to its new leader (Section 7): a DCC Sunday stays with the leader who owed
+it. A Sunday on or after the archive takes no record for them.
 
 **13. The list shows attendance dates under `people.view_subtree`** (owner, 2026-10-28). *Last
 at Cell* and *Last at DCC*, and being on the list at all, are attendance facts that decisions
@@ -122,6 +123,6 @@ recorded while it still counted as owed, and that the list disclosed attendance 
 capability. The owner chose each from screenshots.
 
 Decision 0397, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 3, 6, 7, 9, 10, 16, 17 and 19.
+Sections 3, 5, 6, 7, 9, 10, 16, 17, 19 and 20.
 
 Previous: [2026-10-27 — An edit is checked for duplicates as creation is](0396-an-edit-is-checked-for-duplicates-as-creation-is.md)

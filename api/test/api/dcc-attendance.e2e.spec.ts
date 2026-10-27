@@ -459,12 +459,45 @@ describe('DCC recording (sections 9 and 14)', () => {
       ]);
       expect(saved.status).toBeLessThan(300);
 
-      // A Sunday after the move is Otto's to owe, not Manuel's.
+      // And corrected, through the Sunday's tree too.
+      const [row] = await liveRows(eventId);
+      const corrected = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: false, version: row.version },
+      ]);
+      expect(corrected.status).toBeLessThan(300);
+
+      // A Sunday after the move is Otto's to owe, not Manuel's: refused at scope.
       const later = await createEvent(await recentSunday());
       const refused = await submit(manuelAccount, later, [
         { person_id: quentin.id, present: true, version: null },
       ]);
       expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('dcc.take_attendance');
+    });
+
+    it('gives an upline who did not owe the Sunday the refusal anyone outside gets (decision 0397)', async () => {
+      // Paul holds an account, so the Sunday was his to record and not Manuel's. Quentin then
+      // moves out of Manuel's branch: Manuel was upline on the Sunday, and is answered exactly
+      // as somebody who never was, so the refusal says nothing of where Quentin sat.
+      await createAccount(app, db, { person: paul, roles: ['LEADER'] });
+      const sunday = await recentSunday();
+      const eventId = await createEvent(sunday);
+      const otto = await createPerson(db, { firstName: 'Otto', network: 'MENS' });
+      await assignTo(db, otto.id, raymond.id);
+      const movedAt = startOfManilaDay(shift(sunday, 1));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: movedAt })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, quentin.id, otto.id, movedAt);
+
+      const refused = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('dcc.take_attendance');
     });
   });
 

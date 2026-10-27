@@ -453,12 +453,13 @@ export class DccAttendanceService {
           throw new NotFoundError('No such person.', { person_id: personId });
         }
 
-        // A Person is reached through the tree as it stood on the Sunday as well as today's,
-        // as a Cell meeting resolves through whoever led the Cell on its date, for recording
-        // and correcting alike (owner, 2026-10-28, decision 0397): their leader on that Sunday
-        // records it whether they have been archived or moved to another leader since. Taken
-        // for every Person, so nothing about their lifecycle or their move chooses the rule.
-        const sundayAt = event.at;
+        // A Person on the actor's own checklist for this Sunday is reached through the tree as
+        // it stood on the Sunday as well as today's, for recording and correcting alike (owner,
+        // 2026-10-28, decision 0397): their leader on that Sunday records it whether they have
+        // been archived or moved to another leader since. Keyed on the checklist the actor was
+        // already shown, and nothing about the person's lifecycle or move, so a refusal tells
+        // nobody where somebody outside their scope sat on a past Sunday.
+        const sundayAt = checklist.has(personId) ? event.at : null;
         await this.assertInScope(trx, actor, authority, personId, sundayAt);
 
         // Decision 0322: nobody records their own DCC line, whatever capability they hold,
@@ -895,7 +896,10 @@ export class DccAttendanceService {
     actor: Actor,
     authority: ActorAuthority,
     personId: string,
-    /** The Sunday's instant, whose tree also reaches the Person (decision 0397). */
+    /**
+     * The Sunday's instant, whose tree also reaches the Person, for somebody on the actor's own
+     * checklist for it (decision 0397).
+     */
     sundayAt: Date | null = null,
   ): Promise<void> {
     const covered = await this.coversPersonWithin(
@@ -917,13 +921,13 @@ export class DccAttendanceService {
 
   /**
    * Whether a capability the actor holds reaches this Person: today's tree, as every other
-   * check here, or the tree as it stood on the Sunday (owner, 2026-10-28, decision 0397), as a
-   * Cell meeting resolves through whoever led the Cell on its date for recording and
-   * correcting. So a leader records and corrects a Sunday they owed for somebody archived or
-   * moved to another leader since. The actor must hold the capability at some scope; the
-   * checklist gate in `assertMayRecord` still holds them to the Sunday's own checklist unless
-   * they may submit on behalf, and the dated walk never reaches the actor themself, who
-   * records no line of their own (decision 0322).
+   * check here, or, where the caller passes the Sunday because the Person is on the actor's
+   * own checklist for it, the tree as it stood on the Sunday (owner, 2026-10-28, decision
+   * 0397). So a leader records and corrects a Sunday they owed for somebody archived or moved
+   * to another leader since. **Unlike an ACTIVE Cell**, whose meetings pass to its new leader
+   * (section 7), a DCC Sunday stays on the checklist of the leader who owed it, which section 9
+   * reads as of the Sunday. The actor must hold the capability at some scope, and the dated
+   * walk never reaches the actor themself, who records no line of their own (decision 0322).
    */
   private async coversPersonWithin(
     executor: Db,
@@ -1472,13 +1476,19 @@ export class DccAttendanceService {
     // The same dated reach as the transaction's own check (decision 0397), so a lost race
     // answers what the sequential request would.
     const event = await this.eventForRecording(this.db, eventId);
+    const checklist = await this.checklist(
+      this.db,
+      event,
+      actor.personId,
+      holdsWholeChurch(authority, Capability.DccTakeAttendance),
+    );
     const mayCorrect = await this.coversPersonWithin(
       this.db,
       actor,
       authority,
       Capability.DccCorrectSubtree,
       stale.record.person_id,
-      event.at,
+      checklist.has(stale.record.person_id) ? event.at : null,
     );
 
     if (!mayCorrect) {
