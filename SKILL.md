@@ -434,6 +434,8 @@ Do not enforce a strict unique constraint on name + birthday because two differe
 
 If a possible match exists, show the user the existing record and allow authorized confirmation of whether it is the same person.
 
+**An edit is checked as creation is** (decision 0396). Where Edit details changes a name, the birthday or the mobile number, the same candidates are surfaced while typing and the same Tier 1 acknowledgement is asked before the save, against the record as it will read; the person being edited is never their own candidate, and an edit that changes none of those fields is not checked. The rules this section states of creation about that check — that the system never blocks, which candidates may gate, and what a refusal may show — apply to such an edit: a Tier 1 candidate the editor may not see does not gate. The audit entry records the acknowledged ids that were candidates able to gate this save — Tier 1, visible to the editor, not the person themself — and only those. A pair confirmed as different people is asked about again on a later edit; that answer is not stored for the pair.
+
 ### Matching rules
 
 Two rules bound everything below. The system **never** merges automatically, and the system **never** blocks creation. It surfaces candidates; a person decides. A matcher that blocks will be worked around by staff inventing spellings, which produces the duplicates it was meant to prevent.
@@ -2198,7 +2200,7 @@ Leaders may search the Person directory by name. **It finds the searcher's own p
 
 **A church-wide search is bounded and recorded** (ruling of 2026-09-28, decision 0303). It returns at most 20 people per request, and a `limit` above 20 is refused rather than cut. An account may make at most 30 a minute. Each one is written to the audit log with the term as searched and how many people it returned, and a refused search writes nothing (Section 21). This binds every request for the church-wide directory, which since decision 0389 only a Whole Church scope may make.
 
-**The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and never by this screen. **Since decision 0389 the pickers are narrowed with the screen**, each to the searcher's own scope, naming who ran a Cell meeting adding the leaders above them. A Cell may still hold members its leader does not pastor (Section 10), added by an actor whose scope reaches them or moved by one whose `cell.move_members` covers both Cells (decision 0357).
+**The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and Edit details as a name, the birthday or the mobile number is changed (decision 0396), and never by this screen. **Since decision 0389 the pickers are narrowed with the screen**, each to the searcher's own scope, naming who ran a Cell meeting adding the leaders above them. A Cell may still hold members its leader does not pastor (Section 10), added by an actor whose scope reaches them or moved by one whose `cell.move_members` covers both Cells (decision 0357).
 
 For a person within the searching leader's authorized pastoral scope, return full profile fields as normally authorized.
 
@@ -5036,7 +5038,7 @@ One envelope, always:
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
 | `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
-| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
+| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created, or before an edit to a name, the birthday or the mobile number is saved (Section 3, decision 0396). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 | `RATE_LIMITED` | 429 | Too many requests within a minute (Section 24). Refused before any idempotency key is claimed: retry after a short delay, with the same key |
 | `RESOURCE_BUSY` | 503 | The write could not be serialized against another operation and reached no decision: the wait timed out, the database chose this transaction as a deadlock victim (Section 5), or a premise read before a lock no longer held under it (below). Transient: retry after a short delay, **with the same key** |
