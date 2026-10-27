@@ -190,6 +190,22 @@ export class CellsController {
   }
 
   /**
+   * Leaders whose running Cells start less than two hours apart (SKILL.md section 10,
+   * decision 0392), for Admin to fix: the rule refuses every new clash, and these were
+   * entered before it.
+   *
+   * **`cell.manage_lifecycle` at Whole Church**, the capability decision 0355 keeps for
+   * Admin, because the fixes this list leads to, a schedule change or a handover, are
+   * Admin's to make across the church. The whole list, never paged: one row per leader
+   * with a clash, which the rule keeps from growing.
+   */
+  @Get('schedule-clashes')
+  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'church' })
+  async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
+    return this.index.scheduleClashes();
+  }
+
+  /**
    * People in the actor's scope holding no active Cell membership (SKILL.md sections
    * 10, 15 and 19; decision 0233).
    *

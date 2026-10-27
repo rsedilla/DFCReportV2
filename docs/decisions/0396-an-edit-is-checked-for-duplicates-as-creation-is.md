@@ -53,4 +53,4 @@ branch is shown is decided separately (option C) and is built after this.
 Decision 0396, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 3.
 
-Previous: [2026-10-26 — A member added after a meeting was recorded is asked about, not called not marked](0391-a-member-added-after-a-meeting-was-recorded.md)
+Previous: [2026-10-27 — One button marks the rest Absent](0395-one-button-marks-the-rest-absent.md)
