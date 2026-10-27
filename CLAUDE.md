@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-27, the trigger being decision 0395: of 392 files, 391 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, 0380 to 0393, and 0395 each moved the first two and
-neither of the others, none of them carrying a `Next:`; 0379, 0394 and 0396 are held by work not yet merged. The recount before this one was dated
+2026-10-27, the trigger being decision 0396: of 393 files, 392 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0378, 0380 to 0393, 0395 and 0396 each moved the first two and
+neither of the others, none of them carrying a `Next:`; 0379 and 0394 are held by work not yet merged. The recount before this one was dated
+2026-10-27 and triggered by 0395, and was left stale by 0396 the same day. The one before that was dated
 2026-10-27 and triggered by 0393, and was left stale by 0395 the same day. The one before that was dated
 2026-10-27 and triggered by 0392, and was left stale by 0393 the same day. The one before that was dated
 2026-10-26 and triggered by 0391, and was left stale by 0392 the next day. The one before that was dated
@@ -829,6 +830,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-26 — [One leader's Cells start at least two hours apart](docs/decisions/0392-one-leaders-cells-start-two-hours-apart.md)
 - 2026-10-27 — [An administrator sends a password reset to an account in use](docs/decisions/0393-an-administrator-sends-a-password-reset.md)
 - 2026-10-27 — [One button marks the rest Absent](docs/decisions/0395-one-button-marks-the-rest-absent.md)
+- 2026-10-27 — [An edit is checked for duplicates as creation is](docs/decisions/0396-an-edit-is-checked-for-duplicates-as-creation-is.md)
 
 ### Open — awaiting a ruling
 

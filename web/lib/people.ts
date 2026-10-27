@@ -178,7 +178,11 @@ export async function createPerson(
 
 export type PersonEdit = Partial<
   Pick<PersonInput, 'title' | 'first_name' | 'middle_name' | 'last_name' | 'birth_date' | 'mobile_number'>
-> & { civil_status?: CivilStatus };
+> & {
+  civil_status?: CivilStatus;
+  /** Tier 1 candidates passed over, as on create (decision 0396). */
+  acknowledged_duplicate_ids?: string[];
+};
 
 /** The key is the caller's, for the reason given on `createPerson`. */
 export async function editPerson(

@@ -10,6 +10,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SectionFrame } from '@/components/section-frame';
 import { NameFields } from '@/components/name-fields';
 import { PersonCells } from '@/components/person-cells';
+import { PossibleMatches } from '@/components/possible-matches';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
@@ -26,7 +27,9 @@ import {
   CIVIL_STATUS_OPTIONS,
   editPerson,
   getPerson,
+  isWithheld,
   sexLabel,
+  type DuplicateCandidate,
   type PersonEdit,
   type PersonFull,
 } from '@/lib/people';
@@ -52,6 +55,11 @@ import {
  * question is recorded as open rather than answered by a side effect. This form
  * therefore sends the field only when it has a value, and says so where somebody
  * would otherwise clear the box and expect it to take.
+ *
+ * **A changed name, birthday or mobile number is checked for duplicates as adding a person
+ * is** (decision 0396): the same "Someone similar is already recorded" box while typing, the
+ * person themself left out, and a strong match stops the save until "These are different
+ * people" is pressed.
  */
 export default function EditPersonPage() {
   return (
@@ -145,8 +153,29 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     setWriteKey(crypto.randomUUID());
   }
 
+  // Whether the save will be checked for duplicates: a name, the birthday or the mobile number
+  // differs from what is saved (decision 0396). Digits and a plus for the number, as the API compares.
+  const digits = (value: string | null) => (value ?? '').replace(/[^\d+]/g, '');
+  const identityChanged =
+    values.first_name.trim() !== person.first_name ||
+    (values.middle_name.trim() || null) !== person.middle_name ||
+    values.last_name.trim() !== person.last_name ||
+    (values.birth_date !== '' && values.birth_date !== (person.birth_date ?? '')) ||
+    digits(values.mobile_number) !== digits(person.mobile_number);
+
+  // Tier 1 candidates the API asked about, and those already passed over (decision 0396).
+  const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
+  const [acknowledged, setAcknowledged] = useState<string[]>([]);
+  const [pending, setPending] = useState<PersonEdit | null>(null);
+  // One key for the answer to each question, so pressing "save anyway" again after a lost
+  // response replays the save rather than making it twice (section 23).
+  const [answerKey, setAnswerKey] = useState(() => crypto.randomUUID());
+
   const save = useMutation({
-    mutationFn: (changes: PersonEdit) => editPerson(id, changes, writeKey),
+    // The key travels with the attempt, as on Add Person: a resubmission past a duplicate
+    // is a different body and takes a new key in the same handler.
+    mutationFn: ({ changes, key }: { changes: PersonEdit; key: string }) =>
+      editPerson(id, changes, key),
     // The saved record replaces the cached one before the profile opens. Without this the
     // profile showed the copy it held from before the edit for up to `staleTime`, so a
     // saved change looked unsaved and was saved a second time (owner, 2026-09-22).
@@ -158,6 +187,17 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
       router.push(`/people/${id}`);
     },
     onError: (error) => {
+      if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
+        setCandidates((error.details.candidates as DuplicateCandidate[]) ?? []);
+        setAnswerKey(crypto.randomUUID());
+        setFailure(null);
+        return;
+      }
+      // The question screen has no fields to name, so a failed "save anyway" is said there.
+      if (candidates) {
+        setFailure(describeFailure(error));
+        return;
+      }
       const next: Record<string, string | null> = {};
       for (const field of ['first_name', 'last_name', 'birth_date', 'mobile_number']) {
         next[field] = fieldErrorFor(error, field);
@@ -187,8 +227,13 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     if (values.birth_date) {
       changes.birth_date = values.birth_date;
     }
+    if (acknowledged.length > 0) {
+      changes.acknowledged_duplicate_ids = acknowledged;
+    }
 
-    save.mutate(changes);
+    setCandidates(null);
+    setPending(changes);
+    save.mutate({ changes, key: writeKey });
   }
 
   // Read to show the leader, never to change them: that is a reassignment (section 5).
@@ -216,6 +261,82 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
       : dcc.data.classification
         ? classificationLabel(dcc.data.classification)
         : 'None yet';
+
+  if (candidates && pending) {
+    return (
+      <div className="mt-6">
+        <h2 className="text-lg font-semibold tracking-tight">Is this someone already recorded?</h2>
+        <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+          Before {pending.first_name} {pending.last_name}’s details are saved, check these.
+          Recording one person twice splits their history in two, and the two records are hard to
+          put back together.
+        </p>
+
+        <ul className="border-line divide-line mt-6 divide-y border-t border-b">
+          {candidates.map((candidate) => (
+            <li key={candidate.id} className="py-4">
+              <p className="font-medium">{candidate.full_name}</p>
+              <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
+              {isWithheld(candidate) ? (
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  A possible match. Their details are visible to the leaders who pastor them — ask
+                  before saving.
+                </p>
+              ) : candidate.reasons?.length ? (
+                <ul className="text-muted mt-2 list-inside list-disc text-sm">
+                  {candidate.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <TextLink href={`/people/${candidate.id}`} className="mt-2 text-sm">
+                Open this record
+              </TextLink>
+            </li>
+          ))}
+        </ul>
+
+        {failure ? (
+          <div className="mt-6">
+            <FailureNotice failure={failure} />
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button
+            disabled={save.isPending}
+            onClick={() => {
+              // Union, not replace, as on Add Person; and the answer's own key, because this
+              // body differs from the one the question was stored against.
+              const union = Array.from(
+                new Set([...acknowledged, ...candidates.map((candidate) => candidate.id)]),
+              );
+              setAcknowledged(union);
+              setFailure(null);
+              // The form now sends this body, so it takes this key: going back and saving
+              // unchanged replays or reruns this answer rather than reusing the first key.
+              setWriteKey(answerKey);
+              save.mutate({
+                changes: { ...pending, acknowledged_duplicate_ids: union },
+                key: answerKey,
+              });
+            }}
+          >
+            {save.isPending ? 'Saving…' : 'These are different people — save anyway'}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCandidates(null);
+              setFailure(null);
+            }}
+          >
+            Go back and change the details
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -334,6 +455,21 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
               }
             }}
           />
+
+          {/*
+            Only once a name, the birthday or the mobile number differs from what is saved, which is
+            when the save is checked (decision 0396): opened for a civil status, the page asks
+            nothing and looks nobody up.
+          */}
+          {identityChanged ? (
+            <PossibleMatches
+              firstName={values.first_name}
+              lastName={values.last_name}
+              birthDate={values.birth_date}
+              mobileNumber={values.mobile_number}
+              excludeId={id}
+            />
+          ) : null}
 
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={save.isPending}>

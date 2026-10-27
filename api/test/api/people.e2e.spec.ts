@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import { PeopleService } from '../../src/people/people.service';
+import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -971,6 +973,210 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  // Decision 0396: a changed name, birthday or mobile number is checked as creating a Person
+  // is. Manuel Testfixture, born 1985-06-15, is the Tier 1 candidate throughout.
+  describe('editing a Person checks for duplicates (SKILL.md section 3, decision 0396)', () => {
+    const edit = (account: TestAccount, id: string, body: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .patch(`/api/v1/people/${id}`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(body);
+
+    const pablo = async (): Promise<string> => {
+      const created = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Pablo',
+          last_name: 'Testfixture',
+          birth_date: '1990-01-01',
+        }),
+      );
+      expect(created.status).toBe(201);
+      return created.body.id as string;
+    };
+
+    it('asks before an edit makes somebody a Tier 1 match, then saves once acknowledged', async () => {
+      const id = await pablo();
+
+      const refused = await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+      const candidates = refused.body.error.details.candidates as { id: string }[];
+      expect(candidates.map((candidate) => candidate.id)).toEqual([manuel.id]);
+
+      // Nothing was written by the refusal.
+      const unchanged = await db
+        .selectFrom('persons')
+        .select(['first_name', 'birth_date'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+      expect(unchanged.first_name).toBe('Pablo');
+
+      const saved = await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id],
+      });
+      expect(saved.status).toBe(200);
+      expect(saved.body.first_name).toBe('Manuel');
+
+      const audit = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('action', '=', 'person.updated')
+        .where('target_id', '=', id)
+        .executeTakeFirstOrThrow();
+      expect(audit.after).toMatchObject({ acknowledged_duplicate_ids: [manuel.id] });
+    });
+
+    it('checks a changed mobile number, and not the same number written differently', async () => {
+      const id = await pablo();
+      await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id],
+      }).expect(200);
+
+      // A new mobile number is a change, so Manuel is asked about again.
+      const asked = await edit(raymondAccount, id, { mobile_number: '09171234567' });
+      expect(asked.status).toBe(409);
+      expect(asked.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+      await edit(raymondAccount, id, {
+        mobile_number: '09171234567',
+        acknowledged_duplicate_ids: [manuel.id],
+      }).expect(200);
+
+      // The same number with hyphens is no change.
+      const reformatted = await edit(raymondAccount, id, { mobile_number: '0917-123-4567' });
+      expect(reformatted.status).toBe(200);
+    });
+
+    it('accepts an acknowledgement in any letter case, and audits only real candidates', async () => {
+      const id = await pablo();
+      const saved = await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id.toUpperCase(), juan.id],
+      });
+      expect(saved.status).toBe(200);
+
+      // Juan was never a candidate Raymond could see, so he is not recorded as passed over.
+      const audit = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('action', '=', 'person.updated')
+        .where('target_id', '=', id)
+        .executeTakeFirstOrThrow();
+      expect(
+        (audit.after as { acknowledged_duplicate_ids: string[] }).acknowledged_duplicate_ids,
+      ).toEqual([manuel.id]);
+    });
+    it('never counts the person being edited as their own match', async () => {
+      // Manuel matches himself on every field; a changed middle name is still checked.
+      const saved = await edit(raymondAccount, manuel.id, { middle_name: 'Quinto' });
+      expect(saved.status).toBe(200);
+    });
+
+    it('checks nothing when no name, birthday or mobile number changes', async () => {
+      const id = await pablo();
+      await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id],
+      }).expect(200);
+
+      // Still a Tier 1 match for Manuel, and only the civil status changes.
+      const saved = await edit(raymondAccount, id, { civil_status: 'MARRIED' });
+      expect(saved.status).toBe(200);
+
+      // The same values sent back unchanged are not a change either.
+      const resent = await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        last_name: 'Testfixture',
+        birth_date: '1985-06-15',
+      });
+      expect(resent.status).toBe(200);
+    });
+
+    it('does not gate on a Tier 1 candidate the editor may not see, as creating does not', async () => {
+      // Juan sits outside Raymond's subtree; gating on him would ask Raymond to acknowledge
+      // somebody he may not be shown, and the answer would vary with Juan's birthday.
+      const id = await pablo();
+      const saved = await edit(raymondAccount, id, {
+        first_name: 'Juan',
+        birth_date: '1985-06-15',
+      });
+      expect(saved.status).toBe(200);
+    });
+
+    it('lists only the candidates still owed, never the person being edited', async () => {
+      // Pablo becomes a second Manuel; then editing Manuel himself, who matches himself on
+      // every field, is asked about Pablo and about nobody else.
+      const id = await pablo();
+      await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id],
+      }).expect(200);
+
+      const refused = await edit(raymondAccount, manuel.id, { middle_name: 'Quinto' });
+      expect(refused.status).toBe(409);
+      const candidates = refused.body.error.details.candidates as { id: string }[];
+      expect(candidates.map((candidate) => candidate.id)).toEqual([id]);
+    });
+
+    it('refuses to save past a check made on values a concurrent edit has since replaced', async () => {
+      // The check runs before the write's lock. A holder renames Pablo to a Tier 1 match for
+      // Manuel and holds the row; this edit is checked against "Pablo", then waits on the row,
+      // and must not save over a name its check never saw.
+      const id = await pablo();
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query(
+          `UPDATE persons SET first_name = 'Manuel', birth_date = '1985-06-15' WHERE id = $1`,
+          [id],
+        );
+
+        const attempt = edit(raymondAccount, id, { mobile_number: '09171234567' });
+        const inFlight = track(attempt);
+
+        await countWhileInFlight(
+          async () => {
+            const { rows } = await holder.query<{ count: string }>(
+              `SELECT count(*) AS count FROM pg_locks
+                WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+            );
+            return Number(rows[0].count);
+          },
+          inFlight,
+          'the edit to wait on the person row',
+        );
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        const stored = await db
+          .selectFrom('persons')
+          .select('mobile_number')
+          .where('id', '=', id)
+          .executeTakeFirstOrThrow();
+        expect(stored.mobile_number).toBeNull();
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+  });
   describe('the pastoral path (SKILL.md section 8)', () => {
     it('returns the chain root first, ending with the person', async () => {
       // Section 8's own example is a chain from the top: Oriel -> Raymond ->

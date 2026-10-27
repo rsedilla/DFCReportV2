@@ -596,9 +596,12 @@ export class PeopleController {
         birthDate: body.birth_date,
         civilStatus: body.civil_status,
         mobileNumber: body.mobile_number,
+        acknowledgedDuplicateIds: body.acknowledged_duplicate_ids ?? [],
       },
       actor,
       claim,
+      // The same scope test creation uses, so a refusal discloses nothing a read may not.
+      (candidateId) => this.read.isWithinViewScope(actor, candidateId),
     );
   }
 

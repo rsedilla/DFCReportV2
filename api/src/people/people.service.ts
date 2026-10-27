@@ -7,7 +7,11 @@ import { AuthorizationService } from '../auth/authorization/authorization.servic
 import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
-import { DuplicateAcknowledgementRequiredError, NotFoundError } from '../common/errors/api-error';
+import {
+  DuplicateAcknowledgementRequiredError,
+  NotFoundError,
+  ResourceBusyError,
+} from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { canonicalId } from '../common/identifiers';
 import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
@@ -325,6 +329,17 @@ export class PeopleService {
    * `people.set_title` (decision 0374). **Not sex** —
    * that determines Network, which determines which pastoral edges are legal, so
    * it has its own capability and its own audited path (section 4).
+   *
+   * **A changed name, birthday or mobile number is checked for duplicates as creating a
+   * Person is** (section 3, decision 0396): a Tier 1 candidate the actor may see and has not
+   * acknowledged stops the save, the person themself never counting, and an edit that
+   * changes none of those fields is not checked.
+   *
+   * **Asked before the transaction opens, as on create**, because the check reads the pool:
+   * asked while this request holds a connection and the row lock, it would ask a bounded pool
+   * for more connections (section 24). The row is then locked and, where somebody changed one
+   * of the compared fields in between, the write answers `RESOURCE_BUSY` rather than saving
+   * past a check made on other values; the same body sent again is checked afresh.
    */
   async editBasic(
     personId: string,
@@ -336,10 +351,28 @@ export class PeopleService {
       birthDate?: string;
       civilStatus?: CivilStatus;
       mobileNumber?: string | null;
+      acknowledgedDuplicateIds?: readonly string[];
     },
     actor: { accountId: string; personId: string },
     claim: CurrentClaim,
+    /** Whether the actor may see why a candidate matched, as on create. */
+    canSeeReasons: (personId: string) => Promise<boolean>,
   ): Promise<Record<string, unknown>> {
+    const checked = await this.db
+      .selectFrom('persons')
+      .select(['first_name', 'middle_name', 'last_name', 'birth_date', 'sex', 'mobile_number'])
+      .where('id', '=', personId)
+      .executeTakeFirst();
+    if (checked === undefined) {
+      throw new NotFoundError('No such person.');
+    }
+    const passedOver = await this.assertNoUnacknowledgedDuplicate(
+      checked,
+      changes,
+      personId,
+      canSeeReasons,
+    );
+
     return this.db.transaction().execute(async (trx) => {
       // Read inside the transaction. Outside it, a concurrent edit landing
       // between the read and the update makes this `before` a value that was
@@ -381,6 +414,21 @@ export class PeopleService {
         await this.authorization.assertHolds(actor, Capability.PeopleSetTitle);
       }
 
+      // The duplicate check was made on `checked`; a change to what it compared since then
+      // means it was made on other values.
+      if (
+        before.first_name !== checked.first_name ||
+        before.middle_name !== checked.middle_name ||
+        before.last_name !== checked.last_name ||
+        before.birth_date !== checked.birth_date ||
+        before.mobile_number !== checked.mobile_number
+      ) {
+        throw new ResourceBusyError(
+          { person_id: personId },
+          'This person was changed while being saved. Retry in a moment.',
+        );
+      }
+
       const person = await trx
         .updateTable('persons')
         .set({
@@ -420,7 +468,9 @@ export class PeopleService {
         targetType: 'person',
         targetId: personId,
         before,
-        after: person,
+        // The candidates passed over, which are part of what was done (section 21): only those
+        // this check found, and always written, so an empty list means none was needed.
+        after: { ...person, acknowledged_duplicate_ids: passedOver },
       });
 
       const response = fullProfile(person);
@@ -433,6 +483,91 @@ export class PeopleService {
 
       return response;
     });
+  }
+
+  /**
+   * The duplicate check an edit owes (decision 0396): only where a name, the birthday or the
+   * mobile number changes, against the record as it will read, the person themself excluded.
+   * Gated as on create, on a visible Tier 1 candidate not yet acknowledged. Answers the
+   * acknowledged ids that were visible Tier 1 candidates of this check, for the audit entry.
+   * A pair confirmed different before is asked about again: the answer is not stored per pair
+   * (owner, 2026-10-27).
+   */
+  private async assertNoUnacknowledgedDuplicate(
+    before: {
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+      birth_date: string | null;
+      sex: Sex;
+      mobile_number: string | null;
+    },
+    changes: {
+      firstName?: string;
+      middleName?: string | null;
+      lastName?: string;
+      birthDate?: string;
+      mobileNumber?: string | null;
+      acknowledgedDuplicateIds?: readonly string[];
+    },
+    personId: string,
+    canSeeReasons: (personId: string) => Promise<boolean>,
+  ): Promise<string[]> {
+    const subject: Subject = {
+      firstName: changes.firstName?.trim() ?? before.first_name,
+      middleName:
+        changes.middleName === undefined ? before.middle_name : changes.middleName?.trim() || null,
+      lastName: changes.lastName?.trim() ?? before.last_name,
+      birthDate: changes.birthDate ?? before.birth_date,
+      sex: before.sex,
+      mobileNumberNormalized:
+        changes.mobileNumber === undefined
+          ? normalizeMobile(before.mobile_number)
+          : normalizeMobile(changes.mobileNumber),
+    };
+
+    const identityChanges =
+      subject.firstName !== before.first_name ||
+      subject.middleName !== before.middle_name ||
+      subject.lastName !== before.last_name ||
+      subject.birthDate !== before.birth_date ||
+      subject.mobileNumberNormalized !== normalizeMobile(before.mobile_number);
+    if (!identityChanges) {
+      return [];
+    }
+
+    const self = canonicalId(personId);
+    const acknowledged = new Set(
+      (changes.acknowledgedDuplicateIds ?? []).map((candidateId) => canonicalId(candidateId)),
+    );
+    const owed = (candidateId: string) =>
+      canonicalId(candidateId) !== self && !acknowledged.has(canonicalId(candidateId));
+
+    let gated = false;
+    const passedOver: string[] = [];
+    for (const match of await this.duplicates.findDuplicates(subject)) {
+      const candidateId = canonicalId(match.candidate.id);
+      if (match.tier !== 1 || candidateId === self || !(await canSeeReasons(match.candidate.id))) {
+        continue;
+      }
+      if (acknowledged.has(candidateId)) {
+        passedOver.push(candidateId);
+      } else {
+        gated = true;
+      }
+    }
+
+    if (gated) {
+      throw new DuplicateAcknowledgementRequiredError(
+        await this.duplicates.visibleDuplicatesFor(
+          subject,
+          canSeeReasons,
+          (match) => match.tier === 1 && owed(match.candidateId),
+        ),
+      );
+    }
+
+    return passedOver;
   }
 
   /**
