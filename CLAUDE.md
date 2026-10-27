@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-27, the trigger being decision 0394: of 394 files, 393 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0378, and 0380 to 0396, each moved the first two and
-neither of the others, none of them carrying a `Next:`; 0379 is held by work not yet merged. The recount before this one was dated
+2026-10-27, the trigger being decision 0379: of 395 files, 394 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0396 each moved the first two and
+neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-27 and triggered by 0394, and was left stale by 0379 the same day. The one before that was dated
 2026-10-27 and triggered by 0396, and was left stale by 0394 the same day. The one before that was dated
 2026-10-27 and triggered by 0395, and was left stale by 0396 the same day. The one before that was dated
 2026-10-27 and triggered by 0393, and was left stale by 0395 the same day. The one before that was dated
@@ -816,6 +817,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-20 — [# of People under Reports, for everyone who has it](docs/decisions/0376-number-of-people-under-reports.md)
 - 2026-10-20 — [The Senior Pastors' Trends is a view of Reports](docs/decisions/0377-trends-is-a-view-of-reports.md)
 - 2026-10-20 — [The SUYNL report is Encounter Readiness, with no counts of its own](docs/decisions/0378-encounter-readiness.md)
+- 2026-10-21 — [A page not on your screens does not open](docs/decisions/0379-a-page-not-on-your-screens-does-not-open.md)
 - 2026-10-21 — [A Full view leader's Reports are the Senior Pastors' five, for their own branch](docs/decisions/0380-primaries-reports-as-the-senior-pastors.md)
 - 2026-10-21 — [The two Awaiting lists leave Record, for Cells and People](docs/decisions/0381-awaiting-lists-leave-record.md)
 - 2026-10-21 — [Leaders Under Me is hidden from a Full view leader](docs/decisions/0382-leaders-under-me-hidden-from-full-view.md)
