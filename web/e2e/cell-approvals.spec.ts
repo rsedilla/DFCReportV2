@@ -87,7 +87,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await page.goto('/cells');
 
-    // The administrator's six tabs (decisions 0366 and 0381).
+    // The administrator's seven tabs (decisions 0366, 0381 and 0392).
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
       'Active Cells',
@@ -95,6 +95,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
       'Under 3 Member Cells',
       'Inactive (3+ Months) Cells',
       'Closed Cells',
+      /^Same Leader, Same Time/,
       /^Cells to Approve\s*1$/,
     ]);
 
@@ -230,6 +231,97 @@ test.describe('Under 3 Member Cells (decisions 0353 and 0366)', () => {
   });
 });
 
+test.describe('Same Leader, Same Time (decision 0392)', () => {
+  const CLASHES = [
+    {
+      leader: {
+        person_id: PERSON_IN_SCOPE.id,
+        member_id: PERSON_IN_SCOPE.member_id,
+        full_name: PERSON_IN_SCOPE.full_name,
+      },
+      minutes_apart: 30,
+      cells: [
+        {
+          cell_uuid: '3f1b7c6e-0000-4000-8000-000000000a01',
+          cell_id: 'CELL-000004',
+          category: 'YOUNG_PRO',
+          day_of_week: 6,
+          time_of_day: '19:00',
+        },
+        {
+          cell_uuid: '3f1b7c6e-0000-4000-8000-000000000a02',
+          cell_id: 'CELL-000007',
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '19:30',
+        },
+      ],
+    },
+  ];
+
+  test('lists each leader whose Cells start less than two hours apart, with its count', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellAdministrator(page);
+    await page.route('**/api/v1/cells/schedule-clashes', (route) =>
+      route.fulfill(json({ data: CLASHES })),
+    );
+
+    await page.goto('/cells');
+    const tab = page
+      .getByRole('group', { name: 'Which Cells' })
+      .getByRole('button', { name: /^Same Leader, Same Time/ });
+    await expect(tab).toHaveText(/^Same Leader, Same Time\s*1$/);
+    await tab.click();
+
+    await expect(page).toHaveURL(/view=CLASH/);
+    const clash = page.getByRole('listitem').filter({ hasText: '30 minutes apart' }).first();
+    await expect(clash).toContainText(`${PERSON_IN_SCOPE.full_name} · 30 minutes apart`);
+    await expect(clash).toContainText('Young Pro · Sat CELL-000004');
+    await expect(clash).toContainText('Saturday, 19:00');
+    await expect(clash).toContainText('Youth · Sat CELL-000007');
+    await expect(clash).toContainText('Saturday, 19:30');
+    // The list's own page, so none of Active Cells' controls.
+    await expect(page.getByRole('button', { name: /^Cells you oversee/ })).toHaveCount(0);
+  });
+
+  test('says so when there is none', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellAdministrator(page);
+    await page.route('**/api/v1/cells/schedule-clashes', (route) =>
+      route.fulfill(json({ data: [] })),
+    );
+
+    await page.goto('/cells?view=CLASH');
+
+    await expect(
+      page.getByText('No leader’s Cell Groups start less than 2 hours apart.'),
+    ).toBeVisible();
+  });
+
+  test('is not offered to a Primary, even by its address', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    let asked = false;
+    await page.route('**/api/v1/cells/schedule-clashes', (route) => {
+      asked = true;
+      return route.fulfill(json({ data: CLASHES }));
+    });
+
+    await page.goto('/cells?view=CLASH');
+
+    await expect(page.getByRole('button', { name: 'Active Cells' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: /^Same Leader, Same Time/ })).toHaveCount(0);
+    expect(asked).toBe(false);
+  });
+});
+
 test.describe('the Cells tabs on a phone (decision 0366)', () => {
   for (const width of [320, 390]) {
     test(`wrap at ${width}px, with every tab inside the screen and no sideways scroll`, async ({
@@ -243,7 +335,7 @@ test.describe('the Cells tabs on a phone (decision 0366)', () => {
 
       await page.goto('/cells');
       const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
-      await expect(tabs).toHaveCount(6);
+      await expect(tabs).toHaveCount(7);
 
       const tops = new Set<number>();
       for (const tab of await tabs.all()) {

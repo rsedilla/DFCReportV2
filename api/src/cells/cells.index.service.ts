@@ -23,6 +23,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { decodeCellIndexCursor, encodeCellIndexCursor } from './cell-index-cursor';
 import { CellsReadService } from './cells.read.service';
 import { RECORDED_MEETINGS_PORT, type RecordedMeetingsPort } from './recorded-meetings.port';
+import { scheduleClashesWithin } from './schedule-clash';
 import { ValidationFailedError } from '../common/errors/api-error';
 import { normalizeName } from '../people/duplicate-matching';
 
@@ -95,6 +96,43 @@ export class CellsIndexService {
     @Inject(RECORDED_MEETINGS_PORT)
     private readonly recorded?: RecordedMeetingsPort,
   ) {}
+
+  /**
+   * `GET /api/v1/cells/schedule-clashes`: leaders whose running Cells start less than two
+   * hours apart (section 10, decision 0392), each with those Cells. Ordered as every list of
+   * people is, first name, surname and Member ID, and never by how close (decision 0359).
+   */
+  async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
+    const clashes = await scheduleClashesWithin(this.db);
+    const names = await this.people.namesOf(clashes.map((clash) => clash.leaderId));
+    const key = (leaderId: string) => {
+      const name = names.get(leaderId);
+      return [name?.firstName ?? '', name?.lastName ?? '', name?.memberId ?? ''];
+    };
+
+    const data = [...clashes]
+      .sort((a, b) => {
+        const [x, y] = [key(a.leaderId), key(b.leaderId)];
+        return x[0].localeCompare(y[0]) || x[1].localeCompare(y[1]) || x[2].localeCompare(y[2]);
+      })
+      .map((clash) => ({
+        leader: {
+          person_id: clash.leaderId,
+          member_id: names.get(clash.leaderId)?.memberId ?? null,
+          full_name: names.get(clash.leaderId)?.fullName ?? '',
+        },
+        minutes_apart: clash.closestMinutes,
+        cells: clash.cells.map((cell) => ({
+          cell_uuid: cell.uuid,
+          cell_id: cell.cell_id,
+          category: cell.category,
+          day_of_week: cell.day_of_week,
+          time_of_day: cell.time_of_day,
+        })),
+      }));
+
+    return { data };
+  }
 
   /**
    * `GET /api/v1/cells/counts` (decision 0309): how many running Cells the list would show
