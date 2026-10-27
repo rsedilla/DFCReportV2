@@ -12,7 +12,10 @@ import {
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
-import { VersionConflictError } from '../common/errors/version-conflict';
+import {
+  RecordedFirstConflictError,
+  VersionConflictError,
+} from '../common/errors/version-conflict';
 import {
   isForeignKeyViolation,
   isUniqueViolation,
@@ -121,6 +124,25 @@ type MeetingOperation =
   /** `HELD` ↔ `NOT_HELD`: the first report was wrong (decision 0273). */
   | { kind: 'correct_status' }
   | { kind: 'refused'; error: ApiError };
+
+/**
+ * A refusal of the amendment capability, or, where the body carried no version, what a first
+ * record is told when somebody else recorded the meeting first (decision 0394).
+ */
+function recordedFirstOr(
+  denied: ScopeDeniedError,
+  submittedVersion: number | undefined,
+  currentVersion: number,
+  cellId: string,
+  meetingId: string,
+): ScopeDeniedError | RecordedFirstConflictError {
+  return submittedVersion === undefined
+    ? new RecordedFirstConflictError({
+        currentVersion,
+        details: { cell_id: cellId, meeting_id: meetingId },
+      })
+    : denied;
+}
 
 function classifyOperation(
   storedStatus: string,
@@ -1820,7 +1842,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // the disclosure. Omitting `version` walked straight through. Whatever is right for
     // a client that read no record, it cannot be that one payload is withheld at one
     // door and handed over at the other.*
-    await this.assertMayCorrect(trx, params);
+    await this.assertMayAmend(trx, params, body.version, existing.version);
 
     // **No version, against a record that exists**, is section 22's first
     // null-`submitted_version` case: the client asserted there is no record and there is
@@ -2101,7 +2123,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // record, so the amendment capability is owed unconditionally — unlike a correction,
     // where a submission matching what is stored is not an amendment.
     await this.assertMayActForAnother(trx, params);
-    await this.assertMayCorrect(trx, params);
+    await this.assertMayAmend(trx, params, body.version, existing.version);
 
     // **Read before the version check, because the conflict has to carry it.** Section 14
     // and section 22 require a conflict to show both values "so that a person can choose
@@ -2599,7 +2621,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         });
       } catch (error) {
         if (error instanceof ScopeDeniedError) {
-          return error;
+          return recordedFirstOr(error, body.version, meeting.version, cellId, meetingId);
         }
 
         throw error;
@@ -2669,7 +2691,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       });
     } catch (error) {
       if (error instanceof ScopeDeniedError) {
-        return error;
+        return recordedFirstOr(error, body.version, meeting.version, cellId, meetingId);
       }
 
       throw error;
@@ -2862,6 +2884,34 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         'scope (SKILL.md section 7).',
       { capability: Capability.RecordsBackdateEffectiveDate },
     );
+  }
+
+  /**
+   * The amendment capability, and what a first record is told where it is missing
+   * (decision 0394): a body carrying no version met a meeting somebody else recorded first,
+   * which the screen says and offers Reload for. A body carrying a version is a correction,
+   * and is refused as one.
+   */
+  private async assertMayAmend(
+    trx: Db | Transaction<Database>,
+    params: Parameters<CellMeetingsService['assertMayCorrect']>[1],
+    submittedVersion: number | undefined,
+    currentVersion: number,
+  ): Promise<void> {
+    try {
+      await this.assertMayCorrect(trx, params);
+    } catch (error) {
+      if (error instanceof ScopeDeniedError) {
+        throw recordedFirstOr(
+          error,
+          submittedVersion,
+          currentVersion,
+          params.cellId,
+          params.meetingId,
+        );
+      }
+      throw error;
+    }
   }
 
   /**

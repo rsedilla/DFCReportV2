@@ -3425,7 +3425,11 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       }
     });
 
-    it('refuses the conflict payload to an actor who may record but not correct', async () => {
+    it('tells an actor who may record but not correct that someone recorded it first, and nothing more', async () => {
+      // **Decision 0394 changed the answer and not what it withholds.** This actor sent a
+      // first record and lost; they may not correct, so they are told only that somebody
+      // else recorded the meeting (`VERSION_CONFLICT` with the versions alone), where they
+      // were told the correction was outside their scope. Still nothing of the stored record.
       // **`lostRaceAnswer` was written downstream of `assertMayCorrect` and the new caller
       // skipped it** (decision 0100: reusing a shape requires re-deriving why it has that
       // shape). A `VERSION_CONFLICT` carries the stored present count and the submitter's
@@ -3454,11 +3458,24 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
         const response = await attempt;
 
-        expect(response.status).toBe(403);
-        expect(response.body.error.code).toBe('SCOPE_DENIED');
-        expect(response.body.error.details.capability).toBe('cell.correct_subtree');
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+        expect(response.body.error.details).toMatchObject({
+          submitted_version: null,
+          current_version: 1,
+        });
+        expect(response.body.error.details).not.toHaveProperty('current');
+        expect(response.body.error.details).not.toHaveProperty('submitted');
         // And nothing of the stored record came back with the refusal.
         expect(JSON.stringify(response.body)).not.toContain('present');
+
+        // The same body sent now answers the same, so timing decides nothing.
+        const sequential = await submit(
+          { status: 'HELD', attendance: [{ person_id: one.id, present: false }] },
+          actor,
+        );
+        expect(sequential.status).toBe(409);
+        expect(sequential.body.error.details).not.toHaveProperty('current');
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
@@ -3520,16 +3537,20 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
         const raced = await attempt;
 
-        expect(raced.status).toBe(403);
-        expect(raced.body.error.code).toBe('SCOPE_DENIED');
-        expect(raced.body.error.details.capability).toBe('cell.correct_subtree');
+        // A first record (no version) that met one somebody else made: decision 0394.
+        expect(raced.status).toBe(409);
+        expect(raced.body.error.code).toBe('VERSION_CONFLICT');
+        expect(raced.body.error.details).toMatchObject({
+          submitted_version: null,
+          current_version: 2,
+        });
         expect(JSON.stringify(raced.body)).not.toContain('present');
 
         // The same body sent now, against the same committed state, answers the same.
         const sequential = await submit(body, actor);
 
-        expect(sequential.status).toBe(403);
-        expect(sequential.body.error.details.capability).toBe('cell.correct_subtree');
+        expect(sequential.status).toBe(409);
+        expect(sequential.body.error.details).not.toHaveProperty('current');
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();

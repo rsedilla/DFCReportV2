@@ -126,6 +126,40 @@ export function describeFailure(
   }
 }
 
+/**
+ * A correction refused because somebody else changed the record after this screen read it
+ * (owner's choice of 2026-10-27). The API's message says only that the record changed; the
+ * leader is told what to do as well, beside a Reload.
+ */
+export function staleSaveFailure(error: unknown, what: string, mayCorrect = true): Failure | null {
+  return error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT'
+    ? {
+        // A reader who may not correct is told only that it was recorded (decision 0394):
+        // after Reload it is shown as recorded, and there is nothing for them to change.
+        message: mayCorrect
+          ? `Someone else changed ${what} after you opened it. Reload to see it, then decide again. Your marks are kept.`
+          : `Someone else recorded ${what} after you opened it. Reload to see it.`,
+        aboutInput: false,
+      }
+    : null;
+}
+
+/**
+ * Under a name after Reload, where somebody else changed that line while the edit was open
+ * (decision 0394): their saved mark is shown, and this says so, and what the leader had
+ * marked where they had marked it.
+ */
+export function changedUnderNote({
+  theirs,
+  yours,
+}: {
+  theirs: 'present' | 'absent';
+  yours?: 'present' | 'absent';
+}): string {
+  const word = (mark: 'present' | 'absent') => (mark === 'present' ? 'Present' : 'Absent');
+  const changed = `Changed by someone else after you opened it: ${word(theirs)}.`;
+  return yours === undefined ? changed : `${changed} You had marked ${word(yours)}.`;
+}
 /** How a member of a roster line reads in a sentence, where the API names it. */
 const LINE_FIELD_LABELS: Record<string, string> = {
   correction_reason: 'the reason',

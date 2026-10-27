@@ -553,8 +553,20 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
   );
 }
 
-/** A leader's DCC checklist: one person recorded already, one not. */
-export async function mockDccRoster(page: Page): Promise<void> {
+/**
+ * A leader's DCC checklist: one person recorded already, one not. `recorded` and `second`
+ * replace the two people's records, as a save or somebody else's later change would.
+ */
+export async function mockDccRoster(
+  page: Page,
+  {
+    recorded = { present: true, version: 1 },
+    second = null,
+  }: {
+    recorded?: { present: boolean; version: number };
+    second?: { present: boolean; version: number } | null;
+  } = {},
+): Promise<void> {
   await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
     route.fulfill(
       json({
@@ -575,7 +587,7 @@ export async function mockDccRoster(page: Page): Promise<void> {
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
             responsible_leader_id: READER_PERSON_ID,
-            record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+            record: { ...recorded, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
@@ -584,7 +596,7 @@ export async function mockDccRoster(page: Page): Promise<void> {
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             responsible_leader_id: READER_PERSON_ID,
-            record: null,
+            record: second === null ? null : { ...second, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
         ],
         next_cursor: null,
@@ -891,7 +903,11 @@ export async function mockDccOwed(page: Page): Promise<void> {
 export async function mockRecordedMeetingRoster(
   page: Page,
   status: 'HELD' | 'NOT_HELD',
-  { weekOpen = true }: { weekOpen?: boolean } = {},
+  {
+    weekOpen = true,
+    version = 3,
+    secondPresent = false,
+  }: { weekOpen?: boolean; version?: number; secondPresent?: boolean } = {},
 ): Promise<void> {
   const held = status === 'HELD';
 
@@ -921,7 +937,7 @@ export async function mockRecordedMeetingRoster(
           responsible_leader_id: LEADER_ID,
           submitted_by: SUBMITTER_ID,
           submitted_at: '2026-06-27T13:00:00.000Z',
-          version: 3,
+          version,
         },
         members: [
           {
@@ -938,7 +954,7 @@ export async function mockRecordedMeetingRoster(
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             full_name: 'Bienvenido Trinidad',
-            record: held ? { present: false } : null,
+            record: held ? { present: secondPresent } : null,
           },
         ],
       }),

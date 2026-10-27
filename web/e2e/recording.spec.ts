@@ -356,7 +356,7 @@ test.describe('a recorded Cell meeting', () => {
     await page.getByRole('button', { name: 'Edit meeting' }).click();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
     await page.getByRole('button', { name: 'Save correction' }).click();
-    await expect(page.getByText('This record changed after you opened it.')).toBeVisible();
+    await expect(page.getByText(/^Someone else changed this meeting after you opened it\./)).toBeVisible();
 
     // With the roster scrolled under the bar, the page's bottom scroll padding (what the
     // browser keeps clear when it scrolls a focused control into view) covers everything the
@@ -405,6 +405,186 @@ test.describe('a recorded Cell meeting', () => {
     await expect(refusal).toHaveCount(1);
     await expect(refusal).toBeInViewport();
     await expect(save).toBeInViewport();
+  });
+
+  // Owner's choice of 2026-10-27. The roster is read again when the reader returns to the
+  // tab, and Save is checked against the version the edit started from, so marks chosen
+  // against the old record never overwrite a change the reader has not seen.
+  test('keeps the version the edit started from when the roster is read again', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+
+    const sent: Record<string, unknown>[] = [];
+    await page.route('**/api/v1/cells/*/meetings/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      });
+    });
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page
+      .getByRole('group', { name: 'Rosalinda Ocampo' })
+      .getByRole('radio', { name: 'Absent' })
+      .check();
+
+    // Somebody else corrects the meeting meanwhile, marking Bienvenido present.
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 4, secondPresent: true });
+    const reread = page.waitForResponse('**/api/v1/cells/*/meetings/*/roster');
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+    await reread;
+
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({ version: 3 });
+
+    // Said in words, with Reload beside it.
+    await expect(
+      page.getByText(
+        'Someone else changed this meeting after you opened it. Reload to see it, then decide again. Your marks are kept.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('This record changed.')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    // The other change shows, the reader's own mark is kept, and the edit is still open.
+    await expect(page.getByRole('button', { name: 'Reload' })).toHaveCount(0);
+    await expect(
+      page.getByRole('group', { name: 'Bienvenido Trinidad' }).getByRole('radio', { name: 'Present' }),
+    ).toBeChecked();
+    // A line the reader never touched is named too (decision 0394).
+    await expect(
+      page.getByText('Changed by someone else after you opened it: Present.', { exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('group', { name: 'Rosalinda Ocampo' }).getByRole('radio', { name: 'Absent' }),
+    ).toBeChecked();
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1]).toMatchObject({ version: 4 });
+  });
+
+  // Decision 0394: on a line somebody else changed while the edit was open, Reload shows the
+  // saved mark and names the reader's own in a note; the reader's other marks are kept.
+  test('after Reload, shows the saved mark on a line somebody else recorded first, naming yours', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockMeetingRoster(page);
+    const sent: Record<string, unknown>[] = [];
+    await page.route('**/api/v1/cells/*/meetings/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill(
+        sent.length === 1
+          ? {
+              status: 409,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+              }),
+            }
+          : { status: 201, contentType: 'application/json', body: '{}' },
+      );
+    });
+
+    await page.goto(MEETING);
+    const rosalinda = page.getByRole('group', { name: 'Rosalinda Ocampo' });
+    const bienvenido = page.getByRole('group', { name: 'Bienvenido Trinidad' });
+    await rosalinda.getByRole('radio', { name: 'Absent' }).check();
+    await bienvenido.getByRole('radio', { name: 'Absent' }).check();
+
+    // Somebody else records it first: Rosalinda present, Bienvenido absent.
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 1 });
+    await page.getByRole('button', { name: 'Save meeting' }).click();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(rosalinda.getByRole('radio', { name: 'Present' })).toBeChecked();
+    await expect(
+      page.getByText('Changed by someone else after you opened it: Present. You had marked Absent.'),
+    ).toHaveCount(1);
+    await expect(bienvenido.getByRole('radio', { name: 'Absent' })).toBeChecked();
+    await expect(page.getByText('Editing the recorded meeting')).toBeVisible();
+
+    // Marking the line again is the reader's decision, and the note goes with it.
+    await rosalinda.getByRole('radio', { name: 'Absent' }).check();
+    await expect(page.getByText(/^Changed by someone else/)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1]).toMatchObject({ version: 1 });
+  });
+
+  // Decision 0394: a reader who may record and not correct, beaten to a first record, is told
+  // somebody else recorded it, and Reload shows the meeting as recorded.
+  test('tells a reader who may not correct that somebody else recorded it first, with Reload', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'VERSION_CONFLICT',
+            message: 'Someone else recorded this after you opened it.',
+            details: { submitted_version: null, current_version: 1 },
+          },
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+    await page.getByRole('group', { name: 'Rosalinda Ocampo' }).getByRole('radio', { name: 'Present' }).check();
+    await page.getByRole('group', { name: 'Bienvenido Trinidad' }).getByRole('radio', { name: 'Present' }).check();
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 1 });
+    await page.getByRole('button', { name: 'Save meeting' }).click();
+
+    await expect(
+      page.getByText('Someone else recorded this meeting after you opened it. Reload to see it.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(page.getByText('Already recorded')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(
+      page.getByRole('group', { name: 'Bienvenido Trinidad' }).getByRole('radio', { name: 'Absent' }),
+    ).toBeChecked();
+  });
+
+  test('starts a new edit from what is stored once one is saved', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Absent' }).first().check();
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await mockRecordedMeetingRoster(page, 'HELD', { version: 4 });
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({ version: 3 });
+
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('radio', { name: 'Present' }).nth(1).check();
+    await page.getByRole('button', { name: 'Save correction' }).click();
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1]).toMatchObject({ version: 4 });
   });
 
   // Decision 0273: whether it met may be corrected, with a reason, and the reason is
@@ -768,6 +948,204 @@ test.describe('a Sunday with a mark already recorded', () => {
     await expect(refusal).toHaveCount(1);
     await expect(refusal).toBeInViewport();
     await expect(save).toBeInViewport();
+  });
+
+  // Owner's choice of 2026-10-27, as on the Cell meeting screen: each changed line is sent
+  // with the version it was read at when its mark was first changed.
+  test('keeps the version each changed line started from when the checklist is read again', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockGrants(page, ['dcc.correct_subtree']);
+    await mockDccRoster(page);
+
+    const sent: { records: Record<string, unknown>[] }[] = [];
+    await page.route('**/api/v1/dcc/events/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      });
+    });
+
+    await page.goto(SUNDAY);
+    await page.getByRole('button', { name: 'Edit marks' }).click();
+    await page.getByRole('group', { name: RECORDED.name }).getByRole('radio', { name: 'Absent' }).check();
+
+    // Somebody else corrects the same person meanwhile.
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { recorded: { present: true, version: 2 } });
+    const reread = page.waitForResponse('**/api/v1/dcc/events/*/roster*');
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+    await reread;
+
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0].records).toEqual([{ person_id: RECORDED.id, present: false, version: 1 }]);
+
+    await expect(
+      page.getByText(
+        'Someone else changed a mark here after you opened it. Reload to see it, then decide again. Your marks are kept.',
+      ),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(page.getByRole('button', { name: 'Reload' })).toHaveCount(0);
+    await expect(
+      page.getByRole('group', { name: RECORDED.name }).getByRole('radio', { name: 'Absent' }),
+    ).toBeChecked();
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1].records).toEqual([{ person_id: RECORDED.id, present: false, version: 2 }]);
+  });
+
+  // Decision 0394, as on the Cell meeting screen.
+  test('after Reload, shows the saved mark on a line somebody else recorded first, naming yours', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    // Only a reader who may correct is answered a conflict (decision 0201); others get 403.
+    await mockGrants(page, ['dcc.correct_subtree']);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      }),
+    );
+
+    await page.goto(SUNDAY);
+    const line = page.getByRole('group', { name: UNRECORDED.name });
+    await line.getByRole('radio', { name: 'Present' }).check();
+
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { second: { present: false, version: 1 } });
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(line.getByRole('radio', { name: 'Absent' })).toBeChecked();
+    await expect(
+      page.getByText('Changed by someone else after you opened it: Absent. You had marked Present.'),
+    ).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toHaveCount(0);
+  });
+
+  // Decision 0394: every line somebody else changed is named after Reload, the ones this
+  // reader never touched included, and the reader's own marks on other lines are kept.
+  test('after Reload, names a line somebody else changed that the reader never touched', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['dcc.correct_subtree']);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'VERSION_CONFLICT', message: 'This record changed.', details: {} },
+        }),
+      }),
+    );
+
+    await page.goto(SUNDAY);
+    await page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Present' }).check();
+
+    // Somebody else corrects Rosalinda, whom this reader left alone.
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { recorded: { present: false, version: 2 } });
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(
+      page.getByText('Changed by someone else after you opened it: Absent.', { exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('group', { name: RECORDED.name }).getByRole('radio', { name: 'Absent' }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Present' }),
+    ).toBeChecked();
+  });
+
+  // Decision 0394, as on the Cell meeting screen.
+  test('tells a reader who may not correct that somebody else recorded the mark first', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'VERSION_CONFLICT',
+            message: 'Someone else recorded this after you opened it.',
+            details: { submitted_version: null, current_version: 1, person_id: UNRECORDED.id },
+          },
+        }),
+      }),
+    );
+
+    await page.goto(SUNDAY);
+    const line = page.getByRole('group', { name: UNRECORDED.name });
+    await line.getByRole('radio', { name: 'Present' }).check();
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { second: { present: false, version: 1 } });
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+
+    await expect(
+      page.getByText('Someone else recorded a mark here after you opened it. Reload to see it.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Reload' }).click();
+
+    await expect(line.getByRole('radio', { name: 'Absent' })).toBeChecked();
+    await expect(line.getByRole('radio', { name: 'Absent' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toHaveCount(0);
+  });
+
+  // A mark just saved is what is stored, not an edit: laid over a later change it would show
+  // the old mark and send it again.
+  test('shows a later change to a line just saved, not the mark that was saved', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+
+    await page.goto(SUNDAY);
+    await page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Present' }).check();
+
+    // Stored as saved, which the checklist reads once Save is answered.
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { second: { present: true, version: 1 } });
+    const saved = page.waitForResponse('**/api/v1/dcc/events/*/roster*');
+    await page.getByRole('button', { name: 'Save marks', exact: true }).click();
+    await saved;
+    await expect(page.getByText('Saved.')).toBeVisible();
+
+    // Then somebody else corrects it, and the checklist is read again on return to the tab.
+    await page.unroute('**/api/v1/dcc/events/*/roster*');
+    await mockDccRoster(page, { second: { present: false, version: 2 } });
+    const reread = page.waitForResponse('**/api/v1/dcc/events/*/roster*');
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+    await reread;
+
+    await expect(
+      page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Absent' }),
+    ).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Save marks', exact: true })).toHaveCount(0);
   });
 
   // Decision 0338: the Sunday says what is left in Not recorded's words, and once saved its

@@ -1786,7 +1786,9 @@ describe('DCC recording (sections 9 and 14)', () => {
       }
     };
 
-    it('refuses a disagreeing loser without dcc.correct_subtree, disclosing nothing', async () => {
+    it('tells a disagreeing loser without dcc.correct_subtree that someone recorded it first, disclosing nothing', async () => {
+      // Decision 0394 changed the answer from 403 to a conflict carrying the versions alone,
+      // and not what it withholds.
       // **The half DCC was missing.** Section 7 decides every other capability before the
       // stored contents can change what the caller is told, and the `VERSION_CONFLICT`
       // body carries the stored value *and the name of the account that recorded it*.
@@ -1802,19 +1804,24 @@ describe('DCC recording (sections 9 and 14)', () => {
       // `403` sent sequentially and `409` with the disclosure when it lost a race. Timing
       // decided what a caller was told about somebody else's record.
       //
-      // The mutation: drop the `coversWith` branch in `conflictAfterLostRace` and this
-      // goes 403 to 409.
+      // The mutation: drop the `coversWith` branch in `conflictAfterLostRace` and the
+      // conflict carries the stored record and who recorded it.
       const eventId = await createEvent(await recentSunday());
       await takeAttendanceOnly();
 
       const response = await raceAgainstStored(eventId, true, false);
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect(response.body.error.details.capability).toBe('dcc.correct_subtree');
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('VERSION_CONFLICT');
+      expect(response.body.error.details).toMatchObject({
+        submitted_version: null,
+        current_version: 1,
+      });
+      expect(response.body.error.details).not.toHaveProperty('current');
+      expect(response.body.error.details).not.toHaveProperty('submitted');
 
       // Nothing of the record reaches the refusal: not the stored value, not who wrote it.
-      expect(JSON.stringify(response.body)).not.toMatch(/current|present|recorded_by|Adele/i);
+      expect(JSON.stringify(response.body)).not.toMatch(/present|recorded_by|Adele/i);
     });
 
     it('answers an agreeing loser RESOURCE_BUSY, and asks it for no amendment capability', async () => {
