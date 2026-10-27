@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { mockAdministrator, mockSignedIn } from './mock-api';
+import { mockAdministrator, mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
   ENCOUNTER_DECEMBER,
   PARTY_TOO_LATE,
@@ -324,6 +324,8 @@ test.describe('the Encounter seasons page', () => {
   });
 
   test('is reached from the Growth Training tab', async ({ page }) => {
+    // Training is a whole-church reader's (decisions 0360 and 0379).
+    await mockWholeChurchReader(page);
     await mockTraining(page);
     await mockEncounterSeasons(page);
     await page.goto('/growth/training');
@@ -339,6 +341,9 @@ test.describe('the Encounter seasons page', () => {
 test.describe('the SUYNL report’s Next Encounter', () => {
   test.beforeEach(async ({ page }) => {
     await mockSignedIn(page);
+    // Encounter Readiness is a whole-church reader's: a Full view leader is shown the note
+    // (decisions 0380 and 0379).
+    await mockWholeChurchReader(page);
     await mockSuynl(page);
   });
 

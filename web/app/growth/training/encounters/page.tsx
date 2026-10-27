@@ -24,6 +24,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { useOffered } from '@/lib/screen-guard';
 import { TextLink } from '@/components/ui/text-link';
 
 /**
@@ -78,7 +79,10 @@ function EncounterSeasons() {
     queryFn: ({ signal }) => listEncounterSeasons(signal),
   });
   const mayChange = holdsWholeChurch(me.data, 'settings.manage');
-  const branch = isBranchReader(me.data);
+  // SUYNL is the way back wherever Training is not on the account's screens: a Full view leader's
+  // (decision 0360) and the recording screens' (decision 0379).
+  const offered = useOffered();
+  const branch = isBranchReader(me.data) || !offered('/growth/training');
   // Which half a reader is shown is the API's to decide (decision 0296): a Whole Church reader,
   // who is the only one who edits, both; anyone else their own Network's.
   const shows = seasons.data?.shows ?? 'BOTH';

@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { PeopleTabs } from '@/components/people-tabs';
 import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
+import { useOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /** The sidebar section a page opened from another one belongs to. */
@@ -39,6 +40,10 @@ export function SectionFrame({ section, children }: { section: Section; children
     account: { name: 'Account', tab: 'Account and session', href: '/session' },
   };
   const chosen = section === 'people' ? null : frame[section];
+  // A tab whose page is not on this account's screens is not offered (decision 0379): the
+  // Senior Pastors reach a Cell's pages from Record and have no Cells list.
+  const offered = useOffered();
+  const tabShown = chosen !== null && offered(chosen.href);
 
   return (
     <>
@@ -51,12 +56,14 @@ export function SectionFrame({ section, children }: { section: Section; children
         </PeopleTabs>
       ) : (
         <>
-          <nav aria-label={chosen!.name} className={cn('mt-6 flex', TAB_ROW)}>
-            <Link href={chosen!.href} className={tabClasses(true)}>
-              {chosen!.tab}
-            </Link>
-          </nav>
-          <div className={cn(TAB_PANE, 'pt-4')}>{children}</div>
+          {tabShown ? (
+            <nav aria-label={chosen!.name} className={cn('mt-6 flex', TAB_ROW)}>
+              <Link href={chosen!.href} className={tabClasses(true)}>
+                {chosen!.tab}
+              </Link>
+            </nav>
+          ) : null}
+          <div className={tabShown ? cn(TAB_PANE, 'pt-4') : 'mt-6'}>{children}</div>
         </>
       )}
     </>

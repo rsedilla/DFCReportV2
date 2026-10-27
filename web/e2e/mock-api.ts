@@ -159,6 +159,31 @@ export async function mockAdministrator(page: Page): Promise<void> {
 }
 
 /**
+ * The administrator above, also holding `cell.approve_leadership` at Whole Church as the role
+ * does: the one account New Cell is offered to (sections 2 and 10, decision 0379). Separate from
+ * `mockAdministrator` so that no other case meets the approval queue it brings.
+ */
+export async function mockCellCreator(page: Page): Promise<void> {
+  const wholeChurch = (capability: string) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree' ? wholeChurch(grant.capability) : grant,
+    ),
+    wholeChurch('cell.approve_leadership'),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
+/**
  * The same account on the screens the server names other than today's (decision 0323,
  * point 5), overriding `/auth/me` alone as above.
  *
@@ -170,19 +195,38 @@ export async function mockAdministrator(page: Page): Promise<void> {
 export async function mockScreens(
   page: Page,
   screens: 'RECORDING' | 'SENIOR_PASTOR',
-  { peopleIOversee = false }: { peopleIOversee?: boolean } = {},
+  {
+    peopleIOversee = false,
+    wholeChurch = [],
+  }: {
+    peopleIOversee?: boolean;
+    /** Further capabilities held at Whole Church, as the Senior Pastor role holds the Growth reads. */
+    wholeChurch?: readonly string[];
+  } = {},
 ): Promise<void> {
-  const capabilities =
-    screens === 'RECORDING'
+  const extra = wholeChurch.map((capability) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  }));
+  const capabilities = [
+    ...(screens === 'RECORDING'
       ? CAPABILITIES.filter((grant) => grant.capability !== 'reports.view_subtree')
       : CAPABILITIES
-          // A Senior Pastor holds no `people.create` (decision 0326).
-          .filter((grant) => grant.capability !== 'people.create')
+          // A Senior Pastor holds no `people.create` and no `people.edit_basic` (decision 0326).
+          .filter(
+            (grant) =>
+              grant.capability !== 'people.create' && grant.capability !== 'people.edit_basic',
+          )
           .map((grant) =>
             grant.capability === 'reports.view_subtree'
               ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
               : grant,
-          );
+          )),
+    ...extra,
+  ];
 
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill(

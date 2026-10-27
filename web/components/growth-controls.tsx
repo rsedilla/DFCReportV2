@@ -45,7 +45,7 @@ export function GrowthTabs({
   // The pane stays where it is either way, so the screen inside is not remounted.
   const tabbed = !me.isPending;
   // **A Full view leader has SUYNL alone** too (decision 0360): Training and Conquest are
-  // hidden, not withdrawn, so their pages still open by address and the tabs come back beside it.
+  // hidden, not withdrawn: their pages are kept and do not open for them (decision 0379), and the tabs come back beside it.
   const tabs =
     me.data?.screens === 'RECORDING' || isBranchReader(me.data)
       ? TABS.filter((tab) => tab.href === '/growth/suynl')

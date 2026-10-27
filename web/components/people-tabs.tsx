@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { useAwaitingLeader } from '@/components/awaiting-lists';
 import { TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
+import { useOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,7 +29,7 @@ export function PeopleTabs({
   within = false,
   children,
 }: {
-  /** `/network`, Branch, is still reached by its address and marks no tab (decision 0364). */
+  /** `/network`, Branch, opens for no account since decision 0379 and marks no tab. */
   current: (typeof TABS)[number]['href'] | '/network';
   /** A page reached from the tab rather than the tab itself: shown chosen, not the current page. */
   within?: boolean;
@@ -36,6 +37,12 @@ export function PeopleTabs({
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const awaiting = useAwaitingLeader(me.data?.screens === 'FULL');
+  // A tab whose page is not on this account's screens is not offered (decision 0379): the
+  // Senior Pastors reach a person's page from a name and have no People item, so no tab.
+  const offered = useOffered();
+  const shown = TABS.filter(
+    (tab) => (!tab.fullOnly || me.data?.screens === 'FULL') && offered(tab.href),
+  );
 
   // **The recording screens have the People tab alone** (decision 0323), as one tab in the same
   // frame (owner, 2026-10-19); Family Tree is the Full view screens' (decision 0341), keyed
@@ -47,9 +54,9 @@ export function PeopleTabs({
 
   return (
     <>
-      {tabbed ? (
+      {tabbed && shown.length > 0 ? (
         <nav aria-label="People" className={cn('mt-6 flex', TAB_ROW)}>
-          {TABS.filter((tab) => !tab.fullOnly || me.data?.screens === 'FULL').map((tab) => {
+          {shown.map((tab) => {
             const active = tab.href === current;
 
             return (
@@ -72,7 +79,7 @@ export function PeopleTabs({
           })}
         </nav>
       ) : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
+      <div className={tabbed && shown.length > 0 ? TAB_PANE : 'mt-6'}>{children}</div>
     </>
   );
 }

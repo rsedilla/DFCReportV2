@@ -10,6 +10,7 @@ import {
   mockCellApprover,
   mockCellChoices,
   mockCellCreated,
+  mockGrants,
   mockMembershipAdd,
   mockMemberSearch,
   mockPeople,
@@ -389,6 +390,8 @@ test.describe('a Cell’s meetings', () => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
     await mockCellMeetings(page);
+    // Change when it meets is offered only with this capability.
+    await mockGrants(page, ['cell.manage_configuration']);
     await page.goto(MEETINGS);
 
     const row = page.getByRole('row').filter({ hasText: 'Saturday 27 June' });
@@ -400,6 +403,8 @@ test.describe('a Cell’s meetings', () => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
     await mockCellMeetings(page);
+    // Change when it meets is offered only with this capability.
+    await mockGrants(page, ['cell.manage_configuration']);
 
     const sent: unknown[] = [];
     await page.route('**/api/v1/cells/*/schedule', (route) => {
@@ -431,6 +436,8 @@ test.describe('a Cell’s meetings', () => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
     await mockCellMeetings(page);
+    // Change when it meets is offered only with this capability.
+    await mockGrants(page, ['cell.manage_configuration']);
     await page.goto(MEETINGS);
 
     await page.getByRole('button', { name: 'Show May 2026' }).click();

@@ -52,6 +52,7 @@ The owner said "the Primaries". The screens are keyed on Full view and the reach
 `reports.view_subtree`, never on a role (decision 0323), so this is every Full view leader.
 
 Decision 0380, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 13 and 19. Decision 0379 is held by work not yet merged.
+Sections 13 and 19. Decision 0379, held by work not yet merged when this was written, was built
+on 27 Oct and closes these hidden pages to a Full view leader.
 
-Previous: [2026-10-20 — The SUYNL report is Encounter Readiness, with no counts of its own](0378-encounter-readiness.md)
+Previous: [2026-10-21 — A page not on your screens does not open](0379-a-page-not-on-your-screens-does-not-open.md)

@@ -26,6 +26,7 @@ import {
   type CellCategory,
   type ScheduledMeeting,
 } from '@/lib/cells';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
@@ -85,12 +86,27 @@ function CellMeetings() {
 
   const today = todayInManila();
   const handle = meetings.data?.cell_id ?? null;
+  // Offered only to an account that may change a Cell's configuration (`cell.manage_configuration`),
+  // which a Senior Pastor does not hold (decision 0326); the route still decides the Cell's scope
+  // (decision 0379).
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayConfigure = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'cell.manage_configuration',
+  );
+  // Back to where the account's own screens reached this from: Record's Update Records for the
+  // Senior Pastors, who have no Cells item, and My Cell on the recording screens (decision 0379).
+  const back =
+    me.data?.screens === 'SENIOR_PASTOR'
+      ? { href: '/dashboard?list=awaiting', label: 'Back to Update Records' }
+      : me.data?.screens === 'RECORDING'
+        ? { href: '/my-cell', label: 'Back to Cells' }
+        : { href: '/cells', label: 'Back to Cells' };
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <SectionFrame section="record">
       <p className="mb-4">
-        <TextLink href="/cells">Back to Cells</TextLink>
+        <TextLink href={back.href}>{back.label}</TextLink>
       </p>
 
       <h1 className="text-xl font-semibold tracking-tight">
@@ -112,14 +128,14 @@ function CellMeetings() {
             Members
           </Link>
           {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
-          {meetings.data && meetings.data.cell_closed_on == null ? (
+          {mayConfigure && meetings.data && meetings.data.cell_closed_on == null ? (
             <Button variant="secondary" onClick={() => setChanging(true)}>
               Change when it meets
             </Button>
           ) : null}
           {/* Beside it, under the same capability, and refused for a closed Cell the same way
               (decision 0367). */}
-          {meetings.data && meetings.data.cell_closed_on == null ? (
+          {mayConfigure && meetings.data && meetings.data.cell_closed_on == null ? (
             <Button variant="secondary" onClick={() => setChangingCategory(true)}>
               Change category
             </Button>

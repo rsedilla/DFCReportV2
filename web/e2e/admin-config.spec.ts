@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { PERSON_IN_SCOPE, mockPeople, mockSignedIn } from './mock-api';
+import { PERSON_IN_SCOPE, mockGrants, mockPeople, mockSignedIn } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
   mockCellMeetings,
@@ -236,6 +236,8 @@ test.describe('Change category (decision 0367)', () => {
   }) => {
     await mockSignedIn(page);
     await mockCellMeetings(page);
+    // Change when it meets is offered only with this capability.
+    await mockGrants(page, ['cell.manage_configuration']);
     const sent: unknown[] = [];
     await page.route('**/api/v1/cells/*/category', (route) => {
       sent.push(route.request().postDataJSON());

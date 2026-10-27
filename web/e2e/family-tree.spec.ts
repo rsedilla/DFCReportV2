@@ -43,10 +43,12 @@ test('a Senior Pastor has no Family Tree tab', async ({ page }) => {
   await mockScreens(page, 'SENIOR_PASTOR');
   await mockPeople(page);
 
-  await page.goto('/people');
-
-  // # of People is offered on Full view screens; a Senior Pastor's is under Reports (decision 0364).
-  await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People']);
+  // A Senior Pastor has no People item (decision 0326), so neither page is offered (decision 0379).
+  for (const address of ['/people', '/family-tree']) {
+    await page.goto(address);
+    await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
+    await expect(peopleTabs(page)).toHaveCount(0);
+  }
 });
 
 test('a Recording-only account has no Family Tree tab', async ({ page }) => {
