@@ -131,6 +131,12 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
                           : hand {person.leads.length === 1 ? 'it' : 'them'} over or close{' '}
                           {person.leads.length === 1 ? 'it' : 'them'} first
                         </span>
+                      ) : person.pastors > 0 ? (
+                        // Refused while they pastor anyone (owner, 2026-10-28, decision 0397).
+                        <span key="action" className="text-sm">
+                          Pastors {person.pastors} {person.pastors === 1 ? 'person' : 'people'}: move them to another
+                          leader first
+                        </span>
                       ) : (
                         <Button key="action" variant="secondary" onClick={() => setArchiving(person)}>
                           Archive

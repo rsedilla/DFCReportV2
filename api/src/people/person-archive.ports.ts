@@ -98,6 +98,8 @@ export interface AbsentPerson {
     day_of_week: number | null;
     members: number;
   }[];
+  /** How many people they pastor now; such a row carries no Archive either (decision 0397). */
+  pastors: number;
   /** Their latest Present mark at a Cell meeting, or a meeting of a Cell they led. */
   last_at_cell: string | null;
   /** Their latest Present mark on a DCC Sunday. */

@@ -80,6 +80,9 @@ test.describe('Absent 3+ Months (decision 0397)', () => {
     await expect(rows.nth(1).getByRole('button', { name: 'Archive' })).toBeVisible();
     await expect(rows.nth(2).getByRole('button', { name: 'Archive' })).toHaveCount(0);
     await expect(rows.nth(2)).toContainText('Leads CELL-000012 (3 members): hand it over or close it first');
+    // Gloria pastors two people, so hers is refused too (owner, 2026-10-28).
+    await expect(rows.nth(3).getByRole('button', { name: 'Archive' })).toHaveCount(0);
+    await expect(rows.nth(3)).toContainText('Pastors 2 people: move them to another leader first');
     await expect(rows.nth(2).getByRole('link', { name: 'CELL-000012' })).toHaveAttribute(
       'href',
       '/cells/3f1b7c6e-0000-4000-8000-000000000112/members',

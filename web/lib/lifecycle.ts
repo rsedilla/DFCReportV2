@@ -60,6 +60,8 @@ export interface AbsentPerson {
   cell: CellName | null;
   /** The Cells they lead now; such a row carries no Archive (decision 0397, point 3). */
   leads: (CellName & { members: number })[];
+  /** How many people they pastor now; such a row carries no Archive either (decision 0397). */
+  pastors: number;
   last_at_cell: string | null;
   last_at_dcc: string | null;
 }

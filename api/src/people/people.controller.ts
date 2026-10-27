@@ -508,7 +508,12 @@ export class PeopleController {
     // The guard has already established this person is within the actor's scope,
     // so the full profile is what section 8 authorizes. `archived` is the page's read-only
     // line for an archived person, null for a current one (decision 0397, point 10).
-    return { ...fullProfile(person), archived: await this.lifecycle.archivedLineOf(person.id) };
+    return {
+      ...fullProfile(person),
+      archived: await this.lifecycle.archivedLineOf(person.id),
+      // How many people they pastor now, so the page can say why Archive is not offered.
+      pastors: await this.lifecycle.pastorsOf(person.id),
+    };
   }
 
   /**

@@ -115,6 +115,7 @@ export class AbsentPeopleService implements AbsentPeoplePort {
       this.absence.lastSeen(ids),
     ]);
     const leaderIds = await this.hierarchy.directLeaderIdsOf(ids);
+    const pastors = await this.hierarchy.discipleCountsOf(this.db, ids);
     const cellIds = [...cellsOf.values()].flatMap((cells) => [
       ...(cells.membership === null ? [] : [cells.membership.id]),
       ...cells.leads.map((cell) => cell.id),
@@ -149,6 +150,7 @@ export class AbsentPeopleService implements AbsentPeoplePort {
           ...heading(cell.id),
           members: headings.get(cell.id)?.memberCount ?? 0,
         })),
+        pastors: pastors.get(id) ?? 0,
         last_at_cell: seen.cell.get(id) ?? null,
         last_at_dcc: seen.dcc.get(id) ?? null,
       };

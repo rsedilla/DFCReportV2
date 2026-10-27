@@ -56,17 +56,21 @@ comment.
 
 **7. What archiving does, from that moment.** It is effective now and is never backdated. It
 closes the Person's `CURRENT` row and opens an `ARCHIVED` one with the reason and comment. It ends
-their open pastoral assignment with no replacement, so their own disciples appear on *Awaiting
-Leader Assignment* (decision 0232). It ends their Cell membership, keeping the record. Where they
+their own pastoral assignment with no replacement (Section 5); they pastor nobody by then (point
+8). It ends their Cell membership, keeping the record. Where they
 have an account that is not disabled, the dialog asks *Disable account access*, selected, or
 *Keep account access* (Section 6); completing it needs `accounts.manage` too, disabling ends
 every session at once, and the choice is audit-logged either way. Every count of current people
 leaves them out from that day; no past month moves (Section 3).
 
 **8. Archiving is refused** for somebody who leads a Cell (the refusal names each Cell and its
-members, Section 3), for a Network root (Section 5 offers no succession), for the Admin's own
-Person, and for somebody already archived or absorbed by a merge. Each answers
-`INVARIANT_VIOLATION`.
+members, Section 3), for somebody who pastors anyone (owner, 2026-10-28: the refusal names each,
+and each is moved to another leader first), for a Network root (Section 5 offers no succession),
+for the Admin's own Person, and for somebody already archived or absorbed by a merge. Each
+answers `INVARIANT_VIOLATION`. Their row and their page offer no Archive and say what to resolve:
+"Pastors 2 people: move them to another leader first". Archiving somebody who pastors people
+would end their edge and leave their disciples on no upline's screens and no DCC checklist, which
+is the silent resolution Sections 3 and 4 refuse.
 
 **9. Restore, and where archived people are found** (choice 6, A). The tab has an *Absent 3+
 Months | Archived* switch for the Admin only. *Archived* lists everyone archived, newest first,
@@ -83,6 +87,19 @@ for every reader who may open the page, with the comment beneath it where there 
 `account.disabled` follows it where access was disabled; `person.restored` records the restore
 (Section 21).
 
+**12. A DCC Sunday before the archive keeps them** (owner, 2026-10-28). Section 9's checklist
+reads whether somebody is archived as of the Sunday, so a Person archived on Tuesday stays on
+Sunday's checklist while its week is open. **Their leader on that Sunday may record them**, the
+save reaching them through the tree as it stood on the Sunday, as a Cell meeting resolves through
+whoever led the Cell on its date (Section 7): today's walk reaches them from nobody below the
+Whole Church, their edge having ended. This applies to a Person archived since the Sunday and
+to nobody else; a Sunday on or after the archive takes no record for them.
+
+**13. The list shows attendance dates under `people.view_subtree`** (owner, 2026-10-28). *Last
+at Cell* and *Last at DCC*, and being on the list at all, are attendance facts that decisions
+0246 and 0247 read under `cell.view_subtree` and `dcc.view_subtree`. This list is admitted under
+the people capability alone: every role holds the three together, and the list is People's.
+
 ## Why
 
 Under ground reporting a Cell leader adds members and cannot remove them (owner, 2026-10-07).
@@ -95,7 +112,13 @@ The four definitions are there so the list names only people who really stopped 
 somebody new, not somebody nobody recorded, and not a leader running a Cell every week. Archive
 is on the person's page too because the list can only show somebody after three months.
 
+Points 8 (somebody who pastors people), 12 and 13 were settled on 2026-10-28 from
+`architecture-guardian`'s first review, which found that the built archive left a pastoral
+leader's disciples on nobody's screens, that a DCC Sunday before an archive could no longer be
+recorded while it still counted as owed, and that the list disclosed attendance under a people
+capability. The owner chose each from screenshots.
+
 Decision 0397, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 3, 6, 7, 10, 16, 17 and 19.
+Sections 3, 6, 7, 9, 10, 16, 17 and 19.
 
 Previous: [2026-10-27 — An edit is checked for duplicates as creation is](0396-an-edit-is-checked-for-duplicates-as-creation-is.md)

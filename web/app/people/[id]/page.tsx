@@ -231,7 +231,12 @@ function PersonDetail() {
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
               Where they sit
             </Link>
-            {mayArchive && !person.data.archived && !isRoot && cells.isSuccess && leads.length === 0 ? (
+            {mayArchive &&
+            !person.data.archived &&
+            !isRoot &&
+            cells.isSuccess &&
+            leads.length === 0 &&
+            (person.data.pastors ?? 0) === 0 ? (
               <Button variant="secondary" onClick={() => setArchiving(true)}>
                 Archive
               </Button>
@@ -242,6 +247,11 @@ function PersonDetail() {
               Leads {leads.map((cell) => cell.cell_id).join(', ')}: hand{' '}
               {leads.length === 1 ? 'it' : 'them'} over or close {leads.length === 1 ? 'it' : 'them'}{' '}
               before archiving.
+            </p>
+          ) : mayArchive && !person.data.archived && (person.data.pastors ?? 0) > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Pastors {person.data.pastors} {person.data.pastors === 1 ? 'person' : 'people'}: move
+              them to another leader before archiving.
             </p>
           ) : null}
           {mayArchive ? (

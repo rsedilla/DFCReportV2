@@ -53,6 +53,8 @@ export interface PersonFull {
   direct_leader_name?: string | null;
   /** On one person's record only: their archived line, null while current (decision 0397). */
   archived?: ArchivedLine | null;
+  /** On one person's record only: how many people they pastor now (decision 0397). */
+  pastors?: number;
 }
 
 export type Person = PersonIdentity | PersonFull;

@@ -175,6 +175,30 @@ export class PeopleLifecycleService {
         );
       }
 
+      // **Nor while they pastor anyone** (owner, 2026-10-28, decision 0397): ending their edge
+      // would take their disciples off every upline's screens and off every DCC checklist,
+      // which section 3 refuses for a Cell leader and section 4 for a Network change. Each is
+      // moved to another leader first. The lock above serializes this with a reassignment
+      // naming them as the new leader, which locks them too.
+      const disciples = await this.hierarchy.openDisciplesOf(trx, personId);
+
+      if (disciples.length > 0) {
+        throw new InvariantViolationError(
+          `${composeName(person)} pastors ${disciples.length} ${
+            disciples.length === 1 ? 'person' : 'people'
+          }. Move ${disciples.length === 1 ? 'them' : 'each of them'} to another leader first ` +
+            '(decision 0397).',
+          {
+            person_id: personId,
+            disciples: disciples.map((disciple) => ({
+              person_id: disciple.personId,
+              member_id: disciple.memberId,
+              full_name: disciple.fullName,
+            })),
+          },
+        );
+      }
+
       const account = await accounts.accountOfWithin(trx, personId);
       const asksAboutAccess = account !== null && account.status !== 'DISABLED';
 
@@ -329,6 +353,11 @@ export class PeopleLifecycleService {
 
       return body;
     });
+  }
+
+  /** How many people this person pastors now, for their page (decision 0397). */
+  async pastorsOf(personId: string): Promise<number> {
+    return (await this.hierarchy.discipleCountsOf(this.db, [personId])).get(personId) ?? 0;
   }
 
   /** The archived line for a person's page, or null when they are current. */

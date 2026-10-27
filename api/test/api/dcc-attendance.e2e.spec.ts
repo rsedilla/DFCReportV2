@@ -371,6 +371,37 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(ids).toContain(paul.id);
     });
 
+    it('keeps a Person archived after the Sunday on it, and lets them be recorded (decision 0397)', async () => {
+      const eventId = await createEvent(await recentSunday());
+      // Archived now, as the archive does it: lifecycle rows and their own edge both end now.
+      const now = new Date();
+      await db
+        .updateTable('person_lifecycle')
+        .set({ ended_at: now })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('person_lifecycle')
+        .values({ person_id: quentin.id, state: 'ARCHIVED', reason: 'MOVED_AWAY', started_at: now })
+        .execute();
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: now })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await roster(manuelAccount, eventId).expect(200);
+      const ids = (response.body.data as { person_id: string }[]).map((line) => line.person_id);
+      expect(ids).toContain(quentin.id);
+
+      const saved = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(saved.status).toBeLessThan(300);
+    });
+
     it('reads the tree as of the event date, not as of now', async () => {
       const sunday = await recentSunday();
       const eventId = await createEvent(sunday);

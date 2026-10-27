@@ -365,16 +365,37 @@ describe('absent three months and archiving (decision 0397)', () => {
       await archive(admin, juan, { reason: 'OTHER', note: 'Asked to be removed' }).expect(200);
     });
 
+    it('refuses somebody who pastors people, naming them (owner, 2026-10-28)', async () => {
+      // Manuel leads no Cell and pastors Mark.
+      const response = await archive(admin, manuel, {
+        reason: 'MOVED_AWAY',
+        account_access: 'DISABLE',
+      }).expect(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.details.disciples).toEqual([
+        expect.objectContaining({ person_id: mark.id }),
+      ]);
+
+      // The list and the person's page say so, so no Archive is offered for him.
+      const page = await request(app.getHttpServer())
+        .get(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+      expect(page.body.pastors).toBe(1);
+    });
+
     it('asks about an account, and disables it when told to', async () => {
-      const asked = await archive(admin, manuel, { reason: 'MOVED_AWAY' }).expect(422);
+      const pedroAccount = await createAccount(app, db, { person: pedro, roles: ['LEADER'] });
+
+      const asked = await archive(admin, pedro, { reason: 'MOVED_AWAY' }).expect(422);
       expect(asked.body.error.details.field).toBe('account_access');
 
-      await archive(admin, manuel, { reason: 'MOVED_AWAY', account_access: 'DISABLE' }).expect(200);
+      await archive(admin, pedro, { reason: 'MOVED_AWAY', account_access: 'DISABLE' }).expect(200);
 
       const account = await db
         .selectFrom('accounts')
         .select('status')
-        .where('id', '=', manuelAccount.id)
+        .where('id', '=', pedroAccount.id)
         .executeTakeFirstOrThrow();
       expect(account.status).toBe('DISABLED');
 
@@ -382,16 +403,9 @@ describe('absent three months and archiving (decision 0397)', () => {
         .selectFrom('audit_log')
         .select('after')
         .where('action', '=', 'person.archived')
-        .where('target_id', '=', manuel.id)
+        .where('target_id', '=', pedro.id)
         .executeTakeFirstOrThrow();
       expect(entry.after).toMatchObject({ account_access: 'DISABLE' });
-
-      // His disciple's leader now holds no assignment, so Mark waits for a new one.
-      const waiting = await request(app.getHttpServer())
-        .get('/api/v1/people/awaiting-reassignment')
-        .set('Authorization', `Bearer ${admin.accessToken}`)
-        .expect(200);
-      expect((waiting.body.data as { id: string }[]).map((row) => row.id)).toContain(mark.id);
     });
 
     it('keeps the account when told to keep it', async () => {

@@ -1175,6 +1175,31 @@ export class HierarchyService {
   }
 
   /**
+   * How many people each of these persons pastors now: open assignments naming them as
+   * leader (decision 0397, the owner's answer of 2026-10-28 that refuses archiving somebody
+   * who still pastors anyone). A person who pastors nobody is absent.
+   */
+  async discipleCountsOf(executor: Db, personIds: readonly string[]): Promise<Map<string, number>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id', (eb) => eb.fn.countAll<string>().as('disciples')])
+      .where('leader_id', 'in', [...personIds])
+      .where('ended_at', 'is', null)
+      .groupBy('leader_id')
+      .execute();
+
+    return new Map(
+      rows.flatMap((row) =>
+        row.leader_id === null ? [] : [[row.leader_id, Number(row.disciples)]],
+      ),
+    );
+  }
+
+  /**
    * Each person's leader on their most recent assignment naming one, open or closed, for the
    * Admin's *Archived* list (decision 0397): an archive ends the row and a restore opens
    * none, so it is the leader they had when they were archived. Absent where none ever did.

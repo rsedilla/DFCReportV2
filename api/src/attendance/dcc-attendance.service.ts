@@ -427,6 +427,9 @@ export class DccAttendanceService {
       );
       const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, event.at);
       const identities = await this.people.forDecisionsWithin(trx, personIds);
+      // As of the Sunday, not now: a Person archived since is still recordable for it
+      // (decision 0397, owner's answer of 2026-10-28).
+      const archivedThen = await this.people.archivedAtWithin(trx, personIds, event.at);
       const live = await this.liveRecords(trx, event.id, personIds);
 
       // Everything is decided before anything is written. A rollback would give the
@@ -450,7 +453,17 @@ export class DccAttendanceService {
           throw new NotFoundError('No such person.', { person_id: personId });
         }
 
-        await this.assertInScope(trx, actor, authority, personId);
+        // A Person archived since this Sunday is reached through the tree as it stood on it,
+        // as a Cell meeting resolves through whoever led the Cell on its date (owner,
+        // 2026-10-28, decision 0397): the archive ended their edge today, so today's walk
+        // reaches them from nobody below the Whole Church.
+        await this.assertInScope(
+          trx,
+          actor,
+          authority,
+          personId,
+          identity.isArchived && !archivedThen.has(personId) ? event.at : null,
+        );
 
         // Decision 0322: nobody records their own DCC line, whatever capability they hold,
         // except the two Network roots, who have no leader (section 9). Decided on who is
@@ -465,7 +478,11 @@ export class DccAttendanceService {
         const stored = live.get(personId) ?? null;
         const outcome = outcomeFor(stored, record.present);
 
-        this.assertRecordable(personId, identity, assignments.get(personId));
+        this.assertRecordable(
+          personId,
+          { isArchived: archivedThen.has(personId), mergedIntoId: identity.mergedIntoId },
+          assignments.get(personId),
+        );
 
         await this.assertMayRecord(trx, {
           actor,
@@ -748,14 +765,18 @@ export class DccAttendanceService {
   ): Promise<RosterLine[]> {
     const checklist = [...(await this.checklist(executor, event, submitterId, includesRoots))];
     const identities = await this.people.forDecisionsWithin(executor, checklist);
+    const archivedThen = await this.people.archivedAtWithin(executor, checklist, event.at);
 
-    // An archived Person has left (section 3) and a merged record has been absorbed
-    // into another, so neither is somebody a leader is asked to mark present. Dropped
-    // rather than shown as unrecordable: the roster's question is who there is to
-    // record, and the write refuses both on the same grounds.
+    // A Person archived by the Sunday has left (section 3) and a merged record has been
+    // absorbed into another, so neither is somebody a leader is asked to mark present.
+    // Dropped rather than shown as unrecordable: the roster's question is who there is to
+    // record, and the write refuses both on the same grounds. Archived is read as of the
+    // Sunday, so a Person archived later stays on the Sundays before it (decision 0397).
     const recordable = checklist.filter((personId) => {
       const identity = identities.get(personId);
-      return identity !== undefined && !identity.isArchived && identity.mergedIntoId === null;
+      return (
+        identity !== undefined && !archivedThen.has(personId) && identity.mergedIntoId === null
+      );
     });
 
     const assignments = await this.hierarchy.assignmentsAsOf(executor, recordable, event.at);
@@ -805,9 +826,12 @@ export class DccAttendanceService {
     assignment: { leaderId: string | null } | undefined,
   ): void {
     if (identity.isArchived) {
-      throw new InvariantViolationError('An archived Person takes no attendance record.', {
-        person_id: personId,
-      });
+      throw new InvariantViolationError(
+        'A Person archived by this Sunday takes no record for it.',
+        {
+          person_id: personId,
+        },
+      );
     }
 
     if (identity.mergedIntoId !== null) {
@@ -874,14 +898,31 @@ export class DccAttendanceService {
     actor: Actor,
     authority: ActorAuthority,
     personId: string,
+    /** For a Person archived since the Sunday: the Sunday's instant (decision 0397). */
+    archivedSince: Date | null = null,
   ): Promise<void> {
-    const covered = await this.authorization.coversWith(
-      executor,
-      actor,
-      authority,
-      Capability.DccTakeAttendance,
-      { kind: 'person', personId },
-    );
+    const covered =
+      (await this.authorization.coversWith(
+        executor,
+        actor,
+        authority,
+        Capability.DccTakeAttendance,
+        { kind: 'person', personId },
+      )) ||
+      // The guard has confirmed the actor holds `dcc.take_attendance`; for such a Person the
+      // subtree it covers is read as of the Sunday rather than now. The actor themself is
+      // not reached this way, as nobody records their own line (decision 0322).
+      (archivedSince !== null &&
+        actor.personId !== null &&
+        (await this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          personId,
+          archivedSince,
+          {
+            includeSelf: false,
+          },
+        )));
 
     if (!covered) {
       throw new ScopeDeniedError('This person is outside your scope.', {
