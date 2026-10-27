@@ -37,9 +37,7 @@ import {
   mockDccEvents,
   mockCellMembers,
   mockPastoralPath,
-  mockPastoralPathAtRoot,
   mockNetworkTree,
-  mockNetworkReader,
   mockCellMembersEmpty,
   mockCellReport,
   mockCellTwelve,
@@ -363,6 +361,8 @@ const SCANS = [
     pattern: '/cells/[id]/meetings',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // Change when it meets and Change category are offered only with this capability.
+      await mockGrants(page, ['cell.manage_configuration']);
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -667,6 +667,8 @@ const SCANS = [
     pattern: '/cells/[id]/meetings',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // Change when it meets and Change category are offered only with this capability.
+      await mockGrants(page, ['cell.manage_configuration']);
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -984,24 +986,16 @@ const SCANS = [
     },
   },
   {
-    // The branch as a leader opens it (decision 0252): the focus block, four cards, rows
-    // by name with both figures, Move and Open on each, and `Show 20 more` because the
-    // first page carries a cursor. The reader reads reports, and the two Still to record
-    // figures are plain numbers all the same: Filed Reports is withdrawn (decision 0340).
+    // The Branch screen is replaced (decision 0364) and offered to no account (decision 0379):
+    // its address shows the note naming the account's screens.
     name: 'network',
     route: '/network',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockPastoralPathAtRoot(page);
-      await mockNetworkTree(page);
-      await mockNetworkReader(page, { reports: 'OWN_SUBTREE' });
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
-      await expect(page.getByRole('term').filter({ hasText: /^Still to record$/ }).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /still to record/ })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Move Efren Dimaculangan' }).first()).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Show 20 more' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Go to your start screen' })).toBeVisible();
     },
   },
   {
@@ -1077,43 +1071,6 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Show Consuelo Bautista’s disciples' }).click();
       await expect(page.getByRole('link', { name: 'Teresita Alcantara' })).toBeVisible();
-    },
-  },
-  {
-    // A reader holding neither figure capability: the tree without the figures, shown as
-    // dashes rather than zeros, no Move, and the line that says why there is none.
-    name: 'network, without figures',
-    route: '/network',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockPastoralPathAtRoot(page);
-      await mockNetworkTree(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText('Network root')).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
-      await expect(
-        page.getByText('Moves to another leader are made by your Primary.', { exact: true }),
-      ).toBeVisible();
-      await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
-    },
-  },
-  {
-    // One generation down, reached by its address as the Back button would reach it: the
-    // breadcrumb links back to the reader, which is the way up (one control per job).
-    name: 'network, one generation down',
-    route: '/network?focus=3f1b7c6e-0000-4000-8000-000000000701',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockPastoralPathAtRoot(page);
-      await mockNetworkTree(page);
-      await mockNetworkReader(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Teresita Alcantara' }).first()).toBeVisible();
-      await expect(
-        page.getByRole('navigation', { name: 'Where this person sits' }).getByRole('link').first(),
-      ).toBeVisible();
     },
   },
   {
@@ -1263,6 +1220,8 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
       await mockSignedIn(page);
+      // Encounter Readiness is a whole-church reader's (decisions 0380 and 0379).
+      await mockWholeChurchReader(page);
       await mockSuynl(page);
       await mockEncounterSeasons(page);
     },
@@ -1284,6 +1243,8 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
       await mockSignedIn(page);
+      // Encounter Readiness is a whole-church reader's (decisions 0380 and 0379).
+      await mockWholeChurchReader(page);
       await mockSuynl(page);
       await mockEncounterSeasons(page);
     },
@@ -1320,6 +1281,8 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-09-26T02:00:00Z'));
       await mockSignedIn(page);
+      // Encounter Readiness is a whole-church reader's (decisions 0380 and 0379).
+      await mockWholeChurchReader(page);
       await mockSuynl(page);
       await mockEncounterSeasons(page);
     },
@@ -1336,6 +1299,8 @@ const SCANS = [
     route: '/reports/suynl',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // Encounter Readiness is a whole-church reader's (decisions 0380 and 0379).
+      await mockWholeChurchReader(page);
       await mockSuynl(page);
       await mockEncounterSeasons(page, { shows: 'NEITHER' });
     },
@@ -1413,6 +1378,8 @@ const SCANS = [
     route: '/reports/training',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockTraining(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1426,6 +1393,8 @@ const SCANS = [
     route: '/reports/conquest',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockConquest(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1583,6 +1552,8 @@ const SCANS = [
     route: '/growth/training?all=1',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockTraining(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1604,6 +1575,8 @@ const SCANS = [
     route: '/growth/training',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockTraining(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1624,6 +1597,8 @@ const SCANS = [
     route: '/growth/conquest',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockConquest(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1764,14 +1739,6 @@ const TARGET_SWEEP = [
     minimum: 13,
   },
   {
-    // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
-    // **five**. Your requests renders nothing here, the sweep answering no sent requests.
-    name: 'my cell',
-    route: '/my-cell',
-    settle: 'Ask for a new Cell',
-    minimum: 5,
-  },
-  {
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
     settleRole: 'heading' as const,
@@ -1856,14 +1823,6 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
-    // Search, the filter, two rows' name links and Show 20
-    // more. Settled on Show 20 more, which renders only once the page has arrived.
-    name: 'network',
-    route: '/network',
-    settle: 'Show 20 more',
-    minimum: 4,
-  },
-  {
     // The five Reports tabs, the two views and the month's two arrows: **nine**; the names open
     // nothing (decision 0380). Settled on the last name, which renders from the data.
     name: 'number of people',
@@ -1934,28 +1893,6 @@ const TARGET_SWEEP = [
     minimum: 7,
   },
   {
-    // A Full view leader's three report tabs (decisions 0340 and 0360), the Next Encounter
-    // card's link to the seasons and the link to Growth (decision 0296), then the readiness
-    // table's three name buttons and the two "their 12" links, one per row whose leader leads
-    // anybody (decision 0297): **ten**.
-    // The cards are figures, not controls.
-    name: 'suynl report',
-    route: '/reports/suynl',
-    settleRole: 'link' as const,
-    settle: 'Tick lessons in Growth',
-    minimum: 10,
-  },
-  {
-    // The three report tabs, the card's link, Back to your report, the one row's name button
-    // and its "their 12" link, and the link to Growth: **eight**. Settled on the table's own
-    // way back, which renders from the address, and then on every section loading.
-    name: 'suynl report, one leader',
-    route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
-    settleRole: 'link' as const,
-    settle: 'Back to your report',
-    minimum: 8,
-  },
-  {
     // A Full view leader's one Growth tab and Back to SUYNL (decision 0360), the sweep's
     // account being no administrator: **two**. The table holds no control for it.
     name: 'encounter seasons',
@@ -1963,24 +1900,6 @@ const TARGET_SWEEP = [
     settleRole: 'link' as const,
     settle: 'Back to SUYNL',
     minimum: 2,
-  },
-  {
-    // A Full view leader's three report tabs, which carry no Training (decisions 0340 and
-    // 0360), and the link to Growth: **four**. The page is still reachable by its address.
-    name: 'training report',
-    route: '/reports/training',
-    settleRole: 'link' as const,
-    settle: 'Record graduations in Growth',
-    minimum: 4,
-  },
-  {
-    // A Full view leader's three report tabs, Conquest hidden but reachable by its address
-    // (decision 0360), and the link to Growth: **four**.
-    name: 'conquest report',
-    route: '/reports/conquest',
-    settleRole: 'link' as const,
-    settle: 'See each person in Growth',
-    minimum: 4,
   },
   {
     // Back link and two radios per person across two people. No Save: it appears once
@@ -2015,6 +1934,7 @@ const TARGET_SWEEP = [
     settleRole: 'link' as const,
     settle: 'Lualhati Dizon',
     minimum: 39,
+    church: true,
   },
   {
     // The one tab (decision 0360), four cards, the search, Search and the filter, a name link per person
@@ -2025,6 +1945,60 @@ const TARGET_SWEEP = [
     settleRole: 'link' as const,
     settle: 'Dalisay Soriano',
     minimum: 16,
+    church: true,
+  },
+  // Training and Conquest are a whole-church reader's (decision 0360; a Full view leader is
+  // shown the note, decision 0379), so these are measured last, as the Admin.
+  {
+    // A Full view leader's three report tabs (decisions 0340 and 0360), the Next Encounter
+    // card's link to the seasons and the link to Growth (decision 0296), then the readiness
+    // table's three name buttons and the two "their 12" links, one per row whose leader leads
+    // anybody (decision 0297): **ten**.
+    // The cards are figures, not controls.
+    name: 'suynl report',
+    route: '/reports/suynl',
+    settleRole: 'link' as const,
+    settle: 'Tick lessons in Growth',
+    minimum: 10,
+    church: true,
+  },
+  {
+    // The three report tabs, the card's link, Back to your report, the one row's name button
+    // and its "their 12" link, and the link to Growth: **eight**. Settled on the table's own
+    // way back, which renders from the address, and then on every section loading.
+    name: 'suynl report, one leader',
+    route: `/reports/suynl?leader=${READINESS_ARTURO_ID}`,
+    settleRole: 'link' as const,
+    settle: 'Back to your report',
+    minimum: 8,
+    church: true,
+  },
+  {
+    // The six report tabs and the link to Growth: at least **four**.
+    name: 'training report',
+    route: '/reports/training',
+    settleRole: 'link' as const,
+    settle: 'Record graduations in Growth',
+    minimum: 4,
+    church: true,
+  },
+  {
+    name: 'conquest report',
+    route: '/reports/conquest',
+    settleRole: 'link' as const,
+    settle: 'See each person in Growth',
+    minimum: 4,
+    church: true,
+  },
+  // My Cell is the recording screens' (decision 0323), so it is measured as one, last.
+  {
+    // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
+    // **five**. Your requests renders nothing here, the sweep answering no sent requests.
+    name: 'my cell',
+    route: '/my-cell',
+    settle: 'Ask for a new Cell',
+    minimum: 5,
+    recording: true,
   },
 ] as const;
 
@@ -2358,16 +2332,10 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'no marks and no Save bar.',
   },
   {
-    name: 'network, without figures',
+    name: 'network',
     why:
-      'Renders a subset of the controls measured under "network": the same search, rows and ' +
-      'Show 20 more, without the Move buttons, which are the Button primitive measured elsewhere.',
-  },
-  {
-    name: 'network, one generation down',
-    why:
-      'Its controls are the ones measured under "network" — row links, Move, the filter — ' +
-      'plus a breadcrumb link, the min-h-6 min-w-6 text link measured on other screens.',
+      'Offered to no account since decision 0379: it shows the note page, a heading, a sentence and ' +
+      'one link styled as the Button primitive measured on every screen.',
   },
   {
     name: 'dcc checklist, closed Sunday',
@@ -2432,15 +2400,24 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // The person page's Growth frame, which asks the same two lists by Member ID and falls
   // through to the two above for anything else. It renders only for a reader holding the
   // two view capabilities, and no other screen reads them.
-  await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members']);
+  await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members', 'cell.manage_configuration']);
   await mockPersonGrowth(page);
   await mockBranchPeople(page);
   await mockBranchCounts(page);
   await mockBranchTrends(page);
 
+  let church = false;
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;
     const settleRole = 'settleRole' in entry ? entry.settleRole : 'button';
+    // The whole-church reader's routes come last, because the mock stays once it is set.
+    if ('church' in entry && entry.church && !church) {
+      await mockWholeChurchReader(page);
+      church = true;
+    }
+    if ('recording' in entry && entry.recording) {
+      await mockScreens(page, 'RECORDING');
+    }
 
     await page.goto(route);
     await expect(page.getByRole(settleRole, { name: settle })).toBeVisible();

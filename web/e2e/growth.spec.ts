@@ -45,6 +45,8 @@ async function openSuynl(
 
 async function openTraining(page: Page, path = '/growth/training') {
   await mockSignedIn(page);
+  // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
+  await mockWholeChurchReader(page);
   const traffic = await mockTraining(page);
   await page.goto(path);
   await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
@@ -75,7 +77,7 @@ test.describe('the Growth tabs', () => {
     await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
   });
 
-  test('are SUYNL alone for a Full view leader, and Training still opens by its address (decision 0360)', async ({
+  test('are SUYNL alone for a Full view leader, and Training by its address shows the note (decisions 0360 and 0379)', async ({
     page,
   }) => {
     await openSuynl(page);
@@ -85,11 +87,10 @@ test.describe('the Growth tabs', () => {
     await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
     await expect(tabs.getByRole('link', { name: 'SUYNL' })).toHaveAttribute('aria-current', 'page');
 
-    // Hidden, not withdrawn: the page answers, under the one tab, with none marked current.
+    // Hidden, not withdrawn, and not offered by its address either (decision 0379).
     await page.goto('/growth/training');
-    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
-    await expect(tabs.locator('a[aria-current="page"]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toHaveCount(0);
   });
 
   test('sit under a Full view leader’s SUYNL item of the sidebar, which is the current page (decision 0383)', async ({
@@ -616,6 +617,7 @@ test.describe('the Training list opens on those still to finish (decision 0287)'
 
   test('says "have" and "are" for more than one', async ({ page }) => {
     await mockSignedIn(page);
+    await mockWholeChurchReader(page);
     await mockTraining(page, 'accepted', { counts: { ...TRAINING_COUNTS, all_five: 2 } });
     await page.goto('/growth/training');
 
@@ -669,6 +671,7 @@ test.describe('the Training list opens on those still to finish (decision 0287)'
 
   test('says nothing when nobody holds all five', async ({ page }) => {
     await mockSignedIn(page);
+    await mockWholeChurchReader(page);
     await mockTraining(page, 'accepted', {
       counts: { ...TRAINING_COUNTS, sol_1: 0, sol_2: 0, sol_3: 0, all_five: 0 },
       rows: [TRAINING_TWO, TRAINING_NONE, TRAINING_NOT_MINE],

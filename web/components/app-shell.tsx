@@ -18,9 +18,11 @@ import type { ReactNode } from 'react';
 import { isBranchReader } from '@/components/reports-tabs';
 import { RequireSession } from '@/components/require-session';
 import { SessionHaltBanner } from '@/components/session-halt-banner';
+import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
-import { RECORD_PATH, REPORTS_PATH } from '@/lib/landing';
+import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
 import { getMe } from '@/lib/me';
+import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /**
@@ -273,6 +275,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const accountActive = current?.href === ACCOUNT.href;
 
+  // **A page not on this account's screens does not open** (decision 0379): a typed address or
+  // an old link meets a note naming the account's screens and the way to its start screen.
+  const offered = me.data === undefined || pageIsOffered(me.data, pathname);
+  const names = links.map((link) => link.label);
+  const screensLine =
+    names.length > 1
+      ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+      : names.join('');
+
   return (
     <RequireSession>
       <div className="min-h-dvh lg:flex">
@@ -375,7 +386,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="min-w-0 pb-[calc(3.5625rem+env(safe-area-inset-bottom))] lg:flex-1 lg:pb-0">
           {/* The Account page says the same beside its own button, so it is not repeated there. */}
           {accountActive ? null : <SessionHaltBanner />}
-          {children}
+          {offered ? (
+            children
+          ) : (
+            <main id="main" className={PAGE_WIDTH.READING}>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                This page isn&rsquo;t part of your screens
+              </h1>
+              <p className="text-muted mt-3 max-w-xl text-sm leading-relaxed">
+                Your screens are {screensLine}.
+              </p>
+              <p className="mt-6">
+                <Link href={landingPath(me.data)} className={buttonClasses('primary')}>
+                  Go to your start screen
+                </Link>
+              </p>
+            </main>
+          )}
         </div>
       </div>
     </RequireSession>

@@ -83,7 +83,6 @@ test.describe('which search each surface asks for', () => {
   for (const [who, arrange] of [
     ['a leader on the recording screens', async (page: import('@playwright/test').Page) => mockScreens(page, 'RECORDING')],
     ['a Full view leader', async () => undefined],
-    ['a Senior Pastor', async (page: import('@playwright/test').Page) => mockScreens(page, 'SENIOR_PASTOR')],
     ['an Admin', async (page: import('@playwright/test').Page) => mockAdministrator(page)],
   ] as const) {
     test(`the People screen opens on the search alone for ${who}`, async ({ page }) => {
@@ -121,9 +120,10 @@ test.describe('which search each surface asks for', () => {
     await page.goto('/people');
     await expect(page.getByRole('link', { name: 'Add a person' })).toBeVisible();
 
+    // A Senior Pastor has no People item, so the page is not offered at all (decision 0379).
     await mockScreens(page, 'SENIOR_PASTOR');
     await page.reload();
-    await expect(page.getByText('Search by name or Member ID to find someone.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Add a person' })).toHaveCount(0);
   });
   test('the People screen asks for its own scope', async ({ page }) => {

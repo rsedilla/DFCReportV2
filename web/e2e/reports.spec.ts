@@ -171,17 +171,16 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     }
   });
 
-  test('a Full view leader still opens Conquest by its address, hidden rather than withdrawn (decision 0360)', async ({
+  test('a Full view leader opening Conquest by its address is shown the note (decisions 0360 and 0379)', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockEveryReport(page);
     await page.goto('/reports/conquest');
 
-    await expect(page.getByRole('link', { name: 'See each person in Growth' })).toBeVisible();
-    const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link')).toHaveText(BRANCH_TABS.map((each) => each.label));
-    await expect(which.locator('a[aria-current="page"]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
+    await expect(page.getByText('Your screens are Record, Reports, People, Cells and SUYNL.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'See each person in Growth' })).toHaveCount(0);
   });
 
   test('the month travels to every one of a Full view leader’s five', async ({
@@ -512,6 +511,8 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       page,
     }) => {
       await mockSignedIn(page);
+      // Training and Conquest are a whole-church reader's (decisions 0360 and 0379).
+      await mockWholeChurchReader(page);
       await mockEncounterSeasons(page);
       // SUYNL's readiness table answers, so the one failure shown is the counts' own.
       await mockSuynlReadiness(page);
@@ -539,6 +540,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 
   test('Encounter Readiness shows no counts of its own, and sends ticking to Growth (decision 0378)', async ({ page }) => {
     await mockSignedIn(page);
+    await mockWholeChurchReader(page);
     await mockSuynl(page);
     await mockEncounterSeasons(page);
     await page.goto('/reports/suynl');
@@ -571,6 +573,8 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     page,
   }) => {
     await mockSignedIn(page);
+    // Training and Conquest are a whole-church reader's (decisions 0360 and 0379).
+    await mockWholeChurchReader(page);
     await mockTraining(page);
     await page.goto('/reports/training');
 
@@ -600,6 +604,8 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     page,
   }) => {
     await mockSignedIn(page);
+    // Training and Conquest are a whole-church reader's (decisions 0360 and 0379).
+    await mockWholeChurchReader(page);
     await mockConquest(page);
     await page.goto('/reports/conquest');
 
@@ -623,6 +629,8 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     page,
   }) => {
     await mockSignedIn(page);
+    // Training and Conquest are a whole-church reader's (decisions 0360 and 0379).
+    await mockWholeChurchReader(page);
     await mockSuynl(page);
     await mockEncounterSeasons(page);
     await mockTraining(page);
@@ -962,6 +970,8 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
+    // Encounter Readiness is a whole-church reader's (decisions 0380 and 0379).
+    await mockWholeChurchReader(page);
     await mockSuynl(page);
     await mockEncounterSeasons(page);
   });

@@ -21,7 +21,8 @@ function lastList(lists: URLSearchParams[]): URLSearchParams {
   return lists[lists.length - 1];
 }
 
-async function openConquest(page: Page, address = '/growth/conquest', church = false) {
+// A whole-church reader by default: a Full view leader is shown the note (decisions 0360 and 0379).
+async function openConquest(page: Page, address = '/growth/conquest', church = true) {
   await mockSignedIn(page);
   if (church) {
     await mockWholeChurchReader(page);
