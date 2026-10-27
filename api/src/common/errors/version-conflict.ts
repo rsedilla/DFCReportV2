@@ -69,6 +69,24 @@ export class VersionConflictError extends ApiError {
   }
 }
 
+/**
+ * A first record that met one somebody else made, sent by an actor who may record and may
+ * not correct (decision 0394). `ALREADY_RECORDED`, a code of its own, so the screen says what
+ * happened and offers Reload while `VERSION_CONFLICT` keeps its promise of two sides. It carries
+ * the versions and nothing of the record: Section 14's two sides are for a person who may
+ * choose between them, and this one may not, so neither the stored values nor who recorded
+ * them are handed over (decision 0201).
+ */
+export class RecordedFirstConflictError extends ApiError {
+  constructor(params: { currentVersion: number; details?: Record<string, unknown> }) {
+    super(ApiErrorCode.ALREADY_RECORDED, 'Someone else recorded this after you opened it.', {
+      ...params.details,
+      submitted_version: null,
+      current_version: params.currentVersion,
+    });
+  }
+}
+
 /** The envelope's own field names, which a record's values may not shadow. */
 const RESERVED = ['recorded_at', 'actor'];
 

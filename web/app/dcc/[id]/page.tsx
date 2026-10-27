@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SectionFrame } from '@/components/section-frame';
@@ -23,7 +23,12 @@ import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
 import { getMe } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
-import { describeFailure, describeLineFailure } from '@/lib/messages';
+import {
+  changedUnderNote,
+  describeFailure,
+  describeLineFailure,
+  staleSaveFailure,
+} from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
 
@@ -101,6 +106,19 @@ function DccChecklist() {
   const [editState, setEdits] = useState<Record<string, Mark>>({});
   const [editingState, setEditing] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
+  // **The version each changed line was read at when its mark was first changed** (owner's
+  // choice of 2026-10-27), null for a person with no record, and what Save sends for that
+  // line. The checklist is read again in the background, on returning to the tab, and the
+  // version read *now* would let a mark chosen against the old record overwrite a change the
+  // leader never saw. The mark stored then is kept with it, so Reload can tell which lines
+  // somebody else changed.
+  const [startedFrom, setStartedFrom] = useState<Record<string, Pin>>({});
+  // Lines somebody else changed while their mark was being changed here, shown after Reload
+  // (decision 0394).
+  const [changedUnder, setChangedUnder] = useState<Record<string, ChangedLine>>({});
+  // Every line's stored mark when this edit's first change was made, so Reload can name a
+  // line somebody else changed that this leader never touched (decision 0394).
+  const [openedWith, setOpenedWith] = useState<Record<string, boolean | null> | null>(null);
 
   const lines = useMemo(() => roster.data?.data ?? [], [roster.data]);
   const event = roster.data?.event ?? null;
@@ -127,9 +145,34 @@ function DccChecklist() {
         ),
       ),
     );
+    setStartedFrom((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([personId]) => lines.find((line) => line.person_id === personId)?.record === null,
+        ),
+      ),
+    );
+    setChangedUnder({});
+    // Marks on lines with no record survive Cancel, so the snapshot they are measured against
+    // is kept with them; with none left, the next change takes a fresh one.
+    const remaining = Object.keys(edits).some(
+      (personId) => lines.find((line) => line.person_id === personId)?.record === null,
+    );
+    if (!remaining) {
+      setOpenedWith(null);
+    }
     setCorrectionReason('');
     setEditing(false);
   }
+
+  /** The version a line's change is made against: the one pinned at its first change. */
+  const versionFor = useCallback(
+    (line: DccRosterLine): number | null =>
+      line.person_id in edits && line.person_id in startedFrom
+        ? startedFrom[line.person_id].version
+        : (line.record?.version ?? null),
+    [startedFrom, edits],
+  );
 
   /**
    * What is recorded, overlaid with what this leader has changed since.
@@ -158,22 +201,26 @@ function DccChecklist() {
           present,
           // Null is this person's first record; a number is the version this
           // client read, which section 14 compares per line.
-          version: line.record?.version ?? null,
+          version: versionFor(line),
           ...(corrected && reason ? { correction_reason: reason } : {}),
         };
       });
-  }, [lines, edits, correctionReason]);
+  }, [lines, edits, correctionReason, versionFor]);
 
   const idempotencyKey = useMemo(() => idempotencyKeyFor(params.id, records), [params.id, records]);
 
   const [savedKey, setSavedKey] = useState<string | null>(null);
 
   const save = useMutation({
-    mutationFn: () => submitDccAttendance(params.id, records, idempotencyKey),
-    onSuccess: async () => {
+    mutationFn: (sent: DccRecordInput[]) => submitDccAttendance(params.id, sent, idempotencyKey),
+    onSuccess: async (_saved, sent) => {
       setSavedKey(idempotencyKey);
       setEditing(false);
       setCorrectionReason('');
+      // A note says what was changed under a mark before this save; after it, nothing does.
+      setChangedUnder({});
+      setOpenedWith(null);
+      const savedAt = Date.now();
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster', params.id] });
       // The whole checklist the Record page and the DCC calendar count from.
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster-whole', params.id] });
@@ -182,6 +229,37 @@ function DccChecklist() {
       await queryClient.invalidateQueries({ queryKey: ['dcc-owed'] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-pending-leaders'] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-leader-checklist'] });
+      // **The marks just stored stop being edits once the fresh checklist shows them.** Left
+      // as edits they would be laid over a later change somebody else makes, and sent again
+      // against it. A mark changed while the save was on its way is a new edit and stays.
+      // Where the checklist could not be read again, nothing is settled or re-pinned: the old
+      // read would pin a line to the version before this save.
+      const rosterKey = ['dcc-roster', params.id, leaderId ?? 'own'];
+      const read = queryClient.getQueryState(rosterKey);
+      if (read?.status !== 'success' || read.dataUpdatedAt < savedAt) {
+        return;
+      }
+      const stored = new Map(sent.map((record) => [record.person_id, record.present]));
+      const settled = (personId: string, mark: Mark) =>
+        stored.get(personId) === (mark === 'present');
+      setEdits((current) =>
+        Object.fromEntries(Object.entries(current).filter(([personId, mark]) => !settled(personId, mark))),
+      );
+      // A line sent is pinned to what is stored now, which a mark changed while the save was
+      // on its way is made against; a pin whose line has no edit is not read (`versionFor`).
+      const fresh = queryClient.getQueryData<{ data: DccRosterLine[] }>(rosterKey);
+      // A mark made while the save was on its way is measured from what is stored now.
+      setOpenedWith(storedOf(fresh?.data ?? []));
+      const freshPins = new Map((fresh?.data ?? []).map((line) => [line.person_id, pinOf(line)]));
+      setStartedFrom((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          sent.flatMap((record) => {
+            const pin = freshPins.get(record.person_id);
+            return pin === undefined ? [] : [[record.person_id, pin] as const];
+          }),
+        ),
+      }));
     },
   });
 
@@ -211,12 +289,12 @@ function DccChecklist() {
 
       return edit !== undefined &&
         (line.record === null || (edit === 'present') !== line.record.present)
-        ? [[line.person_id, { mark: edit, version: line.record?.version ?? null }] as const]
+        ? [[line.person_id, { mark: edit, version: versionFor(line) }] as const]
         : [];
     });
 
     return kept.length === 0 ? null : Object.fromEntries(kept);
-  }, [lines, edits, idempotencyKey, savedKey]);
+  }, [lines, edits, idempotencyKey, savedKey, versionFor]);
 
   const draft = useMarkDraft<Record<string, { mark: Mark; version: number | null }>>({
     key:
@@ -241,6 +319,8 @@ function DccChecklist() {
       setEdits(
         Object.fromEntries(restored.map((line) => [line.person_id, stored[line.person_id].mark])),
       );
+      setStartedFrom(Object.fromEntries(restored.map((line) => [line.person_id, pinOf(line)])));
+      setOpenedWith(storedOf(lines));
       if (restored.some((line) => line.record !== null)) {
         setEditing(true);
       }
@@ -252,12 +332,87 @@ function DccChecklist() {
   // where there is no bar to say it in.
   const saveBar = recordable && lines.length > 0;
   const barRef = usePinnedBarPadding<HTMLDivElement>();
+  const stale = save.isError ? staleSaveFailure(save.error, 'a mark here') : null;
   const saveFailure = save.isError
-    ? describeLineFailure(save.error, 'records', (index) => {
+    ? (stale ??
+      describeLineFailure(save.error, 'records', (index) => {
         const personId = records[index]?.person_id;
         return lines.find((line) => line.person_id === personId)?.full_name ?? null;
-      })
+      }))
     : null;
+
+  /**
+   * **Reload after a refused save** (decision 0394), as on the Cell meeting screen: the
+   * checklist is read again and every kept mark is made against what is stored now. On a line
+   * somebody else changed while its mark was being changed here, the saved mark shows and a
+   * note under the name says what this leader had marked. A mark on a line somebody else has
+   * since recorded is a correction, so it is kept only for a reader who may correct, and the
+   * screen opens for editing.
+   */
+  async function reload() {
+    const fresh = await roster.refetch();
+    // A failed read resolves with the old data, so only a successful one re-pins.
+    if (!fresh.isSuccess) {
+      return;
+    }
+    const byPerson = new Map(fresh.data.data.map((line) => [line.person_id, line]));
+    const kept: [string, Mark][] = [];
+    const changed: Record<string, ChangedLine> = {};
+    for (const line of fresh.data.data) {
+      const personId = line.person_id;
+      const yours = edits[personId];
+      const now = line.record?.present ?? null;
+      const theirs: Mark | null = now === null ? null : now ? 'present' : 'absent';
+      // What the line held when this leader began: the pin where they marked it, and the
+      // snapshot taken at the edit's first change where they did not.
+      const was =
+        yours !== undefined && personId in startedFrom
+          ? startedFrom[personId].present
+          : openedWith !== null && personId in openedWith
+            ? openedWith[personId]
+            : now;
+      const moved = theirs !== null && now !== was;
+
+      if (yours === undefined) {
+        if (moved) {
+          changed[personId] = { theirs };
+        }
+        continue;
+      }
+      if (theirs === yours) {
+        continue;
+      }
+      if (moved) {
+        changed[personId] = { theirs, yours };
+        continue;
+      }
+      if (line.record !== null && !canCorrect) {
+        continue;
+      }
+      kept.push([personId, yours]);
+    }
+    setEdits(Object.fromEntries(kept));
+    setChangedUnder(changed);
+    setOpenedWith(storedOf(fresh.data.data));
+    setStartedFrom(
+      Object.fromEntries(
+        kept.flatMap(([personId]) => {
+          const line = byPerson.get(personId);
+          return line === undefined ? [] : [[personId, pinOf(line)] as const];
+        }),
+      ),
+    );
+    if (kept.some(([personId]) => byPerson.get(personId)?.record !== null)) {
+      setEditing(true);
+    }
+    save.reset();
+  }
+
+  const reloadButton = stale ? (
+    <Button variant="secondary" className="mt-3" onClick={() => void reload()}>
+      Reload
+    </Button>
+  ) : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
@@ -339,6 +494,9 @@ function DccChecklist() {
                 onClick={() => {
                   draft.discard();
                   setEdits({});
+                  setStartedFrom({});
+                  setChangedUnder({});
+                  setOpenedWith(null);
                   setCorrectionReason('');
                   setEditing(false);
                 }}
@@ -417,10 +575,20 @@ function DccChecklist() {
                         key={line.person_id}
                         line={line}
                         mark={markFor(line)}
+                        note={changedUnder[line.person_id]}
                         disabled={!recordable || (line.record !== null && !editing)}
-                        onChange={(value) =>
-                          setEdits((current) => ({ ...current, [line.person_id]: value }))
-                        }
+                        onChange={(value) => {
+                          setStartedFrom((current) =>
+                            line.person_id in edits && line.person_id in current
+                              ? current
+                              : { ...current, [line.person_id]: pinOf(line) },
+                          );
+                          setOpenedWith((current) => current ?? storedOf(lines));
+                          setChangedUnder((current) =>
+                            Object.fromEntries(Object.entries(current).filter(([id]) => id !== line.person_id)),
+                          );
+                          setEdits((current) => ({ ...current, [line.person_id]: value }));
+                        }}
                       />
                     ))}
                   </ul>
@@ -468,6 +636,7 @@ function DccChecklist() {
               {/* A refused save is said beside Save, where the reader is looking. */}
               <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
                 <FailureNotice failure={saveFailure} />
+                {reloadButton}
               </div>
               <p aria-live="polite" className="text-sm">
                 {!changed && unmarkedCount === 0
@@ -483,7 +652,7 @@ function DccChecklist() {
                 <Button
                   type="button"
                   className="w-full sm:w-auto"
-                  onClick={() => save.mutate()}
+                  onClick={() => save.mutate(records)}
                   disabled={save.isPending}
                 >
                   {save.isPending ? 'Saving…' : 'Save marks'}
@@ -498,14 +667,35 @@ function DccChecklist() {
   );
 }
 
+/** The version a line was read at and the mark it held then, kept when its mark is first changed. */
+interface Pin {
+  version: number | null;
+  present: boolean | null;
+}
+
+function pinOf(line: DccRosterLine): Pin {
+  return { version: line.record?.version ?? null, present: line.record?.present ?? null };
+}
+
+/** Each line's stored mark, null where none is recorded. */
+function storedOf(lines: readonly DccRosterLine[]): Record<string, boolean | null> {
+  return Object.fromEntries(lines.map((line) => [line.person_id, line.record?.present ?? null]));
+}
+
+/** A line somebody else changed: their saved mark, and this leader's own where they made one. */
+type ChangedLine = { theirs: Mark; yours?: Mark };
+
 function PersonMark({
   line,
   mark,
+  note,
   disabled,
   onChange,
 }: {
   line: DccRosterLine;
   mark: Mark | undefined;
+  /** Somebody else changed this line while this edit was open (decision 0394). */
+  note?: ChangedLine;
   disabled: boolean;
   onChange: (mark: Mark) => void;
 }) {
@@ -514,7 +704,11 @@ function PersonMark({
       <RadioGroup
         legend={line.full_name}
         description={
-          line.record === null ? 'Not recorded yet' : `Last recorded ${shortDate(line.record.recorded_at)}`
+          note
+            ? changedUnderNote(note)
+            : line.record === null
+              ? 'Not recorded yet'
+              : `Last recorded ${shortDate(line.record.recorded_at)}`
         }
         name={`person-${line.person_id}`}
         // **The recorded mark is shown whether or not the Sunday takes a record.**

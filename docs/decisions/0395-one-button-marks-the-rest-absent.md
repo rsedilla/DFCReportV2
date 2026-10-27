@@ -46,4 +46,4 @@ only after the leader has marked somebody, is a different thing, and that refusa
 Decision 0395, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 13.
 
-Previous: [2026-10-27 — An administrator sends a password reset to an account in use](0393-an-administrator-sends-a-password-reset.md)
+Previous: [2026-10-27 — A refused correction offers Reload, and keeps the version the edit began from](0394-a-refused-correction-offers-reload.md)
