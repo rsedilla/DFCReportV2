@@ -146,7 +146,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       .values({
         person_id: person.id,
         state: 'ARCHIVED',
-        reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+        reason: 'MOVED_AWAY',
         started_at: at,
       })
       .execute();

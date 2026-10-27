@@ -929,7 +929,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
         .values({
           person_id: person.id,
           state: options.archived ? 'ARCHIVED' : 'CURRENT',
-          reason: options.archived ? 'NO_LONGER_IN_CURRENT_NETWORK' : null,
+          reason: options.archived ? 'MOVED_AWAY' : null,
           started_at: new Date('2020-01-01T00:00:00+08:00'),
         })
         .execute();

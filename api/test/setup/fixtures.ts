@@ -142,7 +142,7 @@ export async function createPerson(
     .values({
       person_id: person.id,
       state: options.archived ? 'ARCHIVED' : 'CURRENT',
-      reason: options.archived ? 'NO_LONGER_IN_CURRENT_NETWORK' : null,
+      reason: options.archived ? 'MOVED_AWAY' : null,
       started_at: startedAt,
     })
     .execute();

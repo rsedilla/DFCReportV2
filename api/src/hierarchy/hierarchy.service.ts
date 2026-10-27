@@ -1150,6 +1150,97 @@ export class HierarchyService {
   }
 
   /**
+   * Ends the person's open assignment at `at`, opening none in its place, for an archive
+   * (SKILL.md section 3, decision 0397). Section 5 permits a Person with no assignment; their
+   * own disciples keep edges naming them and so appear on the awaiting-reassignment list.
+   *
+   * Returns the leader they were under, for the audit entry, or null where they held none.
+   * The caller refuses a Network root before this, since section 5 gives a root's seat no
+   * succession; this ends whatever row is open.
+   */
+  async endAssignmentWithin(
+    transaction: Transaction<Database>,
+    personId: string,
+    at: Date,
+  ): Promise<{ leaderId: string | null } | null> {
+    const closed = await transaction
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: at })
+      .where('person_id', '=', personId)
+      .where('ended_at', 'is', null)
+      .returning('leader_id')
+      .executeTakeFirst();
+
+    return closed === undefined ? null : { leaderId: closed.leader_id };
+  }
+
+  /**
+   * Each person's leader on their most recent assignment naming one, open or closed, for the
+   * Admin's *Archived* list (decision 0397): an archive ends the row and a restore opens
+   * none, so it is the leader they had when they were archived. Absent where none ever did.
+   */
+  async latestLeadersOf(executor: Db, personIds: readonly string[]): Promise<Map<string, string>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .distinctOn('person_id')
+      .select(['person_id', 'leader_id'])
+      .where('person_id', 'in', [...personIds])
+      .where('leader_id', 'is not', null)
+      .orderBy('person_id')
+      .orderBy('started_at', 'desc')
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, row.leader_id as string]));
+  }
+
+  /**
+   * For each person, which of `months` they were under a pastoral leader for the whole of,
+   * and so on that leader's DCC checklist (decision 0397). A month is `[from, to)` and the
+   * rows in force across it may be several, a reassignment closing one where the next opens.
+   * A Network root's row names no leader and puts nobody on a checklist, so it counts for
+   * nothing here.
+   */
+  async monthsUnderALeaderWithin(
+    executor: Db,
+    personIds: readonly string[],
+    months: readonly { from: Date; to: Date }[],
+  ): Promise<Map<string, Set<number>>> {
+    const covered = new Map<string, Set<number>>();
+
+    if (personIds.length === 0 || months.length === 0) {
+      return covered;
+    }
+
+    const result = await sql<{ person_id: string; month: number }>`
+      SELECT a.person_id, m.month::int AS month
+      FROM pastoral_assignments a
+      CROSS JOIN unnest(
+        ${months.map((month) => month.from.toISOString())}::timestamptz[],
+        ${months.map((month) => month.to.toISOString())}::timestamptz[]
+      ) WITH ORDINALITY AS m (month_from, month_to, month)
+      WHERE a.person_id = ANY(${[...personIds]}::uuid[])
+        AND a.leader_id IS NOT NULL
+        AND a.started_at < m.month_to
+        AND (a.ended_at IS NULL OR a.ended_at > m.month_from)
+      GROUP BY a.person_id, m.month, m.month_from, m.month_to
+      HAVING range_agg(tstzrange(a.started_at, coalesce(a.ended_at, 'infinity'))) @>
+        tstzrange(m.month_from, m.month_to)
+    `.execute(executor);
+
+    for (const row of result.rows) {
+      const set = covered.get(row.person_id) ?? new Set<number>();
+      set.add(row.month - 1);
+      covered.set(row.person_id, set);
+    }
+
+    return covered;
+  }
+
+  /**
    * Whether the person has ever held a pastoral assignment, open or closed. Half of
    * section 5's "outside the pastoral tree" (decision 0270): rows are never deleted,
    * so a closed one still answers yes.

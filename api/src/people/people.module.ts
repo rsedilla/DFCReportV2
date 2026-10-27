@@ -10,6 +10,7 @@ import { LeadersController, NetworkController } from './network.controller';
 import { PeopleController } from './people.controller';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { PeopleImportService } from './people.import.service';
+import { PeopleLifecycleService } from './people.lifecycle.service';
 import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
@@ -85,6 +86,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
     PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
+    PeopleLifecycleService,
     NetworkTreeService,
   ],
   exports: [

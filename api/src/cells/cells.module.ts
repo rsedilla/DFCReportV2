@@ -15,6 +15,7 @@ import { CellsIndexService } from './cells.index.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsReadService } from './cells.read.service';
 import { CellsService } from './cells.service';
+import { PersonArchiveCellsAdapter } from './person-archive.adapter';
 
 /**
  * Owns the six tables SKILL.md section 26 gives to `cells`: `cells`,
@@ -86,7 +87,8 @@ import { CellsService } from './cells.service';
     CellsConfigurationService,
     CellsClosureService,
     CellsReadService,
+    PersonArchiveCellsAdapter,
   ],
-  exports: [CellsReadService],
+  exports: [CellsReadService, PersonArchiveCellsAdapter],
 })
 export class CellsModule {}

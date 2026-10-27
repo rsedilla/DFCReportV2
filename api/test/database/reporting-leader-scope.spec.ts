@@ -176,7 +176,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
       .values({
         person_id: mark.id,
         state: 'ARCHIVED',
-        reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+        reason: 'MOVED_AWAY',
         started_at: OCT_20,
       })
       .execute();

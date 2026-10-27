@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Optional,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ThrottlerException, ThrottlerStorage } from '@nestjs/throttler';
 
 import { CurrentActor } from '../auth/current-actor.decorator';
@@ -12,7 +24,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { unresolvableCursor } from '../common/cursor';
-import { canonicalId, sameId } from '../common/identifiers';
+import { canonicalId, isUuid, sameId } from '../common/identifiers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   CurrentIdempotency,
@@ -32,7 +44,10 @@ import {
   SEARCH_MINIMUM,
   SearchPeopleDto,
 } from './dto/people.dto';
+import { ArchivePersonDto, LifecycleListDto } from './dto/lifecycle.dto';
 import { normalizeName } from './duplicate-matching';
+import { ABSENT_PEOPLE_PORT, type AbsentPeoplePort } from './person-archive.ports';
+import { PeopleLifecycleService } from './people.lifecycle.service';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
@@ -86,6 +101,9 @@ export class PeopleController {
     // The throttler's own store, so the church-wide count is cleared and bounded exactly
     // as the global limit is (decision 0303).
     @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
+    private readonly lifecycle: PeopleLifecycleService,
+    // Bound by `AbsentPeopleBindingModule`; absent, the list refuses (decision 0397).
+    @Optional() @Inject(ABSENT_PEOPLE_PORT) private readonly absent?: AbsentPeoplePort,
   ) {}
 
   /**
@@ -297,6 +315,96 @@ export class PeopleController {
   }
 
   /**
+   * People's *Absent 3+ Months* list (SKILL.md section 19, decision 0397): the current people
+   * of the actor's scope with an Absent mark and no Present mark in each of the last three
+   * finished months, on a roster or a checklist all month, and leading no Cell that met.
+   *
+   * **Read-only for whoever reads it.** A Full view leader reads their branch; the Admin's
+   * Archive is a separate route under `people.manage_lifecycle`. Here, before `:id`, so the
+   * literal segment is not taken for an identifier. Composed in `reporting` behind a port,
+   * because the marks and the Cells belong to modules that import this one.
+   */
+  @Get('absent')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async absentList(
+    @Query() query: LifecycleListDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ months: string[]; data: Record<string, unknown>[]; next_cursor: string | null }> {
+    if (this.absent === undefined) {
+      throw new InvariantViolationError(
+        'This deployment cannot list people absent three months: a port it needs is not bound.',
+        {},
+      );
+    }
+
+    const scope = await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
+    const page = await this.absent.absentPage(
+      scope,
+      query.limit ?? 50,
+      decodeRosterLikeCursor(query.cursor),
+    );
+
+    return {
+      months: page.months,
+      data: page.rows as unknown as Record<string, unknown>[],
+      next_cursor: encodeJsonCursor(page.nextCursor),
+    };
+  }
+
+  /**
+   * Everyone archived, newest first, for the Admin's *Archived* view (decision 0397, point 9).
+   * Guarded by the capability that restores them, because the view exists to restore from.
+   */
+  @Get('archived')
+  @RequiresCapability(Capability.PeopleManageLifecycle, { kind: 'actor' })
+  async archivedList(
+    @Query() query: LifecycleListDto,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const page = await this.lifecycle.archivedPage(
+      query.limit ?? 50,
+      decodeArchivedCursor(query.cursor),
+    );
+
+    return { data: page.rows, next_cursor: encodeJsonCursor(page.nextCursor) };
+  }
+
+  /**
+   * Archive a Person (SKILL.md sections 3 and 6, decision 0397). `people.manage_lifecycle`
+   * is Admin-only at Whole Church; the account-access decision additionally needs
+   * `accounts.manage`, which the service asks.
+   */
+  @Post(':id/archive')
+  @HttpCode(200)
+  @RequiresCapability(Capability.PeopleManageLifecycle, { kind: 'person', from: 'params.id' })
+  async archive(
+    @Param('id') id: string,
+    @Body() body: ArchivePersonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    // Returned unchanged: the service composed this body and recorded it inside the write's
+    // transaction (section 22).
+    return this.lifecycle.archive(
+      id,
+      { reason: body.reason, note: body.note, accountAccess: body.account_access },
+      actor,
+      claim,
+    );
+  }
+
+  /** Restore an archived Person to `CURRENT`, and nothing else (decision 0397, point 9). */
+  @Post(':id/restore')
+  @HttpCode(200)
+  @RequiresCapability(Capability.PeopleManageLifecycle, { kind: 'person', from: 'params.id' })
+  async restore(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.lifecycle.restore(id, actor, claim);
+  }
+
+  /**
    * The person's pastoral path, root first (section 8).
    *
    * **Guarded on the target, and that is what makes returning the whole chain
@@ -398,8 +506,9 @@ export class PeopleController {
     }
 
     // The guard has already established this person is within the actor's scope,
-    // so the full profile is what section 8 authorizes.
-    return fullProfile(person);
+    // so the full profile is what section 8 authorizes. `archived` is the page's read-only
+    // line for an archived person, null for a current one (decision 0397, point 10).
+    return { ...fullProfile(person), archived: await this.lifecycle.archivedLineOf(person.id) };
   }
 
   /**
@@ -726,6 +835,71 @@ function decodeCursor(value: string | undefined): SearchCursor | null {
   }
 
   throw unresolvableCursor();
+}
+
+/** The first-name keyset the Absent 3+ Months list pages by, opaque like every cursor here. */
+function decodeRosterLikeCursor(
+  value: string | undefined,
+): { firstName: string; lastName: string; memberId: string } | null {
+  const parsed = decodeJsonCursor(value);
+
+  if (parsed === null) {
+    return null;
+  }
+
+  if (
+    isStorableText(parsed.firstName) &&
+    isStorableText(parsed.lastName) &&
+    typeof parsed.memberId === 'string'
+  ) {
+    return parsed as { firstName: string; lastName: string; memberId: string };
+  }
+
+  throw unresolvableCursor();
+}
+
+/** The Archived view's keyset: the archive instant and the Person's identifier. */
+function decodeArchivedCursor(
+  value: string | undefined,
+): { archivedAt: string; id: string } | null {
+  const parsed = decodeJsonCursor(value);
+
+  if (parsed === null) {
+    return null;
+  }
+
+  if (
+    typeof parsed.archivedAt === 'string' &&
+    !Number.isNaN(Date.parse(parsed.archivedAt)) &&
+    typeof parsed.id === 'string' &&
+    isUuid(parsed.id)
+  ) {
+    return parsed as { archivedAt: string; id: string };
+  }
+
+  throw unresolvableCursor();
+}
+
+function decodeJsonCursor(value: string | undefined): Record<string, unknown> | null {
+  if (value === undefined || value === '') {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Falls through to the refusal, as `decodeCursor` does.
+  }
+
+  throw unresolvableCursor();
+}
+
+function encodeJsonCursor(cursor: object | null): string | null {
+  return cursor === null ? null : Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
 function encodeCursor(cursor: SearchCursor | null): string | null {

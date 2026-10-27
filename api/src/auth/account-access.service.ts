@@ -14,7 +14,8 @@ import { TokensService } from './tokens.service';
 
 import type { Actor } from './authorization/authorization.service';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { AccountStatus, AuditAction } from '../database/schema';
+import type { AccountStatus, AuditAction, Database } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 /** What both routes answer: the account's state after the change. */
 export type AccountAccessBody = {
@@ -122,22 +123,7 @@ export class AccountAccessService {
         });
       }
 
-      await trx
-        .updateTable('accounts')
-        .set({ status: 'DISABLED', updated_at: new Date() })
-        .where('id', '=', accountId)
-        .execute();
-
-      await this.sessions.revokeAllSessionsWithin(trx, accountId);
-
-      await this.audit.writeWithin(trx, {
-        actorId: actor.accountId,
-        action: 'account.disabled',
-        targetType: 'account',
-        targetId: accountId,
-        before: { status: account.status },
-        after: { status: 'DISABLED' },
-      });
+      await this.writeDisabledWithin(trx, accountId, account.status, actor.accountId);
 
       const body: AccountAccessBody = { id: accountId, status: 'DISABLED' };
 
@@ -145,6 +131,60 @@ export class AccountAccessService {
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body });
 
       return body;
+    });
+  }
+
+  /**
+   * Disables an account inside the caller's transaction, for an archive that chose
+   * *Disable account access* (SKILL.md section 6, decision 0397). The locks are taken in
+   * `disable`'s order, tokens then the account row, and an account already disabled is left
+   * as it is: the archive offers the choice only for one that is not.
+   *
+   * No self-refusal here: the archive itself refuses the actor's own Person.
+   */
+  async disableWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+    actorAccountId: string,
+  ): Promise<void> {
+    await this.accountTokens.supersedeAllWithin(trx, accountId);
+
+    const account = await trx
+      .selectFrom('accounts')
+      .select(['id', 'status'])
+      .where('id', '=', accountId)
+      .forNoKeyUpdate()
+      .executeTakeFirst();
+
+    if (!account || account.status === 'DISABLED') {
+      return;
+    }
+
+    await this.writeDisabledWithin(trx, accountId, account.status, actorAccountId);
+  }
+
+  /** The write and the audit entry both disabling paths share. */
+  private async writeDisabledWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+    status: AccountStatus,
+    actorAccountId: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('accounts')
+      .set({ status: 'DISABLED', updated_at: new Date() })
+      .where('id', '=', accountId)
+      .execute();
+
+    await this.sessions.revokeAllSessionsWithin(trx, accountId);
+
+    await this.audit.writeWithin(trx, {
+      actorId: actorAccountId,
+      action: 'account.disabled',
+      targetType: 'account',
+      targetId: accountId,
+      before: { status },
+      after: { status: 'DISABLED' },
     });
   }
 

@@ -96,7 +96,7 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
 
     await db
       .insertInto('person_lifecycle')
-      .values({ person_id: person.id, state: 'ARCHIVED', started_at: at })
+      .values({ person_id: person.id, state: 'ARCHIVED', reason: 'MOVED_AWAY', started_at: at })
       .execute();
   };
 
