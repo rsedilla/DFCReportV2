@@ -167,6 +167,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
   const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const [pending, setPending] = useState<PersonEdit | null>(null);
+  // One key for the answer to each question, so pressing "save anyway" again after a lost
+  // response replays the save rather than making it twice (section 23).
+  const [answerKey, setAnswerKey] = useState(() => crypto.randomUUID());
 
   const save = useMutation({
     // The key travels with the attempt, as on Add Person: a resubmission past a duplicate
@@ -186,7 +189,13 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     onError: (error) => {
       if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
         setCandidates((error.details.candidates as DuplicateCandidate[]) ?? []);
+        setAnswerKey(crypto.randomUUID());
         setFailure(null);
+        return;
+      }
+      // The question screen has no fields to name, so a failed "save anyway" is said there.
+      if (candidates) {
+        setFailure(describeFailure(error));
         return;
       }
       const next: Record<string, string | null> = {};
@@ -287,19 +296,27 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
           ))}
         </ul>
 
+        {failure ? (
+          <div className="mt-6">
+            <FailureNotice failure={failure} />
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-wrap gap-3">
           <Button
             disabled={save.isPending}
             onClick={() => {
-              // Union, not replace, as on Add Person; and a new key, because this body differs
-              // from the one the question was stored against.
+              // Union, not replace, as on Add Person; and the answer's own key, because this
+              // body differs from the one the question was stored against.
               const union = Array.from(
                 new Set([...acknowledged, ...candidates.map((candidate) => candidate.id)]),
               );
               setAcknowledged(union);
-              const key = crypto.randomUUID();
-              setWriteKey(key);
-              save.mutate({ changes: { ...pending, acknowledged_duplicate_ids: union }, key });
+              setFailure(null);
+              save.mutate({
+                changes: { ...pending, acknowledged_duplicate_ids: union },
+                key: answerKey,
+              });
             }}
           >
             {save.isPending ? 'Saving…' : 'These are different people — save anyway'}

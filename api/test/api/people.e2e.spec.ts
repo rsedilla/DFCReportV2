@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import { PeopleService } from '../../src/people/people.service';
+import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -1109,6 +1111,70 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         birth_date: '1985-06-15',
       });
       expect(saved.status).toBe(200);
+    });
+
+    it('lists only the candidates still owed, never the person being edited', async () => {
+      // Pablo becomes a second Manuel; then editing Manuel himself, who matches himself on
+      // every field, is asked about Pablo and about nobody else.
+      const id = await pablo();
+      await edit(raymondAccount, id, {
+        first_name: 'Manuel',
+        birth_date: '1985-06-15',
+        acknowledged_duplicate_ids: [manuel.id],
+      }).expect(200);
+
+      const refused = await edit(raymondAccount, manuel.id, { middle_name: 'Quinto' });
+      expect(refused.status).toBe(409);
+      const candidates = refused.body.error.details.candidates as { id: string }[];
+      expect(candidates.map((candidate) => candidate.id)).toEqual([id]);
+    });
+
+    it('refuses to save past a check made on values a concurrent edit has since replaced', async () => {
+      // The check runs before the write's lock. A holder renames Pablo to a Tier 1 match for
+      // Manuel and holds the row; this edit is checked against "Pablo", then waits on the row,
+      // and must not save over a name its check never saw.
+      const id = await pablo();
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query(
+          `UPDATE persons SET first_name = 'Manuel', birth_date = '1985-06-15' WHERE id = $1`,
+          [id],
+        );
+
+        const attempt = edit(raymondAccount, id, { mobile_number: '09171234567' });
+        const inFlight = track(attempt);
+
+        await countWhileInFlight(
+          async () => {
+            const { rows } = await holder.query<{ count: string }>(
+              `SELECT count(*) AS count FROM pg_locks
+                WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+            );
+            return Number(rows[0].count);
+          },
+          inFlight,
+          'the edit to wait on the person row',
+        );
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        const stored = await db
+          .selectFrom('persons')
+          .select('mobile_number')
+          .where('id', '=', id)
+          .executeTakeFirstOrThrow();
+        expect(stored.mobile_number).toBeNull();
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
     });
   });
   describe('the pastoral path (SKILL.md section 8)', () => {

@@ -23,9 +23,10 @@ not checked, and the same values sent back unchanged are not a change. A Tier 1 
 editor may not see does not gate, as on creation: the refusal would ask them to acknowledge
 somebody they cannot be shown, and its answer would vary with a birthday Section 8 protects.
 
-**4. Recorded.** The candidates passed over are written into the `person.updated` audit entry,
-as creation writes them into `person.created`: only those this check found, and always written,
-so an empty list says none was needed.
+**4. Recorded.** The candidates passed over are written into the `person.updated` audit entry:
+only the acknowledged ids that were candidates this check found, and always written, so an empty
+list says none was needed. Creation writes the acknowledged ids it was sent into
+`person.created` as they came; that is unchanged here.
 
 **5. A pair already confirmed as different people is asked about again** on a later edit to a
 name, birthday or mobile number (owner, 2026-10-27, chosen over remembering the answer for the
