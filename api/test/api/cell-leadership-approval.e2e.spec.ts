@@ -126,7 +126,7 @@ describe('Cell leadership approval (section 10)', () => {
     prospective_leader_id: prospectiveLeaderId,
     category: 'YOUTH',
     day_of_week: 6,
-    time_of_day: '18:00',
+    time_of_day: '16:00',
     members,
   });
 
@@ -771,7 +771,8 @@ describe('Cell leadership approval (section 10)', () => {
       // Juan is given a Cell of his own first, so that the handover below hands
       // `markCell` to somebody who is *already* a current Cell Leader. A conditional
       // implementation writes nothing in this state; section 10 requires the entry.
-      await createCell(db, { leader: juan });
+      // On a Tuesday, so it is no clash with the Saturday Cell he takes (decision 0392).
+      await createCell(db, { leader: juan, dayOfWeek: 2 });
 
       const requestId = await pendingHandover(markAccount, juan.id, markCell.id);
       await approve(admin, requestId).expect(200);

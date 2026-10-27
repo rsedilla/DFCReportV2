@@ -16,6 +16,7 @@ import {
   provisionAccount,
   resendActivation,
   resetSecondStep,
+  sendPasswordReset,
   setAccountAccess,
   setApprovesCells,
   setMovesPeople,
@@ -34,8 +35,8 @@ import { describeFailure, fieldErrorFor } from '@/lib/messages';
  * `accounts.manage`; the API checks it on every request.
  *
  * Giving an account, resending its activation email, correcting a mistyped address
- * before activation (decision 0300), and disabling and re-enabling it (decision 0307) are
- * what the pilot's setup needs. Changing a role or a grant is not offered: no route exists
+ * before activation (decision 0300), sending a password reset to one in use (decision 0393),
+ * and disabling and re-enabling it (decision 0307) are what the pilot's setup needs. Changing a role or a grant is not offered: no route exists
  * for either.
  */
 export function PersonAccount({
@@ -268,6 +269,9 @@ export function PersonAccount({
               ) : null}
             </>
           ) : null}
+          {current.status === 'ACTIVE' ? (
+            <PasswordResetRow accountId={current.id} firstName={firstName} email={current.email} />
+          ) : null}
           <AccessRow
             accountId={current.id}
             personId={personId}
@@ -339,6 +343,51 @@ export function PersonAccount({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * A password reset link for somebody who cannot sign in, sent to the account's own address
+ * (SKILL.md section 6, decision 0393). The administrator never sees or chooses the password.
+ * Sent at once rather than asked first: it changes nothing until the holder uses the link.
+ */
+function PasswordResetRow({
+  accountId,
+  firstName,
+  email,
+}: {
+  accountId: string;
+  firstName: string;
+  email: string;
+}) {
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
+  const send = useMutation({
+    mutationFn: () => sendPasswordReset(accountId, key),
+    onSuccess: () => setKey(crypto.randomUUID()),
+  });
+
+  return (
+    <div className="mt-3">
+      <FailureNotice failure={send.isError ? describeFailure(send.error) : null} />
+      <Button
+        className="mt-1"
+        variant="secondary"
+        disabled={send.isPending}
+        onClick={() => send.mutate()}
+      >
+        {send.isPending ? 'Sending…' : 'Send a password reset email'}
+      </Button>
+      {send.isSuccess ? (
+        <p aria-live="polite" className="mt-2 text-sm font-medium">
+          Sent to {email}. The link lasts 30 minutes.
+        </p>
+      ) : null}
+      <p className="text-muted mt-2 text-sm leading-relaxed">
+        For someone who cannot sign in. It emails {firstName} a link to choose a new password, at{' '}
+        {email}. You never see or choose the password, and the link lasts 30 minutes.
+      </p>
+    </div>
   );
 }
 

@@ -75,4 +75,4 @@ outside their scope.
 Decision 0394, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Sections 14 and 22.
 
-Previous: [2026-10-26 — One refusal for anybody outside your scope](0390-one-refusal-for-anybody-outside-your-scope.md)
+Previous: [2026-10-27 — An administrator sends a password reset to an account in use](0393-an-administrator-sends-a-password-reset.md)

@@ -1400,14 +1400,23 @@ person's this way.
 - Invalidate token after use
 - Do not let admins know or choose another user's password
 
-**That last rule is not exempted on a development machine, and the development email
+**An administrator may send the holder of an account in use a reset link** (decision 0393). On
+the person page of an `ACTIVE` account, under `accounts.manage` against the Account, *Send a
+password reset email* mints the same reset token the forgot-password page does and emails it to
+the address already on the account, so the holder still chooses their own password and the
+administrator learns nothing they could sign in with. It allows 5 a minute, as asking for a reset does. It is refused for an account awaiting
+activation, which is sent its activation email again instead, and for a disabled one, which is
+re-enabled first. Sending is audited as `account.password_reset_sent`; using the link is still
+`password.reset`. It moves no address: where a reset link goes is the account's own email.
+
+**The rule that an administrator may not know or choose another user's password is not exempted on a development machine, and the development email
 transport is what it binds to** (ruling of 2026-09-11). That transport writes each message
 to a directory. It writes an **activation** token and **withholds a password-reset** one,
 recording the message without it.
 
 The distinction is not a matter of degree. An activation credential belongs to an account
 nobody has used; a reset credential takes over an account somebody is using, which is what
-the sentence above is about. The transport was justified by the first and never by the
+that rule is about. The transport was justified by the first and never by the
 second — it exists because a provisioned account cannot otherwise be activated at all — so
 withholding the reset token costs it nothing it was built for. The trade this section makes
 for `bootstrap:admin`, which prints its activation token, carries for the same reason and
@@ -1417,8 +1426,8 @@ stops at the same place: there the operator *is* the holder.
 was false.** It held that the operator already had the token anyway — that `account_tokens`
 was one query away and the service would mint either token on request. Neither is true.
 That table stores a SHA-256 digest and the schema says in terms that the token itself is
-never stored; of the four sites that mint one, three hand it only to this transport and the
-fourth refuses while any account exists. This section already said so where it introduces
+never stored; every site that mints one hands it only to this transport, except the
+bootstrap command, which refuses while any account exists. This section already said so where it introduces
 the transport: the token is stored only as a hash, *so there is no way back*. The outbox
 exists **because** the database yields nothing, and the amendment argued it was redundant
 **because** the database yields everything.
@@ -2678,6 +2687,17 @@ An earlier draft made the trigger advisory, on the reasoning that it could not s
 
 Changing a Cell's schedule is governed by `cell.manage_configuration` (Section 7), and is audited as a category change is.
 
+### One leader's Cells start at least two hours apart
+
+**Two Cells led by one person never start less than two hours apart** (ruling of 2026-10-26, decision 0392). One leader cannot be at two Cell meetings at once, and the owner found one leader on live leading a Cell on Sunday at 12:00 and another at 12:15.
+
+- **What is compared.** The leader's `ACTIVE` Cells, by every schedule row not yet over: the day and time in force and a change waiting for next month (Schedule changes, above) both count. So do the leader's `PENDING` requests: a new-Cell request, a restart included, by the day and time it asks for, and a handover by the schedule rows of the Cell it hands over. A closed Cell and a declined or approved request do not count.
+- **How it is measured.** By day of week and start time, to the second, around the week, so the distance wraps past midnight and past the week's end: Saturday 23:00 and Sunday 00:30 are ninety minutes apart and clash. Two hours exactly is allowed.
+- **Where it is checked.** When a new-Cell request is sent and again when it is approved, a restart being one; when a handover is requested and approved, comparing the Cell's schedule against the incoming leader's; when a Cell's day or time changes, against its leader's other Cells; and when Admin creates a Cell directly. Each takes the leader's person lock first (Section 5), so two writes for one leader are decided one after the other.
+- **No exception.** Not for Admin, and not for somebody else running one of the meetings: a Cell's leader is the person responsible for it.
+- **The refusal names what the asker may see** (owner, 2026-10-26). It answers `INVARIANT_VIOLATION`, and its `details.clashes` names each Cell or request it clashes with, by its Cell ID where it has one, its category, day and time, where the asker may see it: a Cell, or a pending handover of one, where their `cell.view_subtree` covers its current leader, and a pending new-Cell request where they sent it or approve Cells church-wide. Anything else is said to exist and never named, with `details.others` true, because Section 8 withholds a Cell outside the reader's scope.
+- **Existing clashes stay as they are.** Nothing that already clashes stops working, and nothing already recorded changes. Admin is shown them on the Cells page, under **Same Leader, Same Time**, through `GET /api/v1/cells/schedule-clashes` under `cell.manage_lifecycle` at Whole Church, by the times in force now and in first-name order. That route is not paged, an exception to Section 22's cursor rule: it holds one row per leader with a clash, and the rule keeps the list from growing. Admin fixes each by changing a day or time or by handing a Cell to the person who really leads it. A clash is only ever reached that way from data entered before this rule.
+
 ### Creating a Cell
 
 A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **an approver of that branch, or Admin, approves** (decision 0352). **No actor may approve a request they submitted.**
@@ -3350,6 +3370,12 @@ leader said nothing about. Nothing distinguishes the two in any figure this syst
 — both bucket views count attendees — which is why the rule is about what a leader
 **declares** and is enforced at the submission rather than derived from a total.
 
+**On the recording screen, one button marks the rest Absent once the leader has marked who
+came** (decision 0395). It is offered only once at least one member is marked, names how many
+it will mark, marks only members nobody has marked, and is the leader's own press: nobody
+starts as Absent, and Save waits until every member is marked. The DCC checklist has no such
+button, because it saves only the lines that are marked.
+
 **The roster carries each member's recorded mark, or null where they have none** (ruling
 of 2026-09-09). A `HELD` submission requires the whole roster — every member, present or
 not, on the rule stated in its own right above and on Section 14's "a correction is an
@@ -3370,6 +3396,15 @@ may not change.* They are read under `cell.take_attendance`, the route's own
 declaration (ruling of 2026-09-15). It is decision 0194's
 rule for the DCC roster — a leader marking a checklist must see who is already marked —
 applied to the domain that asks for more, not a new one.
+
+**A member added after the meeting was recorded is asked about, not called not marked** (ruling
+of 2026-10-26, decision 0391). The roster stays everyone in the Cell on the meeting's date, so
+somebody added that evening, after the leader saved, is on it with no mark. Each roster member
+carries `joined_after_recorded`: true where the membership's `started_at` is later than the
+meeting's first `submitted_at`. It is a reading aid and moves no roster, mark or figure. While such a
+member has no mark, the screen counts them as "added after it was recorded", asks whether they came,
+and tells the reader to press Edit meeting wherever that button is offered. A membership backdated before the
+record, or added in the instant of the first save, is not flagged and reads as before.
 
 **The mark carries no per-person version**, which is where a copy of the DCC line would
 have gone wrong: a Cell submission carries **the meeting's** version and the server compares
@@ -4242,7 +4277,7 @@ Admin focuses on platform operations:
 - **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
-- Accounts — given, their activation email resent, and disabled or re-enabled, from the person's page, where the section shows only to a holder of `accounts.manage` (decisions 0276 and 0307)
+- Accounts — given, their activation email resent, a password reset sent to one in use, and disabled or re-enabled, from the person's page, where the section shows only to a holder of `accounts.manage` (decisions 0276, 0307 and 0393)
 - Roles & Permissions
 - Audit Logs
 - System Settings
@@ -4594,6 +4629,7 @@ Audit important actions, including:
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
+- A password reset sent to an account in use by an administrator (decision 0393)
 - A username set or changed, with the old and the new (decision 0337)
 - A password changed by its holder while signed in (decision 0351)
 - Second sign-in step set up or reset, and a recovery code used
@@ -4714,6 +4750,7 @@ GET  /api/v1/auth/me
 GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles, email and username; `accounts.manage` (decisions 0276 and 0337)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
+POST /api/v1/accounts/{id}/password-reset-email   a reset link to an account in use, at its own address; `accounts.manage` (decision 0393)
 POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)
 POST /api/v1/accounts/{id}/reactivate    re-enables a disabled account; `accounts.manage` (decision 0307)
 
@@ -5253,7 +5290,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Database not publicly exposed
 - Input validation
 - Parameterized queries / safe ORM usage
-- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
+- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset, or an administrator sending one (decision 0393), allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
 - CORS restrictions
 - Secure secrets/environment handling
 - Automated backups, daily at minimum, with at least 30 days of retention

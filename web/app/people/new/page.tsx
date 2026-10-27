@@ -20,6 +20,7 @@ import { ApiRequestError } from '@/lib/api-client';
 import { addCellMember, cellShortName, type CellSummary, membershipFailure } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
 import { getMe, holdsWholeChurch } from '@/lib/me';
+import { formatMobile } from '@/lib/mobile';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -505,6 +506,13 @@ function NewPersonForm() {
             disabled={notGiven.mobile_number}
             error={fieldErrors.mobile_number ?? fieldErrors.mobile_number_not_given}
             onChange={(event) => set('mobile_number', event.target.value)}
+            // Written with hyphens as the box is left (lib/mobile.ts), so it is seen before saving.
+            onBlur={(event) => {
+              const next = formatMobile(event.target.value);
+              if (next !== event.target.value) {
+                set('mobile_number', next);
+              }
+            }}
           />
           {notGiven.mobile_number || values.mobile_number.trim() === '' ? (
             <NotGivenTick

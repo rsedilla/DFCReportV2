@@ -907,9 +907,29 @@ export async function mockRecordedMeetingRoster(
     weekOpen = true,
     version = 3,
     secondPresent = false,
-  }: { weekOpen?: boolean; version?: number; secondPresent?: boolean } = {},
+    joinedAfter = false,
+  }: {
+    weekOpen?: boolean;
+    version?: number;
+    secondPresent?: boolean;
+    /** A third member, added to the Cell after the meeting was recorded and unmarked. */
+    joinedAfter?: boolean;
+  } = {},
 ): Promise<void> {
   const held = status === 'HELD';
+  const late = joinedAfter
+    ? [
+        {
+          person_id: '3f1b7c6e-0000-4000-8000-000000000603',
+          member_id: 'M-000703',
+          first_name: 'Marco',
+          last_name: 'Dizon',
+          full_name: 'Marco Dizon',
+          record: null,
+          joined_after_recorded: true,
+        },
+      ]
+    : [];
 
   await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
     route.fulfill(
@@ -956,6 +976,7 @@ export async function mockRecordedMeetingRoster(
             full_name: 'Bienvenido Trinidad',
             record: held ? { present: secondPresent } : null,
           },
+          ...late,
         ],
       }),
     ),

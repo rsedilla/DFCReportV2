@@ -680,5 +680,67 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(3);
     await expect(dialog.getByRole('button', { name: 'Choose CELL-000007' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` })).toHaveCount(1);
+    // ...and says it is listed above (owner, 2026-10-26).
+    await expect(
+      dialog.getByText(`${leaderCell.leader.full_name}’s Cell Group is listed above.`),
+    ).toBeVisible();
+  });
+
+  // Owner, 2026-10-26: their leader's Cell was listed but plain, so a leader searched the
+  // leader's name and was told no Cell matched, because the search leaves that Cell out.
+  test('a search finding only the leader’s Cell says it is listed above, and points to it', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockPersonCells(page, { membership: null, leads: [] });
+    await mockCellChoices(page);
+    const leaderCell = CELL_CHOICES[1];
+    await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            {
+              id: leaderCell.leader.person_id,
+              member_id: leaderCell.leader.member_id,
+              full_name: leaderCell.leader.full_name,
+              network_root: true,
+            },
+            {
+              id: PERSON_IN_SCOPE.id,
+              member_id: PERSON_IN_SCOPE.member_id,
+              full_name: PERSON_IN_SCOPE.full_name,
+              network_root: false,
+            },
+          ],
+          next_cursor: null,
+        }),
+      }),
+    );
+
+    await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
+    await page.getByRole('button', { name: 'Add to a Cell' }).click();
+    const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
+
+    // Set apart: a filled Choose, not the outlined one a search result carries.
+    const choose = dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` });
+    await expect(choose).toBeVisible();
+    const filled = await choose.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await searchCells(dialog, 'CELL-000007');
+    const other = dialog.getByRole('button', { name: 'Choose CELL-000007' });
+    await expect(other).toBeVisible();
+    expect(await other.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(filled);
+
+    await searchCells(dialog, leaderCell.cell_id);
+    await expect(dialog.getByText(/No Cell you oversee matches/)).toHaveCount(0);
+    await expect(
+      dialog.getByText(`${leaderCell.leader.full_name}’s Cell Group is listed above.`),
+    ).toBeVisible();
+    await expect(choose).toHaveCount(1);
+
+    await dialog.getByRole('button', { name: 'Show it' }).click();
+    await expect(choose).toBeFocused();
   });
 });

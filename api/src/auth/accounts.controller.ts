@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { Capability } from './authorization/capabilities';
 import { RequiresCapability } from './authorization/authorization.decorators';
@@ -8,6 +9,7 @@ import {
 } from '../common/idempotency/current-idempotency.decorator';
 import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
+import { CredentialsService } from './credentials.service';
 import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
 import {
@@ -35,6 +37,7 @@ export class AccountsController {
     private readonly provisioning: AccountProvisioningService,
     private readonly secondSteps: SecondStepService,
     private readonly access: AccountAccessService,
+    private readonly credentials: CredentialsService,
   ) {}
 
   /**
@@ -88,6 +91,23 @@ export class AccountsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
     await this.provisioning.resendActivation(id, actor, claim);
+  }
+
+  /**
+   * Sends a password reset link to an account in use, at the account's own address
+   * (section 6, decision 0393). Guarded like the re-send, against the Account.
+   */
+  @Post(':id/password-reset-email')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  // As tight as forgot-password, since each request emails somebody else (section 24).
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
+  async sendPasswordReset(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<void> {
+    await this.credentials.sendResetByAdministrator(id, actor, claim);
   }
 
   /**

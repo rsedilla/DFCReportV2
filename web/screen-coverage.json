@@ -176,6 +176,10 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/password-reset-email",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "POST /api/v1/accounts/:id/email",
       "screen": "web/components/person-account.tsx"
     },
@@ -255,6 +259,11 @@
     {
       "route": "GET /api/v1/cells/counts",
       "screen": "web/app/cells/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/cells/schedule-clashes",
+      "screen": "web/components/schedule-clashes.tsx",
+      "note": "Cells' Same Leader, Same Time tab, the administrator's (decision 0392)."
     },
     {
       "route": "GET /api/v1/cells/people-without-a-cell",

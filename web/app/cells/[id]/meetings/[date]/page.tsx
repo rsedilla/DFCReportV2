@@ -55,6 +55,12 @@ import { TextLink } from '@/components/ui/text-link';
  * nobody made — which on a correction would silently overwrite the marks the leader
  * came here to keep.
  *
+ * **The rest are marked Absent by one button the leader presses** (decision 0395). It is
+ * offered only once at least one member is marked; then "Mark the other 4 Absent" marks
+ * every member still unmarked, and says how many, so a count larger than expected shows
+ * somebody was missed. Save still waits until every member is marked, so every Absent is
+ * one the leader chose.
+ *
  * **A meeting whose day has not come offers no record.** Decision 0238 refuses one
  * before the day begins in Manila, so the screen says "Not yet" rather than offering a
  * Save the API would refuse.
@@ -501,6 +507,14 @@ function RecordMeeting() {
       unmarked.length === 1 ? '1 member still to mark.' : `${unmarked.length} members still to mark.`;
   }
 
+  // The members nobody has marked, marked Absent in one press (decision 0395). Offered only
+  // once at least one member is marked, so it is never the first thing pressed and its count
+  // is always of the rest: a larger count than expected shows somebody was missed.
+  const restAbsentLabel =
+    unmarked.length === 1 ? 'Mark the 1 left Absent' : `Mark the other ${unmarked.length} Absent`;
+  const offerRestAbsent =
+    status !== 'NOT_HELD' && unmarked.length > 0 && unmarked.length < members.length;
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="record">
@@ -643,6 +657,10 @@ function RecordMeeting() {
                       <p className="text-muted mt-1 text-sm">
                         {recordedSummary(recorded, members)}
                       </p>
+                      <JoinedAfter
+                        members={members}
+                        mayEdit={!weekClosed && !followOnly && canCorrect}
+                      />
                     </>
                   )}
                   {weekClosed ? (
@@ -835,12 +853,42 @@ function RecordMeeting() {
                 <FailureNotice failure={saveFailure} />
                 {reloadButton}
               </div>
-              <p aria-live="polite" className="text-sm">
+              <p id="save-hint" tabIndex={-1} aria-live="polite" className="text-sm">
                 {saveHint}
               </p>
               {/* One way back, the link at the top (owner's choice of 2026-10-05). */}
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                {offerRestAbsent ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    // Above Save on a phone, where the bar stacks in reverse; beside it from `sm`.
+                    className="order-last w-full sm:order-none sm:w-auto"
+                    onClick={() => {
+                      setEdits((current) => ({
+                        ...current,
+                        ...Object.fromEntries(
+                          unmarked.map((member) => [member.person_id, 'absent' as const]),
+                        ),
+                      }));
+                      // The button goes once nobody is left to mark, so focus moves on rather than
+                      // falling to the page (2.4.3): to Save, or, where Save still waits for
+                      // something, to the line saying what.
+                      requestAnimationFrame(() => {
+                        const saveButton = document.getElementById('save-meeting');
+                        if (saveButton instanceof HTMLButtonElement && !saveButton.disabled) {
+                          saveButton.focus();
+                        } else {
+                          document.getElementById('save-hint')?.focus();
+                        }
+                      });
+                    }}
+                  >
+                    {restAbsentLabel}
+                  </Button>
+                ) : null}
                 <Button
+                  id="save-meeting"
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => save.mutate()}
@@ -859,6 +907,40 @@ function RecordMeeting() {
       ) : null}
     </SectionFrame>
     </main>
+  );
+}
+
+/** Added to the Cell after the meeting was first recorded, and so far unmarked. */
+function joinedAfter(member: RosterMember): boolean {
+  return member.joined_after_recorded === true && member.record === null;
+}
+
+/**
+ * Asks whether people added to the Cell after the meeting was recorded came to it (decision
+ * 0391). The roster is everyone in the Cell on the meeting's date (section 12), so a
+ * person added that evening is on it with no mark; in G12 they usually came that night,
+ * which is why they were added. "Not marked" read as the leader having skipped them.
+ */
+function JoinedAfter({ members, mayEdit }: { members: RosterMember[]; mayEdit: boolean }) {
+  const late = members.filter(joinedAfter);
+  if (late.length === 0) {
+    return null;
+  }
+
+  const one = late.length === 1;
+  const names = late.map((member) => member.full_name);
+  const list = one
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+  return (
+    <p className="border-accent text-ink mt-3 rounded-md border-2 px-3 py-2 text-sm leading-relaxed">
+      <span className="font-bold">
+        {list} joined the Cell after this was recorded.
+      </span>{' '}
+      {one ? `Was ${late[0].first_name} at this meeting?` : 'Were they at this meeting?'}
+      {mayEdit ? (one ? ' Press Edit meeting to add a mark.' : ' Press Edit meeting to add their marks.') : ''}
+    </p>
   );
 }
 
@@ -884,7 +966,15 @@ function MemberMark({
         legend={member.full_name}
         // Kept until Save, so a first tap does not shift the rows beneath it; nothing is
         // recorded until then, as the DCC checklist says too.
-        description={note ? changedUnderNote(note) : recorded ? undefined : 'Not recorded yet'}
+        description={
+          note
+            ? changedUnderNote(note)
+            : recorded && joinedAfter(member)
+              ? 'Joined the Cell after this was recorded'
+              : recorded
+                ? undefined
+                : 'Not recorded yet'
+        }
         name={`member-${member.person_id}`}
         value={mark ?? ''}
         onChange={onChange}
@@ -958,8 +1048,12 @@ function recordedSummary(
 ): string {
   const present = members.filter((member) => member.record?.present === true).length;
   const absent = members.filter((member) => member.record?.present === false).length;
-  const unmarked = members.length - present - absent;
-  const counts = `${present} present, ${absent} absent${unmarked > 0 ? `, ${unmarked} not marked` : ''}`;
+  const late = members.filter(joinedAfter).length;
+  const unmarked = members.length - present - absent - late;
+  const counts =
+    `${present} present, ${absent} absent` +
+    (unmarked > 0 ? `, ${unmarked} not marked` : '') +
+    (late > 0 ? `, ${late} added after it was recorded` : '');
 
   if (recorded.submitted_at === null) {
     return counts;

@@ -215,7 +215,8 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
   it('lets one leader hold a second Cell', async () => {
     // Section 10 says in terms never to assume one Cell Leader means one Cell.
     await post(admin, body(mark.id)).expect(201);
-    await post(admin, { ...body(mark.id), category: 'YOUNG_PRO' }).expect(201);
+    // On another day, one leader's Cells starting two hours apart (decision 0392).
+    await post(admin, { ...body(mark.id), category: 'YOUNG_PRO', day_of_week: 3 }).expect(201);
 
     const led = await db
       .selectFrom('cell_leaderships')

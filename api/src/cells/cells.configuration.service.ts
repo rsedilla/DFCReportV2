@@ -10,14 +10,17 @@ import { Capability } from '../auth/authorization/capabilities';
 import {
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { sameId } from '../common/identifiers';
 import { manilaDayOf, startOfManilaDay, startOfNextManilaMonth } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
-import { boundLockWaitsWithin } from '../database/person-lock';
+import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 
 import { CellsReadService } from './cells.read.service';
+import { assertNoScheduleClashWithin, clashViewerFor } from './schedule-clash';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
@@ -197,8 +200,27 @@ export class CellsConfigurationService {
     const authority = await this.authorization.authorityFor(actor.accountId);
 
     return this.db.transaction().execute(async (trx) => {
+      // The leader's lock before the Cell's row lock, as section 5 orders them, so this and
+      // any other write for the same leader decide the two-hour rule one after the other
+      // (decision 0392). Whom to lock is read first and checked again under the locks.
+      const leaderBeforeLock = await this.cells.leaderForScopeWithin(trx, cellId);
+      await boundLockWaitsWithin(trx);
+      if (leaderBeforeLock !== null) {
+        await lockPersonsWithin(trx, [leaderBeforeLock]);
+      }
+
       const cell = await this.lockAndReadCellWithin(trx, cellId);
       await this.assertStillInScopeWithin(trx, actor, authority, cellId);
+
+      const leader = await this.cells.leaderForScopeWithin(trx, cellId);
+      if (leader === null || leaderBeforeLock === null || !sameId(leader, leaderBeforeLock)) {
+        // A handover committed between the read and the lock. The same body retried
+        // succeeds, so this is a stale premise rather than a refusal (section 22).
+        throw new ResourceBusyError(
+          { cell_id: cell.cell_id },
+          'This Cell changed hands while its schedule was being changed. Retry in a moment.',
+        );
+      }
 
       const current = await trx
         .selectFrom('cell_schedules')
@@ -223,6 +245,15 @@ export class CellsConfigurationService {
           { cell_id: cell.cell_id, day_of_week: dayOfWeek, time_of_day: timeOfDay },
         );
       }
+
+      // One leader's Cells start at least two hours apart (section 10, decision 0392),
+      // against the leader's other Cells and pending requests.
+      await assertNoScheduleClashWithin(trx, {
+        leaderId: leader,
+        slots: [{ dayOfWeek, timeOfDay }],
+        exceptCellId: cellId,
+        viewer: clashViewerFor(this.authorization, trx, actor, authority),
+      });
 
       const at = await this.nowWithin(trx);
 
@@ -410,9 +441,10 @@ export class CellsConfigurationService {
    * schedule row on a CLOSED Cell — the state section 10 now forbids. Unreachable
    * today, since no operation closes a Cell yet.
    *
-   * **It takes one row lock and no advisory locks**, so it raises none of the
-   * cross-class ordering question section 5 records as open — that section puts the
-   * demonstration burden on an operation needing both classes.
+   * **It takes one row lock.** A category change calls it holding nothing. A schedule change
+   * calls it holding the leader's person lock (decision 0392), which section 5 orders before
+   * any `cells` row lock, so that path takes both classes in the order every other writer
+   * does: the person, then the Cell.
    *
    * **Two earlier versions of this argument were over-broad and both are recorded.**
    * The first was "it takes its first lock while holding nothing", which is true of
@@ -422,18 +454,18 @@ export class CellsConfigurationService {
    * section 5 names in as many words and which any other write endpoint can hold
    * without ever touching `cells`.
    *
-   * The argument that holds is per-lock rather than general. This transaction takes
-   * three: the `cells` row, which it takes first while holding nothing; the
+   * The argument that holds is per-lock rather than general. Beyond a schedule change's
+   * person lock, taken before any other, this transaction takes three: the `cells` row; the
    * configuration rows, reachable only through the Cell it already holds; and the
    * idempotency key, last. A holder of that key row is at its own final statement —
    * section 22 requires the completion to be the last statement in the transaction —
    * so it wants nothing further and cannot be waiting on this one. A membership write
    * holds an advisory lock on a person and waits for `FOR SHARE` on this Cell at
-   * commit, and this service never wants a person lock, so those two wait rather than
-   * cycle. Adding a statement above the `cells` lock that takes a lock ends the first
-   * clause and the argument with it. The bound comes
-   * first because section 5 requires an operation taking row locks and no advisory
-   * locks to set it itself; `SET LOCAL` takes no locks, so it cannot be what waits.
+   * commit; this service takes a person lock only before its `cells` lock, never while
+   * holding one, so those two wait rather than cycle. Taking a lock after the `cells` lock
+   * that another writer takes before one would end that argument. The bound comes
+   * first because section 5 requires an operation taking row locks to set it itself where it
+   * may take no advisory lock; `SET LOCAL` takes no locks, so it cannot be what waits.
    */
   private async lockAndReadCellWithin(
     trx: Transaction<Database>,

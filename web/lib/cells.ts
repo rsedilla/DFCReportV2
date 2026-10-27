@@ -545,6 +545,32 @@ export async function peopleWithoutACell(
   );
 }
 
+/** One leader whose running Cells start less than two hours apart (decision 0392). */
+export interface ScheduleClash {
+  leader: { person_id: string; member_id: string | null; full_name: string };
+  /** The least distance between two of these Cells' starts. */
+  minutes_apart: number;
+  cells: {
+    cell_uuid: string;
+    cell_id: string;
+    category: CellCategory | null;
+    day_of_week: number;
+    time_of_day: string;
+  }[];
+}
+
+/**
+ * `GET /api/v1/cells/schedule-clashes`: Admin's list of leaders whose Cells start less than
+ * two hours apart, entered before the rule refused them (decision 0392). Not paged.
+ */
+export async function getScheduleClashes(signal?: AbortSignal): Promise<ScheduleClash[]> {
+  const body = await authenticatedRequest<{ data: ScheduleClash[] }>(
+    '/api/v1/cells/schedule-clashes',
+    { signal },
+  );
+  return body.data;
+}
+
 export async function listCells(
   params: {
     month: string;
@@ -704,6 +730,12 @@ export interface RosterMember {
    * screen shows "not recorded" and makes the leader choose.
    */
   record: { present: boolean } | null;
+  /**
+   * Added to the Cell after the meeting was first recorded (decision 0391), so the
+   * screen asks whether they came rather than calling them "not marked". Optional only
+   * so test fixtures written before it need not carry it.
+   */
+  joined_after_recorded?: boolean;
 }
 
 export interface MeetingRoster {

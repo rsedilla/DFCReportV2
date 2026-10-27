@@ -703,6 +703,48 @@ test.describe('a recorded Cell meeting', () => {
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
   });
 
+  // Decision 0391: somebody added to the Cell after the meeting was recorded was
+  // called "not marked", which read as the leader having skipped them.
+  test('asks whether a member added after it was recorded came, rather than calling them not marked', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText(/^First recorded on/)).toHaveText(
+      'First recorded on 27 Jun · 1 present, 1 absent, 1 added after it was recorded',
+    );
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting? Press Edit meeting to add a mark.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Joined the Cell after this was recorded', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/not marked/)).toHaveCount(0);
+  });
+
+  test('does not ask for an edit the closed week refuses', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { joinedAfter: true, weekOpen: false });
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText(
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting?',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Press Edit meeting/)).toHaveCount(0);
+  });
+
   test('corrects Did not meet to Met, with the whole roster and a reason', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellCorrector(page);
@@ -3393,5 +3435,206 @@ test.describe('Awaiting Leader Assignment for a reader who may not move people (
 
     await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
     await expect(page.getByText('A new leader is chosen by your Primary.')).toHaveCount(0);
+  });
+});
+
+// Decision 0395: once the leader has marked somebody, one button marks the rest Absent. It
+// names how many, leaves every mark made, and is the leader's own press: Save still waits.
+test.describe('marking the rest of a Cell meeting Absent', () => {
+  const PEOPLE = [
+    { id: '3f1b7c6e-0000-4000-8000-000000000611', first: 'Alma', last: 'Reyes' },
+    { id: '3f1b7c6e-0000-4000-8000-000000000612', first: 'Benito', last: 'Cruz' },
+    { id: '3f1b7c6e-0000-4000-8000-000000000613', first: 'Carla', last: 'Dizon' },
+  ];
+  const name = (index: number) => `${PEOPLE[index].first} ${PEOPLE[index].last}`;
+
+  /** A roster of three, recorded or not, with each member's stored mark. */
+  async function roster(
+    page: Page,
+    {
+      records = [null, null, null],
+      recorded = false,
+      weekOpen = true,
+      mayRecord = true,
+    }: {
+      records?: (boolean | null)[];
+      recorded?: boolean;
+      weekOpen?: boolean;
+      mayRecord?: boolean;
+    } = {},
+  ): Promise<void> {
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: mayRecord,
+          week_open: weekOpen,
+          meeting: recorded
+            ? {
+                id: '3f1b7c6e-0000-4000-8000-000000000301',
+                status: 'HELD',
+                scheduled_date: '2026-06-27',
+                scheduled_time: '19:00',
+                actual_date: null,
+                actual_time: null,
+                not_held_reason: null,
+                not_held_note: null,
+                facilitated_by: null,
+                responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+                submitted_by: '3f1b7c6e-0000-4000-8000-000000000299',
+                submitted_at: '2026-06-27T13:00:00.000Z',
+                version: 3,
+              }
+            : null,
+          members: PEOPLE.map((person, index) => ({
+            person_id: person.id,
+            member_id: `M-00090${index}`,
+            first_name: person.first,
+            last_name: person.last,
+            full_name: `${person.first} ${person.last}`,
+            record: records[index] === null ? null : { present: records[index] },
+          })),
+        }),
+      }),
+    );
+  }
+
+  const mark = (page: Page, index: number, which: 'Present' | 'Absent') =>
+    page.getByRole('group', { name: name(index) }).getByRole('radio', { name: which });
+
+  test('appears only after the first mark, names the rest, and marks only them', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await roster(page);
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+    const save = page.getByRole('button', { name: 'Save meeting' });
+    await expect(mark(page, 0, 'Present')).toBeVisible();
+    // Never the first thing a leader can press.
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+
+    await mark(page, 0, 'Present').check();
+    await expect(page.getByRole('button', { name: 'Mark the other 2 Absent' })).toBeVisible();
+    await mark(page, 1, 'Present').check();
+    await expect(save).toBeDisabled();
+    await page.getByRole('button', { name: 'Mark the 1 left Absent' }).click();
+
+    await expect(mark(page, 0, 'Present')).toBeChecked();
+    await expect(mark(page, 1, 'Present')).toBeChecked();
+    await expect(mark(page, 2, 'Absent')).toBeChecked();
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+    // The button is gone, so focus moves on to Save rather than falling to the page.
+    await expect(save).toBeEnabled();
+    await expect(save).toBeFocused();
+
+    await save.click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({
+      status: 'HELD',
+      attendance: [
+        { person_id: PEOPLE[0].id, present: true },
+        { person_id: PEOPLE[1].id, present: true },
+        { person_id: PEOPLE[2].id, present: false },
+      ],
+    });
+  });
+
+  test('moves focus to what Save waits for when Save is still not ready', async ({ page }) => {
+    await mockSignedIn(page);
+    await roster(page);
+
+    await page.goto(MEETING);
+    // Somebody else ran it and nobody is chosen yet, so Save waits for that.
+    await page.getByRole('radio', { name: 'Someone else' }).check();
+    await mark(page, 0, 'Present').check();
+    await page.getByRole('button', { name: 'Mark the other 2 Absent' }).click();
+
+    await expect(page.getByRole('button', { name: 'Save meeting' })).toBeDisabled();
+    await expect(page.getByText('Choose who ran it to save.')).toBeFocused();
+  });
+
+  test('a meeting nobody came to: mark one Absent, then the rest', async ({ page }) => {
+    await mockSignedIn(page);
+    await roster(page);
+
+    await page.goto(MEETING);
+    await mark(page, 1, 'Absent').check();
+    await page.getByRole('button', { name: 'Mark the other 2 Absent' }).click();
+    for (const index of [0, 1, 2]) {
+      await expect(mark(page, index, 'Absent')).toBeChecked();
+    }
+  });
+
+  test('on a correction, marks only a member with no mark and keeps the stored ones', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    // Alma came and Benito did not; Carla has no mark yet.
+    await roster(page, { recorded: true, records: [true, false, null] });
+
+    await page.goto(MEETING);
+    // Not being edited: nothing is offered.
+    await expect(page.getByText('Already recorded')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Mark the 1 left Absent' }).click();
+    await expect(mark(page, 0, 'Present')).toBeChecked();
+    await expect(mark(page, 1, 'Absent')).toBeChecked();
+    await expect(mark(page, 2, 'Absent')).toBeChecked();
+  });
+
+  test('is not offered where nothing can be recorded, nor on Did not meet', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+
+    // A closed week, and another leader's meeting, each with somebody unmarked.
+    await roster(page, { recorded: true, records: [true, null, null], weekOpen: false });
+    await page.goto(MEETING);
+    await expect(mark(page, 0, 'Present')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await roster(page, { recorded: true, records: [true, null, null], mayRecord: false });
+    await page.goto(MEETING);
+    await expect(mark(page, 0, 'Present')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+
+    await page.unroute('**/api/v1/cells/*/meetings/*/roster');
+    await roster(page);
+    await page.goto(MEETING);
+    await mark(page, 0, 'Present').check();
+    await expect(page.getByRole('button', { name: 'Mark the other 2 Absent' })).toBeVisible();
+    await page.getByRole('radio', { name: 'Did not meet' }).check();
+    await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
+  });
+
+  test('sits above Save on a phone and beside it from sm', async ({ page }) => {
+    await mockSignedIn(page);
+    await roster(page);
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(MEETING);
+    await mark(page, 0, 'Present').check();
+    const rest = page.getByRole('button', { name: 'Mark the other 2 Absent' });
+    const save = page.getByRole('button', { name: 'Save meeting' });
+    const phone = { rest: await rest.boundingBox(), save: await save.boundingBox() };
+    expect(phone.rest!.y).toBeLessThan(phone.save!.y);
+
+    await page.setViewportSize({ width: 1024, height: 900 });
+    const wide = { rest: await rest.boundingBox(), save: await save.boundingBox() };
+    expect(wide.rest!.x).toBeLessThan(wide.save!.x);
   });
 });
