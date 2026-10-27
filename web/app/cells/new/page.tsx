@@ -86,8 +86,6 @@ function NewCellForm() {
           }
         }}
       >
-        <FailureNotice failure={create.isError ? describeFailure(create.error) : null} />
-
         <PersonPicker
           legend="Cell Leader"
           description="The person who will lead it. Its members must be in the same Network as them."
@@ -134,6 +132,10 @@ function NewCellForm() {
             onChange={(event) => setTime(event.target.value)}
           />
         </div>
+
+        {/* Beside Create Cell, where it is seen on a phone: a refusal names what to change,
+            such as a time too close to another of the leader's Cells (decision 0392). */}
+        <FailureNotice failure={create.isError ? describeFailure(create.error) : null} />
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button type="submit" disabled={!ready || create.isPending}>

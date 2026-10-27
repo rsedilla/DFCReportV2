@@ -115,7 +115,7 @@ describe('Cell leadership requests (section 10)', () => {
     prospective_leader_id: prospectiveLeaderId,
     category: 'YOUTH',
     day_of_week: 6,
-    time_of_day: '18:00',
+    time_of_day: '16:00',
     members,
   });
 
@@ -365,7 +365,7 @@ describe('Cell leadership requests (section 10)', () => {
             prospectiveLeaderId: mark.id.toUpperCase(),
             category: 'YOUTH',
             dayOfWeek: 6,
-            timeOfDay: '18:00',
+            timeOfDay: '16:00',
           },
           actor,
           claim as never,
@@ -645,7 +645,7 @@ describe('Cell leadership requests (section 10)', () => {
             requested_by: markAccount.id,
             category: 'YOUTH' as const,
             day_of_week: 6,
-            time_of_day: '18:00',
+            time_of_day: '16:00',
             requested_at: at,
           })
           .execute();
