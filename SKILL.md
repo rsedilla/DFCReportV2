@@ -3370,6 +3370,12 @@ leader said nothing about. Nothing distinguishes the two in any figure this syst
 — both bucket views count attendees — which is why the rule is about what a leader
 **declares** and is enforced at the submission rather than derived from a total.
 
+**On the recording screen, one button marks the rest Absent once the leader has marked who
+came** (decision 0395). It is offered only once at least one member is marked, names how many
+it will mark, marks only members nobody has marked, and is the leader's own press: nobody
+starts as Absent, and Save waits until every member is marked. The DCC checklist has no such
+button, because it saves only the lines that are marked.
+
 **The roster carries each member's recorded mark, or null where they have none** (ruling
 of 2026-09-09). A `HELD` submission requires the whole roster — every member, present or
 not, on the rule stated in its own right above and on Section 14's "a correction is an
