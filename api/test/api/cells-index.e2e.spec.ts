@@ -666,6 +666,40 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(seen).toEqual([manuelCell.id, markCell.id, nathanCell.id].sort());
   });
 
+  it('lists the reader’s own Cells first, then the rest, across pages (decision 0400)', async () => {
+    // Created last, so its Cell ID sorts after Mark's and Nathan's: Cell ID order alone would
+    // put it at the end, where a leader overseeing many pages would not find it.
+    const second = await createCell(db, { leader: manuel, dayOfWeek: 3, createdAt: CREATED });
+
+    const whole = await list(manuelAccount);
+    expect((whole.body.data as { id: string }[]).map((row) => row.id)).toEqual([
+      manuelCell.id,
+      second.id,
+      markCell.id,
+      nathanCell.id,
+    ]);
+
+    // One a page, so a cursor is issued inside the own part, across its end, and after it.
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: request.Response = await list(manuelAccount, {
+        limit: 1,
+        ...(cursor === null ? {} : { cursor }),
+      });
+      expect(page.status).toBe(200);
+      seen.push(...(page.body.data as { id: string }[]).map((row) => row.id));
+      cursor = page.body.next_cursor as string | null;
+    } while (cursor !== null);
+    expect(seen).toEqual([manuelCell.id, second.id, markCell.id, nathanCell.id]);
+
+    // A reader who leads none of them keeps Cell ID order.
+    const asAdmin = await list(admin);
+    expect((asAdmin.body.data as { cell_id: string }[]).map((row) => row.cell_id)).toEqual(
+      (asAdmin.body.data as { cell_id: string }[]).map((row) => row.cell_id).sort(),
+    );
+  });
+
   it('refuses a cursor it cannot read rather than restarting the collection', async () => {
     // Section 22, ruling of 2026-08-31. A client sends a cursor because it already holds
     // a page; handed the first page again under a 200 it appends rows it already has.

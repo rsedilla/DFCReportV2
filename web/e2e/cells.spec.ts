@@ -5,6 +5,7 @@ import {
   CREATED_CELL,
   MEMBER_CHOICES,
   PERSON_IN_SCOPE,
+  SIGNED_IN_PERSON_ID,
   chooseThreeMembers,
   mockCellAdministrator,
   mockCellApprover,
@@ -132,126 +133,111 @@ function listReads(asked: URL[]): URL[] {
   return asked.filter((url) => url.searchParams.get('limit') !== '200');
 }
 
-test.describe('the Cells totals (decision 0289)', () => {
+test.describe('the Cells total (decision 0400)', () => {
   // 10:00 on 24 June in Manila, so the current month is June 2026 and May is one back.
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
   });
 
-  const lead = (page: Page) => page.getByRole('button', { name: /^Cells you lead/ });
-  const scope = (page: Page) => page.getByRole('button', { name: /^Cells you oversee/ });
+  const headline = (page: Page) => page.getByRole('heading', { name: /^\d+ Cells?$/ });
 
-  test('shows both totals, each counted and dated as of today', async ({ page }) => {
+  test('heads the list with one total, with how many the reader leads, as of today', async ({
+    page,
+  }) => {
     await mockSignedIn(page);
     await mockCellTotals(page);
     await page.goto('/cells');
 
-    await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your own Cells · as of today/);
-    await expect(scope(page)).toContainText(
-      /Cells you oversee\s*5\s*People you oversee · as of today/,
-    );
+    await expect(headline(page)).toHaveText('5 Cells');
+    await expect(page.getByText('1 you lead · 4 under your leaders · as of today')).toBeVisible();
+    // Information only: neither of decision 0289's two cards is left, and nothing filters.
+    await expect(page.getByRole('button', { name: /^Cells you (lead|oversee)/ })).toHaveCount(0);
   });
 
-  // Decision 0309: both totals come from one counts request, and never from reading every
+  // Decision 0309: both figures come from one counts request, and never from reading every
   // page of the list with its figures.
-  test('reads both totals from one counts request, and never pages the list for them', async ({
+  test('reads the total from one counts request, and never pages the list for it', async ({
     page,
   }) => {
     await mockSignedIn(page);
     const asked = await mockCellTotals(page);
     await page.goto('/cells');
-    await expect(scope(page)).toContainText(/Cells you oversee\s*5\s*People/);
-    await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your/);
+    await expect(headline(page)).toHaveText('5 Cells');
 
     expect(asked.filter((url) => url.pathname === '/api/v1/cells/counts')).toHaveLength(1);
     expect(asked.filter((url) => url.searchParams.get('limit') === '200')).toHaveLength(0);
+    // The list is never narrowed to the reader's own: they come first instead.
+    expect(listReads(asked).some((url) => url.searchParams.has('led_by'))).toBe(false);
   });
 
-  test('pressing Cells you lead shows only the reader’s own, and pressing the other clears it', async ({
-    page,
-  }) => {
+  test('marks the reader’s own Cell You lead, in the table and on a phone', async ({ page }) => {
     await mockSignedIn(page);
-    const asked = await mockCellTotals(page);
+    await mockCellTotals(page);
+    // Registered last, so it answers the list: the server puts the reader's own first.
+    await page.route('**/api/v1/cells?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: '2026-06-01',
+          open: true,
+          data: [
+            {
+              ...CELL_WITH_MEETINGS,
+              leader: { ...CELL_WITH_MEETINGS.leader, person_id: SIGNED_IN_PERSON_ID },
+            },
+            CELL_WITH_NO_SCHEDULE,
+          ],
+          next_cursor: null,
+        }),
+      }),
+    );
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells');
 
-    // The unfiltered list of this month's running Cells is what "in your scope" counts.
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
-
-    await lead(page).click();
-    await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect
-      .poll(() => listReads(asked).some((url) => url.searchParams.get('led_by') === 'me'))
-      .toBe(true);
     const table = page.getByRole('table', { name: 'Cells you oversee' });
-    await expect(table.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
-    await expect(table.getByRole('link', { name: 'Couple · Wed' })).toHaveCount(0);
+    const rows = table.locator('tbody tr');
+    await expect(rows.nth(0)).toContainText('Youth · SatYou lead');
+    await expect(rows.nth(1)).not.toContainText('You lead');
 
-    await scope(page).click();
-    await expect(page).not.toHaveURL(/mine=/);
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const own = page.getByRole('listitem').filter({ hasText: 'Youth · Sat' });
+    await expect(own).toContainText('You lead');
+    await expect(page.getByRole('listitem').filter({ hasText: 'Couple · Wed' })).not.toContainText(
+      'You lead',
+    );
   });
 
-  test('another month is not what the totals count, and pressing one returns to this month', async ({
-    page,
-  }) => {
+  test('lines the two counts up on the right of their columns', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellTotals(page);
-    await page.goto('/cells?mine=1');
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells');
 
-    await page.getByRole('button', { name: 'Show May 2026' }).click();
-    await expect(page).toHaveURL(/month=2026-05-01/);
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
-
-    await lead(page).click();
-    await expect(page).not.toHaveURL(/month=/);
-    await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+    const table = page.getByRole('table', { name: 'Cells you oversee' });
+    await expect(table.getByRole('columnheader', { name: 'Members' })).toHaveCSS('text-align', 'right');
+    await expect(table.getByRole('columnheader', { name: 'Recorded' })).toHaveCSS('text-align', 'right');
+    await expect(table.locator('tbody tr').first().locator('td').nth(2)).toHaveCSS('text-align', 'right');
+    await expect(table).toHaveCSS('table-layout', 'fixed');
   });
 
-  // The totals belong to Active Cells alone (decision 0366).
-  test('the totals show on Active Cells only, and return with it', async ({ page }) => {
+  // The total belongs to Active Cells alone (decision 0366).
+  test('the total shows on Active Cells only, and returns with it', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellAdministrator(page);
     await mockCellTotals(page);
     await page.goto('/cells');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(headline(page)).toBeVisible();
 
     for (const name of ['Closed Cells', 'Under 3 Member Cells', 'Inactive (3+ Months) Cells']) {
       await page.getByRole('button', { name, exact: true }).click();
       await expect(page).toHaveURL(/view=/);
-      await expect(scope(page)).toHaveCount(0);
-      await expect(lead(page)).toHaveCount(0);
+      await expect(headline(page)).toHaveCount(0);
     }
 
     await page.getByRole('button', { name: 'Active Cells' }).click();
     await expect(page).not.toHaveURL(/view=/);
-    await expect(page.getByRole('button', { name: 'Active Cells' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  test('a search is not what the totals count, and pressing one clears it', async ({ page }) => {
-    await mockSignedIn(page);
-    await mockCellTotals(page);
-    await page.goto('/cells');
-
-    await page.getByLabel('Search by Cell ID or leader').fill('youth');
-    await page.getByRole('button', { name: 'Search' }).click();
-    await expect(page).toHaveURL(/q=youth/);
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
-
-    await lead(page).click();
-    await expect(page).not.toHaveURL(/q=/);
-    await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('');
-    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(headline(page)).toBeVisible();
   });
 
   // The button that brings the whole list back reads Clear search on every list (owner,
@@ -293,15 +279,11 @@ test.describe('the Cells totals (decision 0289)', () => {
 });
 
 test.describe('the browser Back button on the Cells list', () => {
-  test('steps back through the search, the filter and the closed view', async ({ page }) => {
+  test('steps back through the search and the closed view', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellAdministrator(page);
     await mockCellsWithClosed(page);
     await page.goto('/cells');
-
-    // Among running Cells the card is the filter (owner's choice of 2026-10-05).
-    await page.getByRole('button', { name: /^Cells you lead/ }).click();
-    await expect(page).toHaveURL(/mine=1/);
 
     await page.getByLabel('Search by Cell ID or leader').fill('youth');
     await page.getByRole('button', { name: 'Search' }).click();
@@ -310,7 +292,7 @@ test.describe('the browser Back button on the Cells list', () => {
     await page.getByRole('button', { name: 'Closed Cells' }).click();
     await expect(page).toHaveURL(/view=CLOSED/);
 
-    // A reload keeps all three, because they are in the address rather than on the screen.
+    // A reload keeps both, because they are in the address rather than on the screen.
     await page.reload();
     await expect(page.getByRole('button', { name: 'Closed Cells' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('youth');
@@ -324,12 +306,8 @@ test.describe('the browser Back button on the Cells list', () => {
 
     await page.goBack();
     await expect(page).not.toHaveURL(/q=youth/);
-    await expect(page).toHaveURL(/mine=1/);
     // The box follows the address back, rather than keeping a term nobody is searching for.
     await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('');
-
-    await page.goBack();
-    await expect(page).not.toHaveURL(/mine=1/);
   });
 });
 

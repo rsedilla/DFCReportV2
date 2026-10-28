@@ -159,8 +159,8 @@ test.describe('Cells to Approve (decision 0352)', () => {
       'Active Cells',
       /^Awaiting CG Assignment/,
     ]);
-    // The totals stay with the list they count.
-    await expect(page.getByRole('button', { name: /^Cells you oversee/ })).toBeVisible();
+    // The total stays with the list it counts (decision 0400).
+    await expect(page.getByRole('heading', { name: /^\d+ Cells?$/ })).toBeVisible();
   });
 
   test('is a Primary’s tab once they are ticked Approves Cells', async ({ page }) => {

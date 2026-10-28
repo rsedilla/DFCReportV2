@@ -1513,6 +1513,14 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       fewerThanThree?: boolean;
       /** Only Cells created before this instant: the *No meeting* window's start (decision 0355). */
       createdBefore?: Date;
+      /**
+       * The reader, whose own Cells come first (decision 0400): the key becomes the pair, own
+       * Cells before the rest, each in `cell_id` order. Putting the reader's own first ranks
+       * nobody, as `cell_id` itself does not.
+       */
+      ownFirst?: string;
+      /** With `ownFirst`: whether `after` was one of the reader's own Cells. */
+      afterOwn?: boolean;
     },
   ): Promise<
     {
@@ -1526,6 +1534,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }[]
   > {
     const after = page.after ?? null;
+    const ownFirst = page.ownFirst ?? null;
+    // 0 for the reader's own Cell, 1 for the rest.
+    const rank = sql<number>`(CASE WHEN cell_leaderships.person_id = ${ownFirst} THEN 0 ELSE 1 END)`;
 
     // **The search narrows and never reorders** (decision 0261, decision 0009): a Cell ID by its
     // digits, or a leader's name, normalized so `Nuñez` is found by `nunez`. The
@@ -1600,7 +1611,21 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .$if(leaderIds !== null, (query) =>
         query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
       )
-      .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(after !== null && ownFirst === null, (query) =>
+        query.where('cells.cell_id', '>', after as string),
+      )
+      // After an own Cell: the own Cells past it, then every other. After another: only the
+      // others past it.
+      .$if(after !== null && ownFirst !== null, (query) =>
+        query.where((eb) =>
+          page.afterOwn === true
+            ? eb.or([
+                eb.and([eb(rank, '=', 0), eb('cells.cell_id', '>', after as string)]),
+                eb(rank, '=', 1),
+              ])
+            : eb.and([eb(rank, '=', 1), eb('cells.cell_id', '>', after as string)]),
+        ),
+      )
       .$if(page.createdBefore !== undefined, (query) =>
         query.where('cells.created_at', '<', page.createdBefore as Date),
       )
@@ -1637,6 +1662,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           ]),
         ),
       )
+      .$if(ownFirst !== null, (query) => query.orderBy(rank))
       .orderBy('cells.cell_id')
       .limit(page.limit)
       .execute();

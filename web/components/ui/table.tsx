@@ -28,15 +28,18 @@ import { cn } from '@/lib/utils';
 export function Table({
   caption,
   className,
+  tableClassName,
   children,
 }: {
   caption: string;
   className?: string;
+  /** On the `<table>` itself, such as `table-fixed` where the columns are given shares. */
+  tableClassName?: string;
   children: ReactNode;
 }) {
   return (
     <div className={cn('overflow-x-auto lg:overflow-visible', className)}>
-      <table className="w-full border-collapse text-left text-sm">
+      <table className={cn('w-full border-collapse text-left text-sm', tableClassName)}>
         <caption className="sr-only">{caption}</caption>
         {children}
       </table>

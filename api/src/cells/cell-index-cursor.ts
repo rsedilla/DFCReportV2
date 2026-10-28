@@ -34,6 +34,13 @@ import { isStorableText } from '../common/text/storable-text';
  */
 export interface CellIndexCursor {
   cellId: string;
+  /**
+   * Whether the last row was one of the reader's own Cells, which come first (decision
+   * 0400): the key is the pair, own Cells before the rest, each in cell_id order. Absent
+   * reads as false, so a cursor issued before the reader's Cells came first resumes among
+   * the rest.
+   */
+  own?: boolean;
 }
 
 export function decodeCellIndexCursor(value: string | undefined): CellIndexCursor | null {
@@ -49,7 +56,8 @@ export function decodeCellIndexCursor(value: string | undefined): CellIndexCurso
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      isStorableText((parsed as CellIndexCursor).cellId)
+      isStorableText((parsed as CellIndexCursor).cellId) &&
+      [undefined, true, false].includes((parsed as CellIndexCursor).own)
     ) {
       return parsed as CellIndexCursor;
     }
