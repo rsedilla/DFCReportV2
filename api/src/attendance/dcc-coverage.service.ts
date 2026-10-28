@@ -995,8 +995,10 @@ export class DccCoverageService {
 
       const { owed, owing } = await this.obligations(executor, event, null);
       // Accounts as they stood on the Sunday, so a later account moves no past period
-      // (decision 0325, owner 2026-10-08).
-      const submitters = await this.submittersOf(event, [...owed], executor);
+      // (decision 0325, owner 2026-10-08). **Without the fallback to accounts held now**
+      // that the checklist and Record's lists take (decision 0403, owner 2026-10-28): a line
+      // nobody above held an account for is counted against nobody here.
+      const submitters = await this.nearestHolders(event, [...owed], event.at, executor);
       const firstAt = await this.firstRecordedFor(executor, event.id);
       const due = recordDueAt(event.eventDate);
       // Per submitter, the earliest first record among the lines that count the Sunday as

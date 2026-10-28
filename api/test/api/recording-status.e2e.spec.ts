@@ -374,6 +374,24 @@ describe('Recording status (decision 0325)', () => {
     expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 0, late: 0 });
   });
 
+  it('counts a Sunday nobody above held an account for against nobody, after a later account', async () => {
+    // The checklist gives such a Sunday to whoever holds an account now; Recording Progress
+    // does not, so a week already reported does not move (decision 0403, owner 2026-10-28).
+    const { monday, day } = await lastWeek();
+    const ana = await leader('Ana', 'Cruz', oriel);
+    await leader('Dan', 'Esguerra', ana);
+    await createEvent(day(7));
+    await db
+      .updateTable('accounts')
+      .set({ created_at: new Date() })
+      .where('id', '=', pastor.id)
+      .execute();
+
+    const response = await status(pastor, 'WEEK', monday).expect(200);
+
+    expect(response.body.whole_church.dcc).toMatchObject({ recorded: 0, owed: 0 });
+  });
+
   it('counts a DCC submitter whose account is awaiting activation', async () => {
     const { monday, day } = await lastWeek();
     const ana = await leader('Ana', 'Cruz', oriel);

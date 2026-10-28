@@ -27,7 +27,10 @@ those Sundays against the covering leader.
 **3a. Where nobody above held an account on that Sunday, the Sunday goes to whoever holds one
 now** (owner, 2026-10-28, the second question). The walk up from the person is made again with the
 accounts held now, so the line is still somebody's. A Network root given an account after the Sunday
-therefore keeps their 12 for it, there being nobody above a root.
+therefore keeps their 12 for it, there being nobody above a root. **This is for recording and Record's
+lists only** (owner, 2026-10-28, from screenshots of September's Recording Progress both ways):
+*Recording Progress* still reads only who held an account on each Sunday and counts such a line
+against nobody, so a closed week never changes when an account is given later (decision 0325).
 
 **3b. The two Network roots stay on the checklist of anyone holding `dcc.take_attendance` at Whole
 Church, whenever their account was made** (owner, 2026-10-28, the first question). The grant places
