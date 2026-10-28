@@ -165,6 +165,14 @@ function comparisonKey(value: string): string {
   return normalizeName(value).replace(/\s+/g, '');
 }
 
+/**
+ * The last name as every Tier 1 rule compares it, which is what an add locks on so that
+ * two adds of one person cannot both pass the check (decision 0401).
+ */
+export function lastNameKey(value: string): string {
+  return comparisonKey(value);
+}
+
 function suffixOf(value: string): string | null {
   const parts = value.toLowerCase().replace(/[.,]/g, '').split(/\s+/);
   return parts.find((part) => SUFFIXES.has(part)) ?? null;
@@ -172,6 +180,84 @@ function suffixOf(value: string): string | null {
 
 function areNicknames(a: string, b: string): boolean {
   return NICKNAMES.some((set) => set.includes(a) && set.includes(b));
+}
+
+/**
+ * Abbreviations a first name is written with (decision 0401). `Ma.` for Maria is the
+ * owner's example and the only entry: a closed list, as the suffixes are.
+ */
+const ABBREVIATIONS: Readonly<Record<string, string>> = { ma: 'maria' };
+
+/** A first name's words, with a trailing full stop dropped. */
+function bareFirstNameWords(value: string): string[] {
+  return normalizeName(value)
+    .split(' ')
+    .filter((word) => word !== '')
+    .map((word) => word.replace(/\.$/, ''));
+}
+
+/** The same, with an abbreviation written out. */
+function firstNameWords(value: string): string[] {
+  return bareFirstNameWords(value).map((word) => ABBREVIATIONS[word] ?? word);
+}
+
+function abbreviates(value: string): boolean {
+  return bareFirstNameWords(value).some((word) => ABBREVIATIONS[word] !== undefined);
+}
+
+/**
+ * The three spellings decision 0401 catches, each with the reason it is shown, or null.
+ * Reached only where no other rule matched, so equal names never come here.
+ *
+ * - `Ma. Teresa` against `Maria Teresa`: the first names agree once the abbreviation is
+ *   written out, and the last names are equal.
+ * - First and last names typed the wrong way round.
+ * - Two first names against one, the one being the other's first: `Ana Marie` against
+ *   `Ana`, the last names equal.
+ *
+ * Each reads the names alone, so a candidate it surfaces outside the reader's branch
+ * may be shown as a possible match (section 8).
+ */
+function spellingVariant(subject: Subject, candidate: Candidate): string | null {
+  const last = comparisonKey(subject.lastName);
+  const cLast = comparisonKey(candidate.lastName);
+  const words = firstNameWords(subject.firstName);
+  const cWords = firstNameWords(candidate.firstName);
+
+  // Only where one side is written with the abbreviation: a stray full stop alone
+  // (`Ana.` against `Ana`) is not what the reason below says.
+  if (
+    last === cLast &&
+    words.length > 0 &&
+    words.join('') === cWords.join('') &&
+    (abbreviates(subject.firstName) || abbreviates(candidate.firstName))
+  ) {
+    return 'last name equal, and "Ma." is short for "Maria"';
+  }
+
+  if (
+    comparisonKey(subject.firstName) === cLast &&
+    last === comparisonKey(candidate.firstName) &&
+    last !== ''
+  ) {
+    return 'first and last names swapped';
+  }
+
+  if (
+    last === cLast &&
+    words.length > 0 &&
+    cWords.length > 0 &&
+    words.length !== cWords.length &&
+    words[0] === cWords[0]
+  ) {
+    const [longer, shorter] =
+      words.length > cWords.length
+        ? [subject.firstName, candidate.firstName]
+        : [candidate.firstName, subject.firstName];
+    return `last name equal, and the first name "${longer.trim()}" begins with "${shorter.trim()}"`;
+  }
+
+  return null;
 }
 
 /**
@@ -241,6 +327,27 @@ function isDigitTransposition(a: string, b: string): boolean {
 }
 
 /**
+ * Which of section 3's rules a caller asks for beyond the ones every caller gets.
+ *
+ * `namesStopWithoutDetails` is decision 0399: where the subject carries neither a
+ * birthday nor a mobile number, equal first and last names are Tier 1, because
+ * nothing is left to tell the two apart. It reads the *subject* alone, so the tier
+ * it gives says nothing about a candidate's birthday or mobile number.
+ *
+ * Asked for by the application's own add, edit and pre-flight paths, where both
+ * fields carry a *Not given yet* tick (decision 0328), and not by the tree import,
+ * whose rows carry no tick and whose decisions file the ruling did not reach. Nor
+ * by the publishable run in `PeopleDuplicatesService`, whose subject has its two
+ * fields removed rather than not given.
+ */
+export interface MatchingRules {
+  namesStopWithoutDetails?: boolean;
+}
+
+/** What the application's add, edit and pre-flight paths ask for. */
+export const APPLICATION_RULES: MatchingRules = { namesStopWithoutDetails: true };
+
+/**
  * Candidates for a subject, strongest first.
  *
  * Section 3's rules, in the order it gives them. Nothing here excludes a
@@ -250,6 +357,7 @@ export function findCandidates(
   subject: Subject,
   population: readonly Candidate[],
   thresholds: MatchingThresholds = DEFAULT_THRESHOLDS,
+  rules: MatchingRules = {},
 ): Match[] {
   const first = comparisonKey(subject.firstName);
   const last = comparisonKey(subject.lastName);
@@ -293,6 +401,17 @@ export function findCandidates(
       // A number is a strong signal and never sufficient alone (section 3).
       tier = 1;
       reasons.push('same mobile number, and first and last names equal');
+    } else if (
+      rules.namesStopWithoutDetails &&
+      birth === null &&
+      mobile === null &&
+      sameFirst &&
+      sameLast
+    ) {
+      tier = 1;
+      reasons.push(
+        'first and last names equal, and no birthday or mobile number to tell them apart',
+      );
     }
 
     // --- Tier 2 -----------------------------------------------------------
@@ -321,6 +440,15 @@ export function findCandidates(
       } else if (sameMobile && sameLast) {
         tier = 2;
         reasons.push('same mobile number and last name equal');
+      } else {
+        // Decision 0401: spellings that hid one person from the check. Tier 2 and
+        // never Tier 1, whatever else matches: each is a guess about how a name
+        // was written, and a guess is shown rather than asked about.
+        const spelling = spellingVariant(subject, candidate);
+        if (spelling !== null) {
+          tier = 2;
+          reasons.push(spelling);
+        }
       }
     }
 

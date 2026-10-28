@@ -45,7 +45,7 @@ import {
   SearchPeopleDto,
 } from './dto/people.dto';
 import { ArchivePersonDto, LifecycleListDto } from './dto/lifecycle.dto';
-import { normalizeName } from './duplicate-matching';
+import { APPLICATION_RULES, normalizeName } from './duplicate-matching';
 import { ABSENT_PEOPLE_PORT, type AbsentPeoplePort } from './person-archive.ports';
 import { PeopleLifecycleService } from './people.lifecycle.service';
 import { PeopleDuplicatesService } from './people.duplicates.service';
@@ -220,6 +220,9 @@ export class PeopleController {
         Promise.resolve(
           membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId)),
         ),
+      undefined,
+      // The pre-flight list gives the reason the save will stop on (decision 0399).
+      APPLICATION_RULES,
     );
 
     const data = visible.slice(0, limit);
