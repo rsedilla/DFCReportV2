@@ -132,7 +132,11 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await expect(page.getByText('as at today, so far')).toBeVisible();
     // A month that has not begun is not reported (decision 0216).
     await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: /^month/i })).toHaveCount(0);
+    // No length but the month, and no second switch for it (decision 0398).
+    await expect(page.getByRole('group', { name: 'Report period' }).getByRole('button')).toHaveText([
+      'Monthly',
+      'Last 12 months',
+    ]);
 
     await page.getByRole('button', { name: 'The period before' }).click();
 
@@ -206,7 +210,7 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     const bar = period.locator('xpath=..');
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
     await expect(bar.getByLabel('Figures for')).toBeVisible();
-    await expect(bar.getByText('· so far')).toBeVisible();
+    await expect(bar.getByText('so far', { exact: true })).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
   });
 
@@ -230,7 +234,7 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
   });
 });
 
-test('Reports switches a figure between By period and its last 12 months, keeping the tab (decision 0377)', async ({
+test('Reports switches a figure between Monthly and its last 12 months on one switch, keeping the tab (decisions 0377 and 0398)', async ({
   page,
 }) => {
   await seniorPastor(page);
@@ -238,9 +242,11 @@ test('Reports switches a figure between By period and its last 12 months, keepin
   await mockTrends(page);
 
   await page.goto('/reports/number-of-cell-leaders');
-  const view = page.getByRole('group', { name: 'Which view' });
-  await expect(view.getByRole('button')).toHaveText(['By period', 'Last 12 months']);
-  await expect(view.getByRole('button', { name: 'By period' })).toHaveAttribute('aria-pressed', 'true');
+  // No second row: the lengths and the twelve months are one switch (decision 0398).
+  await expect(page.getByRole('group', { name: 'Which view' })).toHaveCount(0);
+  const view = page.getByRole('group', { name: 'Report period' });
+  await expect(view.getByRole('button')).toHaveText(['Monthly', 'Last 12 months']);
+  await expect(view.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
 
   await view.getByRole('button', { name: 'Last 12 months' }).click();
   await expect(page).toHaveURL(/\/trends\?figure=CELL_LEADERS$/);
@@ -252,8 +258,68 @@ test('Reports switches a figure between By period and its last 12 months, keepin
   await expect(main.getByRole('link')).toHaveText(['Record', 'Reports']);
   await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
 
-  await page.getByRole('group', { name: 'Which view' }).getByRole('button', { name: 'By period' }).click();
+  const back = page.getByRole('group', { name: 'Report period' });
+  await expect(back.getByRole('button', { name: 'Last 12 months' })).toHaveAttribute('aria-pressed', 'true');
+  // The twelve months have no month to step.
+  await expect(page.getByRole('button', { name: 'The period before' })).toHaveCount(0);
+  await back.getByRole('button', { name: 'Monthly' }).click();
   await expect(page).toHaveURL(/\/reports\/number-of-cell-leaders$/);
+});
+
+test('the Senior Pastors’ attendance switch keeps four lengths, and a length chosen on Last 12 months opens the tab by it (decision 0398)', async ({
+  page,
+}) => {
+  await seniorPastor(page);
+  await mockCellTwelve(page);
+  await mockRootLeadersTwelve(page);
+  await mockChurchCounts(page);
+  await mockTrends(page);
+
+  await page.goto('/reports/cells');
+  const view = page.getByRole('group', { name: 'Report period' });
+  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year', 'Last 12 months']);
+
+  await view.getByRole('button', { name: 'Last 12 months' }).click();
+  await expect(page).toHaveURL(/\/trends$/);
+  await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }).click();
+  await expect(page).toHaveURL(/\/reports\/cells\?period=quarter$/);
+  await expect(
+    page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+});
+
+test.describe('one size for every report control (decision 0398)', () => {
+  for (const width of [1280, 360]) {
+    test(`at ${width}px every switch button is one width and none wraps its words`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await seniorPastor(page);
+      await mockCellTwelve(page);
+      await mockRootLeadersTwelve(page);
+
+      await page.goto('/reports/cells');
+      const buttons = page.getByRole('group', { name: 'Report period' }).getByRole('button');
+      await expect(buttons).toHaveCount(5);
+      const boxes = await buttons.evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const box = node.getBoundingClientRect();
+          return { width: Math.round(box.width), height: Math.round(box.height) };
+        }),
+      );
+      // On a phone *Last 12 months* takes the whole last row, twice the others.
+      const lengths = width === 360 ? boxes.slice(0, 4) : boxes;
+      // Within a pixel: a row's leftover pixel falls to one column.
+      expect(Math.max(...lengths.map((box) => box.width)) - Math.min(...lengths.map((box) => box.width))).toBeLessThanOrEqual(1);
+      for (const box of boxes) {
+        // 44px tall: one line of words, and the target size (2.5.8).
+        expect(box.height).toBe(44);
+      }
+      if (width === 360) {
+        expect(Math.abs(boxes[4].width - 2 * boxes[0].width)).toBeLessThanOrEqual(2);
+      }
+    });
+  }
 });
 
 test.describe('Trends (decisions 0326 and 0327)', () => {

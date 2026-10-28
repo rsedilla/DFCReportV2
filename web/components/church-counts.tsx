@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
 import { RangeNavigator } from '@/components/my-twelve';
+import { ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -14,6 +15,13 @@ import { useScreenAddress } from '@/lib/screen-address';
 
 export type CountFigure = 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 type Figure = CountFigure;
+
+/** Each figure’s Reports tab, for its switch (decision 0398). */
+const TAB: Record<CountFigure, ReportTab> = {
+  CELLS: 'number-of-cells',
+  CELL_LEADERS: 'number-of-cell-leaders',
+  PEOPLE: 'number-of-people',
+};
 
 /** Each # tab's columns, shared with a Full view leader's branch (decision 0380). */
 export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
@@ -67,12 +75,15 @@ export function ChurchCountsPanel({
     <section aria-label={LABEL[figure]}>
       {/* The same ‹ › month control as CG and DCC attendance (owner, 2026-10-09), in the same bar. */}
       <div className={`mt-4 ${CONTROL_BAR}`}>
+        {/* Monthly or the last 12 months, beside the month (decision 0398). */}
+        <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <RangeNavigator
             kind="MONTH"
             start={month}
             current={current}
             open={undefined}
+            labelled="bare"
             onChange={(value) => go({ month: value })}
           />
           <span className="text-muted text-sm" aria-live="polite">
