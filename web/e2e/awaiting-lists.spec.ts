@@ -158,6 +158,7 @@ test.describe('Awaiting Leader Assignment, a tab of People (decision 0381)', () 
       'Add People',
       /^Awaiting Leader Assignment\s*2$/,
       'Family Tree',
+      'Absent 3+ Months',
     ]);
     await peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment/ }).click();
     await expect(page).toHaveURL(/\/people\/awaiting-leader$/);

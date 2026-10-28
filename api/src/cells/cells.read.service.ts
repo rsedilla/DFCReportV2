@@ -1042,6 +1042,75 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * Each person's most recent Cell membership's Cell, open or closed (decision 0397, the
+   * Admin's *Archived* list). A person who was never in a Cell is absent.
+   */
+  async latestMembershipCellsOf(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+  ): Promise<Map<string, { id: string; cellId: string }>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('cells', 'cells.id', 'cell_memberships.cell_id')
+      .distinctOn('cell_memberships.person_id')
+      .select([
+        'cell_memberships.person_id as person_id',
+        'cells.id as id',
+        'cells.cell_id as cell_id',
+      ])
+      .where('cell_memberships.person_id', 'in', [...personIds])
+      .orderBy('cell_memberships.person_id')
+      .orderBy('cell_memberships.started_at', 'desc')
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, { id: row.id, cellId: row.cell_id }]));
+  }
+
+  /**
+   * For each person, which of `months` they were a member of a Cell for the whole of
+   * (decision 0397). A month is `[from, to)`, and a move between Cells closes one membership
+   * where the next opens, so the rows across it are taken together.
+   */
+  async monthsInACellWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+    months: readonly { from: Date; to: Date }[],
+  ): Promise<Map<string, Set<number>>> {
+    const covered = new Map<string, Set<number>>();
+
+    if (personIds.length === 0 || months.length === 0) {
+      return covered;
+    }
+
+    const result = await sql<{ person_id: string; month: number }>`
+      SELECT cm.person_id, m.month::int AS month
+      FROM cell_memberships cm
+      CROSS JOIN unnest(
+        ${months.map((month) => month.from.toISOString())}::timestamptz[],
+        ${months.map((month) => month.to.toISOString())}::timestamptz[]
+      ) WITH ORDINALITY AS m (month_from, month_to, month)
+      WHERE cm.person_id = ANY(${[...personIds]}::uuid[])
+        AND cm.started_at < m.month_to
+        AND (cm.ended_at IS NULL OR cm.ended_at > m.month_from)
+      GROUP BY cm.person_id, m.month, m.month_from, m.month_to
+      HAVING range_agg(tstzrange(cm.started_at, coalesce(cm.ended_at, 'infinity'))) @>
+        tstzrange(m.month_from, m.month_to)
+    `.execute(executor);
+
+    for (const row of result.rows) {
+      const set = covered.get(row.person_id) ?? new Set<number>();
+      set.add(row.month - 1);
+      covered.set(row.person_id, set);
+    }
+
+    return covered;
+  }
+
+  /**
    * `CellRelationshipsPort`. The Cell this person currently belongs to, or null.
    *
    * Section 10 gives a person at most one active membership, enforced by a partial

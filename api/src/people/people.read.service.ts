@@ -618,6 +618,34 @@ export class PeopleReadService {
   }
 
   /**
+   * Which of these Persons were archived at one instant: the lifecycle row in force then
+   * reads `ARCHIVED` (decision 0397, owner's answer of 2026-10-28). For a DCC Sunday, so a
+   * Person archived afterwards stays recordable for the Sundays before it, as section 3's
+   * "from the effective archive date forward" asks. Keyed by the identifiers given.
+   */
+  async archivedAtWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+    at: Date,
+  ): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await executor
+      .selectFrom('person_lifecycle')
+      .select('person_id')
+      .where('person_id', 'in', [...personIds])
+      .where('state', '=', 'ARCHIVED')
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .execute();
+    const archived = new Set(rows.map((row) => canonicalId(row.person_id)));
+
+    return new Set(personIds.filter((id) => archived.has(canonicalId(id))));
+  }
+
+  /**
    * Whether the actor may see this person's full profile (SKILL.md section 8).
    *
    * Asked of the authorization service rather than reimplemented, so that a Senior

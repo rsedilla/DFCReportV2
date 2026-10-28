@@ -46,7 +46,8 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   const cellRecord = at(/^\/cells\/[^/]+\/(meetings|members)(\/|$)/) && !at(/^\/cells\/new(\/|$)/);
   // A person's own page and the pages it opens, reached from a name.
   const person =
-    at(/^\/people\/[^/]+(\/|$)/) && !at(/^\/people\/(new|awaiting-leader|number-of-people)(\/|$)/);
+    at(/^\/people\/[^/]+(\/|$)/) &&
+    !at(/^\/people\/(new|awaiting-leader|number-of-people|absent)(\/|$)/);
   // The reports the Senior Pastors and a Full view leader have (decisions 0326 and 0380), and
   // their last twelve months (decision 0377). The address # of People had under People forwards.
   const fiveReports =

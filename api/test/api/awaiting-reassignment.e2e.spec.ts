@@ -101,7 +101,7 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
 
     await db
       .insertInto('person_lifecycle')
-      .values({ person_id: person.id, state: 'ARCHIVED', started_at: at })
+      .values({ person_id: person.id, state: 'ARCHIVED', reason: 'MOVED_AWAY', started_at: at })
       .execute();
   };
 

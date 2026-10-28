@@ -1,11 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { ArchivePersonDialog } from '@/components/archive-person-dialog';
 import { SectionFrame } from '@/components/section-frame';
 import { CorrectSexDialog } from '@/components/correct-sex-dialog';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
@@ -26,6 +27,8 @@ import {
   type PastoralPath,
   type PathEntry,
 } from '@/lib/hierarchy';
+import { idempotencyKeyFor } from '@/lib/idempotency';
+import { archiveReasonLabel, restorePerson, shortDate } from '@/lib/lifecycle';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { formatMobile } from '@/lib/mobile';
@@ -101,6 +104,16 @@ function PersonDetail() {
   });
   const [moving, setMoving] = useState(false);
   const [correcting, setCorrecting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const queryClient = useQueryClient();
+  // Back to current and nothing else (decision 0397, point 9); the API checks it again.
+  const restore = useMutation({
+    mutationFn: () => restorePerson(id, idempotencyKeyFor('restore-person', id, person.data?.archived?.archived_at ?? '')),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['person', id] });
+      await queryClient.invalidateQueries({ queryKey: ['people-archived'] });
+    },
+  });
 
   const own = me.data?.person_id === id;
   const mayMove =
@@ -121,6 +134,11 @@ function PersonDetail() {
   const mayCorrectSex = holdsWholeChurch(me.data, 'people.correct_sex');
   const mayBackdate = holdsWholeChurch(me.data, 'records.backdate_effective_date');
   const pathEntries = path.data?.data ?? [];
+  // Archive and Restore, the Admin's alone (decision 0397); never on your own page, never for
+  // a Network root, and for somebody leading a Cell the page says what to resolve first.
+  const mayArchive = !own && holdsWholeChurch(me.data, 'people.manage_lifecycle');
+  const isRoot = pathEntries.length === 1 && pathEntries[0].network_root === true;
+  const leads = cells.data?.leads ?? [];
 
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
@@ -167,6 +185,35 @@ function PersonDetail() {
             own={own}
           />
 
+          {/* Read-only, for every reader who may open the page (decision 0397, point 10). */}
+          {person.data.archived ? (
+            <div className="border-line bg-raised mt-4 flex flex-col gap-3 border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm leading-relaxed">
+                <p>
+                  <strong>Archived</strong> on {shortDate(person.data.archived.archived_at)} ·{' '}
+                  {archiveReasonLabel(person.data.archived.reason)}
+                </p>
+                {person.data.archived.note ? (
+                  <p className="text-muted mt-1">{person.data.archived.note}</p>
+                ) : null}
+              </div>
+              {mayArchive ? (
+                <Button
+                  variant="secondary"
+                  disabled={restore.isPending}
+                  onClick={() => restore.mutate()}
+                >
+                  {restore.isPending ? 'Restoring…' : 'Restore'}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {restore.isError ? (
+            <div className="mt-3">
+              <FailureNotice failure={describeFailure(restore.error)} />
+            </div>
+          ) : null}
+
           {/* The actions in one bar under the name (owner's choice, 2026-09-22). */}
           <div className={`mt-6 ${CONTROL_BAR}`}>
             {/* Offered only to an account that may edit a person (decision 0379): a Senior
@@ -184,7 +231,36 @@ function PersonDetail() {
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
               Where they sit
             </Link>
+            {mayArchive &&
+            !person.data.archived &&
+            !isRoot &&
+            cells.isSuccess &&
+            leads.length === 0 &&
+            (person.data.pastors ?? 0) === 0 ? (
+              <Button variant="secondary" onClick={() => setArchiving(true)}>
+                Archive
+              </Button>
+            ) : null}
           </div>
+          {mayArchive && !person.data.archived && leads.length > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Leads {leads.map((cell) => cell.cell_id).join(', ')}: hand{' '}
+              {leads.length === 1 ? 'it' : 'them'} over or close {leads.length === 1 ? 'it' : 'them'}{' '}
+              before archiving.
+            </p>
+          ) : mayArchive && !person.data.archived && (person.data.pastors ?? 0) > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Pastors {person.data.pastors} {person.data.pastors === 1 ? 'person' : 'people'}: move
+              them to another leader first.
+            </p>
+          ) : null}
+          {mayArchive ? (
+            <ArchivePersonDialog
+              open={archiving}
+              onClose={() => setArchiving(false)}
+              person={{ id, full_name: person.data.full_name }}
+            />
+          ) : null}
           {/* No button and no request: the Primary decides (owner, 2026-10-16, decision 0356). */}
           {me.data && !own && !mayMove ? (
             <p className="text-muted mt-3 text-sm">Moves to another leader are made by your Primary.</p>

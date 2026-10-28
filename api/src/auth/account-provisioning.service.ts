@@ -5,6 +5,7 @@ import { InvariantViolationError, NotFoundError } from '../common/errors/api-err
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { DATABASE, type Db } from '../database/database.module';
+import { lockPersonsWithin } from '../database/person-lock';
 import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.port';
 
 import { CellsReadService } from '../cells/cells.read.service';
@@ -176,6 +177,11 @@ export class AccountProvisioningService {
     }
 
     const outcome = await this.db.transaction().execute(async (trx) => {
+      // The Person's lock first, which an archive also takes (decision 0397): without it an
+      // archive in flight saw no account to ask about while this saw a current Person, and
+      // both committed an archived Person holding an account nobody decided on (section 6).
+      await lockPersonsWithin(trx, [input.personId]);
+
       // Through `people`, which owns `persons` and `person_lifecycle` (section 2).
       const person = await this.people.forDecisionWithin(trx, input.personId);
 

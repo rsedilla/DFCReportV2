@@ -8,6 +8,8 @@ import { CELL_MEETING_SCOPE_PORT } from '../../src/auth/authorization/cell-meeti
 import { CELL_SCOPE_PORT } from '../../src/auth/authorization/cell-scope.port';
 import { CredentialsService } from '../../src/auth/credentials.service';
 import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.scope.service';
+import { PeopleController } from '../../src/people/people.controller';
+import { PeopleLifecycleService } from '../../src/people/people.lifecycle.service';
 import { PeopleReadService } from '../../src/people/people.read.service';
 import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
@@ -97,6 +99,15 @@ describe('the application module graph (section 2)', () => {
       // registered in `PeopleModule` (ruling of 2026-09-11). Same arrangement, same
       // assertion, and on the consumer's own field for the same reason.
       ['ADMIN_ACCOUNTS_PORT', moduleRef.get(PeopleReadService, { strict: false }), 'adminAccounts'],
+      // Decision 0397's three, each optional and refusing when absent: the archive's Cells and
+      // accounts halves, and the Absent 3+ Months list.
+      ['ARCHIVE_CELLS_PORT', moduleRef.get(PeopleLifecycleService, { strict: false }), 'cells'],
+      [
+        'ARCHIVE_ACCOUNTS_PORT',
+        moduleRef.get(PeopleLifecycleService, { strict: false }),
+        'accounts',
+      ],
+      ['ABSENT_PEOPLE_PORT', moduleRef.get(PeopleController, { strict: false }), 'absent'],
     ];
 
     for (const [token, consumer, field] of consumers) {

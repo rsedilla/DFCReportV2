@@ -361,7 +361,7 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
         .values({
           person_id: timothy.id,
           state: 'ARCHIVED',
-          reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+          reason: 'MOVED_AWAY',
           started_at: archivedAt,
         })
         .execute();
