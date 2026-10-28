@@ -1668,14 +1668,22 @@ function PendingDccList({
       </Link>
     );
 
-  const account = (row: PendingDccLeader) =>
-    row.leader.has_account
-      ? null
-      : row.recorded_by_you
-        ? 'Has no account · Recorded by you'
-        : row.recorded_by !== null
-          ? `Has no account · Recorded by ${row.recorded_by.full_name}`
-          : 'Has no account';
+  // A leader given an account between two open Sundays is two rows (decision 0403): the
+  // earlier one is for the Sundays before the account, which stay with who covered them.
+  const account = (row: PendingDccLeader) => {
+    if (row.leader.has_account) {
+      return null;
+    }
+    const since = rows.some(
+      (other) => other !== row && other.leader.person_id === row.leader.person_id,
+    );
+    const none = since ? 'No account on these Sundays' : 'Has no account';
+    return row.recorded_by_you
+      ? `${none} · Recorded by you`
+      : row.recorded_by !== null
+        ? `${none} · Recorded by ${row.recorded_by.full_name}`
+        : none;
+  };
 
   const sundays = (row: PendingDccLeader) => (
     <ul className="flex flex-col gap-1">
@@ -1756,7 +1764,10 @@ function PendingDccList({
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.leader.person_id} className={rowClasses}>
+              <tr
+                key={`${row.leader.person_id}-${row.sundays[0].event_id}`}
+                className={rowClasses}
+              >
                 <td className="px-3 py-3 align-top">
                   {name(row)}
                   {account(row) === null ? null : (
@@ -1775,7 +1786,10 @@ function PendingDccList({
           <li className="border-line text-muted border p-4 text-sm">{empty}</li>
         ) : (
           rows.map((row) => (
-            <li key={row.leader.person_id} className="border-line flex flex-col gap-2 border p-4">
+            <li
+              key={`${row.leader.person_id}-${row.sundays[0].event_id}`}
+              className="border-line flex flex-col gap-2 border p-4"
+            >
               <div className="min-w-0">
                 <p className="text-base font-medium">{name(row)}</p>
                 {account(row) === null ? null : (

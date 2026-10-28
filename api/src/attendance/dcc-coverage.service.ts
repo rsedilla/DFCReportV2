@@ -743,7 +743,7 @@ export class DccCoverageService {
 
   /**
    * `GET /api/v1/dcc/pending-leaders` — Record's *Pending DCC Records* (decision 0336): one
-   * row per leader in the reader's `dcc.view_subtree` scope now who owes a record for a
+   * row per leader and recorder in the reader's `dcc.view_subtree` scope now who owes a record for a
    * Sunday whose week is still open, with each such Sunday.
    *
    * **Owes is coverage's unit** (decision 0224), as on *Leaders Under Me*, so a checklist
@@ -751,8 +751,10 @@ export class DccCoverageService {
    * tree**: a Full view leader's whole branch and an Admin's whole church, never stopping two
    * levels down (decision 0324 is *Leaders Under Me*'s).
    *
-   * **The recorder, Record and See checklist follow the row's oldest Sunday**, and who holds
-   * an account is read as of that Sunday, as the recording route reads it (section 9, decision 0403). The recorder is
+   * **A row is one leader's Sundays with one recorder**, who holds an account being read as
+   * of each Sunday as the recording route reads it (section 9, decision 0403), so a leader
+   * given an account between two open Sundays is two rows. Record and See checklist follow
+   * the row's oldest Sunday. The recorder is
    * named only where the reader's scope covers them (owner, 2026-10-13), and a row without
    * Record never names the leader whose screen it would open (decision 0313, point 14).
    *
@@ -883,24 +885,36 @@ export class DccCoverageService {
     const page = matching.slice(0, limit);
     const more = matching.length > limit;
 
-    // The recorder of each row's oldest Sunday, read for this page only.
-    const recorderOf = new Map<string, string | null>();
-    const byOldest = new Map<string, { event: EventRow; leaders: string[] }>();
+    // The recorder of each of this page's Sundays (section 9, decision 0403). A leader's
+    // Sundays normally share one, and where an account was given between them they do not:
+    // the Sundays before it stay with the leader who covered them. So a leader is one row per
+    // recorder, in date order, and paging stays by leader.
+    const recorderAt = new Map<string, string | null>();
+    const leadersOf = new Map<string, { event: EventRow; leaders: string[] }>();
     for (const line of page) {
-      const oldest = (sundaysOf.get(line.leaderId) ?? [])[0];
-      const entry = byOldest.get(oldest.id) ?? { event: oldest, leaders: [] };
-      entry.leaders.push(line.leaderId);
-      byOldest.set(oldest.id, entry);
-    }
-    for (const { event, leaders } of byOldest.values()) {
-      const submitters = await this.submittersOf(event, leaders);
-      for (const leader of leaders) {
-        recorderOf.set(leader, submitters.get(leader) ?? null);
+      for (const event of sundaysOf.get(line.leaderId) ?? []) {
+        const entry = leadersOf.get(event.id) ?? { event, leaders: [] };
+        entry.leaders.push(line.leaderId);
+        leadersOf.set(event.id, entry);
       }
     }
+    for (const { event, leaders } of leadersOf.values()) {
+      const submitters = await this.submittersOf(event, leaders);
+      for (const leader of leaders) {
+        recorderAt.set(`${leader}|${event.id}`, submitters.get(leader) ?? null);
+      }
+    }
+    const groups = page.flatMap((line) => {
+      const byRecorder = new Map<string | null, EventRow[]>();
+      for (const event of sundaysOf.get(line.leaderId) ?? []) {
+        const recorder = recorderAt.get(`${line.leaderId}|${event.id}`) ?? null;
+        byRecorder.set(recorder, [...(byRecorder.get(recorder) ?? []), event]);
+      }
+      return [...byRecorder].map(([recorder, sundays]) => ({ line, recorder, sundays }));
+    });
 
     const recorders = [
-      ...new Set([...recorderOf.values()].filter((id): id is string => id !== null)),
+      ...new Set(groups.map((group) => group.recorder).filter((id): id is string => id !== null)),
     ];
     const recordable = await this.recordableBy(actor, recorders);
     const recorderNames = await this.people.forDecisionsWithin(this.db, recorders);
@@ -908,8 +922,7 @@ export class DccCoverageService {
     const last = page.at(-1);
 
     return {
-      data: page.map((line) => {
-        const recorder = recorderOf.get(line.leaderId) ?? null;
+      data: groups.map(({ line, recorder, sundays }) => {
         const ownAccount = recorder === line.leaderId;
         const byActor = recorder !== null && recorder === me;
         const mayRecord = recorder !== null && (byActor || recordable.has(recorder));
@@ -925,13 +938,15 @@ export class DccCoverageService {
             last_name: line.lastName,
             first_name: line.firstName,
             is_actor: line.leaderId === me,
+            // Held on this row's Sundays (decision 0403), which is now unless an account was
+            // given since.
             has_account: ownAccount,
           },
           recorded_by: named
             ? { person_id: recorder, full_name: recorderNames.get(recorder)?.fullName ?? '' }
             : null,
           recorded_by_you: byActor && !ownAccount,
-          sundays: (sundaysOf.get(line.leaderId) ?? []).map((event) => ({
+          sundays: sundays.map((event) => ({
             event_id: event.id,
             event_date: event.eventDate,
             due_at: recordDueAt(event.eventDate)?.toISOString() ?? null,
@@ -1038,25 +1053,45 @@ export class DccCoverageService {
 
   /**
    * Whose checklist holds each leader's people at this event (section 9): the leader
-   * themself where they hold an account, otherwise the nearest leader above them who
-   * does, walking the tree as of the Sunday. Canonical identifiers both sides; a leader
-   * whose walk reaches the top without an account holder maps to nothing.
+   * themself where they held an account on the Sunday, otherwise the nearest leader above
+   * them who did, walking the tree as of the Sunday (decision 0403). **Where nobody did**,
+   * the same walk with the accounts held now, so the people are still somebody's (owner,
+   * 2026-10-28). Canonical identifiers both sides; a leader whose walk reaches the top
+   * without an account holder either way maps to nothing.
    */
   private async submittersOf(
     event: EventRow,
     leaderIds: readonly string[],
     executor: Db = this.db,
   ): Promise<Map<string, string>> {
-    // Who held an account is read as of the event: Recording Progress since decision 0325,
-    // and recording and Record's lists since decision 0403, so all three agree.
-    const accountsAt = event.at;
+    const result = await this.nearestHolders(event, leaderIds, event.at, executor);
+    const unresolved = leaderIds.filter((id) => !result.has(canonicalId(id)));
+    if (unresolved.length > 0) {
+      for (const [leader, holder] of await this.nearestHolders(
+        event,
+        unresolved,
+        undefined,
+        executor,
+      )) {
+        result.set(leader, holder);
+      }
+    }
+    return result;
+  }
+
+  /** `submittersOf`'s walk, with accounts held by `accountsAt`, or now where undefined. */
+  private async nearestHolders(
+    event: EventRow,
+    leaderIds: readonly string[],
+    accountsAt: Date | undefined,
+    executor: Db,
+  ): Promise<Map<string, string>> {
     const result = new Map<string, string>();
     const holders = new Set(
       [...(await this.accounts.personsHoldingAccounts(executor, leaderIds, accountsAt))].map((id) =>
         canonicalId(id),
       ),
     );
-
     // Each leader still being walked, and the person whose leader is asked next.
     let pending = new Map<string, string>();
     for (const leaderId of leaderIds) {

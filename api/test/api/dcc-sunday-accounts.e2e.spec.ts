@@ -26,6 +26,8 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
   let app: INestApplication;
   let db: Kysely<Database>;
 
+  let oriel: TestPerson;
+  let raymond: TestPerson;
   let mark: TestPerson;
   let ana: TestPerson;
   let ben: TestPerson;
@@ -41,8 +43,8 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
   beforeEach(async () => {
     await truncateAll(db);
 
-    const oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
-    const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+    oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
     ana = await createPerson(db, { firstName: 'Anselmo', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Benito', network: 'MENS' });
@@ -155,5 +157,93 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
     it("lists Mark's Sunday on Raymond's Record as Mark's own to file", async () => {
       expect(await marksRow()).toMatchObject({ recorded_by_you: false });
     });
+  });
+
+  describe('nobody above held an account that Sunday', () => {
+    // Raymond's and Oriel's accounts made since the Sunday, so the walk up from Mark's
+    // people finds nobody holding one then; the Sunday goes to whoever holds one now
+    // (owner, 2026-10-28).
+    beforeEach(async () => {
+      await db
+        .updateTable('accounts')
+        .set({ created_at: new Date() })
+        .where('id', '=', raymondAccount.id)
+        .execute();
+    });
+
+    it('gives the Sunday to the nearest leader holding an account now', async () => {
+      expect(await roster(raymondAccount)).toEqual([mark.id, ana.id, ben.id].sort());
+    });
+
+    it("lists Mark's Sunday on Raymond's Record as Raymond's to file", async () => {
+      expect(await marksRow()).toMatchObject({ recorded_by_you: true });
+    });
+
+    it('lets a Network root given an account since keep their 12 for it', async () => {
+      const orielAccount = await createAccount(app, db, {
+        person: oriel,
+        roles: ['LEADER'],
+        createdAt: new Date(),
+      });
+      expect(await roster(orielAccount)).toEqual([raymond.id]);
+    });
+  });
+
+  it('puts the Network roots on a Whole Church holder whose account came after the Sunday', async () => {
+    const outside = await createPerson(db, { firstName: 'Adelfo', network: 'MENS' });
+    const admin = await createAccount(app, db, {
+      person: outside,
+      roles: ['ADMIN'],
+      createdAt: new Date(),
+    });
+    expect(await roster(admin)).toContain(oriel.id);
+  });
+
+  it('keeps the roots on a Whole Church holder whose own Sunday stays with the leader above', async () => {
+    // Mark's account postdates the Sunday and Raymond, above him, held one then, so Mark's
+    // people are Raymond's for it; the roots still come with Mark's grant (owner, 2026-10-28).
+    const markAdmin = await createAccount(app, db, {
+      person: mark,
+      roles: ['ADMIN'],
+      createdAt: new Date(),
+    });
+    expect(await roster(markAdmin)).toEqual([oriel.id]);
+  });
+
+  it('lists a leader given an account between two open Sundays as two rows', async () => {
+    const earlier = new Date(Date.parse(`${sunday}T00:00:00Z`) - 7 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const earlierId = (
+      await db
+        .insertInto('dcc_events')
+        .values({ event_date: earlier })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    // Made the day after the earlier Sunday, so that one stays with Raymond.
+    await createAccount(app, db, {
+      person: mark,
+      roles: ['LEADER'],
+      createdAt: new Date(Date.parse(`${earlier}T12:00:00+08:00`) + 86400000),
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/dcc/pending-leaders')
+      .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+    expect(response.status).toBe(200);
+    const rows = (
+      response.body.data as {
+        leader: { person_id: string; has_account: boolean };
+        recorded_by_you: boolean;
+        sundays: { event_id: string }[];
+      }[]
+    ).filter((row) => row.leader.person_id === mark.id);
+
+    expect(rows.map((row) => row.sundays.map((s) => s.event_id))).toEqual([[earlierId], [eventId]]);
+    expect(rows.map((row) => [row.leader.has_account, row.recorded_by_you])).toEqual([
+      [false, true],
+      [true, false],
+    ]);
   });
 });

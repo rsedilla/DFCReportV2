@@ -23,14 +23,28 @@ longer record what they knew, and the new account holder was asked about Sundays
 could sign in. And it makes the checklist agree with *Recording Progress*, which already counted
 those Sundays against the covering leader.
 
+**3a. Where nobody above held an account on that Sunday, the Sunday goes to whoever holds one
+now** (owner, 2026-10-28, the second question). The walk up from the person is made again with the
+accounts held now, so the line is still somebody's. A Network root given an account after the Sunday
+therefore keeps their 12 for it, there being nobody above a root.
+
+**3b. The two Network roots stay on the checklist of anyone holding `dcc.take_attendance` at Whole
+Church, whenever their account was made** (owner, 2026-10-28, the first question). The grant places
+them, not the account's age (decision 0172), so an administrator whose account came after a Sunday
+still records the roots for it.
+
+**3c. Pending DCC Records.** A leader given an account between two open Sundays is two rows: the
+earlier for the Sundays that stay with whoever covered them, labelled *No account on these
+Sundays*, and the later for their own.
+
 **4. The screen.** The section of a checklist holding a leader's people now reads "had no account
 on this Sunday, so you record them".
 
-**5. What is unchanged.** The tree is still walked as of the Sunday, a closed week is still
-amended only at Whole Church, and SUYNL, which is not per Sunday, still follows whoever records a
-person's DCC now (decision 0322).
+**5. What is unchanged.** The tree is still walked as of the Sunday, and a closed week is still
+amended only at Whole Church. Which instant SUYNL reads whose DCC the actor records is not decided
+here, and stays open (decision 0322).
 
 Decision 0403, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 7 and 9.
+Sections 7, 9, 14, 19 and 22.
 
 Previous: [2026-10-28 — Wider lists, and no heading line that repeats the page](0402-wider-lists-and-fewer-heading-lines.md)

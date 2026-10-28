@@ -2771,6 +2771,37 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
+  test('Pending DCC Records splits a leader given an account between two open Sundays (decision 0403)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    const [carlo] = PENDING_DCC_ROWS;
+    // Carlo's account came after 7 June: that Sunday stays with Jose Santos, who covered it,
+    // and 14 June is Carlo's own.
+    await mockPendingDcc(page, [
+      { ...carlo, sundays: [carlo.sundays[0]] },
+      {
+        ...carlo,
+        leader: { ...carlo.leader, has_account: true },
+        recorded_by: null,
+        sundays: [carlo.sundays[1]],
+      },
+    ]);
+    await mockDccOwed(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard?list=dcc');
+
+    const rows = page
+      .getByRole('table', { name: 'Pending DCC Records' })
+      .getByRole('row')
+      .filter({ hasText: 'Carlo Reyes' });
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('No account on these Sundays · Recorded by Jose Santos');
+    await expect(rows.last()).not.toContainText('account');
+  });
+
   test('a list with a further page unread counts what it read and says there is more', async ({
     page,
   }) => {
