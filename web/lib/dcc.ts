@@ -255,7 +255,7 @@ export interface PendingDccLeader {
     last_name: string;
     first_name: string;
     is_actor: boolean;
-    /** False shows "Has no account" (decision 0336). */
+    /** False shows "Has no account" (decision 0336), or "No account on these Sundays" (decision 0403). */
     has_account: boolean;
   };
   /** Who records it, named only where the reader's scope covers them. */

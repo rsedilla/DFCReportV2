@@ -1671,8 +1671,8 @@ function PendingDccList({
       </Link>
     );
 
-  // A leader given an account between two open Sundays is two rows (decision 0403): the
-  // earlier one is for the Sundays before the account, which stay with who covered them.
+  // A leader whose open Sundays have two recorders is two rows (decision 0403). Where one
+  // of them is the leader's own account, the others are for Sundays before it.
   const account = (row: PendingDccLeader) => {
     if (row.leader.has_account) {
       return null;

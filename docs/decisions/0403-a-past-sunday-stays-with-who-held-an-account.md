@@ -41,7 +41,7 @@ still records the roots for it.
 recorder. Most often that is a leader given an account between two of them: the earlier row is
 for the Sundays that stay with whoever covered them, labelled *No account on these Sundays*, and
 the later is their own. A leader above them given an account, or a reassignment, splits a row the
-same way, and those rows keep the usual label.
+same way.
 
 **4. The screen.** The section of a checklist holding a leader's people now reads "had no account
 on this Sunday, so you record them".

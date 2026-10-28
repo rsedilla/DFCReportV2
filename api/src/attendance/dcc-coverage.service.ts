@@ -965,7 +965,8 @@ export class DccCoverageService {
    * a DCC record in the run of days, with how many of its Sundays they owed and how many of
    * those have none.
    *
-   * **The leader is section 9's submitter as of each Sunday**, whose checklist holds the
+   * **The leader is section 9's submitter as of each Sunday**, without the fallback to
+   * accounts held now (decision 0403), whose checklist holds the
    * lines of every leader they record for. They owe a Sunday that has begun and is not
    * removed where they submit at least one line, and have recorded it where any line on that
    * checklist has a live record, whoever entered it. A Sunday whose month has closed still
