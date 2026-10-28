@@ -39,4 +39,4 @@ and tables the width beside the sidebar while keeping forms narrow.
 Decision 0402, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 19.
 
-Previous: [2026-10-28 — One Cells total, and your Cells first](0400-one-cells-total-and-your-cells-first.md)
+Previous: [2026-10-28 — Three spellings, and two adds of one person at once](0401-spellings-and-two-adds-at-once.md)

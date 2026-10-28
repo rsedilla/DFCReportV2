@@ -51,7 +51,17 @@ function write<T>(key: string, value: T | null): void {
     if (value === null) {
       window.localStorage.removeItem(PREFIX + key);
     } else {
-      const stored: Stored<T> = { saved_at: Date.now(), value };
+      // **The time is when the marks were made, not when the screen was opened.** A restored
+      // draft is written straight back, unchanged; restamping it there moved the note's time
+      // to the last opening and restarted its four weeks on every visit. So the stored time
+      // stays until a mark changes.
+      const before = read<T>(key);
+      const json = JSON.stringify(value);
+      const stored: Stored<T> = {
+        saved_at:
+          before !== null && JSON.stringify(before.value) === json ? before.saved_at : Date.now(),
+        value,
+      };
       window.localStorage.setItem(PREFIX + key, JSON.stringify(stored));
     }
   } catch {

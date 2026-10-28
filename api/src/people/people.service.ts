@@ -16,9 +16,9 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { canonicalId } from '../common/identifiers';
 import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
 import { DATABASE, type Db } from '../database/database.module';
-import { lockPersonsWithin } from '../database/person-lock';
+import { lockPersonNameWithin, lockPersonsWithin } from '../database/person-lock';
 
-import { type Subject } from './duplicate-matching';
+import { APPLICATION_RULES, lastNameKey, type Subject } from './duplicate-matching';
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { fullProfile, normalizeMobile, type CreatePersonInput } from './people.shared';
@@ -123,8 +123,13 @@ export class PeopleService {
      * disclosing an out-of-scope person's birthday or mobile number, and a reason
      * naming the field that matched asserts one — so the caller supplies the same
      * scope test the read endpoint uses.
+     *
+     * `leaderId` is the candidate's current pastoral leader, read inside this add's
+     * transaction (decision 0401). The caller reads its scope before the transaction,
+     * so a person added under a leader in that scope a moment earlier, by somebody
+     * else, is not yet in it; their leader is.
      */
-    canSeeReasons: (personId: string) => Promise<boolean>,
+    canSeeReasons: (personId: string, leaderId: string | null) => Promise<boolean>,
   ): Promise<Record<string, unknown>> {
     // **Only the Admin gives a title** (decision 0374): `people.set_title`, at Whole Church.
     // A blank one is no title, so a form that sends an empty box is not refused.
@@ -158,56 +163,71 @@ export class PeopleService {
     const acknowledged = new Set(
       (input.acknowledgedDuplicateIds ?? []).map((candidateId) => canonicalId(candidateId)),
     );
-    const matches = await this.duplicates.findDuplicates(subject);
-
-    // **The gate applies only to candidates the actor may see.**
-    //
-    // Every Tier 1 rule rests on a birthday or a mobile number, so an
-    // out-of-scope Tier 1 candidate is one section 8 does not permit surfacing
-    // (`visibleCandidates`). Refusing on one anyway would answer "acknowledge
-    // this" with nothing to acknowledge, and the encoder could never create that
-    // Person at all -- a permanent block, which is worse than the duplicate it
-    // was guarding against and is what section 3 means by never blocking
-    // creation.
-    //
-    // So an invisible duplicate does not gate. The cost is stated in section 3:
-    // a cross-branch duplicate resting on a protected field is not caught for a
-    // leader outside that branch, and is caught by the leader who holds them.
-    let gated = false;
-    for (const match of matches) {
-      if (match.tier !== 1 || acknowledged.has(canonicalId(match.candidate.id))) {
-        continue;
-      }
-
-      if (await canSeeReasons(match.candidate.id)) {
-        gated = true;
-        break;
-      }
-    }
-
-    // **In-scope candidates only, and the status code is why.**
-    //
-    // Two reasons, and the second is the one that is easy to miss. An
-    // out-of-scope Tier 1 candidate cannot be shown in full, so refusing on one
-    // would answer "acknowledge this" with nothing to acknowledge and leave that
-    // Person impossible to create.
-    //
-    // And 409-against-201 is itself a channel. Every Tier 1 rule reads a birthday
-    // or a mobile number, so gating on an out-of-scope candidate would make the
-    // status vary with a value section 8 protects — the same oracle as the
-    // candidate list, one field further out. The status now varies only with what
-    // the actor is already allowed to know.
-    if (gated) {
-      throw new DuplicateAcknowledgementRequiredError(
-        await this.duplicates.visibleDuplicatesFor(
-          subject,
-          canSeeReasons,
-          (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
-        ),
-      );
-    }
-
     return this.db.transaction().execute(async (trx) => {
+      // **The check runs under a lock on the last name, inside the add** (decision 0401).
+      // Checked before the transaction, two leaders adding one person at the same moment
+      // each looked before either had written, and both were added. Every Tier 1 rule
+      // needs equal last names, so the second add waits here and then sees the first.
+      // Taken before any person lock (section 5's order): nothing else takes this one.
+      await lockPersonNameWithin(trx, lastNameKey(subject.lastName));
+      const matches = await this.duplicates.findDuplicates(subject, APPLICATION_RULES, trx);
+      const leaders = await this.hierarchy.directLeaderIdsOf(
+        matches.map((match) => match.candidate.id),
+        trx,
+      );
+      const visible = (personId: string) => canSeeReasons(personId, leaders.get(personId) ?? null);
+
+      // **The gate applies only to candidates the actor may see.**
+      //
+      // Every Tier 1 rule but one rests on a birthday or a mobile number, so an
+      // out-of-scope Tier 1 candidate is one section 8 does not permit surfacing
+      // (`visibleCandidates`). Refusing on one anyway would answer "acknowledge
+      // this" with nothing to acknowledge, and the encoder could never create that
+      // Person at all -- a permanent block, which is worse than the duplicate it
+      // was guarding against and is what section 3 means by never blocking
+      // creation. The one that does not (decision 0399, equal names with neither
+      // field given) is held to the same gate: its candidate still cannot be shown
+      // in full to somebody outside their branch.
+      //
+      // So an invisible duplicate does not gate. The cost is stated in section 3:
+      // a cross-branch duplicate resting on a protected field is not caught for a
+      // leader outside that branch, and is caught by the leader who holds them.
+      let gated = false;
+      for (const match of matches) {
+        if (match.tier !== 1 || acknowledged.has(canonicalId(match.candidate.id))) {
+          continue;
+        }
+
+        if (await visible(match.candidate.id)) {
+          gated = true;
+          break;
+        }
+      }
+
+      // **In-scope candidates only, and the status code is why.**
+      //
+      // Two reasons, and the second is the one that is easy to miss. An
+      // out-of-scope Tier 1 candidate cannot be shown in full, so refusing on one
+      // would answer "acknowledge this" with nothing to acknowledge and leave that
+      // Person impossible to create.
+      //
+      // And 409-against-201 is itself a channel. Every Tier 1 rule reads a birthday
+      // or a mobile number, or for decision 0399 their absence, so gating on an out-of-scope candidate would make the
+      // status vary with a value section 8 protects — the same oracle as the
+      // candidate list, one field further out. The status now varies only with what
+      // the actor is already allowed to know.
+      if (gated) {
+        throw new DuplicateAcknowledgementRequiredError(
+          await this.duplicates.visibleDuplicatesFor(
+            subject,
+            visible,
+            (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
+            APPLICATION_RULES,
+            trx,
+          ),
+        );
+      }
+
       if (input.placement.kind === 'UNDER') {
         const pastoralLeaderId = input.placement.pastoralLeaderId;
         // **Lock first, then check.** The leader's Network decides whether the edge
@@ -335,7 +355,10 @@ export class PeopleService {
    * acknowledged stops the save, the person themself never counting, and an edit that
    * changes none of those fields is not checked.
    *
-   * **Asked before the transaction opens, as on create**, because the check reads the pool:
+   * **Asked before the transaction opens**, because the check reads the pool. Create differs:
+   * it checks inside its transaction under the last-name lock (decision 0401), which is safe
+   * there only because its caller reads the scope as a set before the transaction opens and the
+   * population is read through the transaction. Here, the check reads the pool:
    * asked while this request holds a connection and the row lock, it would ask a bounded pool
    * for more connections (section 24). The row is then locked and, where somebody changed one
    * of the compared fields in between, the write answers `RESOURCE_BUSY` rather than saving
@@ -545,7 +568,7 @@ export class PeopleService {
 
     let gated = false;
     const passedOver: string[] = [];
-    for (const match of await this.duplicates.findDuplicates(subject)) {
+    for (const match of await this.duplicates.findDuplicates(subject, APPLICATION_RULES)) {
       const candidateId = canonicalId(match.candidate.id);
       if (match.tier !== 1 || candidateId === self || !(await canSeeReasons(match.candidate.id))) {
         continue;
@@ -563,6 +586,7 @@ export class PeopleService {
           subject,
           canSeeReasons,
           (match) => match.tier === 1 && owed(match.candidateId),
+          APPLICATION_RULES,
         ),
       );
     }

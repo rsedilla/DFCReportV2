@@ -218,6 +218,43 @@ test.describe('a DCC checklist with marks not yet saved', () => {
     await expect.poll(() => stored(page, SUNDAY_KEY)).toBeNull();
   });
 
+  test('keeps the time the marks were made when the screen opens, and not the opening', async ({
+    page,
+  }) => {
+    // Restamped on every opening, a draft's note named the last visit and its four weeks
+    // never ran out. A changed mark is new and takes a new time.
+    const madeAt = Date.now() - 27 * 24 * 60 * 60 * 1000;
+    await page.addInitScript(
+      ([key, person, at]) => {
+        if (window.sessionStorage.getItem('seeded') === null) {
+          window.sessionStorage.setItem('seeded', '1');
+          window.localStorage.setItem(
+            key,
+            JSON.stringify({
+              saved_at: Number(at),
+              value: { [person]: { mark: 'absent', version: null } },
+            }),
+          );
+        }
+      },
+      [SUNDAY_KEY, BIENVENIDO.id, String(madeAt)],
+    );
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    const savedAt = async () =>
+      (JSON.parse((await stored(page, SUNDAY_KEY)) ?? '{}') as { saved_at?: number }).saved_at;
+
+    await page.goto(SUNDAY);
+    await expect(page.getByText(RESTORED)).toBeVisible();
+    await expect(radio(page, BIENVENIDO, 'Absent')).toBeChecked();
+    await page.reload();
+    await expect(page.getByText(RESTORED)).toBeVisible();
+    expect(await savedAt()).toBe(madeAt);
+
+    await radio(page, BIENVENIDO, 'Present').check();
+    await expect.poll(savedAt).toBeGreaterThan(madeAt);
+  });
+
   for (const [days, offered] of [
     [27, true],
     [29, false],

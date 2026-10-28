@@ -93,6 +93,121 @@ describe('Tier 1 — very likely the same person', () => {
   });
 });
 
+describe('equal names with neither birthday nor mobile given (decision 0399)', () => {
+  const asked = { namesStopWithoutDetails: true };
+  const tiers = (s: Subject, population: Candidate[] = [BASE]) =>
+    findCandidates(s, population, undefined, asked).map((match) => match.tier);
+
+  it('is Tier 1 when the application asks for it', () => {
+    const [match] = findCandidates(
+      subject({ birthDate: null, mobileNumberNormalized: null }),
+      [BASE],
+      undefined,
+      asked,
+    );
+
+    expect(match.tier).toBe(1);
+    expect(match.reasons).toEqual([
+      'first and last names equal, and no birthday or mobile number to tell them apart',
+    ]);
+  });
+
+  it('reads the subject alone, whatever the candidate carries', () => {
+    // A tier that varied with the candidate's birthday or mobile number would tell
+    // the reader whether those were recorded (section 8).
+    const none = subject({ birthDate: null, mobileNumberNormalized: null });
+    expect(tiers(none, [{ ...BASE, birthDate: null }])).toEqual([1]);
+    expect(tiers(none, [{ ...BASE, mobileNumberNormalized: '09171234567' }])).toEqual([1]);
+  });
+
+  it('stays Tier 2 when either field was given', () => {
+    expect(tiers(subject({ birthDate: '1990-01-01', mobileNumberNormalized: null }))).toEqual([2]);
+    expect(tiers(subject({ birthDate: null, mobileNumberNormalized: '09179999999' }))).toEqual([2]);
+  });
+
+  it('needs both names equal', () => {
+    // A nickname or a near miss on the first name is not reached by it.
+    expect(tiers(subject({ firstName: 'Johnny', birthDate: null }))).toEqual([]);
+    expect(tiers(subject({ firstName: 'Jaun', birthDate: null }))).toEqual([]);
+  });
+
+  it('is not applied unless asked, so the tree import is unchanged', () => {
+    expect(tiersFor(subject({ birthDate: null, mobileNumberNormalized: null }))).toEqual([2]);
+  });
+});
+
+describe('spellings that hid one person from the check (decision 0401)', () => {
+  const none = { birthDate: null, mobileNumberNormalized: null };
+  const maria: Candidate = { ...BASE, firstName: 'Maria Teresa', lastName: 'Santos', ...none };
+  const ana: Candidate = { ...BASE, firstName: 'Ana', lastName: 'Reyes', sex: 'FEMALE', ...none };
+  const reasonsFor = (s: Subject, candidate: Candidate) =>
+    findCandidates(s, [candidate], undefined, { namesStopWithoutDetails: true }).map((match) => [
+      match.tier,
+      match.reasons[0],
+    ]);
+
+  it('reads "Ma." as Maria, with or without the full stop', () => {
+    for (const firstName of ['Ma. Teresa', 'Ma Teresa', 'MA. TERESA']) {
+      expect(
+        reasonsFor(subject({ firstName, lastName: 'Santos', sex: 'FEMALE', ...none }), maria),
+      ).toEqual([[2, 'last name equal, and "Ma." is short for "Maria"']]);
+    }
+  });
+
+  it('reads first and last names typed the wrong way round', () => {
+    expect(
+      reasonsFor(
+        subject({ firstName: 'Reyes', lastName: 'Ana', sex: 'FEMALE', birthDate: '1995-07-03' }),
+        { ...ana, birthDate: '1995-07-03' },
+      ),
+    ).toEqual([[2, 'first and last names swapped']]);
+  });
+
+  it('reads two first names against one, either way round', () => {
+    const marie = subject({ firstName: 'Ana Marie', lastName: 'Reyes', sex: 'FEMALE', ...none });
+    expect(reasonsFor(marie, ana)).toEqual([
+      [2, 'last name equal, and the first name "Ana Marie" begins with "Ana"'],
+    ]);
+    expect(
+      reasonsFor(subject({ firstName: 'Ana', lastName: 'Reyes', sex: 'FEMALE', ...none }), {
+        ...ana,
+        firstName: 'Ana Marie',
+      }),
+    ).toEqual([[2, 'last name equal, and the first name "Ana Marie" begins with "Ana"']]);
+  });
+
+  it('is never Tier 1, even with the same birthday and mobile number', () => {
+    const same = { birthDate: '1995-07-03', mobileNumberNormalized: '09171234567' };
+    const [match] = findCandidates(
+      subject({ firstName: 'Reyes', lastName: 'Ana', sex: 'FEMALE', ...same }),
+      [{ ...ana, ...same }],
+      undefined,
+      { namesStopWithoutDetails: true },
+    );
+    expect(match.tier).toBe(2);
+  });
+
+  it('does not reach other first names, or a full stop alone', () => {
+    // A different second word, a different first word, and a stray full stop.
+    const s = (firstName: string) =>
+      subject({ firstName, lastName: 'Reyes', sex: 'FEMALE', ...none });
+    expect(reasonsFor(s('Rosa Marie'), ana)).toEqual([]);
+    expect(reasonsFor(s('Mae Ana'), ana)).toEqual([]);
+    expect(reasonsFor(s('Ana.'), ana).map(([, reason]) => reason)).not.toContain(
+      'last name equal, and "Ma." is short for "Maria"',
+    );
+  });
+
+  it('needs the last names equal, except when the two names are swapped', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Ma. Teresa', lastName: 'Cruz', ...none }), maria),
+    ).toEqual([]);
+    expect(
+      reasonsFor(subject({ firstName: 'Ana Marie', lastName: 'Santos', ...none }), ana),
+    ).toEqual([]);
+  });
+});
+
 describe('Tier 2 — possible', () => {
   it('surfaces same birthday and last name where the first name differs', () => {
     expect(tiersFor(subject({ firstName: 'Pedro' }))).toEqual([2]);

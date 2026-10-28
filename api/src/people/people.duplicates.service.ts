@@ -10,6 +10,7 @@ import {
   normalizeName,
   type Candidate,
   type Match,
+  type MatchingRules,
   type Subject,
 } from './duplicate-matching';
 import {
@@ -100,14 +101,23 @@ export class PeopleDuplicatesService {
      * living here rather than at the call site.
      */
     only: (match: VisibleMatch) => boolean = () => true,
+    /**
+     * Applied to the subject as given and never to the publishable run, whose
+     * subject has its birthday and mobile number removed rather than not given
+     * (decision 0399). So an out-of-scope candidate still never appears in a
+     * creation refusal, as `visibleCandidates` says.
+     */
+    rules: MatchingRules = {},
+    /** An add reads inside its own transaction, after its lock (decision 0401). */
+    executor: Db = this.db,
   ): Promise<Record<string, unknown>[]> {
     // **One read of the population, scored twice.** The publishable subject carries no
     // birthday and no mobile number, so its population is exactly the rows the names
     // reach. The read marks those rows itself, in the same SQL predicates, rather than
     // the names being re-tested here: scoring it against the wider set could admit an
     // out-of-scope candidate the names never reached, which is a membership disclosure.
-    const { candidates, reachedByNames } = await this.populationFor(subject);
-    const matches = findCandidates(subject, candidates);
+    const { candidates, reachedByNames } = await this.populationFor(subject, executor);
+    const matches = findCandidates(subject, candidates, undefined, rules);
     const publishable = findCandidates(
       {
         firstName: subject.firstName,
@@ -140,8 +150,17 @@ export class PeopleDuplicatesService {
     );
   }
 
-  async findDuplicates(subject: Subject): Promise<Match[]> {
-    return findCandidates(subject, (await this.populationFor(subject)).candidates);
+  async findDuplicates(
+    subject: Subject,
+    rules: MatchingRules = {},
+    executor: Db = this.db,
+  ): Promise<Match[]> {
+    return findCandidates(
+      subject,
+      (await this.populationFor(subject, executor)).candidates,
+      undefined,
+      rules,
+    );
   }
 
   /**
@@ -152,6 +171,7 @@ export class PeopleDuplicatesService {
    */
   private async populationFor(
     subject: Subject,
+    executor: Db,
   ): Promise<{ candidates: Candidate[]; reachedByNames: Set<string> }> {
     // The same guard the search path got, for the same reason and one function
     // away. `normalizeName` drops suffix tokens, so `last_name=Jr` normalizes to
@@ -168,6 +188,7 @@ export class PeopleDuplicatesService {
     // with `translate` over the characters that actually occur in these names.
     const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
     const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const compactLastName = sql<string>`regexp_replace(lower(translate(last_name, ${ACCENTED}, ${UNACCENTED})), '[[:space:]''’-]', '', 'g')`;
     const surnameInitial = normalizedFirstLetter(subject.lastName);
 
     // The two branches the names reach, written once and used twice: in the narrowing
@@ -183,9 +204,15 @@ export class PeopleDuplicatesService {
         // a shared first name has to be able to reach her earlier record on its
         // own (section 3).
         eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
+        // First and last names typed the wrong way round (decision 0401): the surname
+        // initial above reaches the row by the other name, so it needs its own branch.
+        // Compared without spacing, hyphens or apostrophes, so a stored `Santos-Reyes`
+        // or `Dela Cruz` is reached however the first name box spelled it. A suffix
+        // stored in the last name is kept, so `Dela Cruz Jr` typed this way is not.
+        eb(compactLastName, '=', normalizeName(subject.firstName).replace(/\s+/g, '')),
       ]);
 
-    let query = this.db
+    let query = executor
       .selectFrom('persons')
       .select((eb) => [
         'id',
@@ -338,8 +365,10 @@ async function visibleCandidates(
     // section 8 protects.
     //
     // A consequence worth stating rather than discovering: no publishable match
-    // is ever Tier 1, because every Tier 1 rule reads one of those two fields. So
-    // an out-of-scope candidate never appears in the creation refusal at all.
+    // is ever Tier 1, because every Tier 1 rule reads one of those two fields, and
+    // the one that reads their absence (decision 0399) is never asked of the
+    // publishable run. So an out-of-scope candidate never appears in the creation
+    // refusal at all.
     //
     // That is a *new* rule rather than a restatement of the 2026-08-23 one.
     // Gating and appearing in the body are different decisions: the gate has
@@ -374,9 +403,9 @@ async function visibleCandidates(
  * The order key for a withheld candidate: their full name, then their Member ID.
  *
  * **Total, which is the property the rule needs and a name alone does not have.**
- * A withheld candidate is publishable, which requires an equal first *and* last
- * name — so every withheld candidate in one response already shares a name with
- * the others, and two carrying no middle name share the whole of it. A comparator
+ * A withheld candidate is publishable, which reads the names alone — so withheld
+ * candidates in one response often share a name, and two carrying no middle name
+ * may share the whole of it (a spelling, decision 0401, makes that rarer). A comparator
  * returning 0 there leaves `Array.prototype.sort`'s stability to decide, and what
  * it preserves is `findCandidates`'s tier order: position reads the withheld tier
  * back, which is exactly the channel the ordering rule closes. Section 3 states
