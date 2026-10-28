@@ -371,6 +371,44 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(ids).toContain(paul.id);
     });
 
+    it('keeps a Person archived after the Sunday on it, and lets them be recorded (decision 0397)', async () => {
+      const eventId = await createEvent(await recentSunday());
+      // Archived now, as the archive does it: lifecycle rows and their own edge both end now.
+      const now = new Date();
+      await db
+        .updateTable('person_lifecycle')
+        .set({ ended_at: now })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('person_lifecycle')
+        .values({ person_id: quentin.id, state: 'ARCHIVED', reason: 'MOVED_AWAY', started_at: now })
+        .execute();
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: now })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await roster(manuelAccount, eventId).expect(200);
+      const ids = (response.body.data as { person_id: string }[]).map((line) => line.person_id);
+      expect(ids).toContain(quentin.id);
+
+      const saved = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(saved.status).toBeLessThan(300);
+
+      // And corrected, as a Cell meeting's leader on its date may correct it (section 7).
+      const [row] = await liveRows(eventId);
+      const corrected = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: false, version: row.version },
+      ]);
+      expect(corrected.status).toBeLessThan(300);
+    });
+
     it('reads the tree as of the event date, not as of now', async () => {
       const sunday = await recentSunday();
       const eventId = await createEvent(sunday);
@@ -398,6 +436,68 @@ describe('DCC recording (sections 9 and 14)', () => {
 
       expect(line).toBeDefined();
       expect(line?.responsible_leader_id).toBe(paul.id);
+    });
+
+    it('lets the leader on the Sunday record somebody moved out of their branch since (decision 0397)', async () => {
+      // Two Sundays: Quentin moves to Otto, under Raymond and outside Manuel's branch, the day
+      // after the first, so the first is Manuel's to owe and the second is Otto's.
+      const sunday = shift(await recentSunday(), -7);
+      const eventId = await createEvent(sunday);
+      const otto = await createPerson(db, { firstName: 'Otto', network: 'MENS' });
+      await assignTo(db, otto.id, raymond.id);
+      const movedAt = startOfManilaDay(shift(sunday, 1));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: movedAt })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, quentin.id, otto.id, movedAt);
+
+      const saved = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(saved.status).toBeLessThan(300);
+
+      // And corrected, through the Sunday's tree too.
+      const [row] = await liveRows(eventId);
+      const corrected = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: false, version: row.version },
+      ]);
+      expect(corrected.status).toBeLessThan(300);
+
+      // A Sunday after the move is Otto's to owe, not Manuel's: refused at scope.
+      const later = await createEvent(await recentSunday());
+      const refused = await submit(manuelAccount, later, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('dcc.take_attendance');
+    });
+
+    it('gives an upline who did not owe the Sunday the refusal anyone outside gets (decision 0397)', async () => {
+      // Paul holds an account, so the Sunday is on his checklist and not Manuel's. Quentin then
+      // moves out of Manuel's branch: Manuel was upline on the Sunday, and is answered exactly
+      // as somebody who never was, so the refusal says nothing of where Quentin sat.
+      await createAccount(app, db, { person: paul, roles: ['LEADER'] });
+      const sunday = await recentSunday();
+      const eventId = await createEvent(sunday);
+      const otto = await createPerson(db, { firstName: 'Otto', network: 'MENS' });
+      await assignTo(db, otto.id, raymond.id);
+      const movedAt = startOfManilaDay(shift(sunday, 1));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: movedAt })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, quentin.id, otto.id, movedAt);
+
+      const refused = await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.details.capability).toBe('dcc.take_attendance');
     });
   });
 

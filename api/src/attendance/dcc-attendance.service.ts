@@ -427,6 +427,9 @@ export class DccAttendanceService {
       );
       const assignments = await this.hierarchy.assignmentsAsOf(trx, personIds, event.at);
       const identities = await this.people.forDecisionsWithin(trx, personIds);
+      // As of the Sunday, not now: a Person archived since is still recordable for it
+      // (decision 0397, owner's answer of 2026-10-28).
+      const archivedThen = await this.people.archivedAtWithin(trx, personIds, event.at);
       const live = await this.liveRecords(trx, event.id, personIds);
 
       // Everything is decided before anything is written. A rollback would give the
@@ -450,7 +453,14 @@ export class DccAttendanceService {
           throw new NotFoundError('No such person.', { person_id: personId });
         }
 
-        await this.assertInScope(trx, actor, authority, personId);
+        // A Person on the actor's own checklist for this Sunday is reached through the tree as
+        // it stood on the Sunday as well as today's, for recording and correcting alike (owner,
+        // 2026-10-28, decision 0397): their leader on that Sunday records it whether they have
+        // been archived or moved to another leader since. Keyed on the checklist the actor was
+        // already shown, and nothing about the person's lifecycle or move, so a refusal tells
+        // nobody where somebody outside their scope sat on a past Sunday.
+        const sundayAt = checklist.has(personId) ? event.at : null;
+        await this.assertInScope(trx, actor, authority, personId, sundayAt);
 
         // Decision 0322: nobody records their own DCC line, whatever capability they hold,
         // except the two Network roots, who have no leader (section 9). Decided on who is
@@ -465,7 +475,11 @@ export class DccAttendanceService {
         const stored = live.get(personId) ?? null;
         const outcome = outcomeFor(stored, record.present);
 
-        this.assertRecordable(personId, identity, assignments.get(personId));
+        this.assertRecordable(
+          personId,
+          { isArchived: archivedThen.has(personId), mergedIntoId: identity.mergedIntoId },
+          assignments.get(personId),
+        );
 
         await this.assertMayRecord(trx, {
           actor,
@@ -475,6 +489,7 @@ export class DccAttendanceService {
           outcome,
           submittedVersion: record.version,
           storedVersion: stored?.version ?? null,
+          sundayAt,
         });
 
         // **Behind the capability check, and it was in front of it until 2026-09-03**
@@ -748,14 +763,18 @@ export class DccAttendanceService {
   ): Promise<RosterLine[]> {
     const checklist = [...(await this.checklist(executor, event, submitterId, includesRoots))];
     const identities = await this.people.forDecisionsWithin(executor, checklist);
+    const archivedThen = await this.people.archivedAtWithin(executor, checklist, event.at);
 
-    // An archived Person has left (section 3) and a merged record has been absorbed
-    // into another, so neither is somebody a leader is asked to mark present. Dropped
-    // rather than shown as unrecordable: the roster's question is who there is to
-    // record, and the write refuses both on the same grounds.
+    // A Person archived by the Sunday has left (section 3) and a merged record has been
+    // absorbed into another, so neither is somebody a leader is asked to mark present.
+    // Dropped rather than shown as unrecordable: the roster's question is who there is to
+    // record, and the write refuses both on the same grounds. Archived is read as of the
+    // Sunday, so a Person archived later stays on the Sundays before it (decision 0397).
     const recordable = checklist.filter((personId) => {
       const identity = identities.get(personId);
-      return identity !== undefined && !identity.isArchived && identity.mergedIntoId === null;
+      return (
+        identity !== undefined && !archivedThen.has(personId) && identity.mergedIntoId === null
+      );
     });
 
     const assignments = await this.hierarchy.assignmentsAsOf(executor, recordable, event.at);
@@ -805,9 +824,12 @@ export class DccAttendanceService {
     assignment: { leaderId: string | null } | undefined,
   ): void {
     if (identity.isArchived) {
-      throw new InvariantViolationError('An archived Person takes no attendance record.', {
-        person_id: personId,
-      });
+      throw new InvariantViolationError(
+        'A Person archived by this Sunday takes no record for it.',
+        {
+          person_id: personId,
+        },
+      );
     }
 
     if (identity.mergedIntoId !== null) {
@@ -874,13 +896,19 @@ export class DccAttendanceService {
     actor: Actor,
     authority: ActorAuthority,
     personId: string,
+    /**
+     * The Sunday's instant, whose tree also reaches the Person, for somebody on the actor's own
+     * checklist for it (decision 0397).
+     */
+    sundayAt: Date | null = null,
   ): Promise<void> {
-    const covered = await this.authorization.coversWith(
+    const covered = await this.coversPersonWithin(
       executor,
       actor,
       authority,
       Capability.DccTakeAttendance,
-      { kind: 'person', personId },
+      personId,
+      sundayAt,
     );
 
     if (!covered) {
@@ -889,6 +917,43 @@ export class DccAttendanceService {
         person_id: personId,
       });
     }
+  }
+
+  /**
+   * Whether a capability the actor holds reaches this Person: today's tree, as every other
+   * check here, or, where the caller passes the Sunday because the Person is on the actor's
+   * own checklist for it, the tree as it stood on the Sunday (owner, 2026-10-28, decision
+   * 0397). So a leader records and corrects a Sunday they owed for somebody archived or moved
+   * to another leader since. **Unlike an ACTIVE Cell**, whose meetings pass to its new leader
+   * (section 7), a DCC Sunday stays on the checklist the leader is shown for it, which section 9
+   * walks through the tree as of the Sunday (account holders being read now). The actor must hold the capability at some scope, and the dated
+   * walk never reaches the actor themself, who records no line of their own (decision 0322).
+   */
+  private async coversPersonWithin(
+    executor: Db,
+    actor: Actor,
+    authority: ActorAuthority,
+    capability: Capability,
+    personId: string,
+    sundayAt: Date | null,
+  ): Promise<boolean> {
+    if (
+      await this.authorization.coversWith(executor, actor, authority, capability, {
+        kind: 'person',
+        personId,
+      })
+    ) {
+      return true;
+    }
+
+    return (
+      sundayAt !== null &&
+      actor.personId !== null &&
+      authority.grants.some((grant) => grant.capability === capability) &&
+      (await this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, sundayAt, {
+        includeSelf: false,
+      }))
+    );
   }
 
   /**
@@ -950,6 +1015,8 @@ export class DccAttendanceService {
       outcome: LineOutcome;
       submittedVersion: number | null;
       storedVersion: number | null;
+      /** The Sunday's instant, whose tree also reaches the Person (decision 0397). */
+      sundayAt: Date | null;
     },
   ): Promise<void> {
     const { actor, authority, personId } = params;
@@ -999,12 +1066,13 @@ export class DccAttendanceService {
     // resubmitting an identical checklist is submitting.
     if (
       params.outcome === 'CORRECT' &&
-      !(await this.authorization.coversWith(
+      !(await this.coversPersonWithin(
         executor,
         actor,
         authority,
         Capability.DccCorrectSubtree,
-        target,
+        target.personId,
+        params.sundayAt,
       ))
     ) {
       throw recordedFirstOr(
@@ -1405,12 +1473,22 @@ export class DccAttendanceService {
     // that actor `403` where the identical body sent sequentially answers `201` -- the
     // mirror defect, and the one the Cell path reproduced before this shape was settled.
     const authority = await this.authorization.authorityFor(actor.accountId);
-    const mayCorrect = await this.authorization.coversWith(
+    // The same dated reach as the transaction's own check (decision 0397), so a lost race
+    // answers what the sequential request would.
+    const event = await this.eventForRecording(this.db, eventId);
+    const checklist = await this.checklist(
+      this.db,
+      event,
+      actor.personId,
+      holdsWholeChurch(authority, Capability.DccTakeAttendance),
+    );
+    const mayCorrect = await this.coversPersonWithin(
       this.db,
       actor,
       authority,
       Capability.DccCorrectSubtree,
-      { kind: 'person', personId: stale.record.person_id },
+      stale.record.person_id,
+      checklist.has(stale.record.person_id) ? event.at : null,
     );
 
     if (!mayCorrect) {

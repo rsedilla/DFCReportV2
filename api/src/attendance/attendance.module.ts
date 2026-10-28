@@ -9,6 +9,8 @@ import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
+import { AbsenceService } from './absence.service';
+import { AbsentPeopleService } from './absent-people.service';
 import { BranchFiguresController } from './branch-figures.controller';
 import { BranchFiguresService } from './branch-figures.service';
 import { CellMeetingsController } from './cell-meetings.controller';
@@ -89,6 +91,8 @@ import { DccController } from './dcc.controller';
     DccFiguresService,
     CellFiguresService,
     BranchFiguresService,
+    AbsenceService,
+    AbsentPeopleService,
   ],
   // **Two of these are exported to be bound to a port token, and for nothing else.**
   // Nest resolves a provider's dependencies in the module that *registers* it, so a
@@ -110,6 +114,8 @@ import { DccController } from './dcc.controller';
     // service the two DCC calendar routes use, so a report's denominator and a leader's
     // gap list cannot disagree about who owed a record.
     DccCoverageService,
+    // People's Absent 3+ Months list, only to be bound to `people`'s port (decision 0397).
+    AbsentPeopleService,
   ],
 })
 export class AttendanceModule {}

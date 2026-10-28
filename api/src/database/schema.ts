@@ -12,7 +12,16 @@ export type Sex = 'MALE' | 'FEMALE';
 export type CivilStatus = 'SINGLE' | 'MARRIED' | 'WIDOWED';
 export type NetworkName = 'MENS' | 'WOMENS';
 export type LifecycleState = 'CURRENT' | 'ARCHIVED';
-export type ArchiveReason = 'NO_LONGER_IN_CURRENT_NETWORK' | 'RECORD_CREATED_IN_ERROR' | 'OTHER';
+export type ArchiveReason =
+  | 'NO_LONGER_IN_CURRENT_NETWORK'
+  | 'RECORD_CREATED_IN_ERROR'
+  | 'OTHER'
+  // Migration 0032 (decision 0397); NO_LONGER_IN_CURRENT_NETWORK is given for no new archive.
+  | 'WORKING_AWAY'
+  | 'STUDYING_AWAY'
+  | 'MOVED_AWAY'
+  | 'ATTENDS_ANOTHER_CHURCH'
+  | 'PASSED_AWAY';
 export type AccountStatus = 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
 export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'LEADER';
 export type AccountTokenPurpose = 'PASSWORD_RESET' | 'ACTIVATION';
@@ -225,6 +234,10 @@ export interface AccountTokensTable {
 export type AuditAction =
   | 'person.created'
   | 'person.updated'
+  // Section 21's "Person archive" and "Person restore", the archive entry carrying the
+  // account-access decision whichever was chosen (section 6, decision 0397).
+  | 'person.archived'
+  | 'person.restored'
   | 'pastoral_assignment.transferred'
   | 'network.changed'
   | 'sex.corrected'

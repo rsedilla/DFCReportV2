@@ -263,6 +263,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
       'Add People',
       /^Awaiting Leader Assignment/,
       'Family Tree',
+      'Absent 3+ Months',
     ]);
   });
 

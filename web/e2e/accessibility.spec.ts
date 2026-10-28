@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAdministrator,
   mockCellCreator,
+  mockAbsentPeople,
   mockAwaitingReassignment,
   mockCellAdministrator,
   mockCellApprover,
@@ -112,6 +113,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
   await mockPendingDcc(page);
+  await mockAbsentPeople(page);
 }
 
 /**
@@ -940,6 +942,15 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       // A tab of People since decision 0381.
       await expect(page.getByRole('link', { name: 'Amihan Bacani' }).first()).toBeVisible();
+    },
+  },
+  {
+    // People's fourth tab (decision 0397), read-only for a Full view leader.
+    name: 'people, absent three months',
+    route: '/people/absent',
+    before: mockDashboard,
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Dalisay Ocampo' }).first()).toBeVisible();
     },
   },
   {
@@ -1791,6 +1802,14 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
+    // Decision 0397: the People tabs, then a name link per person. Settled on a name.
+    name: 'people, absent three months',
+    route: '/people/absent',
+    settleRole: 'link' as const,
+    settle: 'Dalisay Ocampo',
+    minimum: 6,
+  },
+  {
     // Since decision 0381: the Cells tabs, then a name link per person. Settled on a name.
     name: 'cells, awaiting cg assignment',
     route: '/cells?view=NOCELL',
@@ -2367,6 +2386,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-06-28T02:00:00Z'));
   await mockSignedIn(page);
   await mockPeople(page);
+  await mockAbsentPeople(page);
   // The attendance screens too, because the sweep counts the targets a route
   // renders and a route showing a failure notice renders fewer of them. The
   // `minimum` on each entry is what would catch that, but only if the data is
@@ -2711,7 +2731,12 @@ test('the People item carries People, Awaiting Leader Assignment and Family Tree
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
   // Awaiting Leader Assignment between them since decision 0381.
-  await expect(tabs.getByRole('link')).toHaveText(['Add People', /^Awaiting Leader Assignment/, 'Family Tree']);
+  await expect(tabs.getByRole('link')).toHaveText([
+      'Add People',
+      /^Awaiting Leader Assignment/,
+      'Family Tree',
+      'Absent 3+ Months',
+    ]);
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Add People');
   await expect(tabs.getByRole('link', { name: 'Number of People', exact: true })).toHaveCount(0);
   await expect(tabs.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);

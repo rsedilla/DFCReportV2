@@ -348,7 +348,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .values({
           person_id: manuel.id,
           state: 'ARCHIVED',
-          reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+          reason: 'MOVED_AWAY',
           started_at: new Date(),
         })
         .execute();

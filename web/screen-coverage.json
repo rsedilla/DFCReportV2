@@ -114,6 +114,26 @@
       "note": "People's Awaiting Leader Assignment tab (decision 0381)."
     },
     {
+      "route": "GET /api/v1/people/absent",
+      "screen": "web/components/absent-lists.tsx",
+      "note": "People's Absent 3+ Months tab (decision 0397)."
+    },
+    {
+      "route": "GET /api/v1/people/archived",
+      "screen": "web/components/absent-lists.tsx",
+      "note": "The Admin's Archived view on the Absent 3+ Months tab (decision 0397)."
+    },
+    {
+      "route": "POST /api/v1/people/:id/archive",
+      "screen": "web/components/archive-person-dialog.tsx",
+      "note": "Opened from the Absent 3+ Months tab and from a person's page (decision 0397)."
+    },
+    {
+      "route": "POST /api/v1/people/:id/restore",
+      "screen": "web/components/absent-lists.tsx",
+      "note": "The Archived view and the person's page (decision 0397)."
+    },
+    {
       "route": "GET /api/v1/people/:id/pastoral-path",
       "reason": "§8 asks for the chain when a profile is opened: the profile names the person's direct leader from it, and My Network shows the whole chain.",
       "screen": "web/app/people/[id]/page.tsx"

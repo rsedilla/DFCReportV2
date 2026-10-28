@@ -783,6 +783,110 @@ export async function mockAwaitingReassignment(page: Page): Promise<void> {
   );
 }
 
+/** The months *Absent 3+ Months* covers in these fixtures (decision 0397). */
+export const ABSENT_MONTHS = ['2026-03', '2026-04', '2026-05'];
+
+/**
+ * *Absent 3+ Months* (decision 0397): somebody away three months, and a leader whose Cell did
+ * not meet, whose row carries no Archive. Names are invented.
+ */
+export async function mockAbsentPeople(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/absent*', (route) =>
+    route.fulfill(
+      json({
+        months: ABSENT_MONTHS,
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000951',
+            member_id: 'M-001051',
+            full_name: 'Dalisay Ocampo',
+            leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000903', full_name: 'Rogelio Mendoza' },
+            cell: { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'CELL-000007', category: 'YOUTH', day_of_week: 3 },
+            leads: [],
+            pastors: 0,
+            last_at_cell: '2026-02-11',
+            last_at_dcc: null,
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000952',
+            member_id: 'M-001052',
+            full_name: 'Ernesto Villar',
+            leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000903', full_name: 'Rogelio Mendoza' },
+            cell: null,
+            leads: [
+              { id: '3f1b7c6e-0000-4000-8000-000000000112', cell_id: 'CELL-000012', category: 'YOUNG_PRO', day_of_week: 6, members: 3 },
+            ],
+            pastors: 0,
+            last_at_cell: '2026-02-21',
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000953',
+            member_id: 'M-001053',
+            full_name: 'Gloria Pascual',
+            leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000903', full_name: 'Rogelio Mendoza' },
+            cell: { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'CELL-000007', category: 'YOUTH', day_of_week: 3 },
+            leads: [],
+            pastors: 2,
+            last_at_cell: null,
+            last_at_dcc: '2026-02-15',
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/** The Admin's *Archived* view (decision 0397). */
+export async function mockArchivedPeople(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/archived*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000961',
+            member_id: 'M-001061',
+            full_name: 'Florante Medina',
+            archived_at: '2026-06-02T03:00:00.000Z',
+            reason: 'MOVED_AWAY',
+            note: null,
+            leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000903', full_name: 'Rogelio Mendoza' },
+            cell: { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'CELL-000007', category: 'YOUTH', day_of_week: 3 },
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
+ * The administrator above, also holding `people.manage_lifecycle` and `accounts.manage` at Whole
+ * Church as the role does, so Archive and Restore are offered (decision 0397).
+ */
+export async function mockLifecycleAdministrator(page: Page): Promise<void> {
+  const wholeChurch = (capability: string) => ({
+    capability,
+    scope_type: 'WHOLE_CHURCH',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree' || grant.capability === 'people.view_subtree'
+        ? wholeChurch(grant.capability)
+        : grant,
+    ),
+    wholeChurch('people.manage_lifecycle'),
+    wholeChurch('accounts.manage'),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
 /**
  * The pre-flight lookup with something to show — a Tier 2 candidate the viewer
  * pastors, and one whose details section 8 withholds.

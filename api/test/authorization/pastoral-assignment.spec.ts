@@ -366,7 +366,7 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
       .values({
         person_id: mark.id,
         state: 'ARCHIVED',
-        reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+        reason: 'MOVED_AWAY',
         started_at: new Date(),
       })
       .execute();
