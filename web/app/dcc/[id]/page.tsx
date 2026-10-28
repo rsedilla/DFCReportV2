@@ -784,8 +784,8 @@ function sectionsOf(
         title: name === null ? 'A leader without an account' : `${name}’s people`,
         note:
           name === null
-            ? `Their leader has no account yet, so ${records}.`
-            : `${name} has no account yet, so ${records}.`,
+            ? `Their leader had no account on this Sunday, so ${records}.`
+            : `${name} had no account on this Sunday, so ${records}.`,
         counted: false,
         lines: people,
       };

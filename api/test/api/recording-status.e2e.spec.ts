@@ -67,7 +67,8 @@ describe('Recording status (decision 0325)', () => {
 
   /**
    * Every account so far existed long before any week read here: Recording status reads who
-   * held an account as of each Sunday (decision 0325), and a fixture's is created now.
+   * held an account as of each Sunday (decision 0325). The fixture has created accounts at
+   * `EPOCH` since decision 0403, so this now only restates it for the cases written before.
    */
   async function accountsHeldSinceLongAgo(): Promise<void> {
     await db.updateTable('accounts').set({ created_at: LONG_AGO }).execute();
@@ -359,7 +360,7 @@ describe('Recording status (decision 0325)', () => {
     await leader('Dan', 'Esguerra', ana);
     await createEvent(day(7));
     // Ana is given an account now, after the Sunday: on the Sunday Oriel recorded her people.
-    await createAccount(app, db, { person: ana, roles: ['LEADER'] });
+    await createAccount(app, db, { person: ana, roles: ['LEADER'], createdAt: new Date() });
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
@@ -371,6 +372,24 @@ describe('Recording status (decision 0325)', () => {
       percent: 0,
     });
     expect(rowOf(response.body, ana)?.dcc).toEqual({ recorded: 0, owed: 0, late: 0 });
+  });
+
+  it('counts a Sunday nobody above held an account for against nobody, after a later account', async () => {
+    // The checklist gives such a Sunday to whoever holds an account now; Recording Progress
+    // does not, so a week already reported does not move (decision 0403, owner 2026-10-28).
+    const { monday, day } = await lastWeek();
+    const ana = await leader('Ana', 'Cruz', oriel);
+    await leader('Dan', 'Esguerra', ana);
+    await createEvent(day(7));
+    await db
+      .updateTable('accounts')
+      .set({ created_at: new Date() })
+      .where('id', '=', pastor.id)
+      .execute();
+
+    const response = await status(pastor, 'WEEK', monday).expect(200);
+
+    expect(response.body.whole_church.dcc).toMatchObject({ recorded: 0, owed: 0 });
   });
 
   it('counts a DCC submitter whose account is awaiting activation', async () => {

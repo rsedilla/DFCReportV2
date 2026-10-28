@@ -311,22 +311,24 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(ids).not.toContain(titus.id);
     });
 
-    it('drops the covered branch the moment its leader is given an account', async () => {
+    it('drops the covered branch from the Sundays after its leader is given an account', async () => {
       // The rule above run as a mutation, in the direction the domain actually moves.
       // Section 9: "The arrangement is intended to be temporary. When that leader
       // takes a Cell, their account becomes provisionable and, once provisioned, they
-      // become their own submitter and the covering load falls away."
+      // become their own submitter and the covering load falls away." From the Sunday
+      // after the account was made (decision 0403): a Sunday before it stays with
+      // Manuel, who covered it.
       //
       // Provisioning rather than removing an account, because nothing removes one:
       // `account_roles` and `accounts` both refuse a delete (principle 12).
-      const before = await roster(manuelAccount, await createEvent(await recentSunday()));
-      expect((before.body.data as { person_id: string }[]).map((line) => line.person_id)).toEqual(
-        expect.arrayContaining([paul.id, quentin.id]),
-      );
+      const sunday = shift(await recentSunday(), -7);
+      await createAccount(app, db, {
+        person: nathan,
+        roles: ['LEADER'],
+        createdAt: new Date(`${shift(sunday, -1)}T00:00:00+08:00`),
+      });
 
-      await createAccount(app, db, { person: nathan, roles: ['LEADER'] });
-
-      const eventId = await createEvent(shift(await recentSunday(), -7));
+      const eventId = await createEvent(sunday);
       const after = await roster(manuelAccount, eventId).expect(200);
       const ids = (after.body.data as { person_id: string }[]).map((line) => line.person_id);
 
@@ -334,6 +336,18 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(ids).toContain(nathan.id);
       expect(ids).not.toContain(paul.id);
       expect(ids).not.toContain(quentin.id);
+    });
+
+    it('keeps the covered branch for a Sunday before its leader was given an account', async () => {
+      const sunday = shift(await recentSunday(), -7);
+      await createAccount(app, db, { person: nathan, roles: ['LEADER'], createdAt: new Date() });
+
+      const eventId = await createEvent(sunday);
+      const ids = (
+        (await roster(manuelAccount, eventId).expect(200)).body.data as { person_id: string }[]
+      ).map((line) => line.person_id);
+
+      expect(ids).toEqual(expect.arrayContaining([nathan.id, paul.id, quentin.id]));
     });
 
     it('puts the Network roots on a Whole Church holder and on nobody else', async () => {
