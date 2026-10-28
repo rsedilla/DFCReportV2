@@ -228,6 +228,14 @@ export async function createAccount(
      * nobody without it. Needs Full view, which the database checks.
      */
     movesPeople?: boolean;
+    /**
+     * When the account was created. `EPOCH` by default, so every leader a suite gives an
+     * account held it on every Sunday the suite records: since decision 0403 a DCC
+     * checklist reads who held an account as of the Sunday, and an account created as the
+     * case runs would hold none of them. A case about a leader given an account later
+     * passes the instant.
+     */
+    createdAt?: Date;
   },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
@@ -244,6 +252,7 @@ export async function createAccount(
       status: 'ACTIVE',
       full_view: options.fullView ?? true,
       moves_people: options.movesPeople ?? false,
+      created_at: options.createdAt ?? EPOCH,
     })
     .returning('id')
     .executeTakeFirstOrThrow();

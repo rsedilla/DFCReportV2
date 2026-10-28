@@ -516,7 +516,10 @@ function Dashboard() {
     {
       key: 'dcc',
       label: 'Pending DCC Records',
-      count: pendingDcc ? `${pendingDcc.length}${pendingDccPages.hasNextPage ? '+' : ''}` : null,
+      // Leaders, not rows: a leader whose Sundays have two recorders is two rows (decision 0403).
+      count: pendingDcc
+        ? `${new Set(pendingDcc.map((row) => row.leader.person_id)).size}${pendingDccPages.hasNextPage ? '+' : ''}`
+        : null,
     },
     ...(leaderStatus || churchStatus
       ? [{ key: 'status' as const, label: 'Recording Progress', count: null }]
@@ -1668,14 +1671,22 @@ function PendingDccList({
       </Link>
     );
 
-  const account = (row: PendingDccLeader) =>
-    row.leader.has_account
-      ? null
-      : row.recorded_by_you
-        ? 'Has no account · Recorded by you'
-        : row.recorded_by !== null
-          ? `Has no account · Recorded by ${row.recorded_by.full_name}`
-          : 'Has no account';
+  // A leader whose open Sundays have two recorders is two rows (decision 0403). Where one
+  // of them is the leader's own account, the others are for Sundays before it.
+  const account = (row: PendingDccLeader) => {
+    if (row.leader.has_account) {
+      return null;
+    }
+    const since = rows.some(
+      (other) => other.leader.person_id === row.leader.person_id && other.leader.has_account,
+    );
+    const none = since ? 'No account on these Sundays' : 'Has no account';
+    return row.recorded_by_you
+      ? `${none} · Recorded by you`
+      : row.recorded_by !== null
+        ? `${none} · Recorded by ${row.recorded_by.full_name}`
+        : none;
+  };
 
   const sundays = (row: PendingDccLeader) => (
     <ul className="flex flex-col gap-1">
@@ -1756,7 +1767,10 @@ function PendingDccList({
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.leader.person_id} className={rowClasses}>
+              <tr
+                key={`${row.leader.person_id}-${row.sundays[0].event_id}`}
+                className={rowClasses}
+              >
                 <td className="px-3 py-3 align-top">
                   {name(row)}
                   {account(row) === null ? null : (
@@ -1775,7 +1789,10 @@ function PendingDccList({
           <li className="border-line text-muted border p-4 text-sm">{empty}</li>
         ) : (
           rows.map((row) => (
-            <li key={row.leader.person_id} className="border-line flex flex-col gap-2 border p-4">
+            <li
+              key={`${row.leader.person_id}-${row.sundays[0].event_id}`}
+              className="border-line flex flex-col gap-2 border p-4"
+            >
               <div className="min-w-0">
                 <p className="text-base font-medium">{name(row)}</p>
                 {account(row) === null ? null : (
