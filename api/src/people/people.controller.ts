@@ -126,6 +126,17 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // **Read before the add's transaction opens, never inside it** (decision 0401). The
+    // duplicate gate now runs inside that transaction, under the last-name lock, and a
+    // per-candidate `covers` there would take a second pool connection while holding
+    // the first: ten adds at once would each wait on a connection none could release.
+    // So the scope is read once here, as the pre-flight read does, and the gate tests
+    // a set.
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.PeopleViewSubtree,
+    );
+
     return this.people.create(
       {
         title: body.title ?? null,
@@ -148,9 +159,11 @@ export class PeopleController {
       // The same scope test the pre-flight lookup uses, so a refusal cannot
       // disclose what a read may not (section 8). Without it, a Tier 1 refusal
       // names the field that matched for a person the actor has no scope over —
-      // and the refusal happens before the transaction opens, so probing costs
-      // nothing and writes nothing.
-      (candidateId) => this.read.isWithinViewScope(actor, candidateId),
+      // and the refusal writes nothing, so probing would cost nothing.
+      (candidateId) =>
+        Promise.resolve(
+          membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(candidateId)),
+        ),
     );
   }
 

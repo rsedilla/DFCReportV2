@@ -26,16 +26,19 @@ on each other. The wait is bounded like every other lock wait (Section 24), and 
 
 Each gives its own reason, so the person deciding sees why it was shown.
 
-**3. A spelling is never a stop.** These are Tier 2 whatever else matches, the same birthday and
-mobile number included: each is a guess about how a name was written, and a guess is shown rather
-than asked about. Each reads the names alone, so a candidate reached outside the encoder's branch
+**3. A spelling is never a stop.** A spelling never raises a candidate to Tier 1, the same
+birthday and mobile number included: each is a guess about how a name was written, and a guess is
+shown rather than asked about. A candidate a spelling reaches may still be Tier 1 by another rule,
+as `Ana M` against `Ana` with the same birthday is by the small edit distance. Each reads the names alone, so a candidate reached outside the encoder's branch
 may appear as a possible match, without its tier or reasons (Section 3).
 
 **4. What is unchanged.** The edit path is not serialized by the lock; an edit is checked as
-before (decision 0396). The tree import reads the same rules and so may now show these candidates;
+before (decision 0396). Nor is the tree import, whose commit is one Admin run checked against its
+own dry run: an add made while an import commits may still record one person twice. The lock comes
+before every other lock an add takes, which Section 5 now states. The tree import reads the same rules and so may now show these candidates;
 it never stops on them.
 
 Decision 0401, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 3, 20 and 24.
+Sections 3, 5, 20 and 24.
 
 Previous: [2026-10-28 — One Cells total, and your Cells first](0400-one-cells-total-and-your-cells-first.md)

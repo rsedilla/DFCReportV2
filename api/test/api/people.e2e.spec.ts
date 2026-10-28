@@ -7,7 +7,13 @@ import request from 'supertest';
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import { PeopleService } from '../../src/people/people.service';
 import { lastNameKey } from '../../src/people/duplicate-matching';
-import { countAdvisoryWaiters, countWhileInFlight, track } from '../setup/concurrency';
+import {
+  countAdvisoryHolders,
+  countAdvisoryWaiters,
+  countWhileInFlight,
+  holdPersonLock,
+  track,
+} from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -326,6 +332,47 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
             .select('id')
             .execute(),
         ).toHaveLength(1);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('takes the last-name lock before the person lock (section 5, decision 0401)', async () => {
+      // The leader's person lock is held, so the add stops there. By then it must
+      // already hold its last-name lock: taken the other way round, it would wait on
+      // the person lock holding nothing, and the probe would find no holder.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        const { rows } = await holder.query<{ key: string }>(
+          `SELECT hashtextextended($1, 0) AS key`,
+          [`person-name:${lastNameKey('Ordenfixture')}`],
+        );
+        const nameKey = rows[0].key;
+
+        await holder.query('BEGIN');
+        const personKey = await holdPersonLock(holder, manuel.id);
+
+        const attempt = post(raymondAccount, randomUUID()).send(
+          withoutBirthday({
+            pastoral_leader_id: manuel.id,
+            first_name: 'Celia',
+            last_name: 'Ordenfixture',
+          }),
+        );
+
+        const waiting = await countWhileInFlight(
+          () => countAdvisoryWaiters(holder, personKey),
+          track(attempt),
+          'the add to wait on the leader’s person lock',
+        );
+        expect(waiting).toBe(1);
+        expect(await countAdvisoryHolders(holder, nameKey)).toBe(1);
+
+        await holder.query('COMMIT');
+        expect((await attempt).status).toBe(201);
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
@@ -768,6 +815,42 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
           reasons: ['first and last names swapped'],
         }),
       ]);
+    });
+
+    it('reaches a swapped name whose stored last name is hyphenated (decision 0401)', async () => {
+      const hyphenated = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos-Reyes',
+        network: 'MENS',
+      });
+      await assignTo(db, hyphenated.id, manuel.id);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Santos Reyes', last_name: 'Ana' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({ id: hyphenated.id, reasons: ['first and last names swapped'] }),
+      ]);
+    });
+
+    it('shows an out-of-scope spelling match as a possible match only (decision 0401)', async () => {
+      // Juan is in Rico's branch. A swapped name reaches him by the names alone, so he
+      // appears, and without the tier or the reasons (section 3).
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Testfixture', last_name: 'Juan' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      const found = (response.body.data as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === juan.id,
+      );
+      expect(found).toMatchObject({ possible_match: true });
+      expect(found).not.toHaveProperty('tier');
+      expect(found).not.toHaveProperty('reasons');
     });
 
     it('surfaces an out-of-scope candidate whose names alone explain the match', async () => {

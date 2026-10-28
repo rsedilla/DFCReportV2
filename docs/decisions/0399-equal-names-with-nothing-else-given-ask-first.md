@@ -19,8 +19,9 @@ either (Section 8). Names "equal" means equal as Section 3 compares them: a nick
 difference is not reached by this rule.
 
 **3. Edit details asks the same**, because decision 0396 checks an edit as creation is: an edit
-that leaves a person with neither a birthday nor a mobile number, and changes a name so that it
-equals somebody else's, stops and asks. The pre-flight list shows the same reason before Add is
+that changes a name, the birthday or the mobile number, and leaves the person with neither a
+birthday nor a mobile number and the same first and last name as somebody else, stops and asks.
+Removing the last of the two details from somebody who already shares a name is such an edit. The pre-flight list shows the same reason before Add is
 pressed.
 
 **4. What is unchanged.** A namesake the encoder may not see does not stop the save, as no Tier 1

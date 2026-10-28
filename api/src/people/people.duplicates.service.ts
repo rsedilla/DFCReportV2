@@ -188,6 +188,7 @@ export class PeopleDuplicatesService {
     // with `translate` over the characters that actually occur in these names.
     const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
     const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const compactLastName = sql<string>`regexp_replace(lower(translate(last_name, ${ACCENTED}, ${UNACCENTED})), '[[:space:]''’-]', '', 'g')`;
     const surnameInitial = normalizedFirstLetter(subject.lastName);
 
     // The two branches the names reach, written once and used twice: in the narrowing
@@ -205,7 +206,10 @@ export class PeopleDuplicatesService {
         eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
         // First and last names typed the wrong way round (decision 0401): the surname
         // initial above reaches the row by the other name, so it needs its own branch.
-        eb(normalizedLastName, '=', comparisonForm(subject.firstName)),
+        // Compared without spacing, hyphens or apostrophes, as the matcher compares a
+        // last name, so a stored `Santos-Reyes` or `Dela Cruz` is reached however the
+        // first name box spelled it.
+        eb(compactLastName, '=', normalizeName(subject.firstName).replace(/\s+/g, '')),
       ]);
 
     let query = executor
@@ -399,9 +403,9 @@ async function visibleCandidates(
  * The order key for a withheld candidate: their full name, then their Member ID.
  *
  * **Total, which is the property the rule needs and a name alone does not have.**
- * A withheld candidate is publishable, which requires an equal first *and* last
- * name — so every withheld candidate in one response already shares a name with
- * the others, and two carrying no middle name share the whole of it. A comparator
+ * A withheld candidate is publishable, which reads the names alone — so withheld
+ * candidates in one response often share a name, and two carrying no middle name
+ * may share the whole of it (a spelling, decision 0401, makes that rarer). A comparator
  * returning 0 there leaves `Array.prototype.sort`'s stability to decide, and what
  * it preserves is `findCandidates`'s tier order: position reads the withheld tier
  * back, which is exactly the channel the ordering rule closes. Section 3 states

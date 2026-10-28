@@ -345,7 +345,10 @@ export class PeopleService {
    * acknowledged stops the save, the person themself never counting, and an edit that
    * changes none of those fields is not checked.
    *
-   * **Asked before the transaction opens, as on create**, because the check reads the pool:
+   * **Asked before the transaction opens**, because the check reads the pool. Create differs:
+   * it checks inside its transaction under the last-name lock (decision 0401), which is safe
+   * there only because its caller reads the scope as a set before the transaction opens and the
+   * population is read through the transaction. Here, the check reads the pool:
    * asked while this request holds a connection and the row lock, it would ask a bounded pool
    * for more connections (section 24). The row is then locked and, where somebody changed one
    * of the compared fields in between, the write answers `RESOURCE_BUSY` rather than saving
