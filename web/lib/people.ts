@@ -224,6 +224,8 @@ export interface DuplicateCandidate {
    * Present only when section 8 withheld this candidate's details.
    */
   possible_match?: boolean;
+  /** Present, and true, when the candidate is archived now (decision 0404). */
+  archived?: boolean;
   tier?: 1 | 2;
   reasons?: string[];
 }

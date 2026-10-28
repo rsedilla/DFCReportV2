@@ -3,12 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 
-import { TextLink } from '@/components/ui/text-link';
+import { MatchLink, MatchNote } from '@/components/archived-match';
 
 import {
   MINIMUM_SEARCH_LENGTH,
   duplicateCandidates,
-  isWithheld,
   type DuplicateCandidate,
 } from '@/lib/people';
 
@@ -155,21 +154,14 @@ export function PossibleMatches({
             <p className="text-sm font-medium">{candidate.full_name}</p>
             <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
 
-            {isWithheld(candidate) ? (
-              <p className="text-muted mt-1 text-sm leading-relaxed">
-                A possible match. Their details are visible to the leaders who pastor them.
-              </p>
-            ) : candidate.reasons?.length ? (
-              <ul className="text-muted mt-1 list-inside list-disc text-sm">
-                {candidate.reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            ) : null}
+            <MatchNote
+              candidate={candidate}
+              adding={!excludeId}
+              withheldLine="A possible match. Their details are visible to the leaders who pastor them."
+              className="mt-1"
+            />
 
-            <TextLink href={`/people/${candidate.id}`} className="mt-1 text-sm">
-              Open this record
-            </TextLink>
+            <MatchLink candidate={candidate} className="mt-1 text-sm" />
           </li>
         ))}
       </ul>

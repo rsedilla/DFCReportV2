@@ -15,6 +15,7 @@ import {
   mockPersonCells,
   mockPersonCreated,
   mockPersonDccRefused,
+  mockArchivedMatches,
   mockPossibleMatches,
   mockSignedIn,
   mockWithoutEditBasic,
@@ -380,6 +381,24 @@ test.describe('editing a person', () => {
     await expect(box.getByText(/^Check before saving\./)).toBeVisible();
     await expect(box.getByText(PERSON_WITHHELD.full_name)).toBeVisible();
     await expect(box.getByText(PERSON_IN_SCOPE.full_name)).toHaveCount(0);
+  });
+
+  test('words an archived match for an edit, with no link where its details are withheld (decision 0404)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockArchivedMatches(page);
+
+    await page.goto(`${PROFILE}/edit`);
+    await expect(page.getByLabel('First name')).toBeVisible();
+    await page.getByLabel('Birthday (optional)').fill('1990-05-01');
+    const box = page.getByRole('region', { name: 'Someone similar is already recorded' });
+    await expect(box).toBeVisible();
+    await expect(box.getByText('Archived', { exact: true })).toBeVisible();
+    await expect(
+      box.getByText('This person was archived. If this is them, ask the Admin to restore them.'),
+    ).toBeVisible();
+    await expect(box.getByRole('link', { name: 'Open this record' })).toHaveCount(0);
   });
 
   test('asks about a strong match before saving, then saves as different people', async ({
