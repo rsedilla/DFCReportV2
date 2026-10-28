@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
+import type { RangeKind } from '@/lib/report-range';
 import type { TrendFigure } from '@/lib/reports';
 import { cn } from '@/lib/utils';
 
@@ -126,15 +127,14 @@ export function ReportsTabs({
   month?: string;
   /**
    * The Senior Pastors' two views of one figure (decision 0377): by period, or its last twelve
-   * months, the screen that was `Trends`. Their screens and a Full view leader's offer the
-   * switch (decision 0380).
+   * months, the screen that was `Trends`, so each tab's link keeps the view. The switch between
+   * them is the report's own (decision 0398), beside its month.
    */
   view?: 'period' | 'trend';
   /** The leader a twelve-month view draws, kept from tab to tab. */
   leader?: string | null;
   children: ReactNode;
 }) {
-  const router = useRouter();
   // Which tabs follow the screens the server names (decision 0323, point 5), never a role.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
@@ -204,28 +204,93 @@ export function ReportsTabs({
           })}
         </nav>
       ) : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>
-        {/* The Senior Pastors' figure by period or over its last twelve months, one tab row for
-            both (decision 0377), so the sidebar carries no second item for the same five; a Full
-            view leader's the same, for their own branch (decision 0380). */}
-        {(seniorPastor || branch) && current in TREND_FIGURE ? (
-          <ViewSwitch
-            label="Which view"
-            even="content"
-            options={[
-              { key: 'period', label: 'By period' },
-              { key: 'trend', label: 'Last 12 months' },
-            ]}
-            value={view}
-            onChange={(next) => {
-              const tab = SENIOR_PASTOR_TABS.find((each) => each.key === current)!;
-              router.push(next === 'trend' ? trendHref(TREND_FIGURE[tab.key]) : tab.path);
-            }}
-          />
-        ) : null}
-        {children}
-      </div>
+      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
     </>
+  );
+}
+
+const PERIOD_LABEL: Record<RangeKind, string> = {
+  WEEK: 'Weekly',
+  MONTH: 'Monthly',
+  QUARTER: 'Quarterly',
+  YEAR: 'Year',
+};
+
+/** The lengths each tab offers beside its last twelve months (decision 0398). */
+export function periodsOf(tab: ReportTab, seniorPastor: boolean): readonly RangeKind[] {
+  if (tab !== 'cells' && tab !== 'dcc') {
+    return ['MONTH'];
+  }
+  // A Full view leader's Weekly and Monthly (decision 0380); the Senior Pastors' four.
+  return seniorPastor ? ['WEEK', 'MONTH', 'QUARTER', 'YEAR'] : ['WEEK', 'MONTH'];
+}
+
+/**
+ * The Senior Pastors' and a Full view leader's one switch (decision 0398, amending 0377): the
+ * report's lengths and its last twelve months side by side, in place of a *By period* or *Last
+ * 12 months* row above the lengths. Choosing a length opens that tab by period; *Last 12
+ * months* opens the twelve months, where the period's month stepper has nothing to step.
+ * Renders nothing for any other reader, whose tabs have no twelve months.
+ */
+export function ReportViewSwitch({
+  tab,
+  value,
+  onPeriod,
+  leader,
+}: {
+  tab: ReportTab;
+  /** The length on screen, or `TREND` for the twelve months. */
+  value: RangeKind | 'TREND';
+  /** Another length of the same tab; left out, it opens the tab's own address. */
+  onPeriod?: (kind: RangeKind) => void;
+  /** The leader a twelve-month view draws, kept from tab to tab. */
+  leader?: string | null;
+}) {
+  const router = useRouter();
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  if (!(seniorPastor || isBranchReader(me.data)) || !(tab in TREND_FIGURE)) {
+    return null;
+  }
+  const path = SENIOR_PASTOR_TABS.find((each) => each.key === tab)!.path;
+  const periods = periodsOf(tab, seniorPastor);
+
+  const options: { key: RangeKind | 'TREND'; label: string }[] = [
+    ...periods.map((key) => ({ key, label: PERIOD_LABEL[key] })),
+    { key: 'TREND', label: 'Last 12 months' },
+  ];
+
+  return (
+    <ViewSwitch<RangeKind | 'TREND'>
+      label="Report period"
+      // Every button one width, as wide as *Last 12 months*, in one row from `sm` up. On a phone
+      // two a row and *Last 12 months* the whole last row, so no label breaks (decision 0398).
+      className="mt-0 grid w-full grid-cols-2 sm:flex sm:w-auto sm:flex-nowrap"
+      options={options.map((option, index) => ({
+        ...option,
+        className: cn(
+          'justify-center px-2 text-center sm:w-29',
+          // Alone on its row only where the lengths fill theirs: a # tab's two share one.
+          options.length % 2 === 1 && option.key === 'TREND' && 'col-span-2',
+          // The grid's rows and columns share one border, as the row's buttons do.
+          index >= 2 && '-mt-px sm:mt-0',
+          index > 0 && index % 2 === 0 && 'ml-0 sm:-ml-px',
+        ),
+      }))}
+      value={value}
+      onChange={(next) => {
+        if (next === value) {
+          return;
+        }
+        if (next === 'TREND') {
+          router.push(trendHref(TREND_FIGURE[tab as keyof typeof TREND_FIGURE], leader));
+        } else if (onPeriod && value !== 'TREND') {
+          onPeriod(next);
+        } else {
+          router.push(next === 'MONTH' ? path : `${path}?period=${next.toLowerCase()}`);
+        }
+      }}
+    />
   );
 }
 

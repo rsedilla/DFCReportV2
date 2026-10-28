@@ -416,7 +416,7 @@ test.describe('My 12 on DCC', () => {
 
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(page.getByLabel('Figures for')).toHaveCount(0);
-    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly']);
+    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Last 12 months']);
   });
 });
 

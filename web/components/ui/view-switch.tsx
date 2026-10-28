@@ -23,7 +23,14 @@ export function ViewSwitch<Key extends string>({
 }: {
   label: string;
   /** `name` is what a screen reader says, where `label` is shorter than words (`#`). */
-  options: readonly { key: Key; label: string; name?: string; count?: string | null }[];
+  options: readonly {
+    key: Key;
+    label: string;
+    name?: string;
+    count?: string | null;
+    /** Sizes one button where the switch lays them out itself. */
+    className?: string;
+  }[];
   value: Key;
   onChange: (key: Key) => void;
   className?: string;
@@ -64,6 +71,7 @@ export function ViewSwitch<Key extends string>({
               pressed
                 ? 'bg-accent text-surface border-accent relative'
                 : 'border-line text-ink hover:bg-raised',
+              option.className,
             )}
           >
             {option.label}

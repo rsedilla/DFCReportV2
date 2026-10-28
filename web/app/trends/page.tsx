@@ -9,6 +9,7 @@ import {
   isBranchReader,
   ReportsHeading,
   ReportsTabs,
+  ReportViewSwitch,
   type ReportTab,
 } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -116,10 +117,12 @@ function TrendsScreen() {
       <ReportsHeading line="The last 12 months, one point a month." />
 
       {/* The Senior Pastors' twelve months are a view of Reports (decision 0377): the same tabs,
-          and the switch back to By period above the controls. */}
+          and the one switch back to a length first in the bar (decision 0398). */}
       <ReportsTabs current={TAB_OF[figure]} view="trend" leader={leader}>
-        {branch ? null : (
         <div className={`mt-4 ${CONTROL_BAR}`}>
+          <ReportViewSwitch tab={TAB_OF[figure]} value="TREND" leader={leader} />
+          {/* A Full view leader draws their own branch alone, with no Show list (decision 0380). */}
+          {branch ? null : (
           <div>
             <label htmlFor="trends-show" className="field-label block">
               Show
@@ -145,8 +148,8 @@ function TrendsScreen() {
               ))}
             </select>
           </div>
+          )}
         </div>
-        )}
 
         <div className="mt-4">
           <FailureNotice failure={trends.isError ? describeFailure(trends.error) : null} />

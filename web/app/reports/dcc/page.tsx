@@ -15,7 +15,12 @@ import {
   TwelveTable,
 } from '@/components/my-twelve';
 import { YearTable } from '@/components/report-year';
-import { isBranchReader, ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
+import {
+  isBranchReader,
+  ReportsHeading,
+  ReportsTabs,
+  ReportViewSwitch,
+} from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { describeFailure } from '@/lib/messages';
@@ -120,26 +125,10 @@ export function DccReport() {
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
         <div className={`mt-6 ${CONTROL_BAR}`}>
-          {/* The Senior Pastors' controls in one row: period, month, Figures for (owner, 2026-10-09). */}
-          {seniorPastor ? (
-            <PeriodTabs
-              inBar
-              value={kind}
-              onChange={period.choosePeriodKind}
-            />
-          ) : null}
-          {/* A Full view leader's period, labelled, in one row with the others (decision 0363). */}
-          {branchReader ? (
-            <div>
-              <p className="field-label">Show</p>
-              {/* Weekly and Monthly only (decision 0380). */}
-              <PeriodTabs
-                labelled
-                kinds={['WEEK', 'MONTH']}
-                value={kind}
-                onChange={period.choosePeriodKind}
-              />
-            </div>
+          {/* The Senior Pastors' and a Full view leader's one switch, its lengths and its last 12
+              months (decision 0398), then the month, then Figures for (owner, 2026-10-09). */}
+          {seniorPastor || branchReader ? (
+            <ReportViewSwitch tab="dcc" value={kind} onPeriod={period.choosePeriodKind} />
           ) : null}
           {reach?.kind === 'none' ? null : (
             <RangeNavigator
@@ -149,7 +138,7 @@ export function DccReport() {
               earliest={reach?.kind === 'open' ? reach.earliest : undefined}
               open={twelve.data?.open}
               quiet={seniorPastor}
-              labelled={branchReader}
+              labelled={branchReader || seniorPastor ? 'bare' : false}
               onChange={period.choosePeriodStart}
             />
           )}

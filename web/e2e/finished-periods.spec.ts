@@ -41,7 +41,7 @@ for (const each of TABS) {
 
       await expect(
         page.getByRole('group', { name: 'Report period' }).getByRole('button'),
-      ).toHaveText(['Weekly', 'Monthly']);
+      ).toHaveText(['Weekly', 'Monthly', 'Last 12 months']);
     });
 
     for (const period of ['quarter', 'year']) {
