@@ -1203,7 +1203,16 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
   // Decision 0404: an archived candidate says so, in scope and out, so an encoder asks
   // for a restore rather than adding the person again.
   describe('an archived candidate is labelled (SKILL.md section 3, decision 0404)', () => {
+    // Archiving ends the Person's pastoral assignment too, as the archive does (section 5).
     async function setState(personId: string, state: 'CURRENT' | 'ARCHIVED') {
+      if (state === 'ARCHIVED') {
+        await db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: new Date() })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+      }
       await db
         .updateTable('person_lifecycle')
         .set({ ended_at: new Date() })
@@ -1229,7 +1238,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     }
 
     it('carries the flag for an archived candidate outside the scope, and nothing more', async () => {
-      // Juan is in Rico's branch. He still appears by the names alone, as before, and
+      // Juan was in Rico's branch. He still appears by the names alone, as before, and
       // what is added is that he is archived -- not the tier or the reasons.
       await setState(juan.id, 'ARCHIVED');
 
