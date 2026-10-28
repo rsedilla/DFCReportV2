@@ -532,15 +532,15 @@ function Dashboard() {
         <h1 className="text-2xl font-bold tracking-tight">
           {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
         </h1>
-        <p className="text-muted text-sm">
-          {me.data === undefined
-            ? null
-            : recordingOnly
+        {/* A Full view leader's tabs already say what is recorded here and who is behind,
+            so their heading carries no line (decision 0402). */}
+        {me.data === undefined || !(recordingOnly || seniorPastor) ? null : (
+          <p className="text-muted text-sm">
+            {recordingOnly
               ? 'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.'
-              : seniorPastor
-                ? 'Whether the church has recorded, and your own work.'
-                : 'Record your Cell Group meetings and DCC Sundays here, and see who in your branch still has to.'}
-        </p>
+              : 'Whether the church has recorded, and your own work.'}
+          </p>
+        )}
       </div>
 
       <div className="mt-6">

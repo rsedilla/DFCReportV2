@@ -15,7 +15,6 @@ export default function AbsentPage() {
       <main id="main" className={PAGE_WIDTH.INDEX}>
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-          <p className="text-muted text-sm">The people you oversee who have been away three months.</p>
         </div>
 
         <PeopleTabs current="/people/absent">
