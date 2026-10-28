@@ -706,6 +706,16 @@ export class DccAttendanceService {
     includesRoots: boolean,
   ): Promise<Set<string>> {
     const checklist = new Set<string>();
+
+    // **Who held an account is read as of the Sunday** (decision 0403), here as below. A
+    // leader given an account after the Sunday did not owe it: the leader above who
+    // covered it keeps it, so this leader's checklist for it is empty.
+    if (
+      (await this.accounts.personsHoldingAccounts(executor, [submitterId], event.at)).size === 0
+    ) {
+      return checklist;
+    }
+
     const visited = new Set<string>([canonical(submitterId)]);
     let frontier = [submitterId];
 
@@ -737,7 +747,9 @@ export class DccAttendanceService {
       // theirs rather than this actor's. Section 9: "where a leader with an account
       // sits between them and the leader without one, the obligation is the nearer
       // leader's, and showing it to both leaves each assuming the other will submit."
-      const holders = await this.accounts.personsHoldingAccounts(executor, fresh);
+      // Held as of the Sunday (decision 0403), so a leader given one since leaves the
+      // Sunday with the leader who covered it.
+      const holders = await this.accounts.personsHoldingAccounts(executor, fresh, event.at);
       frontier = fresh.filter((childId) => !holders.has(childId));
     }
 
@@ -926,7 +938,7 @@ export class DccAttendanceService {
    * 0397). So a leader records and corrects a Sunday they owed for somebody archived or moved
    * to another leader since. **Unlike an ACTIVE Cell**, whose meetings pass to its new leader
    * (section 7), a DCC Sunday stays on the checklist the leader is shown for it, which section 9
-   * walks through the tree as of the Sunday (account holders being read now). The actor must hold the capability at some scope, and the dated
+   * walks through the tree as of the Sunday (account holders read as of it too, decision 0403). The actor must hold the capability at some scope, and the dated
    * walk never reaches the actor themself, who records no line of their own (decision 0322).
    */
   private async coversPersonWithin(

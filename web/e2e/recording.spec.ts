@@ -1409,7 +1409,7 @@ test.describe('a DCC checklist in sections', () => {
       'Nestor Ilagan’s people',
       'Network roots',
     ]);
-    await expect(page.getByText('Nestor Ilagan has no account yet, so you record them.')).toBeVisible();
+    await expect(page.getByText('Nestor Ilagan had no account on this Sunday, so you record them.')).toBeVisible();
     await expect(page.getByText(/^0 of 5 marked$/)).toBeVisible();
 
     const yours = page.getByRole('region', { name: /^Your 12/ });

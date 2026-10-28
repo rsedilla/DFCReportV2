@@ -752,7 +752,7 @@ export class DccCoverageService {
    * levels down (decision 0324 is *Leaders Under Me*'s).
    *
    * **The recorder, Record and See checklist follow the row's oldest Sunday**, and who holds
-   * an account is read now, as the recording route reads it (section 9). The recorder is
+   * an account is read as of that Sunday, as the recording route reads it (section 9, decision 0403). The recorder is
    * named only where the reader's scope covers them (owner, 2026-10-13), and a row without
    * Record never names the leader whose screen it would open (decision 0313, point 14).
    *
@@ -981,7 +981,7 @@ export class DccCoverageService {
       const { owed, owing } = await this.obligations(executor, event, null);
       // Accounts as they stood on the Sunday, so a later account moves no past period
       // (decision 0325, owner 2026-10-08).
-      const submitters = await this.submittersOf(event, [...owed], executor, true);
+      const submitters = await this.submittersOf(event, [...owed], executor);
       const firstAt = await this.firstRecordedFor(executor, event.id);
       const due = recordDueAt(event.eventDate);
       // Per submitter, the earliest first record among the lines that count the Sunday as
@@ -1046,10 +1046,10 @@ export class DccCoverageService {
     event: EventRow,
     leaderIds: readonly string[],
     executor: Db = this.db,
-    /** Read who holds an account as of the event rather than now (decision 0325). */
-    accountsAsOfEvent = false,
   ): Promise<Map<string, string>> {
-    const accountsAt = accountsAsOfEvent ? event.at : undefined;
+    // Who held an account is read as of the event: Recording Progress since decision 0325,
+    // and recording and Record's lists since decision 0403, so all three agree.
+    const accountsAt = event.at;
     const result = new Map<string, string>();
     const holders = new Set(
       [...(await this.accounts.personsHoldingAccounts(executor, leaderIds, accountsAt))].map((id) =>
