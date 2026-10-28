@@ -949,10 +949,11 @@ export const ARCHIVED_MATCHES = [
     archived: true,
   },
   {
-    id: PERSON_IN_SCOPE.id,
-    member_id: PERSON_IN_SCOPE.member_id,
-    full_name: PERSON_IN_SCOPE.full_name,
-    sex: PERSON_IN_SCOPE.sex,
+    // Not the person a profile spec edits, so Edit details lists it too.
+    id: '44444444-5555-4666-8777-888888888888',
+    member_id: 'M-000316',
+    full_name: 'Corazon Dizon Ramos',
+    sex: 'FEMALE',
     tier: 2,
     reasons: ['Same first and last name'],
     archived: true,

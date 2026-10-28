@@ -5,8 +5,9 @@ import { isWithheld, type DuplicateCandidate } from '@/lib/people';
  * What a duplicate candidate says beneath their name and Member ID (SKILL.md section 3).
  *
  * An archived candidate carries an *Archived* tag and asks for a restore rather than a second
- * record (decision 0404), in place of the reasons or the possible-match line. `adding` picks the
- * wording: on Edit details nobody is being added.
+ * record (decision 0404), in place of the possible-match line. A candidate the reader may see in
+ * full keeps the reasons it matched beneath it. `adding` picks the wording: on Edit details nobody
+ * is being added.
  */
 export function MatchNote({
   candidate,
@@ -19,31 +20,38 @@ export function MatchNote({
   withheldLine: string;
   className: string;
 }) {
+  const withheld = isWithheld(candidate);
+  const reasons =
+    !withheld && candidate.reasons?.length ? (
+      <ul className={`text-muted list-inside list-disc text-sm ${className}`}>
+        {candidate.reasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+    ) : null;
+
   if (candidate.archived) {
     return (
-      <p className={`text-muted text-sm leading-relaxed ${className}`}>
-        <span className="border-ink text-ink mr-2 inline-block border px-1.5 text-xs font-bold tracking-[0.06em] uppercase">
-          Archived
-        </span>
-        This person was archived.{' '}
-        {adding
-          ? 'Ask the Admin to restore them instead of adding them again.'
-          : 'If this is them, ask the Admin to restore them.'}
-      </p>
+      <>
+        <p className={`text-muted text-sm leading-relaxed ${className}`}>
+          <span className="border-ink text-ink mr-2 inline-block border px-1.5 text-xs font-bold tracking-[0.06em] uppercase">
+            Archived
+          </span>
+          This person was archived.{' '}
+          {adding
+            ? 'Ask the Admin to restore them instead of adding them again.'
+            : 'If this is them, ask the Admin to restore them.'}
+        </p>
+        {reasons}
+      </>
     );
   }
 
-  if (isWithheld(candidate)) {
+  if (withheld) {
     return <p className={`text-muted text-sm leading-relaxed ${className}`}>{withheldLine}</p>;
   }
 
-  return candidate.reasons?.length ? (
-    <ul className={`text-muted list-inside list-disc text-sm ${className}`}>
-      {candidate.reasons.map((reason) => (
-        <li key={reason}>{reason}</li>
-      ))}
-    </ul>
-  ) : null;
+  return reasons;
 }
 
 /**

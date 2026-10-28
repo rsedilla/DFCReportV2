@@ -15,6 +15,7 @@ import {
   mockPersonCells,
   mockPersonCreated,
   mockPersonDccRefused,
+  ARCHIVED_MATCHES,
   mockArchivedMatches,
   mockPossibleMatches,
   mockSignedIn,
@@ -383,7 +384,7 @@ test.describe('editing a person', () => {
     await expect(box.getByText(PERSON_IN_SCOPE.full_name)).toHaveCount(0);
   });
 
-  test('words an archived match for an edit, with no link where its details are withheld (decision 0404)', async ({
+  test('words an archived match for an edit, linked only where its details may be read (decision 0404)', async ({
     page,
   }) => {
     await signedInWithPeople(page);
@@ -394,11 +395,15 @@ test.describe('editing a person', () => {
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
     const box = page.getByRole('region', { name: 'Someone similar is already recorded' });
     await expect(box).toBeVisible();
-    await expect(box.getByText('Archived', { exact: true })).toBeVisible();
+    await expect(box.getByText('Archived', { exact: true })).toHaveCount(2);
     await expect(
       box.getByText('This person was archived. If this is them, ask the Admin to restore them.'),
-    ).toBeVisible();
-    await expect(box.getByRole('link', { name: 'Open this record' })).toHaveCount(0);
+    ).toHaveCount(2);
+    const [withheld, inScope] = ARCHIVED_MATCHES;
+    const row = (name: string) => box.getByRole('listitem').filter({ hasText: name });
+    const link = (name: string) => row(name).getByRole('link', { name: 'Open this record' });
+    await expect(link(withheld.full_name)).toHaveCount(0);
+    await expect(link(inScope.full_name)).toHaveAttribute('href', `/people/${inScope.id}`);
   });
 
   test('asks about a strong match before saving, then saves as different people', async ({

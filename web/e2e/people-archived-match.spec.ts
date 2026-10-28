@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import {
-  ARCHIVED_MATCHES,
-  PERSON_IN_SCOPE,
-  mockArchivedMatches,
-  mockPeople,
-  mockSignedIn,
-} from './mock-api';
+import { ARCHIVED_MATCHES, mockArchivedMatches, mockPeople, mockSignedIn } from './mock-api';
 
 /**
  * An archived duplicate candidate is labelled, and the reader is asked to have them restored
@@ -41,14 +35,15 @@ test.describe('an archived match (decision 0404)', () => {
         ),
       ).toBeVisible();
     }
-    // The line takes the place of the possible-match line and of the reasons.
+    // The line takes the place of the possible-match line; the reasons stay where they may be
+    // read.
     await expect(box.getByText(/A possible match/)).toHaveCount(0);
-    await expect(box.getByText('Same first and last name')).toHaveCount(0);
+    await expect(inScope.getByText('Same first and last name')).toBeVisible();
 
     await expect(withheld.getByRole('link', { name: 'Open this record' })).toHaveCount(0);
     await expect(inScope.getByRole('link', { name: 'Open this record' })).toHaveAttribute(
       'href',
-      `/people/${PERSON_IN_SCOPE.id}`,
+      `/people/${IN_SCOPE.id}`,
     );
   });
 

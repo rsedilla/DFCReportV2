@@ -15,7 +15,9 @@ and on the refusal that asks for a Tier 1 acknowledgement. The state is read as 
 **2. The screen shows an *Archived* tag and one line.** On Add a person: "This person was archived.
 Ask the Admin to restore them instead of adding them again." On Edit details, where nobody is being
 added: "This person was archived. If this is them, ask the Admin to restore them." The line takes
-the place of "A possible match. Their details are visible to the leaders who pastor them."
+the place of "A possible match. Their details are visible to the leaders who pastor them." A match
+the reader may see in full keeps the reasons it matched beneath the line, so a Tier 1 match is still
+acknowledged knowing why it matched.
 
 **3. No *Open this record* link where the reader sees no details.** An archived match outside the
 reader's scope opens a page that shows nothing they can act on, so the link is left out. Inside the
