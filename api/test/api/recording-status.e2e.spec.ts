@@ -67,7 +67,8 @@ describe('Recording status (decision 0325)', () => {
 
   /**
    * Every account so far existed long before any week read here: Recording status reads who
-   * held an account as of each Sunday (decision 0325), and a fixture's is created now.
+   * held an account as of each Sunday (decision 0325). The fixture has created accounts at
+   * `EPOCH` since decision 0403, so this now only restates it for the cases written before.
    */
   async function accountsHeldSinceLongAgo(): Promise<void> {
     await db.updateTable('accounts').set({ created_at: LONG_AGO }).execute();
@@ -359,7 +360,7 @@ describe('Recording status (decision 0325)', () => {
     await leader('Dan', 'Esguerra', ana);
     await createEvent(day(7));
     // Ana is given an account now, after the Sunday: on the Sunday Oriel recorded her people.
-    await createAccount(app, db, { person: ana, roles: ['LEADER'] });
+    await createAccount(app, db, { person: ana, roles: ['LEADER'], createdAt: new Date() });
 
     const response = await status(pastor, 'WEEK', monday).expect(200);
 
