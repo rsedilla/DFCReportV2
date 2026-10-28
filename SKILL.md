@@ -324,7 +324,7 @@ Two situations produce a Person with no birthday, and the second is why this is 
 
 **No list of people missing a birthday or a mobile number is offered** (ruling of 2026-09-22, decision 0272). A list would keep pressing the people who chose not to give one. Instead the person's own record offers to add a detail that is not recorded, to a reader who may edit it.
 
-**Absence is honest, and the matcher already accounts for it.** With no birthday on either side, neither of the two Tier 1 rules that read one can fire. Where the first and last names are equal the pair falls to the Tier 2 rule below that names an absent birthday explicitly, which is correct: less is known, so less is claimed.
+**Absence is honest, and the matcher already accounts for it.** With no birthday on either side, neither of the two Tier 1 rules that read one can fire. Where the first and last names are equal the pair falls to the Tier 2 rule below that names an absent birthday explicitly, which is correct: less is known, so less is claimed. **Except where nothing else was given** (ruling of 2026-10-28, decision 0399): when the person being added or edited has neither a birthday nor a mobile number, equal first and last names are Tier 1, because the names are then all there is and nothing can tell the two apart. The rule reads what was given and never what the other record holds, so it says nothing about either field (Section 8). The tree import does not apply it: its rows carry no *Not given yet* tick.
 
 **The second of those two rules usually falls to nothing at all**, and that is worth saying because the fall-through is not uniform. Tier 1's nickname-or-near-miss rule reads a last name, a first name and a birthday; the Tier 2 rule that catches an absent birthday requires **both** names equal. So two records with the same surname and a first name that is a nickname or a typo — `Mary` against `Maria`, `Jaun` against `Juan` — surface at no tier once the birthday is gone.
 
@@ -448,12 +448,16 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 - same birthday, and normalized last and first names both equal
 - same birthday, last name equal, and first name a known nickname variant or within a small edit distance
+- normalized last and first names both equal, where the person being added or edited has neither a birthday nor a mobile number (decision 0399)
 
 **Tier 2 — possible.** Present in a candidate list:
 
 - same birthday and last name equal
 - last name and first name equal, where birthday differs or is absent
 - high whole-name similarity with birthdays differing by a transposition of digits
+- one of three spellings that hid a person from every rule above (ruling of 2026-10-28, decision 0401): `Ma.` written for `Maria`, with the last names equal; the first and last names typed the wrong way round; and two first names against one, the one being the other's first word, with the last names equal (`Ana Marie` against `Ana`). These are **never Tier 1**, whatever else matches: each is a guess about how a name was written, and a guess is shown rather than asked about. `Ma.` is the only abbreviation read, a closed list as the suffixes are. Each reads the names alone, so a candidate it reaches outside the viewer's scope may appear as a possible match below.
+
+**Two adds of one person at the same moment are checked one after the other** (decision 0401). An add checks for duplicates and writes inside one transaction, after taking a lock on the last name as these rules compare it; every Tier 1 rule needs the last names equal, so two adds that could be one person twice always meet on that lock. The second waits, then checks against the first, and is asked as it would have been a minute later. Adds with different last names never wait on each other. The edit path is not serialized this way.
 
 **Never a match on its own:** a common surname alone, a first name alone, or sex alone. Sex is a supporting signal: a mismatch lowers confidence but never excludes a candidate, because it is a frequently mis-keyed field.
 
@@ -481,7 +485,7 @@ It follows that no publishable match is ever Tier 1, so **an out-of-scope candid
 
 The predicate that narrows the list is therefore given the tier and the identifier and nothing else. Handing it the whole candidate would leave the next one that is written able to read a birthday, with nothing to fail on it.
 
-**What an appearing candidate carries.** In scope, the tier and the reasons it matched. Out of scope, neither. The reasons name the field, and the tier is derived from which rule fired — with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not, so returning the tier church-wide is the same oracle one step removed.
+**What an appearing candidate carries.** In scope, the tier and the reasons it matched. Out of scope, neither. The reasons name the field, and the tier is derived from which rule fired — with an equal first and last name and a birthday given, Tier 1 means the birthday matched and Tier 2 means it did not, so returning the tier church-wide is the same oracle one step removed.
 
 **In what order they appear.** Candidates in scope come first, strongest match first, which is what keeps the one the viewer can actually act on at the top. Withheld candidates follow, ordered by **full name and then Member ID** — both of them fields Section 8 already publishes to a viewer outside the scope. Strongest-first is itself the tier, so a withheld candidate placed above one whose tier *is* shown reads its withheld tier back off its position, and with an equal name that reads back the birthday.
 
@@ -499,7 +503,7 @@ All three parts apply wherever candidates are returned, including the refusal th
 
 An out-of-scope Tier 1 candidate cannot be shown with its tier or reasons, so refusing on one would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all — a worse failure than the duplicate, and what this section means by never blocking creation.
 
-And the refusal itself is a channel. Every Tier 1 rule reads a birthday or a mobile number, so gating on an out-of-scope candidate would make the response vary — refused against created — with a value Section 8 protects. That is the same disclosure as the candidate list, one field further out.
+And the refusal itself is a channel. Every Tier 1 rule but one reads a birthday or a mobile number, so gating on an out-of-scope candidate would make the response vary — refused against created — with a value Section 8 protects. That is the same disclosure as the candidate list, one field further out. The one that reads neither (decision 0399) is held to the same gate by the first reason: its candidate still cannot be shown in full.
 
 **The cost is real and is accepted here rather than discovered later.** A cross-branch duplicate whose match rests on a birthday — the woman whose surname changed on marriage is the case this section names — is no longer surfaced to a leader outside her branch. It is still surfaced to the leader who holds her, and to Admin and the Senior Pastors at Whole Church scope, which is where a merge is authorized from in any case (Section 3, Person Merge).
 
@@ -4611,7 +4615,7 @@ Both views of a domain cover the same population, and both must sum to it.
 
 **A report is computed inside one transaction, opened `READ ONLY` and at `REPEATABLE READ`** (ruling of 2026-09-05), and that is what makes the sentence above a property of the read rather than an accident of timing. Section 24 runs the application at `READ COMMITTED`, where every statement takes its own snapshot even inside one transaction, so two figures read separately can cover two populations and the identity fails with nothing raised. The first DCC report held the identity by taking every figure in **one statement**, which is sound at any isolation level and does not reach across modules: Section 2 requires the owning module to compute, so a leader-scoped report reads the tree from `hierarchy` and the figures from `attendance`, and coverage adds a third. Each module's own read stays one statement; the transaction is what carries the identity **between** them, and `REPEATABLE READ` is the half of it that does the work.
 
-**This is a per-transaction override and never a change to `default_transaction_isolation`.** Section 24 records three mechanisms that depend on `READ COMMITTED` — the Section 5 person lock, the Section 7 grant-limit triggers, and the Section 6 bootstrap — each of which locks and *then* decides, and each of which would decide on a pre-lock snapshot if the default moved. A reporting transaction takes **no row or advisory lock** — the kind all three of those use — writes nothing, and authorizes nothing, so the two levels coexist. Nothing about the default changes. Section 24 states both of those clauses exactly, including what would falsify the second; this sentence defers to it rather than restating it, because the same claim written twice is the shape that leaves one copy uncorrected.
+**This is a per-transaction override and never a change to `default_transaction_isolation`.** Section 24 records four mechanisms that depend on `READ COMMITTED` — the Section 5 person lock, the Section 7 grant-limit triggers, the Section 6 bootstrap, and the Section 3 last-name lock on an add — each of which locks and *then* decides, and each of which would decide on a pre-lock snapshot if the default moved. A reporting transaction takes **no row or advisory lock** — the kind all four of those use — writes nothing, and authorizes nothing, so the two levels coexist. Nothing about the default changes. Section 24 states both of those clauses exactly, including what would falsify the second; this sentence defers to it rather than restating it, because the same claim written twice is the shape that leaves one copy uncorrected.
 
 A stored figure for a closed month is computed once (below), so this governs the open month and any recomputation.
 
@@ -5384,6 +5388,8 @@ Some of those cases would fail loudly rather than silently — where the loser's
 **A second dependency arrived with the grant limit in Section 7.** Its two constraint triggers take `FOR NO KEY UPDATE` on the account and then read the other table to decide, which is the same shape one statement further in: under `READ COMMITTED` the read after the lock sees the transaction that held it first, while under `REPEATABLE READ` the whole transaction answers from one snapshot taken before the lock — so the triggers would serialize correctly and then decide on stale reads, and because the two writers touch different tables neither raises a serialization failure to warn anybody.
 
 **A third arrived with the first-Admin bootstrap in Section 6.** It takes a transaction-scoped advisory lock and *then* reads whether any account exists, which is the same shape again — the lock statement is snapshot-taking, so under `REPEATABLE READ` the snapshot would be fixed before the lock is granted and the loser would read a pre-lock `accounts`. It is the least forgiving of the three: there is no unique constraint behind it, so two runs would both create an Admin with nothing raised.
+
+**A fourth arrived with the last-name lock on an add in Section 3** (decision 0401). It takes a transaction-scoped advisory lock and *then* reads the people a duplicate check compares against, the same shape as the bootstrap: under `REPEATABLE READ` the loser would check a population read before the winner committed, and both would be added with nothing raised.
 
 The row lock also requires those trigger functions to be `VOLATILE`, which is their default. That is not a silent dependency: PostgreSQL runs a non-volatile function's statements read-only and refuses a row-locking `SELECT` inside one, so marking them otherwise fails at the lock rather than quietly weakening the rule.
 
