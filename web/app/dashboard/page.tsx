@@ -516,7 +516,10 @@ function Dashboard() {
     {
       key: 'dcc',
       label: 'Pending DCC Records',
-      count: pendingDcc ? `${pendingDcc.length}${pendingDccPages.hasNextPage ? '+' : ''}` : null,
+      // Leaders, not rows: a leader whose Sundays have two recorders is two rows (decision 0403).
+      count: pendingDcc
+        ? `${new Set(pendingDcc.map((row) => row.leader.person_id)).size}${pendingDccPages.hasNextPage ? '+' : ''}`
+        : null,
     },
     ...(leaderStatus || churchStatus
       ? [{ key: 'status' as const, label: 'Recording Progress', count: null }]
@@ -1675,7 +1678,7 @@ function PendingDccList({
       return null;
     }
     const since = rows.some(
-      (other) => other !== row && other.leader.person_id === row.leader.person_id,
+      (other) => other.leader.person_id === row.leader.person_id && other.leader.has_account,
     );
     const none = since ? 'No account on these Sundays' : 'Has no account';
     return row.recorded_by_you

@@ -938,8 +938,8 @@ export class DccCoverageService {
             last_name: line.lastName,
             first_name: line.firstName,
             is_actor: line.leaderId === me,
-            // Held on this row's Sundays (decision 0403), which is now unless an account was
-            // given since.
+            // The leader records this row's Sundays themself (section 9): held an account on
+            // them, or holds one now where nobody above held one then (decision 0403).
             has_account: ownAccount,
           },
           recorded_by: named
