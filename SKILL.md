@@ -4289,6 +4289,8 @@ SUYNL      a Leader account, with Full view or without, in Growth's place: the G
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
+**A page is as wide as what it shows, and starts beside the sidebar** (ruling of 2026-10-28, decision 0402). A list or a table is up to 1280px wide, one person's page up to 1024px, and a form up to 768px; on a wider screen the spare width falls to the right rather than being shared on both sides, so moving between pages moves only the right-hand edge. **A heading carries no line that only repeats its title, tabs, headline or the labels below it**; a line stays where it says something the page does not, such as a count, what a name stands for, or an instruction. The People tab's heading line named in decision 0385 is gone by this rule.
+
 Do not add Birthday as a sidebar item.
 
 Birthday remains person data and is used to calculate age.

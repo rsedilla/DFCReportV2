@@ -16,7 +16,6 @@ export default function AwaitingLeaderPage() {
       <main id="main" className={PAGE_WIDTH.INDEX}>
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-          <p className="text-muted text-sm">The people you oversee waiting for a new leader.</p>
         </div>
 
         <PeopleTabs current="/people/awaiting-leader">

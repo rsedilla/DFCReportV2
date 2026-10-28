@@ -64,7 +64,8 @@ test.describe('the Cells list', () => {
     await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
     // Record's Awaiting CG Assignment is where that list lives (decision 0343).
     await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveCount(0);
-    await expect(page.getByText('Your Cells and this month’s meetings.')).toBeVisible();
+    // The heading carries no line: the headline and the month say it (decision 0402).
+    await expect(page.getByText('Your Cells and this month’s meetings.')).toHaveCount(0);
     await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toHaveCount(0);
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -272,9 +273,6 @@ test.describe('the Cells total (decision 0400)', () => {
       'href',
       '/cells/new',
     );
-    // Beside the heading rather than under the header row (decision 0290's pass over the
-    // screens' heading lines).
-    await expect(header.getByText('Your Cells and this month’s meetings.')).toBeVisible();
   });
 });
 

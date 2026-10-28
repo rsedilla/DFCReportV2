@@ -218,7 +218,6 @@ function CellsIndex() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
-          <p className="text-muted text-sm">Your Cells and this month&rsquo;s meetings.</p>
         </div>
         {mayCreate ? (
           <Link href="/cells/new" className={buttonClasses('primary')}>

@@ -128,12 +128,15 @@ const ACCOUNT: NavEntry = {
  * from the sidebar and the spare width falls to the right, as the owner's design draws
  * it (owner's choice, 2026-09-22), rather than opening a gap that grows with the screen.
  *
- * Two values for a page of content, where there were four.
+ * Three values for a page of content.
  *
- * - `READING` (`max-w-3xl`, 768px) for anything read or filled in: a profile, a
- *   form, the session description.
- * - `INDEX` (`max-w-5xl`, 1024px) for a list or a table, where the extra width
- *   buys columns rather than longer lines.
+ * - `READING` (`max-w-3xl`, 768px) for anything filled in: a form, the session
+ *   description.
+ * - `RECORD` (`max-w-5xl`, 1024px) for one person's page, which is read rather
+ *   than filled in and carries short tables of its own.
+ * - `INDEX` (`max-w-7xl`, 1280px) for a list or a table, where the extra width
+ *   buys columns rather than longer lines (decision 0402). It was 1024px until then,
+ *   which left a third of a 1536px laptop empty beside every list.
  *
  * **`READING` is not a reading measure**, and it was described as one here in
  * error. Less its padding it is a 728px column, which at the body size is
@@ -150,7 +153,8 @@ const ACCOUNT: NavEntry = {
  */
 export const PAGE_WIDTH = {
   READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
-  INDEX: 'mx-auto max-w-5xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
+  RECORD: 'mx-auto max-w-5xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
+  INDEX: 'mx-auto max-w-7xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
 } as const;
 
 /**

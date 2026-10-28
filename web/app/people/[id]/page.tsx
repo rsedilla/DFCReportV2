@@ -151,7 +151,7 @@ function PersonDetail() {
     (person.error.code === 'SCOPE_DENIED' || person.error.code === 'CAPABILITY_DENIED');
 
   return (
-    <main id="main" className={PAGE_WIDTH.INDEX}>
+    <main id="main" className={PAGE_WIDTH.RECORD}>
       <SectionFrame section="people">
       {offered('/people') ? (
         <p className="text-sm">
