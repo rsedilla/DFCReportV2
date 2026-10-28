@@ -119,6 +119,37 @@ export async function lockPersonsWithin(
 }
 
 /**
+ * Serializes the adding of people who share a last name (SKILL.md section 3, decision 0401).
+ *
+ * Every Tier 1 rule needs equal last names, so two adds that could be one person twice
+ * always share this key. Without it, two leaders adding the same person at the same
+ * moment each checked before either had written, and both were added. Taken first in the
+ * add's transaction, before any person lock, and the duplicate check runs after it: the
+ * second add waits, then sees the first.
+ *
+ * `nameKey` is the last name's comparison form, never a raw value, so `Dela Cruz` and
+ * `DelaCruz` take one lock. The prefix keeps it apart from the person locks above.
+ */
+export async function lockPersonNameWithin(
+  transaction: Transaction<Database>,
+  nameKey: string,
+): Promise<void> {
+  await boundLockWaitsWithin(transaction);
+
+  try {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`person-name:${nameKey}`}, 0))`.execute(
+      transaction,
+    );
+  } catch (error) {
+    if (isLostLockWait(error)) {
+      throw new ResourceBusyError();
+    }
+
+    throw error;
+  }
+}
+
+/**
  * Bound every lock wait this transaction will make (SKILL.md section 5).
  *
  * `lockPersonsWithin` calls this, so a caller taking advisory locks gets the bound

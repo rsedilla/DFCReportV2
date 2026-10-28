@@ -6,7 +6,14 @@ import request from 'supertest';
 
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import { PeopleService } from '../../src/people/people.service';
-import { countWhileInFlight, track } from '../setup/concurrency';
+import { lastNameKey } from '../../src/people/duplicate-matching';
+import {
+  countAdvisoryHolders,
+  countAdvisoryWaiters,
+  countWhileInFlight,
+  holdPersonLock,
+  track,
+} from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -214,27 +221,175 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(stored.birth_date).toBeNull();
     });
 
-    it('is not gated on a name match alone once the birthday is absent', async () => {
-      // **The consequence worth pinning.** Two of the three Tier 1 rules read the
-      // birthday, and Tier 1 blocks creation — so with none, a name match alone
-      // reaches only Tier 2 and creation proceeds.
-      //
-      // Not "Tier 1 is unreachable": the third rule reads a mobile number, and
-      // equal names on a shared household number are still a Tier 1 refusal
-      // (section 3). An earlier version of this comment claimed otherwise, as did
-      // six other places on this branch, this case's own title among them.
-      //
-      // Same name as an existing fixture, which with a matching birthday is the
-      // Tier 1 refusal two cases above. Without one it creates.
+    it('is not gated on a name match alone once the birthday is absent and a number is given', async () => {
+      // Two of the Tier 1 rules read the birthday and one the mobile number. With
+      // no birthday and a number nobody else holds, a name match reaches only Tier 2
+      // and creation proceeds. Same name as an existing fixture, which with a
+      // matching birthday is the Tier 1 refusal two cases above.
       const created = await post(raymondAccount, randomUUID()).send(
         withoutBirthday({
           pastoral_leader_id: manuel.id,
           first_name: 'Manuel',
           last_name: 'Testfixture',
+          mobile_number: '09175550101',
         }),
       );
 
       expect(created.status).toBe(201);
+    });
+
+    it('asks first when the names are equal and neither birthday nor number is given (decision 0399)', async () => {
+      // Nothing is left to tell the two apart, so the encoder is asked rather than
+      // shown a possible match beside an Add that goes through.
+      const body = withoutBirthday({
+        pastoral_leader_id: manuel.id,
+        first_name: 'Manuel',
+        last_name: 'Testfixture',
+      });
+
+      const refused = await post(raymondAccount, randomUUID()).send(body);
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+      expect(refused.body.error.details.candidates).toEqual([
+        expect.objectContaining({
+          id: manuel.id,
+          tier: 1,
+          reasons: [
+            'first and last names equal, and no birthday or mobile number to tell them apart',
+          ],
+        }),
+      ]);
+      expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+
+      const created = await post(raymondAccount, randomUUID()).send({
+        ...body,
+        acknowledged_duplicate_ids: [manuel.id],
+      });
+      expect(created.status).toBe(201);
+    });
+
+    it('does not ask about a namesake the encoder may not see (decision 0399)', async () => {
+      // Juan is in Rico's branch, outside Raymond's: the stop needs a candidate the
+      // encoder can be shown, as every other Tier 1 stop does.
+      const created = await post(raymondAccount, randomUUID()).send(
+        withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Juan',
+          last_name: 'Testfixture',
+        }),
+      );
+
+      expect(created.status).toBe(201);
+    });
+
+    it('asks the second of two leaders adding one person at the same moment (decision 0401)', async () => {
+      // Both adds are held behind the last-name lock and then released together, so
+      // they meet it at once. The Admin's queues first and so goes first, and Raymond's
+      // checks after it has committed and is asked. Without the lock nothing waits, the
+      // probe below sees no waiter, and both adds would have checked an empty population.
+      //
+      // That order is the one that matters: Raymond's scope is read before his add's
+      // transaction opens, when the Admin's Liza does not exist yet, so she is seen as
+      // his only through her leader, Manuel, read inside it. Raymond going first
+      // passed with that read missing; this order failed.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        const { rows } = await holder.query<{ key: string }>(
+          `SELECT hashtextextended($1, 0) AS key`,
+          [`person-name:${lastNameKey('Mendozafixture')}`],
+        );
+        const key = rows[0].key;
+
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock($1::bigint)', [key]);
+
+        const body = withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Liza',
+          last_name: 'Mendozafixture',
+        });
+        const first = post(adminAccount, randomUUID()).send(body);
+        expect(
+          await countWhileInFlight(
+            () => countAdvisoryWaiters(holder, key),
+            track(first),
+            'the Admin’s add to wait on the last-name lock',
+          ),
+        ).toBe(1);
+
+        const second = post(raymondAccount, randomUUID()).send(body);
+        const both = Promise.all([first, second]);
+        const waiting = await countWhileInFlight(
+          async () => {
+            const n = await countAdvisoryWaiters(holder, key);
+            return n >= 2 ? n : 0;
+          },
+          track(both),
+          'both adds to wait on the last-name lock',
+        );
+        expect(waiting).toBe(2);
+
+        await holder.query('COMMIT');
+
+        expect((await first).status).toBe(201);
+        const refused = await second;
+        expect(refused.status).toBe(409);
+        expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+        expect(
+          await db
+            .selectFrom('persons')
+            .where('last_name', '=', 'Mendozafixture')
+            .select('id')
+            .execute(),
+        ).toHaveLength(1);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('takes the last-name lock before the person lock (section 5, decision 0401)', async () => {
+      // The leader's person lock is held, so the add stops there. By then it must
+      // already hold its last-name lock: taken the other way round, it would wait on
+      // the person lock holding nothing, and the probe would find no holder.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        const { rows } = await holder.query<{ key: string }>(
+          `SELECT hashtextextended($1, 0) AS key`,
+          [`person-name:${lastNameKey('Ordenfixture')}`],
+        );
+        const nameKey = rows[0].key;
+
+        await holder.query('BEGIN');
+        const personKey = await holdPersonLock(holder, manuel.id);
+
+        const attempt = post(raymondAccount, randomUUID()).send(
+          withoutBirthday({
+            pastoral_leader_id: manuel.id,
+            first_name: 'Celia',
+            last_name: 'Ordenfixture',
+          }),
+        );
+
+        const waiting = await countWhileInFlight(
+          () => countAdvisoryWaiters(holder, personKey),
+          track(attempt),
+          'the add to wait on the leader’s person lock',
+        );
+        expect(waiting).toBe(1);
+        expect(await countAdvisoryHolders(holder, nameKey)).toBe(1);
+
+        await holder.query('COMMIT');
+        expect((await attempt).status).toBe(201);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
     });
 
     it('lets the leader add the birthday afterwards', async () => {
@@ -639,6 +794,78 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(candidates.every((candidate) => candidate.tier === 2)).toBe(true);
     });
 
+    it('gives the reason the save will stop on when neither birthday nor number is given (decision 0399)', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Manuel', last_name: 'Testfixture' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({
+          id: manuel.id,
+          tier: 1,
+          reasons: [
+            'first and last names equal, and no birthday or mobile number to tell them apart',
+          ],
+        }),
+      ]);
+    });
+
+    it('reaches a person whose first and last names were typed the wrong way round (decision 0401)', async () => {
+      // The typed last name starts with M and Manuel's is Testfixture, and nobody's first
+      // name is Testfixture, so only the swapped branch of the narrowing reaches him.
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Testfixture', last_name: 'Manuel' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({
+          id: manuel.id,
+          tier: 2,
+          reasons: ['first and last names swapped'],
+        }),
+      ]);
+    });
+
+    it('reaches a swapped name whose stored last name is hyphenated (decision 0401)', async () => {
+      const hyphenated = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos-Reyes',
+        network: 'MENS',
+      });
+      await assignTo(db, hyphenated.id, manuel.id);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Santos Reyes', last_name: 'Ana' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({ id: hyphenated.id, reasons: ['first and last names swapped'] }),
+      ]);
+    });
+
+    it('shows an out-of-scope spelling match as a possible match only (decision 0401)', async () => {
+      // Juan is in Rico's branch. A swapped name reaches him by the names alone, so he
+      // appears, and without the tier or the reasons (section 3).
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Testfixture', last_name: 'Juan' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      const found = (response.body.data as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === juan.id,
+      );
+      expect(found).toMatchObject({ possible_match: true });
+      expect(found).not.toHaveProperty('tier');
+      expect(found).not.toHaveProperty('reasons');
+    });
+
     it('surfaces an out-of-scope candidate whose names alone explain the match', async () => {
       // Juan matches on names and on birthday. Membership is decided by whether a
       // subject carrying nothing section 8 protects would still have matched him
@@ -1031,6 +1258,29 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .where('target_id', '=', id)
         .executeTakeFirstOrThrow();
       expect(audit.after).toMatchObject({ acknowledged_duplicate_ids: [manuel.id] });
+    });
+
+    it('asks when an edit gives a person with neither birthday nor number a namesake (decision 0399)', async () => {
+      const created = await post(raymondAccount, randomUUID()).send(
+        withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Pablo',
+          last_name: 'Testfixture',
+        }),
+      );
+      expect(created.status).toBe(201);
+      const id = created.body.id as string;
+
+      const refused = await edit(raymondAccount, id, { first_name: 'Manuel' });
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.details.candidates).toEqual([
+        expect.objectContaining({ id: manuel.id, tier: 1 }),
+      ]);
+
+      // A birthday given in the same save leaves only the possible match.
+      await edit(raymondAccount, id, { first_name: 'Manuel', birth_date: '1990-01-01' }).expect(
+        200,
+      );
     });
 
     it('checks a changed mobile number, and not the same number written differently', async () => {

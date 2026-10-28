@@ -34,4 +34,4 @@ route, which the screen now reads for the headline (Section 22 keeps `/api/v1` a
 Decision 0400, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 15.
 
-Previous: [2026-10-28 — Reports as one switch](0398-reports-as-one-switch.md)
+Previous: [2026-10-28 — Equal names with nothing else given ask first](0399-equal-names-with-nothing-else-given-ask-first.md)

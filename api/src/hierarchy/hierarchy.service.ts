@@ -1312,13 +1312,18 @@ export class HierarchyService {
    * A person with no open assignment, or a root, is absent from the map. Identifiers only,
    * so the caller names the leaders from its own table rather than this module joining
    * `persons` a third time (section 2).
+   *
+   * `executor` lets an add read it inside its own transaction, after its lock (decision 0401).
    */
-  async directLeaderIdsOf(personIds: readonly string[]): Promise<Map<string, string>> {
+  async directLeaderIdsOf(
+    personIds: readonly string[],
+    executor: Db = this.db,
+  ): Promise<Map<string, string>> {
     if (personIds.length === 0) {
       return new Map();
     }
 
-    const rows = await this.db
+    const rows = await executor
       .selectFrom('pastoral_assignments')
       .select(['person_id', 'leader_id'])
       .where('person_id', 'in', personIds)

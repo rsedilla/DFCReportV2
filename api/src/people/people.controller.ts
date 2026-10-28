@@ -45,7 +45,7 @@ import {
   SearchPeopleDto,
 } from './dto/people.dto';
 import { ArchivePersonDto, LifecycleListDto } from './dto/lifecycle.dto';
-import { normalizeName } from './duplicate-matching';
+import { APPLICATION_RULES, normalizeName } from './duplicate-matching';
 import { ABSENT_PEOPLE_PORT, type AbsentPeoplePort } from './person-archive.ports';
 import { PeopleLifecycleService } from './people.lifecycle.service';
 import { PeopleDuplicatesService } from './people.duplicates.service';
@@ -126,6 +126,18 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // **Read before the add's transaction opens, never inside it** (decision 0401). The
+    // duplicate gate now runs inside that transaction, under the last-name lock, and a
+    // per-candidate `covers` there would take a second pool connection while holding
+    // the first: ten adds at once would each wait on a connection none could release.
+    // So the scope is read once here, as the pre-flight read does, and the gate tests
+    // a set. As there, an actor whose own subtree holds a cycle is refused, here on every
+    // add rather than only on a duplicate; section 5 refuses a cycle when it is written.
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.PeopleViewSubtree,
+    );
+
     return this.people.create(
       {
         title: body.title ?? null,
@@ -148,9 +160,14 @@ export class PeopleController {
       // The same scope test the pre-flight lookup uses, so a refusal cannot
       // disclose what a read may not (section 8). Without it, a Tier 1 refusal
       // names the field that matched for a person the actor has no scope over —
-      // and the refusal happens before the transaction opens, so probing costs
-      // nothing and writes nothing.
-      (candidateId) => this.read.isWithinViewScope(actor, candidateId),
+      // and the refusal writes nothing, so probing would cost nothing. A candidate
+      // added since the scope was read is in it where their leader is.
+      (candidateId, leaderId) =>
+        Promise.resolve(
+          membership.kind === 'WHOLE_CHURCH' ||
+            membership.personIds.has(canonicalId(candidateId)) ||
+            (leaderId !== null && membership.personIds.has(canonicalId(leaderId))),
+        ),
     );
   }
 
@@ -220,6 +237,9 @@ export class PeopleController {
         Promise.resolve(
           membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId)),
         ),
+      undefined,
+      // The pre-flight list gives the reason the save will stop on (decision 0399).
+      APPLICATION_RULES,
     );
 
     const data = visible.slice(0, limit);
