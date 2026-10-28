@@ -212,7 +212,7 @@ export class PeopleService {
       // Person impossible to create.
       //
       // And 409-against-201 is itself a channel. Every Tier 1 rule reads a birthday
-      // or a mobile number, so gating on an out-of-scope candidate would make the
+      // or a mobile number, or for decision 0399 their absence, so gating on an out-of-scope candidate would make the
       // status vary with a value section 8 protects — the same oracle as the
       // candidate list, one field further out. The status now varies only with what
       // the actor is already allowed to know.

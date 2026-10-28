@@ -131,7 +131,8 @@ export class PeopleController {
     // per-candidate `covers` there would take a second pool connection while holding
     // the first: ten adds at once would each wait on a connection none could release.
     // So the scope is read once here, as the pre-flight read does, and the gate tests
-    // a set.
+    // a set. As there, an actor whose own subtree holds a cycle is refused, here on every
+    // add rather than only on a duplicate; section 5 refuses a cycle when it is written.
     const membership = await this.authorization.scopeMembership(
       actor,
       Capability.PeopleViewSubtree,

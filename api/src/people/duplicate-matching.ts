@@ -441,9 +441,9 @@ export function findCandidates(
         tier = 2;
         reasons.push('same mobile number and last name equal');
       } else {
-        // Decision 0401: spellings that hid one person from the check. Tier 2 and
-        // never Tier 1, whatever else matches: each is a guess about how a name
-        // was written, and a guess is shown rather than asked about.
+        // Decision 0401: spellings that hid one person from the check. They never
+        // raise a candidate to Tier 1: each is a guess about how a name was written,
+        // and a guess is shown rather than asked about.
         const spelling = spellingVariant(subject, candidate);
         if (spelling !== null) {
           tier = 2;

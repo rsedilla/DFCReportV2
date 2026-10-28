@@ -206,9 +206,9 @@ export class PeopleDuplicatesService {
         eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
         // First and last names typed the wrong way round (decision 0401): the surname
         // initial above reaches the row by the other name, so it needs its own branch.
-        // Compared without spacing, hyphens or apostrophes, as the matcher compares a
-        // last name, so a stored `Santos-Reyes` or `Dela Cruz` is reached however the
-        // first name box spelled it.
+        // Compared without spacing, hyphens or apostrophes, so a stored `Santos-Reyes`
+        // or `Dela Cruz` is reached however the first name box spelled it. A suffix
+        // stored in the last name is kept, so `Dela Cruz Jr` typed this way is not.
         eb(compactLastName, '=', normalizeName(subject.firstName).replace(/\s+/g, '')),
       ]);
 
