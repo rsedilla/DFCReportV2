@@ -95,9 +95,11 @@ export function RangeNavigator({
   current: string;
   /**
    * Labelled above, with the period between the arrows and no tag (a Full view leader, decision
-   * 0363): whether it is open is said in the note under the controls.
+   * 0363): whether it is open is said in the note under the controls. `bare` is the same
+   * without the label, beside the one switch, for every reader who has it (decision 0398); with
+   * `quiet`, an open period says *so far* after it.
    */
-  labelled?: boolean;
+  labelled?: boolean | 'bare';
   /** The earliest period this reader is offered, where there is one (decision 0310). */
   earliest?: string;
   open: boolean | undefined;
@@ -137,13 +139,16 @@ export function RangeNavigator({
   if (labelled) {
     return (
       <div>
-        <p className="field-label">{RANGE_NOUN[kind]}</p>
-        <div className="mt-2 flex items-center">
+        {/* Beside the one switch, which carries no label either (decision 0398). */}
+        {labelled === 'bare' ? null : <p className="field-label">{RANGE_NOUN[kind]}</p>}
+        <div className={labelled === 'bare' ? 'flex items-center' : 'mt-2 flex items-center'}>
           {before}
-          <span className="border-line bg-surface inline-flex min-h-11 min-w-32 items-center justify-center border-y px-3 text-sm font-bold">
+          {/* One width for every month, so the arrows do not move as it steps (decision 0398). */}
+          <span className="border-line bg-surface inline-flex min-h-11 min-w-36 items-center justify-center border-y px-3 text-sm font-bold">
             {rangeLabel(kind, start)}
           </span>
           {after}
+          {quiet && open ? <span className="text-muted ml-3 text-sm">so far</span> : null}
         </div>
       </div>
     );

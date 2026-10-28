@@ -1727,19 +1727,16 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // The two totals (decision 0289), the search box and its button, the one tab a Primary
-    // has (decision 0366), two month controls, a link per Cell in both the table and the
-    // cards (the hidden rendering is counted too), and the pager's two
-    // buttons: **thirteen**, since the totals became the running view's only "my Cells"
-    // filter on 2026-10-05 and the people-without-a-Cell link went (decision 0343). The
-    // month controls are icon-only and are the reason this state is measured rather than
-    // exempted: an icon button is where a 24px target goes wrong. The totals are the
-    // other reason: each is a button carrying a figure, sized by its own padding.
+    // The search box and its button, the page's tabs, two month controls, a link per Cell in
+    // both the table and the cards (the hidden rendering is counted too), and the pager's
+    // two buttons: **twelve**, measured, since decision 0400 made the total a title rather
+    // than two buttons. The month controls are icon-only and are the reason this state is
+    // measured rather than exempted: an icon button is where a 24px target goes wrong.
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 13,
+    minimum: 12,
   },
   {
     name: 'cell meetings',
@@ -1853,33 +1850,35 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's five report tabs and the two views (decision 0380), the two period
-    // buttons and the navigator's two: **eleven**. No Figures for, and the names of their 12
-    // open nothing. Settled on the last name, which renders from the data.
+    // A Full view leader's five report tabs (decision 0380), the one switch's three, Weekly,
+    // Monthly and Last 12 months (decision 0398), and the navigator's two: **ten**. No Figures
+    // for, and the names of their 12 open nothing. Settled on the last name, which renders from
+    // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'cell' as const,
     settle: 'Teresita Alcantara',
-    minimum: 11,
+    minimum: 10,
   },
   {
-    // The same controls, and the Back link: **twelve**.
+    // The same controls, and the Back link: **eleven**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 12,
+    minimum: 11,
   },
   {
-    // The same eleven as CG Attendance (decisions 0294 and 0380).
+    // The same ten as CG Attendance (decisions 0294, 0380 and 0398).
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'cell' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 11,
+    minimum: 10,
   },
   {
-    // The five report tabs, the two views and the month's two arrows: **nine** (decision 0380).
+    // The five report tabs, the switch's Monthly and Last 12 months (decision 0398) and the
+    // month's two arrows: **nine** (decision 0380).
     name: 'number of cell groups, own branch',
     route: '/reports/number-of-cells',
     settleRole: 'cell' as const,
@@ -1887,13 +1886,13 @@ const TARGET_SWEEP = [
     minimum: 9,
   },
   {
-    // The five report tabs and the two views: **seven** (decision 0380). Show the figures is a
-    // `summary`, which this count does not take.
+    // The five report tabs and the switch's three (decisions 0380 and 0398): **eight**. Show the
+    // figures is a `summary`, which this count does not take.
     name: 'last 12 months, own branch',
     route: '/trends',
     settleRole: 'heading' as const,
     settle: 'CG Attendance · Your branch',
-    minimum: 7,
+    minimum: 8,
   },
   {
     // A Full view leader's one Growth tab and Back to SUYNL (decision 0360), the sweep's

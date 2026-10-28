@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { asAt, COUNT_COLUMNS, type CountFigure } from '@/components/church-counts';
 import { RangeNavigator } from '@/components/my-twelve';
+import { ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -26,6 +27,13 @@ const PATH: Record<CountFigure, string> = {
   CELLS: '/reports/number-of-cells',
   CELL_LEADERS: '/reports/number-of-cell-leaders',
   PEOPLE: '/reports/number-of-people',
+};
+
+/** Each figure’s Reports tab, for its switch (decision 0398). */
+const TAB: Record<CountFigure, ReportTab> = {
+  CELLS: 'number-of-cells',
+  CELL_LEADERS: 'number-of-cell-leaders',
+  PEOPLE: 'number-of-people',
 };
 
 type Row = { leader: { id: string; member_id: string | null; full_name: string | null } | null } & Partial<ChurchCountFigures>;
@@ -91,12 +99,15 @@ export function BranchCountsPanel({
   return (
     <section aria-label={LABEL[figure]}>
       <div className={`mt-4 ${CONTROL_BAR}`}>
+        {/* Monthly or the last 12 months, beside the month (decision 0398). */}
+        <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <RangeNavigator
             kind="MONTH"
             start={month}
             current={current}
             open={undefined}
+            labelled="bare"
             onChange={(next) => go({ month: next })}
           />
           <span className="text-muted text-sm" aria-live="polite">

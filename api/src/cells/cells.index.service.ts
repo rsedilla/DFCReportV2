@@ -285,6 +285,9 @@ export class CellsIndexService {
               after: after?.cellId ?? null,
               search: query.q ?? null,
               fewerThanThree: query.fewerThanThree ?? false,
+              // The reader's own Cells first (decision 0400).
+              ownFirst: actor.personId,
+              afterOwn: after?.own === true,
             });
     }
 
@@ -353,7 +356,11 @@ export class CellsIndexService {
       }),
       next_cursor:
         rows.length > limit && last !== undefined
-          ? encodeCellIndexCursor({ cellId: last.cellId })
+          ? encodeCellIndexCursor({
+              cellId: last.cellId,
+              // The *No meeting* filter keeps `cell_id` order alone, so its cursor carries no flag.
+              ...(window === null ? { own: sameId(last.leaderId, actor.personId) } : {}),
+            })
           : null,
     };
   }
