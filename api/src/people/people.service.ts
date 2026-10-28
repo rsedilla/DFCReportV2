@@ -123,8 +123,13 @@ export class PeopleService {
      * disclosing an out-of-scope person's birthday or mobile number, and a reason
      * naming the field that matched asserts one — so the caller supplies the same
      * scope test the read endpoint uses.
+     *
+     * `leaderId` is the candidate's current pastoral leader, read inside this add's
+     * transaction (decision 0401). The caller reads its scope before the transaction,
+     * so a person added under a leader in that scope a moment earlier, by somebody
+     * else, is not yet in it; their leader is.
      */
-    canSeeReasons: (personId: string) => Promise<boolean>,
+    canSeeReasons: (personId: string, leaderId: string | null) => Promise<boolean>,
   ): Promise<Record<string, unknown>> {
     // **Only the Admin gives a title** (decision 0374): `people.set_title`, at Whole Church.
     // A blank one is no title, so a form that sends an empty box is not refused.
@@ -166,6 +171,11 @@ export class PeopleService {
       // Taken before any person lock (section 5's order): nothing else takes this one.
       await lockPersonNameWithin(trx, lastNameKey(subject.lastName));
       const matches = await this.duplicates.findDuplicates(subject, APPLICATION_RULES, trx);
+      const leaders = await this.hierarchy.directLeaderIdsOf(
+        matches.map((match) => match.candidate.id),
+        trx,
+      );
+      const visible = (personId: string) => canSeeReasons(personId, leaders.get(personId) ?? null);
 
       // **The gate applies only to candidates the actor may see.**
       //
@@ -188,7 +198,7 @@ export class PeopleService {
           continue;
         }
 
-        if (await canSeeReasons(match.candidate.id)) {
+        if (await visible(match.candidate.id)) {
           gated = true;
           break;
         }
@@ -210,7 +220,7 @@ export class PeopleService {
         throw new DuplicateAcknowledgementRequiredError(
           await this.duplicates.visibleDuplicatesFor(
             subject,
-            canSeeReasons,
+            visible,
             (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
             APPLICATION_RULES,
             trx,

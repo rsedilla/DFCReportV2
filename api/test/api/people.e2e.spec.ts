@@ -285,9 +285,14 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
     it('asks the second of two leaders adding one person at the same moment (decision 0401)', async () => {
       // Both adds are held behind the last-name lock and then released together, so
-      // they meet it at once. Whichever takes it second checks after the first has
-      // committed and is asked. Without the lock nothing waits, the probe below sees
-      // no waiter, and both adds would have checked an empty population.
+      // they meet it at once. The Admin's queues first and so goes first, and Raymond's
+      // checks after it has committed and is asked. Without the lock nothing waits, the
+      // probe below sees no waiter, and both adds would have checked an empty population.
+      //
+      // That order is the one that matters: Raymond's scope is read before his add's
+      // transaction opens, when the Admin's Liza does not exist yet, so she is seen as
+      // his only through her leader, Manuel, read inside it. Raymond going first
+      // passed with that read missing; this order failed.
       const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
@@ -306,11 +311,17 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
           first_name: 'Liza',
           last_name: 'Mendozafixture',
         });
-        const both = Promise.all([
-          post(raymondAccount, randomUUID()).send(body),
-          post(adminAccount, randomUUID()).send(body),
-        ]);
+        const first = post(adminAccount, randomUUID()).send(body);
+        expect(
+          await countWhileInFlight(
+            () => countAdvisoryWaiters(holder, key),
+            track(first),
+            'the Admin’s add to wait on the last-name lock',
+          ),
+        ).toBe(1);
 
+        const second = post(raymondAccount, randomUUID()).send(body);
+        const both = Promise.all([first, second]);
         const waiting = await countWhileInFlight(
           async () => {
             const n = await countAdvisoryWaiters(holder, key);
@@ -323,8 +334,10 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
         await holder.query('COMMIT');
 
-        const statuses = (await both).map((response) => response.status).sort();
-        expect(statuses).toEqual([201, 409]);
+        expect((await first).status).toBe(201);
+        const refused = await second;
+        expect(refused.status).toBe(409);
+        expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
         expect(
           await db
             .selectFrom('persons')

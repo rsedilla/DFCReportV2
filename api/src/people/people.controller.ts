@@ -159,10 +159,13 @@ export class PeopleController {
       // The same scope test the pre-flight lookup uses, so a refusal cannot
       // disclose what a read may not (section 8). Without it, a Tier 1 refusal
       // names the field that matched for a person the actor has no scope over —
-      // and the refusal writes nothing, so probing would cost nothing.
-      (candidateId) =>
+      // and the refusal writes nothing, so probing would cost nothing. A candidate
+      // added since the scope was read is in it where their leader is.
+      (candidateId, leaderId) =>
         Promise.resolve(
-          membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(candidateId)),
+          membership.kind === 'WHOLE_CHURCH' ||
+            membership.personIds.has(canonicalId(candidateId)) ||
+            (leaderId !== null && membership.personIds.has(canonicalId(leaderId))),
         ),
     );
   }
