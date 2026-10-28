@@ -21,6 +21,10 @@ the place of "A possible match. Their details are visible to the leaders who pas
 reader's scope opens a page that shows nothing they can act on, so the link is left out. Inside the
 reader's scope the link stays, since the reader may open the record.
 
+**4. Everyone sees the label, the Admin included.** The owner chose this on 2026-10-28 rather than
+leaving the Admin's list as it was: an Admin sees the tag and the line, and keeps the link, from
+which they restore the person.
+
 ## What it discloses, and why that is accepted
 
 Section 8 withholds a person's lifecycle state outside the reader's scope. This ruling discloses it
