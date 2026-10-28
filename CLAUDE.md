@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-28, the trigger being decision 0400: of 398 files, 397 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0400 each moved the first two and
+2026-10-28, the trigger being decision 0402: of 399 files, 398 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0402 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-28 and triggered by 0400, and was left stale by 0402 the same day. The one before that was dated
 2026-10-28 and triggered by 0398, and was left stale by 0400 the same day. The one before that was dated
 2026-10-27 and triggered by 0397, and was left stale by 0398 the next day. The one before that was dated
 2026-10-27 and triggered by 0379, and was left stale by 0397 the same day. The one before that was dated
@@ -841,6 +842,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-27 — [Absent 3+ Months, and archiving a person](docs/decisions/0397-absent-three-months-and-archiving.md)
 - 2026-10-28 — [Reports as one switch](docs/decisions/0398-reports-as-one-switch.md)
 - 2026-10-28 — [One Cells total, and your Cells first](docs/decisions/0400-one-cells-total-and-your-cells-first.md)
+- 2026-10-28 — [Wider lists, and no heading line that repeats the page](docs/decisions/0402-wider-lists-and-fewer-heading-lines.md)
 
 ### Open — awaiting a ruling
 
