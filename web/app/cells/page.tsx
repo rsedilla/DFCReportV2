@@ -154,9 +154,12 @@ function CellsIndex() {
   const fewOnly = shown === 'FEW';
   // Section 15's *No meeting in 3 months* (decision 0355).
   const quietOnly = shown === 'QUIET';
-  // *Only my Cells* belongs to the two views carrying it: the cards on Active Cells and the
-  // button on Closed Cells.
-  const mineApplies = shown === 'ACTIVE' || closed;
+  // *Only my Cells* belongs to Closed Cells alone. Active Cells lists the reader's own first
+  // and marks them, under one total that filters nothing (decision 0400).
+  const mineApplies = closed;
+  // The reader's own Cells are marked *You lead* (decision 0400).
+  const leads = (cell: CellSummary) =>
+    me.data !== undefined && cell.leader.person_id.toLowerCase() === me.data.person_id.toLowerCase();
   // *Same Leader, Same Time* (decision 0392): the administrator's, as the route is.
   const clashes = useQuery({
     queryKey: ['schedule-clashes'],
@@ -314,8 +317,8 @@ function CellsIndex() {
             />
           )}
           {/*
-            One control per job (owner's choice of 2026-10-05): among active Cells the cards
-            below are the filter, so this is offered for closed Cells alone.
+            Offered for closed Cells alone: Active Cells lists the reader's own first and marks
+            them (decision 0400).
           */}
           {closed ? (
             <Button
@@ -329,14 +332,8 @@ function CellsIndex() {
           ) : null}
         </div>
 
-        {/* The totals belong to Active Cells, the list they count (decision 0366). */}
-        {shown === 'ACTIVE' ? (
-          <CellTotals
-            current={submitted === '' && month === reportingMonthOf()}
-            mineOnly={mineOnly}
-            onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
-          />
-        ) : null}
+        {/* The total belongs to Active Cells, the list it counts (decisions 0366 and 0400). */}
+        {shown === 'ACTIVE' ? <CellsHeadline /> : null}
 
         <div className="mt-8">
           <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
@@ -444,33 +441,44 @@ function CellsIndex() {
           </>
         ) : cells.data ? (
           <>
-            <Table caption="Cells you oversee" className="mt-6 hidden lg:block">
+            {/*
+              Each column a fixed share, and the two counts right-aligned under right-aligned
+              headings so their digits line up (owner's choice of 2026-10-28, decision 0400).
+            */}
+            <Table caption="Cells you oversee" className="mt-6 hidden lg:block" tableClassName="table-fixed">
               <thead>
                 <tr>
-                  <HeaderCell>Cell</HeaderCell>
-                  <HeaderCell>Leader</HeaderCell>
-                  <HeaderCell>Members</HeaderCell>
-                  <HeaderCell>Meets</HeaderCell>
-                  <HeaderCell>Recorded</HeaderCell>
+                  <HeaderCell className="w-[27%]">Cell</HeaderCell>
+                  <HeaderCell className="w-[27%]">Leader</HeaderCell>
+                  <HeaderCell className="w-[11%] pr-7 text-right">Members</HeaderCell>
+                  <HeaderCell className="w-[19%]">Meets</HeaderCell>
+                  <HeaderCell className="w-[16%] text-right">Recorded</HeaderCell>
                 </tr>
               </thead>
               <tbody>
                 {cells.data.data.map((cell) => (
-                  <tr key={cell.id} className={rowClasses}>
-                    <td className="px-3 py-3">
+                  <tr key={cell.id} className={cn(rowClasses, leads(cell) && 'bg-accent-tint')}>
+                    <td
+                      className={cn(
+                        'px-3 py-3',
+                        // A bar beside the reader's own row, with words saying why (section 23).
+                        leads(cell) && 'shadow-[inset_4px_0_0_var(--accent)]',
+                      )}
+                    >
                       <Link
                         href={`/cells/${cell.id}/meetings?month=${month}`}
                         className={`${LINK} font-medium`}
                       >
                         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                       </Link>
+                      {leads(cell) ? <YouLead /> : null}
                     </td>
                     <td className="px-3 py-3">{cell.leader.full_name}</td>
-                    <td className="px-3 py-3">{cell.member_count}</td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3 pr-7 text-right tabular-nums">{cell.member_count}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
                       {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
                       <CoverageFigure
                         recorded={cell.coverage.recorded}
                         scheduled={cell.coverage.scheduled}
@@ -484,7 +492,7 @@ function CellsIndex() {
 
             <ul className="mt-6 flex flex-col gap-3 lg:hidden">
               {cells.data.data.map((cell) => (
-                <CellCard key={cell.id} cell={cell} month={month} />
+                <CellCard key={cell.id} cell={cell} month={month} mine={leads(cell)} />
               ))}
             </ul>
 
@@ -528,21 +536,13 @@ function CellsIndex() {
 }
 
 /**
- * The two totals, as of today, at the head of the list they count (decision 0289). Each
- * is also the filter that shows those Cells, the way the Growth tabs' cards are, and the
- * one matching what the list shows is marked as pressed.
+ * How many Cells the reader oversees, as of today, as the title of the list it counts
+ * (decision 0400), with how many of them they lead. **Information only**: a title, not a
+ * button, so nothing here looks pressable. The reader's own Cells are first in the list and
+ * marked instead, which is what *Cells you lead* was pressed to find (decision 0289).
  */
-function CellTotals({
-  current,
-  mineOnly,
-  onChoose,
-}: {
-  /** The list is today's running Cells, unsearched, so a total describes it. */
-  current: boolean;
-  mineOnly: boolean;
-  onChoose: (mine: boolean) => void;
-}) {
-  // Both totals in one request, counted on the server rather than by reading every Cell
+function CellsHeadline() {
+  // Both figures in one request, counted on the server rather than by reading every Cell
   // with its figures (decision 0309).
   const counts = useQuery({
     queryKey: ['cells-counts'],
@@ -551,54 +551,52 @@ function CellTotals({
 
   // Every figure carries its scope (section 19), and a whole-church reader's is the church.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const scopeLabel = holdsWholeChurch(me.data, 'cell.view_subtree')
-    ? 'Whole Church'
-    : 'People you oversee';
-
-  const cards = [
-    { mine: true, label: 'Cells you lead', value: counts.data?.led_by_me, scope: 'Your own Cells' },
-    { mine: false, label: 'Cells you oversee', value: counts.data?.in_scope, scope: scopeLabel },
-  ];
+  const wholeChurch = holdsWholeChurch(me.data, 'cell.view_subtree');
 
   // A total that failed to load says why, rather than showing a bare dash.
-  const failed = counts.isError ? counts.error : null;
+  if (counts.isError) {
+    return (
+      <div className="mt-6">
+        <FailureNotice failure={describeFailure(counts.error)} />
+      </div>
+    );
+  }
+
+  const total = counts.data?.in_scope;
+  const mine = counts.data?.led_by_me ?? 0;
+  // The reader's own Cells are counted in the total, so the rest is the difference.
+  const others = total === undefined ? undefined : total - mine;
 
   return (
-    <>
-    {failed ? (
-      <div className="mt-6">
-        <FailureNotice failure={describeFailure(failed)} />
-      </div>
-    ) : null}
-    <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-      {cards.map((card) => {
-        const pressed = current && mineOnly === card.mine;
+    <div className="border-accent mt-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b-2 pb-2">
+      <h2 className="text-2xl font-bold tracking-tight">
+        <span className="text-accent tabular-nums">{total ?? '–'}</span>{' '}
+        {total === 1 ? 'Cell' : 'Cells'}
+      </h2>
+      <p className="text-sm">
+        {mine > 0 ? (
+          <>
+            <span className="font-semibold tabular-nums">{mine}</span> you lead ·{' '}
+            <span className="font-semibold tabular-nums">{others ?? '–'}</span>{' '}
+            {wholeChurch ? 'others in the church' : 'under your leaders'}
+          </>
+        ) : wholeChurch ? (
+          'Whole Church'
+        ) : (
+          'People you oversee'
+        )}
+        <span className="text-muted"> · as of today</span>
+      </p>
+    </div>
+  );
+}
 
-        return (
-          <li key={card.label}>
-            <button
-              type="button"
-              aria-pressed={pressed}
-              onClick={() => onChoose(card.mine)}
-              className={cn(
-                'bg-surface flex h-full min-h-11 w-full flex-col items-start border p-3 text-left',
-                'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
-                pressed
-                  ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent)]'
-                  : 'border-edge hover:bg-raised',
-              )}
-            >
-              <span className="text-accent text-xs font-bold tracking-[0.08em] uppercase">
-                {card.label}
-              </span>
-              <span className="mt-1 text-2xl font-bold tabular-nums">{card.value ?? '–'}</span>
-              <span className="text-muted mt-auto pt-1 text-xs">{card.scope} · as of today</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-    </>
+/** The mark on the reader's own Cell, in words, so the row's tint is never the only sign. */
+function YouLead() {
+  return (
+    <span className="text-accent ml-2 inline-block border border-current px-1.5 py-0.5 align-middle text-[11px] font-bold tracking-[0.06em] whitespace-nowrap uppercase">
+      You lead
+    </span>
   );
 }
 
@@ -845,10 +843,10 @@ function ClosedCellCard({
   );
 }
 
-/** One Cell, below `lg`. */
-function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
+/** One Cell, below `lg`. The reader's own is marked as its table row is (decision 0400). */
+function CellCard({ cell, month, mine }: { cell: CellSummary; month: string; mine: boolean }) {
   return (
-    <li className="border-line border p-4">
+    <li className={cn('border-line border p-4', mine && 'bg-accent-tint shadow-[inset_4px_0_0_var(--accent)]')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="text-base font-medium">
           {/*
@@ -858,6 +856,7 @@ function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
           <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
             {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
           </Link>
+          {mine ? <YouLead /> : null}
         </h2>
         <CoverageFigure
           recorded={cell.coverage.recorded}

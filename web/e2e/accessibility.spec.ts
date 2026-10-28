@@ -1727,19 +1727,16 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // The two totals (decision 0289), the search box and its button, the one tab a Primary
-    // has (decision 0366), two month controls, a link per Cell in both the table and the
-    // cards (the hidden rendering is counted too), and the pager's two
-    // buttons: **thirteen**, since the totals became the running view's only "my Cells"
-    // filter on 2026-10-05 and the people-without-a-Cell link went (decision 0343). The
-    // month controls are icon-only and are the reason this state is measured rather than
-    // exempted: an icon button is where a 24px target goes wrong. The totals are the
-    // other reason: each is a button carrying a figure, sized by its own padding.
+    // The search box and its button, the page's tabs, two month controls, a link per Cell in
+    // both the table and the cards (the hidden rendering is counted too), and the pager's
+    // two buttons: **twelve**, measured, since decision 0400 made the total a title rather
+    // than two buttons. The month controls are icon-only and are the reason this state is
+    // measured rather than exempted: an icon button is where a 24px target goes wrong.
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 13,
+    minimum: 12,
   },
   {
     name: 'cell meetings',
