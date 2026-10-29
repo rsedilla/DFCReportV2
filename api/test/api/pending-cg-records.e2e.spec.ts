@@ -242,7 +242,7 @@ describe('Pending CG Records (decision 0368)', () => {
     const reader = await admin();
     await db
       .updateTable('persons')
-      .set({ merged_into_id: manuel.id })
+      .set({ merged_into_id: manuel.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', ben.id)
       .execute();
 

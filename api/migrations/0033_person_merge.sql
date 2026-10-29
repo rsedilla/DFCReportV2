@@ -14,16 +14,18 @@ ALTER TABLE persons
   ADD COLUMN merged_by uuid REFERENCES accounts (id),
   ADD COLUMN merge_reason text;
 
--- All four together or none: a merge with no time, no Admin or no reason is a merge nobody
--- can explain, and section 3 requires an explicit reason. `~ '\S'` rather than `btrim`,
--- which strips spaces alone (0018's note on the same choice).
+-- A merge carries its time and its reason, or none of the three is set: a merge with no
+-- time or no reason is one nobody can explain, and section 3 requires an explicit reason.
+-- `merged_by` is the Admin wherever the application merges; it may be null so that a merge
+-- written outside the application is still refused only for what it cannot explain, the
+-- audit log naming the actor for every merge the application makes. `~ '\S'` rather than
+-- `btrim`, which strips spaces alone (0018's note on the same choice).
 ALTER TABLE persons
   ADD CONSTRAINT persons_merge_is_whole CHECK (
     (merged_into_id IS NULL AND merged_at IS NULL AND merged_by IS NULL AND merge_reason IS NULL)
     OR (
       merged_into_id IS NOT NULL
       AND merged_at IS NOT NULL
-      AND merged_by IS NOT NULL
       AND merge_reason IS NOT NULL
       AND merge_reason ~ '\S'
     )

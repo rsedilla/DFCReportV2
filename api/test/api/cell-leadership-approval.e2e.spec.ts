@@ -860,7 +860,7 @@ describe('Cell leadership approval (section 10)', () => {
 
       await db
         .updateTable('persons')
-        .set({ merged_into_id: mark.id })
+        .set({ merged_into_id: mark.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', juan.id)
         .execute();
 

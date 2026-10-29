@@ -260,7 +260,7 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     const absorbed = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
     await db
       .updateTable('persons')
-      .set({ merged_into_id: survivor.id })
+      .set({ merged_into_id: survivor.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', absorbed.id)
       .execute();
 
