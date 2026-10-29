@@ -30,7 +30,7 @@ type Goals = Record<ConquestGoalName, Goal>;
 const TARGETS = { WIN_3: 3, COMPLETION_OF_12: 12, RAISE_12_LEADERS: 12 } as const;
 
 /**
- * The Conquest tab, read-only (SKILL.md section 27; decisions 0283 to 0286).
+ * The Conquest page, read-only (SKILL.md section 27; decisions 0283 to 0286).
  *
  * **All four goals are derived, and nothing is stored.** `hierarchy` gives the dated
  * discipling edges, `cells` the Cell leaderships and openings, `suynl` each person's third
