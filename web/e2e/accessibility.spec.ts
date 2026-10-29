@@ -1929,14 +1929,15 @@ const TARGET_SWEEP = [
     church: true,
   },
   {
-    // The one tab (decision 0360), four cards, the search, Search and the filter, a name link per person
-    // in the table and in the list below `lg` (six, the hidden rendering counted as on
-    // "cell attendance report"), and the two pager buttons. No box: every goal is derived.
+    // Four cards, the search, Search and the filter, a name link per person in the table and
+    // in the list below `lg` (six, the hidden rendering counted as on "cell attendance
+    // report"), and the two pager buttons. No tab: Conquest is an item of its own (decision
+    // 0407). No box: every goal is derived.
     name: 'growth conquest',
     route: '/conquest',
     settleRole: 'link' as const,
     settle: 'Dalisay Soriano',
-    minimum: 16,
+    minimum: 15,
     church: true,
   },
   // Training and Conquest are a whole-church reader's (decision 0360; a Full view leader is

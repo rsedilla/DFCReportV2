@@ -123,6 +123,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
       'People',
       'Cells',
       'Growth',
+      'Conquest',
     ]);
   });
 
