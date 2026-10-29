@@ -137,6 +137,8 @@ function PersonDetail() {
   // Archive and Restore, the Admin's alone (decision 0397); never on your own page, never for
   // a Network root, and for somebody leading a Cell the page says what to resolve first.
   const mayArchive = !own && holdsWholeChurch(me.data, 'people.manage_lifecycle');
+  // Merge, the Admin's alone (section 3, decision 0407); the API decides what it refuses.
+  const mayMerge = holdsWholeChurch(me.data, 'people.merge');
   const isRoot = pathEntries.length === 1 && pathEntries[0].network_root === true;
   const leads = cells.data?.leads ?? [];
 
@@ -185,6 +187,27 @@ function PersonDetail() {
             own={own}
           />
 
+          {/*
+            A record merged away is read only and says where the person is now (decision 0407,
+            point 14): no action, no leader and no Cell, so the rest of the page is not shown.
+          */}
+          {person.data.merged ? (
+            <div className="border-accent mt-4 border p-4 text-sm leading-relaxed">
+              <p className="font-medium">This record was merged into {person.data.merged.into.member_id}</p>
+              <p className="text-muted mt-1">
+                {person.data.full_name} ({person.data.member_id}) is the same person as{' '}
+                {person.data.merged.into.full_name}. Their history now counts there. Merged
+                {person.data.merged.merged_by ? ` by ${person.data.merged.merged_by}` : ''} on{' '}
+                {shortDate(person.data.merged.merged_at)}.
+              </p>
+              <p className="mt-3">
+                <TextLink href={`/people/${person.data.merged.into.id}`}>
+                  Open {person.data.merged.into.full_name} ({person.data.merged.into.member_id})
+                </TextLink>
+              </p>
+            </div>
+          ) : (
+          <>
           {/* Read-only, for every reader who may open the page (decision 0397, point 10). */}
           {person.data.archived ? (
             <div className="border-line bg-raised mt-4 flex flex-col gap-3 border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -350,7 +373,25 @@ function PersonDetail() {
             />
           ) : null}
 
-          {mayMove ? (
+          {/* The Admin's way to a merge, on any page but their own (decision 0407). */}
+          {mayMerge ? (
+            <section aria-labelledby="merge-heading" className={`mt-4 ${FRAME}`}>
+              <h2 id="merge-heading" className="font-medium">
+                Is this person recorded twice?
+              </h2>
+              <p className="text-muted mt-1 text-sm leading-relaxed">
+                Only the Admin can merge two records of one person. It cannot be undone.
+              </p>
+              <Link href={`/people/${id}/merge`} className={cn('mt-3', buttonClasses('secondary'))}>
+                Merge a duplicate
+              </Link>
+            </section>
+          ) : null}
+
+          </>
+          )}
+
+          {mayMove && !person.data.merged ? (
             <MoveLeaderDialog
               open={moving}
               onClose={() => setMoving(false)}
