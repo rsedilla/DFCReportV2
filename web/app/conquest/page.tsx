@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { GrowthCards, GrowthFilters } from '@/components/growth-controls';
-import { TAB_PANE } from '@/components/ui/frame';
+
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -102,7 +102,8 @@ function ConquestTab() {
         </p>
       </div>
 
-      <div className={`mt-6 ${TAB_PANE}`}>
+      {/* The tab pane's green frame, closed at the top: Conquest has no tabs (decision 0407). */}
+      <div className="border-accent mt-6 flow-root min-w-0 border-2 px-4 pb-5 sm:px-5">
 
         <GrowthFilters
           submitted={q}
