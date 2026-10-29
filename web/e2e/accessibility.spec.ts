@@ -460,13 +460,18 @@ const SCANS = [
         page.getByRole('heading', { name: 'Someone similar is already recorded' }),
       ).toBeVisible();
       await expect(page.getByText('Same first and last name')).toBeVisible();
-      // Two withheld candidates, and the second carries a tier as well as the
-      // flag. It must still read as withheld — which only `possible_match` can
+      // Two withheld candidates, and the second carries a tier and a name as well as
+      // the flag. It must still read as withheld — which only `possible_match` can
       // decide, so this is what pins the client reading the flag rather than
-      // inferring the same fact from an absent tier.
+      // inferring the same fact from an absent tier. Both are the one line naming
+      // nobody (decision 0405), and only the candidate in scope is linked.
       await expect(
-        page.getByText('Their details are visible to the leaders who pastor them.'),
-      ).toHaveCount(2);
+        page.getByText(
+          'Someone with a similar name is already recorded in another branch. Ask the Admin before adding them.',
+        ),
+      ).toHaveCount(1);
+      await expect(page.getByText('Zenaida Cruz Ocampo')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Open this record' })).toHaveCount(1);
     },
   },
   {

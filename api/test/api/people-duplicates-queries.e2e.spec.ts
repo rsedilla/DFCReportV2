@@ -127,7 +127,11 @@ describe('duplicate check queries do not grow with the candidates (perf-duplicat
       .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
     expect(response.status).toBe(200);
-    expect((response.body.data as { id: string }[]).map((row) => row.id)).not.toContain(hidden.id);
+    // Nobody outside the branch is shown at all: a withheld row names nobody (decision
+    // 0405), so its absence is what can fail here.
+    expect(
+      (response.body.data as Record<string, unknown>[]).filter((row) => row.possible_match),
+    ).toEqual([]);
   });
 
   it('still tells each candidate apart by scope, in scope first', async () => {
@@ -136,18 +140,22 @@ describe('duplicate check queries do not grow with the candidates (perf-duplicat
 
     // In scope first, then withheld ones in name order (section 3), which the middle
     // names make the order they were created in. Within one tier the in-scope order is
-    // not fixed (CLAUDE.md, Open), so those are compared as a set.
-    const ids = rows.map((row) => row.id as string);
-    expect(ids.slice(0, mine.length).sort()).toEqual([...mine].sort());
-    expect(ids.slice(mine.length)).toEqual(theirs);
+    // not fixed (CLAUDE.md, Open), so those are compared as a set. A withheld row names
+    // nobody (decision 0405), so their order is read from the audit entry (decision 0304).
+    const ids = rows.slice(0, mine.length).map((row) => row.id as string);
+    expect(ids.sort()).toEqual([...mine].sort());
+    const entry = await db
+      .selectFrom('audit_log')
+      .select('after')
+      .where('action', '=', 'directory.matched')
+      .executeTakeFirstOrThrow();
+    expect((entry.after as { shown: string[] }).shown).toEqual(theirs);
     for (const row of rows.slice(0, mine.length)) {
       expect(row).toMatchObject({ tier: expect.any(Number), reasons: expect.any(Array) });
       expect(row).not.toHaveProperty('possible_match');
     }
     for (const row of rows.slice(mine.length)) {
-      expect(row).toMatchObject({ possible_match: true });
-      expect(row).not.toHaveProperty('tier');
-      expect(row).not.toHaveProperty('reasons');
+      expect(row).toEqual({ possible_match: true });
     }
   });
 });

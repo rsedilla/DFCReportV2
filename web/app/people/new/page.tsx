@@ -32,7 +32,9 @@ import {
   networkLabel,
   networkOfSex,
   type CivilStatus,
+  shownOnly,
   type DuplicateCandidate,
+  type ShownCandidate,
   type PersonFull,
   type Sex,
 } from '@/lib/people';
@@ -152,7 +154,7 @@ function NewPersonForm() {
       : null;
   const chosenLeaderId = leaderTouched ? leaderId : (self?.id ?? null);
   const chosenLeaderName = leaderTouched ? leaderName : self ? `${self.full_name} (you)` : null;
-  const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
+  const [candidates, setCandidates] = useState<ShownCandidate[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
 
@@ -279,7 +281,8 @@ function NewPersonForm() {
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
-        setCandidates((error.details.candidates as DuplicateCandidate[]) ?? []);
+        // Only a candidate in scope is ever refused on (section 3), so none is withheld.
+        setCandidates(shownOnly((error.details.candidates as DuplicateCandidate[]) ?? []));
         setFailure(null);
         return;
       }
@@ -362,12 +365,7 @@ function NewPersonForm() {
                 "visible to their own leaders" for somebody the viewer pastors,
                 the first time a rule matches without pushing a reason.
               */}
-              <MatchNote
-                candidate={candidate}
-                adding
-                withheldLine="A possible match. Their details are visible to the leaders who pastor them — ask before adding a second record."
-                className="mt-2"
-              />
+              <MatchNote candidate={candidate} adding className="mt-2" />
 
               <MatchLink candidate={candidate} className="mt-2 text-sm" />
             </li>
