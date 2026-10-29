@@ -74,7 +74,7 @@ test.describe('the Growth tabs', () => {
       'page',
     );
     await expect(tabs.getByRole('link', { name: 'SUYNL' })).not.toHaveAttribute('aria-current');
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training']);
   });
 
   test('are SUYNL alone for a Full view leader, and Training by its address shows the note (decisions 0360 and 0379)', async ({

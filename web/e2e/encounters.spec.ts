@@ -295,7 +295,7 @@ test.describe('the Encounter seasons page', () => {
     await expect(page.getByRole('heading', { name: 'Growth', level: 1 })).toBeVisible();
     await expect(page.getByText('The Encounter God Weekends, set by an administrator.')).toBeVisible();
     const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training']);
     await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Training');
     // Nothing under Reports changes a record (decision 0296), so the editor is not a report.
     await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);

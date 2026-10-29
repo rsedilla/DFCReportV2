@@ -22,8 +22,8 @@ import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
- * The Conquest tab of Growth, read-only (SKILL.md section 27; decisions 0283 to 0286,
- * and the owner's choices of 2026-09-24).
+ * The Conquest page of Growth, reached by a link above its tabs (decision 0406), read-only
+ * (SKILL.md section 27; decisions 0283 to 0286, and the owner's choices of 2026-09-24).
  *
  * **Every goal is worked out from the records**, so there is nothing to tick and no save
  * bar. A goal that looks wrong is corrected where its record lives: a SUYNL lesson, a

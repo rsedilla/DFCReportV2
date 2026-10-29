@@ -50,19 +50,28 @@ function cellsOf(page: Page, name: string) {
   };
 }
 
-test.describe('the Conquest tab', () => {
-  // A whole-church reader, as the Admin is: a Full view leader's tab is hidden (decision 0360).
-  test('is a Growth tab, marked as the current page', async ({ page }) => {
+test.describe('the Conquest page', () => {
+  // A whole-church reader, as the Admin is: a Full view leader's page is hidden (decision 0360).
+  test('is a link above the Growth tabs, marked as the current page (decision 0406)', async ({
+    page,
+  }) => {
     await openConquest(page, '/growth/conquest', true);
 
     const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
-    await expect(tabs.getByRole('link', { name: 'Conquest' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    await expect(tabs.getByRole('link', { name: 'SUYNL' })).not.toHaveAttribute('aria-current');
-    await expect(tabs.getByRole('link', { name: 'Training' })).not.toHaveAttribute('aria-current');
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training']);
+    await expect(tabs.locator('a[aria-current="page"]')).toHaveCount(0);
+    const link = page.getByRole('link', { name: 'Conquest goals', exact: true });
+    await expect(link).toHaveAttribute('aria-current', 'page');
+    await expect(link).toHaveAttribute('href', '/growth/conquest');
+
+    // From another tab it leads to Conquest, and is not current.
+    await tabs.getByRole('link', { name: 'SUYNL' }).click();
+    await expect(page).toHaveURL(/\/growth\/suynl$/);
+    const away = page.getByRole('link', { name: 'Conquest goals', exact: true });
+    await expect(away).toHaveAttribute('href', '/growth/conquest');
+    await expect(away).not.toHaveAttribute('aria-current');
+    await away.click();
+    await expect(page).toHaveURL(/\/growth\/conquest$/);
 
     const current = page
       .getByRole('navigation', { name: 'Main' })

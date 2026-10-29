@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { ConquestLink } from '@/components/conquest-link';
 import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -21,8 +22,9 @@ const PEOPLE_TAB = {
 } as const;
 
 /**
- * A whole-church reader's six (decision 0292; Filed Reports withdrawn, decision 0340; *# of
- * People* moved here from People, decision 0376).
+ * A whole-church reader's five (decision 0292; Filed Reports withdrawn, decision 0340; *# of
+ * People* moved here from People, decision 0376). Conquest is a link above them rather than a
+ * tab (decision 0406).
  */
 const TABS = [
   { key: 'cells', label: 'Cell Groups', path: '/reports/cells' },
@@ -30,7 +32,6 @@ const TABS = [
   // Named for what it shows (decision 0378); Growth's SUYNL is where lessons are ticked.
   { key: 'suynl', label: 'Encounter Readiness', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
-  { key: 'conquest', label: 'Conquest', path: '/reports/conquest' },
   PEOPLE_TAB,
 ] as const;
 
@@ -63,7 +64,8 @@ const BRANCH_TABS = [
 ] as const;
 
 /**
- * The two Senior Pastors' five tabs (decision 0326, point 3), in place of the six. The first
+ * The two Senior Pastors' five tabs (decision 0326, point 3), in place of a whole-church
+ * reader's. The first
  * two are the same reports under the names the church uses. **A `#` label keeps its words as
  * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
  * "hash" (section 23).
@@ -77,7 +79,8 @@ const SENIOR_PASTOR_TABS = [
 
 export type ReportTab =
   | (typeof TABS)[number]['key']
-  | (typeof SENIOR_PASTOR_TABS)[number]['key'];
+  | (typeof SENIOR_PASTOR_TABS)[number]['key']
+  | 'conquest';
 
 /** A Senior Pastor's tab as a figure of the twelve-month view (decision 0377). */
 const TREND_FIGURE: Record<(typeof SENIOR_PASTOR_TABS)[number]['key'], TrendFigure> = {
@@ -100,8 +103,9 @@ export function trendHref(figure: TrendFigure, leader?: string | null): string {
 /**
  * Which report is on screen, and the way to the others (SKILL.md section 19; decision 0292).
  *
- * **Six links for a whole-church reader, the Senior Pastors' five (decision 0326), or a Full
- * view leader's five (decision 0380), not ARIA tabs.** Each report keeps an address of its own, so the landing page
+ * **Five links for a whole-church reader, with Conquest a link above them (decision 0406), the
+ * Senior Pastors' five (decision 0326), or a Full view leader's five (decision 0380), not ARIA
+ * tabs.** Each report keeps an address of its own, so the landing page
  * decision 0245 gives a whole-church reader, the sidebar and a saved link all still work, and
  * something that navigates is announced as a link. Equal widths in the Record screen's style
  * (decision 0290): one row from a small screen up, and two on a phone. **A Full view leader's
@@ -142,25 +146,31 @@ export function ReportsTabs({
   const tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] =
     seniorPastor ? SENIOR_PASTOR_TABS : branch ? BRANCH_TABS : TABS;
 
-  // No tabs until the server names the screens, so a Senior Pastor never sees a leader's six
+  // No tabs until the server names the screens, so a Senior Pastor never sees a whole-church reader's five
   // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
   // the report inside is not remounted when the answer arrives.
   const tabbed = !me.isPending;
 
+  // The whole-church reader's way to Conquest (decision 0406); nobody else's tabs carry it.
+  const conquest = tabbed && !seniorPastor && !branch;
+
   return (
     <>
+      {conquest ? <ConquestLink href="/reports/conquest" current={current === 'conquest'} /> : null}
       {tabbed ? (
         <nav
           aria-label="Which report"
           className={cn(
-            // The five labels fit one row from a small screen up (owner, 2026-10-09); a
-            // whole-church reader's six take three a row on a phone. A Full view leader's five sit
-            // two by two on a phone, equal, and from `sm` in one row sized to their words.
+            // The five labels fit one row from a small screen up (owner, 2026-10-09). A
+            // whole-church reader's five take three a row on a phone, as their six did, and the
+            // Senior Pastors' two. A Full view leader's five sit two by two on a phone, equal,
+            // and from `sm` in one row sized to their words.
+            conquest ? 'mt-2' : 'mt-6',
             branch
-              ? 'mt-6 grid grid-cols-2 sm:flex'
-              : tabs.length === 6
-                ? 'mt-6 grid grid-cols-3 sm:grid-cols-6'
-                : 'mt-6 grid grid-cols-2 sm:grid-cols-5',
+              ? 'grid grid-cols-2 sm:flex'
+              : seniorPastor
+                ? 'grid grid-cols-2 sm:grid-cols-5'
+                : 'grid grid-cols-3 sm:grid-cols-5',
             TAB_ROW,
           )}
         >

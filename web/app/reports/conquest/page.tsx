@@ -10,7 +10,7 @@ import { describeFailure } from '@/lib/messages';
 import { getConquestCounts } from '@/lib/growth';
 
 /**
- * Conquest under Reports (decision 0292): the Growth tab's four counts, read only and as of
+ * Conquest under Reports (decision 0292): the Growth page's four counts, read only and as of
  * now. Each person's goals are under Growth.
  */
 export default function Page() {
