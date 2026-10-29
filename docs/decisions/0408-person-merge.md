@@ -68,6 +68,37 @@ not offered.
     to the kept record, who merged it and when. It offers no action and shows no leader or Cell.
     A printed report or a saved link that names the old Member ID still explains itself.
 
+## Six more, from `architecture-guardian`'s review of the build (2026-10-29)
+
+Each was chosen by the owner from a screenshot of the real screen on the demo database, today's
+behaviour beside the alternative.
+
+15. **Two or more duplicates merged into one record.** In a past month when the kept record had no
+    pastoral leader and more than one of its duplicates had one, the person is counted under the
+    leader of the **newer** duplicate: the record created later, the higher Member ID breaking a
+    tie. One person, one leader, and the month's reports still open; as first built, two edges for
+    one person made every figure of that month refuse (Section 20, decision 0212).
+16. **Meetings a merged-away record led count where the kept record sits.** A duplicate that led a
+    Cell before handing it over keeps those meetings; every figure that places a meeting by its
+    responsible leader resolves that leader to the kept record, as point 4 resolves the person who
+    came. Recording Status, which counts leaders, counts the two records as one leader, the record
+    kept, for Cell and DCC alike, so what the merged-away record owed is listed in the kept
+    record's branch rather than under *Others*; what was owed and recorded is unchanged (point
+    19). So each leader's rows still add up to the total.
+17. **The old page opens for anyone who may open the kept record.** The merge ends the duplicate's
+    pastoral assignment, so no leader's scope reaches the old record itself; its page is authorized
+    against the record kept, so that a leader's saved link explains itself as point 14 promises. A
+    reader who may not open the kept record is refused, as before.
+18. **The merge's reason is not shown on the old page.** Point 14 names who merged it and when; the
+    reason is free text an Admin typed, and stays in the audit log (Section 21).
+19. **Past DCC coverage is not changed by a merge.** Coverage counts a leader's obligation for each
+    Sunday they had someone to record (decision 0224). A leader whose only disciple that Sunday was
+    the duplicate did owe that record, and may have filed it; the merge removes neither.
+20. **Unticking a lesson or graduation reaches both records.** Where the kept person's row shows a
+    SUYNL lesson or a Training graduation that came from a duplicate, unticking it withdraws it on
+    every record of the person, as any untick withdraws (Section 28), so a wrong one shown can
+    always be corrected.
+
 Decision 0408, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 3.
 
