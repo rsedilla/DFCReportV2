@@ -12,7 +12,7 @@ export default function ConquestMoved() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(`/conquest${''}`);
+    router.replace(`/conquest${window.location.search}`);
   }, [router]);
 
   return null;

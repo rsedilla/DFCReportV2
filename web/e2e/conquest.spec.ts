@@ -79,9 +79,10 @@ test.describe('the Conquest page', () => {
 
   test('forwards its old addresses, keeping the query (decision 0407)', async ({ page }) => {
     await openConquest(page, '/growth/conquest?goal=OPEN_A_CELL', true);
-    await expect(page).toHaveURL(/\/conquest\?goal=OPEN_A_CELL$/);
-    await page.goto('/reports/conquest');
-    await expect(page).toHaveURL(/\/conquest$/);
+    // Anchored at the host: unanchored, the old address itself matches before it forwards.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/conquest\?goal=OPEN_A_CELL$/);
+    await page.goto('/reports/conquest?goal=WIN_3');
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/conquest\?goal=WIN_3$/);
   });
 
   test('shows the four counts, and a card narrows the list and the address', async ({ page }) => {

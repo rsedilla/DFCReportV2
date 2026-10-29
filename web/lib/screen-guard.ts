@@ -76,7 +76,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     );
   }
 
-  // Full view: Record, Reports, People, Cells and Growth. My Cell is the recording screens'.
+  // Full view: Record, Reports, People, Cells and SUYNL, and Conquest for the Admin. My Cell is the recording screens'.
   if (at(/^\/my-cell(\/|$)/)) {
     return false;
   }

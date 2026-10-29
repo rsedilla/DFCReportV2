@@ -65,7 +65,7 @@ async function expectReadOnly(page: Page) {
 /**
  * A whole-church reader's five tabs, in order, and the address each opens (SKILL.md section
  * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340), # of People
- * came from People (decision 0376), and Conquest is a link above them (decision 0406). A `#`
+ * came from People (decision 0376), and Conquest is a sidebar item of its own (decision 0407). A `#`
  * label keeps its words as the link's name.
  */
 const TABS = [
@@ -745,7 +745,7 @@ test.describe('a Full view leader’s report controls', () => {
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
-   * A whole-church reader's five (decisions 0292, 0376 and 0406): equal, three across on a phone
+   * A whole-church reader's five (decisions 0292, 0376 and 0407): equal, three across on a phone
    * and one row from `sm`. A Full view leader's five (decisions 0361 and 0380): sized to their words in
    * one row from `sm`, a label wrapping inside its tab on a phone.
    */

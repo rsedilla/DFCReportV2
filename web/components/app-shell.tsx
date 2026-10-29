@@ -171,7 +171,7 @@ export const PAGE_WIDTH = {
 /**
  * The frame every signed-in screen sits in.
  *
- * **Five items, and the split is between recording and reading** (SKILL.md section
+ * **Up to six items, and the split is between recording and reading** (SKILL.md section
  * 19, ruling of 2026-09-14; Network became a tab of People by decision 0288). What a person fills in is under `Record`; what they
  * read is under `Reports`. Each module keeps its own name; the label is what
  * reaches it.
@@ -181,8 +181,8 @@ export const PAGE_WIDTH = {
  * scope and period that make it readable.
  *
  * **A Recording-only account has four items** (decisions 0323 and 0371): `Record · People ·
- * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have two**, `Record · Reports` (decisions 0326 and 0377), their twelve months being a view of Reports.
- * Every other account has the five, a Full view leader's fifth reading `SUYNL` (decision 0383). Where a person lands still follows the reach
+ * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have three**, `Record · Reports · Conquest` (decisions 0326, 0377 and 0407), their twelve months being a view of Reports.
+ * A Full view leader has five, the fifth reading `SUYNL` (decision 0383), and the Admin six, `Conquest` the sixth (decision 0407). Where a person lands still follows the reach
  * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
