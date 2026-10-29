@@ -439,7 +439,7 @@ async function visibleCandidates(
  * encodes nothing and is unique (section 3), which is what makes the key total.
  *
  * Since decision 0405 a withheld row returns neither, so the viewer sees only where an
- * archived one sits among them; that position is still a function of the names alone.
+ * archived one sits among them; that position is still a function of nothing protected.
  */
 function orderKeyOf(match: Match): [string, string] {
   // `normalizeName`, which is the form section 3 defines for comparison:

@@ -293,6 +293,42 @@ describe('a similar name, read from the names alone (decision 0405)', () => {
     }
   });
 
+  it('reads no letter away in a name of one or two letters', () => {
+    // The last-name branch's own guard: Go and Yo are one letter apart.
+    expect(
+      reasonsFor(subject({ firstName: 'Maria', lastName: 'Go', ...none }), {
+        ...john,
+        firstName: 'Maria',
+        lastName: 'Yo',
+        ...none,
+      }),
+    ).toEqual([]);
+  });
+
+  it('needs one name equal: a close first name with another last name is no match', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Jon', lastName: 'Reyes', ...none }), { ...john, ...none }),
+    ).toEqual([]);
+  });
+
+  it('is no match where the equal name compares as empty', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Jon', lastName: '-', ...none }), {
+        ...john,
+        lastName: "'",
+        ...none,
+      }),
+    ).toEqual([]);
+    expect(
+      reasonsFor(subject({ firstName: 'Jr', lastName: 'Santos', ...none }), {
+        ...john,
+        firstName: 'Sr',
+        lastName: 'Santoz',
+        ...none,
+      }),
+    ).toEqual([]);
+  });
+
   it('is never Tier 1', () => {
     const [match] = findCandidates(
       subject({ firstName: 'Jon', lastName: 'Santos', ...none }),

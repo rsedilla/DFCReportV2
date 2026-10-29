@@ -1207,6 +1207,16 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(withheldRows(wrong.body)).toEqual(withheldRows(right.body));
     });
 
+    it('shows a last name one letter off in another branch, by the first name', async () => {
+      // "Juan Pestfixture": the surname's first letter differs, so only the equal first
+      // name reaches Juan Testfixture in Rico's branch.
+      const response = await lookup({ first_name: 'Juan', last_name: 'Pestfixture' });
+
+      expect(response.status).toBe(200);
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true }]);
+    });
+
     it('shows a similar name in the branch with its reason', async () => {
       const response = await lookup({ first_name: 'Manny', last_name: 'Testfixture' });
 

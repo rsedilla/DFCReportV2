@@ -94,7 +94,7 @@ export function fullNameOf(candidate: Candidate): string {
  * missing and what it is over-reporting.
  */
 export interface MatchingThresholds {
-  /** Edit distance within which two first names are "a small edit distance" apart. */
+  /** Edit distance within which two names are "a small edit distance" apart. */
   firstNameEditDistance: number;
   /** Whole-name similarity, 0 to 1, at which a Tier 2 candidate surfaces. */
   wholeNameSimilarity: number;
@@ -384,13 +384,14 @@ function similarName(
   nickname: boolean,
   thresholds: MatchingThresholds,
 ): string | null {
-  if (last === cLast && nickname) {
+  // The equal name must be a name: one that compares as empty (`Jr`, `-`) is no match.
+  if (last !== '' && last === cLast && nickname) {
     return 'last name equal, first name a known nickname variant';
   }
-  if (last === cLast && closeName(first, cFirst, thresholds)) {
+  if (last !== '' && last === cLast && closeName(first, cFirst, thresholds)) {
     return 'last name equal, first name within a small edit distance';
   }
-  if (first === cFirst && closeName(last, cLast, thresholds)) {
+  if (first !== '' && first === cFirst && closeName(last, cLast, thresholds)) {
     return 'first name equal, last name within a small edit distance';
   }
   return null;
