@@ -24,6 +24,7 @@ import {
   growthPage,
   growthPopulation,
 } from '../common/growth/growth-list';
+import { mergedCte, resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { compareRosterKeys } from '../common/roster-cursor';
@@ -151,7 +152,8 @@ export class SuynlService {
     );
 
     const ids = rows.map((row) => row.id);
-    const lessons = await this.currentLessons(this.db, ids);
+    // A record kept shows the lessons of every record merged into it (decision 0407).
+    const lessons = await this.lessonsOfKept(ids);
     const identities = await this.people.forDecisions(ids);
     const authority = await this.authorization.authorityFor(actor.accountId);
     const mayFile = await mayFileEach(
@@ -470,14 +472,26 @@ export class SuynlService {
       return new Map();
     }
 
-    // The third is picked in the database, and the people go as one array parameter.
+    // The third is picked in the database, and the people go as one array parameter. A merged
+    // pair is one person (decision 0407): each lesson resolves to the record kept, and a lesson
+    // on both records counts once, on the earlier date.
+    const pairs = await this.people.mergedPairsWithin(this.db);
     const result = await sql<{ person_id: string; confirmed_at: Date }>`
+      WITH ${mergedCte(pairs)},
+      lessons AS (
+        SELECT coalesce(m.kept_id, l.person_id) AS person_id, l.lesson,
+               min(l.confirmed_at) AS confirmed_at
+          FROM suynl_lessons l
+          LEFT JOIN merged m ON m.absorbed_id = l.person_id
+         WHERE l.superseded_at IS NULL
+         GROUP BY coalesce(m.kept_id, l.person_id), l.lesson
+      )
       SELECT person_id, confirmed_at
       FROM (
         SELECT person_id, confirmed_at,
           row_number() OVER (PARTITION BY person_id ORDER BY confirmed_at) AS position
-        FROM suynl_lessons
-        WHERE superseded_at IS NULL
+        FROM lessons
+        WHERE true
           ${personIds === null ? sql`` : sql`AND person_id = ANY(${[...personIds]}::uuid[])`}
       ) ordered
       WHERE position = 3
@@ -494,26 +508,70 @@ export class SuynlService {
       return new Map();
     }
 
+    // A merged pair is one person (decision 0407): each record's lessons count for the record
+    // kept, and a lesson on both counts once, so lessons are counted as distinct numbers.
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    const reach =
+      population === null
+        ? null
+        : [
+            ...population,
+            ...pairs.absorbed.filter((_, index) => population.has(canonicalId(pairs.kept[index]))),
+          ];
+
     const rows = await this.db
       .selectFrom('suynl_lessons')
-      .select((eb) => ['person_id', eb.fn.countAll<string>().as('count')])
+      .select(['person_id', 'lesson'])
       .where('superseded_at', 'is', null)
-      .$if(population !== null, (qb) => qb.where('person_id', 'in', [...(population ?? [])]))
-      .groupBy('person_id')
+      .$if(reach !== null, (qb) => qb.where('person_id', 'in', reach ?? []))
       .execute();
 
-    // Current people only (decision 0279): a lesson row outlives an archival or a merge.
-    const identities = await this.people.forDecisions(rows.map((row) => row.person_id));
+    const lessonsOf = new Map<string, Set<number>>();
+    for (const row of rows) {
+      const kept = canonicalId(resolve(row.person_id));
+      lessonsOf.set(kept, (lessonsOf.get(kept) ?? new Set()).add(row.lesson));
+    }
+
+    // Current people only (decision 0279): a lesson row outlives an archival, and a merged
+    // record's lessons are counted for the record kept above rather than dropped.
+    const identities = await this.people.forDecisions([...lessonsOf.keys()]);
     const progress = new Map<string, { count: number }>();
 
-    for (const row of rows) {
-      const identity = identities.get(row.person_id);
+    for (const [personId, lessons] of lessonsOf) {
+      const identity = identities.get(personId);
       if (identity !== undefined && !identity.isArchived && identity.mergedIntoId === null) {
-        progress.set(canonicalId(row.person_id), { count: Number(row.count) });
+        progress.set(personId, { count: lessons.size });
       }
     }
 
     return progress;
+  }
+
+  /**
+   * The current lessons shown for these records kept, with every record merged into each
+   * (decision 0407): a lesson held on both is shown once, on the earlier date. For reading
+   * only; a save reads `currentLessons`, which names the record written.
+   */
+  private async lessonsOfKept(ids: readonly string[]): Promise<Lesson[]> {
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const wanted = new Set(ids.map((id) => canonicalId(id)));
+    const absorbed = pairs.absorbed.filter((_, index) =>
+      wanted.has(canonicalId(pairs.kept[index])),
+    );
+    const resolve = resolverOf(pairs);
+    const earliest = new Map<string, Lesson>();
+
+    for (const lesson of await this.currentLessons(this.db, [...ids, ...absorbed])) {
+      const personId = canonicalId(resolve(lesson.personId));
+      const key = `${personId}#${lesson.lesson}`;
+      const seen = earliest.get(key);
+      if (seen === undefined || lesson.confirmedAt < seen.confirmedAt) {
+        earliest.set(key, { ...lesson, personId });
+      }
+    }
+
+    return [...earliest.values()];
   }
 
   private async currentLessons(

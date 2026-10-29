@@ -24,6 +24,7 @@ import {
   growthPage,
   growthPopulation,
 } from '../common/growth/growth-list';
+import { resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { manilaDayOf } from '../common/time/manila';
@@ -164,7 +165,8 @@ export class TrainingService {
     );
 
     const ids = rows.map((row) => row.id);
-    const graduations = await this.currentGraduations(this.db, ids);
+    // A record kept shows the graduations of every record merged into it (decision 0407).
+    const graduations = await this.graduationsOfKept(ids);
     const identities = await this.people.forDecisions(ids);
     const authority = await this.authorization.authorityFor(actor.accountId);
     const mayFile = await mayFileEach(
@@ -369,16 +371,24 @@ export class TrainingService {
       return new Set();
     }
 
+    // A record kept holds what any record merged into it holds (decision 0407).
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    const wanted = new Set(personIds.map((id) => canonicalId(id)));
+    const absorbed = pairs.absorbed.filter((_, index) =>
+      wanted.has(canonicalId(pairs.kept[index])),
+    );
+
     const rows = await this.db
       .selectFrom('training_graduations')
       .select('person_id')
       .distinct()
-      .where('person_id', 'in', [...personIds])
+      .where('person_id', 'in', [...personIds, ...absorbed])
       .where('program', 'in', ['ENCOUNTER', 'LIFE_CLASS'])
       .where('superseded_at', 'is', null)
       .execute();
 
-    return new Set(rows.map((row) => canonicalId(row.person_id)));
+    return new Set(rows.map((row) => canonicalId(resolve(row.person_id))));
   }
 
   /** The programs each current person holds a current graduation for. */
@@ -389,12 +399,26 @@ export class TrainingService {
       return new Map();
     }
 
-    const rows = await this.db
-      .selectFrom('training_graduations')
-      .select(['person_id', 'program'])
-      .where('superseded_at', 'is', null)
-      .$if(population !== null, (qb) => qb.where('person_id', 'in', [...(population ?? [])]))
-      .execute();
+    // A merged pair is one person (decision 0407): each record's graduations count for the
+    // record kept, and a program held on both is one program.
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    const reach =
+      population === null
+        ? null
+        : [
+            ...population,
+            ...pairs.absorbed.filter((_, index) => population.has(canonicalId(pairs.kept[index]))),
+          ];
+
+    const rows = (
+      await this.db
+        .selectFrom('training_graduations')
+        .select(['person_id', 'program'])
+        .where('superseded_at', 'is', null)
+        .$if(reach !== null, (qb) => qb.where('person_id', 'in', reach ?? []))
+        .execute()
+    ).map((row) => ({ ...row, person_id: canonicalId(resolve(row.person_id)) }));
 
     // Current people only (decision 0279).
     const identities = await this.people.forDecisions(uniqueIds(rows.map((row) => row.person_id)));
@@ -413,6 +437,33 @@ export class TrainingService {
     }
 
     return held;
+  }
+
+  /**
+   * The current graduations shown for these records kept, with every record merged into each
+   * (decision 0407): a program held on both is shown once, the earlier graduation date kept
+   * (an unknown date counting as later). For reading only; a save reads `currentGraduations`.
+   */
+  private async graduationsOfKept(ids: readonly string[]): Promise<Graduation[]> {
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const wanted = new Set(ids.map((id) => canonicalId(id)));
+    const absorbed = pairs.absorbed.filter((_, index) =>
+      wanted.has(canonicalId(pairs.kept[index])),
+    );
+    const resolve = resolverOf(pairs);
+    const earliest = new Map<string, Graduation>();
+    const order = (graduation: Graduation) => graduation.graduatedOn ?? '9999-12-31';
+
+    for (const graduation of await this.currentGraduations(this.db, [...ids, ...absorbed])) {
+      const personId = canonicalId(resolve(graduation.personId));
+      const key = `${personId}#${graduation.program}`;
+      const seen = earliest.get(key);
+      if (seen === undefined || order(graduation) < order(seen)) {
+        earliest.set(key, { ...graduation, personId });
+      }
+    }
+
+    return [...earliest.values()];
   }
 
   private async currentGraduations(
