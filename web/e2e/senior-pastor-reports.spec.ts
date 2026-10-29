@@ -255,7 +255,7 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of Cell Leaders');
   // The sidebar marks Reports; there is no Trends item.
   const main = page.getByRole('navigation', { name: 'Main' });
-  await expect(main.getByRole('link')).toHaveText(['Record', 'Reports']);
+  await expect(main.getByRole('link')).toHaveText(['Record', 'Reports', 'Conquest']);
   await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
 
   const back = page.getByRole('group', { name: 'Report period' });

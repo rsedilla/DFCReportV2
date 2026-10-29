@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   type LucideIcon,
   Sprout,
+  Trophy,
   Users,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -88,6 +89,16 @@ const GROWTH: NavEntry = {
   label: 'Growth',
   icon: Sprout,
   matches: ['/growth'],
+};
+/**
+ * Conquest, an item of its own for the Admin and the two Senior Pastors (decision 0407),
+ * after Growth, which keeps SUYNL and Training.
+ */
+const CONQUEST: NavEntry = {
+  href: '/conquest',
+  label: 'Conquest',
+  icon: Trophy,
+  matches: ['/conquest'],
 };
 /**
  * A Recording-only account's own Cells (decision 0323): its members, this month's meetings
@@ -199,8 +210,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     : me.data?.screens === 'RECORDING'
       ? [RECORD, PEOPLE, MY_CELL, SUYNL]
       : me.data?.screens === 'SENIOR_PASTOR'
-        ? [RECORD, REPORTS]
-        : [RECORD, REPORTS, PEOPLE, CELLS, isBranchReader(me.data) ? SUYNL : GROWTH];
+        ? [RECORD, REPORTS, CONQUEST]
+        : isBranchReader(me.data)
+          ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
+          : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH, CONQUEST];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

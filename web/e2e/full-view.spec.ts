@@ -129,14 +129,14 @@ test.describe('a Recording-only account (decision 0323)', () => {
   // It said "keeps the five items" and passed only by matching the sidebar before `/auth/me`
   // answered, when every account shows the default five; decision 0326 gave them three, and
   // decision 0377 folded Trends into Reports.
-  test('a Senior Pastor has Record and Reports', async ({ page }) => {
+  test('a Senior Pastor has Record, Reports and Conquest (decision 0407)', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'SENIOR_PASTOR');
     await mockPeople(page);
 
     await page.goto('/people');
 
-    await expect(mainNavigation(page).getByRole('link')).toHaveText(['Record', 'Reports']);
+    await expect(mainNavigation(page).getByRole('link')).toHaveText(['Record', 'Reports', 'Conquest']);
   });
 
   async function mockRecord(page: Page) {

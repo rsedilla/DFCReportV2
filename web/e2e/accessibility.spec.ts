@@ -1397,21 +1397,6 @@ const SCANS = [
     },
   },
   {
-    // Conquest under Reports: four read-only cards.
-    name: 'conquest report',
-    route: '/reports/conquest',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
-      await mockWholeChurchReader(page);
-      await mockConquest(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^The four goals for the 3 people/)).toBeVisible();
-      await expect(page.getByRole('link', { name: 'See each person in Growth' })).toBeVisible();
-    },
-  },
-  {
     // A year of the DCC report: My 12 over the year (decision 0294), then one row per month
     // that has begun, and a year row adding up Owed and Filed only (decision 0257).
     name: 'dcc figures report, year',
@@ -1603,7 +1588,7 @@ const SCANS = [
     // Conquest (section 27), read-only: four cards, and each goal as its month with today's
     // count beneath it, or how far it is, or "Not yet". No box and no save bar.
     name: 'growth conquest',
-    route: '/growth/conquest',
+    route: '/conquest',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
@@ -1948,7 +1933,7 @@ const TARGET_SWEEP = [
     // in the table and in the list below `lg` (six, the hidden rendering counted as on
     // "cell attendance report"), and the two pager buttons. No box: every goal is derived.
     name: 'growth conquest',
-    route: '/growth/conquest',
+    route: '/conquest',
     settleRole: 'link' as const,
     settle: 'Dalisay Soriano',
     minimum: 16,
@@ -1986,14 +1971,6 @@ const TARGET_SWEEP = [
     route: '/reports/training',
     settleRole: 'link' as const,
     settle: 'Record graduations in Growth',
-    minimum: 4,
-    church: true,
-  },
-  {
-    name: 'conquest report',
-    route: '/reports/conquest',
-    settleRole: 'link' as const,
-    settle: 'See each person in Growth',
     minimum: 4,
     church: true,
   },
@@ -2820,7 +2797,8 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
 });
 
 /**
- * At 320px the phone's tab bar holds all five items, each label whole and each a full target.
+ * At 320px the phone's tab bar holds all its items, each label whole and each a full target:
+ * six for a whole-church reader since Conquest became an item of its own (decision 0407).
  *
  * **The sideways-scroll sweep cannot see this.** The bar is `position: fixed`, and a fixed
  * element's overflow does not reach the document's scroll width, so a label pushed past its
@@ -2829,11 +2807,11 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
  * Growth made it six items in 320px, and decision 0288 five; this pins it on both engines,
  * for a whole-church reader's `Growth` and a Full view leader's `SUYNL` (decision 0383).
  */
-for (const [reader, last] of [
-  ['a whole-church reader', 'Growth'],
-  ['a Full view leader', 'SUYNL'],
+for (const [reader, last, items] of [
+  ['a whole-church reader', 'Growth', ['Record', 'Reports', 'People', 'Cells', 'Growth', 'Conquest']],
+  ['a Full view leader', 'SUYNL', ['Record', 'Reports', 'People', 'Cells', 'SUYNL']],
 ] as const) {
-test(`at 320px the tab bar fits all five items, none of them clipped, for ${reader}`, {
+test(`at 320px the tab bar fits all ${items.length} items, none of them clipped, for ${reader}`, {
   tag: [CROSS_BROWSER_TAG],
 }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
@@ -2846,13 +2824,7 @@ test(`at 320px the tab bar fits all five items, none of them clipped, for ${read
   await page.evaluate(() => document.fonts.ready);
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
-  await expect(navigation.getByRole('link')).toHaveText([
-    'Record',
-    'Reports',
-    'People',
-    'Cells',
-    last,
-  ]);
+  await expect(navigation.getByRole('link')).toHaveText([...items]);
 
   const tabs = await navigation.getByRole('link').evaluateAll((links) =>
     links.map((link) => {

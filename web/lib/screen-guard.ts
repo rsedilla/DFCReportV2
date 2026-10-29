@@ -58,7 +58,8 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (me.screens === 'SENIOR_PASTOR') {
     // Record and Reports (decisions 0326 and 0377), and what they open: a Cell's meetings and
     // members, and a person (until the owner rules on their person pages).
-    return fiveReports || cellRecord || person;
+    // and Conquest, an item of their own since decision 0407.
+    return fiveReports || cellRecord || person || at(/^\/conquest(\/|$)/);
   }
 
   if (me.screens === 'RECORDING') {
@@ -94,7 +95,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     if (at(/^\/reports(\/|$)/) || at(/^\/trends(\/|$)/)) {
       return fiveReports;
     }
-    return !at(/^\/growth\/(training|conquest)$/);
+    return !at(/^\/growth\/(training|conquest)$/) && !at(/^\/conquest(\/|$)/);
   }
   // The Admin's six reports have no twelve-month view (decision 0377).
   return !at(/^\/trends(\/|$)/);

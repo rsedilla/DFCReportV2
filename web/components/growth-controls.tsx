@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { type ReactNode } from 'react';
 
-import { ConquestLink } from '@/components/conquest-link';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { isBranchReader } from '@/components/reports-tabs';
@@ -34,7 +33,7 @@ export function GrowthTabs({
   current,
   children,
 }: {
-  current: (typeof TABS)[number]['href'] | '/growth/conquest';
+  current: (typeof TABS)[number]['href'];
   children: ReactNode;
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
@@ -48,16 +47,10 @@ export function GrowthTabs({
   // hidden, not withdrawn: their pages are kept and do not open for them (decision 0379), and the tabs come back beside it.
   const suynlOnly = me.data?.screens === 'RECORDING' || isBranchReader(me.data);
   const tabs = suynlOnly ? TABS.filter((tab) => tab.href === '/growth/suynl') : TABS;
-  // Conquest is a link above the tabs rather than a tab (decision 0406), for those it opens to.
-  const conquest = tabbed && !suynlOnly;
-
   return (
     <>
-      {conquest ? (
-        <ConquestLink href="/growth/conquest" current={current === '/growth/conquest'} />
-      ) : null}
       {tabbed ? (
-        <nav aria-label="Growth" className={cn(conquest ? 'mt-2' : 'mt-6', 'flex', TAB_ROW)}>
+        <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
           {tabs.map((tab) => {
             const active = tab.href === current;
 

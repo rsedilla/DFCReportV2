@@ -10,7 +10,6 @@ import {
   mockDccTwelve,
 } from './mock-attendance';
 import {
-  CONQUEST_COUNTS,
   READINESS_ARTURO_ID,
   READINESS_BENITA_ID,
   READINESS_LEADER,
@@ -154,7 +153,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     }
   }
 
-  test('Conquest is a link above a whole-church reader\'s tabs, current on its own page (decision 0406)', async ({
+  test('Reports carries no Conquest: it is an item of the sidebar (decision 0407)', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
@@ -162,18 +161,11 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await page.goto('/reports/cells');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
-    const away = page.getByRole('link', { name: 'Conquest goals', exact: true });
-    await expect(away).toHaveAttribute('href', '/reports/conquest');
-    await expect(away).not.toHaveAttribute('aria-current');
-
-    await away.click();
-    await expect(page).toHaveURL(/\/reports\/conquest$/);
-    const here = page.getByRole('link', { name: 'Conquest goals', exact: true });
-    await expect(here).toHaveAttribute('aria-current', 'page');
-    // No tab is current, and each leads back.
-    await expect(which.locator('a[aria-current="page"]')).toHaveCount(0);
     await expect(which.getByRole('link')).toHaveText(TABS.map((each) => each.label));
+    await expect(page.locator('main').getByRole('link', { name: /Conquest/ })).toHaveCount(0);
+    await expect(
+      page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Conquest' }),
+    ).toHaveAttribute('href', '/conquest');
   });
 
   test('a Full view leader is offered no Encounter Readiness, Training or Conquest tab (decisions 0360 and 0380)', async ({
@@ -185,8 +177,8 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
 
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link')).toHaveCount(5);
-    // Nor the Conquest link a whole-church reader has (decision 0406).
-    await expect(page.getByRole('link', { name: /Conquest goals/ })).toHaveCount(0);
+    // Nor a Conquest item in their sidebar (decision 0407).
+    await expect(page.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
     for (const name of ['Encounter Readiness', 'Training', 'Conquest']) {
       await expect(which.getByRole('link', { name })).toHaveCount(0);
     }
@@ -204,7 +196,6 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
 
     await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
     await expect(page.getByText('Your screens are Record, Reports, People, Cells and SUYNL.')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'See each person in Growth' })).toHaveCount(0);
   });
 
   test('the month travels to every one of a Full view leader’s five', async ({
@@ -529,7 +520,6 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
 test.describe('the Growth reports: counts only, as of now (decision 0292)', () => {
   for (const report of [
     { path: '/reports/training', counts: '**/api/v1/training/counts' },
-    { path: '/reports/conquest', counts: '**/api/v1/conquest/counts' },
   ]) {
     test(`${report.path} says so when its counts cannot be read, rather than showing figures`, async ({
       page,
@@ -624,31 +614,6 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
     );
   });
 
-  test('Conquest shows its four counts, read only, and sends each person to Growth', async ({
-    page,
-  }) => {
-    await mockSignedIn(page);
-    // Training and Conquest are a whole-church reader's (decisions 0360 and 0379).
-    await mockWholeChurchReader(page);
-    await mockConquest(page);
-    await page.goto('/reports/conquest');
-
-    await expect(
-      page.getByText(`The four goals for the ${CONQUEST_COUNTS.people} people you oversee, as of today.`),
-    ).toBeVisible();
-    await expectCards(page, [
-      ['Win 3', CONQUEST_COUNTS.win_3],
-      ['Open a cell', CONQUEST_COUNTS.open_a_cell],
-      ['Completion of 12', CONQUEST_COUNTS.completion_of_12],
-      ['Raise 12 leaders', CONQUEST_COUNTS.raise_12_leaders],
-    ]);
-    await expectReadOnly(page);
-    await expect(page.getByRole('link', { name: 'See each person in Growth' })).toHaveAttribute(
-      'href',
-      '/growth/conquest',
-    );
-  });
-
   test('none of the three reads a Growth list or writes, whatever month the address carries', async ({
     page,
   }) => {
@@ -668,7 +633,7 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
       }
     });
 
-    for (const path of ['/reports/suynl', '/reports/training', '/reports/conquest']) {
+    for (const path of ['/reports/suynl', '/reports/training']) {
       await page.goto(`${path}?month=2026-05-01`);
       // Encounter Readiness carries no count cards (decision 0378); its readiness table loads.
       await expect(
