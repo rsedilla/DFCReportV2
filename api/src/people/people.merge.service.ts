@@ -94,8 +94,9 @@ export class PeopleMergeService {
   }
 
   /**
-   * A merged record's read-only line (decision 0408, point 14): the record kept, when, by whom
-   * and why. Null for a record that was never merged away, or that does not exist.
+   * A merged record's read-only line (decision 0408, points 14 and 18): the record kept, when and
+   * by whom, and not the reason, which stays in the audit log. Null for a record that was never
+   * merged away, or that does not exist.
    */
   async mergedLineOf(personId: string): Promise<Record<string, unknown> | null> {
     const row = await this.db
@@ -110,7 +111,6 @@ export class PeopleMergeService {
         'absorbed.last_name as last_name',
         'absorbed.merged_at as merged_at',
         'absorbed.merged_by as merged_by',
-        'absorbed.merge_reason as merge_reason',
         'kept.id as kept_id',
         'kept.member_id as kept_member_id',
         'kept.title as kept_title',
@@ -157,7 +157,6 @@ export class PeopleMergeService {
         },
         merged_at: row.merged_at?.toISOString() ?? null,
         merged_by: mergedBy,
-        reason: row.merge_reason,
       },
     };
   }
@@ -244,7 +243,8 @@ export class PeopleMergeService {
           merged_into_id: kept.id,
           merged_into_member_id: kept.member_id,
           reason,
-          copied: Object.keys(copied),
+          // The values written onto the record kept, which had none (point 3, section 21).
+          copied_to_kept: copied,
           account_disabled: disabled,
         },
       });

@@ -5,7 +5,7 @@
 --
 -- `persons.merged_into_id` has existed since 0001 and nothing wrote it. A merge now sets it
 -- on the absorbed record, with when, by whom and why beside it, which is what the absorbed
--- record's page says afterwards (decision 0408, point 13). Additive only: three nullable
+-- record's page says afterwards (decision 0408, point 14). Additive only: three nullable
 -- columns, every existing row null in all four, which the CHECK below accepts.
 -- ---------------------------------------------------------------------------
 
@@ -32,17 +32,31 @@ ALTER TABLE persons
   );
 
 -- A merge is irreversible and never chains (section 3): once set, `merged_into_id` does not
--- change; the survivor has never been merged away; and the absorbed record has absorbed
--- nobody, so every absorbed record is one step from its survivor. The service locks both
--- records first, which is what serializes two merges sharing a record; this refuses a write
--- that would break the shape whatever wrote it.
+-- change, and nor does the record of the merge itself, when, by whom and why; the survivor has
+-- never been merged away; and the absorbed record has absorbed nobody, so every absorbed record
+-- is one step from its survivor. A Person is merged by a merge and never created merged, so an
+-- insert carrying one is refused. The service locks both records first, which is what
+-- serializes two merges sharing a record; this refuses a write that would break the shape
+-- whatever wrote it.
 CREATE FUNCTION persons_merge_is_final() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.merged_into_id IS NOT NULL THEN
+      RAISE EXCEPTION
+        'person %: a Person is merged by a merge, never created merged (decision 0408).', NEW.id
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
   IF OLD.merged_into_id IS NOT NULL
-     AND NEW.merged_into_id IS DISTINCT FROM OLD.merged_into_id THEN
+     AND (NEW.merged_into_id IS DISTINCT FROM OLD.merged_into_id
+          OR NEW.merged_at IS DISTINCT FROM OLD.merged_at
+          OR NEW.merged_by IS DISTINCT FROM OLD.merged_by
+          OR NEW.merge_reason IS DISTINCT FROM OLD.merge_reason) THEN
     RAISE EXCEPTION
-      'person %: a merge is never undone or moved (SKILL.md section 3).', OLD.id
+      'person %: a merge is never undone, moved or rewritten (SKILL.md section 3).', OLD.id
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -68,7 +82,7 @@ END;
 $$;
 
 CREATE TRIGGER persons_merge_final
-  BEFORE UPDATE OF merged_into_id ON persons
+  BEFORE INSERT OR UPDATE OF merged_into_id, merged_at, merged_by, merge_reason ON persons
   FOR EACH ROW EXECUTE FUNCTION persons_merge_is_final();
 
 -- migrate:down

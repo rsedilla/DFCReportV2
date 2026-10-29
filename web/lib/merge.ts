@@ -16,7 +16,6 @@ export interface MergedLine {
   into: { id: string; member_id: string; full_name: string };
   merged_at: string;
   merged_by: string | null;
-  reason: string;
 }
 
 export async function getMergePreview(

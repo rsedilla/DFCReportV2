@@ -509,11 +509,6 @@ export class ReportingService {
   ) {}
 
   /**
-   * The period's placement graph with every merged pair placed once (section 3, decision 0408):
-   * the merges are read in the report's own transaction, so they and the figures are one
-   * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
-   */
-  /**
    * A Network's people at an instant, each resolved to the record kept (decision 0408), so a
    * figure narrowed to them reaches a duplicate's history through the record it was merged
    * into, once.
@@ -523,6 +518,12 @@ export class ReportingService {
     const ids = await this.networks.peopleInNetworkAsOf(trx, network, at);
     return [...new Set(ids.map((id) => canonicalId(resolve(id))))];
   }
+
+  /**
+   * The period's placement graph with every merged pair placed once (section 3, decision 0408):
+   * the merges are read in the report's own transaction, so they and the figures are one
+   * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
+   */
   private async placementGraph(
     trx: Db,
     start: Date,
@@ -581,7 +582,11 @@ export class ReportingService {
               ? await this.networkPeople(trx, scope.network, end)
               : undefined;
 
-        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+        const figures = await this.dccFigures.monthFigures(period, {
+          executor: trx,
+          personIds,
+          merges: await this.people.mergedPairsWithin(trx),
+        });
 
         // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
         // than an inconsistency.** The population above is the placement graph collapsed
@@ -659,7 +664,7 @@ export class ReportingService {
           const figures = await this.cellFigures.monthFigures(
             period,
             { kind: 'CELL', cellId: scope.cell_id },
-            { executor: trx },
+            { executor: trx, merges: await this.people.mergedPairsWithin(trx) },
           );
 
           return {
@@ -682,7 +687,10 @@ export class ReportingService {
               }
             : { kind: 'EVERY_CELL' };
 
-        const figures = await this.cellFigures.monthFigures(period, population, { executor: trx });
+        const figures = await this.cellFigures.monthFigures(period, population, {
+          executor: trx,
+          merges: await this.people.mergedPairsWithin(trx),
+        });
 
         return {
           scope,
@@ -764,6 +772,7 @@ export class ReportingService {
         from,
         to,
         subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
+        await this.people.mergedPairsWithin(trx),
       );
       const peopleOf = (leaders: readonly string[]) => {
         const within = new Set(leaders.map((id) => canonicalId(id)));
@@ -892,8 +901,9 @@ export class ReportingService {
       const start = startOfManilaDay(from);
       const end = endOfManilaDay(to);
 
+      const merges = await this.people.mergedPairsWithin(trx);
       const figuresOf = (personIds: readonly string[] | undefined) =>
-        this.dccFigures.rangeFigures(trx, from, to, personIds);
+        this.dccFigures.rangeFigures(trx, from, to, personIds, merges);
       const figureOf = (people: readonly { lifetimeThroughMonth: number }[]): TwelveFigure => ({
         unique_people: people.length,
         classification: classify(people),
@@ -1551,7 +1561,11 @@ export class ReportingService {
 
     const dcc = await this.dccCoverage.recordingBySubmitterBetween(trx, from, to);
 
-    return { cell, dcc };
+    // **A leader merged away is the record kept** (decision 0408, point 16): what they owed is
+    // listed under the record kept, so it lands in that record's branch rather than in *Others*,
+    // and the two records count as one leader. What was owed and recorded is unchanged (point 19).
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    return { cell: owedAsKept(cell, resolve), dcc: owedAsKept(dcc, resolve) };
   }
 
   /**
@@ -1834,6 +1848,21 @@ function shiftDays(day: string, days: number): string {
 }
 
 /** *Recording status*'s two columns and status over a set of leaders (decision 0325). */
+/** Each leader's obligations keyed by the record kept, a merged pair's added together. */
+function owedAsKept(owing: OwedByLeader, resolve: (personId: string) => string): OwedByLeader {
+  const kept: OwedByLeader = new Map();
+  for (const [leaderId, entry] of owing) {
+    const key = canonicalId(resolve(leaderId));
+    const sum = kept.get(key) ?? { owed: 0, unrecorded: 0, late: 0 };
+    kept.set(key, {
+      owed: sum.owed + entry.owed,
+      unrecorded: sum.unrecorded + entry.unrecorded,
+      late: sum.late + entry.late,
+    });
+  }
+  return kept;
+}
+
 function figuresOf(
   owing: { cell: OwedByLeader; dcc: OwedByLeader },
   leaders: readonly string[],

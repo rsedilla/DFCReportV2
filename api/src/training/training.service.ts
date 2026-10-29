@@ -52,7 +52,10 @@ export interface TrainingChange {
 /** A current graduation row. */
 interface Graduation {
   id: string;
+  /** The person shown: the record kept, where the row is on a record merged into it. */
   personId: string;
+  /** The record the row is on, which differs from `personId` for a duplicate's (decision 0408). */
+  recordId: string;
   program: TrainingProgram;
   graduatedOn: string | null;
   confirmedAt: Date;
@@ -244,7 +247,11 @@ export class TrainingService {
           assignments,
         );
 
-        const stored = keyed(await this.currentGraduations(trx, personIds, { lock: true }));
+        // Across every record of each person, so a graduation shown from a duplicate can be
+        // withdrawn or corrected (decision 0408, point 20).
+        const { shown: stored, all: everyRecord } = await this.storedOfKept(trx, personIds, {
+          lock: true,
+        });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
 
         const staleAt = outcomes.indexOf('STALE');
@@ -263,8 +270,10 @@ export class TrainingService {
 
           const filing = filings.get(canonicalId(change.person_id)) as Filing;
           const row = stored.get(keyOf(change.person_id, change.program)) ?? null;
+          // The row shown and any other record's of the same program (decision 0408, point 20).
+          const rows = everyRecord.get(keyOf(change.person_id, change.program)) ?? [];
 
-          if (row !== null) {
+          for (const withdrawn of rows) {
             await trx
               .updateTable('training_graduations')
               .set({
@@ -272,7 +281,7 @@ export class TrainingService {
                 corrected_by: actor.accountId,
                 correction_reason: change.reason ?? null,
               })
-              .where('id', '=', row.id)
+              .where('id', '=', withdrawn.id)
               .execute();
           }
 
@@ -304,18 +313,21 @@ export class TrainingService {
             });
             created += 1;
           } else {
-            await this.audit.writeWithin(trx, {
-              actorId: actor.accountId,
-              action: 'training_graduation.corrected',
-              targetType: 'person',
-              targetId: change.person_id,
-              before: {
-                program: change.program,
-                graduated_on: row?.graduatedOn ?? null,
-                confirmed_by: row?.confirmedBy ?? null,
-              },
-              after:
-                outcome === 'REPLACE'
+            // One entry per row withdrawn, against the record it was on; the row shown carries
+            // the replacement where there is one.
+            for (const withdrawn of rows) {
+              const replaced = outcome === 'REPLACE' && withdrawn.id === row?.id;
+              await this.audit.writeWithin(trx, {
+                actorId: actor.accountId,
+                action: 'training_graduation.corrected',
+                targetType: 'person',
+                targetId: withdrawn.recordId,
+                before: {
+                  program: change.program,
+                  graduated_on: withdrawn.graduatedOn,
+                  confirmed_by: withdrawn.confirmedBy,
+                },
+                after: replaced
                   ? {
                       program: change.program,
                       graduated_on: change.graduated_on ?? null,
@@ -325,11 +337,12 @@ export class TrainingService {
                   : {
                       program: change.program,
                       withdrawn: true,
-                      confirmed_by: row?.confirmedBy ?? null,
-                      on_behalf: onBehalfOf(row?.confirmedBy ?? null, actor.personId),
+                      confirmed_by: withdrawn.confirmedBy,
+                      on_behalf: onBehalfOf(withdrawn.confirmedBy, actor.personId),
                     },
-              reason: change.reason ?? null,
-            });
+                reason: change.reason ?? null,
+              });
+            }
             corrected += 1;
           }
         }
@@ -352,7 +365,7 @@ export class TrainingService {
         ONE_CURRENT_INDEX,
         changes,
         async () =>
-          keyed(await this.currentGraduations(this.db, uniqueIds(changes.map((c) => c.person_id)))),
+          (await this.storedOfKept(this.db, uniqueIds(changes.map((c) => c.person_id)))).shown,
         (change, stored) => outcomeOf(change, stored) === 'STALE',
         (change, stored) => this.conflictFor(this.db, actor, change, stored),
         'Somebody else recorded these graduations while yours was being saved. Retry shortly, ' +
@@ -442,28 +455,43 @@ export class TrainingService {
   /**
    * The current graduations shown for these records kept, with every record merged into each
    * (decision 0408): a program held on both is shown once, the earlier graduation date kept
-   * (an unknown date counting as later). For reading only; a save reads `currentGraduations`.
+   * (an unknown date counting as later), which is the row a save decides against.
    */
   private async graduationsOfKept(ids: readonly string[]): Promise<Graduation[]> {
-    const pairs = await this.people.mergedPairsWithin(this.db);
+    return [...(await this.storedOfKept(this.db, ids)).shown.values()];
+  }
+
+  /**
+   * What a save decides against, for these records kept (decision 0408, point 20): each
+   * program as the screen showed it, and every record's row of it, which a correction withdraws
+   * together. Locked where asked, records merged in included.
+   */
+  private async storedOfKept(
+    executor: Db | Transaction<Database>,
+    ids: readonly string[],
+    options: { lock?: boolean } = {},
+  ): Promise<{ shown: Map<string, Graduation>; all: Map<string, Graduation[]> }> {
+    const pairs = await this.people.mergedPairsWithin(executor);
     const wanted = new Set(ids.map((id) => canonicalId(id)));
     const absorbed = pairs.absorbed.filter((_, index) =>
       wanted.has(canonicalId(pairs.kept[index])),
     );
     const resolve = resolverOf(pairs);
-    const earliest = new Map<string, Graduation>();
     const order = (graduation: Graduation) => graduation.graduatedOn ?? '9999-12-31';
+    const shown = new Map<string, Graduation>();
+    const all = new Map<string, Graduation[]>();
 
-    for (const graduation of await this.currentGraduations(this.db, [...ids, ...absorbed])) {
-      const personId = canonicalId(resolve(graduation.personId));
-      const key = `${personId}#${graduation.program}`;
-      const seen = earliest.get(key);
+    for (const row of await this.currentGraduations(executor, [...ids, ...absorbed], options)) {
+      const graduation = { ...row, personId: canonicalId(resolve(row.personId)) };
+      const key = keyOf(graduation.personId, graduation.program);
+      all.set(key, [...(all.get(key) ?? []), graduation]);
+      const seen = shown.get(key);
       if (seen === undefined || order(graduation) < order(seen)) {
-        earliest.set(key, { ...graduation, personId });
+        shown.set(key, graduation);
       }
     }
 
-    return [...earliest.values()];
+    return { shown, all };
   }
 
   private async currentGraduations(
@@ -494,6 +522,7 @@ export class TrainingService {
     return rows.map((row) => ({
       id: row.id,
       personId: row.person_id,
+      recordId: row.person_id,
       program: row.program,
       graduatedOn: row.graduated_on === null ? null : String(row.graduated_on),
       confirmedAt: row.confirmed_at,
@@ -552,10 +581,12 @@ export class TrainingService {
             .select(['person_id', 'program', 'superseded_at', 'corrected_by'])
             .where('id', '=', change.seen_id)
             .executeTakeFirst();
+    // A row on a record merged into this person is this person's (decision 0408, point 20).
+    const resolve = resolverOf(await this.people.mergedPairsWithin(executor));
 
     if (
       seen === undefined ||
-      canonicalId(seen.person_id) !== canonicalId(change.person_id) ||
+      canonicalId(resolve(seen.person_id)) !== canonicalId(change.person_id) ||
       seen.program !== change.program ||
       seen.superseded_at === null ||
       seen.corrected_by === null
@@ -691,10 +722,4 @@ function allFive(held: Map<string, Set<TrainingProgram>>): Set<string> {
 
 function keyOf(personId: string, program: TrainingProgram): string {
   return `${canonicalId(personId)}|${program}`;
-}
-
-function keyed(graduations: readonly Graduation[]): Map<string, Graduation> {
-  return new Map(
-    graduations.map((graduation) => [keyOf(graduation.personId, graduation.program), graduation]),
-  );
 }

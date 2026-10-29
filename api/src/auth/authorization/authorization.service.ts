@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
 import { canonicalId, sameId } from '../../common/identifiers';
@@ -9,6 +9,7 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
+import { MERGED_PERSONS_PORT, type MergedPersonsPort } from './merged-persons.port';
 import {
   LEADER_APPROVES_CELLS,
   LEADER_FULL_VIEW_ONLY,
@@ -109,6 +110,7 @@ export class AuthorizationService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
+    @Optional() @Inject(MERGED_PERSONS_PORT) private readonly mergedPersons?: MergedPersonsPort,
   ) {}
 
   /**
@@ -907,13 +909,17 @@ export class AuthorizationService {
     }
   }
 
-  /** An Account resolves through its Person; a Person is already one (section 7). */
+  /**
+   * An Account resolves through its Person; a Person is already one, and a record merged away
+   * resolves through the record kept (section 7, decision 0408 point 17).
+   */
   private async personBehind(
     executor: Db,
     target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
   ): Promise<string | null> {
     if (target.kind === 'person') {
-      return target.personId;
+      const kept = await this.mergedPersons?.keptRecordOfWithin(executor, target.personId);
+      return kept ?? target.personId;
     }
 
     const account = await executor

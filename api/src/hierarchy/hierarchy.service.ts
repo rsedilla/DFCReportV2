@@ -1791,9 +1791,10 @@ function composeName(row: {
 /**
  * A period's placement edges with every merged pair placed once (SKILL.md section 3, decision
  * 0408, point 13): each record and each leader resolved to the record kept, and where both
- * records held an edge, **the kept record's own edge places the person**; the duplicate's
- * places them only where the kept record held none. An edge resolved onto itself (one record
- * of the pair placed under the other) carries no placement and is dropped.
+ * records held an edge, **the kept record's own edge places the person**; a duplicate's
+ * places them only where the kept record held none, and of two duplicates **the newer one's**
+ * (point 15; `merges` lists the oldest absorbed record first). An edge resolved onto itself (one
+ * record of the pair placed under the other) carries no placement and is dropped.
  */
 function placeMerged(
   edges: { personId: string; leaderId: string | null }[],
@@ -1804,7 +1805,8 @@ function placeMerged(
   }
 
   const resolve = resolverOf(merges);
-  const placed = new Map<string, { personId: string; leaderId: string | null; own: boolean }>();
+  const age = new Map(merges.absorbed.map((id, index) => [canonicalId(id), index]));
+  const placed = new Map<string, { personId: string; leaderId: string | null; rank: number }>();
   const kept: { personId: string; leaderId: string | null }[] = [];
 
   for (const edge of edges) {
@@ -1813,11 +1815,14 @@ function placeMerged(
     if (leaderId !== null && sameId(leaderId, personId)) {
       continue;
     }
-    const own = sameId(personId, edge.personId);
+    // The kept record's own edge outranks every duplicate's; a newer duplicate an older one.
+    const rank = sameId(personId, edge.personId)
+      ? Number.POSITIVE_INFINITY
+      : (age.get(canonicalId(edge.personId)) ?? -1);
     const existing = placed.get(personId);
-    if (existing === undefined || (own && !existing.own)) {
-      placed.set(personId, { personId, leaderId, own });
-    } else if (own === existing.own) {
+    if (existing === undefined || rank > existing.rank) {
+      placed.set(personId, { personId, leaderId, rank });
+    } else if (rank === existing.rank) {
       // Two edges for one record is the defect `refuseUnresolvable` reports; kept, not hidden.
       kept.push({ personId, leaderId });
     }

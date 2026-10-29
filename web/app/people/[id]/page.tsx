@@ -179,13 +179,15 @@ function PersonDetail() {
           <h1 className="mt-4 text-xl font-semibold tracking-tight">{person.data.full_name}</h1>
           <p className="text-muted mt-1 text-sm">
             <span className="font-mono">{person.data.member_id}</span>
-            {cells.data ? ` · ${cellLine(cells.data)}` : null}
+            {cells.data && !person.data.merged ? ` · ${cellLine(cells.data)}` : null}
           </p>
-          <PastoredBy
-            path={path.data?.data ?? null}
-            reason={path.data?.no_leader_reason ?? null}
-            own={own}
-          />
+          {person.data.merged ? null : (
+            <PastoredBy
+              path={path.data?.data ?? null}
+              reason={path.data?.no_leader_reason ?? null}
+              own={own}
+            />
+          )}
 
           {/*
             A record merged away is read only and says where the person is now (decision 0408,

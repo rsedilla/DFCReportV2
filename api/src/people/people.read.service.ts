@@ -336,8 +336,8 @@ export class PeopleReadService {
       .where('id', '=', personId)
       // Consistent with the other read paths. A Person absorbed by a merge is not
       // a valid target of any later write; the survivor carries the identity
-      // (section 3, Person Merge). Merge is Stage 3, so this filters nothing
-      // today -- which is exactly when the inconsistency is cheap to remove.
+      // (section 3, Person Merge). Its page reads `PeopleMergeService.mergedLineOf`
+      // instead (decision 0408, point 14).
       .where('merged_into_id', 'is', null)
       .executeTakeFirst();
 
@@ -358,10 +358,10 @@ export class PeopleReadService {
    * hole, and a path with a hole reads as a shorter chain rather than as an
    * error. Section 3 also says a merge never rewrites pastoral records to point
    * at a different Person, so an absorbed ancestor genuinely stays on the chain
-   * and the real question is whether to render them or the survivor. That is
-   * Person Merge's to answer, for every surface at once, and merge is Stage 3 --
-   * so nothing today can reach it, and it is recorded as open rather than decided
-   * here.
+   * and the real question is whether to render them or the survivor. No current
+   * chain can hold one: decision 0408 refuses absorbing anyone who pastors people
+   * and ends the absorbed record's own assignment. A dated path could, and which to
+   * render there is still recorded as open rather than decided here.
    */
   async namesOf(
     personIds: readonly string[],
@@ -623,12 +623,16 @@ export class PeopleReadService {
    * Every Person merge, absorbed record beside record kept (SKILL.md section 3, decision 0408),
    * for a module that counts people to resolve its own rows with (`common/merged-identity.ts`).
    * Read in the caller's transaction, so a report's figures and its merges are one snapshot.
+   * **Oldest absorbed record first**, by when it was created and then by Member ID, so that a
+   * later pair is the newer duplicate (decision 0408, point 15).
    */
   async mergedPairsWithin(executor: Db | Transaction<Database>): Promise<MergedPairs> {
     const rows = await executor
       .selectFrom('persons')
       .select(['id', 'merged_into_id'])
       .where('merged_into_id', 'is not', null)
+      .orderBy('created_at')
+      .orderBy('member_id')
       .execute();
 
     return {

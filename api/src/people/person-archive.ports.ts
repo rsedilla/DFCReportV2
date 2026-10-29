@@ -84,7 +84,10 @@ export interface ArchiveAccountsPort {
    * The Person an account belongs to, or null where it names none. For a merged record's
    * page, which says who merged it (decision 0408, point 14).
    */
-  personOfAccountWithin(executor: Db | Transaction<Database>, accountId: string): Promise<string | null>;
+  personOfAccountWithin(
+    executor: Db | Transaction<Database>,
+    accountId: string,
+  ): Promise<string | null>;
 }
 
 export const ABSENT_PEOPLE_PORT = Symbol('ABSENT_PEOPLE_PORT');

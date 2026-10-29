@@ -128,34 +128,6 @@
       "table": "persons",
       "kind": "join",
       "reason": "Decision 0266 gives the Cells list a closed view, searched as the running view is (decision 0261) by Cell ID or by the last leader’s name. Rooted in cells and joined for that predicate, for the same reason as cellsInScope. Section 2 argues the shape; the instances are not enumerated there."
-    },
-    {
-      "file": "src/attendance/dcc-figures.service.ts",
-      "method": "monthFigures",
-      "table": "persons",
-      "kind": "join",
-      "reason": "Section 3 counts a merged pair as one person in every report (decision 0408), so each record is resolved to the record kept through persons.merged_into_id. Joined inside this one statement, rooted in dcc_attendance, because one statement is what keeps every DCC figure one snapshot (decision 0210); reading the merges through people first would be a second statement."
-    },
-    {
-      "file": "src/attendance/dcc-figures.service.ts",
-      "method": "rangeFigures",
-      "table": "persons",
-      "kind": "join",
-      "reason": "As monthFigures: a merged pair is one person (decision 0408), resolved inside the one statement rooted in dcc_attendance so the range's figures stay one snapshot."
-    },
-    {
-      "file": "src/attendance/cell-figures.service.ts",
-      "method": "monthFigures",
-      "table": "persons",
-      "kind": "join",
-      "reason": "A merged pair is one person in every report (section 3, decision 0408), resolved through persons.merged_into_id inside this one statement, rooted in cell_meetings and cell_attendance, so n and the population stay one snapshot (DccFiguresService gives the reason)."
-    },
-    {
-      "file": "src/attendance/cell-figures.service.ts",
-      "method": "rangeFiguresWithLeaders",
-      "table": "persons",
-      "kind": "join",
-      "reason": "As monthFigures: a merged pair is one person (decision 0408), resolved inside the one statement rooted in cell_meetings."
     }
   ]
 }

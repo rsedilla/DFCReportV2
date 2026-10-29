@@ -16,6 +16,7 @@ import {
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
+import { NO_MERGES } from '../../src/common/merged-identity';
 import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestPerson } from '../setup/fixtures';
 
@@ -260,7 +261,7 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
     // corrected to absent, so the lifetime through that month is the lifetime now.
     const figures = await app
       .get(DccFiguresService)
-      .monthFigures(`${days[1].slice(0, 7)}-01`, { personIds: [timothy.id] });
+      .monthFigures(`${days[1].slice(0, 7)}-01`, { personIds: [timothy.id], merges: NO_MERGES });
 
     const person = figures.people.find((row) => row.personId === timothy.id);
     const response = await attendance(admin, timothy.id).expect(200);

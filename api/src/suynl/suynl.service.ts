@@ -52,7 +52,10 @@ export interface SuynlChange {
 /** A current lesson row. */
 interface Lesson {
   id: string;
+  /** The person shown: the record kept, where the row is on a record merged into it. */
   personId: string;
+  /** The record the row is on, which differs from `personId` for a duplicate's (decision 0408). */
+  recordId: string;
   lesson: number;
   confirmedAt: Date;
   recordedBy: string;
@@ -363,8 +366,12 @@ export class SuynlService {
           submitterLookup(this.deps, trx, now),
         );
 
-        // Locked, so a correction racing this one waits and then reads what it left.
-        const stored = keyed(await this.currentLessons(trx, personIds, { lock: true }));
+        // Locked, so a correction racing this one waits and then reads what it left. Read across
+        // every record of each person, so a lesson shown from a duplicate can be withdrawn
+        // (decision 0408, point 20).
+        const { shown: stored, all: everyRecord } = await this.storedOfKept(trx, personIds, {
+          lock: true,
+        });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
 
         const staleAt = outcomes.indexOf('STALE');
@@ -403,32 +410,35 @@ export class SuynlService {
             });
             created += 1;
           } else if (outcomes[index] === 'RETRACT') {
-            const row = stored.get(keyOf(change.person_id, change.lesson)) as Lesson;
+            // Every record of the person that holds the lesson: the kept record's own, and a
+            // duplicate's merged into it (decision 0408, point 20). Each withdrawn and audited
+            // against the record it was on.
+            for (const row of everyRecord.get(keyOf(change.person_id, change.lesson)) ?? []) {
+              await trx
+                .updateTable('suynl_lessons')
+                .set({
+                  superseded_at: sql<Date>`now()`,
+                  corrected_by: actor.accountId,
+                  correction_reason: change.reason ?? null,
+                })
+                .where('id', '=', row.id)
+                .execute();
 
-            await trx
-              .updateTable('suynl_lessons')
-              .set({
-                superseded_at: sql<Date>`now()`,
-                corrected_by: actor.accountId,
-                correction_reason: change.reason ?? null,
-              })
-              .where('id', '=', row.id)
-              .execute();
-
-            await this.audit.writeWithin(trx, {
-              actorId: actor.accountId,
-              action: 'suynl_lesson.corrected',
-              targetType: 'person',
-              targetId: change.person_id,
-              before: { lesson: row.lesson, filed_on: manilaDayOf(row.confirmedAt) },
-              after: {
-                lesson: row.lesson,
-                withdrawn: true,
-                confirmed_by: row.confirmedBy,
-                on_behalf: onBehalfOf(row.confirmedBy, actor.personId),
-              },
-              reason: change.reason ?? null,
-            });
+              await this.audit.writeWithin(trx, {
+                actorId: actor.accountId,
+                action: 'suynl_lesson.corrected',
+                targetType: 'person',
+                targetId: row.recordId,
+                before: { lesson: row.lesson, filed_on: manilaDayOf(row.confirmedAt) },
+                after: {
+                  lesson: row.lesson,
+                  withdrawn: true,
+                  confirmed_by: row.confirmedBy,
+                  on_behalf: onBehalfOf(row.confirmedBy, actor.personId),
+                },
+                reason: change.reason ?? null,
+              });
+            }
             corrected += 1;
           }
         }
@@ -451,7 +461,7 @@ export class SuynlService {
         ONE_CURRENT_INDEX,
         changes,
         async () =>
-          keyed(await this.currentLessons(this.db, uniqueIds(changes.map((c) => c.person_id)))),
+          (await this.storedOfKept(this.db, uniqueIds(changes.map((c) => c.person_id)))).shown,
         (change, stored) => outcomeOf(change, stored) === 'STALE',
         (change, stored) => this.conflictFor(this.db, actor, change, stored),
         'Somebody else recorded these lessons while yours was being saved. Retry shortly, ' +
@@ -550,28 +560,43 @@ export class SuynlService {
 
   /**
    * The current lessons shown for these records kept, with every record merged into each
-   * (decision 0408): a lesson held on both is shown once, on the earlier date. For reading
-   * only; a save reads `currentLessons`, which names the record written.
+   * (decision 0408): a lesson held on both is shown once, on the earlier date, which is the
+   * row a save decides against (`storedOfKept`).
    */
   private async lessonsOfKept(ids: readonly string[]): Promise<Lesson[]> {
-    const pairs = await this.people.mergedPairsWithin(this.db);
+    return [...(await this.storedOfKept(this.db, ids)).shown.values()];
+  }
+
+  /**
+   * What a save decides against, for these records kept (decision 0408, point 20): each lesson
+   * as the screen showed it, the earliest row across every record of the person, and every row
+   * of it, which an untick withdraws together. Locked where asked, records merged in included.
+   */
+  private async storedOfKept(
+    executor: Db | Transaction<Database>,
+    ids: readonly string[],
+    options: { lock?: boolean } = {},
+  ): Promise<{ shown: Map<string, Lesson>; all: Map<string, Lesson[]> }> {
+    const pairs = await this.people.mergedPairsWithin(executor);
     const wanted = new Set(ids.map((id) => canonicalId(id)));
     const absorbed = pairs.absorbed.filter((_, index) =>
       wanted.has(canonicalId(pairs.kept[index])),
     );
     const resolve = resolverOf(pairs);
-    const earliest = new Map<string, Lesson>();
+    const shown = new Map<string, Lesson>();
+    const all = new Map<string, Lesson[]>();
 
-    for (const lesson of await this.currentLessons(this.db, [...ids, ...absorbed])) {
-      const personId = canonicalId(resolve(lesson.personId));
-      const key = `${personId}#${lesson.lesson}`;
-      const seen = earliest.get(key);
+    for (const row of await this.currentLessons(executor, [...ids, ...absorbed], options)) {
+      const lesson = { ...row, personId: canonicalId(resolve(row.personId)) };
+      const key = keyOf(lesson.personId, lesson.lesson);
+      all.set(key, [...(all.get(key) ?? []), lesson]);
+      const seen = shown.get(key);
       if (seen === undefined || lesson.confirmedAt < seen.confirmedAt) {
-        earliest.set(key, { ...lesson, personId });
+        shown.set(key, lesson);
       }
     }
 
-    return [...earliest.values()];
+    return { shown, all };
   }
 
   private async currentLessons(
@@ -594,6 +619,7 @@ export class SuynlService {
     return rows.map((row) => ({
       id: row.id,
       personId: row.person_id,
+      recordId: row.person_id,
       lesson: row.lesson,
       confirmedAt: row.confirmed_at,
       recordedBy: row.recorded_by,
@@ -644,10 +670,12 @@ export class SuynlService {
             .select(['person_id', 'lesson', 'superseded_at', 'corrected_by'])
             .where('id', '=', change.seen_id)
             .executeTakeFirst();
+    // A row on a record merged into this person is this person's (decision 0408, point 20).
+    const resolve = resolverOf(await this.people.mergedPairsWithin(executor));
 
     if (
       seen === undefined ||
-      canonicalId(seen.person_id) !== canonicalId(change.person_id) ||
+      canonicalId(resolve(seen.person_id)) !== canonicalId(change.person_id) ||
       seen.lesson !== change.lesson ||
       seen.superseded_at === null ||
       seen.corrected_by === null
@@ -761,10 +789,6 @@ function idsWhere(
 
 function keyOf(personId: string, lesson: number): string {
   return `${canonicalId(personId)}|${lesson}`;
-}
-
-function keyed(lessons: readonly Lesson[]): Map<string, Lesson> {
-  return new Map(lessons.map((lesson) => [keyOf(lesson.personId, lesson.lesson), lesson]));
 }
 
 /** A branch as it stands now: everyone in it, and each direct disciple's own, themselves included. */

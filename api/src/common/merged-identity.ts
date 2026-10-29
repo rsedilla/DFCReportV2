@@ -7,7 +7,8 @@ import { sql, type RawBuilder } from 'kysely';
  * it, so no module reads `persons` to count (section 2).
  *
  * One step is always enough: a merge never chains (migration 0033), so every absorbed record
- * names a record kept that was never merged away.
+ * names a record kept that was never merged away. **The pairs are ordered oldest absorbed
+ * record first**, so a later index is the newer duplicate (decision 0408, point 15).
  */
 export interface MergedPairs {
   absorbed: string[];
