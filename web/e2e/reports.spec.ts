@@ -64,16 +64,16 @@ async function expectReadOnly(page: Page) {
 }
 
 /**
- * A whole-church reader's six tabs, in order, and the address each opens (SKILL.md section
- * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340), and # of
- * People came from People (decision 0376). A `#` label keeps its words as the link's name.
+ * A whole-church reader's five tabs, in order, and the address each opens (SKILL.md section
+ * 19; decision 0292). Filed Reports is withdrawn for every account (decision 0340), # of People
+ * came from People (decision 0376), and Conquest is a link above them (decision 0406). A `#`
+ * label keeps its words as the link's name.
  */
 const TABS = [
   { label: 'Cell Groups', path: '/reports/cells', dated: true },
   { label: 'DCC', path: '/reports/dcc', dated: true },
   { label: 'Encounter Readiness', path: '/reports/suynl', dated: false },
   { label: 'Training', path: '/reports/training', dated: false },
-  { label: 'Conquest', path: '/reports/conquest', dated: false },
   { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
 ] as const;
 
@@ -154,6 +154,28 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     }
   }
 
+  test('Conquest is a link above a whole-church reader\'s tabs, current on its own page (decision 0406)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page, { church: true });
+    await page.goto('/reports/cells');
+
+    const which = page.getByRole('navigation', { name: 'Which report' });
+    await expect(which.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
+    const away = page.getByRole('link', { name: 'Conquest goals →' });
+    await expect(away).toHaveAttribute('href', '/reports/conquest');
+    await expect(away).not.toHaveAttribute('aria-current');
+
+    await away.click();
+    await expect(page).toHaveURL(/\/reports\/conquest$/);
+    const here = page.getByRole('link', { name: 'Conquest goals', exact: true });
+    await expect(here).toHaveAttribute('aria-current', 'page');
+    // No tab is current, and each leads back.
+    await expect(which.locator('a[aria-current="page"]')).toHaveCount(0);
+    await expect(which.getByRole('link')).toHaveText(TABS.map((each) => each.label));
+  });
+
   test('a Full view leader is offered no Encounter Readiness, Training or Conquest tab (decisions 0360 and 0380)', async ({
     page,
   }) => {
@@ -163,6 +185,8 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
 
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link')).toHaveCount(5);
+    // Nor the Conquest link a whole-church reader has (decision 0406).
+    await expect(page.getByRole('link', { name: /Conquest goals/ })).toHaveCount(0);
     for (const name of ['Encounter Readiness', 'Training', 'Conquest']) {
       await expect(which.getByRole('link', { name })).toHaveCount(0);
     }
@@ -756,22 +780,22 @@ test.describe('a Full view leader’s report controls', () => {
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
-   * A whole-church reader's six (decisions 0292 and 0376): equal, three across on a phone and one
-   * row from `sm`. A Full view leader's five (decisions 0361 and 0380): sized to their words in
+   * A whole-church reader's five (decisions 0292, 0376 and 0406): equal, three across on a phone
+   * and one row from `sm`. A Full view leader's five (decisions 0361 and 0380): sized to their words in
    * one row from `sm`, a label wrapping inside its tab on a phone.
    */
   const LAYOUTS = [
     // On a phone a Full view leader's five sit two by two, equal.
-    { width: 320, height: 640, columns: { six: 3, five: 2 }, rows: { six: 2, five: 3 } },
-    { width: 375, height: 812, columns: { six: 3, five: 2 }, rows: { six: 2, five: 3 } },
-    { width: 768, height: 1024, columns: { six: 6, five: 5 }, rows: { six: 1, five: 1 } },
-    { width: 1280, height: 800, columns: { six: 6, five: 5 }, rows: { six: 1, five: 1 } },
+    { width: 320, height: 640, columns: { church: 3, branch: 2 }, rows: { church: 2, branch: 3 } },
+    { width: 375, height: 812, columns: { church: 3, branch: 2 }, rows: { church: 2, branch: 3 } },
+    { width: 768, height: 1024, columns: { church: 5, branch: 5 }, rows: { church: 1, branch: 1 } },
+    { width: 1280, height: 800, columns: { church: 5, branch: 5 }, rows: { church: 1, branch: 1 } },
   ] as const;
 
   for (const { reader, church, tabs } of READERS) {
-    const count = tabs.length === 6 ? 'six' : 'five';
+    const count = church ? 'church' : 'branch';
     for (const layout of LAYOUTS) {
-      test(`for ${reader}, at ${layout.width}px the ${count} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
+      test(`for ${reader}, at ${layout.width}px the ${tabs.length} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
         page,
       }) => {
         test.setTimeout(60_000);
@@ -812,7 +836,7 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
           }
           const widths = boxes.map((box) => box.width);
-          if (count === 'six') {
+          if (count === 'church') {
             // Equal buttons: every tab as wide as the others, within a pixel.
             expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
           } else {
