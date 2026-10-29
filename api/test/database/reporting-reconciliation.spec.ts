@@ -23,6 +23,7 @@ import { assignTo, createPerson } from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
+import { NO_MERGES } from '../../src/common/merged-identity';
 import type { Database } from '../../src/database/schema';
 
 /**
@@ -470,7 +471,7 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
       },
     });
 
-    await new DccFiguresService(counting).monthFigures(MONTH);
+    await new DccFiguresService(counting).monthFigures(MONTH, { merges: NO_MERGES });
 
     expect(queries).toBe(1);
   });

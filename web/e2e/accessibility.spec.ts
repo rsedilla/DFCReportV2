@@ -127,6 +127,22 @@ async function chooseRecordList(page: import('@playwright/test').Page, name: Reg
     .click();
 }
 
+/** A second record of the same person, for the merge screen's comparison (decision 0408). */
+const MERGE_DUPLICATE = {
+  scope: 'FULL',
+  id: '11111111-2222-4333-8444-999999999999',
+  member_id: 'M-000899',
+  title: null,
+  first_name: 'Marilou',
+  middle_name: null,
+  last_name: 'Santos',
+  full_name: 'Marilou Santos',
+  birth_date: null,
+  sex: 'FEMALE',
+  civil_status: 'MARRIED',
+  mobile_number: null,
+};
+
 /**
  * Every route, and the state worth scanning it in.
  *
@@ -280,6 +296,44 @@ const SCANS = [
       const growth = page.getByRole('region', { name: 'Growth' });
       await expect(growth.getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
       await expect(growth.getByRole('link', { name: 'Open Training' })).toBeVisible();
+    },
+  },
+  {
+    // Person Merge (decision 0408), the Admin's screen: the duplicate's search first.
+    name: 'merging a duplicate',
+    route: `/people/${PERSON_IN_SCOPE.id}/merge`,
+    pattern: '/people/[id]/merge',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAdministrator(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Merge two records of one person' })).toBeVisible();
+      await expect(page.getByLabel('Search for the duplicate by name or Member ID')).toBeVisible();
+    },
+  },
+  {
+    // The two records side by side, with what will happen and the reason, once one is chosen.
+    name: 'merging a duplicate, the two records side by side',
+    route: `/people/${PERSON_IN_SCOPE.id}/merge?duplicate=${MERGE_DUPLICATE.id}`,
+    pattern: '/people/[id]/merge',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAdministrator(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+      await page.route(`**/api/v1/people/${MERGE_DUPLICATE.id}`, (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MERGE_DUPLICATE) }),
+      );
+      await page.route('**/api/v1/people/*/merge-preview*', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ refusals: [] }) }),
+      );
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('cell', { name: MERGE_DUPLICATE.member_id })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Swap which one is kept' })).toBeVisible();
     },
   },
   {
@@ -2023,6 +2077,13 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Forwards to /reports/number-of-people, measured as "number of people"; it renders nothing ' +
       'of its own.',
   },
+  ...['merging a duplicate', 'merging a duplicate, the two records side by side'].map((name) => ({
+    name,
+    why:
+      "The Admin's alone (decision 0408), and the sweep's account may not merge, so it would " +
+      'measure the refusal. Built only of the Button, TextLink and PersonPicker the sweep measures ' +
+      'on Add a person and the person profile.',
+  })),
   {
     name: 'person profile, correcting sex',
     why:

@@ -11,6 +11,8 @@ import {
 import { CellsReadService } from '../cells/cells.read.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { resolverOf } from '../common/merged-identity';
+import { PeopleReadService } from '../people/people.read.service';
 
 import { CellFiguresService } from './cell-figures.service';
 import { DccCoverageService } from './dcc-coverage.service';
@@ -49,6 +51,7 @@ export class BranchFiguresService {
     private readonly cells: CellsReadService,
     private readonly recordedMeetings: CellFiguresService,
     private readonly dccCoverage: DccCoverageService,
+    private readonly people: PeopleReadService,
   ) {}
 
   /** `GET /api/v1/leaders/{id}/dcc-behind`. */
@@ -72,9 +75,20 @@ export class BranchFiguresService {
 
     // Only the branch's Cells and leaders, rather than the church's kept down to the
     // branch's (checklist row perf-network-cell-figures). A meeting led by anyone outside
-    // the branch counted towards no figure here, so the answer is the same.
+    // the branch counted towards no figure here, so the answer is the same. A record merged
+    // into a member is read with it, and its meetings counted as the member's (decision 0408,
+    // point 16): the merge ended its own place in the tree.
+    const merges = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(merges);
+    const inBranch = new Set(branch.members.map((id) => canonicalId(id)));
+    const mergedIn = merges.absorbed.filter((_, index) =>
+      inBranch.has(canonicalId(merges.kept[index])),
+    );
     const [scheduled, leaders] = await Promise.all([
-      this.cells.scheduledMeetingsWithLeaderIn(this.db, reportingMonth, branch.members),
+      this.cells.scheduledMeetingsWithLeaderIn(this.db, reportingMonth, [
+        ...branch.members,
+        ...mergedIn,
+      ]),
       this.cells.currentCellLeaderIds(branch.members),
     ]);
     const recorded = await this.recordedMeetings.recordedScheduledDatesIn(this.db, reportingMonth, [
@@ -97,7 +111,7 @@ export class BranchFiguresService {
         continue;
       }
 
-      const key = canonicalId(meeting.leaderId);
+      const key = canonicalId(resolve(meeting.leaderId));
       unmet.set(key, (unmet.get(key) ?? 0) + 1);
     }
 

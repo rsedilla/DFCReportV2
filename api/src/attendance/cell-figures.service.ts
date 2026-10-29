@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { DATABASE, type Db } from '../database/database.module';
 import { monthClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
+import { mergedCte, type MergedPairs } from '../common/merged-identity';
 
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -92,6 +93,12 @@ export interface CellMonthFiguresOptions {
    * describes one state of the database (decision 0210).
    */
   executor?: Db;
+  /**
+   * Every Person merge, read by the caller in the same transaction, so a merged pair counts once
+   * and a meeting a merged-away record led is placed with the record kept (section 3, decision
+   * 0408, points 10 and 16). Required, as `DccMonthFiguresOptions.merges` is.
+   */
+  merges: MergedPairs;
 }
 
 /**
@@ -261,36 +268,52 @@ export class CellFiguresService {
     from: string,
     to: string,
     leaders: readonly string[] | null,
+    merges: MergedPairs,
   ): Promise<(CellClassificationFigure & { leaderIds: string[] })[]> {
     const list = leaders === null ? null : [...leaders];
 
+    // A merged pair is one person, and a meeting a merged-away record led belongs to the
+    // record kept (decision 0408, points 10 and 16): both keys resolve through `merges`.
     const rows = await sql<{ person_id: string; lifetime: string; leader_ids: string[] }>`
-      WITH scoped AS (
-        SELECT id, responsible_leader_id
-          FROM cell_meetings
-         WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date
-           AND status IN ('HELD', 'RESCHEDULED')
-           AND (${list}::uuid[] IS NULL OR responsible_leader_id = ANY (${list}::uuid[]))
+      WITH ${mergedCte(merges)},
+      scoped AS (
+        SELECT cm.id, coalesce(ml.kept_id, cm.responsible_leader_id) AS responsible_leader_id
+          FROM cell_meetings cm
+          LEFT JOIN merged ml ON ml.absorbed_id = cm.responsible_leader_id
+         WHERE cm.scheduled_date BETWEEN ${from}::date AND ${to}::date
+           AND cm.status IN ('HELD', 'RESCHEDULED')
+           AND (
+             ${list}::uuid[] IS NULL
+             OR coalesce(ml.kept_id, cm.responsible_leader_id) = ANY (${list}::uuid[])
+           )
       ),
       attended AS (
-        SELECT a.person_id,
+        SELECT coalesce(mg.kept_id, a.person_id) AS person_id,
                array_agg(DISTINCT s.responsible_leader_id::text)
                  FILTER (WHERE s.responsible_leader_id IS NOT NULL) AS leader_ids
           FROM scoped s
           JOIN cell_attendance a ON a.cell_meeting_id = s.id
+          LEFT JOIN merged mg ON mg.absorbed_id = a.person_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
-         GROUP BY a.person_id
+         GROUP BY coalesce(mg.kept_id, a.person_id)
+      ),
+      records AS (
+        SELECT person_id, leader_ids, person_id AS record_id FROM attended
+        UNION ALL
+        SELECT p.person_id, p.leader_ids, mg.absorbed_id
+          FROM attended p
+          JOIN merged mg ON mg.kept_id = p.person_id
       )
-      SELECT p.person_id, count(*)::text AS lifetime, p.leader_ids
-        FROM attended p
-        JOIN cell_attendance a ON a.person_id = p.person_id
+      SELECT r.person_id, count(DISTINCT m.id)::text AS lifetime, r.leader_ids
+        FROM records r
+        JOIN cell_attendance a ON a.person_id = r.record_id
         JOIN cell_meetings m ON m.id = a.cell_meeting_id
        WHERE a.present = true
          AND a.superseded_at IS NULL
          AND m.status IN ('HELD', 'RESCHEDULED')
          AND m.scheduled_date <= ${to}::date
-       GROUP BY p.person_id, p.leader_ids
+       GROUP BY r.person_id, r.leader_ids
     `.execute(executor);
 
     return rows.rows.map((row) => ({
@@ -331,11 +354,10 @@ export class CellFiguresService {
    * and because `n` genuinely needs it -- not because it is currently reachable on the
    * population side.
    *
-   * **What it does not do: resolve a merged identity.** Section 3 requires a merged pair
-   * to count as one person whenever reports are generated, and that resolution belongs to
-   * `people` (section 2). Nothing writes `merged_into_id` yet, so no report can be wrong
-   * today; it is named because the exclusions above read as a complete list and are not
-   * one. The same sentence stands in `DccFiguresService`, and one ruling will move both.
+   * **A merged pair is one person** (section 3, decision 0408), resolved as
+   * `DccFiguresService` resolves it: each record to the record kept, inside this one
+   * statement, and meetings counted as distinct, so a meeting marked Present on both records
+   * counts once and `timesInMonth` still cannot exceed `n`.
    */
   /**
    * **Overloaded so the caller's scope decides the caller's type**, rather than every
@@ -347,22 +369,22 @@ export class CellFiguresService {
   async monthFigures(
     reportingMonth: string,
     population: Extract<CellFiguresPopulation, { kind: 'CELL' }>,
-    options?: CellMonthFiguresOptions,
+    options: CellMonthFiguresOptions,
   ): Promise<CellScopedMonthFigures>;
   async monthFigures(
     reportingMonth: string,
     population: Exclude<CellFiguresPopulation, { kind: 'CELL' }>,
-    options?: CellMonthFiguresOptions,
+    options: CellMonthFiguresOptions,
   ): Promise<AggregateMonthFigures>;
   async monthFigures(
     reportingMonth: string,
     population: CellFiguresPopulation,
-    options?: CellMonthFiguresOptions,
+    options: CellMonthFiguresOptions,
   ): Promise<CellMonthFigures>;
   async monthFigures(
     reportingMonth: string,
     population: CellFiguresPopulation,
-    options: CellMonthFiguresOptions = {},
+    options: CellMonthFiguresOptions,
   ): Promise<CellMonthFigures> {
     assertReportingMonth(reportingMonth);
 
@@ -384,33 +406,43 @@ export class CellFiguresService {
       times_in_month: string | null;
       lifetime_through_month: string | null;
     }>`
-      WITH scoped AS (
-        SELECT id
-          FROM cell_meetings
-         WHERE reporting_month = ${reportingMonth}::date
-           AND status IN ('HELD', 'RESCHEDULED')
-           AND (${cellId}::uuid IS NULL OR cell_id = ${cellId}::uuid)
+      WITH ${mergedCte(options.merges)},
+      scoped AS (
+        SELECT cm.id
+          FROM cell_meetings cm
+          LEFT JOIN merged ml ON ml.absorbed_id = cm.responsible_leader_id
+         WHERE cm.reporting_month = ${reportingMonth}::date
+           AND cm.status IN ('HELD', 'RESCHEDULED')
+           AND (${cellId}::uuid IS NULL OR cm.cell_id = ${cellId}::uuid)
            AND (
              ${leaders}::uuid[] IS NULL
-             OR responsible_leader_id = ANY (${leaders}::uuid[])
+             OR coalesce(ml.kept_id, cm.responsible_leader_id) = ANY (${leaders}::uuid[])
            )
       ),
       -- The month's attendees first, then each one's history (DccFiguresService says why).
       attended AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(mg.kept_id, a.person_id) AS person_id
           FROM scoped s
           JOIN cell_attendance a ON a.cell_meeting_id = s.id
+          LEFT JOIN merged mg ON mg.absorbed_id = a.person_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
       ),
+      records AS (
+        SELECT person_id, person_id AS record_id FROM attended
+        UNION ALL
+        SELECT p.person_id, mg.absorbed_id
+          FROM attended p
+          JOIN merged mg ON mg.kept_id = p.person_id
+      ),
       figures AS (
         SELECT p.person_id,
-               count(*) FILTER (
+               count(DISTINCT a.cell_meeting_id) FILTER (
                  WHERE a.cell_meeting_id IN (SELECT id FROM scoped)
                ) AS times_in_month,
-               count(*) AS lifetime_through_month
-          FROM attended p
-          JOIN cell_attendance a ON a.person_id = p.person_id
+               count(DISTINCT a.cell_meeting_id) AS lifetime_through_month
+          FROM records p
+          JOIN cell_attendance a ON a.person_id = p.record_id
           JOIN cell_meetings m ON m.id = a.cell_meeting_id
          WHERE a.present = true
            AND a.superseded_at IS NULL

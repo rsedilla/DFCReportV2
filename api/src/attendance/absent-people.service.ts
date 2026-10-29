@@ -43,7 +43,9 @@ export class AbsentPeopleService implements AbsentPeoplePort {
     const months = lastFinishedMonths(manilaDayOf(now), 3);
     const labels = months.map((month) => month.first.slice(0, 7));
 
-    let candidates = await this.absence.absentEveryMonth(months);
+    // A merged pair is one person (decision 0408): read once, for both reads below.
+    const merges = await this.people.mergedPairsWithin(this.db);
+    let candidates = await this.absence.absentEveryMonth(months, merges);
 
     if (scope.kind === 'PERSONS') {
       const inScope = new Set([...scope.personIds].map((id) => canonicalId(id)));
@@ -61,12 +63,27 @@ export class AbsentPeopleService implements AbsentPeoplePort {
       ),
     }));
 
+    // Every record of each candidate (decision 0408): a month on a roster or under a leader
+    // counts whichever record of the person it was on.
+    const wanted = new Set(candidates.map((id) => canonicalId(id)));
+    const recordsOf = new Map<string, string[]>(candidates.map((id) => [canonicalId(id), [id]]));
+    merges.absorbed.forEach((absorbed, index) => {
+      const kept = canonicalId(merges.kept[index]);
+      if (wanted.has(kept)) recordsOf.get(kept)?.push(absorbed);
+    });
+    const everyRecord = [...recordsOf.values()].flat();
+
     const [decisions, outside, inACell, underALeader] = await Promise.all([
       this.people.forDecisions(candidates),
       this.people.outsideTreeAt(this.db, now),
-      this.cells.monthsInACellWithin(this.db, candidates, bounds),
-      this.hierarchy.monthsUnderALeaderWithin(this.db, candidates, bounds),
+      this.cells.monthsInACellWithin(this.db, everyRecord, bounds),
+      this.hierarchy.monthsUnderALeaderWithin(this.db, everyRecord, bounds),
     ]);
+    const covered = (id: string, index: number) =>
+      (recordsOf.get(canonicalId(id)) ?? [id]).some(
+        (record) =>
+          inACell.get(record)?.has(index) === true || underALeader.get(record)?.has(index) === true,
+      );
 
     // Current, not merged, not outside the tree (decision 0339), and on a roster or a
     // checklist for the whole of every month, so nobody new is listed.
@@ -78,10 +95,7 @@ export class AbsentPeopleService implements AbsentPeoplePort {
       if (outside.has(id)) {
         return false;
       }
-      return months.every(
-        (_, index) =>
-          inACell.get(id)?.has(index) === true || underALeader.get(id)?.has(index) === true,
-      );
+      return months.every((_, index) => covered(id, index));
     });
 
     const names = await this.people.namesOf(listed);
@@ -112,7 +126,7 @@ export class AbsentPeopleService implements AbsentPeoplePort {
     const [leaders, cellsOf, seen] = await Promise.all([
       this.people.directLeaderNamesOf(ids),
       this.cells.currentCellsOfMany(ids),
-      this.absence.lastSeen(ids),
+      this.absence.lastSeen(ids, merges),
     ]);
     const leaderIds = await this.hierarchy.directLeaderIdsOf(ids);
     const pastors = await this.hierarchy.discipleCountsOf(this.db, ids);

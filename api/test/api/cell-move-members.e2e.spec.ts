@@ -285,7 +285,7 @@ describe('Moving a Cell member (decision 0357)', () => {
       await enrol(absorbed.id, cellR.id);
       await db
         .updateTable('persons')
-        .set({ merged_into_id: pablo.id })
+        .set({ merged_into_id: pablo.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', absorbed.id)
         .execute();
 

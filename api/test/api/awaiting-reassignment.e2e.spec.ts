@@ -366,7 +366,7 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
     await unplace(mark);
     await db
       .updateTable('persons')
-      .set({ merged_into_id: manuel.id })
+      .set({ merged_into_id: manuel.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', juan.id)
       .execute();
 

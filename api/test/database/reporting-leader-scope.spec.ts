@@ -20,6 +20,7 @@ import { assignTo, createPerson } from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
+import { NO_MERGES } from '../../src/common/merged-identity';
 import type { Database } from '../../src/database/schema';
 
 /**
@@ -354,8 +355,8 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     // this query can give, and it is the one nothing was checking.
     const figures = app.get(DccFiguresService);
 
-    const unrestricted = await figures.monthFigures(PERIOD);
-    const nobody = await figures.monthFigures(PERIOD, { personIds: [] });
+    const unrestricted = await figures.monthFigures(PERIOD, { merges: NO_MERGES });
+    const nobody = await figures.monthFigures(PERIOD, { personIds: [], merges: NO_MERGES });
 
     expect(unrestricted.people).toHaveLength(5);
     expect(nobody.people).toHaveLength(0);
@@ -384,7 +385,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     const original = figures.monthFigures.bind(figures);
     const other = createTestDb();
 
-    figures.monthFigures = async (month, options = {}) => {
+    figures.monthFigures = async (month, options = { merges: NO_MERGES }) => {
       // Between the walk and the count: a second Sunday for Mark, who is already in the
       // population. Under a shared snapshot his bucket stays at 2.
       const extra = await other
@@ -440,7 +441,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     const original = figures.monthFigures.bind(figures);
     let observed: { isolation: string; readOnly: string } | undefined;
 
-    figures.monthFigures = async (month, options = {}) => {
+    figures.monthFigures = async (month, options = { merges: NO_MERGES }) => {
       const seen = await sql<{ isolation: string; read_only: string }>`
         SELECT current_setting('transaction_isolation') AS isolation,
                current_setting('transaction_read_only') AS read_only

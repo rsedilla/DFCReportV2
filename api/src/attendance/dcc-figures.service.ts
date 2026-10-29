@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { DATABASE, type Db } from '../database/database.module';
 import { monthClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
+import { mergedCte, type MergedPairs } from '../common/merged-identity';
 
 /**
  * One person's DCC attendance, reduced to the two numbers a monthly report needs.
@@ -51,6 +52,12 @@ export interface DccPersonFigures {
 export interface DccMonthFiguresOptions {
   executor?: Db;
   personIds?: readonly string[];
+  /**
+   * Every Person merge, read by the caller in the same transaction (`people`'s
+   * `mergedPairsWithin`), so a merged pair counts once (section 3, decision 0408). Required, so
+   * that no caller counts the two records of one person twice by forgetting it.
+   */
+  merges: MergedPairs;
 }
 
 export interface DccMonthFigures {
@@ -111,15 +118,17 @@ export class DccFiguresService {
    * is a VIP on October's report forever. Any other reading moves a closed month's figures,
    * which section 20 forbids.
    *
-   * **What it does not do: resolve a merged identity.** Section 3 requires a merged pair to
-   * count as one person "when reports are generated", for every period including past ones,
-   * and that resolution belongs to `people` (section 2). Nothing writes `merged_into_id`
-   * yet — Person Merge is unbuilt — so no report can be wrong today; this is named because
-   * the exclusions above read as a complete list and are not one.
+   * **A merged pair is one person** (section 3, decision 0408). Each record resolves to the
+   * record kept through `options.merges`, one step because a merge never chains (migration
+   * 0033), and a person's history is read across every record of theirs; Sundays are counted
+   * as distinct services, so a Sunday marked Present on both records counts once. An Absent
+   * mark is never counted, so Present wins with no rule of its own. `personIds` names records
+   * kept. The merges come from `people`, read in the caller's transaction, so they and the
+   * figures are one snapshot (decision 0210) and this module reads no table it does not own.
    */
   async monthFigures(
     reportingMonth: string,
-    options: DccMonthFiguresOptions = {},
+    options: DccMonthFiguresOptions,
   ): Promise<DccMonthFigures> {
     assertReportingMonth(reportingMonth);
 
@@ -141,38 +150,48 @@ export class DccFiguresService {
       times_in_month: string | null;
       lifetime_through_month: string | null;
     }>`
-      WITH calendar AS (
+      WITH ${mergedCte(options.merges)},
+      calendar AS (
         SELECT id, event_date, removed_at
           FROM dcc_events
          WHERE event_date >= ${reportingMonth}::date
            AND event_date < (${reportingMonth}::date + interval '1 month')
       ),
       attended_this_month AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(mg.kept_id, a.person_id) AS person_id
           FROM calendar c
           JOIN dcc_attendance a ON a.dcc_event_id = c.id
+          LEFT JOIN merged mg ON mg.absorbed_id = a.person_id
          WHERE c.removed_at IS NULL
            AND a.present = true
            AND a.superseded_at IS NULL
            AND (
              ${population}::uuid[] IS NULL
-             OR a.person_id = ANY (${population}::uuid[])
+             OR coalesce(mg.kept_id, a.person_id) = ANY (${population}::uuid[])
            )
       ),
+      -- Every record of each attendee: their own, and any merged into it.
+      records AS (
+        SELECT person_id, person_id AS record_id FROM attended_this_month
+        UNION ALL
+        SELECT m.person_id, mg.absorbed_id
+          FROM attended_this_month m
+          JOIN merged mg ON mg.kept_id = m.person_id
+      ),
       figures AS (
-        SELECT m.person_id,
-               count(*) FILTER (
+        SELECT r.person_id,
+               count(DISTINCT e.id) FILTER (
                  WHERE e.event_date >= ${reportingMonth}::date
                ) AS times_in_month,
-               count(*) AS lifetime_through_month
-          FROM attended_this_month m
-          JOIN dcc_attendance a ON a.person_id = m.person_id
+               count(DISTINCT e.id) AS lifetime_through_month
+          FROM records r
+          JOIN dcc_attendance a ON a.person_id = r.record_id
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
            AND e.removed_at IS NULL
            AND e.event_date < (${reportingMonth}::date + interval '1 month')
-         GROUP BY m.person_id
+         GROUP BY r.person_id
       ),
       month_meta AS (
         SELECT count(*) FILTER (WHERE removed_at IS NULL)::text AS n,
@@ -223,13 +242,14 @@ export class DccFiguresService {
    * and removed Sundays. A range that is exactly a month answers what `monthFigures` answers.
    *
    * `personIds` narrows the population exactly as it does there, and `undefined` is Whole
-   * Church.
+   * Church; `merges` resolves a merged pair to one person, as there.
    */
   async rangeFigures(
     executor: Db,
     from: string,
     to: string,
     personIds: readonly string[] | undefined,
+    merges: MergedPairs,
   ): Promise<{ n: number; removed: string[]; people: DccPersonFigures[] }> {
     const population = personIds === undefined ? null : [...personIds];
 
@@ -240,35 +260,44 @@ export class DccFiguresService {
       times_in_range: string | null;
       lifetime: string | null;
     }>`
-      WITH calendar AS (
+      WITH ${mergedCte(merges)},
+      calendar AS (
         SELECT id, event_date, removed_at
           FROM dcc_events
          WHERE event_date BETWEEN ${from}::date AND ${to}::date
       ),
       attended AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(mg.kept_id, a.person_id) AS person_id
           FROM calendar c
           JOIN dcc_attendance a ON a.dcc_event_id = c.id
+          LEFT JOIN merged mg ON mg.absorbed_id = a.person_id
          WHERE c.removed_at IS NULL
            AND a.present = true
            AND a.superseded_at IS NULL
            AND (
              ${population}::uuid[] IS NULL
-             OR a.person_id = ANY (${population}::uuid[])
+             OR coalesce(mg.kept_id, a.person_id) = ANY (${population}::uuid[])
            )
       ),
-      figures AS (
-        SELECT m.person_id,
-               count(*) FILTER (WHERE e.event_date >= ${from}::date) AS times_in_range,
-               count(*) AS lifetime
+      records AS (
+        SELECT person_id, person_id AS record_id FROM attended
+        UNION ALL
+        SELECT m.person_id, mg.absorbed_id
           FROM attended m
-          JOIN dcc_attendance a ON a.person_id = m.person_id
+          JOIN merged mg ON mg.kept_id = m.person_id
+      ),
+      figures AS (
+        SELECT r.person_id,
+               count(DISTINCT e.id) FILTER (WHERE e.event_date >= ${from}::date) AS times_in_range,
+               count(DISTINCT e.id) AS lifetime
+          FROM records r
+          JOIN dcc_attendance a ON a.person_id = r.record_id
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
            AND e.removed_at IS NULL
            AND e.event_date <= ${to}::date
-         GROUP BY m.person_id
+         GROUP BY r.person_id
       ),
       range_meta AS (
         SELECT count(*) FILTER (WHERE removed_at IS NULL)::text AS n,

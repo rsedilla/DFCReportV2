@@ -9,6 +9,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import {
   DuplicateAcknowledgementRequiredError,
+  InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
 } from '../common/errors/api-error';
@@ -385,12 +386,21 @@ export class PeopleService {
   ): Promise<Record<string, unknown>> {
     const checked = await this.db
       .selectFrom('persons')
-      .select(['first_name', 'middle_name', 'last_name', 'birth_date', 'sex', 'mobile_number'])
+      .select([
+        'first_name',
+        'middle_name',
+        'last_name',
+        'birth_date',
+        'sex',
+        'mobile_number',
+        'merged_into_id',
+      ])
       .where('id', '=', personId)
       .executeTakeFirst();
     if (checked === undefined) {
       throw new NotFoundError('No such person.');
     }
+    assertNotMergedAway(personId, checked.merged_into_id);
     const passedOver = await this.assertNoUnacknowledgedDuplicate(
       checked,
       changes,
@@ -416,6 +426,7 @@ export class PeopleService {
           'sex',
           'civil_status',
           'mobile_number',
+          'merged_into_id',
         ])
         .where('id', '=', personId)
         // **Locked**, so `before` is the value immediately prior to this write: without it, an
@@ -427,6 +438,8 @@ export class PeopleService {
       if (before === undefined) {
         throw new NotFoundError('No such person.');
       }
+      // Again under the lock: a merge landing since the first read is refused as well.
+      assertNotMergedAway(personId, before.merged_into_id);
 
       // **Only the Admin sets, changes or clears a title** (decision 0374). Refused only where
       // the title would change, so a form that sends back the one already recorded, as a page
@@ -715,5 +728,18 @@ export class PeopleService {
       .execute();
 
     return { id: person.id, memberId: person.member_id, network };
+  }
+}
+
+/**
+ * A record merged away is read only (section 3, decision 0408, point 14): its details are edited on
+ * the record kept, as a reassignment or an archive of it is refused.
+ */
+function assertNotMergedAway(personId: string, mergedIntoId: string | null): void {
+  if (mergedIntoId !== null) {
+    throw new InvariantViolationError(
+      'That person was merged into another record. Edit the record kept instead.',
+      { person_id: personId, merged_into_id: mergedIntoId },
+    );
   }
 }

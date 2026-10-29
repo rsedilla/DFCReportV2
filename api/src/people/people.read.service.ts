@@ -6,6 +6,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import { canonicalId } from '../common/identifiers';
+import { type MergedPairs } from '../common/merged-identity';
 import { type RosterCursor } from '../common/roster-cursor';
 import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
@@ -335,8 +336,8 @@ export class PeopleReadService {
       .where('id', '=', personId)
       // Consistent with the other read paths. A Person absorbed by a merge is not
       // a valid target of any later write; the survivor carries the identity
-      // (section 3, Person Merge). Merge is Stage 3, so this filters nothing
-      // today -- which is exactly when the inconsistency is cheap to remove.
+      // (section 3, Person Merge). Its page reads `PeopleMergeService.mergedLineOf`
+      // instead (decision 0408, point 14).
       .where('merged_into_id', 'is', null)
       .executeTakeFirst();
 
@@ -357,10 +358,10 @@ export class PeopleReadService {
    * hole, and a path with a hole reads as a shorter chain rather than as an
    * error. Section 3 also says a merge never rewrites pastoral records to point
    * at a different Person, so an absorbed ancestor genuinely stays on the chain
-   * and the real question is whether to render them or the survivor. That is
-   * Person Merge's to answer, for every surface at once, and merge is Stage 3 --
-   * so nothing today can reach it, and it is recorded as open rather than decided
-   * here.
+   * and the real question is whether to render them or the survivor. No current
+   * chain can hold one: decision 0408 refuses absorbing anyone who pastors people
+   * and ends the absorbed record's own assignment. A dated path could, and which to
+   * render there is still recorded as open rather than decided here.
    */
   async namesOf(
     personIds: readonly string[],
@@ -595,15 +596,16 @@ export class PeopleReadService {
   /**
    * Every Person current at one instant, for the Senior Pastors' *Number of people*
    * (decision 0326, point 3): a lifecycle row in force then reads `CURRENT`. Lifecycle is
-   * effective-dated so that an archival moves no earlier month (section 3). An absorbed
-   * record is left out, as everywhere else here; nothing writes one yet.
+   * effective-dated so that an archival moves no earlier month (section 3). **A merged pair is
+   * one person** (decision 0408): an absorbed record current then is answered as the record
+   * kept, so a month before the kept record began still counts them, once.
    */
   async currentIdsAt(executor: Db | Transaction<Database>, at: Date): Promise<string[]> {
     const rows = await executor
       .selectFrom('persons')
       .innerJoin('person_lifecycle', 'person_lifecycle.person_id', 'persons.id')
-      .select('persons.id')
-      .where('persons.merged_into_id', 'is', null)
+      .select(sql<string>`coalesce(persons.merged_into_id, persons.id)`.as('id'))
+      .distinct()
       .where('person_lifecycle.state', '=', 'CURRENT')
       .where('person_lifecycle.started_at', '<=', at)
       .where((eb) =>
@@ -615,6 +617,28 @@ export class PeopleReadService {
       .execute();
 
     return rows.map((row) => canonicalId(row.id));
+  }
+
+  /**
+   * Every Person merge, absorbed record beside record kept (SKILL.md section 3, decision 0408),
+   * for a module that counts people to resolve its own rows with (`common/merged-identity.ts`).
+   * Read in the caller's transaction, so a report's figures and its merges are one snapshot.
+   * **Oldest absorbed record first**, by when it was created and then by Member ID, so that a
+   * later pair is the newer duplicate (decision 0408, point 15).
+   */
+  async mergedPairsWithin(executor: Db | Transaction<Database>): Promise<MergedPairs> {
+    const rows = await executor
+      .selectFrom('persons')
+      .select(['id', 'merged_into_id'])
+      .where('merged_into_id', 'is not', null)
+      .orderBy('created_at')
+      .orderBy('member_id')
+      .execute();
+
+    return {
+      absorbed: rows.map((row) => canonicalId(row.id)),
+      kept: rows.map((row) => canonicalId(row.merged_into_id as string)),
+    };
   }
 
   /**

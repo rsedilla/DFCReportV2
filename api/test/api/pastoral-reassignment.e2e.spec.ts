@@ -550,7 +550,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     it('refuses a person absorbed by a merge', async () => {
       await db
         .updateTable('persons')
-        .set({ merged_into_id: rico.id })
+        .set({ merged_into_id: rico.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', mark.id)
         .execute();
 

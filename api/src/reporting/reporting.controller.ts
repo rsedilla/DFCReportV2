@@ -117,6 +117,7 @@ export class ReportingController {
     periodFrom: 'query.period',
   })
   async dccMonthly(@Query() query: DccMonthlyReportDto): Promise<DccMonthlyReport> {
+    await this.readAsKept(query);
     const scope = scopeOf(query);
     await this.assertNamesSomebody(scope);
 
@@ -158,6 +159,7 @@ export class ReportingController {
     periodFrom: 'query.period',
   })
   async cellsMonthly(@Query() query: CellMonthlyReportDto): Promise<CellMonthlyReport> {
+    await this.readAsKept(query);
     const scope = cellScopeOf(query);
     await this.assertNamesSomebody(scope);
 
@@ -184,6 +186,7 @@ export class ReportingController {
     @Query() query: DccByLeaderDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.readAsKept(query);
     const scope = scopeOf(query);
     await this.assertNamesSomebody(scope);
     const coverage = await this.reporting.dccCoverageByLeader(scope, query.period);
@@ -207,6 +210,7 @@ export class ReportingController {
     @Query() query: CellByLeaderDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.readAsKept(query);
     const scope = cellScopeOf(query);
     await this.assertNamesSomebody(scope);
     const coverage = await this.reporting.cellCoverageByLeader(scope, query.period);
@@ -244,6 +248,7 @@ export class ReportingController {
     @Query() query: CellTwelveDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.readAsKept(query);
     const scope = cellScopeOf(query);
     if (scope.kind === 'CELL') {
       throw new ValidationFailedError(
@@ -313,6 +318,7 @@ export class ReportingController {
     @Query() query: DccTwelveDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.readAsKept(query);
     const scope = scopeOf(query);
     await this.assertNamesSomebody(scope);
     const rootLeaders = rootLeadersAsked(query.rows, scope.kind);
@@ -513,6 +519,7 @@ export class ReportingController {
         { field: 'scope', value: 'WHOLE_CHURCH' },
       );
     }
+    await this.readAsKept(query);
     await this.assertNamesSomebody({ kind: 'LEADER', person_id: query.leader_id });
     const status = await this.reporting.leaderRecordingStatus(
       query.leader_id,
@@ -675,6 +682,7 @@ export class ReportingController {
         { field: 'scope', value: query.scope },
       );
     }
+    await this.readAsKept(query);
     const leaderId = query.leader_id;
     await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
     const counts = await this.reporting.branchPeople(leaderId, query.period);
@@ -772,6 +780,7 @@ export class ReportingController {
         { field: 'scope', value: query.scope },
       );
     }
+    await this.readAsKept(query);
     const leaderId = query.leader_id;
     await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
     const counts = await this.reporting.branchCounts(leaderId, query.period);
@@ -870,6 +879,7 @@ export class ReportingController {
         { field: 'scope', value: query.scope },
       );
     }
+    await this.readAsKept(query);
     const leaderId = canonicalId(query.leader_id);
     await this.assertNamesSomebody({ kind: 'LEADER', person_id: leaderId });
     const months = Array.from({ length: 12 }, (_, index) => shiftMonth(query.period, index - 11));
@@ -1010,6 +1020,7 @@ export class ReportingController {
 
     let lines: { leaderId: string | null; network: NetworkName | null }[];
     if (query.leader_id !== undefined) {
+      await this.readAsKept(query);
       if (!(await this.people.findById(query.leader_id))) {
         throw new NotFoundError('No such person.');
       }
@@ -1247,6 +1258,20 @@ export class ReportingController {
    * A selector naming nobody answers `NOT_FOUND` (decision 0253), checked after the guard so
    * a narrower grant is refused whether or not the identifier names anybody.
    */
+  /**
+   * A report naming a leader merged away is the record kept's report (SKILL.md section 3,
+   * decision 0408, point 22). The guard has resolved it the same way; this makes the figures
+   * follow, by naming the record kept wherever the handler reads the leader.
+   */
+  private async readAsKept(query: { leader_id?: string }): Promise<void> {
+    if (query.leader_id === undefined) {
+      return;
+    }
+    const person = await this.people.forDecision(query.leader_id);
+    if (person?.mergedIntoId) {
+      query.leader_id = person.mergedIntoId;
+    }
+  }
   private async assertNamesSomebody(scope: DccReportScope | CellReportScope): Promise<void> {
     if (scope.kind === 'LEADER' && (await this.people.findById(scope.person_id)) === null) {
       throw new NotFoundError('No such person.');

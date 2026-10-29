@@ -141,7 +141,7 @@ describe('SUYNL readiness (decision 0297)', () => {
 
     await db
       .updateTable('persons')
-      .set({ merged_into_id: timothy.id })
+      .set({ merged_into_id: timothy.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', quentin.id)
       .execute();
 
@@ -573,7 +573,7 @@ describe('SUYNL readiness (decision 0297)', () => {
       });
       await db
         .updateTable('persons')
-        .set({ merged_into_id: ines.id })
+        .set({ merged_into_id: ines.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', absorbed.id)
         .execute();
       await lessons(drifter.id, [1, 2]);

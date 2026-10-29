@@ -294,7 +294,7 @@ describe('cell membership (section 10)', () => {
       const absorbed = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
       await db
         .updateTable('persons')
-        .set({ merged_into_id: survivor.id })
+        .set({ merged_into_id: survivor.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', absorbed.id)
         .execute();
       const member = await createPerson(db, { firstName: 'Lino', network: 'MENS' });
@@ -492,7 +492,7 @@ describe('cell membership (section 10)', () => {
       const absorbed = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
       await db
         .updateTable('persons')
-        .set({ merged_into_id: survivor.id })
+        .set({ merged_into_id: survivor.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', absorbed.id)
         .execute();
 
