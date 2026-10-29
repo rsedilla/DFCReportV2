@@ -1,0 +1,988 @@
+import { randomUUID } from 'node:crypto';
+
+import request from 'supertest';
+
+import { sql } from 'kysely';
+
+import { createTestDb, truncateAll } from '../setup/database';
+import {
+  EPOCH,
+  assignTo,
+  createAccount,
+  createCell,
+  createPerson,
+  createTestApp,
+  nameSeniorPastors,
+} from '../setup/fixtures';
+
+import type { INestApplication } from '@nestjs/common';
+import type { Kysely } from 'kysely';
+import type { Database } from '../../src/database/schema';
+import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
+
+/**
+ * Person Merge (SKILL.md sections 3 and 20; decision 0408), asked of the API, because the API
+ * is the sole authority for authorization (`CLAUDE.md`, Definition of Done).
+ *
+ * The tree is `CLAUDE.md`'s example: `Raymond (root) -> Manuel -> Mark -> Juan, Pedro`, Mark
+ * leading the Cell Juan and Pedro are in, and Nestor a second leader under Raymond. **Juan is
+ * recorded twice**: `juan` under Mark, and `juanAgain` under Nestor, both in Mark's Cell. The
+ * merge joins `juanAgain` into `juan`.
+ *
+ * The reported month is fixed and in the past, so it is closed and storable (section 20), and
+ * the reconciliation cases read it before the merge and again after it: the second read is
+ * only right if the merge cleared the stored month.
+ *
+ * Fixture names, dates, mobile numbers and email addresses are invented (`CLAUDE.md`, Secrets).
+ */
+describe('Person Merge (section 3, decision 0408)', () => {
+  let app: INestApplication;
+  let db: Kysely<Database>;
+
+  let raymond: TestPerson;
+  let manuel: TestPerson;
+  let mark: TestPerson;
+  let nestor: TestPerson;
+  let juan: TestPerson;
+  let juanAgain: TestPerson;
+  let pedro: TestPerson;
+  let adele: TestPerson;
+  let cell: TestCell;
+
+  let admin: TestAccount;
+  let manuelAccount: TestAccount;
+  let juanAgainAccount: TestAccount;
+
+  const JUNE = '2026-06-01';
+  const SUNDAYS = ['2026-06-07', '2026-06-14', '2026-06-21', '2026-06-28'];
+  const MEETINGS = ['2026-06-06', '2026-06-13'];
+
+  const server = () => app.getHttpServer();
+
+  const preview = (as: TestAccount, kept: TestPerson | string, duplicate: TestPerson | string) =>
+    request(server())
+      .get(`/api/v1/people/${idOf(kept)}/merge-preview?duplicate_id=${idOf(duplicate)}`)
+      .set('Authorization', `Bearer ${as.accessToken}`);
+
+  const merge = (
+    as: TestAccount,
+    kept: TestPerson | string,
+    body: Record<string, unknown>,
+    key: string = randomUUID(),
+  ) =>
+    request(server())
+      .post(`/api/v1/people/${idOf(kept)}/merge`)
+      .set('Authorization', `Bearer ${as.accessToken}`)
+      .set('Idempotency-Key', key)
+      .send(body);
+
+  const mergeInto = (kept: TestPerson, duplicate: TestPerson) =>
+    merge(admin, kept, { duplicate_id: duplicate.id, reason: 'Entered twice at the 2026 intake.' });
+
+  const report = (domain: 'dcc' | 'cells', query: string) =>
+    request(server())
+      .get(`/api/v1/reports/${domain}/monthly?period=${JUNE}&${query}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+  function idOf(person: TestPerson | string): string {
+    return typeof person === 'string' ? person : person.id;
+  }
+
+  /** Section 20: each view of the month sums to the one unique-people total. */
+  const expectReconciles = (body: {
+    unique_people: number;
+    classification: Record<string, number>;
+    buckets?: { people: number }[];
+  }) => {
+    const classified = Object.values(body.classification).reduce((sum, value) => sum + value, 0);
+    expect(classified).toBe(body.unique_people);
+    if (body.buckets !== undefined) {
+      const bucketed = body.buckets.reduce((sum, bucket) => sum + bucket.people, 0);
+      expect(bucketed).toBe(body.unique_people);
+    }
+  };
+
+  const meeting = async (cellId: string, day: string, leaderId: string): Promise<string> => {
+    const rows = await sql<{ id: string }>`
+      INSERT INTO cell_meetings (
+        cell_id, scheduled_date, scheduled_time, week_starting, reporting_month,
+        status, responsible_leader_id
+      )
+      VALUES (
+        ${cellId}::uuid, ${day}::date, '19:00'::time,
+        ${day}::date - ((EXTRACT(ISODOW FROM ${day}::date)::integer) - 1),
+        date_trunc('month', ${day}::date)::date,
+        'HELD'::cell_meeting_status, ${leaderId}::uuid
+      )
+      RETURNING id
+    `.execute(db);
+    return rows.rows[0].id;
+  };
+
+  const cellMark = (meetingId: string, person: TestPerson, present: boolean) =>
+    db
+      .insertInto('cell_attendance')
+      .values({ cell_meeting_id: meetingId, person_id: person.id, present, recorded_by: admin.id })
+      .execute();
+
+  const dccMark = (eventId: string, person: TestPerson, present: boolean, leader: TestPerson) =>
+    db
+      .insertInto('dcc_attendance')
+      .values({
+        dcc_event_id: eventId,
+        person_id: person.id,
+        present,
+        responsible_leader_id: leader.id,
+        recorded_by: admin.id,
+      })
+      .execute();
+
+  const openRows = async (table: 'pastoral_assignments' | 'cell_memberships', person: TestPerson) =>
+    db
+      .selectFrom(table)
+      .select('id')
+      .where('person_id', '=', person.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+  beforeAll(async () => {
+    db = createTestDb();
+    app = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await db.destroy();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(db);
+
+    raymond = await createPerson(db, {
+      firstName: 'Raymond',
+      lastName: 'Alvarez',
+      network: 'MENS',
+    });
+    await assignTo(db, raymond.id, null);
+    manuel = await createPerson(db, { firstName: 'Manuel', lastName: 'Bautista', network: 'MENS' });
+    await assignTo(db, manuel.id, raymond.id);
+    mark = await createPerson(db, { firstName: 'Mark', lastName: 'Castillo', network: 'MENS' });
+    await assignTo(db, mark.id, manuel.id);
+    nestor = await createPerson(db, { firstName: 'Nestor', lastName: 'Dizon', network: 'MENS' });
+    await assignTo(db, nestor.id, raymond.id);
+
+    // The kept record has a mobile number and no birthday; the duplicate has both.
+    juan = await createPerson(db, {
+      firstName: 'Juan',
+      lastName: 'Reyes',
+      network: 'MENS',
+      birthDate: null,
+    });
+    await assignTo(db, juan.id, mark.id);
+    juanAgain = await createPerson(db, {
+      firstName: 'Juan',
+      lastName: 'Reyes',
+      middleName: 'Santos',
+      network: 'MENS',
+      birthDate: '1990-02-03',
+    });
+    await assignTo(db, juanAgain.id, nestor.id);
+    await db
+      .updateTable('persons')
+      .set({ mobile_number: '09170000001', mobile_number_normalized: '+639170000001' })
+      .where('id', '=', juan.id)
+      .execute();
+    await db
+      .updateTable('persons')
+      .set({ mobile_number: '09170000002', mobile_number_normalized: '+639170000002' })
+      .where('id', '=', juanAgain.id)
+      .execute();
+
+    pedro = await createPerson(db, { firstName: 'Pedro', lastName: 'Ocampo', network: 'MENS' });
+    await assignTo(db, pedro.id, mark.id);
+
+    cell = await createCell(db, { leader: mark, createdAt: EPOCH });
+    for (const person of [juan, juanAgain, pedro]) {
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: person.id, cell_id: cell.id, started_at: EPOCH })
+        .execute();
+    }
+
+    // The Admin's own record is outside the tree (section 6).
+    adele = await createPerson(db, { firstName: 'Adele', lastName: 'Ferrer', network: 'WOMENS' });
+    admin = await createAccount(app, db, { person: adele, roles: ['ADMIN'] });
+    manuelAccount = await createAccount(app, db, { person: manuel, roles: ['LEADER'] });
+    juanAgainAccount = await createAccount(app, db, { person: juanAgain, roles: ['LEADER'] });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 1. A merge that is made
+  // ---------------------------------------------------------------------------
+
+  describe('a successful merge', () => {
+    it('joins the duplicate in, ending its leader and Cell, and answers what it did', async () => {
+      const response = await mergeInto(juan, juanAgain).expect(200);
+
+      expect(response.body).toEqual({
+        id: juanAgain.id,
+        member_id: expect.stringMatching(/^M-\d{6}$/),
+        merged_into: {
+          id: juan.id,
+          member_id: expect.stringMatching(/^M-\d{6}$/),
+          full_name: 'Juan Reyes',
+        },
+        merged_at: expect.any(String),
+        copied: ['birth_date'],
+        account_disabled: true,
+      });
+
+      const absorbed = await db
+        .selectFrom('persons')
+        .select(['merged_into_id', 'merged_at', 'merged_by', 'merge_reason'])
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(absorbed).toEqual({
+        merged_into_id: juan.id,
+        merged_at: new Date(response.body.merged_at),
+        merged_by: admin.id,
+        merge_reason: 'Entered twice at the 2026 intake.',
+      });
+
+      // Points 1 and 2: the duplicate's open edge and membership end; the kept record's stay.
+      expect(await openRows('pastoral_assignments', juanAgain)).toEqual([]);
+      expect(await openRows('cell_memberships', juanAgain)).toEqual([]);
+      expect(await openRows('pastoral_assignments', juan)).toHaveLength(1);
+      expect(await openRows('cell_memberships', juan)).toHaveLength(1);
+
+      const ended = await db
+        .selectFrom('pastoral_assignments')
+        .select(['leader_id', 'ended_at'])
+        .where('person_id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(ended).toEqual({ leader_id: nestor.id, ended_at: new Date(response.body.merged_at) });
+
+      // Point 3: the birthday the kept record lacked is copied; its own mobile number stands.
+      const kept = await db
+        .selectFrom('persons')
+        .select(['birth_date', 'mobile_number', 'mobile_number_normalized', 'merged_into_id'])
+        .where('id', '=', juan.id)
+        .executeTakeFirstOrThrow();
+      expect(kept).toEqual({
+        birth_date: '1990-02-03',
+        mobile_number: '09170000001',
+        mobile_number_normalized: '+639170000001',
+        merged_into_id: null,
+      });
+    });
+
+    it("copies a mobile number the kept record lacks, and keeps the kept record's birthday", async () => {
+      await db
+        .updateTable('persons')
+        .set({ birth_date: '1991-04-05', mobile_number: null, mobile_number_normalized: null })
+        .where('id', '=', juan.id)
+        .execute();
+
+      const response = await mergeInto(juan, juanAgain).expect(200);
+      expect(response.body.copied).toEqual(['mobile_number']);
+
+      const kept = await db
+        .selectFrom('persons')
+        .select(['birth_date', 'mobile_number', 'mobile_number_normalized'])
+        .where('id', '=', juan.id)
+        .executeTakeFirstOrThrow();
+      expect(kept).toEqual({
+        birth_date: '1991-04-05',
+        mobile_number: '09170000002',
+        mobile_number_normalized: '+639170000002',
+      });
+    });
+
+    it("disables the duplicate's account and ends its sessions (section 3)", async () => {
+      await request(server())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${juanAgainAccount.accessToken}`)
+        .expect(200);
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const account = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('id', '=', juanAgainAccount.id)
+        .executeTakeFirstOrThrow();
+      expect(account.status).toBe('DISABLED');
+
+      // No account is created for the kept record (section 3).
+      const keptAccounts = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('person_id', '=', juan.id)
+        .execute();
+      expect(keptAccounts).toEqual([]);
+
+      const after = await request(server())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${juanAgainAccount.accessToken}`);
+      expect(after.status).toBe(401);
+    });
+
+    it('answers account_disabled false where the duplicate holds no account', async () => {
+      const pedroAgain = await createPerson(db, { firstName: 'Pedro', network: 'MENS' });
+
+      const response = await mergeInto(pedro, pedroAgain).expect(200);
+      expect(response.body.account_disabled).toBe(false);
+      expect(response.body.copied).toEqual([]);
+    });
+
+    it('writes one person.merged audit entry naming what moved', async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['actor_id', 'target_type', 'target_id', 'before', 'after'])
+        .where('action', '=', 'person.merged')
+        .execute();
+      expect(entries).toEqual([
+        {
+          actor_id: admin.id,
+          target_type: 'person',
+          target_id: juanAgain.id,
+          before: { pastoral_leader_id: nestor.id, cell_id: cell.cellId },
+          after: expect.objectContaining({
+            merged_into_id: juan.id,
+            reason: 'Entered twice at the 2026 intake.',
+            copied: ['birth_date'],
+            account_disabled: true,
+          }),
+        },
+      ]);
+
+      // The account change is audited too (section 3, section 21).
+      const disabled = await db
+        .selectFrom('audit_log')
+        .select('target_id')
+        .where('action', '=', 'account.disabled')
+        .execute();
+      expect(disabled).toEqual([{ target_id: juanAgainAccount.id }]);
+    });
+
+    it('replays the same answer for the same key and does not merge twice', async () => {
+      const key = randomUUID();
+      const body = { duplicate_id: juanAgain.id, reason: 'Entered twice at the 2026 intake.' };
+
+      const first = await merge(admin, juan, body, key).expect(200);
+      const second = await merge(admin, juan, body, key).expect(200);
+
+      expect(second.body).toEqual(first.body);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('action', '=', 'person.merged')
+        .execute();
+      expect(entries).toHaveLength(1);
+    });
+
+    it('trims the reason it stores', async () => {
+      await merge(admin, juan, { duplicate_id: juanAgain.id, reason: '  Same person.  ' }).expect(
+        200,
+      );
+      const row = await db
+        .selectFrom('persons')
+        .select('merge_reason')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(row.merge_reason).toBe('Same person.');
+    });
+
+    it('accepts an archived duplicate, joined in as it is (point 8)', async () => {
+      const archivedAgain = await createPerson(db, {
+        firstName: 'Pedro',
+        lastName: 'Ocampo',
+        network: 'MENS',
+        archived: true,
+      });
+
+      const shown = await preview(admin, pedro, archivedAgain).expect(200);
+      expect(shown.body).toEqual({ refusals: [] });
+
+      await mergeInto(pedro, archivedAgain).expect(200);
+    });
+
+    it('lets a Network root be the record kept (point 7)', async () => {
+      const raymondAgain = await createPerson(db, {
+        firstName: 'Raymond',
+        lastName: 'Alvarez',
+        network: 'MENS',
+      });
+
+      await mergeInto(raymond, raymondAgain).expect(200);
+
+      const seat = await db
+        .selectFrom('pastoral_assignments')
+        .select(['leader_id', 'root_network'])
+        .where('person_id', '=', raymond.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(seat).toEqual({ leader_id: null, root_network: 'MENS' });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 2. What is refused
+  // ---------------------------------------------------------------------------
+
+  describe('refusals, from the preview and from the merge alike', () => {
+    /** The preview's codes, and that the merge itself refuses with the same ones. */
+    const expectRefused = async (
+      kept: TestPerson | string,
+      duplicate: TestPerson | string,
+      codes: string[],
+    ) => {
+      const stateOf = () =>
+        db
+          .selectFrom('persons')
+          .select(['id', 'merged_into_id', 'merged_at', 'birth_date', 'mobile_number'])
+          .where('id', 'in', [idOf(kept), idOf(duplicate)])
+          .orderBy('id')
+          .execute();
+      const edgesOf = () =>
+        db
+          .selectFrom('pastoral_assignments')
+          .select(['id', 'ended_at'])
+          .where('person_id', '=', idOf(duplicate))
+          .orderBy('id')
+          .execute();
+      const beforeState = await stateOf();
+      const beforeEdges = await edgesOf();
+
+      const shown = await preview(admin, kept, duplicate).expect(200);
+      expect(shown.body.refusals.map((refusal: { code: string }) => refusal.code)).toEqual(codes);
+      for (const refusal of shown.body.refusals) {
+        expect(refusal.message).toEqual(expect.any(String));
+      }
+
+      const refused = await merge(admin, kept, {
+        duplicate_id: idOf(duplicate),
+        reason: 'Same person.',
+      }).expect(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(
+        refused.body.error.details.refusals.map((refusal: { code: string }) => refusal.code),
+      ).toEqual(codes);
+      expect(refused.body.error.message).toBe(shown.body.refusals[0].message);
+
+      // Nothing was written.
+      expect(await stateOf()).toEqual(beforeState);
+      expect(await edgesOf()).toEqual(beforeEdges);
+    };
+
+    it('offers the merge with nothing refused when nothing stands in the way', async () => {
+      const shown = await preview(admin, juan, juanAgain).expect(200);
+      expect(shown.body).toEqual({ refusals: [] });
+    });
+
+    it('refuses one record merged into itself', async () => {
+      await expectRefused(juan, juan, ['SAME_PERSON']);
+    });
+
+    it('refuses a duplicate who pastors anyone (point 5)', async () => {
+      // Manuel leads no Cell and pastors Mark.
+      const manuelAgain = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      await expectRefused(manuelAgain, manuel, ['PASTORS_PEOPLE']);
+      expect(await openRows('pastoral_assignments', mark)).toHaveLength(1);
+    });
+
+    it('refuses two records in different Networks (point 6)', async () => {
+      const rosa = await createPerson(db, { firstName: 'Rosa', network: 'WOMENS' });
+      await expectRefused(juan, rosa, ['DIFFERENT_NETWORKS']);
+    });
+
+    it('refuses absorbing a Network root, which also pastors people (point 7)', async () => {
+      const raymondAgain = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      await expectRefused(raymondAgain, raymond, ['DUPLICATE_IS_ROOT', 'PASTORS_PEOPLE']);
+    });
+
+    it('refuses keeping an archived record (point 8)', async () => {
+      const archived = await createPerson(db, {
+        firstName: 'Juan',
+        lastName: 'Reyes',
+        network: 'MENS',
+        archived: true,
+      });
+      await expectRefused(archived, juanAgain, ['KEPT_ARCHIVED']);
+    });
+
+    it('refuses a duplicate who leads a Cell (section 3)', async () => {
+      // Rico leads a Cell and pastors nobody, so only the Cell refuses.
+      const rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+      await assignTo(db, rico.id, manuel.id);
+      await createCell(db, { leader: rico, createdAt: EPOCH });
+      const ricoAgain = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+
+      await expectRefused(ricoAgain, rico, ['LEADS_A_CELL']);
+    });
+
+    it("refuses absorbing the Admin's own record, and lets it be kept (point 9)", async () => {
+      const adeleAgain = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
+      await expectRefused(adeleAgain, adele, ['OWN_RECORD']);
+
+      await mergeInto(adele, adeleAgain).expect(200);
+    });
+
+    it('refuses a record already merged away, on either side (section 3, point 9)', async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+
+      await expectRefused(juan, juanAgain, ['ALREADY_MERGED']);
+      await expectRefused(juanAgain, pedro, ['ALREADY_MERGED']);
+    });
+
+    it('refuses absorbing a record that has absorbed another, so merges never chain', async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+
+      await expectRefused(pedro, juan, ['HAS_ABSORBED']);
+    });
+
+    it('answers NOT_FOUND for a record that does not exist', async () => {
+      const unknown = randomUUID();
+      const shown = await preview(admin, juan, unknown).expect(404);
+      expect(shown.body.error.code).toBe('NOT_FOUND');
+
+      const refused = await merge(admin, juan, {
+        duplicate_id: unknown,
+        reason: 'Same person.',
+      }).expect(404);
+      expect(refused.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('refuses a merge with no reason, or a reason of only spaces (section 3)', async () => {
+      for (const body of [
+        { duplicate_id: juanAgain.id },
+        { duplicate_id: juanAgain.id, reason: '' },
+        { duplicate_id: juanAgain.id, reason: '   ' },
+      ]) {
+        const refused = await merge(admin, juan, body).expect(422);
+        expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+      }
+
+      const row = await db
+        .selectFrom('persons')
+        .select('merged_into_id')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(row.merged_into_id).toBeNull();
+    });
+
+    it('refuses a duplicate_id that is not an identifier', async () => {
+      const shown = await preview(admin, juan, 'not-an-id').expect(422);
+      expect(shown.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('who may merge (section 3: people.merge, Admin only)', () => {
+    it('refuses a Leader at the capability, through both routes', async () => {
+      const shown = await preview(manuelAccount, juan, juanAgain).expect(403);
+      expect(shown.body.error.code).toBe('CAPABILITY_DENIED');
+
+      const refused = await merge(manuelAccount, juan, {
+        duplicate_id: juanAgain.id,
+        reason: 'Same person.',
+      }).expect(403);
+      expect(refused.body.error.code).toBe('CAPABILITY_DENIED');
+    });
+
+    it('refuses a Senior Pastor at the capability, through both routes', async () => {
+      nameSeniorPastors(app, [raymond.id]);
+      const pastor = await createAccount(app, db, {
+        person: raymond,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+
+      const shown = await preview(pastor, juan, juanAgain).expect(403);
+      expect(shown.body.error.code).toBe('CAPABILITY_DENIED');
+
+      const refused = await merge(pastor, juan, {
+        duplicate_id: juanAgain.id,
+        reason: 'Same person.',
+      }).expect(403);
+      expect(refused.body.error.code).toBe('CAPABILITY_DENIED');
+
+      const row = await db
+        .selectFrom('persons')
+        .select('merged_into_id')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(row.merged_into_id).toBeNull();
+    });
+
+    it('lets one of two concurrent merges sharing a record succeed, never a chain', async () => {
+      // Pedro into Juan, and Juan into Juan's duplicate record, at once: whichever commits
+      // first, the other must not leave a record two steps from its survivor. Several rounds,
+      // so the two genuinely overlap at least once, and the loser must be the service's own
+      // refusal: without the lock the trigger refuses instead, which renders a 500.
+      for (let round = 0; round < 6; round += 1) {
+        const keep = await createPerson(db, { firstName: `Kept${round}`, network: 'MENS' });
+        const middle = await createPerson(db, { firstName: `Middle${round}`, network: 'MENS' });
+        const other = await createPerson(db, { firstName: `Other${round}`, network: 'MENS' });
+
+        const [one, two] = await Promise.all([mergeInto(middle, other), mergeInto(keep, middle)]);
+
+        expect([one.status, two.status].sort()).toEqual([200, 409]);
+        const loser = one.status === 409 ? one : two;
+        expect(loser.body.error.code).toBe('INVARIANT_VIOLATION');
+        expect(loser.body.error.details.refusals).toEqual([
+          expect.objectContaining({
+            code: expect.stringMatching(/^(ALREADY_MERGED|HAS_ABSORBED)$/),
+          }),
+        ]);
+      }
+
+      const chained = await sql<{ n: string }>`
+        SELECT count(*)::text AS n
+          FROM persons a JOIN persons b ON b.id = a.merged_into_id
+         WHERE b.merged_into_id IS NOT NULL
+      `.execute(db);
+      expect(chained.rows[0].n).toBe('0');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3. The absorbed record's page (point 14)
+  // ---------------------------------------------------------------------------
+
+  describe("the absorbed record's page", () => {
+    it('names the record kept, who merged it, when and why, and nothing else', async () => {
+      const merged = await mergeInto(juan, juanAgain).expect(200);
+
+      const page = await request(server())
+        .get(`/api/v1/people/${juanAgain.id}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(page.body).toEqual({
+        id: juanAgain.id,
+        member_id: merged.body.member_id,
+        full_name: 'Juan S. Reyes',
+        merged: {
+          into: {
+            id: juan.id,
+            member_id: merged.body.merged_into.member_id,
+            full_name: 'Juan Reyes',
+          },
+          merged_at: merged.body.merged_at,
+          merged_by: 'Adele Ferrer',
+          reason: 'Entered twice at the 2026 intake.',
+        },
+      });
+    });
+
+    it('still answers NOT_FOUND for a record that never existed', async () => {
+      const response = await request(server())
+        .get(`/api/v1/people/${randomUUID()}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(404);
+      expect(response.body.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4. Reconciliation after a merge (section 20, Definition of Done)
+  // ---------------------------------------------------------------------------
+
+  describe('a merged pair is one person in every figure (points 10 to 13)', () => {
+    let events: string[];
+
+    beforeEach(async () => {
+      events = [];
+      for (const sunday of SUNDAYS) {
+        const row = await db
+          .insertInto('dcc_events')
+          .values({ event_date: sunday })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        events.push(row.id);
+      }
+
+      // DCC. The first Sunday is marked Present on both records; the second Absent on the
+      // kept record and Present on the duplicate; the third on the duplicate alone. As one
+      // person that is three Sundays (points 11 and 4). Mark came once.
+      await dccMark(events[0], juan, true, mark);
+      await dccMark(events[0], juanAgain, true, nestor);
+      await dccMark(events[1], juan, false, mark);
+      await dccMark(events[1], juanAgain, true, nestor);
+      await dccMark(events[2], juanAgain, true, nestor);
+      await dccMark(events[0], mark, true, manuel);
+
+      // Cell. The first meeting is Absent on the kept record and Present on the duplicate;
+      // the second Present on both. As one person that is both meetings. Pedro came once.
+      const first = await meeting(cell.id, MEETINGS[0], mark.id);
+      const second = await meeting(cell.id, MEETINGS[1], mark.id);
+      await cellMark(first, juan, false);
+      await cellMark(first, juanAgain, true);
+      await cellMark(first, pedro, true);
+      await cellMark(second, juan, true);
+      await cellMark(second, juanAgain, true);
+      await cellMark(second, pedro, false);
+    });
+
+    it('counts the pair once at Whole Church on the DCC report, Present winning', async () => {
+      const before = (await report('dcc', 'scope=WHOLE_CHURCH').expect(200)).body;
+      expect(before.unique_people).toBe(3);
+      expectReconciles(before);
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const after = (await report('dcc', 'scope=WHOLE_CHURCH').expect(200)).body;
+      expect(after.unique_people).toBe(2);
+      expectReconciles(after);
+      // Juan three times, Mark once: section 3's worked example, one level down.
+      expect(after.classification).toEqual({
+        vip: 1,
+        second_timer: 0,
+        third_timer: 1,
+        fourth_timer: 0,
+        regular: 0,
+      });
+      expect(after.buckets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ times: 3, people: 1 }),
+          expect.objectContaining({ times: 1, people: 1 }),
+        ]),
+      );
+    });
+
+    it("places the pair under the kept record's leader, and adds up at every leader (point 13)", async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const underMark = (await report('dcc', `scope=LEADER&leader_id=${mark.id}`).expect(200)).body;
+      const underNestor = (await report('dcc', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      const underRaymond = (await report('dcc', `scope=LEADER&leader_id=${raymond.id}`).expect(200))
+        .body;
+      const mens = (await report('dcc', 'scope=NETWORK&network=MENS').expect(200)).body;
+
+      for (const body of [underMark, underNestor, underRaymond, mens]) {
+        expectReconciles(body);
+      }
+
+      // Juan is Mark's, with the duplicate's Sundays; Nestor has nobody now.
+      expect(underMark.classification.third_timer).toBe(1);
+      expect(underNestor.unique_people).toBe(0);
+      // The root's total holds Juan and Mark once each, as the church's does.
+      expect(underRaymond.unique_people).toBe(2);
+      expect(mens.unique_people).toBe(2);
+    });
+
+    it("places the pair under the duplicate's leader in a month the kept record had none", async () => {
+      // Lito's kept record is placed only from July; his duplicate was under Nestor all June.
+      const lito = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, lito.id, mark.id, new Date('2026-07-01T00:00:00+08:00'));
+      const litoAgain = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, litoAgain.id, nestor.id);
+
+      await dccMark(events[3], lito, true, mark);
+      await dccMark(events[3], litoAgain, true, nestor);
+      await dccMark(events[2], litoAgain, true, nestor);
+
+      const nestorBefore = (await report('dcc', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      // Juan's duplicate and Lito's.
+      expect(nestorBefore.unique_people).toBe(2);
+
+      await mergeInto(juan, juanAgain).expect(200);
+      await mergeInto(lito, litoAgain).expect(200);
+
+      const underNestor = (await report('dcc', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      const underMark = (await report('dcc', `scope=LEADER&leader_id=${mark.id}`).expect(200)).body;
+      const church = (await report('dcc', 'scope=WHOLE_CHURCH').expect(200)).body;
+
+      for (const body of [underNestor, underMark, church]) {
+        expectReconciles(body);
+      }
+      // Lito once, under Nestor, with both records' Sundays: two.
+      expect(underNestor.unique_people).toBe(1);
+      expect(underNestor.classification.second_timer).toBe(1);
+      // Mark's own scope holds Mark and Juan; Lito is not his for June.
+      expect(underMark.unique_people).toBe(2);
+      // Juan, Mark and Lito.
+      expect(church.unique_people).toBe(3);
+    });
+
+    it('counts the pair once on the Cell report, a meeting on both records counting once', async () => {
+      const before = (await report('cells', `scope=CELL&cell_id=${cell.id}`).expect(200)).body;
+      expect(before.unique_people).toBe(3);
+      expectReconciles(before);
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const atCell = (await report('cells', `scope=CELL&cell_id=${cell.id}`).expect(200)).body;
+      expect(atCell).toMatchObject({ n: 2, unique_people: 2 });
+      expectReconciles(atCell);
+      // Juan came to both meetings (Present wins the first), Pedro to one.
+      expect(atCell.buckets).toEqual(
+        expect.arrayContaining([
+          { times: 2, people: 1, completed: true },
+          { times: 1, people: 1, completed: false },
+        ]),
+      );
+      expect(atCell.classification).toEqual({
+        vip: 1,
+        second_timer: 1,
+        third_timer: 0,
+        fourth_timer: 0,
+        regular: 0,
+      });
+
+      const church = (await report('cells', 'scope=WHOLE_CHURCH').expect(200)).body;
+      const underMark = (await report('cells', `scope=LEADER&leader_id=${mark.id}`).expect(200))
+        .body;
+      for (const body of [church, underMark]) {
+        expect(body.unique_people).toBe(2);
+        expectReconciles(body);
+      }
+    });
+
+    it('shows a SUYNL lesson on both records once, on the earlier date (point 12)', async () => {
+      const lesson = (person: TestPerson, number: number, at: string, by: TestPerson) =>
+        db
+          .insertInto('suynl_lessons')
+          .values({
+            person_id: person.id,
+            lesson: number,
+            confirmed_by: by.id,
+            recorded_by: admin.id,
+            confirmed_at: new Date(at),
+          })
+          .execute();
+      await lesson(juan, 1, '2026-05-10T10:00:00+08:00', mark);
+      await lesson(juanAgain, 1, '2026-04-01T10:00:00+08:00', nestor);
+      await lesson(juanAgain, 2, '2026-05-01T10:00:00+08:00', nestor);
+
+      const countsBefore = (
+        await request(server())
+          .get('/api/v1/suynl/counts')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body;
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const listed = (
+        await request(server())
+          .get('/api/v1/suynl/people?limit=200')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body.data as { person_id: string; lessons: { lesson: number; filed_on: string }[] }[];
+
+      expect(listed.map((row) => row.person_id)).not.toContain(juanAgain.id);
+      const row = listed.find((entry) => entry.person_id === juan.id);
+      expect(row?.lessons.map(({ lesson: number, filed_on }) => ({ number, filed_on }))).toEqual([
+        { number: 1, filed_on: '2026-04-01' },
+        { number: 2, filed_on: '2026-05-01' },
+      ]);
+
+      const countsAfter = (
+        await request(server())
+          .get('/api/v1/suynl/counts')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body;
+      expect(countsAfter.people).toBe(countsBefore.people - 1);
+      expect(countsAfter.in_progress).toBe(countsBefore.in_progress - 1);
+    });
+
+    it('shows a Training graduation on both records once, on the earlier date (point 12)', async () => {
+      const graduate = (person: TestPerson, on: string) =>
+        db
+          .insertInto('training_graduations')
+          .values({
+            person_id: person.id,
+            program: 'ENCOUNTER',
+            graduated_on: on,
+            confirmed_by: null,
+            recorded_by: admin.id,
+          })
+          .execute();
+      await graduate(juan, '2026-03-01');
+      await graduate(juanAgain, '2026-02-01');
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const listed = (
+        await request(server())
+          .get('/api/v1/training/people?limit=200')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body.data as {
+        person_id: string;
+        graduations: { program: string; graduated_on: string }[];
+      }[];
+
+      expect(listed.map((row) => row.person_id)).not.toContain(juanAgain.id);
+      const row = listed.find((entry) => entry.person_id === juan.id);
+      expect(
+        row?.graduations.map(({ program, graduated_on }) => ({ program, graduated_on })),
+      ).toEqual([{ program: 'ENCOUNTER', graduated_on: '2026-02-01' }]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. The constraints, written directly (migration 0033)
+  // ---------------------------------------------------------------------------
+
+  describe('migration 0033, bypassing the application', () => {
+    const setMerge = (id: string, into: string | null) =>
+      db
+        .updateTable('persons')
+        .set({
+          merged_into_id: into,
+          merged_at: into === null ? null : new Date(),
+          merge_reason: into === null ? null : 'Written directly.',
+          merged_by: null,
+        })
+        .where('id', '=', id)
+        .execute();
+
+    it('refuses moving or undoing a merge once made', async () => {
+      await setMerge(juanAgain.id, juan.id);
+
+      await expect(setMerge(juanAgain.id, pedro.id)).rejects.toThrow(/never undone or moved/);
+      await expect(setMerge(juanAgain.id, null)).rejects.toThrow(/never undone or moved/);
+    });
+
+    it('refuses merging into a record merged away, or merging away one that absorbed another', async () => {
+      await setMerge(juanAgain.id, juan.id);
+
+      await expect(setMerge(pedro.id, juanAgain.id)).rejects.toThrow(/has itself been merged away/);
+      await expect(setMerge(juan.id, pedro.id)).rejects.toThrow(/has absorbed another/);
+    });
+
+    it('refuses a merge with no time or no reason', async () => {
+      await expect(
+        db
+          .updateTable('persons')
+          .set({ merged_into_id: juan.id, merged_at: new Date(), merge_reason: '\t' })
+          .where('id', '=', juanAgain.id)
+          .execute(),
+      ).rejects.toThrow(/persons_merge_is_whole/);
+      await expect(
+        db
+          .updateTable('persons')
+          .set({ merged_into_id: juan.id, merge_reason: 'Written directly.' })
+          .where('id', '=', juanAgain.id)
+          .execute(),
+      ).rejects.toThrow(/persons_merge_is_whole/);
+    });
+  });
+});
