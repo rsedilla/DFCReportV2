@@ -37,6 +37,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/dcc$/)) {
     return false;
   }
+  // Conquest opens for whoever its sidebar item is drawn for: a holder of
+  // `conquest.view_subtree` at Whole Church, whatever their screens (decision 0407).
+  if (at(/^\/conquest(\/|$)/)) {
+    return holdsWholeChurch(me, 'conquest.view_subtree');
+  }
   // Every account has its own Account page and Record, and a Sunday's checklist from Record.
   if (at(/^\/(session|dashboard|dcc)(\/|$)/)) {
     return true;
@@ -58,8 +63,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (me.screens === 'SENIOR_PASTOR') {
     // Record and Reports (decisions 0326 and 0377), and what they open: a Cell's meetings and
     // members, and a person (until the owner rules on their person pages).
-    // and Conquest, an item of their own since decision 0407.
-    return fiveReports || cellRecord || person || at(/^\/conquest(\/|$)/);
+    return fiveReports || cellRecord || person;
   }
 
   if (me.screens === 'RECORDING') {
@@ -76,7 +80,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     );
   }
 
-  // Full view: Record, Reports, People, Cells and SUYNL, and Conquest for the Admin. My Cell is the recording screens'.
+  // Full view: Record, Reports, People, Cells and SUYNL, or Growth for the Admin. My Cell is the recording screens'.
   if (at(/^\/my-cell(\/|$)/)) {
     return false;
   }
@@ -95,7 +99,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     if (at(/^\/reports(\/|$)/) || at(/^\/trends(\/|$)/)) {
       return fiveReports;
     }
-    return !at(/^\/growth\/(training|conquest)$/) && !at(/^\/conquest(\/|$)/);
+    return !at(/^\/growth\/(training|conquest)$/);
   }
   // The Admin's six reports have no twelve-month view (decision 0377).
   return !at(/^\/trends(\/|$)/);

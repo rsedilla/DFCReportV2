@@ -110,9 +110,14 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ]);
   });
 
-  test('a whole-church reader, as the Admin is, keeps Growth (decision 0383)', async ({ page }) => {
+  test('a whole-church reader, as the Admin is, keeps Growth and has Conquest (decisions 0383 and 0407)', async ({
+    page,
+  }) => {
     await mockSignedIn(page);
-    await mockGrants(page, ['reports.view_subtree', 'suynl.view_subtree'], { wholeChurch: true });
+    await mockGrants(page, ['reports.view_subtree', 'suynl.view_subtree'], {
+      wholeChurch: true,
+      conquest: true,
+    });
     await mockPeople(page);
 
     await page.goto('/people');
@@ -125,6 +130,30 @@ test.describe('a Recording-only account (decision 0323)', () => {
       'Growth',
       'Conquest',
     ]);
+  });
+
+  // The item follows `conquest.view_subtree` at Whole Church, not the reach of Reports
+  // (decision 0407, by owner ruling): a whole-church reader of Reports without it has no item,
+  // and the page does not open for them by its address.
+  test('without Conquest at Whole Church there is no Conquest item, and the page does not open', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['reports.view_subtree', 'suynl.view_subtree'], { wholeChurch: true });
+    await mockPeople(page);
+
+    await page.goto('/people');
+
+    await expect(mainNavigation(page).getByRole('link')).toHaveText([
+      'Record',
+      'Reports',
+      'People',
+      'Cells',
+      'Growth',
+    ]);
+
+    await page.goto('/conquest');
+    await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
   });
 
   // It said "keeps the five items" and passed only by matching the sidebar before `/auth/me`

@@ -82,6 +82,15 @@ export async function mockSignedIn(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json(ME)));
 }
 
+/** `conquest.view_subtree` at Whole Church, which the Admin and Senior Pastor roles hold. */
+const CONQUEST_WHOLE_CHURCH = {
+  capability: 'conquest.view_subtree',
+  scope_type: 'WHOLE_CHURCH',
+  scope_network: null,
+  read_only: false,
+  source: 'ROLE',
+};
+
 /**
  * The same account, reading reports across the whole church.
  *
@@ -92,11 +101,15 @@ export async function mockSignedIn(page: Page): Promise<void> {
  * grant is widened, so a case using it differs from the rest in that one respect.
  */
 export async function mockWholeChurchReader(page: Page): Promise<void> {
-  const capabilities = CAPABILITIES.map((grant) =>
-    grant.capability === 'reports.view_subtree'
-      ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
-      : grant,
-  );
+  const capabilities = [
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree'
+        ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
+        : grant,
+    ),
+    // As the Admin holds it, which draws the Conquest item (decision 0407).
+    CONQUEST_WHOLE_CHURCH,
+  ];
 
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
@@ -151,6 +164,8 @@ export async function mockAdministrator(page: Page): Promise<void> {
     wholeChurch('suynl.view_subtree'),
     // A title is the Admin's alone to give (decision 0374).
     wholeChurch('people.set_title'),
+    // Conquest, which draws its sidebar item (decision 0407).
+    wholeChurch('conquest.view_subtree'),
   ];
 
   await page.route('**/api/v1/auth/me', (route) =>
@@ -225,6 +240,8 @@ export async function mockScreens(
               ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
               : grant,
           )),
+    // The Senior Pastor role holds Conquest at Whole Church (decision 0407).
+    ...(screens === 'SENIOR_PASTOR' ? [CONQUEST_WHOLE_CHURCH] : []),
     ...extra,
   ];
 
@@ -256,7 +273,14 @@ export const SIGNED_IN_PERSON_ID = ME.person_id;
 export async function mockGrants(
   page: Page,
   extra: readonly string[],
-  { wholeChurch = false }: { wholeChurch?: boolean } = {},
+  {
+    wholeChurch = false,
+    conquest = false,
+  }: {
+    wholeChurch?: boolean;
+    /** Also `conquest.view_subtree` at Whole Church, as the Admin holds it (decision 0407). */
+    conquest?: boolean;
+  } = {},
 ): Promise<void> {
   const capabilities = [
     ...CAPABILITIES.map((grant) =>
@@ -271,6 +295,7 @@ export async function mockGrants(
       read_only: false,
       source: 'ROLE',
     })),
+    ...(conquest ? [CONQUEST_WHOLE_CHURCH] : []),
   ];
 
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));

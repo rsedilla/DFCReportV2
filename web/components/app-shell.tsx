@@ -22,7 +22,7 @@ import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
@@ -205,15 +205,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   // account's set as a placeholder flashed five items on a reload before a Recording-only
   // leader's four replaced them (owner, 2026-10-11). An unanswered request still shows
   // today's items rather than none.
+  //
+  // **`Conquest` follows its capability rather than the screens** (decision 0407, by owner
+  // ruling): it is the last item of any account holding `conquest.view_subtree` at Whole Church,
+  // which today is the Admin and the two Senior Pastors.
+  const conquest =
+    me.data !== undefined && holdsWholeChurch(me.data, 'conquest.view_subtree') ? [CONQUEST] : [];
   const links = me.isPending
     ? []
-    : me.data?.screens === 'RECORDING'
-      ? [RECORD, PEOPLE, MY_CELL, SUYNL]
-      : me.data?.screens === 'SENIOR_PASTOR'
-        ? [RECORD, REPORTS, CONQUEST]
-        : isBranchReader(me.data)
-          ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
-          : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH, CONQUEST];
+    : [
+        ...(me.data?.screens === 'RECORDING'
+          ? [RECORD, PEOPLE, MY_CELL, SUYNL]
+          : me.data?.screens === 'SENIOR_PASTOR'
+            ? [RECORD, REPORTS]
+            : isBranchReader(me.data)
+              ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
+              : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
+        ...conquest,
+      ];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

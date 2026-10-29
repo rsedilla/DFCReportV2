@@ -14,11 +14,21 @@ longer under Growth, and Growth carries SUYNL and Training.
 People, Cells, Growth, Conquest; Bishop Oriel's and Pastora Geraldine's reads Record, Reports,
 Conquest. Both Senior Pastors alike, so the role stays one set of screens.
 
+**2a. The item follows the capability, not the role** (owner ruling, the same day, on
+`architecture-guardian`'s review). It is the last item of any account holding
+`conquest.view_subtree` at Whole Church, and `/conquest` opens for exactly those accounts. The
+Admin and Senior Pastor roles hold it there by default, so today that is the three accounts point 2
+names; an account holding it at a narrower scope, or not at all, has no item. The first build keyed
+the Admin's item on the reach of `reports.view_subtree`, as Growth and SUYNL are told apart, which
+would have drawn an item whose routes refuse an account without the capability. Section 19 rests the
+sidebar on capabilities (decision 0245).
+
 **3. Nothing else shows Conquest.** The "Conquest goals" link above the tabs of Reports and Growth
 (decision 0406) is removed, and so is the Conquest page under Reports (decision 0292), whose four
 cards are the head of this page. `/growth/conquest` and `/reports/conquest` forward to `/conquest`,
 so a saved link still opens it. A Full view leader and a Leader account without Full view are
-unchanged: neither has Conquest (decisions 0360 and 0379).
+unchanged: neither holds the capability at Whole Church, so neither has Conquest (decisions 0360
+and 0379).
 
 ## What it does not change
 
