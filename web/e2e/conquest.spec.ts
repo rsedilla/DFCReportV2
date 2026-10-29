@@ -50,8 +50,8 @@ function cellsOf(page: Page, name: string) {
   };
 }
 
-test.describe('the Conquest tab', () => {
-  // A whole-church reader, as the Admin is: a Full view leader's tab is hidden (decision 0360).
+test.describe('the Conquest page', () => {
+  // A whole-church reader, as the Admin is: a Full view leader's page is hidden (decision 0360).
   test('is a link above the Growth tabs, marked as the current page (decision 0406)', async ({
     page,
   }) => {
@@ -67,7 +67,7 @@ test.describe('the Conquest tab', () => {
     // From another tab it leads to Conquest, and is not current.
     await tabs.getByRole('link', { name: 'SUYNL' }).click();
     await expect(page).toHaveURL(/\/growth\/suynl$/);
-    const away = page.getByRole('link', { name: 'Conquest goals →' });
+    const away = page.getByRole('link', { name: 'Conquest goals', exact: true });
     await expect(away).toHaveAttribute('href', '/growth/conquest');
     await expect(away).not.toHaveAttribute('aria-current');
     await away.click();

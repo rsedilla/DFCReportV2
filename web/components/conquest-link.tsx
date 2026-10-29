@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils';
  */
 export function ConquestLink({ href, current }: { href: string; current: boolean }) {
   return (
-    <div className="mt-6 flex justify-end">
+    // A landmark of its own, so a screen reader finds it beside the tab row's (section 23).
+    <nav aria-label="Conquest" className="mt-6 flex justify-end">
       <Link
         href={href}
         aria-current={current ? 'page' : undefined}
@@ -19,8 +20,9 @@ export function ConquestLink({ href, current }: { href: string; current: boolean
           current ? 'no-underline' : 'underline underline-offset-4',
         )}
       >
-        {current ? 'Conquest goals' : 'Conquest goals →'}
+        Conquest goals
+        {current ? null : <span aria-hidden="true">&nbsp;→</span>}
       </Link>
-    </div>
+    </nav>
   );
 }

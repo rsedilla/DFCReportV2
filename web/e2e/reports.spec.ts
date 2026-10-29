@@ -163,7 +163,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
 
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
-    const away = page.getByRole('link', { name: 'Conquest goals →' });
+    const away = page.getByRole('link', { name: 'Conquest goals', exact: true });
     await expect(away).toHaveAttribute('href', '/reports/conquest');
     await expect(away).not.toHaveAttribute('aria-current');
 

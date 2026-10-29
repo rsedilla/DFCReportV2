@@ -64,7 +64,8 @@ const BRANCH_TABS = [
 ] as const;
 
 /**
- * The two Senior Pastors' five tabs (decision 0326, point 3), in place of the six. The first
+ * The two Senior Pastors' five tabs (decision 0326, point 3), in place of a whole-church
+ * reader's. The first
  * two are the same reports under the names the church uses. **A `#` label keeps its words as
  * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
  * "hash" (section 23).
@@ -145,7 +146,7 @@ export function ReportsTabs({
   const tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] =
     seniorPastor ? SENIOR_PASTOR_TABS : branch ? BRANCH_TABS : TABS;
 
-  // No tabs until the server names the screens, so a Senior Pastor never sees a leader's six
+  // No tabs until the server names the screens, so a Senior Pastor never sees a whole-church reader's five
   // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
   // the report inside is not remounted when the answer arrives.
   const tabbed = !me.isPending;
