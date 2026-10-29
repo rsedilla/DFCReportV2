@@ -178,6 +178,46 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByText(/every one needs a mark/)).toHaveCount(0);
   });
 
+  test('says a meeting dated when the Cell had no member has nothing to record, with no form', async ({
+    page,
+  }) => {
+    // Decision 0409: nobody to mark, so the meeting is not owed and is not recorded.
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: true,
+          week_open: true,
+          had_a_member: false,
+          meeting: null,
+          members: [],
+        }),
+      }),
+    );
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText(
+        'No member was in this Cell on Saturday 27 June, so there is nothing to record and this meeting is not counted as owed.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Met' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Who was there' })).toHaveCount(0);
+  });
+
   // The roster is read again when the reader comes back to the tab. If the week closed
   // meanwhile, the edit ends rather than leaving marks nobody can save under words saying
   // they are stored.
