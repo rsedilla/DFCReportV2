@@ -520,6 +520,21 @@ describe('Person Merge (section 3, decision 0408)', () => {
       await expectRefused(juan, rosa, ['DIFFERENT_NETWORKS']);
     });
 
+    it('refuses two records whose Networks differed in the past, corrected from now (point 6)', async () => {
+      // Entered as a woman, corrected to a man from today: one Network now, two in the past,
+      // so the pair would count in both Networks for that time. The Admin backdates the
+      // correction instead.
+      const juanAsWoman = await createPerson(db, { firstName: 'Juan', network: 'WOMENS' });
+      const corrected = await request(server())
+        .put(`/api/v1/people/${juanAsWoman.id}/sex`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ sex: 'MALE', reason: 'Sex entered in error.', pastoral_leader_id: mark.id });
+      expect(corrected.status).toBe(200);
+
+      await expectRefused(juan, juanAsWoman, ['NETWORKS_DIFFERED']);
+    });
+
     it('refuses absorbing a Network root, which also pastors people (point 7)', async () => {
       const raymondAgain = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
       await expectRefused(raymondAgain, raymond, ['DUPLICATE_IS_ROOT', 'PASTORS_PEOPLE']);

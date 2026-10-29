@@ -36,6 +36,7 @@ export interface MergeRefusal {
     | 'KEPT_ARCHIVED'
     | 'DUPLICATE_IS_ROOT'
     | 'DIFFERENT_NETWORKS'
+    | 'NETWORKS_DIFFERED'
     | 'LEADS_A_CELL'
     | 'PASTORS_PEOPLE';
   message: string;
@@ -381,6 +382,14 @@ export class PeopleMergeService {
         code: 'DIFFERENT_NETWORKS',
         message:
           'These two are in different Networks. Correct the sex on the record that is wrong first, then merge.',
+      });
+    } else if (await this.networks.networksEverDifferedWithin(executor, kept.id, duplicate.id)) {
+      // Point 6, as the owner widened it on the final review: the histories must agree too,
+      // or the pair is counted in both Networks for the time they differed.
+      refusals.push({
+        code: 'NETWORKS_DIFFERED',
+        message:
+          'These two were in different Networks in the past. Correct the sex on the record that was wrong, dated from when it was wrong, then merge.',
       });
     }
 
