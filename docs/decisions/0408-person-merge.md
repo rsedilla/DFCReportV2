@@ -89,6 +89,13 @@ behaviour beside the alternative.
     pastoral assignment, so no leader's scope reaches the old record itself; its page is authorized
     against the record kept, so that a leader's saved link explains itself as point 14 promises. A
     reader who may not open the kept record is refused, as before.
+
+    *What follows is derived from point 14, not chosen from a screenshot.* The kept record's scope
+    is lent to **read capabilities only**, so a leader is never authorized to write to the old
+    record through it; a first build lent it to writes too, which let a leader edit a merged
+    record, and a test caught it. A Whole Church holder passes every scope check, so each route
+    that writes a Person or an account refuses a merged one itself (`INVARIANT_VIOLATION`):
+    editing its details, reassigning or archiving it, and re-enabling or changing its account.
 18. **The merge's reason is not shown on the old page.** Point 14 names who merged it and when; the
     reason is free text an Admin typed, and stays in the audit log (Section 21).
 19. **Past DCC coverage is not changed by a merge.** Coverage counts a leader's obligation for each
@@ -98,6 +105,20 @@ behaviour beside the alternative.
     SUYNL lesson or a Training graduation that came from a duplicate, unticking it withdraws it on
     every record of the person, as any untick withdraws (Section 28), so a wrong one shown can
     always be corrected.
+
+## Two more, from the second review (2026-10-29)
+
+Chosen by the owner the same way, from screenshots of the real report beside today's answer.
+
+21. **A Cell meeting a merged-away record led is recorded against the kept record's branch.**
+    Point 16 reaches the coverage line too: a Cell report's "meetings recorded", and its rows by
+    leader, place the meeting where the kept record sits, so one report never puts one meeting in
+    two branches. It differs from point 19 because a Cell meeting is owed by the person who led
+    the Cell, and that person is the record kept; a DCC Sunday is owed by the leader of the
+    person recorded. The church total does not change.
+22. **A report opened for a merged-away leader shows the kept record's report**, with a line
+    saying the old record was merged into it, as the old page does (point 17); it opens only for
+    a reader who may read the kept record's report. The Cell Groups report likewise.
 
 Decision 0408, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 3.

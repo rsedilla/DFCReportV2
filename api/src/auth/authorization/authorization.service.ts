@@ -488,7 +488,7 @@ export class AuthorizationService {
       // The guard runs outside any transaction, so the pooled connection is the
       // right reader here. A caller re-checking scope *inside* a transaction —
       // section 5 invariant 1 after taking the person lock — passes its own.
-      if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
+      if (await this.scopeCovers(this.db, grant.scope, target, actor, capability)) {
         return;
       }
     }
@@ -646,7 +646,7 @@ export class AuthorizationService {
         continue;
       }
 
-      if (await this.scopeCovers(executor, grant.scope, target, actor)) {
+      if (await this.scopeCovers(executor, grant.scope, target, actor, capability)) {
         return true;
       }
     }
@@ -782,6 +782,7 @@ export class AuthorizationService {
     scope: Scope,
     target: Target,
     actor: Actor,
+    capability: Capability,
   ): Promise<boolean> {
     if (scope.type === ScopeType.WholeChurch) {
       return true;
@@ -797,7 +798,7 @@ export class AuthorizationService {
       return this.reportScopeCovers(executor, scope, target, actor);
     }
 
-    const personId = await this.personBehind(executor, target);
+    const personId = await this.personBehind(executor, target, isReadCapability(capability));
     if (personId === null) {
       return false;
     }
@@ -910,15 +911,21 @@ export class AuthorizationService {
   }
 
   /**
-   * An Account resolves through its Person; a Person is already one, and a record merged away
-   * resolves through the record kept (section 7, decision 0408 point 17).
+   * An Account resolves through its Person; a Person is already one, and **for a read** a record
+   * merged away resolves through the record kept (section 7, decision 0408 point 17), so its old
+   * page opens for whoever may open the record kept. **Never for a write**: the merge ended the
+   * absorbed record's own position, so a write resolves through that and is refused, and the
+   * page stays read only.
    */
   private async personBehind(
     executor: Db,
     target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
+    read: boolean,
   ): Promise<string | null> {
     if (target.kind === 'person') {
-      const kept = await this.mergedPersons?.keptRecordOfWithin(executor, target.personId);
+      const kept = read
+        ? await this.mergedPersons?.keptRecordOfWithin(executor, target.personId)
+        : null;
       return kept ?? target.personId;
     }
 

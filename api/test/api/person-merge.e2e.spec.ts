@@ -4,6 +4,7 @@ import request from 'supertest';
 
 import { sql } from 'kysely';
 
+import { reportRangeGuardMonth } from '../../src/common/time/report-range';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   EPOCH,
@@ -352,7 +353,8 @@ describe('Person Merge (section 3, decision 0408)', () => {
           after: expect.objectContaining({
             merged_into_id: juan.id,
             reason: 'Entered twice at the 2026 intake.',
-            copied: ['birth_date'],
+            // The values written onto the record kept, which lacked them (point 3, section 21).
+            copied_to_kept: { birth_date: '1990-02-03' },
             account_disabled: true,
           }),
         },
@@ -653,7 +655,7 @@ describe('Person Merge (section 3, decision 0408)', () => {
   // ---------------------------------------------------------------------------
 
   describe("the absorbed record's page", () => {
-    it('names the record kept, who merged it, when and why, and nothing else', async () => {
+    it('names the record kept, who merged it and when, and not why (point 18)', async () => {
       const merged = await mergeInto(juan, juanAgain).expect(200);
 
       const page = await request(server())
@@ -673,9 +675,10 @@ describe('Person Merge (section 3, decision 0408)', () => {
           },
           merged_at: merged.body.merged_at,
           merged_by: 'Adele Ferrer',
-          reason: 'Entered twice at the 2026 intake.',
         },
       });
+      // The reason stays in the audit log (section 21).
+      expect(page.body.merged).not.toHaveProperty('reason');
     });
 
     it('still answers NOT_FOUND for a record that never existed', async () => {
@@ -938,7 +941,516 @@ describe('Person Merge (section 3, decision 0408)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. The constraints, written directly (migration 0033)
+  // 5. Points 15 and 16: where a merged pair, and the meetings it led, are placed
+  // ---------------------------------------------------------------------------
+
+  /** Hand a Cell to another leader at an instant, as a handover writes it (section 10). */
+  const handOver = async (cellId: string, to: TestPerson, at: Date) => {
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('cell_leaderships')
+        .set({ ended_at: at })
+        .where('cell_id', '=', cellId)
+        .where('ended_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('cell_leaderships')
+        .values({ cell_id: cellId, person_id: to.id, started_at: at })
+        .execute();
+    });
+  };
+
+  /** A member of a Cell, placed under `under`, which a Cell figure does not read (section 20). */
+  const attendee = async (firstName: string, under: TestPerson, cellId: string) => {
+    const person = await createPerson(db, { firstName, lastName: 'Lorenzo', network: 'MENS' });
+    await assignTo(db, person.id, under.id);
+    await db
+      .insertInto('cell_memberships')
+      .values({ person_id: person.id, cell_id: cellId, started_at: EPOCH })
+      .execute();
+    return person;
+  };
+
+  /** After June, when a Cell a duplicate led in June is handed over before the merge. */
+  const AFTER_JUNE = new Date('2026-07-10T09:00:00+08:00');
+
+  describe('two duplicates under two leaders in a month the kept record had none (point 15)', () => {
+    let lito: TestPerson;
+    let litoNewer: TestPerson;
+    let litoOlder: TestPerson;
+
+    beforeEach(async () => {
+      const events: string[] = [];
+      for (const sunday of SUNDAYS) {
+        const row = await db
+          .insertInto('dcc_events')
+          .values({ event_date: sunday })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        events.push(row.id);
+      }
+
+      // The kept record is placed only from July.
+      lito = await createPerson(db, { firstName: 'Lito', lastName: 'Garcia', network: 'MENS' });
+      await assignTo(db, lito.id, mark.id, new Date('2026-07-01T00:00:00+08:00'));
+
+      // **The newer duplicate is created first**, so it holds the lower Member ID: only its
+      // `created_at` makes it the newer, which is the rule's first key (point 15).
+      litoNewer = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, litoNewer.id, nestor.id);
+      litoOlder = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, litoOlder.id, mark.id);
+      await db
+        .updateTable('persons')
+        .set({ created_at: new Date('2025-06-01T09:00:00+08:00') })
+        .where('id', '=', litoNewer.id)
+        .execute();
+      await db
+        .updateTable('persons')
+        .set({ created_at: new Date('2025-01-01T09:00:00+08:00') })
+        .where('id', '=', litoOlder.id)
+        .execute();
+
+      // One June Sunday on each duplicate.
+      await dccMark(events[0], litoNewer, true, nestor);
+      await dccMark(events[1], litoOlder, true, mark);
+
+      // The newer duplicate led a Cell in June and handed it over in July, so the merge is
+      // not refused for leading one; Tomas came to its one June meeting.
+      const litoCell = await createCell(db, { leader: litoNewer, createdAt: EPOCH });
+      const tomas = await attendee('Tomas', nestor, litoCell.id);
+      const held = await meeting(litoCell.id, MEETINGS[1], litoNewer.id);
+      await cellMark(held, tomas, true);
+      await handOver(litoCell.id, nestor, AFTER_JUNE);
+
+      await mergeInto(lito, litoOlder).expect(200);
+      await mergeInto(lito, litoNewer).expect(200);
+    });
+
+    it("counts the person under the newer duplicate's leader on the DCC report, every scope open", async () => {
+      const underNestor = (await report('dcc', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      const underMark = (await report('dcc', `scope=LEADER&leader_id=${mark.id}`).expect(200)).body;
+      const underManuel = (await report('dcc', `scope=LEADER&leader_id=${manuel.id}`).expect(200))
+        .body;
+      const underRaymond = (await report('dcc', `scope=LEADER&leader_id=${raymond.id}`).expect(200))
+        .body;
+      const mens = (await report('dcc', 'scope=NETWORK&network=MENS').expect(200)).body;
+      const church = (await report('dcc', 'scope=WHOLE_CHURCH').expect(200)).body;
+
+      for (const body of [underNestor, underMark, underManuel, underRaymond, mens, church]) {
+        expectReconciles(body);
+      }
+
+      // Lito once, under Nestor, with both duplicates' Sundays: two.
+      expect(underNestor.unique_people).toBe(1);
+      expect(underNestor.classification.second_timer).toBe(1);
+      // Not under Mark, whose duplicate was the older.
+      expect(underMark.unique_people).toBe(0);
+      expect(underManuel.unique_people).toBe(0);
+      // Once at every total above.
+      expect(underRaymond.unique_people).toBe(1);
+      expect(mens.unique_people).toBe(1);
+      expect(church.unique_people).toBe(1);
+    });
+
+    it('places the meetings the newer duplicate led under its leader on the Cell report', async () => {
+      const underNestor = (await report('cells', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      const underMark = (await report('cells', `scope=LEADER&leader_id=${mark.id}`).expect(200))
+        .body;
+      const underRaymond = (
+        await report('cells', `scope=LEADER&leader_id=${raymond.id}`).expect(200)
+      ).body;
+      const church = (await report('cells', 'scope=WHOLE_CHURCH').expect(200)).body;
+
+      for (const body of [underNestor, underMark, underRaymond, church]) {
+        expectReconciles(body);
+      }
+
+      // Tomas came to a meeting the newer duplicate led, which is Lito's, under Nestor.
+      expect(underNestor.unique_people).toBe(1);
+      expect(underMark.unique_people).toBe(0);
+      expect(underRaymond.unique_people).toBe(1);
+      expect(church.unique_people).toBe(1);
+    });
+  });
+
+  describe('meetings a merged-away record led count where the kept record sits (point 16)', () => {
+    let rico: TestPerson;
+    let ricoAgain: TestPerson;
+
+    beforeEach(async () => {
+      // Rico's kept record is under Mark; his duplicate was under Nestor and led a Cell
+      // through June, handed to Nestor in July, so the merge is not refused for it.
+      rico = await createPerson(db, { firstName: 'Rico', lastName: 'Santos', network: 'MENS' });
+      await assignTo(db, rico.id, mark.id);
+      ricoAgain = await createPerson(db, {
+        firstName: 'Rico',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      await assignTo(db, ricoAgain.id, nestor.id);
+
+      const ricoCell = await createCell(db, { leader: ricoAgain, createdAt: EPOCH });
+      const tomas = await attendee('Tomas', nestor, ricoCell.id);
+      const held = await meeting(ricoCell.id, MEETINGS[0], ricoAgain.id);
+      await cellMark(held, tomas, true);
+      await handOver(ricoCell.id, nestor, AFTER_JUNE);
+    });
+
+    it("counts the meeting's attendees in the kept record's branch, adding up to Whole Church", async () => {
+      const before = (await report('cells', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      expect(before.unique_people).toBe(1);
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      const underMark = (await report('cells', `scope=LEADER&leader_id=${mark.id}`).expect(200))
+        .body;
+      const underManuel = (await report('cells', `scope=LEADER&leader_id=${manuel.id}`).expect(200))
+        .body;
+      const underNestor = (await report('cells', `scope=LEADER&leader_id=${nestor.id}`).expect(200))
+        .body;
+      const underRaymond = (
+        await report('cells', `scope=LEADER&leader_id=${raymond.id}`).expect(200)
+      ).body;
+      const church = (await report('cells', 'scope=WHOLE_CHURCH').expect(200)).body;
+
+      for (const body of [underMark, underManuel, underNestor, underRaymond, church]) {
+        expectReconciles(body);
+      }
+
+      // The meeting was the duplicate's, which is Rico's now, under Mark.
+      expect(underMark.unique_people).toBe(1);
+      expect(underManuel.unique_people).toBe(1);
+      expect(underNestor.unique_people).toBe(0);
+      // Raymond's two rows add up to his total, and his total to the church's.
+      expect(underManuel.unique_people + underNestor.unique_people).toBe(
+        underRaymond.unique_people,
+      );
+      expect(underRaymond.unique_people).toBe(church.unique_people);
+      expect(church.unique_people).toBe(1);
+    });
+
+    it("lists what the duplicate owed in the kept record's branch on Recording Status, not in Others", async () => {
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(
+        new Date(),
+      );
+      const status = () =>
+        request(server())
+          .get('/api/v1/reports/recording-status')
+          .query({
+            kind: 'MONTH',
+            start: JUNE,
+            period: reportRangeGuardMonth('MONTH', JUNE, today),
+          })
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200);
+      type Row = { leader: { id: string }; cell: { owed: number } };
+      const rowsOf = (body: { tables: { rows: Row[] }[] }) =>
+        body.tables.flatMap((table) => table.rows);
+      const rowOf = (body: { tables: { rows: Row[] }[] }, person: TestPerson) =>
+        rowsOf(body).find((row) => row.leader.id === person.id);
+
+      // Mark owes his Cell's June meetings and the duplicate owes its own: two leaders.
+      const before = (await status()).body;
+      expect(before.whole_church.cell.owed).toBe(2);
+      expect(rowOf(before, manuel)?.cell.owed).toBe(1);
+      expect(rowOf(before, nestor)?.cell.owed).toBe(1);
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      const after = (await status()).body;
+      // Rico is the leader who owed, in Manuel's branch; nothing is unplaced.
+      expect(rowOf(after, manuel)?.cell.owed).toBe(2);
+      expect(rowOf(after, nestor)?.cell.owed).toBe(0);
+      expect(after.others.cell.owed).toBe(0);
+      // What was owed is unchanged (point 19), and the rows add up to it.
+      expect(after.whole_church.cell.owed).toBe(2);
+      expect(
+        rowsOf(after).reduce((sum, row) => sum + row.cell.owed, 0) + after.others.cell.owed,
+      ).toBe(after.whole_church.cell.owed);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Point 17: the old page opens for whoever may open the record kept
+  // ---------------------------------------------------------------------------
+
+  describe("the absorbed record's page is authorized against the record kept (point 17)", () => {
+    let nestorAccount: TestAccount;
+
+    const page = (as: TestAccount, person: TestPerson) =>
+      request(server())
+        .get(`/api/v1/people/${person.id}`)
+        .set('Authorization', `Bearer ${as.accessToken}`);
+
+    beforeEach(async () => {
+      nestorAccount = await createAccount(app, db, { person: nestor, roles: ['LEADER'] });
+      // Manuel may move people, so a refused reassignment below is not the missing tick.
+      await db
+        .updateTable('accounts')
+        .set({ moves_people: true })
+        .where('id', '=', manuelAccount.id)
+        .execute();
+      await mergeInto(juan, juanAgain).expect(200);
+    });
+
+    it('opens for a Leader whose own subtree reaches the record kept', async () => {
+      // Manuel reaches Juan through Mark; the duplicate, under Nestor, was never his.
+      const response = await page(manuelAccount, juanAgain).expect(200);
+      expect(response.body.merged.into.id).toBe(juan.id);
+    });
+
+    it('refuses a Leader who does not reach the record kept, its former leader included', async () => {
+      // Nestor led the duplicate until the merge, and does not reach Juan.
+      const response = await page(nestorAccount, juanAgain).expect(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    it('admits no write to the absorbed record by the Leader its page opens for', async () => {
+      // Section 7 lends the kept record's scope to a read alone: a write resolves through the
+      // absorbed record's own ended position, so the Leader is out of scope for it.
+      const reassigned = await request(server())
+        .put(`/api/v1/people/${juanAgain.id}/pastoral-leader`)
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ pastoral_leader_id: mark.id });
+      expect(reassigned.status).toBe(403);
+      expect(reassigned.body.error.code).toBe('SCOPE_DENIED');
+      expect(await openRows('pastoral_assignments', juanAgain)).toEqual([]);
+
+      // Section 3: the page stays read only. The record kept is acknowledged, so the refusal
+      // is not the duplicate check's.
+      const edited = await request(server())
+        .patch(`/api/v1/people/${juanAgain.id}`)
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ mobile_number: '09170000009', acknowledged_duplicate_ids: [juan.id] });
+      expect(edited.status).toBe(403);
+      expect(edited.body.error.code).toBe('SCOPE_DENIED');
+      const row = await db
+        .selectFrom('persons')
+        .select('mobile_number')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(row.mobile_number).toBe('09170000002');
+    });
+
+    it('refuses even the Admin an edit of the absorbed record (point 17)', async () => {
+      const edited = await request(server())
+        .patch(`/api/v1/people/${juanAgain.id}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ mobile_number: '09170000009', acknowledged_duplicate_ids: [juan.id] });
+      expect(edited.status).toBe(409);
+      expect(edited.body.error.code).toBe('INVARIANT_VIOLATION');
+      const row = await db
+        .selectFrom('persons')
+        .select('mobile_number')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(row.mobile_number).toBe('09170000002');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 7. Point 20: unticking reaches every record of the person
+  // ---------------------------------------------------------------------------
+
+  describe('unticking a lesson or graduation reaches both records (point 20)', () => {
+    const lesson = async (person: TestPerson, number: number, at: string, by: TestPerson) =>
+      (
+        await db
+          .insertInto('suynl_lessons')
+          .values({
+            person_id: person.id,
+            lesson: number,
+            confirmed_by: by.id,
+            recorded_by: admin.id,
+            confirmed_at: new Date(at),
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+
+    const graduate = async (
+      person: TestPerson,
+      program: 'ENCOUNTER' | 'SOL_1',
+      on: string,
+      by: TestPerson,
+    ) =>
+      (
+        await db
+          .insertInto('training_graduations')
+          .values({
+            person_id: person.id,
+            program,
+            graduated_on: on,
+            confirmed_by: by.id,
+            recorded_by: admin.id,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+
+    const submit = (domain: 'suynl' | 'training', changes: Record<string, unknown>[]) =>
+      request(server())
+        .post(`/api/v1/${domain}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ changes });
+
+    const juanLessons = async () => {
+      const listed = (
+        await request(server())
+          .get('/api/v1/suynl/people?limit=200')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body.data as { person_id: string; lessons: { id: string; lesson: number }[] }[];
+      return listed.find((row) => row.person_id === juan.id)?.lessons ?? [];
+    };
+
+    const juanGraduations = async () => {
+      const listed = (
+        await request(server())
+          .get('/api/v1/training/people?limit=200')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body.data as {
+        person_id: string;
+        graduations: { id: string; program: string; graduated_on: string | null }[];
+      }[];
+      return listed.find((row) => row.person_id === juan.id)?.graduations ?? [];
+    };
+
+    const supersededOf = (table: 'suynl_lessons' | 'training_graduations', ids: string[]) =>
+      db.selectFrom(table).select(['id', 'superseded_at']).where('id', 'in', ids).execute();
+
+    const correctedTargets = async (
+      action: 'suynl_lesson.corrected' | 'training_graduation.corrected',
+    ) =>
+      (await db.selectFrom('audit_log').select('target_id').where('action', '=', action).execute())
+        .map((entry) => entry.target_id)
+        .sort();
+
+    it("withdraws a lesson shown from the duplicate, on the duplicate's row", async () => {
+      await lesson(juan, 1, '2026-05-10T10:00:00+08:00', mark);
+      const fromDuplicate = await lesson(juanAgain, 3, '2026-05-17T10:00:00+08:00', nestor);
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const shown = (await juanLessons()).find((row) => row.lesson === 3);
+      expect(shown?.id).toBe(fromDuplicate);
+
+      const response = await submit('suynl', [
+        { person_id: juan.id, lesson: 3, done: false, seen_id: shown?.id, reason: 'Not done.' },
+      ]).expect(201);
+      expect(response.body).toEqual({ created: 0, corrected: 1, unchanged: 0 });
+
+      expect((await juanLessons()).map((row) => row.lesson)).toEqual([1]);
+      const [row] = await supersededOf('suynl_lessons', [fromDuplicate]);
+      expect(row.superseded_at).not.toBeNull();
+    });
+
+    it('withdraws a lesson held on both records from both, one audit entry for each', async () => {
+      const kept = await lesson(juan, 2, '2026-05-10T10:00:00+08:00', mark);
+      const duplicate = await lesson(juanAgain, 2, '2026-04-12T10:00:00+08:00', nestor);
+      await mergeInto(juan, juanAgain).expect(200);
+
+      // The earlier row is the one shown, and the one the untick is made against.
+      const shown = (await juanLessons()).find((row) => row.lesson === 2);
+      expect(shown?.id).toBe(duplicate);
+
+      const response = await submit('suynl', [
+        { person_id: juan.id, lesson: 2, done: false, seen_id: shown?.id, reason: 'Not done.' },
+      ]).expect(201);
+      expect(response.body).toEqual({ created: 0, corrected: 1, unchanged: 0 });
+
+      expect(await juanLessons()).toEqual([]);
+      const rows = await supersededOf('suynl_lessons', [kept, duplicate]);
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.superseded_at).not.toBeNull();
+      }
+      // Each audited against the record it was on.
+      expect(await correctedTargets('suynl_lesson.corrected')).toEqual(
+        [juan.id, juanAgain.id].sort(),
+      );
+    });
+
+    it("withdraws a graduation shown from the duplicate, on the duplicate's row", async () => {
+      const fromDuplicate = await graduate(juanAgain, 'SOL_1', '2026-02-01', nestor);
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const shown = (await juanGraduations()).find((row) => row.program === 'SOL_1');
+      expect(shown?.id).toBe(fromDuplicate);
+
+      const response = await submit('training', [
+        {
+          person_id: juan.id,
+          program: 'SOL_1',
+          graduated: false,
+          seen_id: shown?.id,
+          reason: 'He did not finish.',
+        },
+      ]).expect(201);
+      expect(response.body).toEqual({ created: 0, corrected: 1, unchanged: 0 });
+
+      expect(await juanGraduations()).toEqual([]);
+      const [row] = await supersededOf('training_graduations', [fromDuplicate]);
+      expect(row.superseded_at).not.toBeNull();
+    });
+
+    it('changes the date of a graduation on both records, leaving one row on the record kept', async () => {
+      const kept = await graduate(juan, 'ENCOUNTER', '2026-03-01', mark);
+      const duplicate = await graduate(juanAgain, 'ENCOUNTER', '2026-02-01', nestor);
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const shown = (await juanGraduations()).find((row) => row.program === 'ENCOUNTER');
+      expect(shown?.id).toBe(duplicate);
+
+      const response = await submit('training', [
+        {
+          person_id: juan.id,
+          program: 'ENCOUNTER',
+          graduated: true,
+          graduated_on: '2026-02-08',
+          seen_id: shown?.id,
+          reason: 'The weekend after.',
+        },
+      ]).expect(201);
+      expect(response.body).toEqual({ created: 0, corrected: 1, unchanged: 0 });
+
+      const rows = await supersededOf('training_graduations', [kept, duplicate]);
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.superseded_at).not.toBeNull();
+      }
+      const current = await db
+        .selectFrom('training_graduations')
+        .select(['person_id', 'graduated_on'])
+        .where('program', '=', 'ENCOUNTER')
+        .where('superseded_at', 'is', null)
+        .execute();
+      expect(current).toEqual([{ person_id: juan.id, graduated_on: '2026-02-08' }]);
+
+      expect(await correctedTargets('training_graduation.corrected')).toEqual(
+        [juan.id, juanAgain.id].sort(),
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. The constraints, written directly (migration 0033)
   // ---------------------------------------------------------------------------
 
   describe('migration 0033, bypassing the application', () => {
@@ -957,8 +1469,12 @@ describe('Person Merge (section 3, decision 0408)', () => {
     it('refuses moving or undoing a merge once made', async () => {
       await setMerge(juanAgain.id, juan.id);
 
-      await expect(setMerge(juanAgain.id, pedro.id)).rejects.toThrow(/never undone or moved/);
-      await expect(setMerge(juanAgain.id, null)).rejects.toThrow(/never undone or moved/);
+      await expect(setMerge(juanAgain.id, pedro.id)).rejects.toThrow(
+        /never undone, moved or rewritten/,
+      );
+      await expect(setMerge(juanAgain.id, null)).rejects.toThrow(
+        /never undone, moved or rewritten/,
+      );
     });
 
     it('refuses merging into a record merged away, or merging away one that absorbed another', async () => {
@@ -983,6 +1499,38 @@ describe('Person Merge (section 3, decision 0408)', () => {
           .where('id', '=', juanAgain.id)
           .execute(),
       ).rejects.toThrow(/persons_merge_is_whole/);
+    });
+
+    it('refuses a Person created merged', async () => {
+      await expect(
+        db
+          .insertInto('persons')
+          .values({
+            id: randomUUID(),
+            first_name: 'Juan',
+            last_name: 'Reyes',
+            sex: 'MALE',
+            civil_status: 'SINGLE',
+            merged_into_id: juan.id,
+            merged_at: new Date(),
+            merge_reason: 'Written directly.',
+          })
+          .execute(),
+      ).rejects.toThrow(/never created merged/);
+    });
+
+    it('refuses rewriting when, by whom or why a merge was made', async () => {
+      await setMerge(juanAgain.id, juan.id);
+
+      for (const change of [
+        { merged_at: new Date('2026-01-01T00:00:00Z') },
+        { merged_by: admin.id },
+        { merge_reason: 'Rewritten directly.' },
+      ]) {
+        await expect(
+          db.updateTable('persons').set(change).where('id', '=', juanAgain.id).execute(),
+        ).rejects.toThrow(/never undone, moved or rewritten/);
+      }
     });
   });
 });
