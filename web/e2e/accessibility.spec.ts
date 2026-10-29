@@ -1068,6 +1068,20 @@ const SCANS = [
       await expect(page.getByRole('cell', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
+  ...(['/growth/conquest', '/reports/conquest'] as const).map((route) => ({
+    // Conquest's two old addresses forward to its own (decision 0407); scanned where they land.
+    name: `conquest, old address ${route}`,
+    route,
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockConquest(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page).toHaveURL(/\/conquest$/);
+      await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
+    },
+  })),
   {
     // The Family Tree tab (decision 0341), the reader's line open and one disciple's opened,
     // so the nested outline and both states of the disclosure button are checked.
@@ -1999,6 +2013,10 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  ...['/growth/conquest', '/reports/conquest'].map((route) => ({
+    name: `conquest, old address ${route}`,
+    why: 'Forwards to /conquest, measured as "growth conquest"; it renders nothing of its own.',
+  })),
   {
     name: 'number of people, old address',
     why:
@@ -2883,6 +2901,7 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
     'People',
     'Cells',
     'Growth',
+    'Conquest',
   ]);
   await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
     'href',
