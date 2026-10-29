@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   type LucideIcon,
   Sprout,
+  Trophy,
   Users,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -21,7 +22,7 @@ import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
@@ -88,6 +89,17 @@ const GROWTH: NavEntry = {
   label: 'Growth',
   icon: Sprout,
   matches: ['/growth'],
+};
+/**
+ * Conquest, an item of its own for holders of `conquest.view_subtree` at Whole Church, by
+ * default the Admin and the two Senior Pastors (decision 0407), after Growth, which keeps SUYNL
+ * and Training.
+ */
+const CONQUEST: NavEntry = {
+  href: '/conquest',
+  label: 'Conquest',
+  icon: Trophy,
+  matches: ['/conquest'],
 };
 /**
  * A Recording-only account's own Cells (decision 0323): its members, this month's meetings
@@ -160,7 +172,7 @@ export const PAGE_WIDTH = {
 /**
  * The frame every signed-in screen sits in.
  *
- * **Five items, and the split is between recording and reading** (SKILL.md section
+ * **Up to six items, and the split is between recording and reading** (SKILL.md section
  * 19, ruling of 2026-09-14; Network became a tab of People by decision 0288). What a person fills in is under `Record`; what they
  * read is under `Reports`. Each module keeps its own name; the label is what
  * reaches it.
@@ -170,9 +182,9 @@ export const PAGE_WIDTH = {
  * scope and period that make it readable.
  *
  * **A Recording-only account has four items** (decisions 0323 and 0371): `Record · People ·
- * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have two**, `Record · Reports` (decisions 0326 and 0377), their twelve months being a view of Reports.
- * Every other account has the five, a Full view leader's fifth reading `SUYNL` (decision 0383). Where a person lands still follows the reach
- * of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
+ * Cells · SUYNL`, its `Cells` opening its own Cells on the page titled *My Cell*. **The two Senior Pastors have three**, `Record · Reports · Conquest` (decisions 0326, 0377 and 0407), their twelve months being a view of Reports.
+ * A Full view leader has five, the fifth reading `SUYNL` (decision 0383), and the Admin six, `Conquest` the sixth (decision 0407). Where a person lands follows the screens the server
+ * names (decision 0372), and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
  * 2026-09-15). Below `lg` (1024px) — phones and tablets — the items are a tab bar
@@ -194,13 +206,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   // account's set as a placeholder flashed five items on a reload before a Recording-only
   // leader's four replaced them (owner, 2026-10-11). An unanswered request still shows
   // today's items rather than none.
+  //
+  // **`Conquest` follows its capability rather than the screens** (decision 0407, by owner
+  // ruling): it is the last item of any account holding `conquest.view_subtree` at Whole Church,
+  // which today is the Admin and the two Senior Pastors.
+  const conquest =
+    me.data !== undefined && holdsWholeChurch(me.data, 'conquest.view_subtree') ? [CONQUEST] : [];
   const links = me.isPending
     ? []
-    : me.data?.screens === 'RECORDING'
-      ? [RECORD, PEOPLE, MY_CELL, SUYNL]
-      : me.data?.screens === 'SENIOR_PASTOR'
-        ? [RECORD, REPORTS]
-        : [RECORD, REPORTS, PEOPLE, CELLS, isBranchReader(me.data) ? SUYNL : GROWTH];
+    : [
+        ...(me.data?.screens === 'RECORDING'
+          ? [RECORD, PEOPLE, MY_CELL, SUYNL]
+          : me.data?.screens === 'SENIOR_PASTOR'
+            ? [RECORD, REPORTS]
+            : isBranchReader(me.data)
+              ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
+              : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
+        ...conquest,
+      ];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //

@@ -10,11 +10,11 @@ import { mockAdministrator, mockScreens, mockSignedIn } from './mock-api';
  */
 for (const [who, arrange, screens, start] of [
   ['a Full view leader', async () => undefined, 'Record, Reports, People, Cells and SUYNL', '/dashboard'],
-  ['an Admin', mockAdministrator, 'Record, Reports, People, Cells and Growth', '/dashboard'],
+  ['an Admin', mockAdministrator, 'Record, Reports, People, Cells, Growth and Conquest', '/dashboard'],
   [
     'a Senior Pastor',
     async (page: import('@playwright/test').Page) => mockScreens(page, 'SENIOR_PASTOR'),
-    'Record and Reports',
+    'Record, Reports and Conquest',
     '/reports/dcc',
   ],
   [

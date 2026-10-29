@@ -295,7 +295,7 @@ test.describe('the Encounter seasons page', () => {
     await expect(page.getByRole('heading', { name: 'Growth', level: 1 })).toBeVisible();
     await expect(page.getByText('The Encounter God Weekends, set by an administrator.')).toBeVisible();
     const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
+    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training']);
     await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Training');
     // Nothing under Reports changes a record (decision 0296), so the editor is not a report.
     await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);
@@ -503,11 +503,12 @@ test('every target an administrator is offered is at least 24px', async ({ page 
     }
   };
 
-  // The three Growth tabs, Back to Training, three Edit buttons and Add: eight.
-  await measure('the list', 8);
+  // The two Growth tabs (Conquest is an item of its own, decision 0407), Back to Training,
+  // three Edit buttons and Add: seven.
+  await measure('the list', 7);
 
   // Add opens the form: the four date inputs, Save and Cancel in place of Add.
   await page.getByRole('button', { name: 'Add an Encounter season' }).click();
   await expect(page.getByRole('group', { name: 'Women', exact: true })).toBeVisible();
-  await measure('the form', 13);
+  await measure('the form', 12);
 });

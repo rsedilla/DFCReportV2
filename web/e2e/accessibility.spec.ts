@@ -1068,6 +1068,20 @@ const SCANS = [
       await expect(page.getByRole('cell', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
+  ...(['/growth/conquest', '/reports/conquest'] as const).map((route) => ({
+    // Conquest's two old addresses forward to its own (decision 0407); scanned where they land.
+    name: `conquest, old address ${route}`,
+    route,
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockConquest(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page).toHaveURL(/\/conquest$/);
+      await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
+    },
+  })),
   {
     // The Family Tree tab (decision 0341), the reader's line open and one disciple's opened,
     // so the nested outline and both states of the disclosure button are checked.
@@ -1397,21 +1411,6 @@ const SCANS = [
     },
   },
   {
-    // Conquest under Reports: four read-only cards.
-    name: 'conquest report',
-    route: '/reports/conquest',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
-      await mockWholeChurchReader(page);
-      await mockConquest(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^The four goals for the 3 people/)).toBeVisible();
-      await expect(page.getByRole('link', { name: 'See each person in Growth' })).toBeVisible();
-    },
-  },
-  {
     // A year of the DCC report: My 12 over the year (decision 0294), then one row per month
     // that has begun, and a year row adding up Owed and Filed only (decision 0257).
     name: 'dcc figures report, year',
@@ -1603,7 +1602,7 @@ const SCANS = [
     // Conquest (section 27), read-only: four cards, and each goal as its month with today's
     // count beneath it, or how far it is, or "Not yet". No box and no save bar.
     name: 'growth conquest',
-    route: '/growth/conquest',
+    route: '/conquest',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
@@ -1944,14 +1943,15 @@ const TARGET_SWEEP = [
     church: true,
   },
   {
-    // The one tab (decision 0360), four cards, the search, Search and the filter, a name link per person
-    // in the table and in the list below `lg` (six, the hidden rendering counted as on
-    // "cell attendance report"), and the two pager buttons. No box: every goal is derived.
+    // Four cards, the search, Search and the filter, a name link per person in the table and
+    // in the list below `lg` (six, the hidden rendering counted as on "cell attendance
+    // report"), and the two pager buttons. No tab: Conquest is an item of its own (decision
+    // 0407). No box: every goal is derived.
     name: 'growth conquest',
-    route: '/growth/conquest',
+    route: '/conquest',
     settleRole: 'link' as const,
     settle: 'Dalisay Soriano',
-    minimum: 16,
+    minimum: 15,
     church: true,
   },
   // Training and Conquest are a whole-church reader's (decision 0360; a Full view leader is
@@ -1989,14 +1989,6 @@ const TARGET_SWEEP = [
     minimum: 4,
     church: true,
   },
-  {
-    name: 'conquest report',
-    route: '/reports/conquest',
-    settleRole: 'link' as const,
-    settle: 'See each person in Growth',
-    minimum: 4,
-    church: true,
-  },
   // New Cell is offered to a Whole Church holder of `cell.approve_leadership` alone (decision
   // 0379), so it is measured as one, after the whole-church reader's routes.
   { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10, creator: true },
@@ -2021,6 +2013,10 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  ...['/growth/conquest', '/reports/conquest'].map((route) => ({
+    name: `conquest, old address ${route}`,
+    why: 'Forwards to /conquest, measured as "growth conquest"; it renders nothing of its own.',
+  })),
   {
     name: 'number of people, old address',
     why:
@@ -2820,7 +2816,8 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
 });
 
 /**
- * At 320px the phone's tab bar holds all five items, each label whole and each a full target.
+ * At 320px the phone's tab bar holds all its items, each label whole and each a full target:
+ * six for a whole-church reader since Conquest became an item of its own (decision 0407).
  *
  * **The sideways-scroll sweep cannot see this.** The bar is `position: fixed`, and a fixed
  * element's overflow does not reach the document's scroll width, so a label pushed past its
@@ -2829,11 +2826,11 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
  * Growth made it six items in 320px, and decision 0288 five; this pins it on both engines,
  * for a whole-church reader's `Growth` and a Full view leader's `SUYNL` (decision 0383).
  */
-for (const [reader, last] of [
-  ['a whole-church reader', 'Growth'],
-  ['a Full view leader', 'SUYNL'],
+for (const [reader, last, items] of [
+  ['a whole-church reader', 'Growth', ['Record', 'Reports', 'People', 'Cells', 'Growth', 'Conquest']],
+  ['a Full view leader', 'SUYNL', ['Record', 'Reports', 'People', 'Cells', 'SUYNL']],
 ] as const) {
-test(`at 320px the tab bar fits all five items, none of them clipped, for ${reader}`, {
+test(`at 320px the tab bar fits all ${items.length} items, none of them clipped, for ${reader}`, {
   tag: [CROSS_BROWSER_TAG],
 }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
@@ -2846,13 +2843,7 @@ test(`at 320px the tab bar fits all five items, none of them clipped, for ${read
   await page.evaluate(() => document.fonts.ready);
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
-  await expect(navigation.getByRole('link')).toHaveText([
-    'Record',
-    'Reports',
-    'People',
-    'Cells',
-    last,
-  ]);
+  await expect(navigation.getByRole('link')).toHaveText([...items]);
 
   const tabs = await navigation.getByRole('link').evaluateAll((links) =>
     links.map((link) => {
@@ -2910,6 +2901,7 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
     'People',
     'Cells',
     'Growth',
+    'Conquest',
   ]);
   await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
     'href',

@@ -4,7 +4,7 @@ import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import { CONQUEST_ALL, CONQUEST_NONE, CONQUEST_PARTWAY, mockConquest } from './mock-growth';
 
 /**
- * The Conquest tab of Growth, read-only (SKILL.md section 27; decisions 0283 to 0286, and
+ * The Conquest page, an item of the sidebar of its own (decision 0407), read-only (SKILL.md section 27; decisions 0283 to 0286, and
  * the owner's choices of 2026-09-24).
  *
  * `accessibility.spec.ts` scans the screen; these cases pin what it says. A reached goal
@@ -22,7 +22,7 @@ function lastList(lists: URLSearchParams[]): URLSearchParams {
 }
 
 // A whole-church reader by default: a Full view leader is shown the note (decisions 0360 and 0379).
-async function openConquest(page: Page, address = '/growth/conquest', church = true) {
+async function openConquest(page: Page, address = '/conquest', church = true) {
   await mockSignedIn(page);
   if (church) {
     await mockWholeChurchReader(page);
@@ -50,25 +50,39 @@ function cellsOf(page: Page, name: string) {
   };
 }
 
-test.describe('the Conquest tab', () => {
-  // A whole-church reader, as the Admin is: a Full view leader's tab is hidden (decision 0360).
-  test('is a Growth tab, marked as the current page', async ({ page }) => {
-    await openConquest(page, '/growth/conquest', true);
+test.describe('the Conquest page', () => {
+  // A whole-church reader, as the Admin is: a Full view leader's page is hidden (decision 0360).
+  test('is an item of the sidebar of its own, after Growth and current there (decision 0407)', async ({
+    page,
+  }) => {
+    await openConquest(page, '/conquest', true);
 
-    const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training', 'Conquest']);
-    await expect(tabs.getByRole('link', { name: 'Conquest' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    await expect(tabs.getByRole('link', { name: 'SUYNL' })).not.toHaveAttribute('aria-current');
-    await expect(tabs.getByRole('link', { name: 'Training' })).not.toHaveAttribute('aria-current');
+    await expect(page.getByRole('heading', { name: 'Conquest', level: 1 })).toBeVisible();
+    // Not a Growth tab and not a link above one.
+    await expect(page.getByRole('navigation', { name: 'Growth' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Conquest goals/ })).toHaveCount(0);
 
-    const current = page
-      .getByRole('navigation', { name: 'Main' })
-      .locator('a[aria-current="page"]');
+    const main = page.getByRole('navigation', { name: 'Main' });
+    const current = main.locator('a[aria-current="page"]');
     await expect(current).toHaveCount(1);
-    await expect(current).toHaveText('Growth');
+    await expect(current).toHaveText('Conquest');
+    await expect(main.getByRole('link', { name: 'Conquest' })).toHaveAttribute('href', '/conquest');
+
+    // Growth keeps SUYNL and Training, with no way to Conquest beside them.
+    await main.getByRole('link', { name: 'Growth' }).click();
+    await expect(page).toHaveURL(/\/growth\/suynl$/);
+    await expect(
+      page.getByRole('navigation', { name: 'Growth' }).getByRole('link'),
+    ).toHaveText(['SUYNL', 'Training']);
+    await expect(page.getByRole('link', { name: /Conquest goals/ })).toHaveCount(0);
+  });
+
+  test('forwards its old addresses, keeping the query (decision 0407)', async ({ page }) => {
+    await openConquest(page, '/growth/conquest?goal=OPEN_A_CELL', true);
+    // Anchored at the host: unanchored, the old address itself matches before it forwards.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/conquest\?goal=OPEN_A_CELL$/);
+    await page.goto('/reports/conquest?goal=WIN_3');
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/conquest\?goal=WIN_3$/);
   });
 
   test('shows the four counts, and a card narrows the list and the address', async ({ page }) => {
@@ -100,7 +114,7 @@ test.describe('the Conquest tab', () => {
   });
 
   test('reads a card from the address, and ignores a goal it does not know', async ({ page }) => {
-    const traffic = await openConquest(page, '/growth/conquest?goal=OPEN_A_CELL');
+    const traffic = await openConquest(page, '/conquest?goal=OPEN_A_CELL');
 
     await expect(page.getByRole('button', { name: /^Open a cell/ })).toHaveAttribute(
       'aria-pressed',
@@ -108,7 +122,7 @@ test.describe('the Conquest tab', () => {
     );
     expect(lastList(traffic.lists).get('goal')).toBe('OPEN_A_CELL');
 
-    await page.goto('/growth/conquest?goal=WIN_12');
+    await page.goto('/conquest?goal=WIN_12');
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
     await expect(page.locator('button[aria-pressed="true"]')).toHaveCount(0);
     expect(lastList(traffic.lists).has('goal')).toBe(false);

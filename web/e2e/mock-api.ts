@@ -82,21 +82,35 @@ export async function mockSignedIn(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json(ME)));
 }
 
+/** `conquest.view_subtree` at Whole Church, which the Admin and Senior Pastor roles hold. */
+const CONQUEST_WHOLE_CHURCH = {
+  capability: 'conquest.view_subtree',
+  scope_type: 'WHOLE_CHURCH',
+  scope_network: null,
+  read_only: false,
+  source: 'ROLE',
+};
+
 /**
  * The same account, reading reports across the whole church.
  *
  * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, because
  * Playwright runs the most recently registered matching route first. The shared grant
  * list reads reports over one Network, so without this the arrangement decision 0245
- * gives a whole-church reader is reachable by no test at all. Only the reporting
- * grant is widened, so a case using it differs from the rest in that one respect.
+ * gives a whole-church reader is reachable by no test at all. The reporting grant is widened,
+ * and Conquest is held at Whole Church as the Admin holds it (decision 0407), so a case using it
+ * stands for the Admin's screens; its role is still the shared Leader's.
  */
 export async function mockWholeChurchReader(page: Page): Promise<void> {
-  const capabilities = CAPABILITIES.map((grant) =>
-    grant.capability === 'reports.view_subtree'
-      ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
-      : grant,
-  );
+  const capabilities = [
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree'
+        ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
+        : grant,
+    ),
+    // As the Admin holds it, which draws the Conquest item (decision 0407).
+    CONQUEST_WHOLE_CHURCH,
+  ];
 
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
@@ -151,6 +165,8 @@ export async function mockAdministrator(page: Page): Promise<void> {
     wholeChurch('suynl.view_subtree'),
     // A title is the Admin's alone to give (decision 0374).
     wholeChurch('people.set_title'),
+    // Conquest, which draws its sidebar item (decision 0407).
+    wholeChurch('conquest.view_subtree'),
   ];
 
   await page.route('**/api/v1/auth/me', (route) =>
@@ -176,6 +192,8 @@ export async function mockCellCreator(page: Page): Promise<void> {
       grant.capability === 'reports.view_subtree' ? wholeChurch(grant.capability) : grant,
     ),
     wholeChurch('cell.approve_leadership'),
+    // As the Admin role holds it, so the sidebar is the Admin's (decision 0407).
+    wholeChurch('conquest.view_subtree'),
   ];
 
   await page.route('**/api/v1/auth/me', (route) =>
@@ -225,6 +243,8 @@ export async function mockScreens(
               ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null, source: 'ROLE' }
               : grant,
           )),
+    // The Senior Pastor role holds Conquest at Whole Church (decision 0407).
+    ...(screens === 'SENIOR_PASTOR' ? [CONQUEST_WHOLE_CHURCH] : []),
     ...extra,
   ];
 
@@ -251,12 +271,20 @@ export const SIGNED_IN_PERSON_ID = ME.person_id;
  * below do. The shared grant list holds neither `people.manage_pastoral_assignment` nor
  * `dcc.correct_subtree`, so the controls those capabilities offer are reachable only here.
  * `wholeChurch` widens the reporting grant as `mockWholeChurchReader` does, for a case about
- * what a Full view leader is not shown (decision 0360).
+ * what a Full view leader is not shown (decision 0360); it adds no Conquest, which `conquest`
+ * does (decision 0407).
  */
 export async function mockGrants(
   page: Page,
   extra: readonly string[],
-  { wholeChurch = false }: { wholeChurch?: boolean } = {},
+  {
+    wholeChurch = false,
+    conquest = false,
+  }: {
+    wholeChurch?: boolean;
+    /** Also `conquest.view_subtree` at Whole Church, as the Admin holds it (decision 0407). */
+    conquest?: boolean;
+  } = {},
 ): Promise<void> {
   const capabilities = [
     ...CAPABILITIES.map((grant) =>
@@ -271,6 +299,7 @@ export async function mockGrants(
       read_only: false,
       source: 'ROLE',
     })),
+    ...(conquest ? [CONQUEST_WHOLE_CHURCH] : []),
   ];
 
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));

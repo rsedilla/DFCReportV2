@@ -448,13 +448,13 @@
     },
     {
       "route": "GET /api/v1/conquest/counts",
-      "reason": "The Conquest tab’s four count cards (section 27).",
-      "screen": "web/app/growth/conquest/page.tsx"
+      "reason": "Conquest’s four count cards (section 27, decision 0407).",
+      "screen": "web/app/conquest/page.tsx"
     },
     {
       "route": "GET /api/v1/conquest/people",
-      "reason": "The Conquest tab’s list (section 27).",
-      "screen": "web/app/growth/conquest/page.tsx"
+      "reason": "Conquest’s list (section 27, decision 0407).",
+      "screen": "web/app/conquest/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/counts",

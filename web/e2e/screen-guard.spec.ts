@@ -72,6 +72,16 @@ const TABLE: readonly [Account, string, boolean][] = [
   ['ADMIN', '/reports/suynl', true],
   ['ADMIN', '/trends', false],
   ['ADMIN', '/network', false],
+  // Conquest follows `conquest.view_subtree` at Whole Church, and so do its two old addresses,
+  // which forward to it (decision 0407).
+  ['SENIOR_PASTOR', '/conquest', true],
+  ['SENIOR_PASTOR', '/growth/conquest', true],
+  ['SENIOR_PASTOR', '/reports/conquest', true],
+  ['ADMIN', '/conquest', true],
+  ['ADMIN', '/growth/conquest', true],
+  ['FULL', '/conquest', false],
+  ['FULL', '/growth/conquest', false],
+  ['RECORDING', '/conquest', false],
 ];
 
 for (const [account, address, opens] of TABLE) {
