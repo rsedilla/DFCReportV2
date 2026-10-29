@@ -1,4 +1,5 @@
 import {
+  APPLICATION_RULES,
   findCandidates,
   normalizeName,
   type Candidate,
@@ -205,6 +206,137 @@ describe('spellings that hid one person from the check (decision 0401)', () => {
     expect(
       reasonsFor(subject({ firstName: 'Ana Marie', lastName: 'Santos', ...none }), ana),
     ).toEqual([]);
+  });
+});
+
+describe('a similar name, read from the names alone (decision 0405)', () => {
+  const none = { birthDate: null, mobileNumberNormalized: null };
+  const john: Candidate = { ...BASE, firstName: 'John', lastName: 'Santos' };
+  const reasonsFor = (s: Subject, candidate: Candidate, rules = APPLICATION_RULES) =>
+    findCandidates(s, [candidate], undefined, rules).map((match) => [match.tier, match.reasons[0]]);
+
+  it('is asked for by the application, and not by default', () => {
+    expect(APPLICATION_RULES.similarNames).toBe(true);
+    const jon = subject({ firstName: 'Jon', lastName: 'Santos', ...none });
+    expect(reasonsFor(jon, john)).toEqual([
+      [2, 'last name equal, first name within a small edit distance'],
+    ]);
+    expect(reasonsFor(jon, john, {})).toEqual([]);
+  });
+
+  it('reads a known nickname with the last names equal', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Manny', lastName: 'Santos', ...none }), {
+        ...john,
+        firstName: 'Manuel',
+      }),
+    ).toEqual([[2, 'last name equal, first name a known nickname variant']]);
+  });
+
+  it('gives the same answer whatever birthday or mobile number is typed', () => {
+    const jon = (details: Partial<Subject>) =>
+      subject({ firstName: 'Jon', lastName: 'Santos', birthDate: null, ...details });
+    const answer = reasonsFor(jon({}), { ...john, birthDate: '1985-06-15' });
+    expect(answer).toEqual([[2, 'last name equal, first name within a small edit distance']]);
+    expect(
+      reasonsFor(jon({ birthDate: '1970-01-01' }), { ...john, birthDate: '1985-06-15' }),
+    ).toEqual(answer);
+    expect(
+      reasonsFor(jon({ mobileNumberNormalized: '09171234567' }), {
+        ...john,
+        birthDate: '1985-06-15',
+      }),
+    ).toEqual(answer);
+  });
+
+  it('is never a match on the last name alone', () => {
+    // Different first names, and two short ones a letter apart.
+    expect(reasonsFor(subject({ firstName: 'Pedro', lastName: 'Santos', ...none }), john)).toEqual(
+      [],
+    );
+    expect(
+      reasonsFor(subject({ firstName: 'Bo', lastName: 'Li', ...none }), {
+        ...john,
+        firstName: 'Jo',
+        lastName: 'Li',
+      }),
+    ).toEqual([]);
+  });
+
+  it('reads a last name a letter away where the first names are equal', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'John', lastName: 'Santoz', ...none }), {
+        ...john,
+        ...none,
+      }),
+    ).toEqual([[2, 'first name equal, last name within a small edit distance']]);
+  });
+
+  it('never lets a long shared surname absorb two different first names', () => {
+    // Each was a match while the two names were compared run together.
+    const pairs: [string, string, string, string][] = [
+      ['Bo', 'Santos', 'Jo', 'Santos'],
+      ['Ian', 'Delos Santos', 'Jun', 'Delos Santos'],
+      ['Ben', 'Delos Santos', 'Jon', 'Delos Santos'],
+      ['Jo', 'Dela Cruz-Villanueva', 'Al', 'Dela Cruz-Villanueva'],
+      ['Mariafernanda', 'Go', 'Mariafernanda', 'Yu'],
+    ];
+    for (const [firstName, lastName, cFirst, cLast] of pairs) {
+      expect(
+        reasonsFor(subject({ firstName, lastName, ...none }), {
+          ...john,
+          firstName: cFirst,
+          lastName: cLast,
+          ...none,
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  it('reads no letter away in a name of one or two letters', () => {
+    // The last-name branch's own guard: Go and Yo are one letter apart.
+    expect(
+      reasonsFor(subject({ firstName: 'Maria', lastName: 'Go', ...none }), {
+        ...john,
+        firstName: 'Maria',
+        lastName: 'Yo',
+        ...none,
+      }),
+    ).toEqual([]);
+  });
+
+  it('needs one name equal: a close first name with another last name is no match', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Jon', lastName: 'Reyes', ...none }), { ...john, ...none }),
+    ).toEqual([]);
+  });
+
+  it('is no match where the equal name compares as empty', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Jon', lastName: '-', ...none }), {
+        ...john,
+        lastName: "'",
+        ...none,
+      }),
+    ).toEqual([]);
+    expect(
+      reasonsFor(subject({ firstName: 'Jr', lastName: 'Santos', ...none }), {
+        ...john,
+        firstName: 'Sr',
+        lastName: 'Santoz',
+        ...none,
+      }),
+    ).toEqual([]);
+  });
+
+  it('is never Tier 1', () => {
+    const [match] = findCandidates(
+      subject({ firstName: 'Jon', lastName: 'Santos', ...none }),
+      [{ ...john, ...none }],
+      undefined,
+      APPLICATION_RULES,
+    );
+    expect(match.tier).toBe(2);
   });
 });
 

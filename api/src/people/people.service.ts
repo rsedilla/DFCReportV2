@@ -218,13 +218,15 @@ export class PeopleService {
       // the actor is already allowed to know.
       if (gated) {
         throw new DuplicateAcknowledgementRequiredError(
-          await this.duplicates.visibleDuplicatesFor(
-            subject,
-            visible,
-            (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
-            APPLICATION_RULES,
-            trx,
-          ),
+          (
+            await this.duplicates.visibleDuplicatesFor(
+              subject,
+              visible,
+              (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
+              APPLICATION_RULES,
+              trx,
+            )
+          ).map((row) => row.body),
         );
       }
 
@@ -582,12 +584,14 @@ export class PeopleService {
 
     if (gated) {
       throw new DuplicateAcknowledgementRequiredError(
-        await this.duplicates.visibleDuplicatesFor(
-          subject,
-          canSeeReasons,
-          (match) => match.tier === 1 && owed(match.candidateId),
-          APPLICATION_RULES,
-        ),
+        (
+          await this.duplicates.visibleDuplicatesFor(
+            subject,
+            canSeeReasons,
+            (match) => match.tier === 1 && owed(match.candidateId),
+            APPLICATION_RULES,
+          )
+        ).map((row) => row.body),
       );
     }
 

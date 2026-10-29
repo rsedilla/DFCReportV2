@@ -891,9 +891,9 @@ export async function mockLifecycleAdministrator(page: Page): Promise<void> {
  * The pre-flight lookup with something to show — a Tier 2 candidate the viewer
  * pastors, and one whose details section 8 withholds.
  *
- * The withheld one carries `possible_match` and no tier, which is what the API
- * sends. A fixture that omitted it would let the client's inference-from-shape
- * pass unnoticed, which is the drift this file claims not to permit.
+ * The withheld one carries `possible_match` and nothing that names them, which is what
+ * the API sends (decision 0405). A fixture that omitted the flag would let the client's
+ * inference-from-shape pass unnoticed, which is the drift this file claims not to permit.
  */
 export async function mockPossibleMatches(page: Page): Promise<void> {
   await page.route('**/api/v1/people/duplicate-candidates*', (route) =>
@@ -908,20 +908,14 @@ export async function mockPossibleMatches(page: Page): Promise<void> {
             tier: 2,
             reasons: ['Same first and last name'],
           },
+          { possible_match: true },
           {
-            id: PERSON_WITHHELD.id,
-            member_id: PERSON_WITHHELD.member_id,
-            full_name: PERSON_WITHHELD.full_name,
-            sex: PERSON_WITHHELD.sex,
-            possible_match: true,
-          },
-          {
-            // **`possible_match` *with* a tier**, which the API does not send —
-            // and that is the point. Both other fixtures carry the flag and no
-            // tier, so `isWithheld` answers the same whether it reads the flag
-            // or falls back to the missing tier, and the fix for reading the
-            // flag is pinned by nothing. This one separates them: it must be
-            // treated as withheld, which only the flag can decide.
+            // **`possible_match` *with* a tier and a name**, which the API does not
+            // send — and that is the point. The other withheld fixture carries the flag
+            // and no tier, so `isWithheld` answers the same whether it reads the flag
+            // or falls back to the missing tier, and the fix for reading the flag is
+            // pinned by nothing. This one separates them: it must be treated as
+            // withheld, which only the flag can decide, and its name never shown.
             id: '22222222-3333-4444-8555-666666666666',
             member_id: 'M-000207',
             full_name: 'Zenaida Cruz Ocampo',
@@ -936,18 +930,12 @@ export async function mockPossibleMatches(page: Page): Promise<void> {
 }
 
 /**
- * Two archived candidates (decision 0404): one whose details section 8 withholds, carrying
- * `possible_match` and `archived`, and one the viewer pastors, carrying a tier and `archived`.
+ * Two archived candidates (decision 0404): one outside the viewer's branch, carrying only
+ * `possible_match` and `archived` (decision 0405), and one the viewer pastors, carrying a
+ * tier and `archived`.
  */
 export const ARCHIVED_MATCHES = [
-  {
-    id: '33333333-4444-4555-8666-777777777777',
-    member_id: 'M-000315',
-    full_name: 'Rosalinda Paz Ventura',
-    sex: 'FEMALE',
-    possible_match: true,
-    archived: true,
-  },
+  { possible_match: true, archived: true },
   {
     // Not the person a profile spec edits, so Edit details lists it too.
     id: '44444444-5555-4666-8777-888888888888',
@@ -996,13 +984,8 @@ export async function mockDuplicateRefusal(page: Page): Promise<void> {
                   reasons: ['Same first and last name', 'Same birthday'],
                 },
                 {
-                  id: PERSON_WITHHELD.id,
-                  member_id: PERSON_WITHHELD.member_id,
-                  full_name: PERSON_WITHHELD.full_name,
-                  sex: PERSON_WITHHELD.sex,
-                  // The API's own flag for a withheld candidate. Present here so
-                  // that a client inferring the same fact from a missing tier
-                  // does not pass the harness unnoticed.
+                  // The API never refuses on a withheld candidate (section 3), and the
+                  // screen lists only the ones it may show; this one is left out.
                   possible_match: true,
                 },
               ],

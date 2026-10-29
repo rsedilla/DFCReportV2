@@ -203,32 +203,37 @@ export async function editPerson(
 }
 
 /**
- * A duplicate candidate, as the API hands one back.
- *
- * **`tier` and `reasons` are absent for a candidate outside the viewer's scope,
- * and that is a security rule rather than an omission.** The 2026-08-22 and
- * 2026-08-23 rulings record three attempts at this: withholding the reasons left
- * the tier, which is derived from which rule fired and so leaks the same fact;
- * withholding the tier left membership of the list, which leaks it again. What a
- * client may say about such a candidate is that they are a possible match — which
- * is all section 3 needs the encoder to know, because the answer is to stop and
- * ask the leader who holds them.
+ * A duplicate candidate the reader may be shown in full: one inside their pastoral scope.
  */
-export interface DuplicateCandidate {
+export interface ShownCandidate {
   id: string;
   member_id: string;
   full_name: string;
   sex: Sex;
-  /**
-   * The API's own flag for a withheld candidate, and what `isWithheld` reads.
-   * Present only when section 8 withheld this candidate's details.
-   */
-  possible_match?: boolean;
   /** Present, and true, when the candidate is archived now (decision 0404). */
   archived?: boolean;
-  tier?: 1 | 2;
-  reasons?: string[];
+  tier: 1 | 2;
+  reasons: string[];
 }
+
+/**
+ * A duplicate candidate outside the reader's scope, as the API hands one back.
+ *
+ * **It names nobody, and that is a security rule rather than an omission.** The
+ * 2026-08-22 and 2026-08-23 rulings record three attempts at this: withholding the
+ * reasons left the tier, which is derived from which rule fired and so leaks the same
+ * fact; withholding the tier left membership of the list, which leaks it again. Since
+ * decision 0405 the name and Member ID go too. What a client may say is that somebody
+ * with a similar name is recorded in another branch, and whether they are archived.
+ */
+export interface WithheldCandidate {
+  /** The API's own flag for a withheld candidate, and what `isWithheld` reads. */
+  possible_match: true;
+  /** Present, and true, when the candidate is archived now (decision 0404). */
+  archived?: boolean;
+}
+
+export type DuplicateCandidate = ShownCandidate | WithheldCandidate;
 
 /**
  * True where section 8 withheld this candidate's tier and reasons.
@@ -246,8 +251,17 @@ export interface DuplicateCandidate {
  * visible one as withheld says less than it could. For a rule about what the
  * church may see, the second is the direction to fail in.
  */
-export function isWithheld(candidate: DuplicateCandidate): boolean {
-  return candidate.possible_match === true || candidate.tier === undefined;
+export function isWithheld(candidate: DuplicateCandidate): candidate is WithheldCandidate {
+  return (
+    ('possible_match' in candidate && candidate.possible_match === true) ||
+    !('tier' in candidate) ||
+    candidate.tier === undefined
+  );
+}
+
+/** The candidates the reader may be shown in full. */
+export function shownOnly(candidates: readonly DuplicateCandidate[]): ShownCandidate[] {
+  return candidates.filter((candidate): candidate is ShownCandidate => !isWithheld(candidate));
 }
 
 /**

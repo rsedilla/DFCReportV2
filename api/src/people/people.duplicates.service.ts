@@ -102,15 +102,16 @@ export class PeopleDuplicatesService {
      */
     only: (match: VisibleMatch) => boolean = () => true,
     /**
-     * Applied to the subject as given and never to the publishable run, whose
-     * subject has its birthday and mobile number removed rather than not given
-     * (decision 0399). So an out-of-scope candidate still never appears in a
-     * creation refusal, as `visibleCandidates` says.
+     * Applied to the subject as given. Of these only `similarNames` reaches the
+     * publishable run (decision 0405), which reads the names alone; never
+     * `namesStopWithoutDetails`, whose subject has its birthday and mobile number
+     * removed there rather than not given (decision 0399). So an out-of-scope
+     * candidate still never appears in a creation refusal, as `visibleCandidates` says.
      */
     rules: MatchingRules = {},
     /** An add reads inside its own transaction, after its lock (decision 0401). */
     executor: Db = this.db,
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<VisibleCandidate[]> {
     // **One read of the population, scored twice.** The publishable subject carries no
     // birthday and no mobile number, so its population is exactly the rows the names
     // reach. The read marks those rows itself, in the same SQL predicates, rather than
@@ -128,6 +129,10 @@ export class PeopleDuplicatesService {
         mobileNumberNormalized: null,
       },
       candidates.filter((candidate) => reachedByNames.has(candidate.id)),
+      undefined,
+      // A similar name in another branch is shown as well as an exact one (decision
+      // 0405). It reads the names alone, so membership out of scope still does.
+      { similarNames: rules.similarNames },
     );
 
     // **`only` is not applied here, and that is the fix rather than a
@@ -362,7 +367,7 @@ async function visibleCandidates(
   inScope: (personId: string) => Promise<boolean>,
   only: (match: VisibleMatch) => boolean,
   archived: ReadonlySet<string>,
-): Promise<Record<string, unknown>[]> {
+): Promise<VisibleCandidate[]> {
   const kept: { match: Match; withinScope: boolean }[] = [];
 
   for (const match of matches) {
@@ -409,9 +414,11 @@ async function visibleCandidates(
     .filter((entry) => !entry.withinScope)
     .sort((a, b) => compareOrderKeys(orderKeyOf(a.match), orderKeyOf(b.match)));
 
-  return [...inScopeFirst, ...withheld].map((entry) =>
-    describeCandidate(entry.match, entry.withinScope, archived.has(entry.match.candidate.id)),
-  );
+  return [...inScopeFirst, ...withheld].map((entry) => ({
+    personId: entry.match.candidate.id,
+    withheld: !entry.withinScope,
+    body: describeCandidate(entry.match, entry.withinScope, archived.has(entry.match.candidate.id)),
+  }));
 }
 
 /**
@@ -431,10 +438,8 @@ async function visibleCandidates(
  * so the order remains a function of nothing protected. The Member ID also
  * encodes nothing and is unique (section 3), which is what makes the key total.
  *
- * The name is `fullNameOf`, the same function `describeCandidate` composes the
- * returned `full_name` with, so the key cannot drift from the name the viewer is
- * actually shown — the argument for this ordering rests on their being the same
- * string.
+ * Since decision 0405 a withheld row returns neither, so the viewer sees only where an
+ * archived one sits among them; that position is still a function of nothing protected.
  */
 function orderKeyOf(match: Match): [string, string] {
   // `normalizeName`, which is the form section 3 defines for comparison:
@@ -473,6 +478,17 @@ function visibleForm(match: Match): VisibleMatch {
 }
 
 /**
+ * A candidate as a surface returns it, beside who it is. The identifier travels outside
+ * the body because a withheld body no longer carries one (decision 0405), and the audit
+ * entry decision 0304 requires still names the Persons shown.
+ */
+export interface VisibleCandidate {
+  personId: string;
+  withheld: boolean;
+  body: Record<string, unknown>;
+}
+
+/**
  * A candidate as the caller may see it.
  *
  * `inScope` is required rather than defaulting to true. A default that discloses
@@ -492,8 +508,11 @@ function visibleForm(match: Match): VisibleMatch {
  *
  * What an out-of-scope candidate carries instead is that they are a possible
  * match. That is what section 3 needs the encoder to know: somebody may already
- * be recorded, ask the leader who holds them. It is not what a caller can binary
- * search on.
+ * be recorded, ask the Admin. It is not what a caller can binary search on.
+ *
+ * Since decision 0405 it carries nothing that names them either: no name, no Member
+ * ID, no identifier. Somebody with a similar name is recorded in another branch, and
+ * the encoder asks the Admin.
  *
  * An archived candidate carries `archived: true`, in scope and out, so the encoder
  * asks for a restore rather than adding them again (decision 0404). It is the one
@@ -504,15 +523,22 @@ function describeCandidate(
   inScope: boolean,
   archived: boolean,
 ): Record<string, unknown> {
-  const identity = {
+  const flag = archived ? { archived: true } : {};
+
+  // **Outside the scope, nothing that names the person** (decision 0405): no name, no
+  // Member ID, no identifier, no sex. Only that somebody with a similar name is
+  // recorded in another branch, and whether they are archived.
+  if (!inScope) {
+    return { possible_match: true, ...flag };
+  }
+
+  return {
     id: match.candidate.id,
     member_id: match.candidate.memberId,
     full_name: fullNameOf(match.candidate),
     sex: match.candidate.sex,
-    ...(archived ? { archived: true } : {}),
+    ...flag,
+    tier: match.tier,
+    reasons: match.reasons,
   };
-
-  return inScope
-    ? { ...identity, tier: match.tier, reasons: match.reasons }
-    : { ...identity, possible_match: true };
 }

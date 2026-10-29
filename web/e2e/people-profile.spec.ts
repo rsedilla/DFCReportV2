@@ -380,7 +380,11 @@ test.describe('editing a person', () => {
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
     await expect(box).toBeVisible();
     await expect(box.getByText(/^Check before saving\./)).toBeVisible();
-    await expect(box.getByText(PERSON_WITHHELD.full_name)).toBeVisible();
+    await expect(
+      box.getByText(
+        'Someone with a similar name is already recorded in another branch. Ask the Admin before saving.',
+      ),
+    ).toBeVisible();
     await expect(box.getByText(PERSON_IN_SCOPE.full_name)).toHaveCount(0);
   });
 
@@ -398,12 +402,21 @@ test.describe('editing a person', () => {
     await expect(box.getByText('Archived', { exact: true })).toHaveCount(2);
     await expect(
       box.getByText('This person was archived. If this is them, ask the Admin to restore them.'),
-    ).toHaveCount(2);
-    const [withheld, inScope] = ARCHIVED_MATCHES;
-    const row = (name: string) => box.getByRole('listitem').filter({ hasText: name });
-    const link = (name: string) => row(name).getByRole('link', { name: 'Open this record' });
-    await expect(link(withheld.full_name)).toHaveCount(0);
-    await expect(link(inScope.full_name)).toHaveAttribute('href', `/people/${inScope.id}`);
+    ).toHaveCount(1);
+    await expect(
+      box.getByText(
+        'Someone with a similar name in another branch was archived. If this is them, ask the Admin to restore them.',
+      ),
+    ).toHaveCount(1);
+    const inScope = ARCHIVED_MATCHES[1] as { id: string; full_name: string };
+    // Only the match in the branch is linked (decision 0405).
+    await expect(box.getByRole('link', { name: 'Open this record' })).toHaveCount(1);
+    await expect(
+      box
+        .getByRole('listitem')
+        .filter({ hasText: inScope.full_name })
+        .getByRole('link', { name: 'Open this record' }),
+    ).toHaveAttribute('href', `/people/${inScope.id}`);
   });
 
   test('asks about a strong match before saving, then saves as different people', async ({

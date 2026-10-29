@@ -94,7 +94,7 @@ export function fullNameOf(candidate: Candidate): string {
  * missing and what it is over-reporting.
  */
 export interface MatchingThresholds {
-  /** Edit distance within which two first names are "a small edit distance" apart. */
+  /** Edit distance within which two names are "a small edit distance" apart. */
   firstNameEditDistance: number;
   /** Whole-name similarity, 0 to 1, at which a Tier 2 candidate surfaces. */
   wholeNameSimilarity: number;
@@ -342,10 +342,60 @@ function isDigitTransposition(a: string, b: string): boolean {
  */
 export interface MatchingRules {
   namesStopWithoutDetails?: boolean;
+  /**
+   * Decision 0405: a similar name is a Tier 2 candidate on the names alone. Asked for
+   * by the application's own paths and by the publishable run, so a similar name in
+   * another branch is shown as well as an exact one; not by the tree import.
+   */
+  similarNames?: boolean;
 }
 
 /** What the application's add, edit and pre-flight paths ask for. */
-export const APPLICATION_RULES: MatchingRules = { namesStopWithoutDetails: true };
+export const APPLICATION_RULES: MatchingRules = {
+  namesStopWithoutDetails: true,
+  similarNames: true,
+};
+
+/** The shortest name a one-letter difference may be read in (decision 0405). */
+const SIMILAR_NAME_MIN_LENGTH = 3;
+
+/** Whether two compared names are a small edit distance apart, neither being too short. */
+function closeName(a: string, b: string, thresholds: MatchingThresholds): boolean {
+  return (
+    Math.min(a.length, b.length) >= SIMILAR_NAME_MIN_LENGTH &&
+    editDistance(a, b) <= thresholds.firstNameEditDistance
+  );
+}
+
+/**
+ * Why two names are similar, or null (decision 0405). Reads the names alone, and **each
+ * name is compared on its own**: one of the two equal and the other a known nickname or a
+ * small edit distance away, so a letter added, dropped, changed or two swapped (`Jon`
+ * against `John`, `Santos` against `Santoz`). Never the two run together, which let a
+ * long shared surname absorb two different first names (`Ian` and `Jun Delos Santos`):
+ * a match on the last name alone, which section 3 forbids. A name of one or two letters is
+ * never a letter away from another.
+ */
+function similarName(
+  first: string,
+  cFirst: string,
+  last: string,
+  cLast: string,
+  nickname: boolean,
+  thresholds: MatchingThresholds,
+): string | null {
+  // The equal name must be a name: one that compares as empty (`Jr`, `-`) is no match.
+  if (last !== '' && last === cLast && nickname) {
+    return 'last name equal, first name a known nickname variant';
+  }
+  if (last !== '' && last === cLast && closeName(first, cFirst, thresholds)) {
+    return 'last name equal, first name within a small edit distance';
+  }
+  if (first !== '' && first === cFirst && closeName(last, cLast, thresholds)) {
+    return 'first name equal, last name within a small edit distance';
+  }
+  return null;
+}
 
 /**
  * Candidates for a subject, strongest first.
@@ -448,6 +498,13 @@ export function findCandidates(
         if (spelling !== null) {
           tier = 2;
           reasons.push(spelling);
+        } else if (rules.similarNames) {
+          // Decision 0405: a similar name, read from the names alone.
+          const similar = similarName(first, cFirst, last, cLast, nickname, thresholds);
+          if (similar !== null) {
+            tier = 2;
+            reasons.push(similar);
+          }
         }
       }
     }

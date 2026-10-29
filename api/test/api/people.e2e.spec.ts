@@ -771,6 +771,24 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  // Decision 0405: a match outside the branch names nobody in the response, so a case learns
+  // who was shown from the audit entry decision 0304 writes, in the order they were shown.
+  async function shownOutside(account: TestAccount): Promise<string[]> {
+    const entry = await db
+      .selectFrom('audit_log')
+      .select('after')
+      .where('action', '=', 'directory.matched')
+      .where('actor_id', '=', account.id)
+      .orderBy('occurred_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return (entry?.after as { shown?: string[] } | undefined)?.shown ?? [];
+  }
+
+  // What the response carries for each match outside the branch.
+  const withheldRows = (body: { data: Record<string, unknown>[] }) =>
+    body.data.filter((candidate) => candidate.possible_match === true);
+
   describe('the pre-flight duplicate check (SKILL.md section 3)', () => {
     it('surfaces Tier 2 candidates, which creation alone never shows', async () => {
       // Creation can only refuse on Tier 1, so without this endpoint every Tier 2
@@ -858,12 +876,8 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
       expect(response.status).toBe(200);
-      const found = (response.body.data as Record<string, unknown>[]).find(
-        (candidate) => candidate.id === juan.id,
-      );
-      expect(found).toMatchObject({ possible_match: true });
-      expect(found).not.toHaveProperty('tier');
-      expect(found).not.toHaveProperty('reasons');
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true }]);
     });
 
     it('surfaces an out-of-scope candidate whose names alone explain the match', async () => {
@@ -880,16 +894,11 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1985-06-15' })
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
-      const found = (response.body.data as Record<string, unknown>[]).find(
-        (candidate) => candidate.id === juan.id,
-      );
-
-      expect(found).toMatchObject({ possible_match: true });
-      expect(found).not.toHaveProperty('tier');
-      expect(found).not.toHaveProperty('reasons');
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true }]);
     });
 
-    it('withholds the match reasons for a candidate outside the actor scope', async () => {
+    it('names nobody outside the actor scope, and gives no reasons (decision 0405)', async () => {
       // A reason reading "same birthday" asserts that an out-of-scope person's
       // birthday equals the value just submitted, which section 8 forbids
       // disclosing. On a read endpoint that would be a silent oracle.
@@ -899,21 +908,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
       expect(response.status).toBe(200);
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
 
-      const outOfScope = (response.body.data as Record<string, unknown>[]).find(
-        (candidate) => candidate.id === juan.id,
-      );
-
-      expect(outOfScope).toBeDefined();
-      // Identified, and flagged as possible -- which is what section 3 needs the
-      // encoder to know. Neither the tier nor the reasons travel: both name which
-      // field matched, and with an equal name a tier is a yes/no birthday oracle.
-      expect(outOfScope).toMatchObject({
-        member_id: expect.any(String),
-        possible_match: true,
-      });
-      expect(outOfScope).not.toHaveProperty('tier');
-      expect(outOfScope).not.toHaveProperty('reasons');
+      // Flagged as possible, which is what section 3 needs the encoder to know, and
+      // nothing more: no name, Member ID or identifier (decision 0405), and neither the
+      // tier nor the reasons, which name the field that matched.
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true }]);
     });
 
     it('does not surface an out-of-scope candidate whose match needs a protected field', async () => {
@@ -949,22 +949,18 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .get('/api/v1/people/duplicate-candidates')
         .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1985-06-15' })
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+      // Asserted present first, so a regression that empties the list cannot pass by
+      // comparing two empty answers, which is the channel the redaction does not cover.
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
 
       const withWrongBirthday = await request(app.getHttpServer())
         .get('/api/v1/people/duplicate-candidates')
         .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1970-01-01' })
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
-      const juanIn = (response: { body: { data: Record<string, unknown>[] } }) =>
-        response.body.data.find((candidate) => candidate.id === juan.id);
-
-      // Asserted present first. `.find()` returns undefined when the candidate is
-      // absent, and `expect(undefined).toEqual(undefined)` passes -- so without
-      // this the case goes green for any regression that empties the list, which
-      // is the very channel the redaction does not cover.
-      expect(juanIn(withRightBirthday)).toBeDefined();
-      expect(juanIn(withWrongBirthday)).toBeDefined();
-      expect(juanIn(withRightBirthday)).toEqual(juanIn(withWrongBirthday));
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      expect(withheldRows(withRightBirthday.body)).toEqual([{ possible_match: true }]);
+      expect(withheldRows(withRightBirthday.body)).toEqual(withheldRows(withWrongBirthday.body));
     });
 
     it('does not gate creation on a duplicate the actor may not see', async () => {
@@ -1116,23 +1112,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       expect(response.status).toBe(200);
 
-      const candidates = response.body.data as {
-        id: string;
-        full_name: string;
-        possible_match?: boolean;
-      }[];
+      const candidates = response.body.data as { id?: string; possible_match?: boolean }[];
 
-      // Asserted present, and by id, before anything is asserted about position.
-      // Both are held out of the ordering rule by the membership rule the case
-      // above pins, and an empty tail would satisfy every ordering assertion
-      // below it.
-      const withheld = candidates.filter((candidate) => candidate.possible_match === true);
-      expect(withheld.map((candidate) => candidate.id).sort()).toEqual([abad.id, zamora.id].sort());
-
-      expect(withheld.map((candidate) => candidate.full_name)).toEqual([
-        'Pedro Abad Testfixture',
-        'Pedro Zamora Testfixture',
-      ]);
+      // The response names neither (decision 0405), so the order is read from the
+      // audit entry, which lists them as they were shown: by name, Abad first.
+      expect(await shownOutside(raymondAccount)).toEqual([abad.id, zamora.id]);
+      expect(withheldRows(response.body)).toHaveLength(2);
 
       // In scope first, which is what keeps the strongest match the viewer may
       // actually act on at the top of the list.
@@ -1185,18 +1170,77 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       expect(response.status).toBe(200);
 
-      const withheld = (
-        response.body.data as { id: string; member_id: string; full_name: string }[]
-      ).filter((candidate) => (candidate as { possible_match?: boolean }).possible_match === true);
+      // Both are Pedro Testfixture, so the name half of the key ties and the order
+      // below is the tie-break: the one created first has the lower Member ID.
+      expect(withheldRows(response.body)).toHaveLength(2);
+      expect(await shownOutside(raymondAccount)).toEqual([secondByTier.id, firstByTier.id]);
+    });
+  });
 
-      // The premise of the case: the name half of the key genuinely ties, so what
-      // is being asserted below is the tie-break and not the name sort.
-      expect(new Set(withheld.map((candidate) => candidate.full_name)).size).toBe(1);
+  // Decision 0405: a similar name is shown as well as an exact one, and a match outside the
+  // branch names nobody.
+  describe('a similar name (SKILL.md section 3, decision 0405)', () => {
+    function lookup(query: Record<string, string>) {
+      return request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query(query)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+    }
 
-      expect(withheld.map((candidate) => candidate.id)).toEqual([secondByTier.id, firstByTier.id]);
-      expect(withheld.map((candidate) => candidate.member_id)).toEqual(
-        [...withheld].map((candidate) => candidate.member_id).sort(),
+    it('shows a similar name in another branch, whatever birthday is typed', async () => {
+      // Juan is in Rico's branch, born 1985-06-15. "Jaun" is his name with two letters
+      // swapped: the names alone reach him, so the birthday typed changes nothing.
+      const right = await lookup({
+        first_name: 'Jaun',
+        last_name: 'Testfixture',
+        birth_date: '1985-06-15',
+      });
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      const wrong = await lookup({
+        first_name: 'Jaun',
+        last_name: 'Testfixture',
+        birth_date: '1970-01-01',
+      });
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+
+      expect(withheldRows(right.body)).toEqual([{ possible_match: true }]);
+      expect(withheldRows(wrong.body)).toEqual(withheldRows(right.body));
+    });
+
+    it('shows a last name one letter off in another branch, by the first name', async () => {
+      // "Juan Pestfixture": the surname's first letter differs, so only the equal first
+      // name reaches Juan Testfixture in Rico's branch.
+      const response = await lookup({ first_name: 'Juan', last_name: 'Pestfixture' });
+
+      expect(response.status).toBe(200);
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true }]);
+    });
+
+    it('shows a similar name in the branch with its reason', async () => {
+      const response = await lookup({ first_name: 'Manny', last_name: 'Testfixture' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toContainEqual(
+        expect.objectContaining({
+          id: manuel.id,
+          tier: 2,
+          reasons: ['last name equal, first name a known nickname variant'],
+        }),
       );
+    });
+
+    it('never stops a save', async () => {
+      const created = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Manny',
+          last_name: 'Testfixture',
+          birth_date: '1990-01-01',
+        }),
+      );
+
+      expect(created.status).toBe(201);
     });
   });
 
@@ -1248,13 +1292,9 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       });
 
       expect(response.status).toBe(200);
-      const found = (response.body.data as Record<string, unknown>[]).find(
-        (candidate) => candidate.id === juan.id,
-      );
-      expect(Object.keys(found ?? {}).sort()).toEqual(
-        ['archived', 'full_name', 'id', 'member_id', 'possible_match', 'sex'].sort(),
-      );
-      expect(found).toMatchObject({ archived: true, possible_match: true });
+      expect(await shownOutside(raymondAccount)).toEqual([juan.id]);
+      // Decision 0405: nothing that names him, only that he is archived.
+      expect(withheldRows(response.body)).toEqual([{ possible_match: true, archived: true }]);
     });
 
     // In scope as an Admin: an archived Person's assignment has ended (section 5), so a leader's
@@ -1343,15 +1383,20 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         await assignTo(db, namesake.id, rico.id);
       }
       const query = { first_name: 'Juan', last_name: 'Testfixture' };
-      const ids = (body: { data: { id: string }[] }) => body.data.map((candidate) => candidate.id);
 
       const before = await lookup(raymondAccount, query);
-      expect(ids(before.body)).toHaveLength(3);
-      await setState(ids(before.body)[1], 'ARCHIVED');
+      const shownBefore = await shownOutside(raymondAccount);
+      expect(shownBefore).toHaveLength(3);
+      expect(before.body.data).toHaveLength(3);
+      await setState(shownBefore[1], 'ARCHIVED');
       const after = await lookup(raymondAccount, query);
 
-      expect(ids(after.body)).toEqual(ids(before.body));
-      expect(after.body.data[1]).toMatchObject({ archived: true });
+      expect(await shownOutside(raymondAccount)).toEqual(shownBefore);
+      expect(after.body.data).toEqual([
+        { possible_match: true },
+        { possible_match: true, archived: true },
+        { possible_match: true },
+      ]);
     });
   });
 
