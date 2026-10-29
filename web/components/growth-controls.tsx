@@ -39,12 +39,13 @@ export function GrowthTabs({
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // **On the recording screens SUYNL is an item of its own** (decision 0323), shown as one tab
-  // in the same frame (owner, 2026-10-19): Training and Conquest are refused to such an account.
+  // in the same frame (owner, 2026-10-19): Training is refused to such an account.
   // No tabs until the server names the screens, so they never flash (owner, 2026-10-11).
   // The pane stays where it is either way, so the screen inside is not remounted.
   const tabbed = !me.isPending;
-  // **A Full view leader has SUYNL alone** too (decision 0360): Training and Conquest are
-  // hidden, not withdrawn: their pages are kept and do not open for them (decision 0379), and the tabs come back beside it.
+  // **A Full view leader has SUYNL alone** too (decision 0360): Training is hidden, not
+  // withdrawn: its page is kept and does not open for them (decision 0379), and the tab comes
+  // back beside it. Conquest is not a Growth tab (decision 0407).
   const suynlOnly = me.data?.screens === 'RECORDING' || isBranchReader(me.data);
   const tabs = suynlOnly ? TABS.filter((tab) => tab.href === '/growth/suynl') : TABS;
   return (

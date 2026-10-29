@@ -4,7 +4,7 @@ import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import { CONQUEST_ALL, CONQUEST_NONE, CONQUEST_PARTWAY, mockConquest } from './mock-growth';
 
 /**
- * The Conquest tab of Growth, read-only (SKILL.md section 27; decisions 0283 to 0286, and
+ * The Conquest page, an item of the sidebar of its own (decision 0407), read-only (SKILL.md section 27; decisions 0283 to 0286, and
  * the owner's choices of 2026-09-24).
  *
  * `accessibility.spec.ts` scans the screen; these cases pin what it says. A reached goal

@@ -23,8 +23,8 @@ import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
- * Conquest, an item of the sidebar of its own for the Admin and the two Senior Pastors
- * (decision 0407, replacing 0406), read-only (SKILL.md section 27; decisions 0283 to 0286,
+ * Conquest, an item of the sidebar of its own for holders of `conquest.view_subtree` at Whole
+ * Church, by default the Admin and the two Senior Pastors (decision 0407, replacing 0406), read-only (SKILL.md section 27; decisions 0283 to 0286,
  * and the owner's choices of 2026-09-24).
  *
  * **Every goal is worked out from the records**, so there is nothing to tick and no save

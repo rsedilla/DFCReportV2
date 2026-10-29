@@ -3,8 +3,8 @@ import type { Page } from '@playwright/test';
 import { PERSON_IN_SCOPE, SIGNED_IN_PERSON_ID } from './mock-api';
 
 /**
- * The Growth tabs, SUYNL, Training and Conquest (SKILL.md sections 27 and 28; decisions
- * 0278 to 0286).
+ * The Growth tabs, SUYNL and Training, and the Conquest page (SKILL.md sections 27 and 28;
+ * decisions 0278 to 0286 and 0407).
  *
  * A companion to `mock-api.ts` and `mock-attendance.ts`, and a stand-in for the transport
  * in the same sense: nothing here decides anything. The shapes are the ones
@@ -524,7 +524,7 @@ export function mockTraining(
 }
 
 /**
- * The Conquest tab (SKILL.md section 27), read-only: its two routes, in the shapes
+ * The Conquest page (SKILL.md section 27), read-only: its two routes, in the shapes
  * `api/src/conquest/conquest.service.ts` builds.
  *
  * **Each row carries goal states the screen words differently**: reached with today's count
@@ -580,7 +580,7 @@ export const CONQUEST_COUNTS = {
   raise_12_leaders: 1,
 };
 
-/** The Conquest tab's two routes. Returns every list request's query string, in order. */
+/** The Conquest page's two routes. Returns every list request's query string, in order. */
 export async function mockConquest(page: Page): Promise<{ lists: URLSearchParams[] }> {
   const traffic = { lists: [] as URLSearchParams[] };
 

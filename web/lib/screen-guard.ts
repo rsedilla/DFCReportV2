@@ -39,7 +39,8 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   }
   // Conquest opens for whoever its sidebar item is drawn for: a holder of
   // `conquest.view_subtree` at Whole Church, whatever their screens (decision 0407).
-  if (at(/^\/conquest(\/|$)/)) {
+  // Its two old addresses forward there, so they open for the same accounts.
+  if (at(/^\/conquest(\/|$)/) || at(/^\/(growth|reports)\/conquest$/)) {
     return holdsWholeChurch(me, 'conquest.view_subtree');
   }
   // Every account has its own Account page and Record, and a Sunday's checklist from Record.
@@ -99,7 +100,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     if (at(/^\/reports(\/|$)/) || at(/^\/trends(\/|$)/)) {
       return fiveReports;
     }
-    return !at(/^\/growth\/(training|conquest)$/);
+    return !at(/^\/growth\/training$/);
   }
   // The Admin's six reports have no twelve-month view (decision 0377).
   return !at(/^\/trends(\/|$)/);
