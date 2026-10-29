@@ -142,6 +142,20 @@
       "table": "persons",
       "kind": "join",
       "reason": "As monthFigures: a merged pair is one person (decision 0407), resolved inside the one statement rooted in dcc_attendance so the range's figures stay one snapshot."
+    },
+    {
+      "file": "src/attendance/cell-figures.service.ts",
+      "method": "monthFigures",
+      "table": "persons",
+      "kind": "join",
+      "reason": "A merged pair is one person in every report (section 3, decision 0407), resolved through persons.merged_into_id inside this one statement, rooted in cell_meetings and cell_attendance, so n and the population stay one snapshot (DccFiguresService gives the reason)."
+    },
+    {
+      "file": "src/attendance/cell-figures.service.ts",
+      "method": "rangeFiguresWithLeaders",
+      "table": "persons",
+      "kind": "join",
+      "reason": "As monthFigures: a merged pair is one person (decision 0407), resolved inside the one statement rooted in cell_meetings."
     }
   ]
 }

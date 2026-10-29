@@ -21,6 +21,7 @@ import {
   reportingMonthOf,
 } from '../common/time/submission-window';
 import { canonicalId } from '../common/identifiers';
+import { resolverOf } from '../common/merged-identity';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -508,6 +509,29 @@ export class ReportingService {
   ) {}
 
   /**
+   * The period's placement graph with every merged pair placed once (section 3, decision 0407):
+   * the merges are read in the report's own transaction, so they and the figures are one
+   * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
+   */
+  /**
+   * A Network's people at an instant, each resolved to the record kept (decision 0407), so a
+   * figure narrowed to them reaches a duplicate's history through the record it was merged
+   * into, once.
+   */
+  private async networkPeople(trx: Db, network: NetworkName, at: Date): Promise<string[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    const ids = await this.networks.peopleInNetworkAsOf(trx, network, at);
+    return [...new Set(ids.map((id) => canonicalId(resolve(id))))];
+  }
+  private async placementGraph(
+    trx: Db,
+    start: Date,
+    end: Date,
+  ): ReturnType<HierarchyService['reportingGraph']> {
+    return this.hierarchy.reportingGraph(trx, start, end, await this.people.mergedPairsWithin(trx));
+  }
+
+  /**
    * The DCC monthly report for a scope and a month (SKILL.md sections 9, 12 and 20).
    *
    * **Both views cover one population and both sum to it**, which is section 20's
@@ -552,9 +576,9 @@ export class ReportingService {
         // arguments differ in kind for that reason, not by oversight.
         const personIds =
           scope.kind === 'LEADER'
-            ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
+            ? (await this.placementGraph(trx, start, end)).subtree(scope.person_id)
             : scope.kind === 'NETWORK'
-              ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
+              ? await this.networkPeople(trx, scope.network, end)
               : undefined;
 
         const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
@@ -654,7 +678,7 @@ export class ReportingService {
           scope.kind === 'LEADER'
             ? {
                 kind: 'RESPONSIBLE_LEADERS',
-                personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
+                personIds: (await this.placementGraph(trx, start, end)).subtree(scope.person_id),
               }
             : { kind: 'EVERY_CELL' };
 
@@ -719,7 +743,7 @@ export class ReportingService {
       });
 
       // One read of the placement graph serves every row and the total (it was one per row).
-      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+      const graph = await this.placementGraph(trx, start, end);
 
       // A whole-church reader disciples neither root, so each root row is labelled by its
       // Network rather than by name (decision 0293).
@@ -890,11 +914,11 @@ export class ReportingService {
               ? await this.rootLeadersAsOf(
                   trx,
                   end,
-                  (graph ??= await this.hierarchy.reportingGraph(trx, start, end)),
+                  (graph ??= await this.placementGraph(trx, start, end)),
                 )
               : await this.hierarchy.rootSeatsAsOf(trx, end);
       const subtreeOf = async (leaderId: string) =>
-        (graph ??= await this.hierarchy.reportingGraph(trx, start, end)).subtree(leaderId);
+        (graph ??= await this.placementGraph(trx, start, end)).subtree(leaderId);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure &
@@ -921,7 +945,7 @@ export class ReportingService {
         subject.kind === 'LEADER'
           ? await subtreeOf(subject.person_id)
           : subject.kind === 'NETWORK'
-            ? await this.networks.peopleInNetworkAsOf(trx, subject.network, end)
+            ? await this.networkPeople(trx, subject.network, end)
             : undefined,
       );
 
@@ -1163,11 +1187,7 @@ export class ReportingService {
       const everyone = (byLeader: { cell: OwedByLeader; dcc: OwedByLeader }) =>
         new Set([...byLeader.cell.keys(), ...byLeader.dcc.keys()]);
 
-      const graph = await this.hierarchy.reportingGraph(
-        trx,
-        startOfManilaDay(start),
-        endOfManilaDay(end),
-      );
+      const graph = await this.placementGraph(trx, startOfManilaDay(start), endOfManilaDay(end));
 
       let tables: RecordingStatus['tables'] = null;
       let others: RecordingFigures | null = null;
@@ -1240,12 +1260,8 @@ export class ReportingService {
       const previousEnd = reportRangeEnd(kind, previousStart);
       const previous = await this.owedBetween(trx, previousStart, previousEnd);
 
-      const graph = await this.hierarchy.reportingGraph(
-        trx,
-        startOfManilaDay(start),
-        endOfManilaDay(end),
-      );
-      const previousGraph = await this.hierarchy.reportingGraph(
+      const graph = await this.placementGraph(trx, startOfManilaDay(start), endOfManilaDay(end));
+      const previousGraph = await this.placementGraph(
         trx,
         startOfManilaDay(previousStart),
         endOfManilaDay(previousEnd),
@@ -1343,7 +1359,7 @@ export class ReportingService {
         };
       };
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       const asked = new Map<string, ChurchCountFigures | null>();
       let tables: ChurchCounts['tables'] = null;
       let others: ChurchCountFigures | null = null;
@@ -1415,7 +1431,7 @@ export class ReportingService {
       const count = (ids: readonly string[]): number =>
         ids.filter((id) => people.has(canonicalId(id))).length;
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       if (graph.refused) {
         return { period, at, current, total: null, own: null, rows: null };
       }
@@ -1479,7 +1495,7 @@ export class ReportingService {
         };
       };
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       if (graph.refused) {
         return { period, at, current, total: null, own: null, rows: null };
       }

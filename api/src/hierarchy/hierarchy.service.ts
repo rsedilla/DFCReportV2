@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
 import { NIL_UUID, canonicalId, isUuid, sameId } from '../common/identifiers';
+import { NO_MERGES, resolverOf, type MergedPairs } from '../common/merged-identity';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 import { CurrentTree } from './current-tree';
@@ -578,6 +579,11 @@ export class HierarchyService {
     executor: Db,
     periodStart: Date,
     periodEnd: Date,
+    /**
+     * Every Person merge, from `people` (decision 0407), so a merged pair is placed once.
+     * `hierarchy` cannot read `persons` for it: `people` imports this module.
+     */
+    merges: MergedPairs = NO_MERGES,
   ): Promise<{
     subtree: (leaderId: string) => string[];
     /** The roots on the graph, and a leader's direct leaders on it (decision 0325). */
@@ -636,10 +642,13 @@ export class HierarchyService {
       SELECT person_id, leader_id FROM edges
     `.execute(executor);
 
-    const edges = result.rows.map((row) => ({
-      personId: canonicalId(row.person_id),
-      leaderId: row.leader_id === null ? null : canonicalId(row.leader_id),
-    }));
+    const edges = placeMerged(
+      result.rows.map((row) => ({
+        personId: canonicalId(row.person_id),
+        leaderId: row.leader_id === null ? null : canonicalId(row.leader_id),
+      })),
+      merges,
+    );
     const disciplesOf = new Map<string, string[]>();
     const holdsEdge = new Set<string>();
     let notFunctional = false;
@@ -1777,4 +1786,44 @@ function composeName(row: {
   return [row.title, row.first_name, initial, row.last_name]
     .filter((part): part is string => part !== null && part.trim() !== '')
     .join(' ');
+}
+
+/**
+ * A period's placement edges with every merged pair placed once (SKILL.md section 3, decision
+ * 0407, point 13): each record and each leader resolved to the record kept, and where both
+ * records held an edge, **the kept record's own edge places the person**; the duplicate's
+ * places them only where the kept record held none. An edge resolved onto itself (one record
+ * of the pair placed under the other) carries no placement and is dropped.
+ */
+function placeMerged(
+  edges: { personId: string; leaderId: string | null }[],
+  merges: MergedPairs,
+): { personId: string; leaderId: string | null }[] {
+  if (merges.absorbed.length === 0) {
+    return edges;
+  }
+
+  const resolve = resolverOf(merges);
+  const placed = new Map<string, { personId: string; leaderId: string | null; own: boolean }>();
+  const kept: { personId: string; leaderId: string | null }[] = [];
+
+  for (const edge of edges) {
+    const personId = canonicalId(resolve(edge.personId));
+    const leaderId = edge.leaderId === null ? null : canonicalId(resolve(edge.leaderId));
+    if (leaderId !== null && sameId(leaderId, personId)) {
+      continue;
+    }
+    const own = sameId(personId, edge.personId);
+    const existing = placed.get(personId);
+    if (existing === undefined || (own && !existing.own)) {
+      placed.set(personId, { personId, leaderId, own });
+    } else if (own === existing.own) {
+      // Two edges for one record is the defect `refuseUnresolvable` reports; kept, not hidden.
+      kept.push({ personId, leaderId });
+    }
+  }
+
+  return [...placed.values()]
+    .map(({ personId, leaderId }) => ({ personId, leaderId }))
+    .concat(kept);
 }

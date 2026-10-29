@@ -273,18 +273,20 @@ export class CellFiguresService {
            AND (${list}::uuid[] IS NULL OR responsible_leader_id = ANY (${list}::uuid[]))
       ),
       attended AS (
-        SELECT a.person_id,
+        SELECT coalesce(pr.merged_into_id, a.person_id) AS person_id,
                array_agg(DISTINCT s.responsible_leader_id::text)
                  FILTER (WHERE s.responsible_leader_id IS NOT NULL) AS leader_ids
           FROM scoped s
           JOIN cell_attendance a ON a.cell_meeting_id = s.id
+          JOIN persons pr ON pr.id = a.person_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
-         GROUP BY a.person_id
+         GROUP BY coalesce(pr.merged_into_id, a.person_id)
       )
-      SELECT p.person_id, count(*)::text AS lifetime, p.leader_ids
+      SELECT p.person_id, count(DISTINCT m.id)::text AS lifetime, p.leader_ids
         FROM attended p
-        JOIN cell_attendance a ON a.person_id = p.person_id
+        JOIN persons pr ON pr.id = p.person_id OR pr.merged_into_id = p.person_id
+        JOIN cell_attendance a ON a.person_id = pr.id
         JOIN cell_meetings m ON m.id = a.cell_meeting_id
        WHERE a.present = true
          AND a.superseded_at IS NULL
@@ -331,11 +333,10 @@ export class CellFiguresService {
    * and because `n` genuinely needs it -- not because it is currently reachable on the
    * population side.
    *
-   * **What it does not do: resolve a merged identity.** Section 3 requires a merged pair
-   * to count as one person whenever reports are generated, and that resolution belongs to
-   * `people` (section 2). Nothing writes `merged_into_id` yet, so no report can be wrong
-   * today; it is named because the exclusions above read as a complete list and are not
-   * one. The same sentence stands in `DccFiguresService`, and one ruling will move both.
+   * **A merged pair is one person** (section 3, decision 0407), resolved as
+   * `DccFiguresService` resolves it: each record to the record kept, inside this one
+   * statement, and meetings counted as distinct, so a meeting marked Present on both records
+   * counts once and `timesInMonth` still cannot exceed `n`.
    */
   /**
    * **Overloaded so the caller's scope decides the caller's type**, rather than every
@@ -397,20 +398,22 @@ export class CellFiguresService {
       ),
       -- The month's attendees first, then each one's history (DccFiguresService says why).
       attended AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(pr.merged_into_id, a.person_id) AS person_id
           FROM scoped s
           JOIN cell_attendance a ON a.cell_meeting_id = s.id
+          JOIN persons pr ON pr.id = a.person_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
       ),
       figures AS (
         SELECT p.person_id,
-               count(*) FILTER (
+               count(DISTINCT a.cell_meeting_id) FILTER (
                  WHERE a.cell_meeting_id IN (SELECT id FROM scoped)
                ) AS times_in_month,
-               count(*) AS lifetime_through_month
+               count(DISTINCT a.cell_meeting_id) AS lifetime_through_month
           FROM attended p
-          JOIN cell_attendance a ON a.person_id = p.person_id
+          JOIN persons pr ON pr.id = p.person_id OR pr.merged_into_id = p.person_id
+          JOIN cell_attendance a ON a.person_id = pr.id
           JOIN cell_meetings m ON m.id = a.cell_meeting_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
