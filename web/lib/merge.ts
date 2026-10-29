@@ -1,7 +1,7 @@
 import { authenticatedRequest } from './session';
 
 /**
- * Person Merge as this client sees it (SKILL.md section 3, decision 0407). The Admin joins a
+ * Person Merge as this client sees it (SKILL.md section 3, decision 0408). The Admin joins a
  * duplicate record into the record kept; `people.merge` is Admin-only, and the API decides.
  */
 
@@ -11,7 +11,7 @@ export interface MergeRefusal {
   message: string;
 }
 
-/** A merged record's read-only line (decision 0407, point 14). */
+/** A merged record's read-only line (decision 0408, point 14). */
 export interface MergedLine {
   into: { id: string; member_id: string; full_name: string };
   merged_at: string;

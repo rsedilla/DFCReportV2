@@ -2,7 +2,7 @@ import { sql, type RawBuilder } from 'kysely';
 
 /**
  * Every Person merge, as two parallel lists: `absorbed[i]` was merged into `kept[i]`
- * (SKILL.md section 3, decision 0407). `people` owns the identity and hands it out
+ * (SKILL.md section 3, decision 0408). `people` owns the identity and hands it out
  * (`PeopleReadService.mergedPairsWithin`); a module counting people resolves its own rows with
  * it, so no module reads `persons` to count (section 2).
  *

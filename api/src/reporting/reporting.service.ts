@@ -509,12 +509,12 @@ export class ReportingService {
   ) {}
 
   /**
-   * The period's placement graph with every merged pair placed once (section 3, decision 0407):
+   * The period's placement graph with every merged pair placed once (section 3, decision 0408):
    * the merges are read in the report's own transaction, so they and the figures are one
    * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
    */
   /**
-   * A Network's people at an instant, each resolved to the record kept (decision 0407), so a
+   * A Network's people at an instant, each resolved to the record kept (decision 0408), so a
    * figure narrowed to them reaches a duplicate's history through the record it was merged
    * into, once.
    */

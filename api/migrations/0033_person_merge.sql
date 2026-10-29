@@ -1,11 +1,11 @@
 -- migrate:up
 
 -- ---------------------------------------------------------------------------
--- Person Merge (SKILL.md section 3, decision 0407)
+-- Person Merge (SKILL.md section 3, decision 0408)
 --
 -- `persons.merged_into_id` has existed since 0001 and nothing wrote it. A merge now sets it
 -- on the absorbed record, with when, by whom and why beside it, which is what the absorbed
--- record's page says afterwards (decision 0407, point 13). Additive only: three nullable
+-- record's page says afterwards (decision 0408, point 13). Additive only: three nullable
 -- columns, every existing row null in all four, which the CHECK below accepts.
 -- ---------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM persons WHERE merged_into_id = OLD.id) THEN
       RAISE EXCEPTION
-        'person %: a record that has absorbed another is not merged away (decision 0407).',
+        'person %: a record that has absorbed another is not merged away (decision 0408).',
         OLD.id
         USING ERRCODE = 'check_violation';
     END IF;

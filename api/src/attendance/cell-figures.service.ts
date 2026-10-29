@@ -333,7 +333,7 @@ export class CellFiguresService {
    * and because `n` genuinely needs it -- not because it is currently reachable on the
    * population side.
    *
-   * **A merged pair is one person** (section 3, decision 0407), resolved as
+   * **A merged pair is one person** (section 3, decision 0408), resolved as
    * `DccFiguresService` resolves it: each record to the record kept, inside this one
    * statement, and meetings counted as distinct, so a meeting marked Present on both records
    * counts once and `timesInMonth` still cannot exceed `n`.

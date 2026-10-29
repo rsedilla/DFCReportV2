@@ -88,7 +88,7 @@ export class DccPersonAttendanceService {
     const after = decodeDccPersonAttendanceCursor(page.cursor);
     const limit = page.limit ?? DEFAULT_PAGE;
 
-    // A record kept reads the Sundays of every record merged into it (decision 0407): one line
+    // A record kept reads the Sundays of every record merged into it (decision 0408): one line
     // per Sunday, Present where either record was marked Present.
     const pairs = await this.people.mergedPairsWithin(this.db);
     const records = [

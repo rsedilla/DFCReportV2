@@ -26,7 +26,7 @@ import { composeName } from './people.shared';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
 
-/** One reason a merge cannot be made yet, as the merge screen says it (decision 0407). */
+/** One reason a merge cannot be made yet, as the merge screen says it (decision 0408). */
 export interface MergeRefusal {
   code:
     | 'SAME_PERSON'
@@ -55,7 +55,7 @@ type PersonRow = {
 };
 
 /**
- * Person Merge (SKILL.md section 3, decision 0407): the Admin joins a duplicate record into the
+ * Person Merge (SKILL.md section 3, decision 0408): the Admin joins a duplicate record into the
  * record kept.
  *
  * **Nothing is rewritten.** The duplicate's attendance, lessons and graduations stay on their

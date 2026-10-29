@@ -137,7 +137,7 @@ function PersonDetail() {
   // Archive and Restore, the Admin's alone (decision 0397); never on your own page, never for
   // a Network root, and for somebody leading a Cell the page says what to resolve first.
   const mayArchive = !own && holdsWholeChurch(me.data, 'people.manage_lifecycle');
-  // Merge, the Admin's alone (section 3, decision 0407); the API decides what it refuses.
+  // Merge, the Admin's alone (section 3, decision 0408); the API decides what it refuses.
   const mayMerge = holdsWholeChurch(me.data, 'people.merge');
   const isRoot = pathEntries.length === 1 && pathEntries[0].network_root === true;
   const leads = cells.data?.leads ?? [];
@@ -188,7 +188,7 @@ function PersonDetail() {
           />
 
           {/*
-            A record merged away is read only and says where the person is now (decision 0407,
+            A record merged away is read only and says where the person is now (decision 0408,
             point 14): no action, no leader and no Cell, so the rest of the page is not shown.
           */}
           {person.data.merged ? (
@@ -373,7 +373,7 @@ function PersonDetail() {
             />
           ) : null}
 
-          {/* The Admin's way to a merge, on any page but their own (decision 0407). */}
+          {/* The Admin's way to a merge, on any page but their own (decision 0408). */}
           {mayMerge ? (
             <section aria-labelledby="merge-heading" className={`mt-4 ${FRAME}`}>
               <h2 id="merge-heading" className="font-medium">

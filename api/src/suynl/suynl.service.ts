@@ -152,7 +152,7 @@ export class SuynlService {
     );
 
     const ids = rows.map((row) => row.id);
-    // A record kept shows the lessons of every record merged into it (decision 0407).
+    // A record kept shows the lessons of every record merged into it (decision 0408).
     const lessons = await this.lessonsOfKept(ids);
     const identities = await this.people.forDecisions(ids);
     const authority = await this.authorization.authorityFor(actor.accountId);
@@ -473,7 +473,7 @@ export class SuynlService {
     }
 
     // The third is picked in the database, and the people go as one array parameter. A merged
-    // pair is one person (decision 0407): each lesson resolves to the record kept, and a lesson
+    // pair is one person (decision 0408): each lesson resolves to the record kept, and a lesson
     // on both records counts once, on the earlier date.
     const pairs = await this.people.mergedPairsWithin(this.db);
     const result = await sql<{ person_id: string; confirmed_at: Date }>`
@@ -508,7 +508,7 @@ export class SuynlService {
       return new Map();
     }
 
-    // A merged pair is one person (decision 0407): each record's lessons count for the record
+    // A merged pair is one person (decision 0408): each record's lessons count for the record
     // kept, and a lesson on both counts once, so lessons are counted as distinct numbers.
     const pairs = await this.people.mergedPairsWithin(this.db);
     const resolve = resolverOf(pairs);
@@ -550,7 +550,7 @@ export class SuynlService {
 
   /**
    * The current lessons shown for these records kept, with every record merged into each
-   * (decision 0407): a lesson held on both is shown once, on the earlier date. For reading
+   * (decision 0408): a lesson held on both is shown once, on the earlier date. For reading
    * only; a save reads `currentLessons`, which names the record written.
    */
   private async lessonsOfKept(ids: readonly string[]): Promise<Lesson[]> {

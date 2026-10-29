@@ -56,7 +56,7 @@ export interface PersonFull {
   archived?: ArchivedLine | null;
   /** On one person's record only: how many people they pastor now (decision 0397). */
   pastors?: number;
-  /** On one person's record only: where it was merged, null unless merged (decision 0407). */
+  /** On one person's record only: where it was merged, null unless merged (decision 0408). */
   merged?: MergedLine | null;
 }
 

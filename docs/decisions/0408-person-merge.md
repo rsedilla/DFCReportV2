@@ -68,7 +68,7 @@ not offered.
     to the kept record, who merged it and when. It offers no action and shows no leader or Cell.
     A printed report or a saved link that names the old Member ID still explains itself.
 
-Decision 0407, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
+Decision 0408, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 3.
 
-Previous: [2026-10-29 — Conquest is a link above the tabs on Reports and Growth](0406-conquest-is-a-link.md)
+Previous: [2026-10-29 — Conquest is an item of the sidebar, for the Admin and both Senior Pastors](0407-conquest-is-a-sidebar-item.md)

@@ -416,7 +416,7 @@ export class PeopleController {
   }
 
   /**
-   * What merging `duplicate_id` into this record would be refused for, now (decision 0407).
+   * What merging `duplicate_id` into this record would be refused for, now (decision 0408).
    * The merge screen reads it before offering the button; the merge asks the same again
    * after locking both records. `people.merge` is Admin-only at Whole Church (section 3).
    */
@@ -430,7 +430,7 @@ export class PeopleController {
     return this.merges.preview(id, query.duplicate_id, actor);
   }
 
-  /** Join `duplicate_id` into this record (SKILL.md section 3, decision 0407). */
+  /** Join `duplicate_id` into this record (SKILL.md section 3, decision 0408). */
   @Post(':id/merge')
   @HttpCode(200)
   @RequiresCapability(Capability.PeopleMerge, { kind: 'person', from: 'params.id' })

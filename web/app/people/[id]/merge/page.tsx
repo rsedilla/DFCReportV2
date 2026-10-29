@@ -26,7 +26,7 @@ import { getPerson } from '@/lib/people';
 const REASON_MAX = 500;
 
 /**
- * Merge two records of one person (SKILL.md section 3, decision 0407), as the owner chose it
+ * Merge two records of one person (SKILL.md section 3, decision 0408), as the owner chose it
  * on 2026-10-27: the record kept on the left, the duplicate beside it, what will happen, and a
  * required reason. The API is asked what would refuse the merge before the button is offered,
  * and asks again when it is pressed.
@@ -244,7 +244,7 @@ function Row({ label, kept, other }: { label: string; kept: ReactNode; other: Re
   );
 }
 
-/** What point 3 of decision 0407 copies: a detail the kept record lacks. */
+/** What point 3 of decision 0408 copies: a detail the kept record lacks. */
 function copies(
   kept: { birth_date: string | null; mobile_number: string | null },
   other: { birth_date: string | null; mobile_number: string | null },

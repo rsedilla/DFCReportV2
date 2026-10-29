@@ -2,7 +2,7 @@ import { IsString, IsUUID, Length } from 'class-validator';
 
 import { IsStorableText } from '../../common/text/is-storable-text';
 
-/** `POST /api/v1/people/{id}/merge`: join `duplicate_id` into the record `{id}` (decision 0407). */
+/** `POST /api/v1/people/{id}/merge`: join `duplicate_id` into the record `{id}` (decision 0408). */
 export class MergePersonDto {
   /** The record joined in and retired. */
   @IsUUID()

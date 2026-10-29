@@ -165,7 +165,7 @@ export class TrainingService {
     );
 
     const ids = rows.map((row) => row.id);
-    // A record kept shows the graduations of every record merged into it (decision 0407).
+    // A record kept shows the graduations of every record merged into it (decision 0408).
     const graduations = await this.graduationsOfKept(ids);
     const identities = await this.people.forDecisions(ids);
     const authority = await this.authorization.authorityFor(actor.accountId);
@@ -371,7 +371,7 @@ export class TrainingService {
       return new Set();
     }
 
-    // A record kept holds what any record merged into it holds (decision 0407).
+    // A record kept holds what any record merged into it holds (decision 0408).
     const pairs = await this.people.mergedPairsWithin(this.db);
     const resolve = resolverOf(pairs);
     const wanted = new Set(personIds.map((id) => canonicalId(id)));
@@ -399,7 +399,7 @@ export class TrainingService {
       return new Map();
     }
 
-    // A merged pair is one person (decision 0407): each record's graduations count for the
+    // A merged pair is one person (decision 0408): each record's graduations count for the
     // record kept, and a program held on both is one program.
     const pairs = await this.people.mergedPairsWithin(this.db);
     const resolve = resolverOf(pairs);
@@ -441,7 +441,7 @@ export class TrainingService {
 
   /**
    * The current graduations shown for these records kept, with every record merged into each
-   * (decision 0407): a program held on both is shown once, the earlier graduation date kept
+   * (decision 0408): a program held on both is shown once, the earlier graduation date kept
    * (an unknown date counting as later). For reading only; a save reads `currentGraduations`.
    */
   private async graduationsOfKept(ids: readonly string[]): Promise<Graduation[]> {

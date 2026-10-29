@@ -597,7 +597,7 @@ export class PeopleReadService {
    * Every Person current at one instant, for the Senior Pastors' *Number of people*
    * (decision 0326, point 3): a lifecycle row in force then reads `CURRENT`. Lifecycle is
    * effective-dated so that an archival moves no earlier month (section 3). **A merged pair is
-   * one person** (decision 0407): an absorbed record current then is answered as the record
+   * one person** (decision 0408): an absorbed record current then is answered as the record
    * kept, so a month before the kept record began still counts them, once.
    */
   async currentIdsAt(executor: Db | Transaction<Database>, at: Date): Promise<string[]> {
@@ -620,7 +620,7 @@ export class PeopleReadService {
   }
 
   /**
-   * Every Person merge, absorbed record beside record kept (SKILL.md section 3, decision 0407),
+   * Every Person merge, absorbed record beside record kept (SKILL.md section 3, decision 0408),
    * for a module that counts people to resolve its own rows with (`common/merged-identity.ts`).
    * Read in the caller's transaction, so a report's figures and its merges are one snapshot.
    */

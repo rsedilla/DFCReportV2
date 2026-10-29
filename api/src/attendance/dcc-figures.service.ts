@@ -111,7 +111,7 @@ export class DccFiguresService {
    * is a VIP on October's report forever. Any other reading moves a closed month's figures,
    * which section 20 forbids.
    *
-   * **A merged pair is one person** (section 3, decision 0407). Each record resolves to the
+   * **A merged pair is one person** (section 3, decision 0408). Each record resolves to the
    * record kept, `coalesce(merged_into_id, id)`, one step because a merge never chains
    * (migration 0033); and Sundays are counted as distinct services, so a Sunday marked Present
    * on both records counts once. An Absent mark is never counted, so Present wins with no rule

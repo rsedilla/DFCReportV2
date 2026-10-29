@@ -580,7 +580,7 @@ export class HierarchyService {
     periodStart: Date,
     periodEnd: Date,
     /**
-     * Every Person merge, from `people` (decision 0407), so a merged pair is placed once.
+     * Every Person merge, from `people` (decision 0408), so a merged pair is placed once.
      * `hierarchy` cannot read `persons` for it: `people` imports this module.
      */
     merges: MergedPairs = NO_MERGES,
@@ -1790,7 +1790,7 @@ function composeName(row: {
 
 /**
  * A period's placement edges with every merged pair placed once (SKILL.md section 3, decision
- * 0407, point 13): each record and each leader resolved to the record kept, and where both
+ * 0408, point 13): each record and each leader resolved to the record kept, and where both
  * records held an edge, **the kept record's own edge places the person**; the duplicate's
  * places them only where the kept record held none. An edge resolved onto itself (one record
  * of the pair placed under the other) carries no placement and is dropped.

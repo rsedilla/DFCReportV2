@@ -131,7 +131,7 @@ export class ConquestService {
 
     // Only somebody who has had a disciple or opened a Cell can have reached a goal. A record
     // merged into one in the population is reached too, its history counting for the record
-    // kept (decision 0407).
+    // kept (decision 0408).
     const pairs = await this.people.mergedPairsWithin(this.db);
     const resolve = resolverOf(pairs);
     const scope =
@@ -194,7 +194,7 @@ export class ConquestService {
       return result;
     }
 
-    // **A merged pair is one person** (section 3, decision 0407): every leader, disciple,
+    // **A merged pair is one person** (section 3, decision 0408): every leader, disciple,
     // leadership and opening resolves to the record kept, so two records of one disciple are
     // one of the twelve, and the earlier of two dates stands.
     const pairs = await this.people.mergedPairsWithin(this.db);

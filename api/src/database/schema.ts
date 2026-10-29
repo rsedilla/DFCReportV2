@@ -242,7 +242,7 @@ export type AuditAction =
   // account-access decision whichever was chosen (section 6, decision 0397).
   | 'person.archived'
   | 'person.restored'
-  // Section 21's "Person merge", targeting the absorbed record (decision 0407).
+  // Section 21's "Person merge", targeting the absorbed record (decision 0408).
   | 'person.merged'
   | 'pastoral_assignment.transferred'
   | 'network.changed'
