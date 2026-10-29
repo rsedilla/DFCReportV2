@@ -15,7 +15,7 @@ import type {
 } from './leadership-request-cursor';
 import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
-import type { Transaction } from 'kysely';
+import type { RawBuilder, Transaction } from 'kysely';
 import { ACCENTED, UNACCENTED, composeName, escapeLike } from '../people/people.shared';
 import { normalizeName } from '../people/duplicate-matching';
 
@@ -278,14 +278,19 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     executor: Db | Transaction<Database>,
     cellId: string,
     reportingMonth: string,
-  ): Promise<{ scheduledDate: string; scheduledTime: string; weekStarting: string }[]> {
+  ): Promise<
+    { scheduledDate: string; scheduledTime: string; weekStarting: string; hadAMember: boolean }[]
+  > {
     const result = await sql<{
       scheduled_date: string;
       scheduled_time: string;
+      had_a_member: boolean;
       week_starting: string;
     }>`
       SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
              to_char(governing.time_of_day, 'HH24:MI')         AS scheduled_time,
+             -- Every scheduled date is listed, and this says which are owed (decision 0409).
+             ${hadAMemberOn(sql`${cellId}::uuid`)}               AS had_a_member,
              -- Section 20: a calendar week begins on Monday. date_trunc('week') is
              -- ISO and therefore Monday-based, which is the same authority
              -- day_of_week is stored under.
@@ -327,6 +332,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       scheduledDate: row.scheduled_date,
       scheduledTime: row.scheduled_time,
       weekStarting: row.week_starting,
+      hadAMember: row.had_a_member,
     }));
   }
 
@@ -2008,6 +2014,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            LIMIT 1
         ) AS leader ON true
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+         AND ${hadAMemberOn(sql`cell.id`)}
          ${
            leaders === undefined
              ? sql``
@@ -2163,6 +2170,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         ) AS leader ON ${leaders === null ? sql`TRUE` : sql`leader.person_id = ANY(${leaders}::uuid[])`}
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
          AND day::date <= (now() AT TIME ZONE 'Asia/Manila')::date
+         AND ${hadAMemberOn(sql`cell.id`)}
          -- Cells this person has ever led. Implied by the join above, which keeps a row
          -- only where the *governing* leader is them, so this removes no row; what it
          -- removes is the work. The actor sits in an ON clause the planner cannot push
@@ -2323,6 +2331,23 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
 }
 
 /**
+ * Whether the Cell had a member on `day`, by the roster's own rule (`membersAsOfWithin`):
+ * a membership whose Manila start date is on or before the day and whose end date, if any,
+ * is on or after it. A scheduled meeting on a day this is false for is not owed (decision
+ * 0409): nobody can be marked, so it is in no denominator, no queue and no list of what is
+ * behind. `day` is the `generate_series` alias every caller names it.
+ */
+function hadAMemberOn(cell: RawBuilder<unknown>) {
+  return sql`EXISTS (
+          SELECT 1
+            FROM cell_memberships AS membership
+           WHERE membership.cell_id = ${cell}
+             AND (membership.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (membership.ended_at IS NULL
+                  OR (membership.ended_at AT TIME ZONE 'Asia/Manila')::date >= day))`;
+}
+
+/**
  * The one derivation of a Cell's scheduled days in a month (Section 12): a day-by-day
  * series against the schedule rows in force, one governing row per day, inert rows
  * excluded, the weekday tested against the governing row alone. {@link
@@ -2365,5 +2390,6 @@ function scheduledDays(
            LIMIT 1
         ) AS governing
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+         AND ${hadAMemberOn(sql`asked.cell_id`)}
   `;
 }

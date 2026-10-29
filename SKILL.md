@@ -3217,6 +3217,8 @@ Population: the same unique people who attended this Cell at least once in the m
 
 Each Cell has one logical scheduled meeting per week of its configured schedule (Section 10, Schedule changes), and a Cell running for a whole month therefore has 4 or 5 **scheduled** meetings. *Per week of its schedule, not per calendar week: a schedule change takes effect on the first of a month while a week begins on a Monday, so a week straddling that boundary can hold two scheduled meetings under two schedules, reporting in two months. That is why a meeting is identified by its scheduled date rather than by its week (Section 13).* A Cell created or closed part-way through a month has fewer, and that is not an anomaly.
 
+**A scheduled meeting dated when the Cell had no member is not owed** (owner, 2026-10-29, decision 0409). "Had a member" is the roster's own rule (Section 13): a membership whose Manila start date is on or before the meeting's date and whose end date, if any, is on or after it. Such a meeting is in no coverage denominator, is not behind, and is on no recording list, *Update Records*, *Pending CG Records* and Recording Status included; it is not recorded either (Section 13). A Cell's leader holds no membership, so a Cell with only its leader owes nothing. It keeps the denominator out of a leader's hands: membership rows are not backdated, and a member removed today ends today, so no past meeting stops being owed. A record already made on such a date stays as it was; the Reports figures match records to owed meetings, so it is in neither term there, while the Cells list counts records on their own and its numerator counts it.
+
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
 ```text
@@ -3386,7 +3388,7 @@ actual date and uses the scheduled one.
 **A meeting that took place is recorded for every member of the Cell on its roster date,
 exactly once, present or not.** `HELD` and `RESCHEDULED` alike — the reschedule takes the
 roster of the day it moved to, and the rule is what makes that a complete account rather
-than a partial one. `NOT_HELD` carries no attendance at all, so it is outside this. This is the rule Section 7 and this section have each cited as
+than a partial one. `NOT_HELD` carries no attendance at all, so it is outside this. **A meeting dated when the Cell had no member has nothing to record** (decision 0409): it is not owed (Section 12), its screen says so and offers no form, and a first submission for it is refused, `INVARIANT_VIOLATION`, whatever its status. This is the rule Section 7 and this section have each cited as
 "every member exactly once (Section 13)" while it was stated nowhere in its own words —
 visible once the ruling below stopped resting on a Section 20 sentence that does not exist.
 It generalises the zero-attendance case above rather than being deduced from it, and that
