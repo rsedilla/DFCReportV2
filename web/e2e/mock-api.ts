@@ -167,6 +167,8 @@ export async function mockAdministrator(page: Page): Promise<void> {
     wholeChurch('people.set_title'),
     // Conquest, which draws its sidebar item (decision 0407).
     wholeChurch('conquest.view_subtree'),
+    // Merging two records of one person is the Admin's alone (decision 0408).
+    wholeChurch('people.merge'),
   ];
 
   await page.route('**/api/v1/auth/me', (route) =>

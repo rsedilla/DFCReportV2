@@ -43,7 +43,9 @@ export class AbsentPeopleService implements AbsentPeoplePort {
     const months = lastFinishedMonths(manilaDayOf(now), 3);
     const labels = months.map((month) => month.first.slice(0, 7));
 
-    let candidates = await this.absence.absentEveryMonth(months);
+    // A merged pair is one person (decision 0408): read once, for both reads below.
+    const merges = await this.people.mergedPairsWithin(this.db);
+    let candidates = await this.absence.absentEveryMonth(months, merges);
 
     if (scope.kind === 'PERSONS') {
       const inScope = new Set([...scope.personIds].map((id) => canonicalId(id)));
@@ -112,7 +114,7 @@ export class AbsentPeopleService implements AbsentPeoplePort {
     const [leaders, cellsOf, seen] = await Promise.all([
       this.people.directLeaderNamesOf(ids),
       this.cells.currentCellsOfMany(ids),
-      this.absence.lastSeen(ids),
+      this.absence.lastSeen(ids, merges),
     ]);
     const leaderIds = await this.hierarchy.directLeaderIdsOf(ids);
     const pastors = await this.hierarchy.discipleCountsOf(this.db, ids);

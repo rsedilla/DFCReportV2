@@ -4,6 +4,8 @@ import request from 'supertest';
 
 import { sql } from 'kysely';
 
+import { lastFinishedMonths } from '../../src/attendance/absent-people.service';
+import { manilaDayOf } from '../../src/common/time/manila';
 import { reportRangeGuardMonth } from '../../src/common/time/report-range';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
@@ -1179,6 +1181,291 @@ describe('Person Merge (section 3, decision 0408)', () => {
       expect(
         rowsOf(after).reduce((sum, row) => sum + row.cell.owed, 0) + after.others.cell.owed,
       ).toBe(after.whole_church.cell.owed);
+    });
+
+    it("places the duplicate's scheduled meetings on the coverage line of the kept record's branch (point 21)", async () => {
+      // June's Saturdays: four of Mark's Cell, none recorded, and four the duplicate led, one
+      // recorded.
+      const coverageOf = async (query: string) =>
+        (await report('cells', query).expect(200)).body.coverage as {
+          recorded: number;
+          scheduled: number;
+        };
+
+      const churchBefore = await coverageOf('scope=WHOLE_CHURCH');
+      expect(churchBefore).toEqual({ recorded: 1, scheduled: 8 });
+      expect(await coverageOf(`scope=LEADER&leader_id=${manuel.id}`)).toEqual({
+        recorded: 0,
+        scheduled: 4,
+      });
+      expect(await coverageOf(`scope=LEADER&leader_id=${nestor.id}`)).toEqual({
+        recorded: 1,
+        scheduled: 4,
+      });
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      // One meeting in one branch: the kept record's, under Manuel, and not Nestor's.
+      expect(await coverageOf(`scope=LEADER&leader_id=${manuel.id}`)).toEqual({
+        recorded: 1,
+        scheduled: 8,
+      });
+      expect(await coverageOf(`scope=LEADER&leader_id=${nestor.id}`)).toEqual({
+        recorded: 0,
+        scheduled: 0,
+      });
+      // The church total does not change.
+      expect(await coverageOf('scope=WHOLE_CHURCH')).toEqual(churchBefore);
+    });
+
+    it("lists the duplicate's meetings under the kept record on the coverage rows by leader (point 21)", async () => {
+      type Line = { leader: { id: string } | null; filed: number; owed: number };
+      const byLeader = async () =>
+        (
+          await request(server())
+            .get('/api/v1/reports/cells/monthly/by-leader')
+            .query({ period: JUNE, scope: 'WHOLE_CHURCH', limit: 200 })
+            .set('Authorization', `Bearer ${admin.accessToken}`)
+            .expect(200)
+        ).body as { data: Line[]; total: { filed: number; owed: number } };
+      const lineOf = (body: { data: Line[] }, person: TestPerson) =>
+        body.data.find((line) => line.leader?.id === person.id);
+
+      const before = await byLeader();
+      expect(lineOf(before, ricoAgain)).toMatchObject({ filed: 1, owed: 4 });
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      const after = await byLeader();
+      expect(lineOf(after, rico)).toMatchObject({ filed: 1, owed: 4 });
+      expect(lineOf(after, ricoAgain)).toBeUndefined();
+      expect(lineOf(after, mark)).toMatchObject({ filed: 0, owed: 4 });
+      expect(after.total).toEqual(before.total);
+    });
+
+    describe("the Senior Pastors' counts (decision 0408, point 16)", () => {
+      type Counts = { cell_groups: number; cell_leaders: number };
+      type CountRow = Counts & { leader: { id: string } };
+
+      const churchCounts = async () =>
+        (
+          await request(server())
+            .get('/api/v1/reports/church-counts')
+            .query({ period: JUNE })
+            .set('Authorization', `Bearer ${admin.accessToken}`)
+            .expect(200)
+        ).body as {
+          whole_church: Counts;
+          tables: { rows: CountRow[] }[];
+          others: Counts;
+        };
+      const branchCounts = async (leader: TestPerson) =>
+        (
+          await request(server())
+            .get('/api/v1/reports/counts/branch')
+            .query({ period: JUNE, scope: 'LEADER', leader_id: leader.id })
+            .set('Authorization', `Bearer ${admin.accessToken}`)
+            .expect(200)
+        ).body as { total: Counts; own: Counts; rows: CountRow[] };
+      const rowOf = (body: { tables: { rows: CountRow[] }[] }, person: TestPerson) =>
+        body.tables.flatMap((table) => table.rows).find((row) => row.leader.id === person.id);
+
+      it("counts the Cell the duplicate led in the kept record's branch row, not in Others", async () => {
+        const before = await churchCounts();
+        expect(rowOf(before, nestor)).toMatchObject({ cell_groups: 1, cell_leaders: 1 });
+
+        await mergeInto(rico, ricoAgain).expect(200);
+
+        const after = await churchCounts();
+        // Mark's Cell and the one the duplicate led, both in Manuel's branch.
+        expect(rowOf(after, manuel)).toMatchObject({ cell_groups: 2, cell_leaders: 2 });
+        expect(rowOf(after, nestor)).toMatchObject({ cell_groups: 0, cell_leaders: 0 });
+        expect(after.others).toMatchObject({ cell_groups: 0, cell_leaders: 0 });
+        expect(after.whole_church).toMatchObject({ cell_groups: 2, cell_leaders: 2 });
+
+        const manuelBranch = await branchCounts(manuel);
+        expect(manuelBranch.total).toMatchObject({ cell_groups: 2, cell_leaders: 2 });
+        expect(manuelBranch.rows).toEqual([
+          expect.objectContaining({ leader: expect.objectContaining({ id: mark.id }) }),
+        ]);
+        expect(manuelBranch.rows[0]).toMatchObject({ cell_groups: 2, cell_leaders: 2 });
+        expect((await branchCounts(nestor)).total).toMatchObject({
+          cell_groups: 0,
+          cell_leaders: 0,
+        });
+      });
+
+      it('counts the duplicate and the kept record as one Cell Leader where each led a Cell', async () => {
+        await createCell(db, { leader: rico, createdAt: EPOCH });
+
+        await mergeInto(rico, ricoAgain).expect(200);
+
+        const after = await churchCounts();
+        // Three Cells, led by Mark and by Rico, whichever of his records led it.
+        expect(after.whole_church).toMatchObject({ cell_groups: 3, cell_leaders: 2 });
+        expect(rowOf(after, manuel)).toMatchObject({ cell_groups: 3, cell_leaders: 2 });
+
+        const markBranch = await branchCounts(mark);
+        expect(markBranch.total).toMatchObject({ cell_groups: 3, cell_leaders: 2 });
+        expect(markBranch.rows.find((row) => row.leader?.id === rico.id)).toMatchObject({
+          cell_groups: 2,
+          cell_leaders: 1,
+        });
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Point 17's derived paragraph: an account whose Person was merged away is not changed
+  // ---------------------------------------------------------------------------
+
+  describe("the merged-away record's account (point 17, decision 0408)", () => {
+    const post = (path: string, body: Record<string, unknown> = {}) =>
+      request(server())
+        .post(`/api/v1/accounts/${path}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(body);
+
+    const accountOf = (id: string) =>
+      db
+        .selectFrom('accounts')
+        .select(['status', 'full_view', 'approves_cells', 'moves_people'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+
+    it('refuses re-enabling it, and leaves it disabled', async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const refused = await post(`${juanAgainAccount.id}/reactivate`).expect(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect((await accountOf(juanAgainAccount.id)).status).toBe('DISABLED');
+    });
+
+    it('refuses changing its Full view, Approves Cells or Moves people, and changes nothing', async () => {
+      await mergeInto(juan, juanAgain).expect(200);
+      const before = await accountOf(juanAgainAccount.id);
+      expect(before.full_view).toBe(true);
+
+      for (const [path, body] of [
+        ['full-view', { full_view: false }],
+        ['approves-cells', { approves_cells: true }],
+        ['moves-people', { moves_people: true }],
+      ] as const) {
+        const refused = await post(`${juanAgainAccount.id}/${path}`, body).expect(409);
+        expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      }
+
+      expect(await accountOf(juanAgainAccount.id)).toEqual(before);
+    });
+
+    it('still re-enables an ordinary disabled account, and ticks it', async () => {
+      await post(`${manuelAccount.id}/disable`).expect(200);
+      expect((await accountOf(manuelAccount.id)).status).toBe('DISABLED');
+
+      await post(`${manuelAccount.id}/reactivate`).expect(200);
+      expect((await accountOf(manuelAccount.id)).status).toBe('ACTIVE');
+
+      await post(`${manuelAccount.id}/moves-people`, { moves_people: true }).expect(200);
+      expect((await accountOf(manuelAccount.id)).moves_people).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Absent 3+ Months (decision 0397) counts a merged pair as one person (point 11)
+  // ---------------------------------------------------------------------------
+
+  describe('Absent 3+ Months with a merged pair (decision 0397, point 11)', () => {
+    // Whichever three months have finished when the suite runs, as absent-and-archive does.
+    const months = lastFinishedMonths(manilaDayOf(new Date()), 3);
+    const dayIn = (index: number, day: number): string =>
+      `${months[index].first.slice(0, 8)}${String(day).padStart(2, '0')}`;
+    /** A day `days` before the first of the three months. */
+    const beforeWindow = (days: number): string => {
+      const at = new Date(`${months[0].first}T00:00:00Z`);
+      at.setUTCDate(at.getUTCDate() - days);
+      return at.toISOString().slice(0, 10);
+    };
+    /** The first Sunday on or after a day. */
+    const sundayFrom = (day: string): string => {
+      const at = new Date(`${day}T00:00:00Z`);
+      while (at.getUTCDay() !== 0) {
+        at.setUTCDate(at.getUTCDate() + 1);
+      }
+      return at.toISOString().slice(0, 10);
+    };
+
+    const absentIds = async () =>
+      (
+        (
+          await request(server())
+            .get('/api/v1/people/absent')
+            .set('Authorization', `Bearer ${admin.accessToken}`)
+            .expect(200)
+        ).body.data as { id: string; last_at_cell: string | null; last_at_dcc: string | null }[]
+      ).map((row) => row);
+
+    /** One meeting of Mark's Cell in each month, Juan and Pedro marked Absent at each. */
+    const absentEveryMonth = async (): Promise<string[]> => {
+      const meetings: string[] = [];
+      for (let index = 0; index < 3; index += 1) {
+        const id = await meeting(cell.id, dayIn(index, 10), mark.id);
+        await cellMark(id, juan, false);
+        await cellMark(id, pedro, false);
+        meetings.push(id);
+      }
+      return meetings;
+    };
+
+    it('does not list the kept record where the duplicate was Present in one of the months', async () => {
+      const meetings = await absentEveryMonth();
+      await cellMark(meetings[1], juanAgain, true);
+
+      expect((await absentIds()).map((row) => row.id)).toEqual(
+        expect.arrayContaining([juan.id, pedro.id]),
+      );
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const ids = (await absentIds()).map((row) => row.id);
+      expect(ids).toContain(pedro.id);
+      expect(ids).not.toContain(juan.id);
+    });
+
+    it("gives the kept record the duplicate's later last-seen days", async () => {
+      await absentEveryMonth();
+      // Before the three months, the duplicate came to the Cell and to a DCC Sunday.
+      const earlier = beforeWindow(20);
+      const held = await meeting(cell.id, earlier, mark.id);
+      await cellMark(held, juanAgain, true);
+      const sunday = sundayFrom(beforeWindow(14));
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: sunday })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await dccMark(event.id, juanAgain, true, nestor);
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const row = (await absentIds()).find((entry) => entry.id === juan.id);
+      expect(row).toMatchObject({ last_at_cell: earlier, last_at_dcc: sunday });
+    });
+
+    it('does not list the kept record where the duplicate led a Cell that met in the months', async () => {
+      await absentEveryMonth();
+      // The duplicate led a Cell that met in the second month, and handed it over since.
+      const ledCell = await createCell(db, { leader: juanAgain, createdAt: EPOCH });
+      await meeting(ledCell.id, dayIn(1, 12), juanAgain.id);
+      await handOver(ledCell.id, nestor, new Date(Date.now() - 60_000));
+
+      expect((await absentIds()).map((row) => row.id)).toContain(juan.id);
+
+      await mergeInto(juan, juanAgain).expect(200);
+
+      const ids = (await absentIds()).map((row) => row.id);
+      expect(ids).toContain(pedro.id);
+      expect(ids).not.toContain(juan.id);
     });
   });
 

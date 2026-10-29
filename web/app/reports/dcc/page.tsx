@@ -26,6 +26,7 @@ import { CONTROL_BAR } from '@/components/ui/frame';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { networkLabel } from '@/lib/people';
+import { useKeptLeader } from '@/lib/merged-leader';
 import { getDccTwelve, type ReportNetwork } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
 import { rangeEndOf } from '@/lib/report-range';
@@ -75,6 +76,8 @@ export function DccReport() {
   const { kind, current, me, wholeChurch, seniorPastor, finishedKind, chosen, reach } = period;
   const { periodReady, start, guardMonth, own, probe, periodParams } = period;
   const leader = search.get('leader');
+  // A leader merged away opens the record kept's report (decision 0408, point 22).
+  const mergedFrom = useKeptLeader(leader);
   const networkParam = search.get('network');
   const network: ReportNetwork | null =
     networkParam === 'MENS' || networkParam === 'WOMENS' ? networkParam : null;
@@ -205,6 +208,13 @@ export function DccReport() {
             month={guardMonth}
             backHref={`/reports/dcc?${periodParams({})}`}
           />
+        ) : null}
+
+        {leader && mergedFrom ? (
+          <p className="border-accent mt-6 border p-4 text-sm leading-relaxed">
+            <strong>{mergedFrom} was merged into this record.</strong> These are {subjectName}
+            &rsquo;s figures, the record kept.
+          </p>
         ) : null}
 
         <div className="mt-8">

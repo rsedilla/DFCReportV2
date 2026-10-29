@@ -8,6 +8,7 @@ import {
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
+import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountTokensService } from './account-tokens.service';
 import { TokensService } from './tokens.service';
@@ -77,7 +78,36 @@ export class AccountAccessService {
     private readonly sessions: TokensService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly people: PeopleReadService,
   ) {}
+
+  /**
+   * Refuses a change to an account whose Person was merged away (SKILL.md section 3, decision
+   * 0408): the merge disabled it, and its holder signs in through the record kept. Read after
+   * the account row is locked, so a merge committing first is seen; one committing later
+   * disables the account again.
+   */
+  private async assertHolderNotMergedAwayWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+  ): Promise<void> {
+    const account = await trx
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+    if (!account) {
+      return;
+    }
+
+    const person = await this.people.forDecisionWithin(trx, account.person_id);
+    if (person?.mergedIntoId) {
+      throw new InvariantViolationError(
+        'That account belongs to a record merged into another. Give the record kept an account instead.',
+        { account_id: accountId, merged_into_id: person.mergedIntoId },
+      );
+    }
+  }
 
   /**
    * Ends every session at once and kills every activation and reset link. Refused for
@@ -232,6 +262,8 @@ export class AccountAccessService {
         });
       }
 
+      await this.assertHolderNotMergedAwayWithin(trx, accountId);
+
       const status: AccountStatus =
         account.password_hash === null ? 'PENDING_ACTIVATION' : 'ACTIVE';
 
@@ -345,6 +377,8 @@ export class AccountAccessService {
       if (!account) {
         throw new NotFoundError('No such account.');
       }
+
+      await this.assertHolderNotMergedAwayWithin(trx, accountId);
 
       const leader = await trx
         .selectFrom('account_roles')

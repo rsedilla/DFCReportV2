@@ -520,6 +520,21 @@ export class ReportingService {
   }
 
   /**
+   * Each item's leader resolved to the record kept (decision 0408, points 16 and 21): a Cell a
+   * record merged away led, and the meetings it was owed, are placed and counted where the
+   * record kept sits, and the two records count as one leader.
+   */
+  private async leadersAsKept<T extends { leaderId: string | null }>(
+    trx: Db,
+    items: readonly T[],
+  ): Promise<T[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    return items.map((item) =>
+      item.leaderId === null ? item : { ...item, leaderId: canonicalId(resolve(item.leaderId)) },
+    );
+  }
+
+  /**
    * The period's placement graph with every merged pair placed once (section 3, decision 0408):
    * the merges are read in the report's own transaction, so they and the figures are one
    * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
@@ -1033,7 +1048,10 @@ export class ReportingService {
    */
   async cellCoverageByLeader(scope: CellReportScope, period: string): Promise<CoverageByLeader> {
     return this.overPeriod(period, async (trx) => {
-      const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+      const pairs = await this.leadersAsKept(
+        trx,
+        await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
+      );
       const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
       const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
 
@@ -1106,7 +1124,10 @@ export class ReportingService {
     // above records what a `Promise.all` cost this module once, on a *pooled* connection
     // where it really was two snapshots; writing it the same way here would invite a
     // reader to check whether this is that mistake again.
-    const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+    const pairs = await this.leadersAsKept(
+      trx,
+      await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
+    );
     const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
 
     const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
@@ -1351,7 +1372,7 @@ export class ReportingService {
       const current = now.getTime() < bounds.end.getTime();
       const at = current ? now : bounds.end;
 
-      const cells = await this.cells.cellsInForceAt(trx, at);
+      const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
       // Nobody outside the pastoral tree at the month's instant is counted (decision 0339).
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
@@ -1487,7 +1508,7 @@ export class ReportingService {
       const current = now.getTime() < bounds.end.getTime();
       const at = current ? now : bounds.end;
 
-      const cells = await this.cells.cellsInForceAt(trx, at);
+      const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
 
@@ -1847,7 +1868,6 @@ function shiftDays(day: string, days: number): string {
   return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
 }
 
-/** *Recording status*'s two columns and status over a set of leaders (decision 0325). */
 /** Each leader's obligations keyed by the record kept, a merged pair's added together. */
 function owedAsKept(owing: OwedByLeader, resolve: (personId: string) => string): OwedByLeader {
   const kept: OwedByLeader = new Map();
@@ -1863,6 +1883,7 @@ function owedAsKept(owing: OwedByLeader, resolve: (personId: string) => string):
   return kept;
 }
 
+/** *Recording status*'s two columns and status over a set of leaders (decision 0325). */
 function figuresOf(
   owing: { cell: OwedByLeader; dcc: OwedByLeader },
   leaders: readonly string[],
