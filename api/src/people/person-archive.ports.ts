@@ -1,3 +1,4 @@
+import type { Db } from '../database/database.module';
 import type { Database } from '../database/schema';
 import type { ScopeMembership } from '../auth/authorization/authorization.service';
 import type { Transaction } from 'kysely';
@@ -78,6 +79,12 @@ export interface ArchiveAccountsPort {
     accountId: string,
     actorAccountId: string,
   ): Promise<void>;
+
+  /**
+   * The Person an account belongs to, or null where it names none. For a merged record's
+   * page, which says who merged it (decision 0408, point 14).
+   */
+  personOfAccountWithin(executor: Db | Transaction<Database>, accountId: string): Promise<string | null>;
 }
 
 export const ABSENT_PEOPLE_PORT = Symbol('ABSENT_PEOPLE_PORT');

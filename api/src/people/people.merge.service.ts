@@ -93,6 +93,75 @@ export class PeopleMergeService {
     });
   }
 
+  /**
+   * A merged record's read-only line (decision 0408, point 14): the record kept, when, by whom
+   * and why. Null for a record that was never merged away, or that does not exist.
+   */
+  async mergedLineOf(personId: string): Promise<Record<string, unknown> | null> {
+    const row = await this.db
+      .selectFrom('persons as absorbed')
+      .innerJoin('persons as kept', 'kept.id', 'absorbed.merged_into_id')
+      .select([
+        'absorbed.id as id',
+        'absorbed.member_id as member_id',
+        'absorbed.title as title',
+        'absorbed.first_name as first_name',
+        'absorbed.middle_name as middle_name',
+        'absorbed.last_name as last_name',
+        'absorbed.merged_at as merged_at',
+        'absorbed.merged_by as merged_by',
+        'absorbed.merge_reason as merge_reason',
+        'kept.id as kept_id',
+        'kept.member_id as kept_member_id',
+        'kept.title as kept_title',
+        'kept.first_name as kept_first_name',
+        'kept.middle_name as kept_middle_name',
+        'kept.last_name as kept_last_name',
+      ])
+      .where('absorbed.id', '=', personId)
+      .executeTakeFirst();
+
+    if (!row) {
+      return null;
+    }
+
+    // Who merged it, by name where their account names a Person (section 6 allows an
+    // administrator outside the tree, who still has one).
+    let mergedBy: string | null = null;
+    if (row.merged_by !== null && this.accounts) {
+      const byPersonId = await this.accounts.personOfAccountWithin(this.db, row.merged_by);
+      if (byPersonId !== null) {
+        const by = await this.db
+          .selectFrom('persons')
+          .select(['title', 'first_name', 'middle_name', 'last_name'])
+          .where('id', '=', byPersonId)
+          .executeTakeFirst();
+        mergedBy = by ? composeName(by) : null;
+      }
+    }
+
+    return {
+      id: row.id,
+      member_id: row.member_id,
+      full_name: composeName(row),
+      merged: {
+        into: {
+          id: row.kept_id,
+          member_id: row.kept_member_id,
+          full_name: composeName({
+            title: row.kept_title,
+            first_name: row.kept_first_name,
+            middle_name: row.kept_middle_name,
+            last_name: row.kept_last_name,
+          }),
+        },
+        merged_at: row.merged_at?.toISOString() ?? null,
+        merged_by: mergedBy,
+        reason: row.merge_reason,
+      },
+    };
+  }
+
   async merge(
     keptId: string,
     input: { duplicateId: string; reason: string },

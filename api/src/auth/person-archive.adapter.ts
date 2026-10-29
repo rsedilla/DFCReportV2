@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { AccountAccessService } from './account-access.service';
 
+import type { Db } from '../database/database.module';
 import type { Database } from '../database/schema';
 import type { ArchiveAccountsPort } from '../people/person-archive.ports';
 import type { Transaction } from 'kysely';
@@ -34,5 +35,18 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
     actorAccountId: string,
   ): Promise<void> {
     await this.access.disableWithin(executor, accountId, actorAccountId);
+  }
+
+  async personOfAccountWithin(
+    executor: Db | Transaction<Database>,
+    accountId: string,
+  ): Promise<string | null> {
+    const account = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+
+    return account?.person_id ?? null;
   }
 }

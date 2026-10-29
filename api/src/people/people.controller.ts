@@ -558,6 +558,12 @@ export class PeopleController {
   async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
     const person = await this.read.findById(id);
     if (!person) {
+      // A record merged away keeps its page, read only, naming where the person is now
+      // (decision 0408, point 14): no leader, no Cell, no action.
+      const merged = await this.merges.mergedLineOf(id);
+      if (merged) {
+        return merged;
+      }
       throw new NotFoundError('No such person.');
     }
 
