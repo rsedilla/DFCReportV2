@@ -102,10 +102,11 @@ export class PeopleDuplicatesService {
      */
     only: (match: VisibleMatch) => boolean = () => true,
     /**
-     * Applied to the subject as given and never to the publishable run, whose
-     * subject has its birthday and mobile number removed rather than not given
-     * (decision 0399). So an out-of-scope candidate still never appears in a
-     * creation refusal, as `visibleCandidates` says.
+     * Applied to the subject as given. Of these only `similarNames` reaches the
+     * publishable run (decision 0405), which reads the names alone; never
+     * `namesStopWithoutDetails`, whose subject has its birthday and mobile number
+     * removed there rather than not given (decision 0399). So an out-of-scope
+     * candidate still never appears in a creation refusal, as `visibleCandidates` says.
      */
     rules: MatchingRules = {},
     /** An add reads inside its own transaction, after its lock (decision 0401). */
@@ -437,10 +438,8 @@ async function visibleCandidates(
  * so the order remains a function of nothing protected. The Member ID also
  * encodes nothing and is unique (section 3), which is what makes the key total.
  *
- * The name is `fullNameOf`, the same function `describeCandidate` composes the
- * returned `full_name` with, so the key cannot drift from the name the viewer is
- * actually shown — the argument for this ordering rests on their being the same
- * string.
+ * Since decision 0405 a withheld row returns neither, so the viewer sees only where an
+ * archived one sits among them; that position is still a function of the names alone.
  */
 function orderKeyOf(match: Match): [string, string] {
   // `normalizeName`, which is the form section 3 defines for comparison:
@@ -509,8 +508,7 @@ export interface VisibleCandidate {
  *
  * What an out-of-scope candidate carries instead is that they are a possible
  * match. That is what section 3 needs the encoder to know: somebody may already
- * be recorded, ask the leader who holds them. It is not what a caller can binary
- * search on.
+ * be recorded, ask the Admin. It is not what a caller can binary search on.
  *
  * Since decision 0405 it carries nothing that names them either: no name, no Member
  * ID, no identifier. Somebody with a similar name is recorded in another branch, and

@@ -29,12 +29,14 @@ a line of its own beside the one above, shown when any match in another branch i
 owner chose this on 2026-10-29 rather than dropping the tag, so that a leader still asks for the
 first record back (decision 0404).
 
-**3. A similar name is shown as well as an exact one.** A candidate is Tier 2 on the names alone
-where the last names are equal and the first names are a known nickname variant, or the whole
-names are closely similar, which is what catches a letter added, dropped, changed or swapped
-(`Jon` against `John`, `Jaun` against `Juan`). Both read Section 3's existing nickname list and
-whole-name threshold. The whole name rather than the first name alone, so two short first names a
-letter apart (`Bo` against `Jo`) are not a match on the last name alone, which Section 3 forbids.
+**3. A similar name is shown as well as an exact one.** A candidate is Tier 2 on the names alone,
+each name compared on its own: the last names equal and the first names a known nickname variant
+or one edit apart, or the first names equal and the last names one edit apart. That catches a
+letter added, dropped, changed or two swapped (`Jon` against `John`, `Jaun` against `Juan`,
+`Santos` against `Santoz`), using Section 3's existing nickname list and edit distance. The two
+names are never run together, which would let a long shared surname absorb two different first
+names (`Ian` and `Jun Delos Santos`), a match on the last name alone that Section 3 forbids; and a
+name of one or two letters (`Bo` against `Jo`) is never a letter away from another.
 It is asked of the application's own add, edit and pre-flight paths, and of the run that decides
 who in another branch appears, and not of the tree import, whose decisions file this ruling does
 not reach. It is never Tier 1, so it never stops a save.

@@ -138,16 +138,9 @@ export function PossibleMatches({
       </p>
 
       {/*
-        **Rendered in name order, not the order the API returned.** The API sorts
-        candidates by tier, and a withheld candidate's tier is withheld precisely
-        because it is derived from which rule fired — so with two withheld
-        candidates sharing the submitted names, the one listed first is the one
-        whose birthday matched. Position would answer the question the redaction
-        exists to refuse, which is the same oracle section 3's three rulings
-        closed, one field further out.
-
-        This removes the channel from *this* client. The sort itself is in the
-        API and reaches every client, so it is raised separately.
+        **Rendered in name order, not the order the API returned.** The candidates in
+        scope are sorted by name here; the withheld ones follow as at most two lines naming
+        nobody (decision 0405), so no position among them is shown.
       */}
       <ul className="divide-line mt-3 divide-y">
         {[...shown]

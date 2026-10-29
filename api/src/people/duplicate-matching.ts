@@ -356,25 +356,42 @@ export const APPLICATION_RULES: MatchingRules = {
   similarNames: true,
 };
 
+/** The shortest name a one-letter difference may be read in (decision 0405). */
+const SIMILAR_NAME_MIN_LENGTH = 3;
+
+/** Whether two compared names are a small edit distance apart, neither being too short. */
+function closeName(a: string, b: string, thresholds: MatchingThresholds): boolean {
+  return (
+    Math.min(a.length, b.length) >= SIMILAR_NAME_MIN_LENGTH &&
+    editDistance(a, b) <= thresholds.firstNameEditDistance
+  );
+}
+
 /**
- * Why two names are similar, or null (decision 0405). Reads the names alone: the last
- * names equal and the first names a known nickname, or the whole names closely similar,
- * which is what catches one letter added, dropped or changed (`Jon` against `John`).
- * The whole name rather than the first alone, so that two short first names one letter
- * apart are not a match on the last name alone, which section 3 forbids.
+ * Why two names are similar, or null (decision 0405). Reads the names alone, and **each
+ * name is compared on its own**: one of the two equal and the other a known nickname or a
+ * small edit distance away, so a letter added, dropped, changed or two swapped (`Jon`
+ * against `John`, `Santos` against `Santoz`). Never the two run together, which let a
+ * long shared surname absorb two different first names (`Ian` and `Jun Delos Santos`):
+ * a match on the last name alone, which section 3 forbids. A name of one or two letters is
+ * never a letter away from another.
  */
 function similarName(
-  sameLast: boolean,
+  first: string,
+  cFirst: string,
+  last: string,
+  cLast: string,
   nickname: boolean,
-  whole: string,
-  cWhole: string,
   thresholds: MatchingThresholds,
 ): string | null {
-  if (sameLast && nickname) {
+  if (last === cLast && nickname) {
     return 'last name equal, first name a known nickname variant';
   }
-  if (similarity(whole, cWhole) >= thresholds.wholeNameSimilarity) {
-    return 'names closely similar';
+  if (last === cLast && closeName(first, cFirst, thresholds)) {
+    return 'last name equal, first name within a small edit distance';
+  }
+  if (first === cFirst && closeName(last, cLast, thresholds)) {
+    return 'first name equal, last name within a small edit distance';
   }
   return null;
 }
@@ -482,7 +499,7 @@ export function findCandidates(
           reasons.push(spelling);
         } else if (rules.similarNames) {
           // Decision 0405: a similar name, read from the names alone.
-          const similar = similarName(sameLast, nickname, whole, cWhole, thresholds);
+          const similar = similarName(first, cFirst, last, cLast, nickname, thresholds);
           if (similar !== null) {
             tier = 2;
             reasons.push(similar);

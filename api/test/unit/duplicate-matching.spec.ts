@@ -218,7 +218,9 @@ describe('a similar name, read from the names alone (decision 0405)', () => {
   it('is asked for by the application, and not by default', () => {
     expect(APPLICATION_RULES.similarNames).toBe(true);
     const jon = subject({ firstName: 'Jon', lastName: 'Santos', ...none });
-    expect(reasonsFor(jon, john)).toEqual([[2, 'names closely similar']]);
+    expect(reasonsFor(jon, john)).toEqual([
+      [2, 'last name equal, first name within a small edit distance'],
+    ]);
     expect(reasonsFor(jon, john, {})).toEqual([]);
   });
 
@@ -235,7 +237,7 @@ describe('a similar name, read from the names alone (decision 0405)', () => {
     const jon = (details: Partial<Subject>) =>
       subject({ firstName: 'Jon', lastName: 'Santos', birthDate: null, ...details });
     const answer = reasonsFor(jon({}), { ...john, birthDate: '1985-06-15' });
-    expect(answer).toEqual([[2, 'names closely similar']]);
+    expect(answer).toEqual([[2, 'last name equal, first name within a small edit distance']]);
     expect(
       reasonsFor(jon({ birthDate: '1970-01-01' }), { ...john, birthDate: '1985-06-15' }),
     ).toEqual(answer);
@@ -259,6 +261,36 @@ describe('a similar name, read from the names alone (decision 0405)', () => {
         lastName: 'Li',
       }),
     ).toEqual([]);
+  });
+
+  it('reads a last name a letter away where the first names are equal', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'John', lastName: 'Santoz', ...none }), {
+        ...john,
+        ...none,
+      }),
+    ).toEqual([[2, 'first name equal, last name within a small edit distance']]);
+  });
+
+  it('never lets a long shared surname absorb two different first names', () => {
+    // Each was a match while the two names were compared run together.
+    const pairs: [string, string, string, string][] = [
+      ['Bo', 'Santos', 'Jo', 'Santos'],
+      ['Ian', 'Delos Santos', 'Jun', 'Delos Santos'],
+      ['Ben', 'Delos Santos', 'Jon', 'Delos Santos'],
+      ['Jo', 'Dela Cruz-Villanueva', 'Al', 'Dela Cruz-Villanueva'],
+      ['Mariafernanda', 'Go', 'Mariafernanda', 'Yu'],
+    ];
+    for (const [firstName, lastName, cFirst, cLast] of pairs) {
+      expect(
+        reasonsFor(subject({ firstName, lastName, ...none }), {
+          ...john,
+          firstName: cFirst,
+          lastName: cLast,
+          ...none,
+        }),
+      ).toEqual([]);
+    }
   });
 
   it('is never Tier 1', () => {
