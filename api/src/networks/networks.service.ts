@@ -83,7 +83,11 @@ export class NetworksService {
    * point 6): an instant both held a `network_assignments` row and the rows differ. A merge is
    * refused then, because the pair would be counted in both Networks for that time.
    */
-  async networksEverDifferedWithin(executor: Db, personA: string, personB: string): Promise<boolean> {
+  async networksEverDifferedWithin(
+    executor: Db,
+    personA: string,
+    personB: string,
+  ): Promise<boolean> {
     const result = await sql<{ differed: boolean }>`
       SELECT EXISTS (
         SELECT 1

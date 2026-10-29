@@ -33,9 +33,11 @@ not offered.
 5. **The duplicate pastors anyone.** The merge is refused until the Admin moves each of them to a
    leader, because where each person belongs is a pastoral decision (the same rule as a duplicate
    who leads a Cell).
-6. **The two are in different Networks.** The merge is refused until the sex is corrected on the
-   record that is wrong (Section 4), so that each Network's figures move once, for one stated
-   reason.
+6. **The two are in different Networks, now or at any time in the past.** The merge is refused
+   until the sex is corrected on the record that is wrong (Section 4), so that each Network's
+   figures move once, for one stated reason. A correction made from today still leaves the two in
+   different Networks before it, where the pair would count in both, so the Admin backdates the
+   correction to cover that time first (owner, 2026-10-30, `NETWORKS_DIFFERED`).
 7. **The duplicate is a Network root.** A root may be the record kept, and stays the root; it is
    never absorbed. (A root pastors people, so point 5 refuses it too.)
 8. **The kept record is archived.** The duplicate may be archived and is joined in as it is; the

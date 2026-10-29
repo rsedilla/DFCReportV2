@@ -529,7 +529,7 @@ describe('Person Merge (section 3, decision 0408)', () => {
         .put(`/api/v1/people/${juanAsWoman.id}/sex`)
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ sex: 'MALE', reason: 'Sex entered in error.', pastoral_leader_id: mark.id });
+        .send({ sex: 'MALE', reason: 'Sex entered in error.' });
       expect(corrected.status).toBe(200);
 
       await expectRefused(juan, juanAsWoman, ['NETWORKS_DIFFERED']);
