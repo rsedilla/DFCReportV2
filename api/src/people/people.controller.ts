@@ -45,6 +45,8 @@ import {
   SearchPeopleDto,
 } from './dto/people.dto';
 import { ArchivePersonDto, LifecycleListDto } from './dto/lifecycle.dto';
+import { MergePersonDto, MergePreviewDto } from './dto/merge.dto';
+import { PeopleMergeService } from './people.merge.service';
 import { APPLICATION_RULES, normalizeName } from './duplicate-matching';
 import { ABSENT_PEOPLE_PORT, type AbsentPeoplePort } from './person-archive.ports';
 import { PeopleLifecycleService } from './people.lifecycle.service';
@@ -90,6 +92,7 @@ export class PeopleController {
     private readonly duplicates: PeopleDuplicatesService,
     private readonly sexCorrection: PeopleSexCorrectionService,
     private readonly reassignment: PeopleReassignmentService,
+    private readonly merges: PeopleMergeService,
     // The path is a hierarchy question answered on a `people` route, so it is
     // taken from the owning module's service rather than re-walked here
     // (section 2). `PeopleModule` already imports `HierarchyModule`.
@@ -407,6 +410,39 @@ export class PeopleController {
     return this.lifecycle.archive(
       id,
       { reason: body.reason, note: body.note, accountAccess: body.account_access },
+      actor,
+      claim,
+    );
+  }
+
+  /**
+   * What merging `duplicate_id` into this record would be refused for, now (decision 0407).
+   * The merge screen reads it before offering the button; the merge asks the same again
+   * after locking both records. `people.merge` is Admin-only at Whole Church (section 3).
+   */
+  @Get(':id/merge-preview')
+  @RequiresCapability(Capability.PeopleMerge, { kind: 'person', from: 'params.id' })
+  async mergePreview(
+    @Param('id') id: string,
+    @Query() query: MergePreviewDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.merges.preview(id, query.duplicate_id, actor);
+  }
+
+  /** Join `duplicate_id` into this record (SKILL.md section 3, decision 0407). */
+  @Post(':id/merge')
+  @HttpCode(200)
+  @RequiresCapability(Capability.PeopleMerge, { kind: 'person', from: 'params.id' })
+  async merge(
+    @Param('id') id: string,
+    @Body() body: MergePersonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.merges.merge(
+      id,
+      { duplicateId: body.duplicate_id, reason: body.reason },
       actor,
       claim,
     );

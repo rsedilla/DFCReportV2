@@ -54,6 +54,10 @@ export interface PersonsTable {
   search_last_name: GeneratedAlways<string>;
   search_full_name: GeneratedAlways<string>;
   merged_into_id: string | null;
+  /** When, by which Admin account and why this record was merged away (migration 0033). */
+  merged_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  merged_by: string | null;
+  merge_reason: string | null;
   created_at: ServerTimestamp;
   updated_at: ServerTimestamp;
 }
@@ -238,6 +242,8 @@ export type AuditAction =
   // account-access decision whichever was chosen (section 6, decision 0397).
   | 'person.archived'
   | 'person.restored'
+  // Section 21's "Person merge", targeting the absorbed record (decision 0407).
+  | 'person.merged'
   | 'pastoral_assignment.transferred'
   | 'network.changed'
   | 'sex.corrected'

@@ -6,6 +6,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import { canonicalId } from '../common/identifiers';
+import { type MergedPairs } from '../common/merged-identity';
 import { type RosterCursor } from '../common/roster-cursor';
 import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
@@ -595,15 +596,16 @@ export class PeopleReadService {
   /**
    * Every Person current at one instant, for the Senior Pastors' *Number of people*
    * (decision 0326, point 3): a lifecycle row in force then reads `CURRENT`. Lifecycle is
-   * effective-dated so that an archival moves no earlier month (section 3). An absorbed
-   * record is left out, as everywhere else here; nothing writes one yet.
+   * effective-dated so that an archival moves no earlier month (section 3). **A merged pair is
+   * one person** (decision 0407): an absorbed record current then is answered as the record
+   * kept, so a month before the kept record began still counts them, once.
    */
   async currentIdsAt(executor: Db | Transaction<Database>, at: Date): Promise<string[]> {
     const rows = await executor
       .selectFrom('persons')
       .innerJoin('person_lifecycle', 'person_lifecycle.person_id', 'persons.id')
-      .select('persons.id')
-      .where('persons.merged_into_id', 'is', null)
+      .select(sql<string>`coalesce(persons.merged_into_id, persons.id)`.as('id'))
+      .distinct()
       .where('person_lifecycle.state', '=', 'CURRENT')
       .where('person_lifecycle.started_at', '<=', at)
       .where((eb) =>
@@ -615,6 +617,24 @@ export class PeopleReadService {
       .execute();
 
     return rows.map((row) => canonicalId(row.id));
+  }
+
+  /**
+   * Every Person merge, absorbed record beside record kept (SKILL.md section 3, decision 0407),
+   * for a module that counts people to resolve its own rows with (`common/merged-identity.ts`).
+   * Read in the caller's transaction, so a report's figures and its merges are one snapshot.
+   */
+  async mergedPairsWithin(executor: Db | Transaction<Database>): Promise<MergedPairs> {
+    const rows = await executor
+      .selectFrom('persons')
+      .select(['id', 'merged_into_id'])
+      .where('merged_into_id', 'is not', null)
+      .execute();
+
+    return {
+      absorbed: rows.map((row) => canonicalId(row.id)),
+      kept: rows.map((row) => canonicalId(row.merged_into_id as string)),
+    };
   }
 
   /**

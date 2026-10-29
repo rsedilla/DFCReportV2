@@ -587,7 +587,7 @@ const collect = (file, source, tables) => {
           const { roots, joined, writes, unreadable } = rawSqlReferences(arg.text, tables, () => null);
           const group = groupFor(where);
           for (const table of roots) group.roots.add(table);
-          for (const table of joined) group.joined.push({ table, root: null, node });
+          for (const table of joined) group.joined.push({ table, root: null, templateRoots: roots, node });
           for (const table of writes) group.writes.add(table);
           for (const fragment of unreadable) {
             fail(relativeTo(file), `raw SQL in \`${where}\` names a table this check cannot resolve: \`${fragment}\``);
@@ -603,7 +603,7 @@ const collect = (file, source, tables) => {
           );
           const group = groupFor(where);
           for (const table of roots) group.roots.add(table);
-          for (const table of joined) group.joined.push({ table, root: null, node });
+          for (const table of joined) group.joined.push({ table, root: null, templateRoots: roots, node });
           for (const table of writes) group.writes.add(table);
           for (const fragment of unreadable) {
             fail(
@@ -637,7 +637,7 @@ const collect = (file, source, tables) => {
         );
         const group = groupFor(where);
         for (const table of roots) group.roots.add(table);
-        for (const table of joined) group.joined.push({ table, root: null, node });
+        for (const table of joined) group.joined.push({ table, root: null, templateRoots: roots, node });
         for (const table of writes) group.writes.add(table);
         for (const fragment of unreadable) {
           fail(
@@ -800,7 +800,7 @@ const main = async () => {
         );
       }
 
-      for (const { table, root, node } of joined) {
+      for (const { table, root, templateRoots, node } of joined) {
         if (ownIt(table)) continue;
         inventory(
           table,
@@ -810,7 +810,13 @@ const main = async () => {
           // A standalone chain is measured against its own root. A **nested** one belongs to
           // the query it sits inside, which is how section 2 reads `withoutACell`: "rooted
           // in `persons`" while anti-joining three Cell tables, one of which it joins to.
-          isNested(node) ? subqueryRootsItsOwn : owners[root] === owner,
+          // A raw SQL statement has no builder chain, so its join is measured against the tables
+          // that same statement roots in: \FROM dcc_events ... JOIN persons\ in one template.
+          isNested(node)
+            ? subqueryRootsItsOwn
+            : root === null && templateRoots !== undefined
+              ? [...templateRoots].some((rooted) => owners[rooted] === owner)
+              : owners[root] === owner,
         );
       }
     }

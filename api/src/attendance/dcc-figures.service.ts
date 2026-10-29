@@ -111,11 +111,13 @@ export class DccFiguresService {
    * is a VIP on October's report forever. Any other reading moves a closed month's figures,
    * which section 20 forbids.
    *
-   * **What it does not do: resolve a merged identity.** Section 3 requires a merged pair to
-   * count as one person "when reports are generated", for every period including past ones,
-   * and that resolution belongs to `people` (section 2). Nothing writes `merged_into_id`
-   * yet — Person Merge is unbuilt — so no report can be wrong today; this is named because
-   * the exclusions above read as a complete list and are not one.
+   * **A merged pair is one person** (section 3, decision 0407). Each record resolves to the
+   * record kept, `coalesce(merged_into_id, id)`, one step because a merge never chains
+   * (migration 0033); and Sundays are counted as distinct services, so a Sunday marked Present
+   * on both records counts once. An Absent mark is never counted, so Present wins with no rule
+   * of its own. `personIds` names records kept. `persons` is joined here, inside this one
+   * statement, rather than read through `people`, because one statement is what keeps every
+   * figure one snapshot (section 2's exemption; `api/module-boundaries.json`).
    */
   async monthFigures(
     reportingMonth: string,
@@ -148,25 +150,27 @@ export class DccFiguresService {
            AND event_date < (${reportingMonth}::date + interval '1 month')
       ),
       attended_this_month AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(p.merged_into_id, a.person_id) AS person_id
           FROM calendar c
           JOIN dcc_attendance a ON a.dcc_event_id = c.id
+          JOIN persons p ON p.id = a.person_id
          WHERE c.removed_at IS NULL
            AND a.present = true
            AND a.superseded_at IS NULL
            AND (
              ${population}::uuid[] IS NULL
-             OR a.person_id = ANY (${population}::uuid[])
+             OR coalesce(p.merged_into_id, a.person_id) = ANY (${population}::uuid[])
            )
       ),
       figures AS (
         SELECT m.person_id,
-               count(*) FILTER (
+               count(DISTINCT e.id) FILTER (
                  WHERE e.event_date >= ${reportingMonth}::date
                ) AS times_in_month,
-               count(*) AS lifetime_through_month
+               count(DISTINCT e.id) AS lifetime_through_month
           FROM attended_this_month m
-          JOIN dcc_attendance a ON a.person_id = m.person_id
+          JOIN persons p ON p.id = m.person_id OR p.merged_into_id = m.person_id
+          JOIN dcc_attendance a ON a.person_id = p.id
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.present = true
            AND a.superseded_at IS NULL
@@ -246,23 +250,25 @@ export class DccFiguresService {
          WHERE event_date BETWEEN ${from}::date AND ${to}::date
       ),
       attended AS (
-        SELECT DISTINCT a.person_id
+        SELECT DISTINCT coalesce(p.merged_into_id, a.person_id) AS person_id
           FROM calendar c
           JOIN dcc_attendance a ON a.dcc_event_id = c.id
+          JOIN persons p ON p.id = a.person_id
          WHERE c.removed_at IS NULL
            AND a.present = true
            AND a.superseded_at IS NULL
            AND (
              ${population}::uuid[] IS NULL
-             OR a.person_id = ANY (${population}::uuid[])
+             OR coalesce(p.merged_into_id, a.person_id) = ANY (${population}::uuid[])
            )
       ),
       figures AS (
         SELECT m.person_id,
-               count(*) FILTER (WHERE e.event_date >= ${from}::date) AS times_in_range,
-               count(*) AS lifetime
+               count(DISTINCT e.id) FILTER (WHERE e.event_date >= ${from}::date) AS times_in_range,
+               count(DISTINCT e.id) AS lifetime
           FROM attended m
-          JOIN dcc_attendance a ON a.person_id = m.person_id
+          JOIN persons p ON p.id = m.person_id OR p.merged_into_id = m.person_id
+          JOIN dcc_attendance a ON a.person_id = p.id
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.present = true
            AND a.superseded_at IS NULL

@@ -11,6 +11,7 @@ import { PeopleController } from './people.controller';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { PeopleImportService } from './people.import.service';
 import { PeopleLifecycleService } from './people.lifecycle.service';
+import { PeopleMergeService } from './people.merge.service';
 import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
@@ -87,6 +88,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
     PeopleSexCorrectionService,
     PeopleReassignmentService,
     PeopleLifecycleService,
+    PeopleMergeService,
     NetworkTreeService,
   ],
   exports: [
