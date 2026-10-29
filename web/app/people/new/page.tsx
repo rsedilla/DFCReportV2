@@ -16,6 +16,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
+import { MatchLink, MatchNote } from '@/components/archived-match';
 import { ApiRequestError } from '@/lib/api-client';
 import { addCellMember, cellShortName, type CellSummary, membershipFailure } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
@@ -28,7 +29,6 @@ import {
   SEX_OPTIONS,
   createPerson,
   getPerson,
-  isWithheld,
   networkLabel,
   networkOfSex,
   type CivilStatus,
@@ -362,22 +362,14 @@ function NewPersonForm() {
                 "visible to their own leaders" for somebody the viewer pastors,
                 the first time a rule matches without pushing a reason.
               */}
-              {isWithheld(candidate) ? (
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  A possible match. Their details are visible to the leaders who pastor them —
-                  ask before adding a second record.
-                </p>
-              ) : candidate.reasons?.length ? (
-                <ul className="text-muted mt-2 list-inside list-disc text-sm">
-                  {candidate.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              ) : null}
+              <MatchNote
+                candidate={candidate}
+                adding
+                withheldLine="A possible match. Their details are visible to the leaders who pastor them — ask before adding a second record."
+                className="mt-2"
+              />
 
-              <TextLink href={`/people/${candidate.id}`} className="mt-2 text-sm">
-                Open this record
-              </TextLink>
+              <MatchLink candidate={candidate} className="mt-2 text-sm" />
             </li>
           ))}
         </ul>

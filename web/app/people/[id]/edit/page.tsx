@@ -16,6 +16,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
+import { MatchLink, MatchNote } from '@/components/archived-match';
 import { ApiRequestError } from '@/lib/api-client';
 import { classificationLabel, getPersonDccAttendance } from '@/lib/dcc';
 import { directLeaderOf, getPastoralPath, noLeaderLabel } from '@/lib/hierarchy';
@@ -27,7 +28,6 @@ import {
   CIVIL_STATUS_OPTIONS,
   editPerson,
   getPerson,
-  isWithheld,
   sexLabel,
   type DuplicateCandidate,
   type PersonEdit,
@@ -277,21 +277,13 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <li key={candidate.id} className="py-4">
               <p className="font-medium">{candidate.full_name}</p>
               <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
-              {isWithheld(candidate) ? (
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  A possible match. Their details are visible to the leaders who pastor them — ask
-                  before saving.
-                </p>
-              ) : candidate.reasons?.length ? (
-                <ul className="text-muted mt-2 list-inside list-disc text-sm">
-                  {candidate.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              ) : null}
-              <TextLink href={`/people/${candidate.id}`} className="mt-2 text-sm">
-                Open this record
-              </TextLink>
+              <MatchNote
+                candidate={candidate}
+                adding={false}
+                withheldLine="A possible match. Their details are visible to the leaders who pastor them — ask before saving."
+                className="mt-2"
+              />
+              <MatchLink candidate={candidate} className="mt-2 text-sm" />
             </li>
           ))}
         </ul>

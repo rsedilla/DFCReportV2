@@ -1200,6 +1200,161 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  // Decision 0404: an archived candidate says so, in scope and out, so an encoder asks
+  // for a restore rather than adding the person again.
+  describe('an archived candidate is labelled (SKILL.md section 3, decision 0404)', () => {
+    // Archiving ends the Person's pastoral assignment too, as the archive does (section 5).
+    async function setState(personId: string, state: 'CURRENT' | 'ARCHIVED') {
+      if (state === 'ARCHIVED') {
+        await db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: new Date() })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+      }
+      await db
+        .updateTable('person_lifecycle')
+        .set({ ended_at: new Date() })
+        .where('person_id', '=', personId)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('person_lifecycle')
+        .values({
+          person_id: personId,
+          state,
+          reason: state === 'ARCHIVED' ? 'MOVED_AWAY' : null,
+          started_at: new Date(),
+        })
+        .execute();
+    }
+
+    function lookup(actor: TestAccount, query: Record<string, string>) {
+      return request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query(query)
+        .set('Authorization', `Bearer ${actor.accessToken}`);
+    }
+
+    it('carries the flag for an archived candidate outside the scope, and nothing more', async () => {
+      // Juan was in Rico's branch. He still appears by the names alone, as before, and
+      // what is added is that he is archived -- not the tier or the reasons.
+      await setState(juan.id, 'ARCHIVED');
+
+      const response = await lookup(raymondAccount, {
+        first_name: 'Juan',
+        last_name: 'Testfixture',
+      });
+
+      expect(response.status).toBe(200);
+      const found = (response.body.data as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === juan.id,
+      );
+      expect(Object.keys(found ?? {}).sort()).toEqual(
+        ['archived', 'full_name', 'id', 'member_id', 'possible_match', 'sex'].sort(),
+      );
+      expect(found).toMatchObject({ archived: true, possible_match: true });
+    });
+
+    // In scope as an Admin: an archived Person's assignment has ended (section 5), so a leader's
+    // own subtree no longer reaches them, and an Admin's whole-church scope is where they are seen.
+    it('carries the flag beside the tier for an archived candidate in scope', async () => {
+      await setState(manuel.id, 'ARCHIVED');
+
+      const response = await lookup(adminAccount, {
+        first_name: 'Manuel',
+        last_name: 'Testfixture',
+        birth_date: '1985-06-15',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toContainEqual(
+        expect.objectContaining({ id: manuel.id, tier: 1, archived: true }),
+      );
+    });
+
+    it('carries no flag for a current candidate, nor for one archived and since restored', async () => {
+      await setState(juan.id, 'ARCHIVED');
+      await setState(juan.id, 'CURRENT');
+
+      const response = await lookup(adminAccount, { first_name: 'Juan', last_name: 'Testfixture' });
+
+      expect(response.status).toBe(200);
+      const candidates = response.body.data as Record<string, unknown>[];
+      expect(candidates.length).toBeGreaterThan(0);
+      for (const candidate of candidates) {
+        expect(candidate).not.toHaveProperty('archived');
+      }
+    });
+
+    it('carries the flag on the refusal that asks for a Tier 1 acknowledgement', async () => {
+      await setState(manuel.id, 'ARCHIVED');
+
+      const refused = await post(adminAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: raymond.id,
+          first_name: 'Manuel',
+          last_name: 'Testfixture',
+          birth_date: '1985-06-15',
+        }),
+      );
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+      expect(refused.body.error.details.candidates).toEqual([
+        expect.objectContaining({ id: manuel.id, tier: 1, archived: true }),
+      ]);
+    });
+
+    it('carries the flag on the refusal of an edit (decision 0396)', async () => {
+      const created = await post(adminAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: raymond.id,
+          first_name: 'Pablo',
+          last_name: 'Testfixture',
+          birth_date: '1990-01-01',
+        }),
+      );
+      expect(created.status).toBe(201);
+      await setState(manuel.id, 'ARCHIVED');
+
+      const refused = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${created.body.id}`)
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ first_name: 'Manuel', birth_date: '1985-06-15' });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+      expect(refused.body.error.details.candidates).toEqual([
+        expect.objectContaining({ id: manuel.id, tier: 1, archived: true }),
+      ]);
+    });
+
+    it('does not change which candidates appear, or their order', async () => {
+      // Three withheld namesakes in Rico's branch, so the order among them is the Member ID
+      // tie-break, and archiving one of them must leave it where it was.
+      const namesakes = [
+        await createPerson(db, { firstName: 'Juan', network: 'MENS' }),
+        await createPerson(db, { firstName: 'Juan', network: 'MENS' }),
+      ];
+      for (const namesake of namesakes) {
+        await assignTo(db, namesake.id, rico.id);
+      }
+      const query = { first_name: 'Juan', last_name: 'Testfixture' };
+      const ids = (body: { data: { id: string }[] }) => body.data.map((candidate) => candidate.id);
+
+      const before = await lookup(raymondAccount, query);
+      expect(ids(before.body)).toHaveLength(3);
+      await setState(ids(before.body)[1], 'ARCHIVED');
+      const after = await lookup(raymondAccount, query);
+
+      expect(ids(after.body)).toEqual(ids(before.body));
+      expect(after.body.data[1]).toMatchObject({ archived: true });
+    });
+  });
+
   // Decision 0396: a changed name, birthday or mobile number is checked as creating a Person
   // is. Manuel Testfixture, born 1985-06-15, is the Tier 1 candidate throughout.
   describe('editing a Person checks for duplicates (SKILL.md section 3, decision 0396)', () => {

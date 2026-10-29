@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-28, the trigger being decision 0403: of 402 files, 401 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0403 each moved the first two and
+2026-10-28, the trigger being decision 0404: of 403 files, 402 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0404 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-28 and triggered by decision 0403, and was left stale by 0404 the same day. The one before that was dated
 2026-10-28 and triggered by decisions 0399 and 0401, and was left stale by 0403 the same day. The one before that was dated
 2026-10-28 and triggered by 0402, and was left stale by 0399 and 0401 the same day. The one before that was dated
 2026-10-28 and triggered by 0400, and was left stale by 0402 the same day. The one before that was dated
@@ -848,6 +849,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-28 — [Three spellings, and two adds of one person at once](docs/decisions/0401-spellings-and-two-adds-at-once.md)
 - 2026-10-28 — [Wider lists, and no heading line that repeats the page](docs/decisions/0402-wider-lists-and-fewer-heading-lines.md)
 - 2026-10-28 — [A past Sunday stays with whoever held an account that Sunday](docs/decisions/0403-a-past-sunday-stays-with-who-held-an-account.md)
+- 2026-10-28 — [An archived match is labelled, and the reader is told to ask for a restore](docs/decisions/0404-an-archived-match-is-labelled.md)
 
 ### Open — awaiting a ruling
 

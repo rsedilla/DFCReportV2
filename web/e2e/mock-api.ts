@@ -936,6 +936,37 @@ export async function mockPossibleMatches(page: Page): Promise<void> {
 }
 
 /**
+ * Two archived candidates (decision 0404): one whose details section 8 withholds, carrying
+ * `possible_match` and `archived`, and one the viewer pastors, carrying a tier and `archived`.
+ */
+export const ARCHIVED_MATCHES = [
+  {
+    id: '33333333-4444-4555-8666-777777777777',
+    member_id: 'M-000315',
+    full_name: 'Rosalinda Paz Ventura',
+    sex: 'FEMALE',
+    possible_match: true,
+    archived: true,
+  },
+  {
+    // Not the person a profile spec edits, so Edit details lists it too.
+    id: '44444444-5555-4666-8777-888888888888',
+    member_id: 'M-000316',
+    full_name: 'Corazon Dizon Ramos',
+    sex: 'FEMALE',
+    tier: 2,
+    reasons: ['Same first and last name'],
+    archived: true,
+  },
+];
+
+export async function mockArchivedMatches(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/duplicate-candidates*', (route) =>
+    route.fulfill(json({ data: ARCHIVED_MATCHES })),
+  );
+}
+
+/**
  * Creation refused because a Tier 1 candidate needs acknowledging (section 3).
  *
  * One candidate carries reasons and one does not — the second is outside the

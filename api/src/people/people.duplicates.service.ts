@@ -116,7 +116,7 @@ export class PeopleDuplicatesService {
     // reach. The read marks those rows itself, in the same SQL predicates, rather than
     // the names being re-tested here: scoring it against the wider set could admit an
     // out-of-scope candidate the names never reached, which is a membership disclosure.
-    const { candidates, reachedByNames } = await this.populationFor(subject, executor);
+    const { candidates, reachedByNames, archived } = await this.populationFor(subject, executor);
     const matches = findCandidates(subject, candidates, undefined, rules);
     const publishable = findCandidates(
       {
@@ -147,6 +147,7 @@ export class PeopleDuplicatesService {
       new Map(publishable.map((match) => [match.candidate.id, match])),
       inScope,
       only,
+      archived,
     );
   }
 
@@ -172,13 +173,13 @@ export class PeopleDuplicatesService {
   private async populationFor(
     subject: Subject,
     executor: Db,
-  ): Promise<{ candidates: Candidate[]; reachedByNames: Set<string> }> {
+  ): Promise<{ candidates: Candidate[]; reachedByNames: Set<string>; archived: Set<string> }> {
     // The same guard the search path got, for the same reason and one function
     // away. `normalizeName` drops suffix tokens, so `last_name=Jr` normalizes to
     // empty and the surname-initial branch below becomes LIKE '%' -- which
     // selects the whole directory into memory to be scored, on every request.
     if (normalizeName(subject.lastName) === '' && normalizeName(subject.firstName) === '') {
-      return { candidates: [], reachedByNames: new Set() };
+      return { candidates: [], reachedByNames: new Set(), archived: new Set() };
     }
 
     const mobile = subject.mobileNumberNormalized ?? normalizeMobile(null);
@@ -224,6 +225,18 @@ export class PeopleDuplicatesService {
         'sex',
         'mobile_number_normalized',
         byNames(eb).as('reached_by_names'),
+        // Whether the Person is archived now (decision 0404). Read here, beside the
+        // names, and never consulted by the matcher or by which candidates appear.
+        eb
+          .exists(
+            eb
+              .selectFrom('person_lifecycle')
+              .select('person_lifecycle.id')
+              .whereRef('person_lifecycle.person_id', '=', 'persons.id')
+              .where('person_lifecycle.ended_at', 'is', null)
+              .where('person_lifecycle.state', '=', 'ARCHIVED'),
+          )
+          .as('archived'),
       ])
       // A Person absorbed by a merge is never a candidate: the survivor is the
       // only valid target of any later write (section 3, Person Merge).
@@ -260,6 +273,7 @@ export class PeopleDuplicatesService {
       reachedByNames: new Set(
         population.filter((row) => row.reached_by_names === true).map((row) => row.id),
       ),
+      archived: new Set(population.filter((row) => row.archived === true).map((row) => row.id)),
     };
   }
 }
@@ -347,6 +361,7 @@ async function visibleCandidates(
   publishableById: ReadonlyMap<string, Match>,
   inScope: (personId: string) => Promise<boolean>,
   only: (match: VisibleMatch) => boolean,
+  archived: ReadonlySet<string>,
 ): Promise<Record<string, unknown>[]> {
   const kept: { match: Match; withinScope: boolean }[] = [];
 
@@ -395,7 +410,7 @@ async function visibleCandidates(
     .sort((a, b) => compareOrderKeys(orderKeyOf(a.match), orderKeyOf(b.match)));
 
   return [...inScopeFirst, ...withheld].map((entry) =>
-    describeCandidate(entry.match, entry.withinScope),
+    describeCandidate(entry.match, entry.withinScope, archived.has(entry.match.candidate.id)),
   );
 }
 
@@ -479,13 +494,22 @@ function visibleForm(match: Match): VisibleMatch {
  * match. That is what section 3 needs the encoder to know: somebody may already
  * be recorded, ask the leader who holds them. It is not what a caller can binary
  * search on.
+ *
+ * An archived candidate carries `archived: true`, in scope and out, so the encoder
+ * asks for a restore rather than adding them again (decision 0404). It is the one
+ * lifecycle fact this list discloses outside the scope, and the owner's choice.
  */
-function describeCandidate(match: Match, inScope: boolean): Record<string, unknown> {
+function describeCandidate(
+  match: Match,
+  inScope: boolean,
+  archived: boolean,
+): Record<string, unknown> {
   const identity = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,
     full_name: fullNameOf(match.candidate),
     sex: match.candidate.sex,
+    ...(archived ? { archived: true } : {}),
   };
 
   return inScope
