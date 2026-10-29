@@ -120,6 +120,14 @@ Chosen by the owner the same way, from screenshots of the real report beside tod
     saying the old record was merged into it, as the old page does (point 17); it opens only for
     a reader who may read the kept record's report. The Cell Groups report likewise.
 
+## One more, from the third review (2026-10-29)
+
+23. **A Cell meeting a merged-away record led, on a date when the kept record had no pastoral
+    leader, is counted in the branch of the leader the duplicate had on that date**, as point 13
+    places a person for a month the kept record had none. Otherwise the meeting would sit in the
+    church total and in no branch, and the rows would stop adding up to it. Chosen by the owner,
+    on the recommendation.
+
 Decision 0408, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Section 3.
 

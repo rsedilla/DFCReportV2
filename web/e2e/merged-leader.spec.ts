@@ -65,12 +65,31 @@ async function mockMergedLeader(page: Page) {
       ),
     ),
   );
+  // A different record, merged into somebody else: Efren.
+  await page.route(`**/api/v1/people/${ELSEWHERE.id}`, (route) =>
+    route.fulfill(
+      json(
+        person(ELSEWHERE.id, ELSEWHERE.member_id, {
+          into: {
+            id: TWELVE.efren.id,
+            member_id: TWELVE.efren.member_id,
+            full_name: TWELVE.efren.full_name,
+          },
+          merged_at: '2026-06-18T02:00:00.000Z',
+          merged_by: 'Adele Ferrer',
+        }),
+      ),
+    ),
+  );
   for (const leader of [TWELVE.consuelo, TWELVE.aurora]) {
     await page.route(`**/api/v1/people/${leader.id}`, (route) =>
       route.fulfill(json(person(leader.id, leader.member_id, null))),
     );
   }
 }
+
+/** A record merged into Efren, not into the leader a crafted address names. */
+const ELSEWHERE = { id: '3f1b7c6e-0000-4000-8000-000000000798', member_id: 'M-000898' };
 
 const NOTE = `${ABSORBED.member_id} was merged into this record.`;
 
@@ -105,8 +124,29 @@ for (const report of [
       await page.goto(`${report.path}?month=2026-06-01&leader=${ABSORBED.id}`);
 
       await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.consuelo.id}`));
+      await expect(page).toHaveURL(new RegExp(`[?&]merged_from=${ABSORBED.id}`));
       await expect(page).not.toHaveURL(new RegExp(`leader=${ABSORBED.id}`));
       await expect(page.getByText(NOTE)).toBeVisible();
+    });
+
+    test('shows no note for a crafted address naming a record that was not merged into the leader', async ({
+      page,
+    }) => {
+      // Aurora was never merged; the other record was merged into Efren, not Consuelo. The line
+      // is the server's, so neither address can make the report claim a merge.
+      for (const from of [TWELVE.aurora.id, ELSEWHERE.id]) {
+        // Read back before the note is looked for, so its absence is the decision, not a wait.
+        const readBack = page.waitForResponse((response) =>
+          response.url().endsWith(`/api/v1/people/${from}`),
+        );
+        await page.goto(
+          `${report.path}?month=2026-06-01&leader=${TWELVE.consuelo.id}&merged_from=${from}`,
+        );
+        await readBack;
+        await expect(page.getByRole('table')).not.toHaveCount(0);
+        await expect(page.getByText(/was merged into this record/)).toHaveCount(0);
+        await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.consuelo.id}`));
+      }
     });
 
     test('shows no note once another leader is chosen', async ({ page }) => {

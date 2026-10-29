@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
 
+import { Client } from 'pg';
 import { sql } from 'kysely';
 
 import { lastFinishedMonths } from '../../src/attendance/absent-people.service';
 import { manilaDayOf } from '../../src/common/time/manila';
 import { reportRangeGuardMonth } from '../../src/common/time/report-range';
+import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   EPOCH,
@@ -86,6 +88,21 @@ describe('Person Merge (section 3, decision 0408)', () => {
     request(server())
       .get(`/api/v1/reports/${domain}/monthly?period=${JUNE}&${query}`)
       .set('Authorization', `Bearer ${admin.accessToken}`);
+
+  /** The month a June range resolves at, which the client names as the My 12 tables do. */
+  const guardMonth = () =>
+    reportRangeGuardMonth(
+      'MONTH',
+      JUNE,
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
+    );
+
+  /** My 12 over June, which the Cell Groups and DCC screens read (decision 0293). */
+  const twelve = (domain: 'dcc' | 'cells', as: TestAccount, query: Record<string, string>) =>
+    request(server())
+      .get(`/api/v1/reports/${domain}/twelve`)
+      .query({ kind: 'MONTH', start: JUNE, period: guardMonth(), ...query })
+      .set('Authorization', `Bearer ${as.accessToken}`);
 
   function idOf(person: TestPerson | string): string {
     return typeof person === 'string' ? person : person.id;
@@ -1243,6 +1260,111 @@ describe('Person Merge (section 3, decision 0408)', () => {
       expect(after.total).toEqual(before.total);
     });
 
+    it("places the duplicate's meetings in the kept record's branch on the Cell Groups screen's coverage (point 21)", async () => {
+      // `cells/twelve` is what the Cell Groups screen reads; its coverage follows cells/monthly.
+      const coverageOf = async (query: Record<string, string>) => {
+        const body = (await twelve('cells', admin, query).expect(200)).body as {
+          coverage: { recorded: number; scheduled: number };
+        };
+        return { recorded: body.coverage.recorded, scheduled: body.coverage.scheduled };
+      };
+      const church = { scope: 'WHOLE_CHURCH' };
+      const underManuel = { scope: 'LEADER', leader_id: manuel.id };
+      const underNestor = { scope: 'LEADER', leader_id: nestor.id };
+
+      const churchBefore = await coverageOf(church);
+      expect(churchBefore).toEqual({ recorded: 1, scheduled: 8 });
+      expect(await coverageOf(underManuel)).toEqual({ recorded: 0, scheduled: 4 });
+      expect(await coverageOf(underNestor)).toEqual({ recorded: 1, scheduled: 4 });
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      expect(await coverageOf(underManuel)).toEqual({ recorded: 1, scheduled: 8 });
+      expect(await coverageOf(underNestor)).toEqual({ recorded: 0, scheduled: 0 });
+      expect(await coverageOf(church)).toEqual(churchBefore);
+    });
+
+    describe('a report naming the merged-away leader is the record kept’s (point 22)', () => {
+      let nestorAccount: TestAccount;
+
+      beforeEach(async () => {
+        // Rico came to DCC in June, so his own figures are not all zero.
+        const event = await db
+          .insertInto('dcc_events')
+          .values({ event_date: SUNDAYS[0] })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        await dccMark(event.id, rico, true, mark);
+        nestorAccount = await createAccount(app, db, { person: nestor, roles: ['LEADER'] });
+        await mergeInto(rico, ricoAgain).expect(200);
+      });
+
+      /** Every leader-scoped report route a leader's saved link may name, for one leader. */
+      const leaderRoutes = (leaderId: string): [string, Record<string, string>][] => {
+        const leader = { scope: 'LEADER', leader_id: leaderId };
+        const range = { kind: 'MONTH', start: JUNE, period: guardMonth() };
+        return [
+          ['/api/v1/reports/dcc/monthly', { period: JUNE, ...leader }],
+          ['/api/v1/reports/cells/monthly', { period: JUNE, ...leader }],
+          ['/api/v1/reports/dcc/twelve', { ...range, ...leader }],
+          ['/api/v1/reports/cells/twelve', { ...range, ...leader }],
+          ['/api/v1/reports/counts/branch', { period: JUNE, ...leader }],
+          ['/api/v1/reports/people/branch', { period: JUNE, ...leader }],
+          ['/api/v1/reports/trends/branch', { period: JUNE, figure: 'CELLS', ...leader }],
+        ];
+      };
+      const read = (as: TestAccount, path: string, query: Record<string, string>) =>
+        request(server()).get(path).query(query).set('Authorization', `Bearer ${as.accessToken}`);
+
+      it('answers a Leader who reaches the record kept with the record kept’s figures', async () => {
+        const absorbed = leaderRoutes(ricoAgain.id);
+        const kept = leaderRoutes(rico.id);
+
+        for (const [index, [path, query]] of absorbed.entries()) {
+          const asAbsorbed = await read(manuelAccount, path, query);
+          expect({ path, status: asAbsorbed.status }).toEqual({ path, status: 200 });
+          const asKept = await read(manuelAccount, kept[index][0], kept[index][1]).expect(200);
+          expect({ path, body: asAbsorbed.body }).toEqual({ path, body: asKept.body });
+        }
+      });
+
+      it('refuses a Leader who cannot read the record kept’s report, the former leader included', async () => {
+        // Nestor led the duplicate all June, and does not reach Rico.
+        for (const [path, query] of leaderRoutes(ricoAgain.id)) {
+          const refused = await read(nestorAccount, path, query);
+          expect({ path, status: refused.status, code: refused.body.error?.code }).toEqual({
+            path,
+            status: 403,
+            code: 'SCOPE_DENIED',
+          });
+        }
+      });
+
+      it('answers the church-wide trend for the merged-away leader as for the record kept', async () => {
+        const asAbsorbed = await read(admin, '/api/v1/reports/trends', {
+          figure: 'CELLS',
+          leader_id: ricoAgain.id,
+        }).expect(200);
+        const asKept = await read(admin, '/api/v1/reports/trends', {
+          figure: 'CELLS',
+          leader_id: rico.id,
+        }).expect(200);
+        expect(asAbsorbed.body).toEqual(asKept.body);
+      });
+
+      it('still answers NOT_FOUND for a leader who never existed', async () => {
+        for (const [path, query] of leaderRoutes(randomUUID())) {
+          const missing = await read(admin, path, query);
+          expect({ path, status: missing.status }).toEqual({ path, status: 404 });
+        }
+        const trend = await read(admin, '/api/v1/reports/trends', {
+          figure: 'CELLS',
+          leader_id: randomUUID(),
+        });
+        expect(trend.status).toBe(404);
+      });
+    });
+
     describe("the Senior Pastors' counts (decision 0408, point 16)", () => {
       type Counts = { cell_groups: number; cell_leaders: number };
       type CountRow = Counts & { leader: { id: string } };
@@ -1466,6 +1588,286 @@ describe('Person Merge (section 3, decision 0408)', () => {
       const ids = (await absentIds()).map((row) => row.id);
       expect(ids).toContain(pedro.id);
       expect(ids).not.toContain(juan.id);
+    });
+
+    it('lists the kept record where the duplicate was the one on the roster in the first month', async () => {
+      // The duplicate was in Mark's Cell and under Mark from the start; the kept record only
+      // from the first day of the second month. Each was marked Absent while it was there.
+      const second = new Date(`${months[1].first}T00:00:00+08:00`);
+      const lito = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, lito.id, mark.id, second);
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: lito.id, cell_id: cell.id, started_at: second })
+        .execute();
+      const litoAgain = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, litoAgain.id, mark.id);
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: litoAgain.id, cell_id: cell.id, started_at: EPOCH })
+        .execute();
+
+      for (let index = 0; index < 3; index += 1) {
+        const id = await meeting(cell.id, dayIn(index, 10), mark.id);
+        await cellMark(id, index === 0 ? litoAgain : lito, false);
+      }
+
+      expect((await absentIds()).map((row) => row.id)).not.toContain(lito.id);
+
+      await mergeInto(lito, litoAgain).expect(200);
+
+      // One person, on the roster and under a leader the whole of every month, by one record
+      // or the other, and Absent in each.
+      expect((await absentIds()).map((row) => row.id)).toContain(lito.id);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Point 23: a meeting a duplicate led on a date the kept record had no leader
+  // ---------------------------------------------------------------------------
+
+  describe('a meeting the duplicate led while the kept record had no leader (point 23)', () => {
+    let lito: TestPerson;
+    let litoAgain: TestPerson;
+
+    beforeEach(async () => {
+      // Lito's kept record is placed only from July; his duplicate was under Nestor and led a
+      // Cell through June, recording one meeting, and handed it to Nestor in July.
+      lito = await createPerson(db, { firstName: 'Lito', lastName: 'Garcia', network: 'MENS' });
+      await assignTo(db, lito.id, mark.id, new Date('2026-07-01T00:00:00+08:00'));
+      litoAgain = await createPerson(db, {
+        firstName: 'Lito',
+        lastName: 'Garcia',
+        network: 'MENS',
+      });
+      await assignTo(db, litoAgain.id, nestor.id);
+
+      const litoCell = await createCell(db, { leader: litoAgain, createdAt: EPOCH });
+      const tomas = await attendee('Tomas', nestor, litoCell.id);
+      const held = await meeting(litoCell.id, MEETINGS[0], litoAgain.id);
+      await cellMark(held, tomas, true);
+      await handOver(litoCell.id, nestor, AFTER_JUNE);
+
+      await mergeInto(lito, litoAgain).expect(200);
+    });
+
+    type Coverage = { recorded: number; scheduled: number };
+    const monthly = async (query: string): Promise<Coverage> =>
+      (await report('cells', query).expect(200)).body.coverage as Coverage;
+    const ofTwelve = async (query: Record<string, string>): Promise<Coverage> => {
+      const body = (await twelve('cells', admin, query).expect(200)).body as {
+        coverage: Coverage;
+      };
+      return { recorded: body.coverage.recorded, scheduled: body.coverage.scheduled };
+    };
+
+    it("counts it in the duplicate's then-leader's branch on cells/monthly, the rows adding up", async () => {
+      // Mark's Cell's four June Saturdays are Manuel's; the duplicate's four are Nestor's.
+      const underManuel = await monthly(`scope=LEADER&leader_id=${manuel.id}`);
+      const underNestor = await monthly(`scope=LEADER&leader_id=${nestor.id}`);
+      const underRaymond = await monthly(`scope=LEADER&leader_id=${raymond.id}`);
+      const church = await monthly('scope=WHOLE_CHURCH');
+
+      expect(underNestor).toEqual({ recorded: 1, scheduled: 4 });
+      expect(underManuel).toEqual({ recorded: 0, scheduled: 4 });
+      // Raymond's two rows are his total, and his total the church's.
+      expect({
+        recorded: underManuel.recorded + underNestor.recorded,
+        scheduled: underManuel.scheduled + underNestor.scheduled,
+      }).toEqual(underRaymond);
+      expect(underRaymond).toEqual(church);
+      expect(church).toEqual({ recorded: 1, scheduled: 8 });
+    });
+
+    it('counts it the same way on cells/twelve', async () => {
+      const underManuel = await ofTwelve({ scope: 'LEADER', leader_id: manuel.id });
+      const underNestor = await ofTwelve({ scope: 'LEADER', leader_id: nestor.id });
+      const underRaymond = await ofTwelve({ scope: 'LEADER', leader_id: raymond.id });
+      const church = await ofTwelve({ scope: 'WHOLE_CHURCH' });
+
+      expect(underNestor).toEqual({ recorded: 1, scheduled: 4 });
+      expect(underManuel).toEqual({ recorded: 0, scheduled: 4 });
+      expect({
+        recorded: underManuel.recorded + underNestor.recorded,
+        scheduled: underManuel.scheduled + underNestor.scheduled,
+      }).toEqual(underRaymond);
+      expect(underRaymond).toEqual(church);
+    });
+
+    it('names the line by the kept record on the coverage rows by leader', async () => {
+      type Line = { leader: { id: string } | null; filed: number; owed: number };
+      const body = (
+        await request(server())
+          .get('/api/v1/reports/cells/monthly/by-leader')
+          .query({ period: JUNE, scope: 'LEADER', leader_id: nestor.id, limit: 200 })
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200)
+      ).body as { data: Line[]; total: { filed: number; owed: number } };
+
+      expect(body.data.find((line) => line.leader?.id === lito.id)).toMatchObject({
+        filed: 1,
+        owed: 4,
+      });
+      expect(body.data.find((line) => line.leader?.id === litoAgain.id)).toBeUndefined();
+      expect(body.total).toEqual({ filed: 1, owed: 4 });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // The Network screen's Cell meetings behind (decision 0252) follow the kept record
+  // ---------------------------------------------------------------------------
+
+  describe("the Network screen's Cell meetings behind (point 16)", () => {
+    it("counts a meeting the duplicate led and nobody recorded in the kept record's branch", async () => {
+      // Today's meeting, on a Cell the duplicate led until today: its day has begun and its
+      // week is open (decision 0335), and a handover on its own day leaves it with the
+      // duplicate (decision 0187). Every date is the database's Manila day.
+      const today = (
+        await sql<{ today: string }>`
+          SELECT to_char((now() AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD') AS today
+        `.execute(db)
+      ).rows[0].today;
+      const [y, m, d] = today.split('-').map(Number);
+      const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() || 7;
+
+      const rico = await createPerson(db, {
+        firstName: 'Rico',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      await assignTo(db, rico.id, mark.id);
+      const ricoAgain = await createPerson(db, {
+        firstName: 'Rico',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      await assignTo(db, ricoAgain.id, nestor.id);
+      const ricoCell = await createCell(db, {
+        leader: ricoAgain,
+        dayOfWeek: weekday,
+        createdAt: new Date(Date.UTC(y - 1, 0, 1, 2)),
+      });
+      await handOver(ricoCell.id, nestor, new Date(`${today}T00:00:01+08:00`));
+
+      const figures = async () =>
+        (
+          await request(server())
+            .get(`/api/v1/leaders/${raymond.id}/cell-figures`)
+            .set('Authorization', `Bearer ${admin.accessToken}`)
+            .expect(200)
+        ).body as {
+          branch_meetings_behind: number;
+          meetings_behind_by_child: Record<string, number>;
+        };
+
+      const before = await figures();
+      // At least today's, all the duplicate's, in Nestor's row.
+      const owed = before.meetings_behind_by_child[nestor.id];
+      expect(owed).toBeGreaterThanOrEqual(1);
+
+      await mergeInto(rico, ricoAgain).expect(200);
+
+      const after = await figures();
+      expect(after.meetings_behind_by_child).toEqual({
+        [manuel.id]: before.meetings_behind_by_child[manuel.id] + owed,
+        [nestor.id]: 0,
+      });
+      expect(after.branch_meetings_behind).toBe(before.branch_meetings_behind);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // A merge racing a re-enable of the duplicate's account (decision 0408, point 17)
+  // ---------------------------------------------------------------------------
+
+  describe("a merge racing a re-enable of the duplicate's account", () => {
+    it('leaves the account disabled and the merge made, the re-enable having committed first', async () => {
+      // The duplicate's account is disabled before the merge. A re-enable takes the account
+      // row and checks the Person (not merged yet), then is held, still uncommitted, by a
+      // session row another connection has locked. The merge must wait for that account row
+      // rather than read it as still DISABLED and skip disabling it.
+      const post = (path: string) =>
+        request(server())
+          .post(`/api/v1/accounts/${path}`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID());
+      await post(`${juanAgainAccount.id}/disable`).expect(200);
+      const session = await db
+        .insertInto('refresh_tokens')
+        .values({
+          account_id: juanAgainAccount.id,
+          token_hash: `held-${randomUUID()}`,
+          issued_at: new Date(),
+          expires_at: new Date(Date.now() + 86_400_000),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+      const waiters = async () => {
+        const { rows } = await holder.query<{ count: string }>(
+          `SELECT count(*) AS count FROM pg_locks
+            WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+        );
+        return Number(rows[0].count);
+      };
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('UPDATE refresh_tokens SET last_used_at = now() WHERE id = $1', [
+          session.id,
+        ]);
+
+        const reenable = post(`${juanAgainAccount.id}/reactivate`).then((response) => response);
+        expect(
+          await countWhileInFlight(
+            waiters,
+            track(reenable),
+            'the re-enable to wait on the session',
+          ),
+        ).toBe(1);
+
+        const merged = mergeInto(juan, juanAgain).then((response) => response);
+        const both = Promise.all([reenable, merged]);
+        // The merge waits on the account row, or, where nothing makes it, finishes.
+        await countWhileInFlight(
+          async () => ((await waiters()) >= 2 ? 2 : 0),
+          track(merged),
+          'the merge to wait on the account row',
+        );
+
+        await holder.query('ROLLBACK');
+        const [reenabled, merge] = await both;
+
+        expect(reenabled.status).toBe(200);
+        expect(merge.status).toBe(200);
+        expect(merge.body.account_disabled).toBe(true);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+
+      const account = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('id', '=', juanAgainAccount.id)
+        .executeTakeFirstOrThrow();
+      expect(account.status).toBe('DISABLED');
+      const absorbed = await db
+        .selectFrom('persons')
+        .select('merged_into_id')
+        .where('id', '=', juanAgain.id)
+        .executeTakeFirstOrThrow();
+      expect(absorbed.merged_into_id).toBe(juan.id);
     });
   });
 

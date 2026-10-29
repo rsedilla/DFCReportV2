@@ -868,23 +868,21 @@ export class AuthorizationService {
     // `LEADER` branch already asks: is that Person within the actor's reach at
     // `target.at`. Handling them apart would be two paths for one rule, and the rule is
     // the resolution rather than the containment.
+    // A leader merged away is read as the record kept (decision 0408, point 22): a report is
+    // a read, and the merge ended the absorbed record's own place in the tree.
+    const personId =
+      (await this.mergedPersons?.keptRecordOfWithin(executor, selector.personId)) ??
+      selector.personId;
+
     switch (scope.type) {
       case ScopeType.OwnSubtree:
-        return this.hierarchy.isWithinSubtreeAsOf(
-          executor,
-          actor.personId,
-          selector.personId,
-          target.at,
-          { includeSelf: true },
-        );
+        return this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, target.at, {
+          includeSelf: true,
+        });
       case ScopeType.SubtreeExclSelf:
-        return this.hierarchy.isWithinSubtreeAsOf(
-          executor,
-          actor.personId,
-          selector.personId,
-          target.at,
-          { includeSelf: false },
-        );
+        return this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, target.at, {
+          includeSelf: false,
+        });
       case ScopeType.Network: {
         if (scope.network === null) {
           // The database requires a Network to be named on a NETWORK grant. An unnamed
@@ -902,7 +900,7 @@ export class AuthorizationService {
         // Section 4 is authoritative for a person's Network only from their encoding date
         // forward and forbids inferring anything before it, so a report for a month
         // predating the person is refused rather than guessed at.
-        const network = await this.networks.networkAsOf(executor, selector.personId, target.at);
+        const network = await this.networks.networkAsOf(executor, personId, target.at);
         return network !== null && network === scope.network;
       }
       case ScopeType.WholeChurch:

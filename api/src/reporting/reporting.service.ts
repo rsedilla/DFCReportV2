@@ -20,7 +20,7 @@ import {
   recordDueAt,
   reportingMonthOf,
 } from '../common/time/submission-window';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
 import { resolverOf } from '../common/merged-identity';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -535,6 +535,46 @@ export class ReportingService {
   }
 
   /**
+   * Cell coverage's scheduled meetings with each leader resolved to the record kept (decision
+   * 0408, points 16 and 21), and placed by it: `leaderId` names the record kept, and `placeId` is
+   * where the meeting is placed in a dated walk, the record kept unless it held no pastoral
+   * assignment on the meeting's date, when it is the duplicate that led it (point 23).
+   */
+  private async coveragePairsAsKept<T extends { scheduledDate: string; leaderId: string | null }>(
+    trx: Db,
+    pairs: readonly T[],
+  ): Promise<(T & { placeId: string | null })[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    const resolved = pairs.map((pair) => {
+      const kept = pair.leaderId === null ? null : canonicalId(resolve(pair.leaderId));
+      return { pair, kept, merged: kept !== null && !sameId(kept, pair.leaderId as string) };
+    });
+
+    // Whether each record kept held an assignment on each date a duplicate of it led a meeting.
+    const held = new Map<string, Set<string>>();
+    for (const date of new Set(resolved.filter((r) => r.merged).map((r) => r.pair.scheduledDate))) {
+      const ids = [
+        ...new Set(
+          resolved
+            .filter((r) => r.merged && r.pair.scheduledDate === date)
+            .map((r) => r.kept as string),
+        ),
+      ];
+      const found = await this.hierarchy.assignmentsAsOf(trx, ids, endOfManilaDay(date));
+      held.set(date, new Set([...found.keys()].map((id) => canonicalId(id))));
+    }
+
+    return resolved.map(({ pair, kept, merged }) => ({
+      ...pair,
+      leaderId: kept,
+      placeId:
+        merged && !(held.get(pair.scheduledDate)?.has(kept as string) ?? false)
+          ? pair.leaderId
+          : kept,
+    }));
+  }
+
+  /**
    * The period's placement graph with every merged pair placed once (section 3, decision 0408):
    * the merges are read in the report's own transaction, so they and the figures are one
    * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
@@ -822,7 +862,10 @@ export class ReportingService {
       // September. Within the current month the whole month is due, as a month's own
       // coverage line counts it (decision 0239).
       const dueTo = to < rangeMonthEnd(today) ? to : rangeMonthEnd(today);
-      const pairs = await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, dueTo);
+      const pairs = await this.coveragePairsAsKept(
+        trx,
+        await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, dueTo),
+      );
       const recorded = await this.cellFigures.recordedScheduledDatesBetween(trx, from, dueTo);
       const scope: CellReportScope =
         subject.kind === 'LEADER'
@@ -1048,7 +1091,7 @@ export class ReportingService {
    */
   async cellCoverageByLeader(scope: CellReportScope, period: string): Promise<CoverageByLeader> {
     return this.overPeriod(period, async (trx) => {
-      const pairs = await this.leadersAsKept(
+      const pairs = await this.coveragePairsAsKept(
         trx,
         await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
       );
@@ -1124,7 +1167,7 @@ export class ReportingService {
     // above records what a `Promise.all` cost this module once, on a *pooled* connection
     // where it really was two snapshots; writing it the same way here would invite a
     // reader to check whether this is that mistake again.
-    const pairs = await this.leadersAsKept(
+    const pairs = await this.coveragePairsAsKept(
       trx,
       await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
     );
@@ -1150,7 +1193,12 @@ export class ReportingService {
    */
   private async scheduledPairsInScope(
     trx: Transaction<Database>,
-    pairs: readonly { cellId: string; scheduledDate: string; leaderId: string | null }[],
+    pairs: readonly {
+      cellId: string;
+      scheduledDate: string;
+      leaderId: string | null;
+      placeId?: string | null;
+    }[],
     scope: CellReportScope,
   ): Promise<readonly { cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     if (scope.kind === 'CELL') {
@@ -1169,11 +1217,11 @@ export class ReportingService {
     );
     const subtrees = new Map(dates.map((date, index) => [date, walked[index]]));
 
-    return pairs.filter(
-      (pair) =>
-        pair.leaderId !== null &&
-        (subtrees.get(pair.scheduledDate)?.has(canonicalId(pair.leaderId)) ?? false),
-    );
+    // Placed by `placeId` where a merge set one (decision 0408, point 23), else by its leader.
+    return pairs.filter((pair) => {
+      const place = pair.placeId ?? pair.leaderId;
+      return place !== null && (subtrees.get(pair.scheduledDate)?.has(canonicalId(place)) ?? false);
+    });
   }
 
   /**
