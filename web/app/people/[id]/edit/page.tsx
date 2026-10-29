@@ -29,7 +29,9 @@ import {
   editPerson,
   getPerson,
   sexLabel,
+  shownOnly,
   type DuplicateCandidate,
+  type ShownCandidate,
   type PersonEdit,
   type PersonFull,
 } from '@/lib/people';
@@ -164,7 +166,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     digits(values.mobile_number) !== digits(person.mobile_number);
 
   // Tier 1 candidates the API asked about, and those already passed over (decision 0396).
-  const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
+  const [candidates, setCandidates] = useState<ShownCandidate[] | null>(null);
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const [pending, setPending] = useState<PersonEdit | null>(null);
   // One key for the answer to each question, so pressing "save anyway" again after a lost
@@ -188,7 +190,8 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
-        setCandidates((error.details.candidates as DuplicateCandidate[]) ?? []);
+        // Only a candidate in scope is ever refused on (section 3), so none is withheld.
+        setCandidates(shownOnly((error.details.candidates as DuplicateCandidate[]) ?? []));
         setAnswerKey(crypto.randomUUID());
         setFailure(null);
         return;
@@ -277,12 +280,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <li key={candidate.id} className="py-4">
               <p className="font-medium">{candidate.full_name}</p>
               <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
-              <MatchNote
-                candidate={candidate}
-                adding={false}
-                withheldLine="A possible match. Their details are visible to the leaders who pastor them — ask before saving."
-                className="mt-2"
-              />
+              <MatchNote candidate={candidate} adding={false} className="mt-2" />
               <MatchLink candidate={candidate} className="mt-2 text-sm" />
             </li>
           ))}

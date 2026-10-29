@@ -1,4 +1,5 @@
 import {
+  APPLICATION_RULES,
   findCandidates,
   normalizeName,
   type Candidate,
@@ -205,6 +206,69 @@ describe('spellings that hid one person from the check (decision 0401)', () => {
     expect(
       reasonsFor(subject({ firstName: 'Ana Marie', lastName: 'Santos', ...none }), ana),
     ).toEqual([]);
+  });
+});
+
+describe('a similar name, read from the names alone (decision 0405)', () => {
+  const none = { birthDate: null, mobileNumberNormalized: null };
+  const john: Candidate = { ...BASE, firstName: 'John', lastName: 'Santos' };
+  const reasonsFor = (s: Subject, candidate: Candidate, rules = APPLICATION_RULES) =>
+    findCandidates(s, [candidate], undefined, rules).map((match) => [match.tier, match.reasons[0]]);
+
+  it('is asked for by the application, and not by default', () => {
+    expect(APPLICATION_RULES.similarNames).toBe(true);
+    const jon = subject({ firstName: 'Jon', lastName: 'Santos', ...none });
+    expect(reasonsFor(jon, john)).toEqual([[2, 'names closely similar']]);
+    expect(reasonsFor(jon, john, {})).toEqual([]);
+  });
+
+  it('reads a known nickname with the last names equal', () => {
+    expect(
+      reasonsFor(subject({ firstName: 'Manny', lastName: 'Santos', ...none }), {
+        ...john,
+        firstName: 'Manuel',
+      }),
+    ).toEqual([[2, 'last name equal, first name a known nickname variant']]);
+  });
+
+  it('gives the same answer whatever birthday or mobile number is typed', () => {
+    const jon = (details: Partial<Subject>) =>
+      subject({ firstName: 'Jon', lastName: 'Santos', birthDate: null, ...details });
+    const answer = reasonsFor(jon({}), { ...john, birthDate: '1985-06-15' });
+    expect(answer).toEqual([[2, 'names closely similar']]);
+    expect(
+      reasonsFor(jon({ birthDate: '1970-01-01' }), { ...john, birthDate: '1985-06-15' }),
+    ).toEqual(answer);
+    expect(
+      reasonsFor(jon({ mobileNumberNormalized: '09171234567' }), {
+        ...john,
+        birthDate: '1985-06-15',
+      }),
+    ).toEqual(answer);
+  });
+
+  it('is never a match on the last name alone', () => {
+    // Different first names, and two short ones a letter apart.
+    expect(reasonsFor(subject({ firstName: 'Pedro', lastName: 'Santos', ...none }), john)).toEqual(
+      [],
+    );
+    expect(
+      reasonsFor(subject({ firstName: 'Bo', lastName: 'Li', ...none }), {
+        ...john,
+        firstName: 'Jo',
+        lastName: 'Li',
+      }),
+    ).toEqual([]);
+  });
+
+  it('is never Tier 1', () => {
+    const [match] = findCandidates(
+      subject({ firstName: 'Jon', lastName: 'Santos', ...none }),
+      [{ ...john, ...none }],
+      undefined,
+      APPLICATION_RULES,
+    );
+    expect(match.tier).toBe(2);
   });
 });
 

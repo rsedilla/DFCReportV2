@@ -342,10 +342,42 @@ function isDigitTransposition(a: string, b: string): boolean {
  */
 export interface MatchingRules {
   namesStopWithoutDetails?: boolean;
+  /**
+   * Decision 0405: a similar name is a Tier 2 candidate on the names alone. Asked for
+   * by the application's own paths and by the publishable run, so a similar name in
+   * another branch is shown as well as an exact one; not by the tree import.
+   */
+  similarNames?: boolean;
 }
 
 /** What the application's add, edit and pre-flight paths ask for. */
-export const APPLICATION_RULES: MatchingRules = { namesStopWithoutDetails: true };
+export const APPLICATION_RULES: MatchingRules = {
+  namesStopWithoutDetails: true,
+  similarNames: true,
+};
+
+/**
+ * Why two names are similar, or null (decision 0405). Reads the names alone: the last
+ * names equal and the first names a known nickname, or the whole names closely similar,
+ * which is what catches one letter added, dropped or changed (`Jon` against `John`).
+ * The whole name rather than the first alone, so that two short first names one letter
+ * apart are not a match on the last name alone, which section 3 forbids.
+ */
+function similarName(
+  sameLast: boolean,
+  nickname: boolean,
+  whole: string,
+  cWhole: string,
+  thresholds: MatchingThresholds,
+): string | null {
+  if (sameLast && nickname) {
+    return 'last name equal, first name a known nickname variant';
+  }
+  if (similarity(whole, cWhole) >= thresholds.wholeNameSimilarity) {
+    return 'names closely similar';
+  }
+  return null;
+}
 
 /**
  * Candidates for a subject, strongest first.
@@ -448,6 +480,13 @@ export function findCandidates(
         if (spelling !== null) {
           tier = 2;
           reasons.push(spelling);
+        } else if (rules.similarNames) {
+          // Decision 0405: a similar name, read from the names alone.
+          const similar = similarName(sameLast, nickname, whole, cWhole, thresholds);
+          if (similar !== null) {
+            tier = 2;
+            reasons.push(similar);
+          }
         }
       }
     }

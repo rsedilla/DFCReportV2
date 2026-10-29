@@ -83,7 +83,8 @@ describe('a duplicate check showing somebody outside the branch is recorded (dec
     });
 
     expect(response.status).toBe(200);
-    expect((response.body.data as { id: string }[]).map((row) => row.id)).toEqual([juan.id]);
+    // The response names nobody outside the branch (decision 0405); the entry does.
+    expect(response.body.data).toEqual([{ possible_match: true }]);
 
     const written = await entries();
     expect(written).toEqual([
@@ -124,9 +125,11 @@ describe('a duplicate check showing somebody outside the branch is recorded (dec
     await assignTo(db, juanInside.id, markPerson.id);
 
     const response = await check(mark, { first_name: 'Juan', last_name: 'Dizon' });
-    expect((response.body.data as { id: string }[]).map((row) => row.id).sort()).toEqual(
-      [juan.id, juanElsewhere.id, juanInside.id].sort(),
-    );
+    expect(response.body.data).toEqual([
+      expect.objectContaining({ id: juanInside.id }),
+      { possible_match: true },
+      { possible_match: true },
+    ]);
 
     const written = await entries();
     expect(written).toHaveLength(1);

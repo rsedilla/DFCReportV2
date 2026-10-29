@@ -242,22 +242,22 @@ export class PeopleController {
       APPLICATION_RULES,
     );
 
-    const data = visible.slice(0, limit);
+    const shown = visible.slice(0, limit);
 
     // **A lookup that shows somebody outside the scope is recorded** (section 3,
     // decision 0304): the names typed and the people shown, never the birthday or the
-    // mobile number. Only an out-of-scope candidate carries `possible_match`.
-    const outside = data.filter((row) => row.possible_match === true).map((row) => row.id);
+    // mobile number. The response no longer names them (decision 0405); the entry does.
+    const outside = shown.filter((row) => row.withheld).map((row) => row.personId);
     if (outside.length > 0) {
       await this.people.recordDuplicateCheck(
         actor.accountId,
         query.first_name,
         query.last_name,
-        outside as string[],
+        outside,
       );
     }
 
-    return { data, next_cursor: null };
+    return { data: shown.map((row) => row.body), next_cursor: null };
   }
 
   /**

@@ -3,12 +3,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 
-import { MatchLink, MatchNote } from '@/components/archived-match';
+import { MatchLink, MatchNote, OtherBranchMatches } from '@/components/archived-match';
 
 import {
   MINIMUM_SEARCH_LENGTH,
   duplicateCandidates,
-  type DuplicateCandidate,
+  shownOnly,
+  type ShownCandidate,
 } from '@/lib/people';
 
 /**
@@ -44,12 +45,12 @@ function useDebounced<T>(value: T, delay: number): T {
  * requirement is Tier 1's alone, and that arrives as a refusal. This is here to
  * be read.
  *
- * **A withheld candidate says only that they are a possible match**, because
- * section 8 protects every field the matching rules read and three rulings
- * record three attempts at redacting this without leaking the same birthday one
- * field further out. The API marks such a candidate itself, and `isWithheld`
- * reads that flag — with a fail-closed fallback for a candidate carrying no
- * tier, which says less rather than more.
+ * **A withheld candidate is one line naming nobody** (decision 0405): somebody with a
+ * similar name is recorded in another branch, and the Admin is asked. Section 8 protects
+ * every field the matching rules read, and three rulings record three attempts at
+ * redacting this without leaking the same birthday one field further out. The API marks
+ * such a candidate itself, and `isWithheld` reads that flag — with a fail-closed
+ * fallback for a candidate carrying no tier, which says less rather than more.
  *
  * **On Edit details it leaves out the person being edited** (decision 0396), who would
  * otherwise match their own record, and says "saving" where Add Person says "adding".
@@ -115,9 +116,11 @@ export function PossibleMatches({
     enabled: ready,
   });
 
-  const candidates = (matches.data?.data ?? []).filter((candidate) => candidate.id !== excludeId);
+  const candidates = matches.data?.data ?? [];
+  const shown = shownOnly(candidates).filter((candidate) => candidate.id !== excludeId);
+  const withheld = candidates.length - shownOnly(candidates).length > 0;
 
-  if (!ready || matches.isPending || matches.isError || candidates.length === 0) {
+  if (!ready || matches.isPending || matches.isError || (shown.length === 0 && !withheld)) {
     // Silent when there is nothing to say, and never "nobody matches": a match resting on a
     // birthday or mobile number outside the reader's scope is withheld from them (section 3),
     // so an empty list is not evidence that nobody does. A failed lookup says nothing either.
@@ -147,23 +150,19 @@ export function PossibleMatches({
         API and reaches every client, so it is raised separately.
       */}
       <ul className="divide-line mt-3 divide-y">
-        {[...candidates]
+        {[...shown]
           .sort((a, b) => a.full_name.localeCompare(b.full_name))
-          .map((candidate: DuplicateCandidate) => (
+          .map((candidate: ShownCandidate) => (
           <li key={candidate.id} className="py-3">
             <p className="text-sm font-medium">{candidate.full_name}</p>
             <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
 
-            <MatchNote
-              candidate={candidate}
-              adding={!excludeId}
-              withheldLine="A possible match. Their details are visible to the leaders who pastor them."
-              className="mt-1"
-            />
+            <MatchNote candidate={candidate} adding={!excludeId} className="mt-1" />
 
             <MatchLink candidate={candidate} className="mt-1 text-sm" />
           </li>
         ))}
+        <OtherBranchMatches candidates={candidates} adding={!excludeId} itemClassName="py-3" />
       </ul>
     </section>
   );
