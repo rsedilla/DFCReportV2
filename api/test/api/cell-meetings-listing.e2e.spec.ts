@@ -3,6 +3,7 @@ import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -79,6 +80,8 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
       .set('Authorization', `Bearer ${as.accessToken}`);
 
   it('derives every scheduled date in the month, and none is recorded yet', async () => {
+    // A member from the start, so every meeting is owed (decision 0409).
+    await addCellMember(db, markCell);
     // Four Saturdays in September 2026, and every one awaiting a record. The `null`
     // is section 13's "outstanding task, shown to the responsible leader as a meeting
     // awaiting a record" — an absence of data, never a status.
@@ -143,6 +146,8 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
   });
 
   it('counts five where the month holds five', async () => {
+    // A member from the start, so every meeting is owed (decision 0409).
+    await addCellMember(db, markCell);
     // August 2026 has five Saturdays. A separate case rather than a parameter, because
     // section 12 states 4 **or** 5 and an off-by-one that always drops the last one
     // survives every four-Saturday month.
@@ -188,6 +193,8 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
   });
 
   it('joins a recorded meeting onto its scheduled date', async () => {
+    // A member from the start, so every meeting is owed (decision 0409).
+    await addCellMember(db, markCell);
     await db
       .insertInto('cell_meetings')
       .values({
@@ -215,6 +222,8 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
   });
 
   it('keeps a rescheduled meeting in the month it reports in', async () => {
+    // A member from the start, so every meeting is owed (decision 0409).
+    await addCellMember(db, markCell);
     // Section 13: a `RESCHEDULED` meeting "remains part of January's Cell meeting
     // report and does not create an additional February meeting". The row is selected
     // by `reporting_month` and keyed by `scheduled_date`, so a meeting moved into the
@@ -260,6 +269,7 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
       // After the first two Saturdays of August 2026 (1 and 8).
       createdAt: new Date('2026-08-12T10:00:00+08:00'),
     });
+    await addCellMember(db, lateCell);
     const lateAccount = await createAccount(app, db, { person: late, roles: ['LEADER'] });
 
     const response = await list(lateCell.id, '2026-08-01', lateAccount);
