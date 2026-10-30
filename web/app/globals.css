@@ -195,6 +195,33 @@
 }
 
 /*
+ * **On a page that is filled in, a label is sentence case in `ink`** (decision 0410), so a
+ * form of many fields reads as a form rather than as a list of headings. The pages carry
+ * `data-form-layout` (`components/form-section.tsx`); everywhere else keeps the label above.
+ */
+@layer utilities {
+  [data-form-layout] .field-label {
+    color: var(--ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  /* Two pickers side by side: each search row at the foot of its card, so the boxes align. */
+  @media (width >= 64rem) {
+    [data-field-pair] > div {
+      display: flex;
+      flex-direction: column;
+    }
+    [data-field-pair] [data-picker-search] {
+      margin-top: auto;
+      padding-top: 0.75rem;
+    }
+  }
+}
+
+/*
  * Responsive from the beginning: leaders will open this on their phones long
  * before a native app exists, so mobile web is a current surface rather than
  * preparation for the future (SKILL.md section 23).

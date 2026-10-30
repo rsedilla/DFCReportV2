@@ -42,6 +42,7 @@ export function RadioGroup<T extends string>({
   disabled = false,
   layout = 'stacked',
   even = false,
+  descriptionBelow = false,
 }: {
   legend: string;
   description?: string;
@@ -67,6 +68,11 @@ export function RadioGroup<T extends string>({
   layout?: 'stacked' | 'row';
   /** Every choice the same width from `sm`, as wide as the longest (decision 0332). */
   even?: boolean;
+  /**
+   * The description under the choices rather than above them, for a group set beside
+   * another (`FieldPair`), so the two rows of choices line up (decision 0410). Stacked only.
+   */
+  descriptionBelow?: boolean;
 }) {
   const id = useId();
   const row = layout === 'row';
@@ -78,21 +84,24 @@ export function RadioGroup<T extends string>({
     [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(' ') ||
     undefined;
 
+  const below = descriptionBelow && !row;
+  const descriptionElement = description ? (
+    <p
+      id={descriptionId}
+      // On a phone the line runs under the choices too, rather than wrapping into
+      // a column a word wide beside them.
+      className={cn(
+        'text-muted text-sm leading-relaxed',
+        row && 'col-span-2 sm:col-span-1 sm:col-start-1',
+      )}
+    >
+      {description}
+    </p>
+  ) : null;
+
   const body = (
     <>
-      {description ? (
-        <p
-          id={descriptionId}
-          // On a phone the line runs under the choices too, rather than wrapping into
-          // a column a word wide beside them.
-          className={cn(
-            'text-muted text-sm leading-relaxed',
-            row && 'col-span-2 sm:col-span-1 sm:col-start-1',
-          )}
-        >
-          {description}
-        </p>
-      ) : null}
+      {below ? null : descriptionElement}
 
       <div
         className={
@@ -163,6 +172,8 @@ export function RadioGroup<T extends string>({
           );
         })}
       </div>
+
+      {below ? descriptionElement : null}
 
       {error ? (
         <div className={cn(row && 'col-span-2')}>

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { FieldPair, FormActions, FormSection } from '@/components/form-section';
 import { SectionFrame } from '@/components/section-frame';
 import { NameFields } from '@/components/name-fields';
 import { PersonCells } from '@/components/person-cells';
@@ -331,137 +332,141 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
   return (
     <>
       {(
-        <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
+        <form onSubmit={onSubmit} className="mt-8 flex flex-col" data-form-layout noValidate>
           <FailureNotice failure={failure} />
 
-          <NameFields
-            values={values}
-            errors={fieldErrors}
-            onChange={(key, value) => edit(key, value)}
-            note="Middle name is optional."
-            showTitle={mayTitle}
-          />
-
-          {/* The three facts this form cannot change, in one box (owner's choice, 2026-09-22). */}
-          <section
-            aria-labelledby="fixed-heading"
-            className="border-line bg-raised flex flex-col gap-4 border p-4"
-          >
-            <h2 id="fixed-heading" className="text-sm font-bold">
-              Not changed here
-            </h2>
-          {/*
-            Shown and not editable. Sex is not one of `people.edit_basic`'s fields: it
-            decides the Network (section 4), and correcting it is Admin's alone
-            (section 7).
-          */}
-          <div className="flex flex-col gap-1.5">
-            <p className="field-label">Sex</p>
-            <p className="text-sm">{sexLabel(person.sex)}</p>
-            <p className="text-muted text-sm leading-relaxed">
-              Only an administrator can correct this, because it decides which Network they belong to.
-            </p>
-          </div>
-
-          {/*
-            Shown and not editable, as the design has it (owner's choice of 2026-09-15).
-            Changing a pastoral leader is a reassignment with its own authority and audit
-            entry (section 5), so it is its own action on the profile and never part of Save.
-          */}
-          <div className="flex flex-col gap-1.5">
-            <p className="field-label">Cell Leader</p>
-            <p className="text-sm">
-              {path.isPending
-                ? 'Loading…'
-                : path.isError
-                  ? 'Not available'
-                  : leader
-                    ? leader.full_name
-                    : noLeaderLabel(pathEntries, path.data?.no_leader_reason ?? null)}
-            </p>
-            <p className="text-muted text-sm leading-relaxed">
-              Changing it is a move, not an edit. Use Move to another leader on the profile.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <p className="field-label">DCC stage</p>
-            <p className="text-sm">{stage}</p>
-            <p className="text-muted text-sm leading-relaxed">
-              Worked out from their Sundays. If it looks wrong, correct the Sunday on their page.
-            </p>
-          </div>
-          </section>
-          {/*
-            Section 7 gives `people.edit_basic` six fields, and civil status is
-            the sixth. It belongs here for an ordinary reason: a marriage or a
-            bereavement is a correction to somebody's own descriptive record, and
-            leaving it out gave that change no path through this client at all.
-          */}
-          <RadioGroup
-            legend="Civil status"
-            name="civil_status"
-            options={CIVIL_STATUS_OPTIONS}
-            value={values.civil_status}
-            onChange={(next) => edit('civil_status', next)}
-          />
-
-          {/* Optional on an edit; only adding a person requires them (decision 0328). */}
-          <Field
-            label="Birthday (optional)"
-            type="date"
-            name="birth_date"
-            autoComplete="off"
-            value={values.birth_date}
-            error={fieldErrors.birth_date}
-            onChange={(event) => edit('birth_date', event.target.value)}
-            description={
-              person.birth_date
-                ? 'A recorded birthday cannot be removed here — only corrected.'
-                : undefined
-            }
-          />
-          <Field
-            label="Mobile number (optional)"
-            type="tel"
-            name="mobile_number"
-            autoComplete="off"
-            value={values.mobile_number}
-            error={fieldErrors.mobile_number}
-            onChange={(event) => {
-              mobileTyped.current = true;
-              edit('mobile_number', event.target.value);
-            }}
-            onBlur={(event) => {
-              // Only a number typed in is written with hyphens (lib/mobile.ts), so passing
-              // through the box leaves a saved number exactly as it was saved.
-              if (!mobileTyped.current) {
-                return;
-              }
-              mobileTyped.current = false;
-              const next = formatMobile(event.target.value);
-              if (next !== event.target.value) {
-                edit('mobile_number', next);
-              }
-            }}
-          />
-
-          {/*
-            Only once a name, the birthday or the mobile number differs from what is saved, which is
-            when the save is checked (decision 0396): opened for a civil status, the page asks
-            nothing and looks nobody up.
-          */}
-          {identityChanged ? (
-            <PossibleMatches
-              firstName={values.first_name}
-              lastName={values.last_name}
-              birthDate={values.birth_date}
-              mobileNumber={values.mobile_number}
-              excludeId={id}
+          <FormSection title="Name" description="As they write it, so they can be found again.">
+            <NameFields
+              values={values}
+              errors={fieldErrors}
+              onChange={(key, value) => edit(key, value)}
+              note="Middle name is optional."
+              showTitle={mayTitle}
             />
-          ) : null}
+          </FormSection>
 
-          <div className="flex flex-wrap gap-3">
+          <FormSection title="About them">
+            {/*
+              Section 7 gives `people.edit_basic` six fields, and civil status is
+              the sixth. It belongs here for an ordinary reason: a marriage or a
+              bereavement is a correction to somebody's own descriptive record, and
+              leaving it out gave that change no path through this client at all.
+            */}
+            <RadioGroup
+              legend="Civil status"
+              name="civil_status"
+              options={CIVIL_STATUS_OPTIONS}
+              value={values.civil_status}
+              onChange={(next) => edit('civil_status', next)}
+            />
+
+            {/* Optional on an edit; only adding a person requires them (decision 0328). */}
+            <FieldPair>
+              <Field
+                label="Birthday (optional)"
+                type="date"
+                name="birth_date"
+                autoComplete="off"
+                value={values.birth_date}
+                error={fieldErrors.birth_date}
+                onChange={(event) => edit('birth_date', event.target.value)}
+                description={
+                  person.birth_date
+                    ? 'A recorded birthday cannot be removed here — only corrected.'
+                    : undefined
+                }
+                descriptionBelow
+              />
+              <Field
+                label="Mobile number (optional)"
+                type="tel"
+                name="mobile_number"
+                autoComplete="off"
+                value={values.mobile_number}
+                error={fieldErrors.mobile_number}
+                onChange={(event) => {
+                  mobileTyped.current = true;
+                  edit('mobile_number', event.target.value);
+                }}
+                onBlur={(event) => {
+                  // Only a number typed in is written with hyphens (lib/mobile.ts), so passing
+                  // through the box leaves a saved number exactly as it was saved.
+                  if (!mobileTyped.current) {
+                    return;
+                  }
+                  mobileTyped.current = false;
+                  const next = formatMobile(event.target.value);
+                  if (next !== event.target.value) {
+                    edit('mobile_number', next);
+                  }
+                }}
+              />
+            </FieldPair>
+
+            {/*
+              Only once a name, the birthday or the mobile number differs from what is saved, which is
+              when the save is checked (decision 0396): opened for a civil status, the page asks
+              nothing and looks nobody up.
+            */}
+            {identityChanged ? (
+              <PossibleMatches
+                firstName={values.first_name}
+                lastName={values.last_name}
+                birthDate={values.birth_date}
+                mobileNumber={values.mobile_number}
+                excludeId={id}
+              />
+            ) : null}
+          </FormSection>
+
+          {/* The three facts this form cannot change (owner's choice, 2026-09-22). */}
+          <FormSection title="Not changed here" description="Each is changed somewhere else, as it says.">
+            <div className="grid gap-6 lg:grid-cols-3 lg:gap-x-8">
+              {/*
+                Shown and not editable. Sex is not one of `people.edit_basic`'s fields: it
+                decides the Network (section 4), and correcting it is Admin's alone
+                (section 7).
+              */}
+              <div className="flex flex-col gap-1.5">
+                <p className="field-label">Sex</p>
+                <p className="text-sm">{sexLabel(person.sex)}</p>
+                <p className="text-muted text-sm leading-relaxed">
+                  Only an administrator can correct this, because it decides which Network they belong to.
+                </p>
+              </div>
+
+              {/*
+                Shown and not editable, as the design has it (owner's choice of 2026-09-15).
+                Changing a pastoral leader is a reassignment with its own authority and audit
+                entry (section 5), so it is its own action on the profile and never part of Save.
+              */}
+              <div className="flex flex-col gap-1.5">
+                <p className="field-label">Cell Leader</p>
+                <p className="text-sm">
+                  {path.isPending
+                    ? 'Loading…'
+                    : path.isError
+                      ? 'Not available'
+                      : leader
+                        ? leader.full_name
+                        : noLeaderLabel(pathEntries, path.data?.no_leader_reason ?? null)}
+                </p>
+                <p className="text-muted text-sm leading-relaxed">
+                  Changing it is a move, not an edit. Use Move to another leader on the profile.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <p className="field-label">DCC stage</p>
+                <p className="text-sm">{stage}</p>
+                <p className="text-muted text-sm leading-relaxed">
+                  Worked out from their Sundays. If it looks wrong, correct the Sunday on their page.
+                </p>
+              </div>
+            </div>
+          </FormSection>
+
+          <FormActions>
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save changes'}
             </Button>
@@ -482,7 +487,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <Link href={`/people/${id}`} className={cn(buttonClasses('secondary'))}>
               Cancel
             </Link>
-          </div>
+          </FormActions>
         </form>
       )}
 

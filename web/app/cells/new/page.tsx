@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { FieldPair, FormActions, FormSection } from '@/components/form-section';
 import { SectionFrame } from '@/components/section-frame';
 import { PersonPicker } from '@/components/person-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
@@ -77,7 +78,8 @@ function NewCellForm() {
       </p>
 
       <form
-        className="mt-8 flex flex-col gap-5"
+        className="mt-8 flex flex-col"
+        data-form-layout
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -86,65 +88,71 @@ function NewCellForm() {
           }
         }}
       >
-        <PersonPicker
-          legend="Cell Leader"
-          description="The person who will lead it. Its members must be in the same Network as them."
-          searchLabel="Search for the leader by name"
-          selectedId={leader?.id ?? null}
-          selectedName={leader?.full_name ?? null}
-          onSelect={(person) => {
-            create.reset();
-            setLeader(person);
-          }}
-        />
-
-        <RadioGroup
-          legend="Category"
-          name="category"
-          required
-          value={category}
-          onChange={setCategory}
-          options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
-        />
-
-        <div className="grid gap-5 sm:grid-cols-2">
-          <SelectField
-            label="Meets every"
-            name="day_of_week"
-            value={day}
-            onChange={(event) => setDay(event.target.value)}
-          >
-            <option value="">Choose a day</option>
-            {DAYS.map((value) => (
-              <option key={value} value={String(value)}>
-                {dayOfWeekLabel(value)}
-              </option>
-            ))}
-          </SelectField>
-
-          <Field
-            label="At"
-            description="Manila time."
-            type="time"
-            name="time_of_day"
-            autoComplete="off"
-            value={time}
-            onChange={(event) => setTime(event.target.value)}
+        <FormSection title="Leader">
+          <PersonPicker
+            legend="Cell Leader"
+            description="The person who will lead it. Its members must be in the same Network as them."
+            searchLabel="Search for the leader by name"
+            selectedId={leader?.id ?? null}
+            selectedName={leader?.full_name ?? null}
+            onSelect={(person) => {
+              create.reset();
+              setLeader(person);
+            }}
           />
-        </div>
+        </FormSection>
+
+        <FormSection title="When it meets" description="Its category, and the day and time each week.">
+
+          <RadioGroup
+            legend="Category"
+            name="category"
+            required
+            value={category}
+            onChange={setCategory}
+            options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
+          />
+
+          <FieldPair>
+              <SelectField
+                label="Meets every"
+                name="day_of_week"
+                value={day}
+                onChange={(event) => setDay(event.target.value)}
+              >
+                <option value="">Choose a day</option>
+                {DAYS.map((value) => (
+                  <option key={value} value={String(value)}>
+                    {dayOfWeekLabel(value)}
+                  </option>
+                ))}
+              </SelectField>
+
+              <Field
+                label="At"
+                description="Manila time."
+                descriptionBelow
+                type="time"
+                name="time_of_day"
+                autoComplete="off"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+              />
+          </FieldPair>
+        </FormSection>
 
         {/* Beside Create Cell, where it is seen on a phone: a refusal names what to change,
             such as a time too close to another of the leader's Cells (decision 0392). */}
         <FailureNotice failure={create.isError ? describeFailure(create.error) : null} />
 
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <FormActions>
           <Button type="submit" disabled={!ready || create.isPending}>
             {create.isPending ? 'Creating…' : 'Create Cell'}
           </Button>
           <Link href="/cells" className={buttonClasses('secondary')}>
             Cancel
           </Link>
-        </div>
+        </FormActions>
       </form>
     </SectionFrame>
     </main>

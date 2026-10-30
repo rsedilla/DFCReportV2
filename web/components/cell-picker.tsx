@@ -129,7 +129,7 @@ export function CellPicker({
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" data-picker-search>
         <Field
           label={leaders.length > 0 ? 'Or find another Cell Group' : 'Search for a Cell Group'}
           description="Type the leader’s name or the Cell ID, like CELL-000032."

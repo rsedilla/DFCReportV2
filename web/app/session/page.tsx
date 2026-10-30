@@ -96,7 +96,7 @@ function SessionDetail() {
   });
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.NARROW} data-form-layout>
       <SectionFrame section="account">
       <h1 className="text-xl font-semibold tracking-tight">Account and session</h1>
 
