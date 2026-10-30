@@ -118,7 +118,9 @@ export class DccPersonAttendanceService {
                e.event_date,
                bool_or(a.present) AS present,
                e.removed_at IS NOT NULL AS removed,
-               (array_agg(a.responsible_leader_id))[1] AS responsible_leader_id
+               -- The kept record's line where both have one: a merged record is on no checklist.
+               (array_agg(a.responsible_leader_id ORDER BY (a.person_id = ${person.id}::uuid) DESC))[1]
+                 AS responsible_leader_id
           FROM dcc_attendance a
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.person_id = ANY (${records}::uuid[])

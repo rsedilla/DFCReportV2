@@ -264,6 +264,35 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
     expect(manuelS.body.data[0].checklist_of).toBe(manuel.id);
   });
 
+  // A merged record is on no checklist, so where both records have a line on one Sunday
+  // the kept record's walk decides it (decisions 0408 and 0411).
+  it('walks from the kept record’s line where a merged record has one on the same Sunday', async () => {
+    const sunday = await recentSunday();
+    const event = await createEvent(sunday);
+    // The merged record's line goes in first, under a walk that reaches nobody.
+    const ned = await createPerson(db, { firstName: 'Ned', network: 'MENS' });
+    await assignTo(db, ned.id, nathan.id);
+    await insertRecord(event, ned, true, nathan, admin);
+    const tim = await createPerson(db, { firstName: 'Tim', network: 'MENS' });
+    await assignTo(db, tim.id, manuel.id);
+    await insertRecord(event, tim, false, manuel, admin);
+    await db
+      .updateTable('persons')
+      .set({
+        merged_into_id: tim.id,
+        merged_at: new Date(),
+        merged_by: admin.id,
+        merge_reason: 'Entered twice.',
+      })
+      .where('id', '=', ned.id)
+      .execute();
+
+    const response = await attendance(admin, tim.id).expect(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].present).toBe(true);
+    expect(response.body.data[0].checklist_of).toBe(manuel.id);
+  });
+
   it('climbs section 9’s ladder and has no classification before any attendance', async () => {
     const s0 = await recentSunday();
 
