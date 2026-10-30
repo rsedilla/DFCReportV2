@@ -257,6 +257,8 @@ export interface PendingDccLeader {
     is_actor: boolean;
     /** False shows "Has no account" (decision 0336), or "No account on these Sundays" (decision 0403). */
     has_account: boolean;
+    /** Holds an account now: a row of Sundays before it reads "No account on these Sundays" (decision 0403, 3c). */
+    holds_account_now: boolean;
   };
   /** Who records it, named only where the reader's scope covers them. */
   recorded_by: { person_id: string; full_name: string } | null;
