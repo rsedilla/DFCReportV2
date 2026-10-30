@@ -140,21 +140,23 @@ const ACCOUNT: NavEntry = {
  * from the sidebar and the spare width falls to the right, as the owner's design draws
  * it (owner's choice, 2026-09-22), rather than opening a gap that grows with the screen.
  *
- * Three values for a page of content.
+ * Four values for a page of content.
  *
- * - `READING` (`max-w-3xl`, 768px) for anything filled in: a form, the session
- *   description.
+ * - `READING` (`max-w-7xl`, 1280px) for anything filled in: a form, a recording screen,
+ *   the session description. It was 768px until decision 0410, which gave a form the
+ *   width a list has and arranged it in sections instead (`components/form-section.tsx`),
+ *   so the width buys a second column rather than longer inputs.
+ * - `NARROW` (`max-w-3xl`, 768px) for a page read top to bottom that holds no list and
+ *   no form of many fields: Account, and the chain on Where they sit.
  * - `RECORD` (`max-w-5xl`, 1024px) for one person's page, which is read rather
  *   than filled in and carries short tables of its own.
  * - `INDEX` (`max-w-7xl`, 1280px) for a list or a table, where the extra width
  *   buys columns rather than longer lines (decision 0402). It was 1024px until then,
  *   which left a third of a 1536px laptop empty beside every list.
  *
- * **`READING` is not a reading measure**, and it was described as one here in
- * error. Less its padding it is a 728px column, which at the body size is
- * nearer 90 characters than the 60–75 that is comfortable. Prose is kept short
- * by the `max-w-xl`/`max-w-2xl` on the paragraphs themselves, which is where a
- * measure belongs — a page width also has to hold a form and a definition list.
+ * **`READING` is not a reading measure.** Prose is kept short by the
+ * `max-w-xl`/`max-w-2xl` on the paragraphs themselves, which is where a measure
+ * belongs — a page width also has to hold a form and a definition list.
  *
  * **The unauthenticated screens are a third width and are not counted here.**
  * `auth-card.tsx` and the landing screen are centred cards on an empty page
@@ -164,7 +166,8 @@ const ACCOUNT: NavEntry = {
  * and jumps to another.
  */
 export const PAGE_WIDTH = {
-  READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
+  READING: 'mx-auto max-w-7xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
+  NARROW: 'mx-auto max-w-3xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
   RECORD: 'mx-auto max-w-5xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
   INDEX: 'mx-auto max-w-7xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
 } as const;

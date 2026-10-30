@@ -246,9 +246,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-29, the trigger being decision 0408: of 407 files, 406 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0408 each moved the first two and
-neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-30, the trigger being decision 0410: of 408 files, 407 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0410 each moved the first two and
+neither of the others, none of them carrying a `Next:`; 0409 is not yet on this branch, and
+whichever of the two merges second recounts. The recount before this one was dated
+2026-10-29 and triggered by 0408, and was left stale by 0410 the next day. The one before that was dated
 2026-10-29 and triggered by 0407, and was left stale by 0408 the same day. The one before that was dated
 2026-10-29 and triggered by decision 0406, and was left stale by 0407 the same day. The one before that was dated
 2026-10-29 and triggered by decision 0405, and was left stale by 0406 the same day. The one before that was dated
@@ -858,6 +860,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-29 — [Conquest is a link above the tabs on Reports and Growth](docs/decisions/0406-conquest-is-a-link.md)
 - 2026-10-29 — [Conquest is an item of the sidebar, for the Admin and both Senior Pastors](docs/decisions/0407-conquest-is-a-sidebar-item.md)
 - 2026-10-29 — [Person Merge: who may be merged, what moves, and how a merged pair is counted](docs/decisions/0408-person-merge.md)
+- 2026-10-30 — [A form is as wide as a list, and is set out in sections](docs/decisions/0410-a-form-is-as-wide-as-a-list-in-sections.md)
 
 ### Open — awaiting a ruling
 

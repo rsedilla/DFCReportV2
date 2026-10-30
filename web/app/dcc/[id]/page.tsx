@@ -415,7 +415,7 @@ function DccChecklist() {
   ) : null;
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
       <SectionFrame section="record">
       <p className="mb-4">
         {/* To Record's DCC list, as after a save: the month page is not linked for now. */}
@@ -569,7 +569,7 @@ function DccChecklist() {
                       : ''}
                   </h2>
                   {section.note ? <p className="text-muted mt-1 text-sm">{section.note}</p> : null}
-                  <ul className="border-line mt-2 border-t [&>li:last-child]:border-b-0">
+                  <ul className="mt-2 grid gap-3 lg:grid-cols-2 lg:gap-x-4">
                     {section.lines.map((line) => (
                       <PersonMark
                         key={line.person_id}
@@ -700,7 +700,7 @@ function PersonMark({
   onChange: (mark: Mark) => void;
 }) {
   return (
-    <li className="border-line border-b py-4">
+    <li className="border-line rounded-md border px-4 py-4">
       <RadioGroup
         legend={line.full_name}
         description={

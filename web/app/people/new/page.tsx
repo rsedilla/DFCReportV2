@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { FieldPair, FormActions, FormSection } from '@/components/form-section';
 import { SectionFrame } from '@/components/section-frame';
 import { CellPicker } from '@/components/cell-picker';
 import { NameFields } from '@/components/name-fields';
@@ -410,169 +411,188 @@ function NewPersonForm() {
         Search first — most &ldquo;new&rdquo; people already have a record somewhere in the church.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
+      <form onSubmit={onSubmit} className="mt-8 flex flex-col" data-form-layout noValidate>
         <FailureNotice failure={failure} />
 
-        <NameFields
-          values={values}
-          errors={fieldErrors}
-          onChange={(key, value) => set(key, value)}
-          note="Middle name is optional. A generational suffix such as Jr or III belongs with the last name."
-          showTitle={mayTitle}
-        />
-
-        {/*
-          Section 4 assigns the Network from sex rather than proposing it, and the
-          mapping is total — so the consequence is stated here as a fact rather
-          than as a step to confirm. A confirmation of a tautology gets clicked
-          unread.
-        */}
-        {!sexSettled ? (
-          <div>
-            <p className="field-label">Sex</p>
-            <p className="text-muted mt-1.5 text-sm">Loading&hellip;</p>
-          </div>
-        ) : decidedSex !== null ? (
-          // Stated, not offered (decision 0373): the one answer the server would accept.
-          <div>
-            <p className="field-label">Sex</p>
-            <p className="mt-1.5">
-              <strong>{decidedSex === 'MALE' ? 'Male' : 'Female'}</strong> ·{' '}
-              {networkLabel(networkOfSex(decidedSex))}
-            </p>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
-              Set from your Network. A {decidedSex === 'MALE' ? 'woman' : 'man'} is added by a
-              leader in the {networkLabel(networkOfSex(decidedSex === 'MALE' ? 'FEMALE' : 'MALE'))}.
-            </p>
-          </div>
-        ) : (
-          <RadioGroup
-            legend="Sex"
-            name="sex"
-            required
-            description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
-            options={SEX_OPTIONS}
-            value={sex}
-            onChange={(next) => set('sex', next)}
+        <FormSection title="Name" description="As they write it, so they can be found again.">
+          <NameFields
+            values={values}
+            errors={fieldErrors}
+            onChange={(key, value) => set(key, value)}
+            note="Middle name is optional. A generational suffix such as Jr or III belongs with the last name."
+            showTitle={mayTitle}
           />
-        )}
+        </FormSection>
 
-        <RadioGroup
-          legend="Civil status"
-          name="civil_status"
-          required
-          options={CIVIL_STATUS_OPTIONS}
-          value={values.civil_status}
-          onChange={(next) => set('civil_status', next)}
-        />
+        <FormSection
+          title="About them"
+          description="Tick Not given yet where they would rather not say."
+        >
+          <FieldPair>
+            {/*
+              Section 4 assigns the Network from sex rather than proposing it, and the
+              mapping is total — so the consequence is stated here as a fact rather
+              than as a step to confirm. A confirmation of a tautology gets clicked
+              unread.
+            */}
+            {!sexSettled ? (
+              <div>
+                <p className="field-label">Sex</p>
+                <p className="text-muted mt-1.5 text-sm">Loading&hellip;</p>
+              </div>
+            ) : decidedSex !== null ? (
+              // Stated, not offered (decision 0373): the one answer the server would accept.
+              <div>
+                <p className="field-label">Sex</p>
+                <p className="mt-1.5">
+                  <strong>{decidedSex === 'MALE' ? 'Male' : 'Female'}</strong> ·{' '}
+                  {networkLabel(networkOfSex(decidedSex))}
+                </p>
+                <p className="text-muted mt-1 text-sm leading-relaxed">
+                  Set from your Network. A {decidedSex === 'MALE' ? 'woman' : 'man'} is added by a
+                  leader in the {networkLabel(networkOfSex(decidedSex === 'MALE' ? 'FEMALE' : 'MALE'))}.
+                </p>
+              </div>
+            ) : (
+              <RadioGroup
+                legend="Sex"
+                name="sex"
+                required
+                description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
+                options={SEX_OPTIONS}
+                value={sex}
+                onChange={(next) => set('sex', next)}
+              />
+            )}
 
-        {/* Both required unless Not given yet is ticked, and nothing stores the tick (decision 0328). */}
-        <div className="flex flex-col gap-2">
-          <Field
-            label="Birthday (required)"
-            type="date"
-            name="birth_date"
-            autoComplete="off"
-            value={notGiven.birth_date ? '' : values.birth_date}
-            disabled={notGiven.birth_date}
-            error={fieldErrors.birth_date ?? fieldErrors.birth_date_not_given}
-            onChange={(event) => set('birth_date', event.target.value)}
-          />
-          {/* Hidden once something is typed, so a value and a tick never show together. */}
-          {notGiven.birth_date || values.birth_date === '' ? (
-            <NotGivenTick
-              checked={notGiven.birth_date}
-              onChange={(checked) => tickNotGiven('birth_date', checked)}
+            <RadioGroup
+              legend="Civil status"
+              name="civil_status"
+              required
+              options={CIVIL_STATUS_OPTIONS}
+              value={values.civil_status}
+              onChange={(next) => set('civil_status', next)}
             />
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-2">
-          <Field
-            label="Mobile number (required)"
-            type="tel"
-            name="mobile_number"
-            autoComplete="off"
-            value={notGiven.mobile_number ? '' : values.mobile_number}
-            disabled={notGiven.mobile_number}
-            error={fieldErrors.mobile_number ?? fieldErrors.mobile_number_not_given}
-            onChange={(event) => set('mobile_number', event.target.value)}
-            // Written with hyphens as the box is left (lib/mobile.ts), so it is seen before saving.
-            onBlur={(event) => {
-              const next = formatMobile(event.target.value);
-              if (next !== event.target.value) {
-                set('mobile_number', next);
-              }
-            }}
+          </FieldPair>
+
+          <FieldPair>
+            {/* Both required unless Not given yet is ticked, and nothing stores the tick (decision 0328). */}
+            <div className="flex flex-col gap-2">
+              <Field
+                label="Birthday (required)"
+                type="date"
+                name="birth_date"
+                autoComplete="off"
+                value={notGiven.birth_date ? '' : values.birth_date}
+                disabled={notGiven.birth_date}
+                error={fieldErrors.birth_date ?? fieldErrors.birth_date_not_given}
+                onChange={(event) => set('birth_date', event.target.value)}
+              />
+              {/* Hidden once something is typed, so a value and a tick never show together. */}
+              {notGiven.birth_date || values.birth_date === '' ? (
+                <NotGivenTick
+                  checked={notGiven.birth_date}
+                  onChange={(checked) => tickNotGiven('birth_date', checked)}
+                />
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Field
+                label="Mobile number (required)"
+                type="tel"
+                name="mobile_number"
+                autoComplete="off"
+                value={notGiven.mobile_number ? '' : values.mobile_number}
+                disabled={notGiven.mobile_number}
+                error={fieldErrors.mobile_number ?? fieldErrors.mobile_number_not_given}
+                onChange={(event) => set('mobile_number', event.target.value)}
+                // Written with hyphens as the box is left (lib/mobile.ts), so it is seen before saving.
+                onBlur={(event) => {
+                  const next = formatMobile(event.target.value);
+                  if (next !== event.target.value) {
+                    set('mobile_number', next);
+                  }
+                }}
+              />
+              {notGiven.mobile_number || values.mobile_number.trim() === '' ? (
+                <NotGivenTick
+                  checked={notGiven.mobile_number}
+                  onChange={(checked) => tickNotGiven('mobile_number', checked)}
+                />
+              ) : null}
+            </div>
+          </FieldPair>
+
+          {/*
+            **The pre-flight lookup, which is why section 3 has that endpoint.**
+            Creation can only ever refuse on Tier 1, so without this every Tier 2
+            match would be "computed and discarded" — section 3's own words for the
+            failure it exists to prevent, and section 9 makes it the first step of
+            registering a VIP.
+
+            Advisory, never blocking: section 3 says the system never blocks
+            creation, and a weaker match is something for the encoder to look at
+            rather than something to answer.
+          */}
+          <PossibleMatches
+            firstName={values.first_name}
+            lastName={values.last_name}
+            birthDate={notGiven.birth_date ? '' : values.birth_date}
+            mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
           />
-          {notGiven.mobile_number || values.mobile_number.trim() === '' ? (
-            <NotGivenTick
-              checked={notGiven.mobile_number}
-              onChange={(checked) => tickNotGiven('mobile_number', checked)}
+        </FormSection>
+
+        <FormSection
+          title="Where they belong"
+          description="Choose the leader first: their Cell Groups are listed first."
+        >
+          <FieldPair>
+            <PersonPicker
+              legend="Their leader"
+              description="The person who disciples them. Only this leader and the leaders above can see and edit their details."
+              searchLabel="Search for a leader by name"
+              describeWhenChosen
+              selectedId={chosenLeaderId}
+              selectedName={chosenLeaderName}
+              onSelect={(person) => {
+                setLeaderTouched(true);
+                setLeaderId(person?.id ?? null);
+                setLeaderName(person?.full_name ?? null);
+                // The leader is in the body, so changing it is a different write.
+                // Without this, a `SCOPE_DENIED` or a cross-Network refusal — both
+                // 4xx, both stored — left the key spent, and picking a valid leader
+                // then met `IDEMPOTENCY_KEY_REUSED` with no way to finish the record.
+                beginNewWrite();
+              }}
             />
-          ) : null}
-        </div>
 
-        {/*
-          **The pre-flight lookup, which is why section 3 has that endpoint.**
-          Creation can only ever refuse on Tier 1, so without this every Tier 2
-          match would be "computed and discarded" — section 3's own words for the
-          failure it exists to prevent, and section 9 makes it the first step of
-          registering a VIP.
-
-          Advisory, never blocking: section 3 says the system never blocks
-          creation, and a weaker match is something for the encoder to look at
-          rather than something to answer.
-        */}
-        <PossibleMatches
-          firstName={values.first_name}
-          lastName={values.last_name}
-          birthDate={notGiven.birth_date ? '' : values.birth_date}
-          mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
-        />        <PersonPicker
-          legend="Their leader"
-          description="The person who disciples them. Only this leader and the leaders above can see and edit their details."
-          searchLabel="Search for a leader by name"
-          describeWhenChosen
-          selectedId={chosenLeaderId}
-          selectedName={chosenLeaderName}
-          onSelect={(person) => {
-            setLeaderTouched(true);
-            setLeaderId(person?.id ?? null);
-            setLeaderName(person?.full_name ?? null);
-            // The leader is in the body, so changing it is a different write.
-            // Without this, a `SCOPE_DENIED` or a cross-Network refusal — both
-            // 4xx, both stored — left the key spent, and picking a valid leader
-            // then met `IDEMPOTENCY_KEY_REUSED` with no way to finish the record.
-            beginNewWrite();
-          }}
-        />
-
-        {/* It follows the leader field above, so changing the leader changes whose Cells come first. */}
-        <CellPicker
-          label="Their Cell Group"
-          description="The Cell Group they will attend. Optional; you can add it later from their record."
-          describeWhenChosen
-          leaderId={chosenLeaderId}
-          leaderName={chosenLeaderSearchName}
-          network={network}
-          selected={cell}
-          onSelect={setCell}
-        />
+            {/* It follows the leader field above, so changing the leader changes whose Cells come first. */}
+            <CellPicker
+              label="Their Cell Group"
+              description="The Cell Group they will attend. Optional; you can add it later from their record."
+              describeWhenChosen
+              leaderId={chosenLeaderId}
+              leaderName={chosenLeaderSearchName}
+              network={network}
+              selected={cell}
+              onSelect={setCell}
+            />
+          </FieldPair>
+        </FormSection>
 
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
-        <div className="flex flex-col gap-1.5">
-          <p className="field-label">DCC stage</p>
-          <p className="text-muted text-sm leading-relaxed">
-            None yet. VIP, 2nd Timer, up to Regular: set automatically from the Sundays they
-            attend, so there is nothing to choose.
-          </p>
-        </div>
+        <FormSection title="DCC stage">
+            <p className="text-muted text-sm leading-relaxed">
+              None yet. VIP, 2nd Timer, up to Regular: set automatically from the Sundays they
+              attend, so there is nothing to choose.
+            </p>
+        </FormSection>
 
-        <div>
+        <FormActions>
           <Button type="submit" disabled={create.isPending || !chosenLeaderId}>
             {create.isPending ? 'Adding…' : 'Add this person'}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </SectionFrame>
       </main>

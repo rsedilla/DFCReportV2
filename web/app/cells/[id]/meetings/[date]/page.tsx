@@ -516,7 +516,7 @@ function RecordMeeting() {
     status !== 'NOT_HELD' && unmarked.length > 0 && unmarked.length < members.length;
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
       <SectionFrame section="record">
       <p className="mb-4">
         <TextLink href={`/cells/${params.id}/meetings`}>
@@ -688,57 +688,60 @@ function RecordMeeting() {
             </div>
           ) : null}
 
-          {/* On a first record, and while correcting a Met or Did-not-meet record. */}
-          {(correcting && !statusEditable) || followOnly || weekClosed ? null : (
-            <div className="mt-8">
-              <RadioGroup
-                legend="Did the meeting take place?"
-                name="status"
-                value={status === 'NOT_HELD' ? 'NOT_HELD' : 'HELD'}
-                onChange={(value) => {
-                  begin();
-                  (correcting ? setStatusFix : setStatusChoice)(value);
-                }}
-                options={[
-                  // Section 13 fixes these labels so wording cannot drift between screens.
-                  { value: 'HELD', label: 'Met' },
-                  { value: 'NOT_HELD', label: 'Did not meet' },
-                ]}
-              />
-            </div>
-          )}
-
-          {askRanBy && !followOnly && !weekClosed ? (
-            <div className="mt-6 flex flex-col gap-4">
-              <RadioGroup
-                legend="Who ran the meeting?"
-                name="ran-by"
-                value={ranBy}
-                onChange={(value) => {
-                  begin();
-                  setRanBy(value);
-                }}
-                options={[
-                  { value: 'LEADER', label: 'The leader' },
-                  { value: 'OTHER', label: 'Someone else' },
-                ]}
-              />
-              {ranBy === 'OTHER' ? (
-                <PersonPicker
-                  legend="Who ran it"
-                  description="Somebody you oversee, or a leader above you."
-                  searchLabel="Search for a person by name"
-                  upline
-                  selectedId={facilitator?.id ?? null}
-                  selectedName={facilitator?.full_name ?? null}
-                  onSelect={(person) => {
+          {/* The two questions side by side on a laptop, in one box (decision 0410). */}
+          <div className="border-line mt-8 grid gap-6 rounded-md border p-5 empty:hidden lg:grid-cols-2 lg:gap-x-10">
+            {/* On a first record, and while correcting a Met or Did-not-meet record. */}
+            {(correcting && !statusEditable) || followOnly || weekClosed ? null : (
+              <div>
+                <RadioGroup
+                  legend="Did the meeting take place?"
+                  name="status"
+                  value={status === 'NOT_HELD' ? 'NOT_HELD' : 'HELD'}
+                  onChange={(value) => {
                     begin();
-                    setFacilitator(person);
+                    (correcting ? setStatusFix : setStatusChoice)(value);
                   }}
+                  options={[
+                    // Section 13 fixes these labels so wording cannot drift between screens.
+                    { value: 'HELD', label: 'Met' },
+                    { value: 'NOT_HELD', label: 'Did not meet' },
+                  ]}
                 />
-              ) : null}
-            </div>
-          ) : null}
+              </div>
+            )}
+
+            {askRanBy && !followOnly && !weekClosed ? (
+              <div className="flex flex-col gap-4">
+                <RadioGroup
+                  legend="Who ran the meeting?"
+                  name="ran-by"
+                  value={ranBy}
+                  onChange={(value) => {
+                    begin();
+                    setRanBy(value);
+                  }}
+                  options={[
+                    { value: 'LEADER', label: 'The leader' },
+                    { value: 'OTHER', label: 'Someone else' },
+                  ]}
+                />
+                {ranBy === 'OTHER' ? (
+                  <PersonPicker
+                    legend="Who ran it"
+                    description="Somebody you oversee, or a leader above you."
+                    searchLabel="Search for a person by name"
+                    upline
+                    selectedId={facilitator?.id ?? null}
+                    selectedName={facilitator?.full_name ?? null}
+                    onSelect={(person) => {
+                      begin();
+                      setFacilitator(person);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
 
           {status === 'NOT_HELD' ? (
             recorded === null || statusChanged ? (
@@ -789,7 +792,7 @@ function RecordMeeting() {
                   This Cell had no members on the meeting date, so there is nobody to mark.
                 </p>
               ) : (
-                <ul className="border-line mt-4 border-t">
+                <ul className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-x-4">
                   {members.map((member) => (
                     <MemberMark
                       key={member.person_id}
@@ -961,7 +964,7 @@ function MemberMark({
   onChange: (mark: Mark) => void;
 }) {
   return (
-    <li className="border-line border-b py-4">
+    <li className="border-line rounded-md border px-4 py-4">
       <RadioGroup
         legend={member.full_name}
         // Kept until Save, so a first tap does not shift the rows beneath it; nothing is

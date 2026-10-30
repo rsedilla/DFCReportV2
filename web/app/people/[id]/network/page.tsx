@@ -43,7 +43,7 @@ function PastoralNetwork() {
   const person = entries.at(-1);
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.NARROW}>
       <SectionFrame section="people">
       <p className="mb-4">
         <TextLink href={`/people/${params.id}`}>Back to this person</TextLink>
