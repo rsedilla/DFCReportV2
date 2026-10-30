@@ -19,7 +19,8 @@ closed. Only the Admin may amend it, with a reason that is kept in the audit log
 **Amend Closed Week** button. That is offered to an account holding `records.backdate_effective_date`
 at Whole Church, which by default is the Admin alone; the server still decides every save
 (Sections 9 and 13). A week closed for another reason, a Sunday with no service or one not yet
-held, offers nothing.
+held, offers nothing, and so does the meeting of a closed Cell, which Section 7 resolves through
+nobody once its week has shut.
 
 **2. Amending opens the page as it is while the week is open**: a recorded meeting's marks and,
 where it was recorded as met or not met, that answer; a meeting with no record, the whole form;
