@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SectionFrame } from '@/components/section-frame';
@@ -265,10 +265,20 @@ function RecordMeeting() {
   const askRanBy = recorded === null && status === 'HELD';
   const facilitatorMissing = askRanBy && ranBy === 'OTHER' && facilitator === null;
   const unmarked = members.filter((member) => markFor(member) === undefined);
+  // **An amendment must change something** (decision 0411): the server writes nothing and
+  // audits nothing for a recorded meeting sent back unchanged, so the page does not offer it.
+  const marksChanged = members.some((member) => {
+    const edit = edits[member.person_id];
+    return (
+      edit !== undefined &&
+      (member.record === null || (edit === 'present') !== member.record.present)
+    );
+  });
+  const amendsNothing = amending && correcting && !statusChanged && !marksChanged;
   const noteRequired = notHeldReason === 'OTHER';
 
   const submission = useMemo((): CellSubmission | null => {
-    if (!roster.data || (amending && amendReason.trim() === '')) {
+    if (!roster.data || (amending && (amendReason.trim() === '' || amendsNothing))) {
       return null;
     }
     const amendment = amending ? { reason: amendReason.trim() } : undefined;
@@ -313,6 +323,7 @@ function RecordMeeting() {
     roster.data,
     amending,
     amendReason,
+    amendsNothing,
     status,
     recorded,
     baseVersion,
@@ -446,9 +457,26 @@ function RecordMeeting() {
 
   /** Leaving edit mode discards what was changed, so the stored marks show again. */
   function stopEditing() {
+    // An amendment's marks are kept on the device like any other (decision 0345); Cancel drops
+    // them, or the next Amend would bring them back.
+    if (amending) {
+      draft.discard();
+    }
     resetForm();
     save.reset();
   }
+
+  // **Focus follows the amendment** (WCAG 2.4.3): Amend Closed Week and Cancel each remove
+  // the button just pressed, so focus moves to what replaced it rather than to the page.
+  const amendWasOn = useRef(false);
+  useEffect(() => {
+    if (amending && !amendWasOn.current) {
+      document.getElementById('amending-heading')?.focus();
+    } else if (!amending && amendWasOn.current) {
+      document.getElementById('amend-closed-week')?.focus();
+    }
+    amendWasOn.current = amending;
+  }, [amending]);
 
   const barRef = usePinnedBarPadding<HTMLDivElement>();
 
@@ -507,7 +535,9 @@ function RecordMeeting() {
 
   // What Save is still waiting for, said rather than left to a greyed button.
   let saveHint: string;
-  if (amending && amendReason.trim() === '') {
+  if (amendsNothing) {
+    saveHint = 'Change a mark or the answer above to amend it.';
+  } else if (amending && amendReason.trim() === '') {
     saveHint = 'Say why this closed week is being amended to save.';
   } else if (reasonMissing) {
     saveHint = 'Say why this is being corrected to save.';
@@ -651,12 +681,16 @@ function RecordMeeting() {
             <div className="border-edge mt-6 border p-4">
               {editing ? (
                 <>
-                  <p className="text-sm font-bold">
+                  <p
+                    id={amending ? 'amending-heading' : undefined}
+                    tabIndex={amending ? -1 : undefined}
+                    className="text-sm font-bold"
+                  >
                     {amending ? 'Amending a closed week' : 'Editing the recorded meeting'}
                   </p>
                   <p className="text-muted mt-1 text-sm leading-relaxed">
                     {amending
-                      ? 'Saving replaces what is recorded for this meeting. The first report and your reason are kept in its history and the audit log.'
+                      ? 'Saving replaces what is recorded for this meeting. Your reason is kept in the audit log.'
                       : statusEditable
                       ? 'Saving replaces what is recorded. If whether it met was recorded wrongly, change the answer below and say why: the first report is kept in the meeting’s history.'
                       : 'Saving replaces the marks already recorded.'}
@@ -732,7 +766,9 @@ function RecordMeeting() {
           ) : null}
           {!correcting && amending ? (
             <div className="border-edge mt-6 border p-4">
-              <p className="text-sm font-bold">Amending a closed week</p>
+              <p id="amending-heading" tabIndex={-1} className="text-sm font-bold">
+                Amending a closed week
+              </p>
               <p className="text-muted mt-1 text-sm leading-relaxed">
                 Recording it now is an amendment. Your reason is kept in the audit log.
               </p>
@@ -905,7 +941,9 @@ function RecordMeeting() {
                 value={amendReason}
                 onChange={(event) => setAmendReason(event.target.value)}
                 rows={2}
-                maxLength={1000}
+                maxLength={500}
+                required
+                aria-required="true"
                 className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
               />
             </div>
@@ -1156,7 +1194,7 @@ function AmendClosedWeek({ onAmend }: { onAmend: () => void }) {
         This week is closed. Only the Admin may amend it, with a reason that is kept in the audit
         log.
       </p>
-      <Button variant="secondary" className="mt-3" onClick={onAmend}>
+      <Button id="amend-closed-week" variant="secondary" className="mt-3" onClick={onAmend}>
         Amend Closed Week
       </Button>
     </>

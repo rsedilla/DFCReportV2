@@ -84,12 +84,125 @@ test.describe('a Cell meeting in a closed week', () => {
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeDisabled();
   });
+
+  test('offers no Save for an amendment that changes nothing', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedWeekAmender(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Amend Closed Week' }).click();
+    await page.getByLabel(/Why is this closed week being amended/).fill('Checking.');
+
+    await expect(page.getByRole('button', { name: 'Save Amendment' })).toBeDisabled();
+    await expect(page.getByText('Change a mark or the answer above to amend it.')).toBeVisible();
+  });
+
+  test('Cancel drops the marks, so the next Amend starts from what is stored', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedWeekAmender(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+
+    await page.goto(MEETING);
+    const amend = page.getByRole('button', { name: 'Amend Closed Week' });
+    await amend.click();
+    await expect(page.locator('#amending-heading')).toBeFocused();
+    const firstAbsent = page.getByRole('radio', { name: 'Absent' }).first();
+    await firstAbsent.check();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(amend).toBeFocused();
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Amend Closed Week' }).click();
+    await expect(page.getByText(/Restored marks/)).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Absent' }).first()).not.toBeChecked();
+  });
+
+  test('records a closed meeting that has no record, as an amendment', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedWeekAmender(page);
+    await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          meeting_id: '2026-06-27',
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          week_starting: '2026-06-22',
+          reporting_month: '2026-06-01',
+          roster_date: '2026-06-27',
+          responsible_leader_id: '3f1b7c6e-0000-4000-8000-000000000299',
+          may_record: true,
+          week_open: false,
+          had_a_member: true,
+          meeting: null,
+          members: [
+            {
+              person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+              member_id: 'M-000701',
+              first_name: 'Rosalinda',
+              last_name: 'Ocampo',
+              full_name: 'Rosalinda Ocampo',
+              record: null,
+            },
+          ],
+        }),
+      }),
+    );
+    const sent = await captureSave(page, '**/api/v1/cells/*/meetings/*/submit', { version: 1 });
+
+    await page.goto(MEETING);
+    await expect(page.getByText(NOTICE)).toBeVisible();
+    await page.getByRole('button', { name: 'Amend Closed Week' }).click();
+    await page.getByRole('radio', { name: 'Present' }).first().check();
+    await page.getByLabel(/Why is this closed week being amended/).fill('Found the paper roster.');
+    await page.getByRole('button', { name: 'Save Amendment' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({
+      status: 'HELD',
+      attendance: [{ person_id: '3f1b7c6e-0000-4000-8000-000000000601', present: true }],
+      amendment: { reason: 'Found the paper roster.' },
+    });
+    expect((sent[0] as { version?: number }).version).toBeUndefined();
+  });
 });
 
 test.describe('a DCC Sunday in a closed week', () => {
   test('offers a leader no amendment', async ({ page }) => {
     await mockSignedIn(page);
     await mockClosedDccRoster(page);
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByText('This Sunday takes no record')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Amend Closed Week' })).toHaveCount(0);
+  });
+
+  test('offers the Admin nothing on a Sunday with no service', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedWeekAmender(page);
+    await page.route('**/api/v1/dcc/events/*/roster*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          event: {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: false,
+            not_recordable_reason: 'REMOVED',
+            removed: true,
+            removal_reason: 'Typhoon.',
+            coverage: { met: 0, owed: 0 },
+          },
+          data: [],
+          next_cursor: null,
+        }),
+      }),
+    );
 
     await page.goto(SUNDAY);
 
@@ -112,6 +225,7 @@ test.describe('a DCC Sunday in a closed week', () => {
 
     await page.getByRole('button', { name: 'Amend Closed Week' }).click();
     await expect(page.getByText('Amending a closed week')).toBeVisible();
+    await expect(page.getByLabel(/Why is this changing/)).toHaveCount(0);
     const absent = page
       .getByRole('group', { name: 'Rosalinda Ocampo' })
       .getByRole('radio', { name: 'Absent' });

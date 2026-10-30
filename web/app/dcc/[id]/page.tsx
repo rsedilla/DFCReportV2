@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { SectionFrame } from '@/components/section-frame';
@@ -132,9 +132,13 @@ function DccChecklist() {
   const mayAmend =
     event?.recordable === false &&
     event.not_recordable_reason === 'MONTH_CLOSED' &&
-    holdsWholeChurch(me.data, 'records.backdate_effective_date');
+    holdsWholeChurch(me.data, 'records.backdate_effective_date') &&
+    (roster.data?.data ?? []).length > 0;
   const recordable = (event?.recordable ?? false) || (amending && mayAmend);
-  const amendment = amending ? { reason: amendReason.trim() } : undefined;
+  const amendment = useMemo(
+    () => (amending ? { reason: amendReason.trim() } : undefined),
+    [amending, amendReason],
+  );
   const amendReasonMissing = amending && amendReason.trim() === '';
 
   // **A Sunday that stops taking records while the page is open ends any edit in
@@ -176,9 +180,29 @@ function DccChecklist() {
     }
     setCorrectionReason('');
     setEditing(false);
+    // **Cancelling an amendment drops every mark made in it**, a line with no record too,
+    // and the copy kept on the device (decision 0345), or the next Amend would restore them.
+    if (amending) {
+      setEdits({});
+      setStartedFrom({});
+      setOpenedWith(null);
+      draft.discard();
+    }
     setAmending(false);
     setAmendReason('');
   }
+
+  // **Focus follows the amendment** (WCAG 2.4.3): Amend Closed Week and Cancel each remove
+  // the button just pressed, so focus moves to what replaced it rather than to the page.
+  const amendWasOn = useRef(false);
+  useEffect(() => {
+    if (amending && !amendWasOn.current) {
+      document.getElementById('amending-heading')?.focus();
+    } else if (!amending && amendWasOn.current) {
+      document.getElementById('amend-closed-week')?.focus();
+    }
+    amendWasOn.current = amending;
+  }, [amending]);
 
   /** The version a line's change is made against: the one pinned at its first change. */
   const versionFor = useCallback(
@@ -500,7 +524,12 @@ function DccChecklist() {
                 This week is closed. Only the Admin may amend it, with a reason that is kept in the
                 audit log.
               </p>
-              <Button variant="secondary" className="mt-3" onClick={() => setAmending(true)}>
+              <Button
+                id="amend-closed-week"
+                variant="secondary"
+                className="mt-3"
+                onClick={() => setAmending(true)}
+              >
                 Amend Closed Week
               </Button>
             </div>
@@ -512,7 +541,9 @@ function DccChecklist() {
           ) : null}
           {amending && recordable ? (
             <div className="border-edge mt-6 max-w-2xl border p-4">
-              <p className="text-sm font-bold">Amending a closed week</p>
+              <p id="amending-heading" tabIndex={-1} className="text-sm font-bold">
+                Amending a closed week
+              </p>
               <p className="text-muted mt-1 text-sm leading-relaxed">
                 Mark anyone whose Sunday was missed or wrong. Your reason is kept in the audit log.
               </p>
@@ -639,7 +670,8 @@ function DccChecklist() {
                 </section>
               ))}
 
-              {editing ? (
+              {/* While amending, the amendment's own reason says why, so the optional one is not asked. */}
+              {editing && !amending ? (
                 <div className="mt-6">
                   <label htmlFor="correction-reason" className="field-label block">
                     Why is this changing? (optional)
@@ -681,7 +713,9 @@ function DccChecklist() {
                 value={amendReason}
                 onChange={(event) => setAmendReason(event.target.value)}
                 rows={2}
-                maxLength={1000}
+                maxLength={500}
+                required
+                aria-required="true"
                 className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
               />
             </div>
