@@ -158,6 +158,35 @@ test.describe('a person’s DCC stage', () => {
     expect(new Set(asked)).toEqual(new Set(['false']));
   });
 
+  // Decision 0411: where the server says whose checklist a Sunday is on (it tells the Admin
+  // alone), Open Sunday opens that checklist, where a closed week can be amended.
+  test('opens the checklist a Sunday is on, where the server says which', async ({ page }) => {
+    await signedInWithPeople(page);
+    const leader = '3f1b7c6e-0000-4000-8000-0000000002aa';
+    await page.route('**/api/v1/dcc/people/*/attendance*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...DCC_PAGE_ONE,
+          next_cursor: null,
+          data: DCC_PAGE_ONE.data.map((line, index) => ({
+            ...line,
+            checklist_of: index === 0 ? leader : null,
+          })),
+        }),
+      }),
+    );
+    await page.goto(PROFILE);
+
+    const links = page.getByRole('link', { name: /Open Sunday/ });
+    await expect(links.first()).toHaveAttribute(
+      'href',
+      `/dcc/${DCC_PAGE_ONE.data[0].event_id}?leader=${leader}`,
+    );
+    await expect(links.nth(1)).toHaveAttribute('href', `/dcc/${DCC_PAGE_ONE.data[1].event_id}`);
+  });
+
   test('on a phone, keeps Open Sunday level with the date of a removed Sunday', async ({ page }) => {
     await signedInWithPeople(page);
     await page.setViewportSize({ width: 390, height: 844 });

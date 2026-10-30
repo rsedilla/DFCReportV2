@@ -1,10 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import {
+  AuthorizationService,
+  holdsWholeChurch,
+  type Actor,
+} from '../auth/authorization/authorization.service';
+import { Capability } from '../auth/authorization/capabilities';
 import { NotFoundError } from '../common/errors/api-error';
 import { NIL_UUID, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
+import { DccCoverageService } from './dcc-coverage.service';
 
 import {
   decodeDccPersonAttendanceCursor,
@@ -40,7 +47,13 @@ const DEFAULT_PAGE = 50;
 
 interface PersonAttendanceRow {
   attended: number;
-  rows: { event_id: string; event_date: string; present: boolean; removed: boolean }[];
+  rows: {
+    event_id: string;
+    event_date: string;
+    present: boolean;
+    removed: boolean;
+    responsible_leader_id: string | null;
+  }[];
 }
 
 /**
@@ -56,6 +69,8 @@ export class DccPersonAttendanceService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly people: PeopleReadService,
+    private readonly authorization: AuthorizationService,
+    private readonly coverage: DccCoverageService,
   ) {}
 
   /**
@@ -79,6 +94,7 @@ export class DccPersonAttendanceService {
   async forPerson(
     personId: string,
     page: { limit?: number; cursor?: string } = {},
+    actor?: Actor,
   ): Promise<Record<string, unknown>> {
     const person = await this.people.findById(personId);
     if (!person) {
@@ -101,7 +117,10 @@ export class DccPersonAttendanceService {
         SELECT a.dcc_event_id AS event_id,
                e.event_date,
                bool_or(a.present) AS present,
-               e.removed_at IS NOT NULL AS removed
+               e.removed_at IS NOT NULL AS removed,
+               -- The kept record's line where both have one: a merged record is on no checklist.
+               (array_agg(a.responsible_leader_id ORDER BY (a.person_id = ${person.id}::uuid) DESC))[1]
+                 AS responsible_leader_id
           FROM dcc_attendance a
           JOIN dcc_events e ON e.id = a.dcc_event_id
          WHERE a.person_id = ANY (${records}::uuid[])
@@ -112,7 +131,8 @@ export class DccPersonAttendanceService {
         SELECT live.event_id,
                to_char(live.event_date, 'YYYY-MM-DD') AS event_date,
                live.present,
-               live.removed
+               live.removed,
+               live.responsible_leader_id
           FROM live
          WHERE ${after === null}
             OR (live.event_date, live.event_id)
@@ -132,6 +152,27 @@ export class DccPersonAttendanceService {
     const window = rows.slice(0, limit);
     const last = window[window.length - 1];
 
+    // **Whose checklist each Sunday is on, for the Admin alone** (decision 0411): an account
+    // that may record on anybody's behalf church-wide is told, so a person's Sunday opens the
+    // checklist it belongs to, where a closed week can be amended. Nobody else is told, so the
+    // field discloses nothing a reader could not already reach.
+    let owners: Map<string, string | null> | null = null;
+    if (actor !== undefined) {
+      const authority = await this.authorization.authorityFor(actor.accountId);
+      if (
+        holdsWholeChurch(authority, Capability.DccSubmitOnBehalf) &&
+        holdsWholeChurch(authority, Capability.DccTakeAttendance)
+      ) {
+        owners = await this.coverage.checklistOwners(
+          window.map((row) => ({
+            eventId: row.event_id,
+            eventDate: row.event_date,
+            leaderId: row.responsible_leader_id,
+          })),
+        );
+      }
+    }
+
     return {
       person_id: person.id,
       classification: dccClassificationFor(attended),
@@ -141,6 +182,7 @@ export class DccPersonAttendanceService {
         event_date: row.event_date,
         present: row.present,
         removed: row.removed,
+        ...(owners === null ? {} : { checklist_of: owners.get(row.event_id) ?? null }),
       })),
       next_cursor:
         more && last !== undefined

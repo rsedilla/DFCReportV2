@@ -203,8 +203,13 @@ export class DccController {
   async personAttendance(
     @Param('id') personId: string,
     @Query() query: DccPersonAttendanceDto,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.personRecords.forPerson(personId, { limit: query.limit, cursor: query.cursor });
+    return this.personRecords.forPerson(
+      personId,
+      { limit: query.limit, cursor: query.cursor },
+      actor,
+    );
   }
 
   /**
