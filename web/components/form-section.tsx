@@ -31,9 +31,17 @@ export function FormSection({
   );
 }
 
-/** Two related fields side by side from `lg` up, one above the other below it. */
+/**
+ * Two related fields side by side from `lg` up, one above the other below it. Their boxes
+ * line up: help under a box goes below it (`descriptionBelow`), and two search pickers push
+ * their search row to the foot of equal-height cards (`globals.css`).
+ */
 export function FieldPair({ children }: { children: ReactNode }) {
-  return <div className="grid gap-6 lg:grid-cols-2 lg:gap-x-8">{children}</div>;
+  return (
+    <div className="grid gap-6 lg:grid-cols-2 lg:gap-x-8" data-field-pair>
+      {children}
+    </div>
+  );
 }
 
 /** Where a form's button sits: under the fields column, after a rule. */

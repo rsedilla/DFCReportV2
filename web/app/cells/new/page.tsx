@@ -131,6 +131,7 @@ function NewCellForm() {
               <Field
                 label="At"
                 description="Manila time."
+                descriptionBelow
                 type="time"
                 name="time_of_day"
                 autoComplete="off"

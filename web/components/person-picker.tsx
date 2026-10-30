@@ -168,7 +168,7 @@ export function PersonPicker({
       ) : null}
 
       {/* Stacked on a phone, inline from `sm` up — as on the people search. */}
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end" data-picker-search>
         <Field
           label={searchLabel}
           type="search"

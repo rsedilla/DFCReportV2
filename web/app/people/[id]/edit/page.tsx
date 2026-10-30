@@ -375,6 +375,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
                     ? 'A recorded birthday cannot be removed here — only corrected.'
                     : undefined
                 }
+                descriptionBelow
               />
               <Field
                 label="Mobile number (optional)"

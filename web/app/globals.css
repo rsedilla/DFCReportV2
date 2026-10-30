@@ -207,6 +207,18 @@
     letter-spacing: normal;
     text-transform: none;
   }
+
+  /* Two pickers side by side: each search row at the foot of its card, so the boxes align. */
+  @media (width >= 64rem) {
+    [data-field-pair] > div {
+      display: flex;
+      flex-direction: column;
+    }
+    [data-field-pair] [data-picker-search] {
+      margin-top: auto;
+      padding-top: 0.75rem;
+    }
+  }
 }
 
 /*

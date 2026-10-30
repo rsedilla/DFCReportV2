@@ -459,6 +459,7 @@ function NewPersonForm() {
                 name="sex"
                 required
                 description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
+                descriptionBelow
                 options={SEX_OPTIONS}
                 value={sex}
                 onChange={(next) => set('sex', next)}

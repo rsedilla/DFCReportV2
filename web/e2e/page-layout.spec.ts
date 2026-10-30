@@ -7,7 +7,7 @@ import { mockCells } from './mock-attendance';
  * How wide a page is, and what its heading carries (decision 0402).
  *
  * A list or a table widens to 1280px beside the sidebar, one person's page stays at
- * 1024px, and a form at 768px; all three start at the same place beside the sidebar,
+ * 1024px, and a form widens to 1280px in sections (decision 0410); all three start at the same place beside the sidebar,
  * so moving between them moves only the right-hand edge. A heading carries no line
  * that only repeats its title, tabs or headline.
  */
@@ -36,9 +36,31 @@ test.describe('page widths (decision 0402)', () => {
     await expect(main(page)).toHaveCSS('max-width', '1024px');
   });
 
-  test('a form stays 768px wide', async ({ page }) => {
+  test('a form is up to 1280px wide, in sections (decision 0410)', async ({ page }) => {
     await page.goto('/people/new');
     await expect(page.getByRole('heading', { name: 'Add a person' })).toBeVisible();
+
+    await expect(main(page)).toHaveCSS('max-width', '1280px');
+    await expect(main(page)).toHaveCSS('margin-left', '0px');
+    for (const title of ['Name', 'About them', 'Where they belong']) {
+      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    }
+  });
+
+  test('two fields set side by side line their boxes up (decision 0410)', async ({ page }) => {
+    await page.goto('/people/new');
+    const birthday = page.getByLabel('Birthday (required)');
+    const mobile = page.getByLabel('Mobile number (required)');
+    await expect(birthday).toBeVisible();
+
+    const [left, right] = [await birthday.boundingBox(), await mobile.boundingBox()];
+    expect(left && right && Math.abs(left.y - right.y)).toBeLessThanOrEqual(1);
+    expect(left && right && right.x > left.x + left.width).toBe(true);
+  });
+
+  test('Account keeps 768px, being read top to bottom (decision 0410)', async ({ page }) => {
+    await page.goto('/session');
+    await expect(page.getByRole('heading', { name: 'Account and session' })).toBeVisible();
 
     await expect(main(page)).toHaveCSS('max-width', '768px');
   });

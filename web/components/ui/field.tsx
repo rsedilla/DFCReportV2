@@ -49,6 +49,11 @@ export type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'cla
    * already carries the accented label (`NameFields`), so two rows of accented capitals do not stack.
    */
   quietLabel?: boolean;
+  /**
+   * The description under the box rather than above it, for a field set beside another
+   * (`FieldPair`), so the two boxes line up whatever help either carries (decision 0410).
+   */
+  descriptionBelow?: boolean;
   ref?: Ref<HTMLInputElement>;
 };
 
@@ -57,6 +62,7 @@ export function Field({
   description,
   error,
   quietLabel = false,
+  descriptionBelow = false,
   className,
   ...props
 }: FieldProps & { className?: string }) {
@@ -77,7 +83,7 @@ export function Field({
         {label}
       </LabelPrimitive.Root>
 
-      {description ? (
+      {description && !descriptionBelow ? (
         <p id={descriptionId} className="text-muted text-sm leading-relaxed">
           {description}
         </p>
@@ -97,6 +103,12 @@ export function Field({
         )}
         {...props}
       />
+
+      {description && descriptionBelow ? (
+        <p id={descriptionId} className="text-muted text-sm leading-relaxed">
+          {description}
+        </p>
+      ) : null}
 
       {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
