@@ -54,9 +54,10 @@ record them. Those meetings were owed before this ruling too, so nothing is wors
 ## Why this is not "recording less looks better"
 
 Section 12 derives the coverage denominator from the schedule so that a leader cannot shrink it.
-This keeps that: whether the Cell had a member is read from membership rows, and no membership ends
-in the past except at a closure, which ends the schedule with it, so no past meeting stops being
-owed; a membership opened in the past, as a backdated closure's dispersal opens one, only makes
+This keeps that: whether the Cell had a member is read from membership rows, and no screen or route
+ends a membership in the past except a closure, which ends the schedule with it, so no past meeting
+stops being owed. Section 7 lets an Admin's backdating reach a membership; a tool that ends one in
+the past is not built, and must say what happens to the meetings it owed (owner, 2026-10-30); a membership opened in the past, as a backdated closure's dispersal opens one, only makes
 more of a Cell's past meetings owed. What a Cell
 with no members owes from then on is nothing, which is true; *No meeting in 3 months* (decision
 0355) still lists it for the Admin, since it holds no meeting.
