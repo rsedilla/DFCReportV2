@@ -13,8 +13,8 @@ saw only "Some fields need correcting." *Did not meet* could be saved, and would
 Cell did meet. So the meeting stayed on the leader's and the Primary's *Pending CG Records* until
 its week closed, with nothing either of them could do.
 
-Correcting the join dates was considered and set aside. Section 10 opens no backdating of a Cell
-membership, and the people concerned were usually not in the app at all before they were added, so
+Correcting the join dates was considered and set aside. No leader may backdate a Cell membership
+(only an Admin's backdating capability reaches one, Section 7), and the people concerned were usually not in the app at all before they were added, so
 their record, Network and pastoral leader would all have to be backdated with them.
 
 ## The ruling
@@ -37,11 +37,27 @@ Cells list counts records on their own, so its numerator counts it, as it alread
 left outside the schedule by a backdated closure — the open question in `CLAUDE.md` on what such a
 record counts towards now names both.
 
+## Three answers the review asked for (owner, 2026-10-30)
+
+**4. It reaches months already reported.** Those meetings could never be recorded, so counting
+them as missing was the error. A past month's Cell coverage may therefore drop. Months already
+stored as finished reports are computed again once (migration 0034), so every surface agrees.
+
+**5. A Cell with only its leader owes nothing.** Its leader is not a member of their own Cell;
+their attendance is recorded in DCC. The question of whether a leader is a member stays open in
+`CLAUDE.md` for everything else it decides.
+
+**6. A backdated closure's dispersal stays as it is.** Members moved to another Cell from a past
+date make that Cell's meetings from then owed; where their week has closed only an Admin can
+record them. Those meetings were owed before this ruling too, so nothing is worse.
+
 ## Why this is not "recording less looks better"
 
 Section 12 derives the coverage denominator from the schedule so that a leader cannot shrink it.
-This keeps that: whether the Cell had a member is read from membership rows, which a leader cannot
-backdate, and a member removed today ends today, so no past meeting stops being owed. What a Cell
+This keeps that: whether the Cell had a member is read from membership rows, and no membership ends
+in the past except at a closure, which ends the schedule with it, so no past meeting stops being
+owed; a membership opened in the past, as a backdated closure's dispersal opens one, only makes
+more of a Cell's past meetings owed. What a Cell
 with no members owes from then on is nothing, which is true; *No meeting in 3 months* (decision
 0355) still lists it for the Admin, since it holds no meeting.
 

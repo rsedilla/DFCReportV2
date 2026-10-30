@@ -937,8 +937,12 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // Section 12's coverage line, as two figures arrived at two ways. `Coverage =
       // Total Meetings / Scheduled`, reported as `recorded out of scheduled` rather
       // than as a percentage, because section 13 forbids a derived score.
-      scheduled_count: meetings.length,
-      recorded_count: meetings.filter((entry) => entry.meeting !== null).length,
+      // **Owed meetings only, on both terms** (decision 0409): a date the Cell had no member
+      // is listed and is in neither figure, so this line agrees with the Reports one, which
+      // matches records to owed meetings.
+      scheduled_count: meetings.filter((entry) => entry.had_a_member).length,
+      recorded_count: meetings.filter((entry) => entry.had_a_member && entry.meeting !== null)
+        .length,
       meetings,
     };
   }

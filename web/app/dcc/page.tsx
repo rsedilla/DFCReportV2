@@ -108,6 +108,8 @@ function YourMonth() {
     for (const scheduled of meetings[index]?.data?.meetings ?? []) {
       const notYet = scheduled.meeting === null && scheduled.scheduled_date > today;
       const open = awaitingKeys.has(`${cell.id}|${scheduled.scheduled_date}`);
+      // Not owed and not recorded: nobody was in the Cell that day (decision 0409).
+      const noMembers = scheduled.meeting === null && scheduled.had_a_member === false;
 
       items.push({
         key: `cell-${cell.id}-${scheduled.scheduled_date}`,
@@ -115,13 +117,15 @@ function YourMonth() {
         label: `${categoryLabel(cell.category)} · ${timeLabel(scheduled.scheduled_time)}`,
         state: notYet
           ? 'Not yet'
-          : scheduled.meeting !== null
+          : noMembers
+            ? 'No members that day'
+            : scheduled.meeting !== null
             ? `Recorded · ${meetingStateLabel(scheduled.meeting).toLowerCase()}`
             : open
               ? 'Not recorded'
               : 'Not recorded · week closed',
         href:
-          notYet || (scheduled.meeting === null && !open)
+          notYet || noMembers || (scheduled.meeting === null && !open)
             ? null
             : `/cells/${cell.id}/meetings/${scheduled.scheduled_date}`,
       });

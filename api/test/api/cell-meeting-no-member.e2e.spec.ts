@@ -297,6 +297,12 @@ describe('a Cell meeting with no member is not owed (decision 0409)', () => {
       ]);
       // The record made on the 6th is still shown as it was.
       expect(entries[0].meeting).not.toBeNull();
+      // The page's own coverage line counts owed meetings on both terms, as Reports does: the
+      // 6th is in neither, its record included.
+      expect(response.body.scheduled_count).toBe(3);
+      expect(response.body.recorded_count).toBe(
+        entries.filter((entry) => entry.meeting !== null).length - 1,
+      );
 
       const ended = await get(`cells/${leftTheDayBefore.id}/meetings`, admin, { month: JUNE });
       expect(
