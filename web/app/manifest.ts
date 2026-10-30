@@ -6,7 +6,7 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'DREAMS — Doulos Reporting, Evaluation, And Monitoring System',
+    name: 'DREAMS — Doulos Reporting, Equipping, And Monitoring System',
     short_name: 'DREAMS',
     start_url: '/',
     display: 'standalone',

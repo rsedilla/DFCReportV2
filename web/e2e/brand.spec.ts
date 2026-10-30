@@ -3,11 +3,11 @@ import { expect, test } from '@playwright/test';
 import { mockPeople, mockSignedIn } from './mock-api';
 
 /**
- * DREAMS, Doulos Reporting, Evaluation, And Monitoring System, and the DfC globe (owner's
- * choice of 2026-10-19): on the sign-in screen, in the sidebar, as the tab's title and icon,
- * and as the name a phone gives the site on its home screen.
+ * DREAMS, Doulos Reporting, Equipping, And Monitoring System, and the DfC globe (owner's
+ * choice of 2026-10-19; Equipping for Evaluation, 2026-10-30): on the sign-in screen, in the
+ * sidebar, as the tab's title and icon, and as the name a phone gives the site on its home screen.
  */
-const FULL_NAME = 'Doulos Reporting, Evaluation, And Monitoring System';
+const FULL_NAME = 'Doulos Reporting, Equipping, And Monitoring System';
 
 test('the sign-in screen carries the logo, the name and a welcome', async ({ page }) => {
   await page.goto('/sign-in');

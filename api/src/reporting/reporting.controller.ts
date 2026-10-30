@@ -11,6 +11,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
+import { mapInTurns } from '../common/map-in-turns';
 import {
   compareRosterKeys,
   decodeRosterCursor,
@@ -899,15 +900,14 @@ export class ReportingController {
     // the asked one included.
     await this.reporting.assertReportable(query.period);
 
-    const values: (number | null)[] = [];
-    const open: boolean[] = [];
-    for (const [index, month] of months.entries()) {
-      const point = admitted[index]
-        ? await this.branchTrendPoint(query.figure, month, leaderId).catch(refusalAsNull)
-        : null;
-      values.push(point?.value ?? null);
-      open.push(point?.open ?? false);
-    }
+    // The months are independent, so a few are read at once (TREND_REPORTS_AT_ONCE).
+    const read = await mapInTurns(months, TREND_REPORTS_AT_ONCE, (month, index) =>
+      admitted[index]
+        ? this.branchTrendPoint(query.figure, month, leaderId).catch(refusalAsNull)
+        : Promise.resolve(null),
+    );
+    const values = read.map((point) => point?.value ?? null);
+    const open = read.map((point) => point?.open ?? false);
 
     const { person } = await this.namer([leaderId]);
     // The leader's Network today, so the line takes the colour the Senior Pastors' Trends give
@@ -1042,9 +1042,9 @@ export class ReportingController {
 
     // Each month's open flag comes from that month's own report, inside the seam that owns
     // the period rules; a month that could not be read has no figure to flag.
+    const read = await this.trendPoints(query.figure, months, branches);
     const open: boolean[] = [];
-    for (const month of months) {
-      const point = await this.trendPoint(query.figure, month, branches).catch(refusalAsNull);
+    for (const point of read) {
       open.push(point?.open ?? false);
       for (const line of lines) {
         const key = line.leaderId ?? 'church';
@@ -1067,16 +1067,21 @@ export class ReportingController {
     };
   }
 
-  /** One month of *Trends*, keyed `church` and by each branch's leader. */
-  private async trendPoint(
+  /**
+   * Each month of *Trends*, keyed `church` and by each branch's leader; null for a month that
+   * could not be read.
+   *
+   * The reports are independent, so they are read TREND_REPORTS_AT_ONCE at a time rather than
+   * one after another. A closed month is a stored read (decision 0320) and the month still
+   * running is computed, so it is the current month's church and branch reports, side by side,
+   * that this shortens.
+   */
+  private async trendPoints(
     figure: TrendFigure,
-    month: string,
+    months: readonly string[],
     branches: readonly string[],
-  ): Promise<{ values: Map<string, number | null>; open: boolean }> {
-    const values = new Map<string, number | null>();
-
+  ): Promise<({ values: Map<string, number | null>; open: boolean } | null)[]> {
     if (figure === 'CELLS' || figure === 'CELL_LEADERS' || figure === 'PEOPLE') {
-      const counts = await this.reporting.churchCounts(month, branches);
       const pick = (figures: ChurchCountFigures | null | undefined) =>
         figures === null || figures === undefined
           ? null
@@ -1085,28 +1090,57 @@ export class ReportingController {
             : figure === 'CELL_LEADERS'
               ? figures.cellLeaders
               : figures.people;
-      values.set('church', pick(counts.wholeChurch));
-      for (const id of branches) {
-        values.set(id, pick(counts.branches.get(canonicalId(id))));
+
+      return mapInTurns(months, TREND_REPORTS_AT_ONCE, async (month) => {
+        const counts = await this.reporting.churchCounts(month, branches).catch(refusalAsNull);
+        if (counts === null) {
+          return null;
+        }
+        const values = new Map<string, number | null>([['church', pick(counts.wholeChurch)]]);
+        for (const id of branches) {
+          values.set(id, pick(counts.branches.get(canonicalId(id))));
+        }
+        // A count is taken on the month's last day, so only the month still running is *so
+        // far* (decision 0326); the recording window is attendance's, not a count's.
+        return { values, open: counts.current };
+      });
+    }
+
+    type Scope = { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string };
+    const report = async (
+      scope: Scope,
+      month: string,
+    ): Promise<{ unique_people: number; open: boolean }> => {
+      const { unique_people, open } =
+        figure === 'CG'
+          ? await this.reporting.cellMonthly(scope, month)
+          : await this.reporting.dccMonthly(scope, month);
+      return { unique_people, open };
+    };
+
+    // Every month's church report and each branch's, as one list of independent reads.
+    type Ask = { month: string; key: string; scope: Scope };
+    const asks = months.flatMap((month): Ask[] => [
+      { month, key: 'church', scope: { kind: 'WHOLE_CHURCH' } },
+      ...branches.map((id): Ask => ({ month, key: id, scope: { kind: 'LEADER', person_id: id } })),
+    ]);
+    const answers = await mapInTurns(asks, TREND_REPORTS_AT_ONCE, (ask) =>
+      report(ask.scope, ask.month).catch(refusalAsNull),
+    );
+
+    return months.map((month) => {
+      const own = asks.flatMap((ask, index) => (ask.month === month ? [index] : []));
+      const church = answers[own[0]];
+      // A month whose church report could not be read has no figure.
+      if (church === null) {
+        return null;
       }
-      // A count is taken on the month's last day, so only the month still running is *so far*
-      // (decision 0326); the recording window is attendance's, not a count's.
-      return { values, open: counts.current };
-    }
-
-    const report = (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
-      figure === 'CG'
-        ? this.reporting.cellMonthly(scope, month)
-        : this.reporting.dccMonthly(scope, month);
-    const read = async (scope: { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string }) =>
-      (await report(scope)).unique_people;
-
-    const church = await report({ kind: 'WHOLE_CHURCH' });
-    values.set('church', church.unique_people);
-    for (const id of branches) {
-      values.set(id, await read({ kind: 'LEADER', person_id: id }).catch(refusalAsNull));
-    }
-    return { values, open: church.open };
+      const values = new Map<string, number | null>();
+      for (const index of own) {
+        values.set(asks[index].key, answers[index]?.unique_people ?? null);
+      }
+      return { values, open: church.open };
+    });
   }
 
   /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
@@ -1384,6 +1418,12 @@ export class ReportingController {
 }
 
 const BEFORE_EVERY_KEY: RosterCursor = { lastName: '', firstName: '', memberId: '' };
+
+/**
+ * How many of a Trends request's reports are read at once. Each holds a pool connection for
+ * its transaction, so four leaves six of the pool's ten to other requests.
+ */
+const TREND_REPORTS_AT_ONCE = 4;
 
 /** Men's before Women's, and a root with no seat last. */
 function networkOrder(network: NetworkName | null): number {

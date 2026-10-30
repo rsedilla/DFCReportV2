@@ -66,7 +66,7 @@ describe('the SMTP email transport (section 6)', () => {
       smtp.linkOrigin,
     );
 
-    expect(subject).toMatch(/Set your password/);
+    expect(subject).toBe('Set your password for DREAMS');
     expect(text).toContain('https://app.example.test/activate?token=a%2Bb%2Fc%3D');
     expect(text).toContain('Hello Invented Person,');
     // 16:00 UTC is midnight in Manila, the next day.
@@ -84,7 +84,7 @@ describe('the SMTP email transport (section 6)', () => {
       smtp.linkOrigin,
     );
 
-    expect(subject).toMatch(/Reset your/);
+    expect(subject).toBe('Reset your DREAMS password');
     expect(text).toContain('https://app.example.test/reset-password?token=tok');
     expect(text.startsWith('Hello,\n')).toBe(true);
   });
@@ -99,7 +99,7 @@ describe('the SMTP email transport (section 6)', () => {
       smtp.linkOrigin,
     );
 
-    expect(subject).toMatch(/password was changed/);
+    expect(subject).toBe('Your DREAMS password was changed');
     expect(text).toContain('https://app.example.test/forgot-password');
     expect(text).not.toContain('token=');
     expect(text).toMatch(/Sept? 23, 2026/);

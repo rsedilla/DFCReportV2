@@ -67,7 +67,7 @@ export function compose(
     });
 
     return {
-      subject: 'Your DFC Reporting Management System password was changed',
+      subject: 'Your DREAMS password was changed',
       text: [
         greeting,
         '',
@@ -91,7 +91,7 @@ export function compose(
 
   if (message.kind === 'ACTIVATION') {
     return {
-      subject: 'Set your password for DFC Reporting Management System',
+      subject: 'Set your password for DREAMS',
       text: [
         greeting,
         '',
@@ -107,7 +107,7 @@ export function compose(
   }
 
   return {
-    subject: 'Reset your DFC Reporting Management System password',
+    subject: 'Reset your DREAMS password',
     text: [
       greeting,
       '',
