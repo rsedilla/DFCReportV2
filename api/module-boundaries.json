@@ -62,7 +62,9 @@
     "report_snapshots": "reporting",
     "conquest_confirmations": "conquest"
   },
-  "infrastructure": ["database"],
+  "infrastructure": [
+    "database"
+  ],
   "crossModule": [
     {
       "file": "src/hierarchy/hierarchy.service.ts",

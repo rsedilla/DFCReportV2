@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { NotFoundError } from '../common/errors/api-error';
-import { NIL_UUID } from '../common/identifiers';
+import { NIL_UUID, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
 
@@ -88,16 +88,25 @@ export class DccPersonAttendanceService {
     const after = decodeDccPersonAttendanceCursor(page.cursor);
     const limit = page.limit ?? DEFAULT_PAGE;
 
+    // A record kept reads the Sundays of every record merged into it (decision 0408): one line
+    // per Sunday, Present where either record was marked Present.
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const records = [
+      person.id,
+      ...pairs.absorbed.filter((_, index) => sameId(pairs.kept[index], person.id)),
+    ];
+
     const result = await sql<PersonAttendanceRow>`
       WITH live AS (
         SELECT a.dcc_event_id AS event_id,
                e.event_date,
-               a.present,
+               bool_or(a.present) AS present,
                e.removed_at IS NOT NULL AS removed
           FROM dcc_attendance a
           JOIN dcc_events e ON e.id = a.dcc_event_id
-         WHERE a.person_id = ${person.id}
+         WHERE a.person_id = ANY (${records}::uuid[])
            AND a.superseded_at IS NULL
+         GROUP BY a.dcc_event_id, e.event_date, e.removed_at
       ),
       page AS (
         SELECT live.event_id,

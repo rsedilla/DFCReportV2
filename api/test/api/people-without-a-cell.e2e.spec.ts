@@ -207,7 +207,7 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
   it('does not list a merged-away person', async () => {
     await db
       .updateTable('persons')
-      .set({ merged_into_id: manuel.id })
+      .set({ merged_into_id: manuel.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', nathan.id)
       .execute();
 

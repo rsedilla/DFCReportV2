@@ -20,7 +20,8 @@ import {
   recordDueAt,
   reportingMonthOf,
 } from '../common/time/submission-window';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
+import { resolverOf } from '../common/merged-identity';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -508,6 +509,85 @@ export class ReportingService {
   ) {}
 
   /**
+   * A Network's people at an instant, each resolved to the record kept (decision 0408), so a
+   * figure narrowed to them reaches a duplicate's history through the record it was merged
+   * into, once.
+   */
+  private async networkPeople(trx: Db, network: NetworkName, at: Date): Promise<string[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    const ids = await this.networks.peopleInNetworkAsOf(trx, network, at);
+    return [...new Set(ids.map((id) => canonicalId(resolve(id))))];
+  }
+
+  /**
+   * Each item's leader resolved to the record kept (decision 0408, points 16 and 21): a Cell a
+   * record merged away led, and the meetings it was owed, are placed and counted where the
+   * record kept sits, and the two records count as one leader.
+   */
+  private async leadersAsKept<T extends { leaderId: string | null }>(
+    trx: Db,
+    items: readonly T[],
+  ): Promise<T[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    return items.map((item) =>
+      item.leaderId === null ? item : { ...item, leaderId: canonicalId(resolve(item.leaderId)) },
+    );
+  }
+
+  /**
+   * Cell coverage's scheduled meetings with each leader resolved to the record kept (decision
+   * 0408, points 16 and 21), and placed by it: `leaderId` names the record kept, and `placeId` is
+   * where the meeting is placed in a dated walk, the record kept unless it held no pastoral
+   * assignment on the meeting's date, when it is the duplicate that led it (point 23).
+   */
+  private async coveragePairsAsKept<T extends { scheduledDate: string; leaderId: string | null }>(
+    trx: Db,
+    pairs: readonly T[],
+  ): Promise<(T & { placeId: string | null })[]> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    const resolved = pairs.map((pair) => {
+      const kept = pair.leaderId === null ? null : canonicalId(resolve(pair.leaderId));
+      return { pair, kept, merged: kept !== null && !sameId(kept, pair.leaderId as string) };
+    });
+
+    // Whether each record kept held an assignment on each date a duplicate of it led a meeting.
+    const held = new Map<string, Set<string>>();
+    for (const date of new Set(resolved.filter((r) => r.merged).map((r) => r.pair.scheduledDate))) {
+      const ids = [
+        ...new Set(
+          resolved
+            .filter((r) => r.merged && r.pair.scheduledDate === date)
+            .map((r) => r.kept as string),
+        ),
+      ];
+      const found = await this.hierarchy.assignmentsAsOf(trx, ids, endOfManilaDay(date));
+      held.set(date, new Set([...found.keys()].map((id) => canonicalId(id))));
+    }
+
+    return resolved.map(({ pair, kept, merged }) => ({
+      ...pair,
+      leaderId: kept,
+      placeId:
+        merged && !(held.get(pair.scheduledDate)?.has(kept as string) ?? false)
+          ? pair.leaderId
+          : kept,
+    }));
+  }
+
+  /**
+   * The period's placement graph with every merged pair placed once (section 3, decision 0408):
+   * the merges are read in the report's own transaction, so they and the figures are one
+   * snapshot, and handed to `hierarchy`, which cannot read `persons` itself.
+   */
+  private async placementGraph(
+    trx: Db,
+    start: Date,
+    end: Date,
+  ): ReturnType<HierarchyService['reportingGraph']> {
+    return this.hierarchy.reportingGraph(trx, start, end, await this.people.mergedPairsWithin(trx));
+  }
+
+  /**
    * The DCC monthly report for a scope and a month (SKILL.md sections 9, 12 and 20).
    *
    * **Both views cover one population and both sum to it**, which is section 20's
@@ -552,12 +632,16 @@ export class ReportingService {
         // arguments differ in kind for that reason, not by oversight.
         const personIds =
           scope.kind === 'LEADER'
-            ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
+            ? (await this.placementGraph(trx, start, end)).subtree(scope.person_id)
             : scope.kind === 'NETWORK'
-              ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
+              ? await this.networkPeople(trx, scope.network, end)
               : undefined;
 
-        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+        const figures = await this.dccFigures.monthFigures(period, {
+          executor: trx,
+          personIds,
+          merges: await this.people.mergedPairsWithin(trx),
+        });
 
         // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
         // than an inconsistency.** The population above is the placement graph collapsed
@@ -635,7 +719,7 @@ export class ReportingService {
           const figures = await this.cellFigures.monthFigures(
             period,
             { kind: 'CELL', cellId: scope.cell_id },
-            { executor: trx },
+            { executor: trx, merges: await this.people.mergedPairsWithin(trx) },
           );
 
           return {
@@ -654,11 +738,14 @@ export class ReportingService {
           scope.kind === 'LEADER'
             ? {
                 kind: 'RESPONSIBLE_LEADERS',
-                personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
+                personIds: (await this.placementGraph(trx, start, end)).subtree(scope.person_id),
               }
             : { kind: 'EVERY_CELL' };
 
-        const figures = await this.cellFigures.monthFigures(period, population, { executor: trx });
+        const figures = await this.cellFigures.monthFigures(period, population, {
+          executor: trx,
+          merges: await this.people.mergedPairsWithin(trx),
+        });
 
         return {
           scope,
@@ -719,7 +806,7 @@ export class ReportingService {
       });
 
       // One read of the placement graph serves every row and the total (it was one per row).
-      const graph = await this.hierarchy.reportingGraph(trx, start, end);
+      const graph = await this.placementGraph(trx, start, end);
 
       // A whole-church reader disciples neither root, so each root row is labelled by its
       // Network rather than by name (decision 0293).
@@ -740,6 +827,7 @@ export class ReportingService {
         from,
         to,
         subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
+        await this.people.mergedPairsWithin(trx),
       );
       const peopleOf = (leaders: readonly string[]) => {
         const within = new Set(leaders.map((id) => canonicalId(id)));
@@ -774,7 +862,10 @@ export class ReportingService {
       // September. Within the current month the whole month is due, as a month's own
       // coverage line counts it (decision 0239).
       const dueTo = to < rangeMonthEnd(today) ? to : rangeMonthEnd(today);
-      const pairs = await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, dueTo);
+      const pairs = await this.coveragePairsAsKept(
+        trx,
+        await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, dueTo),
+      );
       const recorded = await this.cellFigures.recordedScheduledDatesBetween(trx, from, dueTo);
       const scope: CellReportScope =
         subject.kind === 'LEADER'
@@ -868,8 +959,9 @@ export class ReportingService {
       const start = startOfManilaDay(from);
       const end = endOfManilaDay(to);
 
+      const merges = await this.people.mergedPairsWithin(trx);
       const figuresOf = (personIds: readonly string[] | undefined) =>
-        this.dccFigures.rangeFigures(trx, from, to, personIds);
+        this.dccFigures.rangeFigures(trx, from, to, personIds, merges);
       const figureOf = (people: readonly { lifetimeThroughMonth: number }[]): TwelveFigure => ({
         unique_people: people.length,
         classification: classify(people),
@@ -890,11 +982,11 @@ export class ReportingService {
               ? await this.rootLeadersAsOf(
                   trx,
                   end,
-                  (graph ??= await this.hierarchy.reportingGraph(trx, start, end)),
+                  (graph ??= await this.placementGraph(trx, start, end)),
                 )
               : await this.hierarchy.rootSeatsAsOf(trx, end);
       const subtreeOf = async (leaderId: string) =>
-        (graph ??= await this.hierarchy.reportingGraph(trx, start, end)).subtree(leaderId);
+        (graph ??= await this.placementGraph(trx, start, end)).subtree(leaderId);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure &
@@ -921,7 +1013,7 @@ export class ReportingService {
         subject.kind === 'LEADER'
           ? await subtreeOf(subject.person_id)
           : subject.kind === 'NETWORK'
-            ? await this.networks.peopleInNetworkAsOf(trx, subject.network, end)
+            ? await this.networkPeople(trx, subject.network, end)
             : undefined,
       );
 
@@ -999,7 +1091,10 @@ export class ReportingService {
    */
   async cellCoverageByLeader(scope: CellReportScope, period: string): Promise<CoverageByLeader> {
     return this.overPeriod(period, async (trx) => {
-      const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+      const pairs = await this.coveragePairsAsKept(
+        trx,
+        await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
+      );
       const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
       const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
 
@@ -1072,7 +1167,10 @@ export class ReportingService {
     // above records what a `Promise.all` cost this module once, on a *pooled* connection
     // where it really was two snapshots; writing it the same way here would invite a
     // reader to check whether this is that mistake again.
-    const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+    const pairs = await this.coveragePairsAsKept(
+      trx,
+      await this.cells.scheduledMeetingsWithLeaderIn(trx, period),
+    );
     const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
 
     const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
@@ -1095,7 +1193,12 @@ export class ReportingService {
    */
   private async scheduledPairsInScope(
     trx: Transaction<Database>,
-    pairs: readonly { cellId: string; scheduledDate: string; leaderId: string | null }[],
+    pairs: readonly {
+      cellId: string;
+      scheduledDate: string;
+      leaderId: string | null;
+      placeId?: string | null;
+    }[],
     scope: CellReportScope,
   ): Promise<readonly { cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     if (scope.kind === 'CELL') {
@@ -1114,11 +1217,11 @@ export class ReportingService {
     );
     const subtrees = new Map(dates.map((date, index) => [date, walked[index]]));
 
-    return pairs.filter(
-      (pair) =>
-        pair.leaderId !== null &&
-        (subtrees.get(pair.scheduledDate)?.has(canonicalId(pair.leaderId)) ?? false),
-    );
+    // Placed by `placeId` where a merge set one (decision 0408, point 23), else by its leader.
+    return pairs.filter((pair) => {
+      const place = pair.placeId ?? pair.leaderId;
+      return place !== null && (subtrees.get(pair.scheduledDate)?.has(canonicalId(place)) ?? false);
+    });
   }
 
   /**
@@ -1163,11 +1266,7 @@ export class ReportingService {
       const everyone = (byLeader: { cell: OwedByLeader; dcc: OwedByLeader }) =>
         new Set([...byLeader.cell.keys(), ...byLeader.dcc.keys()]);
 
-      const graph = await this.hierarchy.reportingGraph(
-        trx,
-        startOfManilaDay(start),
-        endOfManilaDay(end),
-      );
+      const graph = await this.placementGraph(trx, startOfManilaDay(start), endOfManilaDay(end));
 
       let tables: RecordingStatus['tables'] = null;
       let others: RecordingFigures | null = null;
@@ -1240,12 +1339,8 @@ export class ReportingService {
       const previousEnd = reportRangeEnd(kind, previousStart);
       const previous = await this.owedBetween(trx, previousStart, previousEnd);
 
-      const graph = await this.hierarchy.reportingGraph(
-        trx,
-        startOfManilaDay(start),
-        endOfManilaDay(end),
-      );
-      const previousGraph = await this.hierarchy.reportingGraph(
+      const graph = await this.placementGraph(trx, startOfManilaDay(start), endOfManilaDay(end));
+      const previousGraph = await this.placementGraph(
         trx,
         startOfManilaDay(previousStart),
         endOfManilaDay(previousEnd),
@@ -1325,7 +1420,7 @@ export class ReportingService {
       const current = now.getTime() < bounds.end.getTime();
       const at = current ? now : bounds.end;
 
-      const cells = await this.cells.cellsInForceAt(trx, at);
+      const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
       // Nobody outside the pastoral tree at the month's instant is counted (decision 0339).
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
@@ -1343,7 +1438,7 @@ export class ReportingService {
         };
       };
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       const asked = new Map<string, ChurchCountFigures | null>();
       let tables: ChurchCounts['tables'] = null;
       let others: ChurchCountFigures | null = null;
@@ -1415,7 +1510,7 @@ export class ReportingService {
       const count = (ids: readonly string[]): number =>
         ids.filter((id) => people.has(canonicalId(id))).length;
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       if (graph.refused) {
         return { period, at, current, total: null, own: null, rows: null };
       }
@@ -1461,7 +1556,7 @@ export class ReportingService {
       const current = now.getTime() < bounds.end.getTime();
       const at = current ? now : bounds.end;
 
-      const cells = await this.cells.cellsInForceAt(trx, at);
+      const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
 
@@ -1479,7 +1574,7 @@ export class ReportingService {
         };
       };
 
-      const graph = await this.hierarchy.reportingGraph(trx, bounds.start, bounds.end);
+      const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       if (graph.refused) {
         return { period, at, current, total: null, own: null, rows: null };
       }
@@ -1535,7 +1630,11 @@ export class ReportingService {
 
     const dcc = await this.dccCoverage.recordingBySubmitterBetween(trx, from, to);
 
-    return { cell, dcc };
+    // **A leader merged away is the record kept** (decision 0408, point 16): what they owed is
+    // listed under the record kept, so it lands in that record's branch rather than in *Others*,
+    // and the two records count as one leader. What was owed and recorded is unchanged (point 19).
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    return { cell: owedAsKept(cell, resolve), dcc: owedAsKept(dcc, resolve) };
   }
 
   /**
@@ -1815,6 +1914,21 @@ function shiftDays(day: string, days: number): string {
   const [year, month, date] = day.split('-').map(Number);
 
   return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+/** Each leader's obligations keyed by the record kept, a merged pair's added together. */
+function owedAsKept(owing: OwedByLeader, resolve: (personId: string) => string): OwedByLeader {
+  const kept: OwedByLeader = new Map();
+  for (const [leaderId, entry] of owing) {
+    const key = canonicalId(resolve(leaderId));
+    const sum = kept.get(key) ?? { owed: 0, unrecorded: 0, late: 0 };
+    kept.set(key, {
+      owed: sum.owed + entry.owed,
+      unrecorded: sum.unrecorded + entry.unrecorded,
+      late: sum.late + entry.late,
+    });
+  }
+  return kept;
 }
 
 /** *Recording status*'s two columns and status over a set of leaders (decision 0325). */

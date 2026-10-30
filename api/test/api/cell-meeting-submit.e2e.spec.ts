@@ -452,7 +452,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     const absorbed = await createPerson(db, { firstName: 'Absorbido', network: 'MENS' });
     await db
       .updateTable('persons')
-      .set({ merged_into_id: survivor.id })
+      .set({ merged_into_id: survivor.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
       .where('id', '=', absorbed.id)
       .execute();
 

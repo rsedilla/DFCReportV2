@@ -5,6 +5,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
 import { growthPage, growthPopulation } from '../common/growth/growth-list';
 import { uniqueIds } from '../common/growth/growth-submit';
+import { resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow } from '../common/time/submission-window';
@@ -128,14 +129,24 @@ export class ConquestService {
       return empty;
     }
 
-    // Only somebody who has had a disciple or opened a Cell can have reached a goal.
-    const scope = population === null ? null : [...population];
+    // Only somebody who has had a disciple or opened a Cell can have reached a goal. A record
+    // merged into one in the population is reached too, its history counting for the record
+    // kept (decision 0408).
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    const scope =
+      population === null
+        ? null
+        : [
+            ...population,
+            ...pairs.absorbed.filter((_, index) => population.has(canonicalId(pairs.kept[index]))),
+          ];
     const edges = await this.hierarchy.edgeHistoryOf(this.db, scope);
     const openers = [...(await this.cells.openingsOf(scope)).keys()];
 
     // Every leader and opener is inside the scope, so the edges just read are all theirs.
     const goals = await this.goalsOf(
-      uniqueIds([...edges.map((edge) => edge.leaderId), ...openers]),
+      uniqueIds([...edges.map((edge) => edge.leaderId), ...openers].map(resolve)),
       now,
       edges,
       population === null,
@@ -183,22 +194,43 @@ export class ConquestService {
       return result;
     }
 
-    const asked = new Set(personIds.map(canonicalId));
+    // **A merged pair is one person** (section 3, decision 0408): every leader, disciple,
+    // leadership and opening resolves to the record kept, so two records of one disciple are
+    // one of the twelve, and the earlier of two dates stands.
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = (id: string) => canonicalId(resolverOf(pairs)(id));
+    const absorbedOf = (ids: readonly string[]) => {
+      const wanted = new Set(ids.map(canonicalId));
+      return pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index])));
+    };
+    const records = [...personIds, ...absorbedOf(personIds)];
+
+    const asked = new Set(personIds.map(resolve));
     const edges =
       known === undefined
-        ? await this.hierarchy.edgeHistoryOf(this.db, personIds)
-        : known.filter((edge) => asked.has(canonicalId(edge.leaderId)));
-    const disciples = everyone ? null : uniqueIds(edges.map((edge) => edge.personId));
+        ? await this.hierarchy.edgeHistoryOf(this.db, records)
+        : known.filter((edge) => asked.has(resolve(edge.leaderId)));
+    const discipleIds = uniqueIds(edges.map((edge) => edge.personId));
+    const disciples = everyone ? null : uniqueIds(discipleIds.map(resolve));
     const thirdLessons = keyed(await this.suynl.thirdLessonInstantsOf(disciples));
     const leading = new Map<string, Period[]>();
-    for (const entry of await this.cells.leadershipPeriodsOf(disciples)) {
-      const key = canonicalId(entry.personId);
+    for (const entry of await this.cells.leadershipPeriodsOf(
+      everyone ? null : [...discipleIds, ...absorbedOf(discipleIds)],
+    )) {
+      const key = resolve(entry.personId);
       leading.set(key, [...(leading.get(key) ?? []), period(entry.startedAt, entry.endedAt)]);
     }
-    const openings = keyed(await this.cells.openingsOf(everyone ? null : personIds));
+    const openings = new Map<string, Date>();
+    for (const [personId, openedAt] of await this.cells.openingsOf(everyone ? null : records)) {
+      const key = resolve(personId);
+      const seen = openings.get(key);
+      if (seen === undefined || openedAt < seen) {
+        openings.set(key, openedAt);
+      }
+    }
     const byLeader = new Map<string, typeof edges>();
     for (const edge of edges) {
-      const key = canonicalId(edge.leaderId);
+      const key = resolve(edge.leaderId);
       byLeader.set(key, [...(byLeader.get(key) ?? []), edge]);
     }
     const at = now.getTime();
@@ -212,7 +244,11 @@ export class ConquestService {
       const raise = new Map<string, Period[]>();
 
       for (const edge of own) {
-        const disciple = canonicalId(edge.personId);
+        const disciple = resolve(edge.personId);
+        if (disciple === key) {
+          // One record of the pair once placed under the other carries no discipleship.
+          continue;
+        }
         const held = period(edge.startedAt, edge.endedAt);
         add(completion, disciple, [held]);
 

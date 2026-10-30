@@ -45,6 +45,8 @@ import {
   SearchPeopleDto,
 } from './dto/people.dto';
 import { ArchivePersonDto, LifecycleListDto } from './dto/lifecycle.dto';
+import { MergePersonDto, MergePreviewDto } from './dto/merge.dto';
+import { PeopleMergeService } from './people.merge.service';
 import { APPLICATION_RULES, normalizeName } from './duplicate-matching';
 import { ABSENT_PEOPLE_PORT, type AbsentPeoplePort } from './person-archive.ports';
 import { PeopleLifecycleService } from './people.lifecycle.service';
@@ -90,6 +92,7 @@ export class PeopleController {
     private readonly duplicates: PeopleDuplicatesService,
     private readonly sexCorrection: PeopleSexCorrectionService,
     private readonly reassignment: PeopleReassignmentService,
+    private readonly merges: PeopleMergeService,
     // The path is a hierarchy question answered on a `people` route, so it is
     // taken from the owning module's service rather than re-walked here
     // (section 2). `PeopleModule` already imports `HierarchyModule`.
@@ -412,6 +415,39 @@ export class PeopleController {
     );
   }
 
+  /**
+   * What merging `duplicate_id` into this record would be refused for, now (decision 0408).
+   * The merge screen reads it before offering the button; the merge asks the same again
+   * after locking both records. `people.merge` is Admin-only at Whole Church (section 3).
+   */
+  @Get(':id/merge-preview')
+  @RequiresCapability(Capability.PeopleMerge, { kind: 'person', from: 'params.id' })
+  async mergePreview(
+    @Param('id') id: string,
+    @Query() query: MergePreviewDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.merges.preview(id, query.duplicate_id, actor);
+  }
+
+  /** Join `duplicate_id` into this record (SKILL.md section 3, decision 0408). */
+  @Post(':id/merge')
+  @HttpCode(200)
+  @RequiresCapability(Capability.PeopleMerge, { kind: 'person', from: 'params.id' })
+  async merge(
+    @Param('id') id: string,
+    @Body() body: MergePersonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.merges.merge(
+      id,
+      { duplicateId: body.duplicate_id, reason: body.reason },
+      actor,
+      claim,
+    );
+  }
+
   /** Restore an archived Person to `CURRENT`, and nothing else (decision 0397, point 9). */
   @Post(':id/restore')
   @HttpCode(200)
@@ -522,6 +558,12 @@ export class PeopleController {
   async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
     const person = await this.read.findById(id);
     if (!person) {
+      // A record merged away keeps its page, read only, naming where the person is now
+      // (decision 0408, point 14): no leader, no Cell, no action.
+      const merged = await this.merges.mergedLineOf(id);
+      if (merged) {
+        return merged;
+      }
       throw new NotFoundError('No such person.');
     }
 

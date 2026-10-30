@@ -976,7 +976,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       const { ids } = await createRequestMembers(db, 'MENS', { under: mark.id });
       await db
         .updateTable('persons')
-        .set({ merged_into_id: juan.id })
+        .set({ merged_into_id: juan.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', ids[0])
         .execute();
       await refusedAt(ids, 0);
@@ -1315,7 +1315,7 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       const { id, members } = await pendingNewCell(manuelAccount, mark.id);
       await db
         .updateTable('persons')
-        .set({ merged_into_id: juan.id })
+        .set({ merged_into_id: juan.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
         .where('id', '=', members[2])
         .execute();
       await refusedNaming(id, members[2]);

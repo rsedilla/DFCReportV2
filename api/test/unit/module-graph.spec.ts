@@ -108,6 +108,12 @@ describe('the application module graph (section 2)', () => {
         'accounts',
       ],
       ['ABSENT_PEOPLE_PORT', moduleRef.get(PeopleController, { strict: false }), 'absent'],
+      // Decision 0408's: a record merged away resolves its scope through the record kept.
+      [
+        'MERGED_PERSONS_PORT',
+        moduleRef.get(AuthorizationService, { strict: false }),
+        'mergedPersons',
+      ],
     ];
 
     for (const [token, consumer, field] of consumers) {

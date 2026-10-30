@@ -78,6 +78,31 @@ export class NetworksService {
    * for a second from the same bounded pool starves once enough of them run at
    * once (section 24 bounds the pool).
    */
+  /**
+   * Whether two Persons were ever in different Networks at the same instant (decision 0408,
+   * point 6): an instant both held a `network_assignments` row and the rows differ. A merge is
+   * refused then, because the pair would be counted in both Networks for that time.
+   */
+  async networksEverDifferedWithin(
+    executor: Db,
+    personA: string,
+    personB: string,
+  ): Promise<boolean> {
+    const result = await sql<{ differed: boolean }>`
+      SELECT EXISTS (
+        SELECT 1
+          FROM network_assignments a
+          JOIN network_assignments b
+            ON b.person_id = ${personB}::uuid
+           AND b.network <> a.network
+           AND tstzrange(a.started_at, a.ended_at) && tstzrange(b.started_at, b.ended_at)
+         WHERE a.person_id = ${personA}::uuid
+      ) AS differed
+    `.execute(executor);
+
+    return result.rows[0]?.differed === true;
+  }
+
   async networkAsOf(executor: Db, personId: string, at: Date): Promise<NetworkName | null> {
     const row = await executor
       .selectFrom('network_assignments')

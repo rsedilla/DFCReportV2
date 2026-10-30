@@ -124,6 +124,16 @@
       "note": "The Admin's Archived view on the Absent 3+ Months tab (decision 0397)."
     },
     {
+      "route": "GET /api/v1/people/:id/merge-preview",
+      "screen": "web/app/people/[id]/merge/page.tsx",
+      "note": "What would refuse the merge, read before the button is offered (decision 0408)."
+    },
+    {
+      "route": "POST /api/v1/people/:id/merge",
+      "screen": "web/app/people/[id]/merge/page.tsx",
+      "note": "The Admin joins a duplicate into the record kept (decision 0408)."
+    },
+    {
       "route": "POST /api/v1/people/:id/archive",
       "screen": "web/components/archive-person-dialog.tsx",
       "note": "Opened from the Absent 3+ Months tab and from a person's page (decision 0397)."

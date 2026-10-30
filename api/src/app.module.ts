@@ -25,6 +25,7 @@ import { PersonArchiveCellsBindingModule } from './cells/person-archive.binding.
 import { AbsentPeopleBindingModule } from './attendance/absent-people.binding.module';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
+import { MergedPersonsBindingModule } from './people/merged-persons.binding.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { CellMeetingsScopeService } from './attendance/cell-meetings.scope.service';
@@ -82,6 +83,7 @@ import { TrainingModule } from './training/training.module';
     PersonArchiveAccountsBindingModule,
     AbsentPeopleBindingModule,
     RecordedMeetingsBindingModule,
+    MergedPersonsBindingModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
 import { canonicalId, sameId } from '../../common/identifiers';
@@ -9,6 +9,7 @@ import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { isGrantMaking } from './grant-making';
+import { MERGED_PERSONS_PORT, type MergedPersonsPort } from './merged-persons.port';
 import {
   LEADER_APPROVES_CELLS,
   LEADER_FULL_VIEW_ONLY,
@@ -109,6 +110,7 @@ export class AuthorizationService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
+    @Optional() @Inject(MERGED_PERSONS_PORT) private readonly mergedPersons?: MergedPersonsPort,
   ) {}
 
   /**
@@ -486,7 +488,7 @@ export class AuthorizationService {
       // The guard runs outside any transaction, so the pooled connection is the
       // right reader here. A caller re-checking scope *inside* a transaction —
       // section 5 invariant 1 after taking the person lock — passes its own.
-      if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
+      if (await this.scopeCovers(this.db, grant.scope, target, actor, capability)) {
         return;
       }
     }
@@ -644,7 +646,7 @@ export class AuthorizationService {
         continue;
       }
 
-      if (await this.scopeCovers(executor, grant.scope, target, actor)) {
+      if (await this.scopeCovers(executor, grant.scope, target, actor, capability)) {
         return true;
       }
     }
@@ -780,6 +782,7 @@ export class AuthorizationService {
     scope: Scope,
     target: Target,
     actor: Actor,
+    capability: Capability,
   ): Promise<boolean> {
     if (scope.type === ScopeType.WholeChurch) {
       return true;
@@ -795,7 +798,7 @@ export class AuthorizationService {
       return this.reportScopeCovers(executor, scope, target, actor);
     }
 
-    const personId = await this.personBehind(executor, target);
+    const personId = await this.personBehind(executor, target, isReadCapability(capability));
     if (personId === null) {
       return false;
     }
@@ -865,23 +868,21 @@ export class AuthorizationService {
     // `LEADER` branch already asks: is that Person within the actor's reach at
     // `target.at`. Handling them apart would be two paths for one rule, and the rule is
     // the resolution rather than the containment.
+    // A leader merged away is read as the record kept (decision 0408, point 22): a report is
+    // a read, and the merge ended the absorbed record's own place in the tree.
+    const personId =
+      (await this.mergedPersons?.keptRecordOfWithin(executor, selector.personId)) ??
+      selector.personId;
+
     switch (scope.type) {
       case ScopeType.OwnSubtree:
-        return this.hierarchy.isWithinSubtreeAsOf(
-          executor,
-          actor.personId,
-          selector.personId,
-          target.at,
-          { includeSelf: true },
-        );
+        return this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, target.at, {
+          includeSelf: true,
+        });
       case ScopeType.SubtreeExclSelf:
-        return this.hierarchy.isWithinSubtreeAsOf(
-          executor,
-          actor.personId,
-          selector.personId,
-          target.at,
-          { includeSelf: false },
-        );
+        return this.hierarchy.isWithinSubtreeAsOf(executor, actor.personId, personId, target.at, {
+          includeSelf: false,
+        });
       case ScopeType.Network: {
         if (scope.network === null) {
           // The database requires a Network to be named on a NETWORK grant. An unnamed
@@ -899,7 +900,7 @@ export class AuthorizationService {
         // Section 4 is authoritative for a person's Network only from their encoding date
         // forward and forbids inferring anything before it, so a report for a month
         // predating the person is refused rather than guessed at.
-        const network = await this.networks.networkAsOf(executor, selector.personId, target.at);
+        const network = await this.networks.networkAsOf(executor, personId, target.at);
         return network !== null && network === scope.network;
       }
       case ScopeType.WholeChurch:
@@ -907,13 +908,23 @@ export class AuthorizationService {
     }
   }
 
-  /** An Account resolves through its Person; a Person is already one (section 7). */
+  /**
+   * An Account resolves through its Person; a Person is already one, and **for a read** a record
+   * merged away resolves through the record kept (section 7, decision 0408 point 17), so its old
+   * page opens for whoever may open the record kept. **Never for a write**: the merge ended the
+   * absorbed record's own position, so a write resolves through that and is refused, and the
+   * page stays read only.
+   */
   private async personBehind(
     executor: Db,
     target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
+    read: boolean,
   ): Promise<string | null> {
     if (target.kind === 'person') {
-      return target.personId;
+      const kept = read
+        ? await this.mergedPersons?.keptRecordOfWithin(executor, target.personId)
+        : null;
+      return kept ?? target.personId;
     }
 
     const account = await executor

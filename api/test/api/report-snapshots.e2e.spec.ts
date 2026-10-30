@@ -398,7 +398,7 @@ describe('stored closed months (section 20, decision 0320)', () => {
         await versionsAfter((trx) =>
           trx
             .updateTable('persons')
-            .set({ merged_into_id: mark.id })
+            .set({ merged_into_id: mark.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
             .where('id', '=', nino.id)
             .execute(),
         ),
