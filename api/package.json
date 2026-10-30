@@ -37,11 +37,16 @@
     "advisory against it is about parsing a multipart request. This API registers no upload route",
     "and no multipart parser, so none of them is reachable — but an unreachable advisory is still",
     "an advisory somebody has to re-triage, and the alternative fix npm offers is a NestJS major",
-    "upgrade. The patched 2.x is API-compatible, so it is forced here instead.",
-    "Remove this when @nestjs/platform-express ships a version that depends on 2.3.0 or later."
+    "upgrade. The patched 2.x is API-compatible, so it is forced here instead (2.5.0 for the",
+    "advisory of 28 Oct 2026).",
+    "Remove this when @nestjs/platform-express ships a version that depends on 2.5.0 or later.",
+    "qs is pinned to 6.16.1, the release that fixes the stringify advisory of 28 Oct 2026, rather",
+    "than left to take a newer one: Express accepts it, and 6.16.2 and 6.17.x were days old.",
+    "Remove the pin at the next routine dependency update."
   ],
   "overrides": {
-    "multer": "^2.4.0"
+    "multer": "^2.5.0",
+    "qs": "6.16.1"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
@@ -55,7 +60,7 @@
     "dotenv": "^17.4.2",
     "helmet": "^8.3.0",
     "kysely": "^0.28.17",
-    "nodemailer": "^10.0.10",
+    "nodemailer": "~10.1.7",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
