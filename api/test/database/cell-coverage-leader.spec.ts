@@ -1,6 +1,6 @@
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createCell, createPerson } from '../setup/fixtures';
+import { addCellMember, assignTo, createCell, createPerson } from '../setup/fixtures';
 
 import type { Kysely } from 'kysely';
 import type { Database } from '../../src/database/schema';
@@ -80,6 +80,17 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
     await assignTo(db, incoming.id, outgoing.id);
   });
 
+  /**
+   * A Cell led by `outgoing` holding one member from its first day, so every scheduled date
+   * is owed and derived at all (decision 0409: a date with no member is not owed).
+   */
+  const cellFrom = async (createdAt: Date): Promise<string> => {
+    const cell = await createCell(db, { leader: outgoing, createdAt });
+    await addCellMember(db, cell);
+
+    return cell.id;
+  };
+
   const handOver = async (cellId: string, at: Date) => {
     await db.transaction().execute(async (trx) => {
       await trx
@@ -120,7 +131,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
   };
 
   it('agrees on every scheduled date of a Cell that never changed hands', async () => {
-    const cell = (await createCell(db, { leader: outgoing, createdAt: BEFORE })).id;
+    const cell = await cellFrom(BEFORE);
 
     const pairs = await agreesThroughout(cell);
 
@@ -131,7 +142,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
   });
 
   it('agrees on a handover that falls on a scheduled date', async () => {
-    const cell = (await createCell(db, { leader: outgoing, createdAt: BEFORE })).id;
+    const cell = await cellFrom(BEFORE);
 
     // The 20th is itself a Saturday, so both leadership rows match the date comparison and
     // only the ordering decides. This is the case decision 0187 settles.
@@ -151,7 +162,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
   });
 
   it('agrees on a handover that falls between two scheduled dates', async () => {
-    const cell = (await createCell(db, { leader: outgoing, createdAt: BEFORE })).id;
+    const cell = await cellFrom(BEFORE);
 
     // A Monday: only one row matches each scheduled date, so the ordering decides nothing
     // and the two implementations must still agree for the ordinary reason.
@@ -169,7 +180,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
   });
 
   it('agrees across two handovers in one month', async () => {
-    const cell = (await createCell(db, { leader: outgoing, createdAt: BEFORE })).id;
+    const cell = await cellFrom(BEFORE);
 
     await handOver(cell, new Date('2020-06-13T00:00:00+08:00'));
     // Back to the first leader, so one scheduled date has three leadership rows covering
@@ -223,9 +234,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
       ['June 2020', '2020-06-01', '2020-06-30'],
       ['February of a leap year', '2020-02-01', '2020-02-29'],
     ])('answers %s identically as a month and as its days', async (_label, month, last) => {
-      const cell = (
-        await createCell(db, { leader: outgoing, createdAt: new Date('2020-01-01T00:00:00+08:00') })
-      ).id;
+      const cell = await cellFrom(new Date('2020-01-01T00:00:00+08:00'));
       await handOver(cell, new Date(`${month.slice(0, 7)}-15T00:00:00+08:00`));
 
       const asMonth = await cells.scheduledMeetingsWithLeaderIn(db, month);
@@ -236,7 +245,7 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
     });
 
     it('includes both ends of a range and nothing outside it', async () => {
-      await createCell(db, { leader: outgoing, createdAt: BEFORE });
+      await cellFrom(BEFORE);
 
       // The week of Monday 1 June holds one Saturday, the 6th.
       expect(

@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -222,11 +223,23 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
       .execute();
   };
 
+  /**
+   * A Cell holding one member from its first day, beneath nobody, so every meeting it has
+   * scheduled is owed and on a queue at all (decision 0409). The cases that record a
+   * meeting enrol Juan through `addMember` instead, and name him in the attendance.
+   */
+  const owedCell = async (options: Parameters<typeof createCell>[1]): Promise<TestCell> => {
+    const cell = await createCell(db, options);
+    await addCellMember(db, cell);
+
+    return cell;
+  };
+
   describe('the Cell half', () => {
     it('answers `mine` as before, the default, with the new fields added and nobody else’s work', async () => {
       const { month, dayOfWeek, dates, created } = await stage(1);
-      const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
-      await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+      const manuelCell = await owedCell({ leader: manuel, dayOfWeek, createdAt: created });
+      await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
       const byDefault = await queue(month, manuelAccount);
       const explicit = await queue(month, manuelAccount, 'mine');
@@ -282,7 +295,7 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
 
     it('adds a downline leader’s meetings in `branch`, naming them, to follow up rather than record', async () => {
       const { month, dayOfWeek, dates, created } = await stage(1);
-      const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
+      const manuelCell = await owedCell({ leader: manuel, dayOfWeek, createdAt: created });
       const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
       await addMember(markCell, juan, created);
 
@@ -378,10 +391,10 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
 
     it('never reaches a sibling branch or the upline', async () => {
       const { month, dayOfWeek, created } = await stage(1);
-      const raymondCell = await createCell(db, { leader: raymond, dayOfWeek, createdAt: created });
-      const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
-      const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
-      const benCell = await createCell(db, { leader: ben, dayOfWeek, createdAt: created });
+      const raymondCell = await owedCell({ leader: raymond, dayOfWeek, createdAt: created });
+      const manuelCell = await owedCell({ leader: manuel, dayOfWeek, createdAt: created });
+      const markCell = await owedCell({ leader: mark, dayOfWeek, createdAt: created });
+      const benCell = await owedCell({ leader: ben, dayOfWeek, createdAt: created });
 
       // Manuel: himself and Mark, never Ben beside him nor Raymond above him.
       const forManuel = await queue(month, manuelAccount, 'branch');
@@ -406,9 +419,9 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
 
     it('is the pastoral tree and never the grant: a Whole Church administrator outside the tree sees nobody else’s work', async () => {
       const { month, dayOfWeek, created } = await stage(1);
-      await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
-      await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
-      await createCell(db, { leader: ben, dayOfWeek, createdAt: created });
+      await owedCell({ leader: manuel, dayOfWeek, createdAt: created });
+      await owedCell({ leader: mark, dayOfWeek, createdAt: created });
+      await owedCell({ leader: ben, dayOfWeek, createdAt: created });
 
       const branch = await queue(month, adminAccount, 'branch');
       expect(branch.status).toBe(200);
@@ -421,7 +434,7 @@ describe('the recording queue’s branch view (section 19, decision 0258)', () =
 
     it('lists a downline leader’s row where the actor may see it, saying whether they may record it', async () => {
       const { month, dayOfWeek, dates, created } = await stage(1);
-      const manuelCell = await createCell(db, { leader: manuel, dayOfWeek, createdAt: created });
+      const manuelCell = await owedCell({ leader: manuel, dayOfWeek, createdAt: created });
       const markCell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
       await addMember(markCell, juan, created);
 

@@ -6,6 +6,7 @@ import request from 'supertest';
 import * as submissionWindow from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -191,6 +192,9 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   // -------------------------------------------------------------------------
 
   it('lists a quiet Cell with each month of the window, oldest first', async () => {
+    // A member from the Cell's first day, so its meetings are owed and counted (decision
+    // 0409). Only here: the closure cases below close Mark's Cell with no members to move.
+    await addCellMember(db, markCell);
     const response = await list(admin);
 
     expect(response.status).toBe(200);
@@ -208,6 +212,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   });
 
   it('ignores a meeting held before the window', async () => {
+    await addCellMember(db, markCell);
     // April is not one of the last three finished months.
     await record(markCell, mark, '2026-04-25', { status: 'HELD' });
 
@@ -244,6 +249,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   });
 
   it('does not count a move to a day still to come, and lists the Cell', async () => {
+    await addCellMember(db, markCell);
     // Moved from Saturday 25 July to 20 August, which has not come at NOW: not met, and
     // not *Did not meet* or *Not recorded* either — it has a record and may yet happen.
     await record(markCell, mark, '2026-07-25', { status: 'RESCHEDULED', actualDate: '2026-08-20' });
@@ -256,6 +262,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   });
 
   it('counts a meeting recorded as not held under Did not meet', async () => {
+    await addCellMember(db, markCell);
     await record(markCell, mark, '2026-06-06', { status: 'NOT_HELD' });
     await record(markCell, mark, '2026-06-13', { status: 'NOT_HELD' });
 
@@ -269,6 +276,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   });
 
   it('lists a Cell whose every meeting was recorded as not held', async () => {
+    await addCellMember(db, markCell);
     // A quiet Cell told from one nobody reports on: all Did not meet, none Not recorded.
     for (const day of ['2026-07-04', '2026-07-11', '2026-07-18', '2026-07-25']) {
       await record(markCell, mark, day, { status: 'NOT_HELD' });
@@ -289,6 +297,9 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
       tomas = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
       await assignTo(db, tomas.id, manuel.id);
       thursdayCell = await createCell(db, { leader: tomas, dayOfWeek: 4, createdAt: CREATED });
+      // A member from its first day, so 30 July is owed and the leader has time to record it
+      // (decision 0409).
+      await addCellMember(db, thursdayCell);
     });
 
     it('keeps the Cell off the list while the leader still has time to record', async () => {
@@ -361,6 +372,7 @@ describe('Cells with no meeting held (section 15, decision 0355)', () => {
   });
 
   it('reads the window from the church-wide setting', async () => {
+    await addCellMember(db, markCell);
     // "The number in the label is the setting's" (decision 0355, point 6).
     await record(markCell, mark, '2026-05-16', { status: 'HELD' });
     expect(idsOf(await list(admin))).not.toContain(markCell.id);

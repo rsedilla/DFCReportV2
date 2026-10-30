@@ -5,6 +5,7 @@ import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -159,6 +160,16 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
   // ---------------------------------------------------------------------------
   // Fixture writes
   // ---------------------------------------------------------------------------
+
+  /**
+   * A Cell holding one member from its first day, beneath nobody, so every meeting it has
+   * scheduled is owed (decision 0409) and no DCC obligation moves with the member.
+   */
+  const owedCell = async (options: Parameters<typeof createCell>[1]): Promise<TestCell> => {
+    const cell = await createCell(db, options);
+    await addCellMember(db, cell);
+    return cell;
+  };
 
   const createEvent = async (eventDate: string, removedBy?: TestAccount): Promise<string> => {
     const row = await db
@@ -410,9 +421,9 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
       const { begun, ahead } = await monthDays(weekday);
       const created = await lastYear();
 
-      await createCell(db, { leader: manuel, dayOfWeek: weekday, createdAt: created });
-      await createCell(db, { leader: mark, dayOfWeek: weekday, createdAt: created });
-      await createCell(db, { leader: raymond, dayOfWeek: weekday, createdAt: created });
+      await owedCell({ leader: manuel, dayOfWeek: weekday, createdAt: created });
+      await owedCell({ leader: mark, dayOfWeek: weekday, createdAt: created });
+      await owedCell({ leader: raymond, dayOfWeek: weekday, createdAt: created });
 
       const response = await cellFigures(admin, raymond.id);
 
@@ -438,7 +449,7 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
       // next month and the Cell has no meeting here at all, so the answer is zero either
       // way -- but only the first case is the one this names.
       const tomorrow = shift(await manilaToday(), 1);
-      await createCell(db, { leader: manuel, dayOfWeek: isoWeekday(tomorrow) });
+      await owedCell({ leader: manuel, dayOfWeek: isoWeekday(tomorrow) });
 
       const response = await cellFigures(admin, raymond.id);
 
@@ -453,17 +464,17 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
       const created = await lastYear();
       const first = begun[0];
 
-      const held = await createCell(db, {
+      const held = await owedCell({
         leader: manuel,
         dayOfWeek: weekday,
         createdAt: created,
       });
-      const notHeld = await createCell(db, {
+      const notHeld = await owedCell({
         leader: mark,
         dayOfWeek: weekday,
         createdAt: created,
       });
-      const moved = await createCell(db, { leader: ben, dayOfWeek: weekday, createdAt: created });
+      const moved = await owedCell({ leader: ben, dayOfWeek: weekday, createdAt: created });
 
       const before = (await cellFigures(admin, raymond.id)).body;
 
@@ -493,7 +504,7 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
       const today = await manilaToday();
       const weekday = isoWeekday(today);
       const { begun } = await monthDays(weekday);
-      const cell = await createCell(db, {
+      const cell = await owedCell({
         leader: manuel,
         dayOfWeek: weekday,
         createdAt: await lastYear(),
@@ -551,7 +562,7 @@ describe('the Network screen figures (SKILL.md section 17, decision 0252)', () =
     for (const sunday of sundays) {
       await createEvent(sunday);
     }
-    await createCell(db, { leader: ben, dayOfWeek: weekday, createdAt: await lastYear() });
+    await owedCell({ leader: ben, dayOfWeek: weekday, createdAt: await lastYear() });
 
     const dcc = (await dccBehind(admin, raymond.id)).body;
     const cell = (await cellFigures(admin, raymond.id)).body;

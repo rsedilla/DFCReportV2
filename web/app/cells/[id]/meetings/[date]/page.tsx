@@ -186,6 +186,9 @@ function RecordMeeting() {
   const recordedNotHeld = recorded?.status === 'NOT_HELD';
   // Compared as Manila dates: a meeting takes no record before its day begins (decision 0238).
   const notYet = recorded === null && params.date > todayInManila();
+  // Nobody was in the Cell that day, so there is nothing to record and the meeting is not
+  // owed (decision 0409). A record already made is shown as it is.
+  const noMembers = recorded === null && !notYet && roster.data?.had_a_member === false;
 
   // Held at any scope. Whether it covers *this* meeting is the API's to decide.
   const canCorrect = (me.data?.capabilities ?? []).some(
@@ -347,7 +350,7 @@ function RecordMeeting() {
 
   const draft = useMarkDraft<{ version: number | null; marks: Record<string, Mark> }>({
     key:
-      me.data && roster.data && !followOnly && !notYet && !weekClosed
+      me.data && roster.data && !followOnly && !notYet && !noMembers && !weekClosed
         ? `cell:${params.id}:${params.date}:${me.data.person_id}`
         : null,
     draft: unsaved,
@@ -550,7 +553,9 @@ function RecordMeeting() {
       ) : null}
       {notYet ? null : (
         <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
-          {followOnly
+          {noMembers
+            ? `No member was in this Cell on ${dayLabel(params.date)}, so there is nothing to record and this meeting is not counted as owed.`
+            : followOnly
             ? recorded === null
               ? weekClosed
                 ? 'Not recorded. Its week has closed, so it can no longer be recorded.'
@@ -587,7 +592,7 @@ function RecordMeeting() {
 
       {roster.isPending ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : roster.data && notYet ? (
+      ) : roster.data && noMembers ? null : roster.data && notYet ? (
         <div className="border-edge mt-6 border p-4">
           <p className="text-sm font-bold">Not yet</p>
           <p className="text-muted mt-1 text-sm leading-relaxed">

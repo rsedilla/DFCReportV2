@@ -5,6 +5,7 @@ import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -131,15 +132,24 @@ describe('Pending CG Records (decision 0368)', () => {
     return weekday === 0 ? 7 : weekday;
   };
 
-  /** A Cell meeting on yesterday's weekday, running for a year before today. */
-  const cellFor = async (leader: TestPerson): Promise<TestCell> => {
+  /**
+   * A Cell meeting on yesterday's weekday, running for a year before today, with a member
+   * beneath nobody from its first day so its meetings are owed (decision 0409). `withMember`
+   * false leaves it empty, for a case that enrols and records its own member.
+   */
+  const cellFor = async (leader: TestPerson, withMember = true): Promise<TestCell> => {
     const yesterday = shift(await today(), -1);
 
-    return createCell(db, {
+    const cell = await createCell(db, {
       leader,
       dayOfWeek: isoWeekday(yesterday),
       createdAt: new Date(`${shift(yesterday, -365)}T02:00:00Z`),
     });
+    if (withMember) {
+      await addCellMember(db, cell);
+    }
+
+    return cell;
   };
 
   const leaderAccount = (person: TestPerson): Promise<TestAccount> =>
@@ -258,7 +268,7 @@ describe('Pending CG Records (decision 0368)', () => {
 
   it('drops a meeting once it is recorded, and the Cell once none is left', async () => {
     const yesterday = shift(await today(), -1);
-    const cell = await cellFor(manuel);
+    const cell = await cellFor(manuel, false);
     await db
       .insertInto('cell_memberships')
       .values({

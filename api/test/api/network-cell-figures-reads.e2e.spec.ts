@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -69,9 +70,11 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
     weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() || 7;
     created = new Date(Date.UTC(y - 1, m - 1, 1));
 
-    await createCell(db, { leader: raymond, dayOfWeek: weekday, createdAt: created });
-    await createCell(db, { leader: manuel, dayOfWeek: weekday, createdAt: created });
-    await createCell(db, { leader: juan, dayOfWeek: weekday, createdAt: created });
+    // Each holds a member from its first day, so its meetings are owed (decision 0409).
+    for (const leader of [raymond, manuel, juan]) {
+      const cell = await createCell(db, { leader, dayOfWeek: weekday, createdAt: created });
+      await addCellMember(db, cell);
+    }
   });
 
   afterEach(() => {
@@ -113,6 +116,8 @@ describe('a branch’s Cell figures cost the same however many Cells are elsewhe
       const leader = await createPerson(db, { firstName: `Outside${i}`, network: 'MENS' });
       await assignTo(db, leader.id, rico.id);
       const cell = await createCell(db, { leader, dayOfWeek: weekday, createdAt: created });
+      // A member too, so its meetings would be owed were it inside the branch (decision 0409).
+      await addCellMember(db, cell);
       await db
         .insertInto('cell_meetings')
         .values({

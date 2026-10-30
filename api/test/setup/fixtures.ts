@@ -517,6 +517,54 @@ export async function createCell(
 }
 
 /**
+ * A member of a Cell from the instant the Cell was created, so that every meeting it has
+ * scheduled since is owed (SKILL.md section 12, decision 0409: a meeting dated when the
+ * Cell had no member is in no denominator, no queue and no list of what is behind, and a
+ * first submission for it is refused).
+ *
+ * **The membership starts at `cells.created_at`, read in the same statement**, so it never
+ * precedes the leadership the Cell opened with -- migration 0009 refuses a membership at an
+ * instant the Cell had no leader -- and both take their start from one clock. `from`
+ * overrides it for a case that needs a later joiner.
+ *
+ * **The member is in the leader's Network and, by default, beneath nobody.** A pastoral
+ * assignment would put them on somebody's DCC checklist and inside a subtree's count of
+ * people, which a case measuring a Cell figure does not want moved; `under` places them
+ * where a case does. Invented names, like every fixture (CLAUDE.md, Secrets).
+ */
+export async function addCellMember(
+  db: Kysely<Database>,
+  cell: { id: string; leaderId: string },
+  options: { firstName?: string; under?: string; from?: Date } = {},
+): Promise<TestPerson> {
+  const network = (
+    await sql<{ network: NetworkName }>`
+      SELECT network_as_of(${cell.leaderId}::uuid, created_at) AS network
+        FROM cells
+       WHERE id = ${cell.id}::uuid
+    `.execute(db)
+  ).rows[0].network;
+
+  const person = await createPerson(db, {
+    firstName: options.firstName ?? 'Cellmember',
+    lastName: `Memberfixture${randomUUID().slice(0, 6)}`,
+    network,
+  });
+  if (options.under !== undefined) {
+    await assignTo(db, person.id, options.under);
+  }
+
+  await sql`
+    INSERT INTO cell_memberships (cell_id, person_id, started_at)
+    SELECT id, ${person.id}::uuid, coalesce(${options.from ?? null}::timestamptz, created_at)
+      FROM cells
+     WHERE id = ${cell.id}::uuid
+  `.execute(db);
+
+  return person;
+}
+
+/**
  * End a Cell's open category and schedule rows at an instant, the way a closure does
  * (SKILL.md section 10, *What closing does*; migration 0010).
  *

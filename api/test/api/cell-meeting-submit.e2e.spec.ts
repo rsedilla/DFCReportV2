@@ -148,15 +148,19 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return createAccount(app, db, { person, roles: ['ADMIN'] });
   }
 
-  /** A member of Mark's Cell from well before any meeting these cases record. */
-  async function member(firstName: string): Promise<TestPerson> {
+  /**
+   * A member of Mark's Cell, or of `cell`, from well before any meeting these cases record.
+   * A meeting dated when its Cell had no member is not recorded at all (decision 0409), so
+   * every Cell a case records a first submission for holds one.
+   */
+  async function member(firstName: string, cell: TestCell = markCell): Promise<TestPerson> {
     const person = await createPerson(db, { firstName, network: 'MENS' });
     await assignTo(db, person.id, mark.id);
     await db
       .insertInto('cell_memberships')
       .values({
         person_id: person.id,
-        cell_id: markCell.id,
+        cell_id: cell.id,
         started_at: CREATED,
       })
       .execute();
@@ -753,12 +757,13 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
           .values({ person_id: bensSuccessor.id, cell_id: bensCell.id, started_at: noon })
           .execute();
       });
+      const bensMember = await member('Benedicto', bensCell);
 
       const afterHandover = await request(app.getHttpServer())
         .post(`/api/v1/cells/${bensCell.id}/meetings/${meetingDate}/submit`)
         .set('Authorization', `Bearer ${entering.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ status: 'HELD' });
+        .send({ status: 'HELD', attendance: [{ person_id: bensMember.id, present: true }] });
 
       expect(afterHandover.status).toBe(201);
       // Ben, who held the Cell when the day began -- not Teodoro, who holds it now and
@@ -1168,12 +1173,13 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
           granted_by: admin.id,
         })
         .execute();
+      const bensMember = await member('Benedicto', bensCell);
 
       await request(app.getHttpServer())
         .post(`/api/v1/cells/${bensCell.id}/meetings/${meetingDate}/submit`)
         .set('Authorization', `Bearer ${bensAccount.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ status: 'HELD' })
+        .send({ status: 'HELD', attendance: [{ person_id: bensMember.id, present: false }] })
         .expect(201);
     });
 
@@ -3494,6 +3500,10 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       // A first submission cannot itself say RESCHEDULED (decision 0188), so the committed
       // state needs a submission and then a move, both committed before the loser re-reads.
       // The holder writes that meeting row directly.
+      //
+      // The Cell holds a member, so the loser reaches the record the holder writes rather
+      // than being refused because nobody was in the Cell that day (decision 0409).
+      await member('Aurelio');
       const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
       const schedule = await db
         .selectFrom('cell_schedules')

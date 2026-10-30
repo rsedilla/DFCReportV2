@@ -3224,6 +3224,8 @@ Population: the same unique people who attended this Cell at least once in the m
 
 Each Cell has one logical scheduled meeting per week of its configured schedule (Section 10, Schedule changes), and a Cell running for a whole month therefore has 4 or 5 **scheduled** meetings. *Per week of its schedule, not per calendar week: a schedule change takes effect on the first of a month while a week begins on a Monday, so a week straddling that boundary can hold two scheduled meetings under two schedules, reporting in two months. That is why a meeting is identified by its scheduled date rather than by its week (Section 13).* A Cell created or closed part-way through a month has fewer, and that is not an anomaly.
 
+**A scheduled meeting dated when the Cell had no member is not owed** (owner, 2026-10-29, decision 0409). "Had a member" is the roster's own rule (Section 13): a membership whose Manila start date is on or before the meeting's date and whose end date, if any, is on or after it. Such a meeting is in no coverage denominator, is not behind, and is on no recording list, *Update Records*, *Pending CG Records* and Recording Status included; it is not recorded either (Section 13). A Cell's leader holds no membership, so a Cell with only its leader owes nothing. It keeps the denominator out of a leader's hands: no screen or route ends a membership in the past except a closure, which ends the schedule with it, so no past meeting stops being owed (a future Admin tool that ends one in the past must say what happens to the meetings it owed, owner, 2026-10-30); a membership opened in the past, as a backdated closure's dispersal opens one, only makes more of a Cell's past meetings owed. A record already made on such a date stays as it was; the Reports figures and a Cell's own meetings page match records to owed meetings, so it is in neither term there, while the Cells list counts records on their own and its numerator counts it. **It reaches months already reported** (owner, 2026-10-30): a past month's Cell coverage may drop, and stored months were computed again once (migration 0034).
+
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
 ```text
@@ -3393,7 +3395,7 @@ actual date and uses the scheduled one.
 **A meeting that took place is recorded for every member of the Cell on its roster date,
 exactly once, present or not.** `HELD` and `RESCHEDULED` alike — the reschedule takes the
 roster of the day it moved to, and the rule is what makes that a complete account rather
-than a partial one. `NOT_HELD` carries no attendance at all, so it is outside this. This is the rule Section 7 and this section have each cited as
+than a partial one. `NOT_HELD` carries no attendance at all, so it is outside this. **A meeting dated when the Cell had no member has nothing to record** (decision 0409): it is not owed (Section 12), its screen says so and offers no form, and a first submission for it is refused, `INVARIANT_VIOLATION`, whatever its status. This is the rule Section 7 and this section have each cited as
 "every member exactly once (Section 13)" while it was stated nowhere in its own words —
 visible once the ruling below stopped resting on a Section 20 sentence that does not exist.
 It generalises the zero-attendance case above rather than being deduced from it, and that
@@ -4478,7 +4480,8 @@ in the second bullet and had been transplanted onto the headline.*
   exists to surface the records that are *missing* and a missing record has no responsible
   leader frozen on it. For DCC the denominator is the responsible leaders as of the event
   date, and the numerator is those holding a record (Section 9). For Cells the denominator
-  is the Cell's scheduled meetings, each appearing for the leader who led the Cell on the
+  is the Cell's scheduled meetings that are owed (a date it had no member is not, Section 12,
+  decision 0409), each appearing for the leader who led the Cell on the
   scheduled date (Sections 13 and 15), and the numerator is those with a record — a meeting
   has no row until it is reported. *Both halves are now stated for both domains: an earlier
   version gave DCC its numerator and left the Cell one to be inferred.*

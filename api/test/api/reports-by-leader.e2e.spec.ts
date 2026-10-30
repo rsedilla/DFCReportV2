@@ -8,6 +8,7 @@ import { startOfNextManilaMonth } from '../../src/common/time/manila';
 import { currentReportingMonth, databaseNow } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -258,7 +259,11 @@ describe('Reports coverage by leader (section 17, decision 0254)', () => {
       ['onofre', onofre],
       ['oriel', oriel],
     ] as const) {
-      cells[name] = (await createCell(db, { leader, createdAt: BEFORE })).id;
+      const cell = await createCell(db, { leader, createdAt: BEFORE });
+      // A member beneath nobody, so the Cell's meetings are owed (decision 0409) and no DCC
+      // obligation moves with them.
+      await addCellMember(db, cell);
+      cells[name] = cell.id;
     }
   };
 

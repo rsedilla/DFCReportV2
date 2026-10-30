@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import request from 'supertest';
 import { Client } from 'pg';
 
@@ -89,7 +90,9 @@ describe('a page of people’s Cells at once (perf-people-list-cells)', () => {
   async function join(person: TestPerson, cell: TestCell): Promise<void> {
     await db
       .insertInto('cell_memberships')
-      .values({ person_id: person.id, cell_id: cell.id, started_at: new Date() })
+      // The database's clock, as the Cell's leadership took: a host stamp can land before
+      // it, and migration 0009 refuses a membership at an instant the Cell had no leader.
+      .values({ person_id: person.id, cell_id: cell.id, started_at: sql`clock_timestamp()` })
       .execute();
   }
 
