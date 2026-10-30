@@ -272,6 +272,10 @@ function MeetingState({ entry, today }: { entry: ScheduledMeeting; today: string
   if (entry.meeting === null && entry.scheduled_date > today) {
     return <span className="text-muted text-sm">Not yet</span>;
   }
+  // Not owed and not recorded: nobody was in the Cell that day (decision 0409).
+  if (entry.meeting === null && entry.had_a_member === false) {
+    return <span className="text-muted text-sm">No members that day</span>;
+  }
 
   return <Tag appearance="outline">{meetingStateLabel(entry.meeting)}</Tag>;
 }

@@ -7,6 +7,7 @@ import { manilaDayOf } from '../../src/common/time/manila';
 import { databaseNow, recordClosesAt } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -85,6 +86,10 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     manuelCell = await createCell(db, { leader: manuel, dayOfWeek: 6, createdAt: CREATED });
     markCell = await createCell(db, { leader: mark, dayOfWeek: 6, createdAt: CREATED });
     nathanCell = await createCell(db, { leader: nathan, dayOfWeek: 6, createdAt: CREATED });
+    // Mark's Cell is the one the coverage cases read, and a meeting dated when the Cell had
+    // no member is not owed (decision 0409), so it holds a member from its first day. The
+    // other two stay empty: Manuel's carries the member-count case below.
+    await addCellMember(db, markCell);
 
     const adminPerson = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
     admin = await createAccount(app, db, { person: adminPerson, roles: ['ADMIN'] });
@@ -480,6 +485,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       timeOfDay: from.timeOfDay,
       createdAt: CREATED,
     });
+    // A member from the first day, so June's meetings are owed (decision 0409).
+    await addCellMember(db, cell);
 
     await db.transaction().execute(async (trx) => {
       if (to !== null) {
@@ -556,6 +563,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
       timeOfDay: '19:00',
       createdAt: CREATED,
     });
+    await addCellMember(db, cell);
 
     await db
       .insertInto('cell_schedules')

@@ -6,6 +6,7 @@ import { manilaDayOf } from '../../src/common/time/manila';
 import { databaseNow } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -239,6 +240,10 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
 
     markCell = (await createCell(db, { leader: mark, createdAt: BEFORE })).id;
     onofreCell = (await createCell(db, { leader: onofre, createdAt: BEFORE })).id;
+    // Each holds a member from its first day, so its meetings are owed for coverage
+    // (decision 0409). Nobody records them present, so no figure of people moves.
+    await addCellMember(db, { id: markCell, leaderId: mark.id });
+    await addCellMember(db, { id: onofreCell, leaderId: onofre.id });
   });
 
   const raymondsJune = `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=LEADER&leader_id=`;

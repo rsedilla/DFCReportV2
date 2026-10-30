@@ -913,6 +913,9 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         scheduled_time: entry.scheduledTime,
         week_starting: entry.weekStarting,
         reporting_month: reportingMonth,
+        // False where the Cell had no member that day: such a meeting is not owed and is
+        // not recorded (decision 0409).
+        had_a_member: entry.hadAMember,
         // Null is "awaiting a record" (sections 13 and 19), never a fourth status.
         meeting: row,
       };
@@ -934,8 +937,12 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // Section 12's coverage line, as two figures arrived at two ways. `Coverage =
       // Total Meetings / Scheduled`, reported as `recorded out of scheduled` rather
       // than as a percentage, because section 13 forbids a derived score.
-      scheduled_count: meetings.length,
-      recorded_count: meetings.filter((entry) => entry.meeting !== null).length,
+      // **Owed meetings only, on both terms** (decision 0409): a date the Cell had no member
+      // is listed and is in neither figure, so this line agrees with the Reports one, which
+      // matches records to owed meetings.
+      scheduled_count: meetings.filter((entry) => entry.had_a_member).length,
+      recorded_count: meetings.filter((entry) => entry.had_a_member && entry.meeting !== null)
+        .length,
       meetings,
     };
   }
@@ -1079,6 +1086,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       scheduled_time: entry.scheduledTime,
       week_starting: entry.weekStarting,
       reporting_month: reportingMonthOf(meetingId),
+      // False where the Cell had no member that day (decision 0409): nothing to record.
+      had_a_member: entry.hadAMember,
       // The date the roster was read at, stated rather than left to be inferred: it is
       // the actual date for a rescheduled meeting and the scheduled one otherwise, and
       // a client showing "who was there" needs to know which.
@@ -1466,6 +1475,19 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         throw new InvariantViolationError(
           'You sent a version for a meeting that has no record yet. Re-read the roster.',
           { cell_id: cellId, meeting_id: meetingId, submitted_version: body.version },
+        );
+      }
+
+      // **A meeting dated when the Cell had no member is not owed, and is not recorded
+      // either** (decision 0409). Nobody can be marked, so Met cannot be saved, and Did not
+      // meet would be the only record a leader could make of a meeting the Cell may well
+      // have held before its members were added. A record already made stays as it is
+      // (section 13) and is corrected through the branch above.
+      if (!entry.hadAMember) {
+        throw new InvariantViolationError(
+          'No member was in this Cell on that date, so there is nothing to record and the ' +
+            'meeting is not counted as owed.',
+          { cell_id: cellId, meeting_id: meetingId },
         );
       }
 

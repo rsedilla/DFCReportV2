@@ -376,6 +376,8 @@ export interface ScheduledMeeting {
   scheduled_time: string;
   week_starting: string;
   reporting_month: string;
+  /** False where the Cell had no member that day: not owed, and not recorded (decision 0409). */
+  had_a_member: boolean;
   /**
    * `null` is "awaiting a record", which sections 13 and 19 make an outstanding
    * task rather than a fourth status. A screen must not render it as a status
@@ -752,6 +754,8 @@ export interface MeetingRoster {
   may_record: boolean;
   /** Whether the meeting's week is still open; once it closes nothing on it is saved. */
   week_open: boolean;
+  /** False where the Cell had no member that day: not owed, and not recorded (decision 0409). */
+  had_a_member: boolean;
   meeting: RecordedMeeting | null;
   members: RosterMember[];
 }

@@ -13,6 +13,7 @@ import {
 } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -288,6 +289,8 @@ describe('a closed week inside an open month (decision 0335)', () => {
   });
 
   it('counts a meeting as behind only while its week is open', async () => {
+    // A member from the Cell's first day, so its Saturdays are owed (decision 0409).
+    await addCellMember(db, markCell);
     const closed = await closedSaturdayInOpenMonth();
     if (closed === null) {
       return;
@@ -333,6 +336,9 @@ describe('a closed week inside an open month (decision 0335)', () => {
     const month = reportingMonthOf(today);
     const disciple = await createPerson(db, { firstName: 'Timothy', network: 'MENS' });
     await assignTo(db, disciple.id, mark.id);
+    // A member beneath nobody, so the Saturdays are owed (decision 0409) and nobody's DCC
+    // checklist grows.
+    await addCellMember(db, markCell);
 
     let saturdays = 0;
     let sundays = 0;

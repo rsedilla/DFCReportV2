@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -112,7 +113,10 @@ describe('People I oversee stops two levels down (decision 0324)', () => {
     const created = new Date(`${shift(date, -400)}T12:00:00+08:00`);
 
     for (const leader of leaders) {
-      await createCell(db, { leader, dayOfWeek: iso, createdAt: created });
+      const cell = await createCell(db, { leader, dayOfWeek: iso, createdAt: created });
+      // A member beneath nobody, so the meeting is owed (decision 0409) and nobody's DCC
+      // checklist grows.
+      await addCellMember(db, cell);
     }
 
     return { month: monthOf(date), date };

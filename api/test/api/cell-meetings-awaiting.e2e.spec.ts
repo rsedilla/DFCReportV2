@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -196,11 +197,22 @@ describe('the recording queue (sections 13 and 19)', () => {
     });
   };
 
+  /**
+   * A Cell holding one member from its first day, beneath nobody, so every meeting it has
+   * scheduled is owed and on a queue at all (decision 0409).
+   */
+  const owedCell = async (options: Parameters<typeof createCell>[1]): Promise<TestCell> => {
+    const cell = await createCell(db, options);
+    await addCellMember(db, cell);
+
+    return cell;
+  };
+
   it('lists the meetings of the current month whose day has begun, and no others', async () => {
     // `stage(1)` always answers the current month: the weekday of its first day has
     // come round at least once by definition, whatever day of the month it is.
     const { month, dayOfWeek, dates, created } = await stage(1);
-    await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+    await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
     const today = await manilaToday();
     expect(month).toBe(`${today.slice(0, 8)}01`);
@@ -217,7 +229,7 @@ describe('the recording queue (sections 13 and 19)', () => {
 
   it('names a closed Cell’s meetings, which no other surface can', async () => {
     const { month, dayOfWeek, dates, created } = await stage(1);
-    const cell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+    const cell = await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
     // Closed the evening of its most recent meeting: every earlier Saturday is still
     // owed, and the Cell is gone from the `ACTIVE`-only index that fed the Dashboard.
@@ -234,7 +246,7 @@ describe('the recording queue (sections 13 and 19)', () => {
 
   it('gives an ACTIVE Cell’s meeting to the leader who holds it now, not the one who held it then', async () => {
     const { month, dayOfWeek, dates, created } = await stage(1);
-    const cell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+    const cell = await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
     // Handed to Ben after the month's meetings so far. Section 7: "An `ACTIVE` Cell is
     // untouched by this and resolves through its current leader, whatever any record
@@ -256,7 +268,7 @@ describe('the recording queue (sections 13 and 19)', () => {
     // month's first week that means last month, which section 13 keeps open until the
     // 7th, so the case runs every day of the year rather than most of them.
     const { month, dayOfWeek, dates, created } = await stage(2);
-    const cell = await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+    const cell = await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
     const handover = dates[0];
     const closure = dates[dates.length - 1];
@@ -311,7 +323,7 @@ describe('the recording queue (sections 13 and 19)', () => {
     // leader's own work and nobody else's, and a downline leader's outstanding
     // meetings are section 15's attention list rather than somebody else's to-do list.
     const { month, dayOfWeek, created } = await stage(1);
-    await createCell(db, { leader: ben, dayOfWeek, createdAt: created });
+    await owedCell({ leader: ben, dayOfWeek, createdAt: created });
 
     const response = await queue(month, markAccount);
 
@@ -321,7 +333,7 @@ describe('the recording queue (sections 13 and 19)', () => {
 
   it('answers a shut month empty rather than refusing it', async () => {
     const { dayOfWeek, created } = await stage(1);
-    await createCell(db, { leader: mark, dayOfWeek, createdAt: created });
+    await owedCell({ leader: mark, dayOfWeek, createdAt: created });
 
     // Two months back is shut under every reading of section 13's window, whatever day
     // of the month the suite runs on — one month back is shut only after the 7th.

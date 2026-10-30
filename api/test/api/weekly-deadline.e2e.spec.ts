@@ -7,6 +7,7 @@ import { manilaDayOf } from '../../src/common/time/manila';
 import { databaseNow, recordDueAt } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -106,7 +107,11 @@ describe('The weekly deadline (decision 0335)', () => {
   }
 
   async function cellOf(person: TestPerson, dayOfWeek: number): Promise<TestCell> {
-    return createCell(db, { leader: person, dayOfWeek, createdAt: LONG_AGO });
+    const cell = await createCell(db, { leader: person, dayOfWeek, createdAt: LONG_AGO });
+    // A member beneath nobody, so its meetings are owed (decision 0409) and no DCC line is.
+    await addCellMember(db, cell);
+
+    return cell;
   }
 
   /** A record for one meeting, first made at `at`. */

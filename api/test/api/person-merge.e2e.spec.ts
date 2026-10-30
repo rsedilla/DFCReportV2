@@ -12,6 +12,7 @@ import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   EPOCH,
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -1770,6 +1771,9 @@ describe('Person Merge (section 3, decision 0408)', () => {
         dayOfWeek: weekday,
         createdAt: new Date(Date.UTC(y - 1, 0, 1, 2)),
       });
+      // A member beneath nobody from the Cell's first day, so its meetings are owed (decision
+      // 0409) and no DCC obligation moves with them.
+      await addCellMember(db, ricoCell);
       await handOver(ricoCell.id, nestor, new Date(`${today}T00:00:01+08:00`));
 
       const figures = async () =>

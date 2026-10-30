@@ -375,6 +375,59 @@ test.describe('a Cell’s meetings', () => {
     await expect(page.getByText('Not recorded').filter({ visible: true })).toHaveCount(0);
   });
 
+  test('a past meeting dated when the Cell had no member reads No members that day', async ({
+    page,
+  }) => {
+    // Decision 0409: not owed and not recorded, so not "Not recorded" either.
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await mockGrants(page, []);
+    await page.route('**/api/v1/cells/*/meetings?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cell_id: 'CELL-000007',
+          category: 'YOUTH',
+          day_of_week: 6,
+          scheduled_time: '19:00',
+          leader: { id: '3f1b7c6e-0000-4000-8000-000000000299', full_name: 'Teofilo Ramos' },
+          member_count: 1,
+          cell_closed_on: null,
+          reporting_month: '2026-06-01',
+          scheduled_count: 1,
+          recorded_count: 0,
+          meetings: [
+            {
+              scheduled_date: '2026-06-06',
+              scheduled_time: '19:00',
+              week_starting: '2026-06-01',
+              reporting_month: '2026-06-01',
+              had_a_member: false,
+              meeting: null,
+            },
+            {
+              scheduled_date: '2026-06-13',
+              scheduled_time: '19:00',
+              week_starting: '2026-06-08',
+              reporting_month: '2026-06-01',
+              had_a_member: true,
+              meeting: null,
+            },
+          ],
+        }),
+      }),
+    );
+    await page.goto(MEETINGS);
+
+    const empty = page.getByRole('row').filter({ hasText: 'Saturday 6 June' });
+    await expect(empty.getByText('No members that day')).toBeVisible();
+    await expect(empty.getByText('Not recorded')).toHaveCount(0);
+    const owed = page.getByRole('row').filter({ hasText: 'Saturday 13 June' });
+    await expect(owed.getByText('Not recorded')).toBeVisible();
+  });
+
   test('changes when it meets from the next month, and says so once saved', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
