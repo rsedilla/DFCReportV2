@@ -85,6 +85,31 @@ test.describe('a Cell meeting in a closed week', () => {
     await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeDisabled();
   });
 
+  test('asks one reason when whether it met is corrected, and sends it as both', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockClosedWeekAmender(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+    const sent = await captureSave(page, '**/api/v1/cells/*/meetings/*/submit', { version: 4 });
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Amend Closed Week' }).click();
+    await page.getByRole('radio', { name: 'Did not meet' }).check();
+    await page.getByRole('radio', { name: 'Weather or calamity' }).check();
+    // Only the amendment's reason is asked (owner, 2026-10-30).
+    await expect(page.getByLabel(/Why is this being corrected/)).toHaveCount(0);
+    await page.getByLabel(/Why is this closed week being amended/).fill('It was cancelled for the storm.');
+    await page.getByRole('button', { name: 'Save Amendment' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({
+      status: 'NOT_HELD',
+      correction_reason: 'It was cancelled for the storm.',
+      amendment: { reason: 'It was cancelled for the storm.' },
+    });
+  });
+
   test('offers no Save for an amendment that changes nothing', async ({ page }) => {
     await mockSignedIn(page);
     await mockClosedWeekAmender(page);

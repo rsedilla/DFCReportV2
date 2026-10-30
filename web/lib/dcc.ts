@@ -345,6 +345,11 @@ export interface PersonDccRecord {
   present: boolean;
   /** A record on a Sunday later removed: listed, and not counted (section 9). */
   removed: boolean;
+  /**
+   * Whose checklist the line is on that Sunday, told to the Admin alone (decision 0411);
+   * absent for everyone else, and null where it is nobody's or a Network root's own.
+   */
+  checklist_of?: string | null;
 }
 
 export interface PersonDccAttendance {

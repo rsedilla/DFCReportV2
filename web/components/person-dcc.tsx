@@ -272,7 +272,15 @@ function DccHistory({
                       </Tag>
                     ) : null}
                   </div>
-                  <TextLink href={`/dcc/${line.event_id}`} className="shrink-0 text-sm">
+                  {/* The checklist this line is on, where the server says which (decision 0411). */}
+                  <TextLink
+                    href={
+                      line.checklist_of
+                        ? `/dcc/${line.event_id}?leader=${encodeURIComponent(line.checklist_of)}`
+                        : `/dcc/${line.event_id}`
+                    }
+                    className="shrink-0 text-sm"
+                  >
                     Open Sunday<span className="sr-only">, {line.event_date}</span>
                   </TextLink>
                 </li>

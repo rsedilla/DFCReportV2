@@ -225,7 +225,8 @@ function DccChecklist() {
     (line.record === null ? undefined : line.record.present ? 'present' : 'absent');
 
   const records = useMemo((): DccRecordInput[] => {
-    const reason = correctionReason.trim();
+    // While amending, the amendment's reason is sent as each corrected line's too (decision 0411).
+    const reason = (amending ? amendReason : correctionReason).trim();
 
     return lines
       .filter((line) => edits[line.person_id] !== undefined || line.record !== null)
@@ -244,7 +245,7 @@ function DccChecklist() {
           ...(corrected && reason ? { correction_reason: reason } : {}),
         };
       });
-  }, [lines, edits, correctionReason, versionFor]);
+  }, [lines, edits, correctionReason, amending, amendReason, versionFor]);
 
   // The amendment is part of the body, so a changed reason is a different submission.
   const idempotencyKey = useMemo(

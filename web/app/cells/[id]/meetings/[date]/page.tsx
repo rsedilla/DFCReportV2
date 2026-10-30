@@ -261,7 +261,11 @@ function RecordMeeting() {
     (weekClosed ? null : statusChoice) ??
     'HELD';
   const statusChanged = recorded !== null && status !== recorded.status;
-  const reasonMissing = statusChanged && correctionReason.trim() === '';
+  // **While amending, one reason serves both** (owner, 2026-10-30, decision 0411): the
+  // amendment's reason is sent as the correction reason too, so the Admin is asked once and
+  // the reason lands in the meeting's history as well as the audit log.
+  const whyCorrected = amending ? amendReason : correctionReason;
+  const reasonMissing = !amending && statusChanged && correctionReason.trim() === '';
   const askRanBy = recorded === null && status === 'HELD';
   const facilitatorMissing = askRanBy && ranBy === 'OTHER' && facilitator === null;
   const unmarked = members.filter((member) => markFor(member) === undefined);
@@ -299,7 +303,7 @@ function RecordMeeting() {
         version: baseVersion,
         not_held_reason: notHeldReason,
         not_held_note: note.trim() || undefined,
-        correction_reason: statusChanged ? correctionReason.trim() : undefined,
+        correction_reason: statusChanged ? whyCorrected.trim() : undefined,
         amendment,
       };
     }
@@ -315,7 +319,7 @@ function RecordMeeting() {
         person_id: member.person_id,
         present: markFor(member) === 'present',
       })),
-      correction_reason: correcting && correctionReason.trim() ? correctionReason.trim() : undefined,
+      correction_reason: correcting && whyCorrected.trim() ? whyCorrected.trim() : undefined,
       facilitated_by: askRanBy && ranBy === 'OTHER' ? facilitator?.id : undefined,
       amendment,
     };
@@ -334,7 +338,7 @@ function RecordMeeting() {
     members,
     markFor,
     correcting,
-    correctionReason,
+    whyCorrected,
     statusChanged,
     reasonMissing,
     askRanBy,
@@ -690,7 +694,7 @@ function RecordMeeting() {
                   </p>
                   <p className="text-muted mt-1 text-sm leading-relaxed">
                     {amending
-                      ? 'Saving replaces what is recorded for this meeting. Your reason is kept in the audit log.'
+                      ? 'Saving replaces what is recorded for this meeting. Your reason is kept in its history and in the audit log.'
                       : statusEditable
                       ? 'Saving replaces what is recorded. If whether it met was recorded wrongly, change the answer below and say why: the first report is kept in the meeting’s history.'
                       : 'Saving replaces the marks already recorded.'}
@@ -905,8 +909,8 @@ function RecordMeeting() {
             </section>
           )}
 
-          {/* While amending, the amendment's own reason says why, so the optional one is not asked. */}
-          {correcting && editing && (!amending || statusChanged) ? (
+          {/* While amending, the amendment's reason is the one reason asked (decision 0411). */}
+          {correcting && editing && !amending ? (
             <div className="mt-6">
               <label htmlFor="correction-reason" className="field-label block">
                 {statusChanged ? 'Why is this being corrected?' : 'Why is this changing? (optional)'}

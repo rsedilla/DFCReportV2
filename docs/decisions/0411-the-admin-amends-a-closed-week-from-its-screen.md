@@ -30,10 +30,24 @@ everything as it was. The reason is part of what is sent, so a changed reason is
 
 **3. Leaders see no change.** They keep today's closed page, and nothing else moves.
 
+**4. One reason** (owner, 2026-10-30, from `architecture-guardian`'s review). Where the Admin also
+corrects whether the meeting took place, or a recorded mark, the amendment's reason is sent as the
+correction reason too, so it is asked once and kept in the meeting's or line's history as well as
+the audit log.
+
+**5. A person's Sunday opens the checklist it is on** (owner, 2026-10-30). The Admin's own DCC
+checklist holds only the Network roots, so "Open Sunday" on a person's page led nowhere useful for
+anyone else. `GET /api/v1/dcc/people/{id}/attendance` now tells an account holding
+`dcc.submit_on_behalf` and `dcc.take_attendance` at Whole Church, and nobody else, whose checklist
+each line is on (`checklist_of`), by Section 9's submitter walk as of that Sunday from the line's
+responsible leader; "Open Sunday" then opens that leader's checklist, where a closed week can be
+amended. Null where the walk reaches nobody or the line is a Network root's own.
+
 ## What it does not change
 
 What an amendment may do, who may make one, or what it writes (Sections 9, 13 and 21): the
-server already took the amendment and audited it. No route, record or migration changes.
+server already took the amendment and audited it. No record or migration changes; one route
+gains the field in point 5.
 
 Decision 0411, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
 Sections 9 and 13.
