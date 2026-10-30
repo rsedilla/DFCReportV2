@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { RecordedMeetingsBindingModule } from '../../src/attendance/recorded-meetings.binding.module';
 import { configureApp } from '../../src/bootstrap';
+import { CellsReadService } from '../../src/cells/cells.read.service';
 import { RECORDED_MEETINGS_PORT } from '../../src/cells/recorded-meetings.port';
 import { EMAIL_PORT } from '../../src/email/email.port';
 import { CapturingEmailAdapter } from '../setup/capturing-email.adapter';
@@ -173,6 +174,26 @@ describe('the Cells index with the recorded-meetings port unbound (section 2)', 
 
       expect(response.status).toBe(500);
       expect(logged.join(' ')).toContain('RECORDED_MEETINGS_PORT');
+    });
+
+    // A refusal raised inside the `Promise.all` answered while the reads beside it ran on,
+    // and the next case's TRUNCATE deadlocked with them in CI (30 Oct). Refused first, it
+    // starts none of them.
+    it('starts none of its reads before refusing', async () => {
+      const leader = await buildFixture(app, db);
+      const scheduled = jest.spyOn(CellsReadService.prototype, 'scheduledCountsIn');
+      const due = jest.spyOn(CellsReadService.prototype, 'dueDaysIn');
+
+      try {
+        const response = await listCells(app, leader);
+
+        expect(response.status).toBe(500);
+        expect(scheduled).not.toHaveBeenCalled();
+        expect(due).not.toHaveBeenCalled();
+      } finally {
+        scheduled.mockRestore();
+        due.mockRestore();
+      }
     });
   });
 
