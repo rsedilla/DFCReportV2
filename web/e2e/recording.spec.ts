@@ -2820,10 +2820,14 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     // Carlo's account came after 7 June: that Sunday stays with Jose Santos, who covered it,
     // and 14 June is Carlo's own.
     await mockPendingDcc(page, [
-      { ...carlo, sundays: [carlo.sundays[0]] },
       {
         ...carlo,
-        leader: { ...carlo.leader, has_account: true },
+        leader: { ...carlo.leader, holds_account_now: true },
+        sundays: [carlo.sundays[0]],
+      },
+      {
+        ...carlo,
+        leader: { ...carlo.leader, has_account: true, holds_account_now: true },
         recorded_by: null,
         sundays: [carlo.sundays[1]],
       },
@@ -2838,12 +2842,34 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
       .getByRole('row')
       .filter({ hasText: 'Carlo Reyes' });
     await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toContainText('No account on these Sundays · Recorded by Jose Santos');
+    await expect(rows.first()).toContainText('No account on this Sunday · Recorded by Jose Santos');
     await expect(rows.last()).not.toContainText('account');
     // The tab counts leaders, not rows.
     await expect(
       recordLists(page).getByRole('button', { name: /^Pending DCC Records\s*1$/ }),
     ).toBeVisible();
+  });
+
+  test('a leader given an account after their only open Sundays reads No account on these Sundays (decision 0403)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    const [carlo] = PENDING_DCC_ROWS;
+    // Carlo holds an account now, given after both Sundays, so both stay with Jose Santos and
+    // Carlo has no row of his own. Seen live: the row read Has no account.
+    await mockPendingDcc(page, [{ ...carlo, leader: { ...carlo.leader, holds_account_now: true } }]);
+    await mockDccOwed(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard?list=dcc');
+
+    const row = page
+      .getByRole('table', { name: 'Pending DCC Records' })
+      .getByRole('row')
+      .filter({ hasText: 'Carlo Reyes' });
+    await expect(row).toContainText('No account on these Sundays · Recorded by Jose Santos');
+    await expect(row).not.toContainText('Has no account');
   });
 
   test('a leader with no account whose Sundays have two recorders reads Has no account on both rows (decision 0403)', async ({
