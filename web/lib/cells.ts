@@ -777,6 +777,8 @@ export interface CellSubmission {
   facilitated_by?: string;
   not_held_reason?: string;
   not_held_note?: string;
+  /** An Admin's amendment of a closed week, with why (section 13, decision 0411). */
+  amendment?: { reason: string };
 }
 
 /** The roster a submission must name in full, and the marks already standing. */

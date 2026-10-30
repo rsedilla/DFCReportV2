@@ -232,6 +232,67 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
     ]);
   });
 
+  // Decision 0411: the Admin is told whose checklist each Sunday is on, so a person's Sunday
+  // opens the checklist where a closed week can be amended. The case above pins that a leader
+  // is told nothing of it: its lines carry exactly four fields.
+  it('tells the Admin whose checklist each Sunday is on, by section 9’s walk', async () => {
+    const { events } = await timothyHistory();
+
+    const response = await attendance(admin, timothy.id).expect(200);
+
+    const owners = (response.body.data as { event_id: string; checklist_of: string | null }[]).map(
+      (line) => [line.event_id, line.checklist_of],
+    );
+    expect(owners).toEqual(events.map((eventId) => [eventId, mark.id]));
+  });
+
+  it('walks past a leader with no account to the nearest one above who has one', async () => {
+    const sunday = await recentSunday();
+    const event = await createEvent(sunday);
+    // Nathan holds no account, and neither does Raymond above him, so the walk reaches
+    // nobody; under Manuel, who holds one, it stops at him.
+    const ned = await createPerson(db, { firstName: 'Ned', network: 'MENS' });
+    await assignTo(db, ned.id, nathan.id);
+    await insertRecord(event, ned, true, nathan, admin);
+    const tim = await createPerson(db, { firstName: 'Tim', network: 'MENS' });
+    await assignTo(db, tim.id, manuel.id);
+    await insertRecord(event, tim, true, manuel, admin);
+
+    const nobody = await attendance(admin, ned.id).expect(200);
+    expect(nobody.body.data[0].checklist_of).toBeNull();
+    const manuelS = await attendance(admin, tim.id).expect(200);
+    expect(manuelS.body.data[0].checklist_of).toBe(manuel.id);
+  });
+
+  // A merged record is on no checklist, so where both records have a line on one Sunday
+  // the kept record's walk decides it (decisions 0408 and 0411).
+  it('walks from the kept record’s line where a merged record has one on the same Sunday', async () => {
+    const sunday = await recentSunday();
+    const event = await createEvent(sunday);
+    // The merged record's line goes in first, under a walk that reaches nobody.
+    const ned = await createPerson(db, { firstName: 'Ned', network: 'MENS' });
+    await assignTo(db, ned.id, nathan.id);
+    await insertRecord(event, ned, true, nathan, admin);
+    const tim = await createPerson(db, { firstName: 'Tim', network: 'MENS' });
+    await assignTo(db, tim.id, manuel.id);
+    await insertRecord(event, tim, false, manuel, admin);
+    await db
+      .updateTable('persons')
+      .set({
+        merged_into_id: tim.id,
+        merged_at: new Date(),
+        merged_by: admin.id,
+        merge_reason: 'Entered twice.',
+      })
+      .where('id', '=', ned.id)
+      .execute();
+
+    const response = await attendance(admin, tim.id).expect(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].present).toBe(true);
+    expect(response.body.data[0].checklist_of).toBe(manuel.id);
+  });
+
   it('climbs section 9’s ladder and has no classification before any attendance', async () => {
     const s0 = await recentSunday();
 

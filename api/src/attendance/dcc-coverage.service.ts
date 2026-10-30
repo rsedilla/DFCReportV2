@@ -1082,6 +1082,33 @@ export class DccCoverageService {
     return result;
   }
 
+  /**
+   * Whose checklist holds each of a person's lines (section 9's submitter walk; decision
+   * 0411): keyed by event, from the responsible leader frozen on the line, walked as of
+   * that Sunday exactly as `submittersOf` walks it. Null where the line names no responsible
+   * leader, which is a Network root's own, or where the walk reaches nobody.
+   */
+  async checklistOwners(
+    lines: readonly { eventId: string; eventDate: string; leaderId: string | null }[],
+  ): Promise<Map<string, string | null>> {
+    const now = await databaseNow(this.db);
+    const owners = new Map<string, string | null>();
+    for (const line of lines) {
+      if (line.leaderId === null) {
+        owners.set(line.eventId, null);
+        continue;
+      }
+      const event = this.describe(
+        line.eventDate,
+        { id: line.eventId, removed_at: null, removal_reason: null },
+        now,
+      );
+      const submitters = await this.submittersOf(event, [line.leaderId]);
+      owners.set(line.eventId, submitters.get(canonicalId(line.leaderId)) ?? null);
+    }
+    return owners;
+  }
+
   /** `submittersOf`'s walk, with accounts held by `accountsAt`, or now where undefined. */
   private async nearestHolders(
     event: EventRow,

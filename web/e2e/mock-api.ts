@@ -308,6 +308,28 @@ export async function mockGrants(
 }
 
 /**
+ * The Admin who may amend a closed week (decision 0411): the backdating capability at Whole
+ * Church, which is what offers *Amend Closed Week*, and both correction capabilities.
+ */
+export async function mockClosedWeekAmender(page: Page): Promise<void> {
+  const grant = (capability: string, scope_type: string) => ({
+    capability,
+    scope_type,
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  const capabilities = [
+    ...CAPABILITIES,
+    grant('cell.correct_subtree', 'WHOLE_CHURCH'),
+    grant('dcc.correct_subtree', 'WHOLE_CHURCH'),
+    grant('records.backdate_effective_date', 'WHOLE_CHURCH'),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
+/**
  * The same account, also allowed to correct a recorded Cell meeting.
  *
  * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, as above.
