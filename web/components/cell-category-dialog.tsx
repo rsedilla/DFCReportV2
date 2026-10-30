@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
-import { categoryLabel, changeCellCategory, type CellCategory } from '@/lib/cells';
+import {
+  categoryLabel,
+  CELL_CATEGORIES,
+  changeCellCategory,
+  type CellCategory,
+} from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
-
-const CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
 
 /**
  * Changing a Cell's category (SKILL.md section 10, decision 0367), beside Changing when it
@@ -91,7 +94,7 @@ export function CellCategoryDialog({
           name="category"
           value={category}
           onChange={setCategory}
-          options={CATEGORIES.filter((value) => value !== current).map((value) => ({
+          options={CELL_CATEGORIES.filter((value) => value !== current).map((value) => ({
             value,
             label: categoryLabel(value),
           }))}

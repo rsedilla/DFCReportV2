@@ -1,3 +1,4 @@
+import { addDays } from '@/lib/calendar-day';
 import { authenticatedRequest } from '@/lib/session';
 
 /**
@@ -67,12 +68,6 @@ export function updateEncounterSeason(
     `/api/v1/encounter-seasons/${encodeURIComponent(id)}`,
     { method: 'PATCH', body: input, idempotencyKey },
   );
-}
-
-export function addDays(date: string, days: number): string {
-  const next = new Date(`${date}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next.toISOString().slice(0, 10);
 }
 
 function weekendsOf(season: ShownSeason): string[] {

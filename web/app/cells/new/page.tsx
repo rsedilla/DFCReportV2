@@ -15,12 +15,16 @@ import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { SelectField } from '@/components/ui/select-field';
 import { TextLink } from '@/components/ui/text-link';
-import { categoryLabel, createCell, dayOfWeekLabel, type CellCategory } from '@/lib/cells';
+import {
+  categoryLabel,
+  CELL_CATEGORIES,
+  CELL_DAYS,
+  createCell,
+  dayOfWeekLabel,
+  type CellCategory,
+} from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
-
-const CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
-const DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 /**
  * New Cell (SKILL.md sections 2 and 10): an administrator creates a Cell with its leader
@@ -110,7 +114,7 @@ function NewCellForm() {
             required
             value={category}
             onChange={setCategory}
-            options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
+            options={CELL_CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
           />
 
           <FieldPair>
@@ -121,7 +125,7 @@ function NewCellForm() {
                 onChange={(event) => setDay(event.target.value)}
               >
                 <option value="">Choose a day</option>
-                {DAYS.map((value) => (
+                {CELL_DAYS.map((value) => (
                   <option key={value} value={String(value)}>
                     {dayOfWeekLabel(value)}
                   </option>

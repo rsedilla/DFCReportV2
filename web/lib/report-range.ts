@@ -5,6 +5,8 @@
  *
  * A week runs Monday to Sunday (decision 0054); quarters and years are the calendar's.
  */
+import { addDays } from '@/lib/calendar-day';
+
 export type RangeKind = 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
 
 function parts(date: string): [number, number, number] {
@@ -15,12 +17,6 @@ function parts(date: string): [number, number, number] {
 
 function iso(at: Date): string {
   return at.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, days: number): string {
-  const [year, month, day] = parts(date);
-
-  return iso(new Date(Date.UTC(year, month - 1, day + days)));
 }
 
 function addMonths(date: string, months: number): string {

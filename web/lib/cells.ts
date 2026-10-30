@@ -20,6 +20,12 @@ import { authenticatedRequest } from './session';
 
 export type CellCategory = 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
 
+/** The three categories, in the order every Cell form offers them. */
+export const CELL_CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+
+/** A Cell's meeting day as an ISO 8601 weekday, 1 Monday through 7 Sunday (section 20). */
+export const CELL_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+
 export type CellMeetingStatus = 'HELD' | 'NOT_HELD' | 'RESCHEDULED';
 
 /** Section 12's coverage line, as two figures that are never divided. */

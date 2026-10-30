@@ -10,13 +10,9 @@
  * matches `weeklyDeadlineFrom` in `api/src/common/time/submission-window.ts`.
  */
 
+import { addDays } from '@/lib/calendar-day';
+
 const WEEKLY_FROM = '2026-10-26';
-
-function addDays(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
 
 /** The Monday of the Monday-to-Sunday week a day falls in. */
 function weekStart(date: string): string {

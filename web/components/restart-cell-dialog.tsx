@@ -16,6 +16,8 @@ import {
 } from '@/components/three-members';
 import {
   categoryLabel,
+  CELL_CATEGORIES,
+  CELL_DAYS,
   cellShortName,
   dayOfWeekLabel,
   requestCellRestart,
@@ -24,9 +26,6 @@ import {
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
-
-const CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
-const DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 /**
  * Restart this Cell (decisions 0264, 0265 and 0266).
@@ -137,7 +136,7 @@ export function RestartCellDialog({
           name="category"
           value={category}
           onChange={setCategory}
-          options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
+          options={CELL_CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
         />
 
         <RadioGroup
@@ -145,7 +144,10 @@ export function RestartCellDialog({
           name="day_of_week"
           value={day}
           onChange={setDay}
-          options={DAYS.map((value) => ({ value: String(value), label: dayOfWeekLabel(value) }))}
+          options={CELL_DAYS.map((value) => ({
+            value: String(value),
+            label: dayOfWeekLabel(value),
+          }))}
         />
 
         <Field

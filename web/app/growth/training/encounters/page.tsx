@@ -11,7 +11,6 @@ import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   PARTY_DAYS_BEFORE,
-  addDays,
   createEncounterSeason,
   dayLabel,
   listEncounterSeasons,
@@ -21,6 +20,7 @@ import {
   type EncounterSeasonInput,
   type ShownSeason,
 } from '@/lib/encounters';
+import { addDays } from '@/lib/calendar-day';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
