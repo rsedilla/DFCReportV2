@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { reportRangeGuardMonth } from '../../src/common/time/report-range';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   createAccount,
   createCell,
@@ -131,7 +132,11 @@ describe('Recording status (decision 0325)', () => {
   }
 
   async function cellOf(person: TestPerson, dayOfWeek: number): Promise<TestCell> {
-    return createCell(db, { leader: person, dayOfWeek, createdAt: LONG_AGO });
+    const cell = await createCell(db, { leader: person, dayOfWeek, createdAt: LONG_AGO });
+    // A member beneath nobody, so its meetings are owed (decision 0409) and no DCC line is.
+    await addCellMember(db, cell);
+
+    return cell;
   }
 
   /** A record for one meeting, whatever its status: here, not held. */

@@ -5,6 +5,7 @@ import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
+  addCellMember,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -237,6 +238,25 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     // refusal is `VALIDATION_FAILED`, which is also 422, so the status could not
     // distinguish the layer it claimed to. Worse, it left the write half of section 7's
     // exception never once demonstrated to work — the thing the whole branch is for.
+    // A member on the meeting's date, whose row ended with the Cell: a meeting dated when
+    // the Cell had no member is not recorded at all (decision 0409), so without one this
+    // would be refused for that reason rather than admitted for this one.
+    const closedAt = await db
+      .selectFrom('cells')
+      .select('closed_at')
+      .where('id', '=', cell.id)
+      .executeTakeFirstOrThrow();
+    const member = await createPerson(db, { firstName: 'Quintin', network: 'MENS' });
+    await db
+      .insertInto('cell_memberships')
+      .values({
+        person_id: member.id,
+        cell_id: cell.id,
+        started_at: CREATED,
+        ended_at: closedAt.closed_at,
+      })
+      .execute();
+
     const response = await submit(marksMeeting, markAccount, {
       status: 'NOT_HELD',
       not_held_reason: 'NO_MEMBERS_AVAILABLE',
@@ -391,6 +411,9 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       dayOfWeek: scheduleDay,
       createdAt: CREATED,
     });
+    // A member from the Cell's first day, so the meeting is owed and recordable (decision
+    // 0409).
+    const member = await addCellMember(db, active);
     const ownerAccount = await createAccount(app, db, { person: owner, roles: ['LEADER'] });
 
     const handover = new Date(`${marksMeeting}T23:00:00+08:00`);
@@ -441,7 +464,7 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       .post(`/api/v1/cells/${active.id}/meetings/${marksMeeting}/submit`)
       .set('Authorization', `Bearer ${successorAccount.accessToken}`)
       .set('Idempotency-Key', randomUUID())
-      .send({ status: 'HELD' })
+      .send({ status: 'HELD', attendance: [{ person_id: member.id, present: true }] })
       .expect(201);
 
     expect(filed.body.responsible_leader_id).toBe(owner.id);
