@@ -918,6 +918,16 @@ export class DccCoverageService {
     ];
     const recordable = await this.recordableBy(actor, recorders);
     const recorderNames = await this.people.forDecisionsWithin(this.db, recorders);
+    // Who among this page's leaders holds an account now, so a row of Sundays before one was
+    // given says so rather than "Has no account" (decision 0403, 3c).
+    const holdsNow = new Set(
+      [
+        ...(await this.accounts.personsHoldingAccounts(
+          this.db,
+          page.map((line) => line.leaderId),
+        )),
+      ].map((id) => canonicalId(id)),
+    );
     const me = canonicalId(actor.personId);
     const last = page.at(-1);
 
@@ -941,6 +951,8 @@ export class DccCoverageService {
             // The leader records this row's Sundays themself (section 9): held an account on
             // them, or holds one now where nobody above held one then (decision 0403).
             has_account: ownAccount,
+            // Holds an account now, whoever records these Sundays (decision 0403, 3c).
+            holds_account_now: holdsNow.has(canonicalId(line.leaderId)),
           },
           recorded_by: named
             ? { person_id: recorder, full_name: recorderNames.get(recorder)?.fullName ?? '' }

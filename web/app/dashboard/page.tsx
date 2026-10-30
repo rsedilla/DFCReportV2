@@ -1671,16 +1671,17 @@ function PendingDccList({
       </Link>
     );
 
-  // A leader whose open Sundays have two recorders is two rows (decision 0403). Where one
-  // of them is the leader's own account, the others are for Sundays before it.
+  // A leader given an account after some of their open Sundays holds one now, and those
+  // Sundays stay with whoever covered them (decision 0403, 3c).
   const account = (row: PendingDccLeader) => {
     if (row.leader.has_account) {
       return null;
     }
-    const since = rows.some(
-      (other) => other.leader.person_id === row.leader.person_id && other.leader.has_account,
-    );
-    const none = since ? 'No account on these Sundays' : 'Has no account';
+    const none = !row.leader.holds_account_now
+      ? 'Has no account'
+      : row.sundays.length === 1
+        ? 'No account on this Sunday'
+        : 'No account on these Sundays';
     return row.recorded_by_you
       ? `${none} · Recorded by you`
       : row.recorded_by !== null

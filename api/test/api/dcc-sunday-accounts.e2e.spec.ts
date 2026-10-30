@@ -246,4 +246,37 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
       [true, false],
     ]);
   });
+
+  // A leader whose only open Sunday came before their account is one row, recorded by the
+  // leader above, and still says they hold an account now (decision 0403, 3c).
+  it('says a leader holds an account now when their only open Sunday came before it', async () => {
+    const list = () =>
+      request(app.getHttpServer())
+        .get('/api/v1/dcc/pending-leaders')
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+    const markRows = (body: {
+      data: {
+        leader: { person_id: string; has_account: boolean; holds_account_now: boolean };
+        recorded_by_you: boolean;
+      }[];
+    }) => body.data.filter((row) => row.leader.person_id === mark.id);
+
+    const before = await list();
+    expect(before.status).toBe(200);
+    expect(
+      markRows(before.body).map((row) => [row.leader.has_account, row.leader.holds_account_now]),
+    ).toEqual([[false, false]]);
+
+    await createAccount(app, db, { person: mark, roles: ['LEADER'], createdAt: new Date() });
+
+    const after = await list();
+    expect(after.status).toBe(200);
+    expect(
+      markRows(after.body).map((row) => [
+        row.leader.has_account,
+        row.leader.holds_account_now,
+        row.recorded_by_you,
+      ]),
+    ).toEqual([[false, true, true]]);
+  });
 });
