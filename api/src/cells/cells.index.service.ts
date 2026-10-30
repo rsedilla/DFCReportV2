@@ -167,6 +167,17 @@ export class CellsIndexService {
       noMeeting?: boolean;
     },
   ): Promise<Record<string, unknown>> {
+    // **Refused before any read starts.** Each helper below refuses too, but inside a
+    // `Promise.all`, which answers on the first refusal while the reads beside it run on
+    // holding their locks; in the test suite the next case's TRUNCATE then deadlocks with
+    // them (seen in CI from 30 Oct).
+    if (!this.recorded) {
+      throw new Error(
+        'Cannot list Cells: RECORDED_MEETINGS_PORT is not bound, so the SKILL.md section ' +
+          '12 coverage line has no numerator. This is a deployment fault.',
+      );
+    }
+
     const reportingMonth = reportingMonthOf(query.month);
 
     // **A period that has not begun is refused rather than answered** (section 20, decision
