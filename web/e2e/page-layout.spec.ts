@@ -53,9 +53,21 @@ test.describe('page widths (decision 0402)', () => {
     const mobile = page.getByLabel('Mobile number (required)');
     await expect(birthday).toBeVisible();
 
-    const [left, right] = [await birthday.boundingBox(), await mobile.boundingBox()];
-    expect(left && right && Math.abs(left.y - right.y)).toBeLessThanOrEqual(1);
-    expect(left && right && right.x > left.x + left.width).toBe(true);
+    // Measured until the layout settles rather than once: on CI the first measurement could
+    // land before the page had finished laying out, and read the two 74px apart (31 Oct).
+    // Fields that never line up still fail, when the poll times out.
+    const offsets = async () => {
+      const [left, right] = [await birthday.boundingBox(), await mobile.boundingBox()];
+      return left && right
+        ? { rows: Math.abs(left.y - right.y), sideBySide: right.x > left.x + left.width }
+        : null;
+    };
+    await expect
+      .poll(async () => {
+        const measured = await offsets();
+        return measured !== null && measured.rows <= 1 && measured.sideBySide;
+      })
+      .toBe(true);
   });
 
   test('Account keeps 768px, being read top to bottom (decision 0410)', async ({ page }) => {
