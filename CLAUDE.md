@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-30, the trigger being decision 0410: of 409 files, 408 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0410 each moved the first two and
+2026-10-30, the trigger being decision 0411: of 410 files, 409 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0411 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-30 and triggered by 0410, and was left stale by 0411 the same day. The one before that was dated
 2026-10-29 and triggered by 0409, and was left stale by 0410 the next day. The one before that was dated
 2026-10-29 and triggered by 0408, and was left stale by 0409 the same day. The one before that was dated
 2026-10-29 and triggered by 0407, and was left stale by 0408 the same day. The one before that was dated
@@ -862,6 +863,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-29 — [Person Merge: who may be merged, what moves, and how a merged pair is counted](docs/decisions/0408-person-merge.md)
 - 2026-10-29 — [A Cell meeting dated when the Cell had no member is not owed](docs/decisions/0409-a-meeting-with-no-member-is-not-owed.md)
 - 2026-10-30 — [A form is as wide as a list, and is set out in sections](docs/decisions/0410-a-form-is-as-wide-as-a-list-in-sections.md)
+- 2026-10-30 — [The Admin amends a closed week from its own screen](docs/decisions/0411-the-admin-amends-a-closed-week-from-its-screen.md)
 
 ### Open — awaiting a ruling
 

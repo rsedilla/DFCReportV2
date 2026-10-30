@@ -21,7 +21,7 @@ import {
 } from '@/lib/dcc';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import {
   changedUnderNote,
@@ -119,16 +119,29 @@ function DccChecklist() {
   // Every line's stored mark when this edit's first change was made, so Reload can name a
   // line somebody else changed that this leader never touched (decision 0394).
   const [openedWith, setOpenedWith] = useState<Record<string, boolean | null> | null>(null);
+  // The Admin amending a closed week, and why (decision 0411).
+  const [amending, setAmending] = useState(false);
+  const [amendReason, setAmendReason] = useState('');
 
   const lines = useMemo(() => roster.data?.data ?? [], [roster.data]);
   const event = roster.data?.event ?? null;
-  const recordable = event?.recordable ?? false;
+  // **The Admin may amend a closed week** (decision 0411): a Sunday closed only because its
+  // week has closed is offered to an account holding the backdating capability over the whole
+  // church, and while it is being amended the checklist works as it does while the week is
+  // open. The server decides whether this account may (section 9).
+  const mayAmend =
+    event?.recordable === false &&
+    event.not_recordable_reason === 'MONTH_CLOSED' &&
+    holdsWholeChurch(me.data, 'records.backdate_effective_date');
+  const recordable = (event?.recordable ?? false) || (amending && mayAmend);
+  const amendment = amending ? { reason: amendReason.trim() } : undefined;
+  const amendReasonMissing = amending && amendReason.trim() === '';
 
   // **A Sunday that stops taking records while the page is open ends any edit in
   // progress**, as on the Cell meeting screen: no save can succeed, so marks left over
   // would show where nobody can keep or discard them. Derived, so nothing is set in render.
   const edits = recordable ? editState : NO_EDITS;
-  const editing = editingState && recordable;
+  const editing = (editingState || amending) && recordable;
   const recordedCount = lines.filter((line) => line.record !== null).length;
 
   // Held at any scope. Whether it covers each person is the API's to decide.
@@ -163,6 +176,8 @@ function DccChecklist() {
     }
     setCorrectionReason('');
     setEditing(false);
+    setAmending(false);
+    setAmendReason('');
   }
 
   /** The version a line's change is made against: the one pinned at its first change. */
@@ -207,15 +222,22 @@ function DccChecklist() {
       });
   }, [lines, edits, correctionReason, versionFor]);
 
-  const idempotencyKey = useMemo(() => idempotencyKeyFor(params.id, records), [params.id, records]);
+  // The amendment is part of the body, so a changed reason is a different submission.
+  const idempotencyKey = useMemo(
+    () => idempotencyKeyFor(params.id, records, amendment ?? null),
+    [params.id, records, amendment],
+  );
 
   const [savedKey, setSavedKey] = useState<string | null>(null);
 
   const save = useMutation({
-    mutationFn: (sent: DccRecordInput[]) => submitDccAttendance(params.id, sent, idempotencyKey),
+    mutationFn: (sent: DccRecordInput[]) =>
+      submitDccAttendance(params.id, sent, idempotencyKey, amendment),
     onSuccess: async (_saved, sent) => {
       setSavedKey(idempotencyKey);
       setEditing(false);
+      setAmending(false);
+      setAmendReason('');
       setCorrectionReason('');
       // A note says what was changed under a mark before this save; after it, nothing does.
       setChangedUnder({});
@@ -471,11 +493,33 @@ function DccChecklist() {
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : roster.data && event ? (
         <>
-          {!recordable && event.not_recordable_reason ? (
+          {!recordable && mayAmend ? (
+            <div className="border-edge mt-6 max-w-2xl border p-4">
+              <p className="text-sm font-bold">Week closed</p>
+              <p className="text-muted mt-1 text-sm leading-relaxed">
+                This week is closed. Only the Admin may amend it, with a reason that is kept in the
+                audit log.
+              </p>
+              <Button variant="secondary" className="mt-3" onClick={() => setAmending(true)}>
+                Amend Closed Week
+              </Button>
+            </div>
+          ) : !recordable && event.not_recordable_reason ? (
             <p className="border-edge mt-6 max-w-2xl border p-4 text-sm leading-relaxed">
               This Sunday takes no record: {notRecordableLabel(event.not_recordable_reason)}.
               {event.removed && event.removal_reason ? ` ${event.removal_reason}` : ''}
             </p>
+          ) : null}
+          {amending && recordable ? (
+            <div className="border-edge mt-6 max-w-2xl border p-4">
+              <p className="text-sm font-bold">Amending a closed week</p>
+              <p className="text-muted mt-1 text-sm leading-relaxed">
+                Mark anyone whose Sunday was missed or wrong. Your reason is kept in the audit log.
+              </p>
+              <Button variant="secondary" className="mt-3" onClick={stopEditing}>
+                Cancel
+              </Button>
+            </div>
           ) : null}
 
           {save.isSuccess ? (
@@ -508,7 +552,7 @@ function DccChecklist() {
 
           {/* The checklist and what is already recorded, in one frame (owner's choice, 2026-09-22). */}
           <div className={`mt-6 ${FRAME}`}>
-          {recordable && recordedCount > 0 ? (
+          {recordable && recordedCount > 0 && !amending ? (
             <div className="border-line border-b pb-4">
               {editing ? (
                 <>
@@ -627,6 +671,22 @@ function DccChecklist() {
             </p>
           ) : null}
 
+          {amending && recordable ? (
+            <div className="mt-8">
+              <label htmlFor="amend-reason" className="field-label block">
+                Why is this closed week being amended? (required)
+              </label>
+              <textarea
+                id="amend-reason"
+                value={amendReason}
+                onChange={(event) => setAmendReason(event.target.value)}
+                rows={2}
+                maxLength={1000}
+                className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+            </div>
+          ) : null}
+
           {/* Pinned for the reason the Cell meeting screen gives. */}
           {saveBar ? (
             <div
@@ -639,7 +699,9 @@ function DccChecklist() {
                 {reloadButton}
               </div>
               <p aria-live="polite" className="text-sm">
-                {!changed && unmarkedCount === 0
+                {changed && amendReasonMissing
+                  ? 'Say why this closed week is being amended to save.'
+                  : !changed && unmarkedCount === 0
                   ? 'Everyone here is recorded.'
                   : records.length === 0
                     ? 'Mark at least one person to save.'
@@ -653,9 +715,9 @@ function DccChecklist() {
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => save.mutate(records)}
-                  disabled={save.isPending}
+                  disabled={save.isPending || amendReasonMissing}
                 >
-                  {save.isPending ? 'Saving…' : 'Save marks'}
+                  {save.isPending ? 'Saving…' : amending ? 'Save Amendment' : 'Save marks'}
                 </Button>
               ) : null}
             </div>

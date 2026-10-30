@@ -24,7 +24,7 @@ import {
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { restoredNote, useMarkDraft } from '@/lib/mark-draft';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import {
   changedUnderNote,
@@ -168,6 +168,9 @@ function RecordMeeting() {
   );
   // Lines somebody else changed while this edit was open, shown after Reload (decision 0394).
   const [changedUnder, setChangedUnder] = useState<Record<string, ChangedLine>>({});
+  // The Admin amending a closed week, and why (decision 0411).
+  const [amending, setAmending] = useState(false);
+  const [amendReason, setAmendReason] = useState('');
 
   // The Cell's category for the line under the date. Same capability as the roster, but
   // resolved against the Cell rather than the meeting, so a leader who led on the meeting's
@@ -201,13 +204,20 @@ function RecordMeeting() {
 
   // A meeting whose week has closed (decision 0335): the save would be refused, so it is
   // shown and nothing on it is offered, as the DCC checklist shows a closed Sunday.
-  const weekClosed = roster.data?.week_open === false;
+  const weekClosedNow = roster.data?.week_open === false;
+
+  // **The Admin may amend a closed week** (decision 0411). Amend Closed Week makes the page
+  // work as it does while the week is open, and Save sends the amendment with its reason;
+  // the server decides whether this account may (section 13). Nobody else is offered it.
+  const mayAmend =
+    weekClosedNow && !followOnly && holdsWholeChurch(me.data, 'records.backdate_effective_date');
+  const weekClosed = weekClosedNow && !amending;
 
   // **A week that closes while the page is open ends any edit in progress.** The roster is
   // read again when the reader returns to the tab, and once it says the week has closed no
   // save can succeed, so an edit left open would show marks nobody can keep under words
   // saying they are what is stored. Derived rather than reset, so nothing is set in render.
-  const editing = editingState && !weekClosed;
+  const editing = (editingState || (amending && correcting)) && !weekClosed;
   const edits = weekClosed ? NO_EDITS : editState;
 
   // A recorded meeting nobody has chosen to edit: shown, and not changeable.
@@ -258,9 +268,10 @@ function RecordMeeting() {
   const noteRequired = notHeldReason === 'OTHER';
 
   const submission = useMemo((): CellSubmission | null => {
-    if (!roster.data) {
+    if (!roster.data || (amending && amendReason.trim() === '')) {
       return null;
     }
+    const amendment = amending ? { reason: amendReason.trim() } : undefined;
 
     if (status === 'NOT_HELD') {
       // A first record, or a Met record corrected to Did not meet (decision 0273).
@@ -279,6 +290,7 @@ function RecordMeeting() {
         not_held_reason: notHeldReason,
         not_held_note: note.trim() || undefined,
         correction_reason: statusChanged ? correctionReason.trim() : undefined,
+        amendment,
       };
     }
 
@@ -295,9 +307,12 @@ function RecordMeeting() {
       })),
       correction_reason: correcting && correctionReason.trim() ? correctionReason.trim() : undefined,
       facilitated_by: askRanBy && ranBy === 'OTHER' ? facilitator?.id : undefined,
+      amendment,
     };
   }, [
     roster.data,
+    amending,
+    amendReason,
     status,
     recorded,
     baseVersion,
@@ -397,6 +412,8 @@ function RecordMeeting() {
     setCorrectionReason('');
     setStartedFrom(null);
     setChangedUnder({});
+    setAmending(false);
+    setAmendReason('');
   }
 
   const save = useMutation({
@@ -490,7 +507,9 @@ function RecordMeeting() {
 
   // What Save is still waiting for, said rather than left to a greyed button.
   let saveHint: string;
-  if (reasonMissing) {
+  if (amending && amendReason.trim() === '') {
+    saveHint = 'Say why this closed week is being amended to save.';
+  } else if (reasonMissing) {
     saveHint = 'Say why this is being corrected to save.';
   } else if (facilitatorMissing) {
     saveHint = 'Choose who ran it to save.';
@@ -632,9 +651,13 @@ function RecordMeeting() {
             <div className="border-edge mt-6 border p-4">
               {editing ? (
                 <>
-                  <p className="text-sm font-bold">Editing the recorded meeting</p>
+                  <p className="text-sm font-bold">
+                    {amending ? 'Amending a closed week' : 'Editing the recorded meeting'}
+                  </p>
                   <p className="text-muted mt-1 text-sm leading-relaxed">
-                    {statusEditable
+                    {amending
+                      ? 'Saving replaces what is recorded for this meeting. The first report and your reason are kept in its history and the audit log.'
+                      : statusEditable
                       ? 'Saving replaces what is recorded. If whether it met was recorded wrongly, change the answer below and say why: the first report is kept in the meeting’s history.'
                       : 'Saving replaces the marks already recorded.'}
                   </p>
@@ -668,7 +691,14 @@ function RecordMeeting() {
                       />
                     </>
                   )}
-                  {weekClosed ? (
+                  {weekClosed && mayAmend ? (
+                    <AmendClosedWeek
+                      onAmend={() => {
+                        begin();
+                        setAmending(true);
+                      }}
+                    />
+                  ) : weekClosed ? (
                     <p className="text-muted mt-1 text-sm leading-relaxed">
                       This week is closed, so this meeting can no longer be changed.
                     </p>
@@ -690,6 +720,25 @@ function RecordMeeting() {
                   ) : null}
                 </>
               )}
+            </div>
+          ) : null}
+
+          {/* A closed week with no record: the Admin may record it as an amendment (decision 0411). */}
+          {!correcting && weekClosed && mayAmend ? (
+            <div className="border-edge mt-6 border p-4">
+              <p className="text-sm font-bold">Week closed</p>
+              <AmendClosedWeek onAmend={() => setAmending(true)} />
+            </div>
+          ) : null}
+          {!correcting && amending ? (
+            <div className="border-edge mt-6 border p-4">
+              <p className="text-sm font-bold">Amending a closed week</p>
+              <p className="text-muted mt-1 text-sm leading-relaxed">
+                Recording it now is an amendment. Your reason is kept in the audit log.
+              </p>
+              <Button variant="secondary" className="mt-3" onClick={stopEditing}>
+                Cancel
+              </Button>
             </div>
           ) : null}
 
@@ -820,7 +869,8 @@ function RecordMeeting() {
             </section>
           )}
 
-          {correcting && editing ? (
+          {/* While amending, the amendment's own reason says why, so the optional one is not asked. */}
+          {correcting && editing && (!amending || statusChanged) ? (
             <div className="mt-6">
               <label htmlFor="correction-reason" className="field-label block">
                 {statusChanged ? 'Why is this being corrected?' : 'Why is this changing? (optional)'}
@@ -845,6 +895,22 @@ function RecordMeeting() {
             The page's scroll padding (`app/layout.tsx`, raised to the bar's height by
             `usePinnedBarPadding` when the bar grows) keeps a focused control clear of it.
           */}
+          {amending ? (
+            <div className="mt-8">
+              <label htmlFor="amend-reason" className="field-label block">
+                Why is this closed week being amended? (required)
+              </label>
+              <textarea
+                id="amend-reason"
+                value={amendReason}
+                onChange={(event) => setAmendReason(event.target.value)}
+                rows={2}
+                maxLength={1000}
+                className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+            </div>
+          ) : null}
+
           {locked ? null : (
             <div
               ref={barRef}
@@ -904,9 +970,11 @@ function RecordMeeting() {
                 >
                   {save.isPending
                     ? 'Saving…'
-                    : correcting
-                      ? 'Save correction'
-                      : 'Save meeting'}
+                    : amending
+                      ? 'Save Amendment'
+                      : correcting
+                        ? 'Save correction'
+                        : 'Save meeting'}
                 </Button>
               </div>
             </div>
@@ -1075,4 +1143,22 @@ function recordedSummary(
   });
 
   return `First recorded on ${label} · ${counts}`;
+}
+
+/**
+ * What the Admin sees on a closed week (decision 0411): the rule, and the way past it.
+ * Shared by a recorded meeting and one with no record.
+ */
+function AmendClosedWeek({ onAmend }: { onAmend: () => void }) {
+  return (
+    <>
+      <p className="text-muted mt-1 text-sm leading-relaxed">
+        This week is closed. Only the Admin may amend it, with a reason that is kept in the audit
+        log.
+      </p>
+      <Button variant="secondary" className="mt-3" onClick={onAmend}>
+        Amend Closed Week
+      </Button>
+    </>
+  );
 }

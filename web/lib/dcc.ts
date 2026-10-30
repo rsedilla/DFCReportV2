@@ -200,10 +200,12 @@ export async function submitDccAttendance(
   eventId: string,
   records: DccRecordInput[],
   idempotencyKey: string,
+  /** An Admin's amendment of a closed week, with why (section 9, decision 0411). */
+  amendment?: { reason: string },
 ): Promise<unknown> {
   return authenticatedRequest<unknown>(`/api/v1/dcc/events/${encodeURIComponent(eventId)}/submit`, {
     method: 'POST',
-    body: { records },
+    body: amendment ? { records, amendment } : { records },
     idempotencyKey,
   });
 }
