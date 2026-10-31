@@ -208,6 +208,8 @@ const SCANS = [
     },
   },
   { name: 'forgot-password', route: '/forgot-password' },
+  // The Privacy Notice, open to anyone (decision 0412).
+  { name: 'privacy', route: '/privacy' },
   {
     name: 'forgot-password, sent',
     route: '/forgot-password',
@@ -1736,6 +1738,8 @@ for (const theme of THEMES) {
 const TARGET_SWEEP = [
   { name: 'sign-in', route: '/sign-in', settle: 'Sign in', minimum: 4 },
   { name: 'forgot-password', route: '/forgot-password', settle: 'Email me a link', minimum: 3 },
+  // The two links inside its sentences and "Back to sign in" (decision 0412).
+  { name: 'privacy', route: '/privacy', settleRole: 'link' as const, settle: 'Back to sign in', minimum: 3 },
   {
     name: 'activate',
     route: '/activate?token=example-activation-token',
@@ -2518,6 +2522,16 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     for (let index = 0; index < count; index += 1) {
       const target = targets.nth(index);
       if (!(await target.isVisible())) {
+        continue;
+      }
+
+      // **A link inside a sentence is exempt** under 2.5.8's own inline exception, which is
+      // what `TextLink inline` is for: an `<a>` laid out inline inside a paragraph. Anything
+      // else, a standalone link included, is still measured (decision 0412).
+      const inSentence = await target.evaluate(
+        (node) => node.tagName === 'A' && getComputedStyle(node).display === 'inline' && node.parentElement?.tagName === 'P',
+      );
+      if (inSentence) {
         continue;
       }
 
