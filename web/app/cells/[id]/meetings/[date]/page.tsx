@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -31,6 +32,7 @@ import {
   describeFailure,
   describeLineFailure,
   staleSaveFailure,
+  type Failure,
 } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -538,30 +540,18 @@ function RecordMeeting() {
   ) : null;
 
   // What Save is still waiting for, said rather than left to a greyed button.
-  let saveHint: string;
-  if (amendsNothing) {
-    saveHint = 'Change a mark or the answer above to amend it.';
-  } else if (amending && amendReason.trim() === '') {
-    saveHint = 'Say why this closed week is being amended to save.';
-  } else if (reasonMissing) {
-    saveHint = 'Say why this is being corrected to save.';
-  } else if (facilitatorMissing) {
-    saveHint = 'Choose who ran it to save.';
-  } else if (recordedNotHeld && !statusChanged) {
-    saveHint = 'Change the answer above to correct it.';
-  } else if (status === 'NOT_HELD') {
-    saveHint =
-      notHeldReason === ''
-        ? 'Choose why it did not meet.'
-        : noteRequired && note.trim() === ''
-          ? 'Say what happened to save.'
-          : 'Ready to save.';
-  } else if (unmarked.length === 0) {
-    saveHint = `All ${members.length} members marked.`;
-  } else {
-    saveHint =
-      unmarked.length === 1 ? '1 member still to mark.' : `${unmarked.length} members still to mark.`;
-  }
+  const saveHint = saveHintFor({
+    amendsNothing,
+    amendReasonMissing: amending && amendReason.trim() === '',
+    reasonMissing,
+    facilitatorMissing,
+    recordedNotHeldUnchanged: recordedNotHeld && !statusChanged,
+    status,
+    notHeldReason,
+    noteMissing: noteRequired && note.trim() === '',
+    unmarked: unmarked.length,
+    members: members.length,
+  });
 
   // The members nobody has marked, marked Absent in one press (decision 0395). Offered only
   // once at least one member is marked, so it is never the first thing pressed and its count
@@ -606,25 +596,15 @@ function RecordMeeting() {
       ) : null}
       {notYet ? null : (
         <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
-          {noMembers
-            ? `No member was in this Cell on ${dayLabel(params.date)}, so there is nothing to record and this meeting is not counted as owed.`
-            : followOnly
-            ? recorded === null
-              ? weekClosed
-                ? 'Not recorded. Its week has closed, so it can no longer be recorded.'
-                : 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
-              : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
-            : weekClosed
-            ? recorded === null
-              ? 'This meeting was not recorded before its week closed, so it can no longer be recorded.'
-              : recordedNotHeld
-                ? 'This meeting is recorded: the Cell did not meet.'
-                : 'This meeting has been recorded. The marks below are what is stored.'
-            : recordedNotHeld
-            ? 'This meeting is recorded: the Cell did not meet.'
-            : correcting
-              ? 'This meeting has already been recorded. A correction replaces the whole roster, so every member is sent again — the marks below are what is stored now.'
-              : 'Record what happened. A Cell that met needs every member marked, present or not.'}
+          {introFor({
+            date: params.date,
+            noMembers,
+            followOnly,
+            recorded: recorded !== null,
+            weekClosed,
+            recordedNotHeld,
+            correcting,
+          })}
         </p>
       )}
 
@@ -839,192 +819,406 @@ function RecordMeeting() {
 
           {status === 'NOT_HELD' ? (
             recorded === null || statusChanged ? (
-              <div className="mt-6 flex flex-col gap-6">
-                <RadioGroup
-                  legend="Why did it not meet?"
-                  description="Reporting honestly that the Cell could not meet is a record like any other. It counts as recorded and is not a mark against anybody. Choose “Members could not come” only if it was known beforehand that nobody could come. If the leader was there and nobody came, the Cell met, with everyone marked absent."
-                  name="not-held-reason"
-                  value={notHeldReason}
-                  onChange={setNotHeldReason}
-                  options={NOT_HELD_REASONS}
-                />
-                <div>
-                  <label htmlFor="not-held-note" className="field-label block">
-                    {noteRequired ? 'What happened?' : 'What happened? (optional)'}
-                  </label>
-                  <textarea
-                    id="not-held-note"
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    rows={3}
-                    maxLength={1000}
-                    className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-                  />
-                </div>
-              </div>
+              <NotHeldDetails
+                reason={notHeldReason}
+                onReason={setNotHeldReason}
+                note={note}
+                onNote={setNote}
+                noteRequired={noteRequired}
+              />
             ) : null
           ) : weekClosed && recorded === null ? null : (
             // A meeting nobody recorded before its week closed has no marks to show and
             // takes none, so its roster and the instruction to mark it are not shown.
-            <section className="mt-8" aria-labelledby="roster-heading">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h2 id="roster-heading" className="text-lg font-bold tracking-tight">
-                  Who was there
-                </h2>
-                {members.length > 0 ? (
-                  <p className="text-sm">
-                    {markedCount} of {members.length} marked
-                  </p>
-                ) : null}
-              </div>
-              <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-                Every member is listed and every one needs a mark. Nobody is assumed absent.
-              </p>
-
-              {members.length === 0 ? (
-                <p className="text-muted mt-4 text-sm">
-                  This Cell had no members on the meeting date, so there is nobody to mark.
-                </p>
-              ) : (
-                <ul className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-x-4">
-                  {members.map((member) => (
-                    <MemberMark
-                      key={member.person_id}
-                      member={member}
-                      mark={markFor(member)}
-                      recorded={correcting}
-                      disabled={locked}
-                      note={changedUnder[member.person_id]}
-                      onChange={(value) => {
-                        begin();
-                        setChangedUnder((current) =>
-                          Object.fromEntries(Object.entries(current).filter(([id]) => id !== member.person_id)),
-                        );
-                        setEdits((current) => ({ ...current, [member.person_id]: value }));
-                      }}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
+            <RosterSection
+              members={members}
+              markedCount={markedCount}
+              markFor={markFor}
+              recorded={correcting}
+              locked={locked}
+              changedUnder={changedUnder}
+              onMark={(personId, value) => {
+                begin();
+                setChangedUnder((current) =>
+                  Object.fromEntries(Object.entries(current).filter(([id]) => id !== personId)),
+                );
+                setEdits((current) => ({ ...current, [personId]: value }));
+              }}
+            />
           )}
 
           {/* While amending, the amendment's reason is the one reason asked (decision 0411). */}
           {correcting && editing && !amending ? (
-            <div className="mt-6">
-              <label htmlFor="correction-reason" className="field-label block">
-                {statusChanged ? 'Why is this being corrected?' : 'Why is this changing? (optional)'}
-              </label>
-              <textarea
-                id="correction-reason"
-                value={correctionReason}
-                onChange={(event) => setCorrectionReason(event.target.value)}
-                rows={2}
-                maxLength={500}
-                required={statusChanged}
-                className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-              />
-            </div>
+            <ReasonField
+              id="correction-reason"
+              className="mt-6"
+              label={
+                statusChanged ? 'Why is this being corrected?' : 'Why is this changing? (optional)'
+              }
+              value={correctionReason}
+              onChange={setCorrectionReason}
+              required={statusChanged}
+            />
           ) : null}
 
-          {/*
-            **Save stays in reach on a phone.** The bar is pinned to the bottom of the
-            screen above the tab bar below `lg`, and to the bottom at `lg`, so a leader
-            tapping down a long roster never scrolls back to find it. It says what is
-            still needed, because a greyed button says only that something is wrong.
-            The page's scroll padding (`app/layout.tsx`, raised to the bar's height by
-            `usePinnedBarPadding` when the bar grows) keeps a focused control clear of it.
-          */}
           {amending ? (
-            <div className="mt-8">
-              <label htmlFor="amend-reason" className="field-label block">
-                Why is this closed week being amended? (required)
-              </label>
-              <textarea
-                id="amend-reason"
-                value={amendReason}
-                onChange={(event) => setAmendReason(event.target.value)}
-                rows={2}
-                maxLength={500}
-                required
-                aria-required="true"
-                className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-              />
-            </div>
+            <ReasonField
+              id="amend-reason"
+              className="mt-8"
+              label="Why is this closed week being amended? (required)"
+              value={amendReason}
+              onChange={setAmendReason}
+              required
+              ariaRequired
+            />
           ) : null}
 
           {locked ? null : (
-            <div
-              ref={barRef}
-              className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0"
-            >
-              {/*
-                **A refused save is said here, beside Save**, not at the top of the page,
-                where on a phone it sat off-screen and Save looked as if it did nothing.
-                The live region is mounted with the bar, before anything goes wrong, so a
-                screen reader announces the refusal when it arrives; empty, it takes no
-                room.
-              */}
-              <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
-                <FailureNotice failure={saveFailure} />
-                {reloadButton}
-              </div>
-              <p id="save-hint" tabIndex={-1} aria-live="polite" className="text-sm">
-                {saveHint}
-              </p>
-              {/* One way back, the link at the top (owner's choice of 2026-10-05). */}
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-                {offerRestAbsent ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    // Above Save on a phone, where the bar stacks in reverse; beside it from `sm`.
-                    className="order-last w-full sm:order-none sm:w-auto"
-                    onClick={() => {
-                      setEdits((current) => ({
-                        ...current,
-                        ...Object.fromEntries(
-                          unmarked.map((member) => [member.person_id, 'absent' as const]),
-                        ),
-                      }));
-                      // The button goes once nobody is left to mark, so focus moves on rather than
-                      // falling to the page (2.4.3): to Save, or, where Save still waits for
-                      // something, to the line saying what.
-                      requestAnimationFrame(() => {
-                        const saveButton = document.getElementById('save-meeting');
-                        if (saveButton instanceof HTMLButtonElement && !saveButton.disabled) {
-                          saveButton.focus();
-                        } else {
-                          document.getElementById('save-hint')?.focus();
-                        }
-                      });
-                    }}
-                  >
-                    {restAbsentLabel}
-                  </Button>
-                ) : null}
-                <Button
-                  id="save-meeting"
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => save.mutate()}
-                  disabled={submission === null || save.isPending}
-                >
-                  {save.isPending
-                    ? 'Saving…'
-                    : amending
-                      ? 'Save Amendment'
-                      : correcting
-                        ? 'Save correction'
-                        : 'Save meeting'}
-                </Button>
-              </div>
-            </div>
+            <SaveBar
+              barRef={barRef}
+              saveFailure={saveFailure}
+              reloadButton={reloadButton}
+              saveHint={saveHint}
+              restAbsentLabel={offerRestAbsent ? restAbsentLabel : null}
+              onRestAbsent={() => {
+                setEdits((current) => ({
+                  ...current,
+                  ...Object.fromEntries(
+                    unmarked.map((member) => [member.person_id, 'absent' as const]),
+                  ),
+                }));
+                // The button goes once nobody is left to mark, so focus moves on rather than
+                // falling to the page (2.4.3): to Save, or, where Save still waits for
+                // something, to the line saying what.
+                requestAnimationFrame(() => {
+                  const saveButton = document.getElementById('save-meeting');
+                  if (saveButton instanceof HTMLButtonElement && !saveButton.disabled) {
+                    saveButton.focus();
+                  } else {
+                    document.getElementById('save-hint')?.focus();
+                  }
+                });
+              }}
+              onSave={() => save.mutate()}
+              saveDisabled={submission === null || save.isPending}
+              saveLabel={
+                save.isPending
+                  ? 'Saving…'
+                  : amending
+                    ? 'Save Amendment'
+                    : correcting
+                      ? 'Save correction'
+                      : 'Save meeting'
+              }
+            />
           )}
         </>
       ) : null}
     </SectionFrame>
     </main>
+  );
+}
+
+/** What Save is still waiting for, said beside it rather than left to a greyed button. */
+function saveHintFor({
+  amendsNothing,
+  amendReasonMissing,
+  reasonMissing,
+  facilitatorMissing,
+  recordedNotHeldUnchanged,
+  status,
+  notHeldReason,
+  noteMissing,
+  unmarked,
+  members,
+}: {
+  amendsNothing: boolean;
+  amendReasonMissing: boolean;
+  reasonMissing: boolean;
+  facilitatorMissing: boolean;
+  recordedNotHeldUnchanged: boolean;
+  status: CellMeetingStatus;
+  notHeldReason: NotHeldReason | '';
+  noteMissing: boolean;
+  unmarked: number;
+  members: number;
+}): string {
+  if (amendsNothing) {
+    return 'Change a mark or the answer above to amend it.';
+  }
+  if (amendReasonMissing) {
+    return 'Say why this closed week is being amended to save.';
+  }
+  if (reasonMissing) {
+    return 'Say why this is being corrected to save.';
+  }
+  if (facilitatorMissing) {
+    return 'Choose who ran it to save.';
+  }
+  if (recordedNotHeldUnchanged) {
+    return 'Change the answer above to correct it.';
+  }
+  if (status === 'NOT_HELD') {
+    return notHeldReason === ''
+      ? 'Choose why it did not meet.'
+      : noteMissing
+        ? 'Say what happened to save.'
+        : 'Ready to save.';
+  }
+  if (unmarked === 0) {
+    return `All ${members} members marked.`;
+  }
+  return unmarked === 1 ? '1 member still to mark.' : `${unmarked} members still to mark.`;
+}
+
+/** The sentence under a meeting's date: what the reader may do with it, and why. */
+function introFor({
+  date,
+  noMembers,
+  followOnly,
+  recorded,
+  weekClosed,
+  recordedNotHeld,
+  correcting,
+}: {
+  date: string;
+  noMembers: boolean;
+  followOnly: boolean;
+  recorded: boolean;
+  weekClosed: boolean;
+  recordedNotHeld: boolean;
+  correcting: boolean;
+}): string {
+  return (
+    noMembers
+    ? `No member was in this Cell on ${dayLabel(date)}, so there is nothing to record and this meeting is not counted as owed.`
+    : followOnly
+    ? !recorded
+      ? weekClosed
+        ? 'Not recorded. Its week has closed, so it can no longer be recorded.'
+        : 'Not recorded yet. The Cell’s leader records it; you can see it here to follow up.'
+      : 'The Cell’s leader recorded this meeting. You can see it here to follow up.'
+    : weekClosed
+    ? !recorded
+      ? 'This meeting was not recorded before its week closed, so it can no longer be recorded.'
+      : recordedNotHeld
+        ? 'This meeting is recorded: the Cell did not meet.'
+        : 'This meeting has been recorded. The marks below are what is stored.'
+    : recordedNotHeld
+    ? 'This meeting is recorded: the Cell did not meet.'
+    : correcting
+      ? 'This meeting has already been recorded. A correction replaces the whole roster, so every member is sent again — the marks below are what is stored now.'
+      : 'Record what happened. A Cell that met needs every member marked, present or not.'
+  );
+}
+
+/** Why a Cell did not meet, and what happened, as section 13 asks for it. */
+function NotHeldDetails({
+  reason,
+  onReason,
+  note,
+  onNote,
+  noteRequired,
+}: {
+  reason: NotHeldReason | '';
+  onReason: (next: NotHeldReason) => void;
+  note: string;
+  onNote: (next: string) => void;
+  noteRequired: boolean;
+}) {
+  return (
+    <div className="mt-6 flex flex-col gap-6">
+      <RadioGroup
+        legend="Why did it not meet?"
+        description="Reporting honestly that the Cell could not meet is a record like any other. It counts as recorded and is not a mark against anybody. Choose “Members could not come” only if it was known beforehand that nobody could come. If the leader was there and nobody came, the Cell met, with everyone marked absent."
+        name="not-held-reason"
+        value={reason}
+        onChange={onReason}
+        options={NOT_HELD_REASONS}
+      />
+      <div>
+        <label htmlFor="not-held-note" className="field-label block">
+          {noteRequired ? 'What happened?' : 'What happened? (optional)'}
+        </label>
+        <textarea
+          id="not-held-note"
+          value={note}
+          onChange={(event) => onNote(event.target.value)}
+          rows={3}
+          maxLength={1000}
+          className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Who was there: every member of the Cell on the meeting's date, each to be marked. */
+function RosterSection({
+  members,
+  markedCount,
+  markFor,
+  recorded,
+  locked,
+  changedUnder,
+  onMark,
+}: {
+  members: readonly RosterMember[];
+  markedCount: number;
+  markFor: (member: RosterMember) => Mark | undefined;
+  recorded: boolean;
+  locked: boolean;
+  changedUnder: Record<string, ChangedLine>;
+  onMark: (personId: string, value: Mark) => void;
+}) {
+  return (
+    <section className="mt-8" aria-labelledby="roster-heading">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="roster-heading" className="text-lg font-bold tracking-tight">
+          Who was there
+        </h2>
+        {members.length > 0 ? (
+          <p className="text-sm">
+            {markedCount} of {members.length} marked
+          </p>
+        ) : null}
+      </div>
+      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+        Every member is listed and every one needs a mark. Nobody is assumed absent.
+      </p>
+
+      {members.length === 0 ? (
+        <p className="text-muted mt-4 text-sm">
+          This Cell had no members on the meeting date, so there is nobody to mark.
+        </p>
+      ) : (
+        <ul className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-x-4">
+          {members.map((member) => (
+            <MemberMark
+              key={member.person_id}
+              member={member}
+              mark={markFor(member)}
+              recorded={recorded}
+              disabled={locked}
+              note={changedUnder[member.person_id]}
+              onChange={(value) => onMark(member.person_id, value)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * **Save stays in reach on a phone.** Pinned to the bottom of the screen above the tab bar below
+ * `lg`, and to the bottom at `lg`, so a leader tapping down a long roster never scrolls back to
+ * find it. It says what is still needed, because a greyed button says only that something is
+ * wrong. The page's scroll padding (`app/layout.tsx`, raised to the bar's height by
+ * `usePinnedBarPadding` when the bar grows) keeps a focused control clear of it.
+ */
+function SaveBar({
+  barRef,
+  saveFailure,
+  reloadButton,
+  saveHint,
+  restAbsentLabel,
+  onRestAbsent,
+  onSave,
+  saveDisabled,
+  saveLabel,
+}: {
+  barRef: (bar: HTMLDivElement | null) => void;
+  saveFailure: Failure | null;
+  reloadButton: ReactNode;
+  saveHint: string;
+  /** Null where Mark the rest Absent is not offered (decision 0395). */
+  restAbsentLabel: string | null;
+  onRestAbsent: () => void;
+  onSave: () => void;
+  saveDisabled: boolean;
+  saveLabel: string;
+}) {
+  return (
+    <div
+      ref={barRef}
+      className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:bottom-0"
+    >
+      {/*
+        **A refused save is said here, beside Save**, not at the top of the page,
+        where on a phone it sat off-screen and Save looked as if it did nothing.
+        The live region is mounted with the bar, before anything goes wrong, so a
+        screen reader announces the refusal when it arrives; empty, it takes no
+        room.
+      */}
+      <div className={saveFailure ? 'sm:basis-full' : 'sr-only'}>
+        <FailureNotice failure={saveFailure} />
+        {reloadButton}
+      </div>
+      <p id="save-hint" tabIndex={-1} aria-live="polite" className="text-sm">
+        {saveHint}
+      </p>
+      {/* One way back, the link at the top (owner's choice of 2026-10-05). */}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+        {restAbsentLabel !== null ? (
+          <Button
+            type="button"
+            variant="secondary"
+            // Above Save on a phone, where the bar stacks in reverse; beside it from `sm`.
+            className="order-last w-full sm:order-none sm:w-auto"
+            onClick={onRestAbsent}
+          >
+            {restAbsentLabel}
+          </Button>
+        ) : null}
+        <Button
+          id="save-meeting"
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={onSave}
+          disabled={saveDisabled}
+        >
+          {saveLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A reason a save carries: a correction's, or a closed-week amendment's (decision 0411). */
+function ReasonField({
+  id,
+  className,
+  label,
+  value,
+  onChange,
+  required,
+  ariaRequired = false,
+}: {
+  id: string;
+  className: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  required: boolean;
+  ariaRequired?: boolean;
+}) {
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="field-label block">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={2}
+        maxLength={500}
+        required={required}
+        aria-required={ariaRequired ? 'true' : undefined}
+        className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+      />
+    </div>
   );
 }
 
