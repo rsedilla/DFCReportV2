@@ -11,12 +11,12 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
-  addDays,
   lastWeekendOf,
   listEncounterSeasons,
   seasonLabel,
   weekendLabel,
 } from '@/lib/encounters';
+import { addDays } from '@/lib/calendar-day';
 import {
   getReadinessPeople,
   getSuynlReadiness,

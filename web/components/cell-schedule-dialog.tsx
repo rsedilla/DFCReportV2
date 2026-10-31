@@ -8,12 +8,10 @@ import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
-import { changeCellSchedule, dayOfWeekLabel, listCellMeetings } from '@/lib/cells';
+import { CELL_DAYS, changeCellSchedule, dayOfWeekLabel, listCellMeetings } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { monthLabel, reportingMonthOf, shiftMonth } from '@/lib/reporting-month';
-
-const DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 /** The ISO 8601 weekday of a `YYYY-MM-DD` day, 1 Monday through 7 Sunday (section 20). */
 function isoWeekday(date: string): number {
@@ -120,7 +118,10 @@ export function CellScheduleDialog({
           name="day_of_week"
           value={day}
           onChange={setDay}
-          options={DAYS.map((value) => ({ value: String(value), label: dayOfWeekLabel(value) }))}
+          options={CELL_DAYS.map((value) => ({
+            value: String(value),
+            label: dayOfWeekLabel(value),
+          }))}
         />
 
         <Field

@@ -21,6 +21,8 @@ import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   categoryLabel,
+  CELL_CATEGORIES,
+  CELL_DAYS,
   cellShortName,
   dayOfWeekLabel,
   listCells,
@@ -30,9 +32,6 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { monthLabel, reportingMonthOf } from '@/lib/reporting-month';
-
-const CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
-const DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export default function MyCellPage() {
   return (
@@ -221,7 +220,7 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
           name="category"
           value={category}
           onChange={setCategory}
-          options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
+          options={CELL_CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))}
         />
 
         <RadioGroup
@@ -229,7 +228,10 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
           name="day_of_week"
           value={day}
           onChange={setDay}
-          options={DAYS.map((value) => ({ value: String(value), label: dayOfWeekLabel(value) }))}
+          options={CELL_DAYS.map((value) => ({
+            value: String(value),
+            label: dayOfWeekLabel(value),
+          }))}
         />
 
         <Field
