@@ -207,6 +207,29 @@ export interface SecondStepRecoveryCodesTable {
   used_at: Date | null;
 }
 
+/**
+ * Wrong passwords for one email address or username as typed, and the pause they start
+ * (SKILL.md section 6, decision 0413). Transient: removed on a correct password, on a
+ * completed reset, and a day after it was last touched.
+ */
+export interface SignInPausesTable {
+  /** `email:<normalized address>` or `username:<lowercase name>`. */
+  identifier: string;
+  failed_at: ColumnType<Date[], Date[] | undefined, Date[]>;
+  paused_until: Date | null;
+  /** Fifteen minutes after a completed reset, when that browser's sign-in works anyway. */
+  exempt_until: Date | null;
+  /** The SHA-256 of the proof the reset answered with; only it opens the allowance. */
+  exempt_proof_hash: string | null;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+/** When the Admin was emailed about a pause, for the daily caps (decision 0413). */
+export interface SignInPauseAlertsTable {
+  account_id: string;
+  sent_at: ColumnType<Date, Date | undefined, never>;
+}
+
 export interface SecondStepChallengesTable {
   id: Generated<string>;
   account_id: string;
@@ -291,6 +314,9 @@ export type AuditAction =
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.
   | 'password.reset'
+  // Sign-in for an account's address or username paused after ten wrong passwords
+  // (decision 0413). A system action: nobody signed in caused it. Targets the account.
+  | 'sign_in.paused'
   // The holder changing it while signed in (decision 0351).
   | 'password.changed'
   | 'role.granted'
@@ -901,6 +927,8 @@ export interface Database {
   second_steps: SecondStepsTable;
   second_step_recovery_codes: SecondStepRecoveryCodesTable;
   second_step_challenges: SecondStepChallengesTable;
+  sign_in_pauses: SignInPausesTable;
+  sign_in_pause_alerts: SignInPauseAlertsTable;
   cells: CellsTable;
   cell_categories: CellCategoriesTable;
   cell_schedules: CellSchedulesTable;

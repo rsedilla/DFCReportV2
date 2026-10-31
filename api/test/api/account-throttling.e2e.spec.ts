@@ -145,11 +145,15 @@ describe('rate limiting is per account for a signed-in request (section 24)', ()
     // address. A route that needs no sign-in is counted per address, whatever token
     // it carries.
     const LOGIN_LIMIT = 10;
+    // A different email each time, so ten wrong passwords for one name do not pause it
+    // (decision 0413) before the per-address limit this case is about is reached.
+    let attempt = 0;
     const login = (address: string, bearer?: string): request.Test => {
+      attempt += 1;
       const req = request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .set('X-Forwarded-For', address)
-        .send({ email: 'nobody@example.test', password: 'a wrong passphrase' });
+        .send({ email: `nobody${attempt}@example.test`, password: 'a wrong passphrase' });
 
       return bearer === undefined ? req : req.set('Authorization', `Bearer ${bearer}`);
     };

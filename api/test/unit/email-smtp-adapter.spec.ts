@@ -104,4 +104,23 @@ describe('the SMTP email transport (section 6)', () => {
     expect(text).not.toContain('token=');
     expect(text).toMatch(/Sept? 23, 2026/);
   });
+
+  it('tells the Admin which name was paused, whose account it is, and when it opens', () => {
+    const { subject, text } = compose(
+      {
+        kind: 'SIGN_IN_PAUSED',
+        to: { email: 'admin@example.test', name: 'Invented Admin' },
+        typed: { username: 'inventedname' },
+        holder: 'Invented Person',
+        pausedUntil: expiresAt,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(subject).toBe('DREAMS: sign-in paused after 10 wrong passwords');
+    expect(text).toContain('the username inventedname');
+    expect(text).toContain("Invented Person's account");
+    expect(text).toMatch(/Sept? 23, 2026/);
+    expect(text).not.toContain('token=');
+  });
 });

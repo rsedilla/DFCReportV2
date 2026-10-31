@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
@@ -21,6 +23,7 @@ import {
   sessionPredatesSecondStep,
 } from './accounts.repository';
 import { PasswordService } from './password.service';
+import { SignInPauseService } from './sign-in-pause.service';
 import { TokensService, hashToken } from './tokens.service';
 import { UsernamesService, assertUsernameShape } from './usernames.service';
 
@@ -53,6 +56,7 @@ export class CredentialsService {
     private readonly usernames: UsernamesService,
     private readonly idempotency: IdempotencyService,
     private readonly accounts: AccountsRepository,
+    private readonly pauses: SignInPauseService,
   ) {}
 
   /**
@@ -231,9 +235,15 @@ export class CredentialsService {
     await this.setPassword('ACTIVATION', token, password, name);
   }
 
-  /** Redeems a reset token and replaces the password. */
-  async resetPassword(token: string, password: string): Promise<void> {
-    await this.setPassword('PASSWORD_RESET', token, password);
+  /**
+   * Redeems a reset token and replaces the password, and answers with a proof the browser
+   * keeps: for fifteen minutes it signs that browser in through a pause (decision 0413).
+   * Only its hash is stored.
+   */
+  async resetPassword(token: string, password: string): Promise<{ sign_in_proof: string }> {
+    const proof = randomBytes(32).toString('base64url');
+    await this.setPassword('PASSWORD_RESET', token, password, null, hashToken(proof));
+    return { sign_in_proof: proof };
   }
 
   /**
@@ -351,6 +361,7 @@ export class CredentialsService {
     token: string,
     password: string,
     username: string | null = null,
+    proofHash: string | null = null,
   ): Promise<void> {
     assertPasswordIsAcceptable(password);
 
@@ -393,7 +404,7 @@ export class CredentialsService {
       // in. The revocation below then takes the same row, so no new wait is introduced.
       const account = await trx
         .selectFrom('accounts')
-        .select('status')
+        .select(['status', 'email', 'username'])
         .where('id', '=', claimed.accountId)
         .forNoKeyUpdate()
         .executeTakeFirstOrThrow();
@@ -429,6 +440,12 @@ export class CredentialsService {
       // somebody resetting a password may be doing it because a session is in
       // hands that are not theirs.
       await this.sessions.revokeAllSessionsWithin(trx, claimed.accountId);
+
+      // A completed reset ends a pause on the account's address and username (decision
+      // 0413): it is the way in the pause's own message points to.
+      if (purpose === 'PASSWORD_RESET' && proofHash !== null) {
+        await this.pauses.resetForWithin(trx, account, proofHash);
+      }
 
       await this.audit.writeWithin(trx, {
         actorId: claimed.accountId,

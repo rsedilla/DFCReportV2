@@ -34,6 +34,16 @@ export class LoginDto {
   @MaxLength(120)
   @IsStorableText()
   device_label?: string;
+
+  /**
+   * The proof a completed reset answered with, which this browser kept (decision 0413): for
+   * fifteen minutes it signs in through a pause. Anything else is ignored.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @IsStorableText()
+  reset_proof?: string;
 }
 
 export class RefreshDto {

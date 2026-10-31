@@ -127,7 +127,7 @@ export class DccCalendarService {
         for (const day of creatable) {
           await this.audit.writeWithin(trx, {
             // A system action: the command is invoked by a schedule and has no
-            // interactive actor, which section 6 now names as one of two things
+            // interactive actor, which is one of the things section 7 lists as
             // permitted to write this null.
             actorId: null,
             action: 'dcc_event.created',

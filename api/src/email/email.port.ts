@@ -69,7 +69,23 @@ export interface PasswordChangedEmail {
   changedAt: Date;
 }
 
-export type OutboundEmail = ActivationEmail | PasswordResetEmail | PasswordChangedEmail;
+/**
+ * Sign-in for an account's address or username was paused after ten wrong passwords
+ * (decision 0413). Sent to each active Admin, once per pause, and only where an account
+ * holds the name: what a stranger typed for nobody is not worth an Admin's attention.
+ */
+export interface SignInPausedEmail {
+  kind: 'SIGN_IN_PAUSED';
+  to: EmailRecipient;
+  /** What was typed, as typed: the address or the username. */
+  typed: { email: string } | { username: string };
+  /** The full name of the person whose account it is. */
+  holder: string;
+  pausedUntil: Date;
+}
+
+export type OutboundEmail =
+  ActivationEmail | PasswordResetEmail | PasswordChangedEmail | SignInPausedEmail;
 
 export interface EmailPort {
   /**

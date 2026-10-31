@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { ApiError, ApiErrorCode } from '../common/errors/api-error';
+import { EMAIL_PORT, type EmailPort } from '../email/email.port';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountsRepository, sessionPredatesSecondStep } from './accounts.repository';
@@ -8,7 +9,8 @@ import { AuthorizationService, type Actor } from './authorization/authorization.
 import { grantCoversNothing } from './authorization/single-scope';
 import { PasswordService } from './password.service';
 import { SecondStepService, type SecondStepChallenge } from './second-step.service';
-import { ACCESS_TOKEN_TTL_SECONDS, TokensService } from './tokens.service';
+import { pauseIdentifier, SignInPauseService, type SignInName } from './sign-in-pause.service';
+import { ACCESS_TOKEN_TTL_SECONDS, TokensService, hashToken } from './tokens.service';
 
 export interface SessionTokens {
   access_token: string;
@@ -41,6 +43,8 @@ export class AuthService {
     private readonly authorization: AuthorizationService,
     private readonly people: PeopleReadService,
     private readonly secondSteps: SecondStepService,
+    private readonly pauses: SignInPauseService,
+    @Inject(EMAIL_PORT) private readonly email: EmailPort,
   ) {}
 
   /**
@@ -48,10 +52,23 @@ export class AuthService {
    * with a session (section 6, decision 0302); every other account, as before.
    */
   async login(
-    who: { email: string } | { username: string },
+    who: SignInName,
     password: string,
     deviceLabel: string | null,
+    resetProof: string | null = null,
   ): Promise<SessionTokens | SecondStepChallenge> {
+    // Ten wrong passwords for this name pause it (decision 0413). Asked before the
+    // account is looked up, so a pause answers alike whether or not one holds the name,
+    // and a correct password is not checked while it lasts.
+    const identifier = pauseIdentifier(who);
+    const attempt = await this.pauses.begin(
+      identifier,
+      resetProof === null ? null : hashToken(resetProof),
+    );
+    if (!attempt.admitted) {
+      throw signInPaused(who, attempt.pausedUntil);
+    }
+
     const account =
       'email' in who
         ? await this.accounts.findByEmail(who.email)
@@ -60,13 +77,31 @@ export class AuthService {
 
     // One response for every failure: wrong password, no such account, an account
     // awaiting activation, and a disabled one are indistinguishable from outside. The
-    // same words for a username as for an address (decision 0337).
+    // same words for a username as for an address (decision 0337). Each counts towards
+    // the pause the same way, for the same reason.
     if (!account || !correct || account.status !== 'ACTIVE') {
+      // Paused but just after a reset: only the right password helps, and a wrong one is
+      // answered as the pause it is, without counting.
+      if (attempt.exempt) {
+        throw signInPaused(who, attempt.pausedUntil);
+      }
+      const pausedUntil = await this.pauses.failed(identifier);
+      if (pausedUntil !== null) {
+        if (account) {
+          // Recorded, and the Admin told within the daily caps. Not awaited, so the answer
+          // takes no longer for a held name than for one nobody holds, and a slow or
+          // failing mail provider changes nothing sign-in answers.
+          void this.notePause(who, identifier, account.id, account.person_id, pausedUntil);
+        }
+        throw signInPaused(who, pausedUntil);
+      }
       throw new ApiError(
         ApiErrorCode.UNAUTHENTICATED,
         'email' in who ? 'Email or password is incorrect.' : 'Username or password is incorrect.',
       );
     }
+
+    await this.pauses.succeeded(identifier);
 
     if (account.owes_second_step) {
       return this.secondSteps.begin(account);
@@ -74,6 +109,42 @@ export class AuthService {
 
     await this.accounts.recordLogin(account.id);
     return this.issue(account.id, account.person_id, deviceLabel);
+  }
+
+  /**
+   * Writes the pause of an account's name to the audit log and, within the daily caps,
+   * emails each active Admin (decision 0413).
+   */
+  private async notePause(
+    typed: SignInName,
+    identifier: string,
+    accountId: string,
+    holderPersonId: string,
+    pausedUntil: Date,
+  ): Promise<void> {
+    try {
+      const email = await this.pauses.recordPause(accountId, identifier, pausedUntil);
+      if (!email) {
+        return;
+      }
+      const holder =
+        (await this.people.forDecision(holderPersonId))?.fullName ?? 'an unnamed person';
+      for (const admin of await this.accounts.activeAdministrators()) {
+        const name = (await this.people.forDecision(admin.person_id))?.fullName ?? '';
+        await this.email.send({
+          kind: 'SIGN_IN_PAUSED',
+          to: { email: admin.email, name },
+          typed,
+          holder,
+          pausedUntil,
+        });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Could not record or report the sign-in pause of account ${accountId}.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   /**
@@ -385,4 +456,22 @@ export class AuthService {
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
     };
   }
+}
+
+/**
+ * The answer while a name is paused (decision 0413), in the owner's words. `RATE_LIMITED`,
+ * since it is a limit on attempts (section 22); `reason` lets a client show these words
+ * rather than the general one it shows for a route's per-minute limit.
+ */
+function signInPaused(who: SignInName, pausedUntil: Date | null): ApiError {
+  const name = 'email' in who ? 'email address' : 'username';
+  return new ApiError(
+    ApiErrorCode.RATE_LIMITED,
+    `Sign-in for this ${name} is paused for 15 minutes after 10 wrong passwords. To get in now, use "I have forgotten my password".`,
+    // When it opens, so a client does not retry within seconds as section 22 says it may
+    // for a per-minute limit. Absent only while ten attempts are still being checked.
+    pausedUntil === null
+      ? { reason: 'SIGN_IN_PAUSED' }
+      : { reason: 'SIGN_IN_PAUSED', paused_until: pausedUntil.toISOString() },
+  );
 }

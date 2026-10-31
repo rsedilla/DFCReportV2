@@ -21,6 +21,7 @@ import { AccessTokenGuard } from './authorization/access-token.guard';
 import { PasswordService } from './password.service';
 import { PersonArchiveAccountsAdapter } from './person-archive.adapter';
 import { SecondStepService } from './second-step.service';
+import { SignInPauseService } from './sign-in-pause.service';
 import { TokensService } from './tokens.service';
 import { UsernamesService } from './usernames.service';
 
@@ -61,6 +62,7 @@ import { UsernamesService } from './usernames.service';
     PasswordService,
     PersonArchiveAccountsAdapter,
     SecondStepService,
+    SignInPauseService,
     TokensService,
     UsernamesService,
     AccessTokenGuard,

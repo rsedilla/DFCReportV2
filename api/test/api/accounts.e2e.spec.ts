@@ -693,7 +693,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         const reset = await request(app.getHttpServer())
           .post('/api/v1/auth/reset-password')
           .send({ token: mail?.token, password: `${PASSWORD}-new` });
-        expect(reset.status).toBe(204);
+        expect(reset.status).toBe(200);
 
         const login = await request(app.getHttpServer())
           .post('/api/v1/auth/login')
@@ -1674,7 +1674,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .post('/api/v1/auth/reset-password')
         .send({ token, password: 'an entirely new passphrase' });
 
-      expect(reset.status).toBe(204);
+      expect(reset.status).toBe(200);
 
       // The refresh token issued before the reset is dead.
       const refresh = await request(app.getHttpServer())
@@ -1718,7 +1718,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .post('/api/v1/auth/reset-password')
         .send({ token: second, password: 'an entirely new passphrase' });
 
-      expect(current.status).toBe(204);
+      expect(current.status).toBe(200);
     });
 
     it('is rate limited, because it mails somebody on an unauthenticated request', async () => {

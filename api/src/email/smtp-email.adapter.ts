@@ -59,6 +59,30 @@ export function compose(
 ): { subject: string; text: string } {
   const greeting = message.to.name.trim() === '' ? 'Hello,' : `Hello ${message.to.name},`;
 
+  if (message.kind === 'SIGN_IN_PAUSED') {
+    const until = message.pausedUntil.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    const name =
+      'email' in message.typed
+        ? `the email address ${message.typed.email}`
+        : `the username ${message.typed.username}`;
+
+    return {
+      subject: 'DREAMS: sign-in paused after 10 wrong passwords',
+      text: [
+        greeting,
+        '',
+        `Sign-in with ${name}, which is ${message.holder}'s account, was paused after 10 wrong passwords in 15 minutes. It opens again at ${until} (Manila time).`,
+        '',
+        `If ${message.holder} was not trying to sign in, somebody may be guessing the password. Nothing needs doing to keep the account safe: they can still get in with "I have forgotten my password".`,
+        '',
+      ].join('\n'),
+    };
+  }
+
   if (message.kind === 'PASSWORD_CHANGED') {
     const changed = message.changedAt.toLocaleString('en-PH', {
       timeZone: 'Asia/Manila',

@@ -1291,6 +1291,17 @@ Include:
 - Change Password
 - Secure token handling
 - A second sign-in step for `ADMIN` and `SENIOR_PASTOR` accounts (below)
+- A pause after ten wrong passwords (below)
+
+### A pause after ten wrong passwords
+
+**Ten wrong passwords for one email address or username, as typed, within fifteen minutes pause sign-in for it for fifteen minutes, from every device and address** (owner, 2026-11-01, decision 0413). The tenth wrong password, and every attempt while the pause lasts, the correct password included, is answered `RATE_LIMITED` (but for the one browser below) with `details.reason` `SIGN_IN_PAUSED`, `details.paused_until` naming when it opens (Section 22), and the words "Sign-in for this username is paused for 15 minutes after 10 wrong passwords. To get in now, use "I have forgotten my password"." ("this email address" where one was typed). The sign-in screen shows those words; any other limit keeps its own. One answer carries no `paused_until`: an attempt refused because ten are already counted and still being checked, when no pause exists yet to have an end. It is refused all the same, so that no eleventh password is checked while the tenth may yet start one.
+
+**It is kept for the name as typed, whether or not an account holds it**, compared as sign-in compares it: an address normalized, a username lowercase. A name nobody holds is paused exactly as a held one is, with the same words, so a pause says nothing about whether an account exists, and the first nine wrong passwords are answered as before. An address and a username of one account are counted apart, for the same reason. Wrong passwords for an account awaiting activation or disabled count like any other, since sign-in answers them alike.
+
+**A correct password before the tenth starts the count again; a completed password reset ends the pause on the account's address and username**, and "I have forgotten my password" keeps working throughout. When a pause ends, the count starts empty. Each attempt is counted before its password is checked, so attempts sent together cannot pass the count, and no more than ten passwords are checked for a name in a window, but for the one browser below. **For fifteen minutes after a completed reset, the browser that completed it signs in with the right password even if the name is paused again** (owner, 2026-11-01): the reset answers with a proof (`sign_in_proof`) that browser keeps and sends with its sign-in (`reset_proof`), and only the proof's hash is stored. Somebody re-pausing a name the moment a reset clears it therefore cannot keep its holder out of the device they reset on. While the name is paused in those fifteen minutes, that browser's attempts are not counted, and a wrong password is answered as the pause. Every other device and address is refused as the pause until it ends, so the allowance opens no window for guessing, and that browser's signing in leaves the pause in place for them. Signing in once does not end the allowance.
+
+**A pause of a name an account holds is written to the audit log** (Section 21) as a system action targeting the account, with the name as it was compared (`email:…` or `username:…`), when it opens, and whether the Admin was emailed (owner, 2026-11-01). **Each active Admin is emailed about it, at most once a day for one account and twenty times a day in all** (Manila days), naming what was typed, whose account it is, and when it opens (decision 0413; the owner's second alert, for person pages opened, is a separate ruling). The caps keep alerts from spending the mail provider's daily allowance that reset emails need. A name nobody holds is neither recorded nor emailed. Both are done after the answer is sent, so they change nothing sign-in answers and take no time it could be measured by; a failure is logged. The pause is kept in the database (`sign_in_pauses`, and `sign_in_pause_alerts` for the caps), so a restart or a second API instance does not reset it, and a row untouched for a day is removed. It sits beside Section 24's per-address limit of 10 sign-ins a minute, which is unchanged.
 
 ### Usernames
 
@@ -1506,9 +1517,9 @@ The two are not equivalent in general: a foreign key makes a non-empty `accounts
 
 It takes a lock before it looks, so that two runs cannot both find an empty table.
 
-**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-09-28 — one of three permitted to write `audit_log.actor_id` null.
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-11-01 — one of four permitted to write `audit_log.actor_id` null (Section 7).
 
-The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. The third is the command that resets an administrator's second sign-in step (ruling of 2026-09-28), run by an operator on the server with no account to act as. Neither touches the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a fourth is an amendment here.
+The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. The third is the command that resets an administrator's second sign-in step (ruling of 2026-09-28), run by an operator on the server with no account to act as. The fourth is the pause of a name after ten wrong passwords (decision 0413), which nobody signed in caused. None of them touches the other three columns. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a fifth is an amendment here.
 
 The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
 
@@ -2041,7 +2052,7 @@ Where the configuration is what is wrong rather than the row, this means a real 
 
 **A succession is an amendment to Section 4 and a configuration change together.** Section 4 names the two Senior Pastors, so who holds the role is recorded in this specification and approved as any other change to it is. Revoking the role row frees the seat; the configuration follows the section. Neither alone moves a seat.
 
-`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. Section 21 makes the same allowance for `audit_log.actor_id`, which has three permitted writers — the first Admin account, the DCC calendar command, and since 2026-09-28 the command resetting an administrator's second sign-in step (Sections 6 and 9). `granted_by` still has one, and the two allowances are no longer parallel. Every other role grant has an actor.
+`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. Section 21 makes the same allowance for `audit_log.actor_id`, which has four permitted writers — the first Admin account, the DCC calendar command, since 2026-09-28 the command resetting an administrator's second sign-in step (Sections 6 and 9), and since 2026-11-01 the pause of a name after ten wrong passwords, which nobody signed in caused (Section 6, decision 0413). `granted_by` still has one, and the two allowances are no longer parallel. Every other role grant has an actor.
 
 ```text
 capability_grants
@@ -4677,6 +4688,7 @@ Audit important actions, including:
 - A username set or changed, with the old and the new (decision 0337)
 - A password changed by its holder while signed in (decision 0351)
 - Second sign-in step set up or reset, and a recovery code used
+- Sign-in for an account's address or username paused after ten wrong passwords, as a system action (Section 6, decision 0413)
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
@@ -5082,7 +5094,7 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created, or before an edit to a name, the birthday or the mobile number is saved (Section 3, decision 0396). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
-| `RATE_LIMITED` | 429 | Too many requests within a minute (Section 24). Refused before any idempotency key is claimed: retry after a short delay, with the same key |
+| `RATE_LIMITED` | 429 | Too many requests within a minute (Section 24). Refused before any idempotency key is claimed: retry after a short delay, with the same key. **Sign-in paused after ten wrong passwords** (Section 6, decision 0413) carries `details.reason` `SIGN_IN_PAUSED` and, where a pause exists, `details.paused_until`, the instant it opens: retry no sooner. Sign-in takes no idempotency key |
 | `RESOURCE_BUSY` | 503 | The write could not be serialized against another operation and reached no decision: the wait timed out, the database chose this transaction as a deadlock victim (Section 5), or a premise read before a lock no longer held under it (below). Transient: retry after a short delay, **with the same key** |
 
 **A stale premise is placed by one question: could this same body, resubmitted unchanged, succeed?** A write that reads a value, takes a lock, and finds the value different underneath it has taken its lock cleanly — so it is neither of the first two conditions above, and it needed a home.
@@ -5334,7 +5346,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Database not publicly exposed
 - Input validation
 - Parameterized queries / safe ORM usage
-- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset, or an administrator sending one (decision 0393), allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
+- Rate limiting, answered `RATE_LIMITED` (Section 22; decision 0344). Each limit counts the requests made to one route within a minute, against the account where the request carries a valid access token and against the address otherwise, including on every route that needs no sign-in. The default is 120 a minute. Ten wrong passwords for one name also pause its sign-in for fifteen minutes (Section 6, decision 0413). Sign-in, the second step and its setup, activation and its username suggestion, setting a password from a reset link, and reading a suggested username or setting one allow 10; asking for a password reset, or an administrator sending one (decision 0393), allows 5; refreshing a session allows 30. A church-wide search (Section 8, decision 0303) is counted separately as well, at 30 a minute per account
 - CORS restrictions
 - Secure secrets/environment handling
 - Automated backups, daily at minimum, with at least 30 days of retention

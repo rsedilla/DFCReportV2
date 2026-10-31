@@ -139,13 +139,16 @@ export class AuthController {
     await this.credentials.requestPasswordReset(body.email);
   }
 
-  /** Redeems a reset token and replaces the password (section 6). */
+  /**
+   * Redeems a reset token and replaces the password (section 6), answering with the proof
+   * that signs this browser in through a pause for fifteen minutes (decision 0413).
+   */
   @Post('reset-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @Public('The reset token is the credential; the holder cannot sign in.')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async resetPassword(@Body() body: SetPasswordDto): Promise<void> {
-    await this.credentials.resetPassword(body.token, body.password);
+  async resetPassword(@Body() body: SetPasswordDto): Promise<{ sign_in_proof: string }> {
+    return this.credentials.resetPassword(body.token, body.password);
   }
 
   /**
@@ -168,6 +171,7 @@ export class AuthController {
       email !== undefined ? { email } : { username: username as string },
       body.password,
       body.device_label ?? null,
+      body.reset_proof ?? null,
     );
   }
 
