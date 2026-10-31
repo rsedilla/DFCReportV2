@@ -5342,6 +5342,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
+- **A Privacy Notice under the Data Privacy Act of 2012 (RA 10173)** (decision 0412). The sign-in page says DREAMS holds the personal information of the church's members, children among them, and links to `/privacy`, a page open to anyone that says what is kept and not kept, why, who can see it, how it is protected and by which service providers, how long it is kept, the rights the Act gives, and that questions go to Doulos For Christ through doulosforchrist.org. A change to what is kept about a person, who can see it, or who helps run DREAMS updates that page in the same change.
 - **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance. See The instance count, below
 
 ### The instance count
