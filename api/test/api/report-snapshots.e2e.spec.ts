@@ -145,6 +145,8 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['second_steps', 'sign-in state'],
       ['second_step_recovery_codes', 'sign-in state'],
       ['second_step_challenges', 'sign-in state'],
+      ['sign_in_pauses', 'sign-in state'],
+      ['sign_in_pause_alerts', 'sign-in state'],
       ['cell_leadership_requests', 'a request is not a leadership until approved'],
       [
         'cell_leadership_request_members',

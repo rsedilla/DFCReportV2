@@ -110,6 +110,11 @@ export function describeFailure(
       return { message: error.message, aboutInput: false };
 
     case 'RATE_LIMITED':
+      // A name paused after ten wrong passwords says so in its own words, which name the
+      // way in that still works (decision 0413). Every other limit is a minute's wait.
+      if (error.details.reason === 'SIGN_IN_PAUSED') {
+        return { message: error.message, aboutInput: false };
+      }
       return { message: 'Too many attempts. Wait a minute and try again.', aboutInput: false };
 
     case 'RESOURCE_BUSY':

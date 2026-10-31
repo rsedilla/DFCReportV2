@@ -87,6 +87,21 @@ export class OutboxEmailAdapter implements EmailPort {
  * because the next step is copying it into a form.
  */
 function render(message: OutboundEmail): string {
+  // A notice to the Admin carries no token (decision 0413).
+  if (message.kind === 'SIGN_IN_PAUSED') {
+    return [
+      `Kind:      ${message.kind}`,
+      `To:        ${message.to.name} <${message.to.email}>`,
+      `Typed:     ${'email' in message.typed ? message.typed.email : message.typed.username}`,
+      `Holder:    ${message.holder}`,
+      `Until:     ${message.pausedUntil.toISOString()}`,
+      '',
+      'This message was not delivered. It was written by the development transport',
+      '(SKILL.md section 6). Nothing was sent to the address above.',
+      '',
+    ].join('\n');
+  }
+
   // A notice carries no token and no expiry (decision 0351).
   if (message.kind === 'PASSWORD_CHANGED') {
     return [

@@ -52,6 +52,7 @@
  */
 import { ApiRequestError, apiRequest } from './api-client';
 import { clearMarkDrafts } from './mark-draft';
+import { resetProof } from './reset-proof';
 
 export interface SessionTokens {
   access_token: string;
@@ -409,7 +410,13 @@ export async function signIn(
     : { username: emailOrUsername };
   const answer = await apiRequest<SessionTokens | SecondStepChallenge>('/api/v1/auth/login', {
     method: 'POST',
-    body: { ...who, password, device_label: deviceLabel ?? undefined },
+    // The proof of a reset completed here in the last fifteen minutes, if any (decision 0413).
+    body: {
+      ...who,
+      password,
+      device_label: deviceLabel ?? undefined,
+      reset_proof: resetProof() ?? undefined,
+    },
   });
 
   if ('second_step' in answer) {

@@ -40,6 +40,8 @@
     "second_steps": "auth",
     "second_step_recovery_codes": "auth",
     "second_step_challenges": "auth",
+    "sign_in_pauses": "auth",
+    "sign_in_pause_alerts": "auth",
     "cells": "cells",
     "cell_categories": "cells",
     "cell_schedules": "cells",
