@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-10-31, the trigger being decision 0412: of 411 files, 410 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0412 each moved the first two and
+2026-11-01, the trigger being decision 0413: of 412 files, 411 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0413 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-10-31 and triggered by 0412, and was left stale by 0413 the next day. The one before that was dated
 2026-10-30 and triggered by 0411, and was left stale by 0412 the next day. The one before that was dated
 2026-10-30 and triggered by 0410, and was left stale by 0411 the same day. The one before that was dated
 2026-10-29 and triggered by 0409, and was left stale by 0410 the next day. The one before that was dated
@@ -866,6 +867,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-30 — [A form is as wide as a list, and is set out in sections](docs/decisions/0410-a-form-is-as-wide-as-a-list-in-sections.md)
 - 2026-10-30 — [The Admin amends a closed week from its own screen](docs/decisions/0411-the-admin-amends-a-closed-week-from-its-screen.md)
 - 2026-10-31 — [A Privacy Notice, linked from the sign-in page](docs/decisions/0412-a-privacy-notice-on-the-sign-in-page.md)
+- 2026-11-01 — [A pause after ten wrong passwords, and the Admin is told](docs/decisions/0413-a-pause-after-ten-wrong-passwords.md)
 
 ### Open — awaiting a ruling
 
