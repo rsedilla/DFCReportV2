@@ -59,6 +59,8 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
       cell_schedules,
       cell_categories,
       cells,
+      person_view_alerts,
+      person_views,
       sign_in_pause_alerts,
       sign_in_pauses,
       refresh_tokens,

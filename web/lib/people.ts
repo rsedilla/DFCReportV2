@@ -62,8 +62,17 @@ export interface PersonFull {
 
 export type Person = PersonIdentity | PersonFull;
 
+/**
+ * A search row inside the viewer's scope: the record without its birthday, civil status and
+ * mobile number, which no list shows and only reading the one record gives (decision 0414).
+ */
+export type PersonListed = Omit<PersonFull, 'birth_date' | 'civil_status' | 'mobile_number'>;
+
+/** One row of a search: either shape. */
+export type PersonRow = PersonIdentity | PersonListed;
+
 export interface PersonPage {
-  data: Person[];
+  data: PersonRow[];
   next_cursor: string | null;
 }
 

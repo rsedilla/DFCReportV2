@@ -11,6 +11,7 @@ import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.sco
 import { PeopleController } from '../../src/people/people.controller';
 import { PeopleLifecycleService } from '../../src/people/people.lifecycle.service';
 import { PeopleReadService } from '../../src/people/people.read.service';
+import { PersonViewsService } from '../../src/people/person-views.service';
 import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { NetworksService } from '../../src/networks/networks.service';
@@ -99,6 +100,12 @@ describe('the application module graph (section 2)', () => {
       // registered in `PeopleModule` (ruling of 2026-09-11). Same arrangement, same
       // assertion, and on the consumer's own field for the same reason.
       ['ADMIN_ACCOUNTS_PORT', moduleRef.get(PeopleReadService, { strict: false }), 'adminAccounts'],
+      // The same port, for the Admin's alert about many person pages opened (decision 0414).
+      [
+        'ADMIN_ACCOUNTS_PORT',
+        moduleRef.get(PersonViewsService, { strict: false }),
+        'adminAccounts',
+      ],
       // Decision 0397's three, each optional and refusing when absent: the archive's Cells and
       // accounts halves, and the Absent 3+ Months list.
       ['ARCHIVE_CELLS_PORT', moduleRef.get(PeopleLifecycleService, { strict: false }), 'cells'],

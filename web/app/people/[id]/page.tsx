@@ -11,6 +11,7 @@ import { SectionFrame } from '@/components/section-frame';
 import { CorrectSexDialog } from '@/components/correct-sex-dialog';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { PersonAccount } from '@/components/person-account';
+import { PersonViews } from '@/components/person-views';
 import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
 import { PersonGrowth } from '@/components/person-growth';
@@ -126,6 +127,8 @@ function PersonDetail() {
   const mayManageAccounts = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'accounts.manage',
   );
+  // Who opened this record (decision 0414): `accounts.manage` at Whole Church, the Admin's.
+  const mayReadViews = holdsWholeChurch(me.data, 'accounts.manage');
   // Full view is ticked under `roles.manage` (decision 0323); the API checks it again.
   const mayTickFullView = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'roles.manage',
@@ -358,6 +361,8 @@ function PersonDetail() {
               mayTickFullView={mayTickFullView}
             />
           ) : null}
+          {/* Who opened this record, for the Admin alone (decision 0414). */}
+          {mayReadViews ? <PersonViews personId={id} /> : null}
           </div>
           </div>
 

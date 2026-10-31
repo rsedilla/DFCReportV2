@@ -87,6 +87,20 @@ export class OutboxEmailAdapter implements EmailPort {
  * because the next step is copying it into a form.
  */
 function render(message: OutboundEmail): string {
+  // A notice to the Admin carries no token (decision 0414).
+  if (message.kind === 'MANY_PAGES_OPENED') {
+    return [
+      `Kind:      ${message.kind}`,
+      `To:        ${message.to.name} <${message.to.email}>`,
+      `Viewer:    ${message.viewer}`,
+      `Pages:     ${message.pages}`,
+      '',
+      'This message was not delivered. It was written by the development transport',
+      '(SKILL.md section 6). Nothing was sent to the address above.',
+      '',
+    ].join('\n');
+  }
+
   // A notice to the Admin carries no token (decision 0413).
   if (message.kind === 'SIGN_IN_PAUSED') {
     return [

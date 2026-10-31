@@ -11,10 +11,10 @@ import { getMe, holdsWholeChurch } from '@/lib/me';
 import {
   MINIMUM_CHURCH_WIDE_SEARCH_LENGTH,
   MINIMUM_SEARCH_LENGTH,
-  searchPeople,
   type Network,
-  type Person,
   type PersonPage,
+  type PersonRow,
+  searchPeople,
 } from '@/lib/people';
 
 /**
@@ -207,7 +207,7 @@ export function PersonPicker({
       ) : (
         <>
           <ul ref={list} className="divide-line mt-3 divide-y">
-            {results.data.map((person: Person) => (
+            {results.data.map((person: PersonRow) => (
               <li
                 key={person.id}
                 className="flex flex-wrap items-center justify-between gap-2 py-2"
