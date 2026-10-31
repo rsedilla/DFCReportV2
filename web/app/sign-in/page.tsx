@@ -97,7 +97,18 @@ export default function SignInPage() {
       brand
       title="Welcome. Sign in to continue."
       footer={
-        <TextLink href="/forgot-password">I have forgotten my password</TextLink>
+        <>
+          <TextLink href="/forgot-password">I have forgotten my password</TextLink>
+          {/* The Data Privacy Act notice, for the leaders signing in (decision 0412). */}
+          <p className="text-muted mt-6 text-xs leading-relaxed">
+            DREAMS holds the personal information of the members of Doulos For Christ World
+            Harvest Ministry, children among them, under the Data Privacy Act of 2012 (RA 10173). Use it only to care for the people
+            you lead.{' '}
+            <TextLink inline href="/privacy">
+              Privacy Notice
+            </TextLink>
+          </p>
+        </>
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
