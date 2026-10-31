@@ -489,6 +489,41 @@ type CellMeetingSubmissionResponse = {
 /** One scheduled meeting with no record yet, as the awaiting query answers it. */
 type Awaiting = Awaited<ReturnType<CellsReadService['meetingsAwaitingFor']>>[number];
 
+/** What `transitionWithin` and its four parts are given. */
+type TransitionParams = {
+  cellId: string;
+  cellHandle: string;
+  cell: { state: string; closedAt: Date | null };
+  /**
+   * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
+   *
+   * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
+   * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
+   * extra JSON key skip the closed-month refusal entirely: no capability check, no
+   * audit entry, and a meeting moved into a month shut for weeks. That is the third
+   * defect this null has caused in this file, which is why it is threaded rather than
+   * re-derived.
+   */
+  amendment: { reason: string } | undefined;
+  meetingId: string;
+  reportingMonth: string;
+  existing: {
+    id: string;
+    version: number;
+    status: string;
+    not_held_reason: string | null;
+    responsible_leader_id: string;
+    facilitated_by: string | null;
+    submitted_by: string | null;
+    submitted_at: Date | null;
+  };
+  body: SubmitCellMeeting;
+  actor: Actor;
+  authority: ActorAuthority;
+  /** Decided once by `classifyOperation`, never re-derived here. */
+  operation: Exclude<MeetingOperation, { kind: 'refused' } | { kind: 'correction' }>;
+};
+
 @Injectable()
 export class CellMeetingsService implements RecordedMeetingsPort {
   constructor(
@@ -2036,43 +2071,108 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    */
   private async transitionWithin(
     trx: Transaction<Database>,
-    params: {
-      cellId: string;
-      cellHandle: string;
-      cell: { state: string; closedAt: Date | null };
-      /**
-       * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
-       *
-       * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
-       * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
-       * extra JSON key skip the closed-month refusal entirely: no capability check, no
-       * audit entry, and a meeting moved into a month shut for weeks. That is the third
-       * defect this null has caused in this file, which is why it is threaded rather than
-       * re-derived.
-       */
-      amendment: { reason: string } | undefined;
-      meetingId: string;
-      reportingMonth: string;
-      existing: {
-        id: string;
-        version: number;
-        status: string;
-        not_held_reason: string | null;
-        responsible_leader_id: string;
-        facilitated_by: string | null;
-        submitted_by: string | null;
-        submitted_at: Date | null;
-      };
-      body: SubmitCellMeeting;
-      actor: Actor;
-      authority: ActorAuthority;
-      /** Decided once by `classifyOperation`, never re-derived here. */
-      operation: Exclude<MeetingOperation, { kind: 'refused' } | { kind: 'correction' }>;
-    },
+    params: TransitionParams,
   ): Promise<CellMeetingSubmissionResponse> {
-    const { cellId, cell, meetingId, existing, body, actor, operation } = params;
+    const { cellId, meetingId, existing, body, actor, operation } = params;
     const toRescheduled = operation.kind === 'reschedule';
     const correctingStatus = operation.kind === 'correct_status';
+
+    // Section 13's refusals that belong to the move itself, before anything is read.
+    await this.refuseInvalidTransition(trx, params);
+
+    // Both checks that decide whether this meeting is the actor's to touch, in section 7's
+    // order: whose it is, then whether they may amend it. A transition always changes the
+    // record, so the amendment capability is owed unconditionally — unlike a correction,
+    // where a submission matching what is stored is not an amendment.
+    await this.assertMayActForAnother(trx, params);
+    await this.assertMayAmend(trx, params, body.version, existing.version);
+
+    // **Read before the version check, because the conflict has to carry it.** Section 14
+    // and section 22 require a conflict to show both values "so that a person can choose
+    // between them", and section 22 says a refusal with no second value to show is not a
+    // conflict at all.
+    //
+    // *This read `live` afterwards and passed `storedPresent: 0`, hard-coded because the
+    // rows were not in hand yet. A stale reschedule against a meeting with somebody
+    // present was answered a conflict reporting nobody present — a fabricated figure, and
+    // the person resolving it would have discarded the stored record on the strength of
+    // it.*
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['id', 'person_id', 'present', 'version'])
+      .where('cell_meeting_id', '=', existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    if (body.version === undefined || body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
+    }
+
+    const attendance = await this.attendanceForTransition(trx, params);
+    const corrected = await this.rewriteAttendanceWithin(trx, params, live, attendance);
+    const before = await this.moveMeetingWithin(trx, params);
+
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: correctingStatus
+        ? 'cell_meeting.status_corrected'
+        : toRescheduled
+          ? 'cell_meeting.rescheduled'
+          : 'cell_meeting.not_held',
+      targetType: 'cell',
+      targetId: cellId,
+      reason: correctingStatus
+        ? (body.correction_reason ?? null)
+        : toRescheduled
+          ? null
+          : (body.not_held_reason ?? null),
+      // A correction to `HELD` clears the reason and note on the meeting row, so the
+      // previous values are kept here (section 21) and the first report stays legible.
+      before: {
+        meeting_id: meetingId,
+        status: existing.status,
+        ...(existing.status === 'NOT_HELD'
+          ? { not_held_reason: before.not_held_reason, not_held_note: before.not_held_note }
+          : {}),
+      },
+      after: {
+        meeting_id: meetingId,
+        status: body.status,
+        ...(toRescheduled
+          ? { actual_date: body.actual_date as string, recorded: attendance.length }
+          : body.status === 'NOT_HELD'
+            ? {
+                not_held_reason: body.not_held_reason ?? null,
+                not_held_note: body.not_held_note ?? null,
+              }
+            : { recorded: attendance.length }),
+      },
+    });
+
+    return this.responseFor(
+      { ...params, existing: { ...existing, status: body.status } },
+      {
+        version: existing.version + 1,
+        recorded: attendance.length,
+        present: attendance.filter((line) => line.present).length,
+        corrected,
+      },
+    );
+  }
+
+  /** `transitionWithin`'s refusals of the move itself (SKILL.md section 13), in their order. */
+  private async refuseInvalidTransition(
+    trx: Transaction<Database>,
+    params: TransitionParams,
+  ): Promise<void> {
+    const { cellId, cell, meetingId, existing, body, operation } = params;
+    const toRescheduled = operation.kind === 'reschedule';
 
     // **The reason and its note, which section 13 requires of `NOT_HELD` and the DTO
     // cannot.** Both fields are optional there because a first submission of `HELD` carries
@@ -2160,40 +2260,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         { cell_id: cellId, meeting_id: meetingId, submitted_status: body.status },
       );
     }
+  }
 
-    // Both checks that decide whether this meeting is the actor's to touch, in section 7's
-    // order: whose it is, then whether they may amend it. A transition always changes the
-    // record, so the amendment capability is owed unconditionally — unlike a correction,
-    // where a submission matching what is stored is not an amendment.
-    await this.assertMayActForAnother(trx, params);
-    await this.assertMayAmend(trx, params, body.version, existing.version);
-
-    // **Read before the version check, because the conflict has to carry it.** Section 14
-    // and section 22 require a conflict to show both values "so that a person can choose
-    // between them", and section 22 says a refusal with no second value to show is not a
-    // conflict at all.
-    //
-    // *This read `live` afterwards and passed `storedPresent: 0`, hard-coded because the
-    // rows were not in hand yet. A stale reschedule against a meeting with somebody
-    // present was answered a conflict reporting nobody present — a fabricated figure, and
-    // the person resolving it would have discarded the stored record on the strength of
-    // it.*
-    const live = await trx
-      .selectFrom('cell_attendance')
-      .select(['id', 'person_id', 'present', 'version'])
-      .where('cell_meeting_id', '=', existing.id)
-      .where('superseded_at', 'is', null)
-      .execute();
-
-    if (body.version === undefined || body.version !== existing.version) {
-      throw await this.conflictFor(trx, {
-        actor,
-        submittedVersion: body.version ?? null,
-        existing,
-        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
-        storedPresent: live.filter((row) => row.present).length,
-      });
-    }
+  /** The attendance a transition records, checked against the roster of the day it lands on. */
+  private async attendanceForTransition(
+    trx: Transaction<Database>,
+    params: TransitionParams,
+  ): Promise<{ person_id: string; present: boolean }[]> {
+    const { cellId, meetingId, body, operation } = params;
+    const correctingStatus = operation.kind === 'correct_status';
 
     // **The roster of the day it moved to** (section 12), which is the ruling. On a
     // `NOT_HELD` transition there is no roster at all: the meeting did not happen, so
@@ -2239,7 +2314,17 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // takes the function's own `NOT_HELD` branch, refuses a non-empty list, and returns
     // `[]`. The empty `roster` it is handed on that path is never read, since that branch
     // returns before the membership checks.
-    const attendance = assertAttendanceMatchesRoster(body, roster, { cellId, meetingId });
+    return assertAttendanceMatchesRoster(body, roster, { cellId, meetingId });
+  }
+
+  /** Rewrites a transitioned meeting's attendance lines; answers how many it corrected. */
+  private async rewriteAttendanceWithin(
+    trx: Transaction<Database>,
+    params: TransitionParams,
+    live: { id: string; person_id: string; present: boolean; version: number }[],
+    attendance: { person_id: string; present: boolean }[],
+  ): Promise<number> {
+    const { existing, body, actor } = params;
 
     const named = new Set(attendance.map((line) => line.person_id));
     const stored = new Map(live.map((row) => [row.person_id, row]));
@@ -2317,6 +2402,18 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         })
         .execute();
     }
+
+    return corrected;
+  }
+
+  /** Moves the meeting row and records the move; answers the not-met details it held before. */
+  private async moveMeetingWithin(
+    trx: Transaction<Database>,
+    params: TransitionParams,
+  ): Promise<{ not_held_reason: string | null; not_held_note: string | null }> {
+    const { existing, body, actor, operation } = params;
+    const toRescheduled = operation.kind === 'reschedule';
+    const correctingStatus = operation.kind === 'correct_status';
 
     // The meeting as it stands, read before it moves: the `from_*` columns of the changes
     // row below come from here, and the actual time defaults from it.
@@ -2435,52 +2532,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       } as never)
       .execute();
 
-    await this.audit.writeWithin(trx, {
-      actorId: actor.accountId,
-      action: correctingStatus
-        ? 'cell_meeting.status_corrected'
-        : toRescheduled
-          ? 'cell_meeting.rescheduled'
-          : 'cell_meeting.not_held',
-      targetType: 'cell',
-      targetId: cellId,
-      reason: correctingStatus
-        ? (body.correction_reason ?? null)
-        : toRescheduled
-          ? null
-          : (body.not_held_reason ?? null),
-      // A correction to `HELD` clears the reason and note on the meeting row, so the
-      // previous values are kept here (section 21) and the first report stays legible.
-      before: {
-        meeting_id: meetingId,
-        status: existing.status,
-        ...(existing.status === 'NOT_HELD'
-          ? { not_held_reason: before.not_held_reason, not_held_note: before.not_held_note }
-          : {}),
-      },
-      after: {
-        meeting_id: meetingId,
-        status: body.status,
-        ...(toRescheduled
-          ? { actual_date: body.actual_date as string, recorded: attendance.length }
-          : body.status === 'NOT_HELD'
-            ? {
-                not_held_reason: body.not_held_reason ?? null,
-                not_held_note: body.not_held_note ?? null,
-              }
-            : { recorded: attendance.length }),
-      },
-    });
-
-    return this.responseFor(
-      { ...params, existing: { ...existing, status: body.status } },
-      {
-        version: existing.version + 1,
-        recorded: attendance.length,
-        present: attendance.filter((line) => line.present).length,
-        corrected,
-      },
-    );
+    return { not_held_reason: before.not_held_reason, not_held_note: before.not_held_note };
   }
 
   /** Refuses a facilitator who is not a current Person (decision 0274). */
