@@ -170,8 +170,9 @@ export class AccountsRepository {
   }
 
   /**
-   * Where an alert to the Admin goes (decision 0413): every `ACTIVE` account holding a
-   * live `ADMIN` role. An account that cannot sign in is not one somebody is reading.
+   * `AdminAccountsPort`. Where an alert to the Admin goes (decisions 0413 and 0414): every
+   * `ACTIVE` account holding a live `ADMIN` role. An account that cannot sign in is not one
+   * somebody is reading.
    */
   async activeAdministrators(): Promise<{ email: string; person_id: string }[]> {
     return this.db

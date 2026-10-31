@@ -83,7 +83,11 @@ export default function PrivacyNoticePage() {
           </li>
           <li>The two Senior Pastors, and the church&rsquo;s system administrator.</li>
         </ul>
-        <p className="mt-3">Every change to a record is kept, with who made it and when.</p>
+        <p className="mt-3">
+          Every change to a record is kept, with who made it and when. Each time somebody opens or
+          looks up a person&rsquo;s record, who and when is kept for one year, and the Admin can see
+          it.
+        </p>
       </Part>
 
       <Part title="How we protect it">
@@ -148,7 +152,7 @@ export default function PrivacyNoticePage() {
         </p>
       </Part>
 
-      <p className="text-muted mt-10 text-xs">Last updated: October 21, 2026</p>
+      <p className="text-muted mt-10 text-xs">Last updated: November 1, 2026</p>
       <p className="border-line mt-6 border-t pt-6 text-sm">
         <TextLink href="/sign-in">Back to sign in</TextLink>
       </p>

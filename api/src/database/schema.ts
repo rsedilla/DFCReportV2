@@ -914,6 +914,19 @@ export interface HierarchyTreeVersionTable {
   version: ColumnType<string, never, never>;
 }
 
+/** Who opened a person's page, kept a year (decision 0414). */
+export interface PersonViewsTable {
+  person_id: string;
+  viewer_person_id: string;
+  viewed_at: ColumnType<Date, Date | undefined, never>;
+}
+
+/** When the Admin was emailed about many pages opened, for the daily caps (decision 0414). */
+export interface PersonViewAlertsTable {
+  viewer_person_id: string;
+  sent_at: ColumnType<Date, Date | undefined, never>;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -951,4 +964,6 @@ export interface Database {
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;
+  person_views: PersonViewsTable;
+  person_view_alerts: PersonViewAlertsTable;
 }

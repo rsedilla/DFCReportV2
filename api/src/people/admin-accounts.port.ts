@@ -43,4 +43,10 @@ export interface AdminAccountsPort {
    * then. For decision 0339, which judges a month at its own end.
    */
   personsHoldingAdminAtWithin(executor: Db | Transaction<Database>, at: Date): Promise<Set<string>>;
+
+  /**
+   * Where an alert to the Admin goes (decisions 0413 and 0414): every `ACTIVE` account
+   * holding a live `ADMIN` role, with its address and Person.
+   */
+  activeAdministrators(): Promise<{ email: string; person_id: string }[]>;
 }

@@ -55,7 +55,15 @@ import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
 import { PeopleSexCorrectionService } from './people.sex-correction.service';
-import { composeName, fullProfile, normalizeMobile, type SearchCursor } from './people.shared';
+import { TreePagingQueryDto } from './dto/network.dto';
+import { decodeViewsCursor, PersonViewsService, type PersonView } from './person-views.service';
+import {
+  composeName,
+  fullProfile,
+  listedProfile,
+  normalizeMobile,
+  type SearchCursor,
+} from './people.shared';
 import { isStorableText } from '../common/text/storable-text';
 
 /**
@@ -97,6 +105,7 @@ export class PeopleController {
     // taken from the owning module's service rather than re-walked here
     // (section 2). `PeopleModule` already imports `HierarchyModule`.
     private readonly hierarchy: HierarchyService,
+    private readonly views: PersonViewsService,
     // The attention list below narrows to the actor's own scope, and the scope set
     // is the authorization module's to compute rather than this controller's to
     // re-derive (section 2, and the seam decision 0106 made its own module).
@@ -555,17 +564,26 @@ export class PeopleController {
 
   @Get(':id')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
+  async findOne(
+    @CurrentActor() actor: Actor,
+    @Param('id') id: string,
+  ): Promise<Record<string, unknown>> {
     const person = await this.read.findById(id);
     if (!person) {
       // A record merged away keeps its page, read only, naming where the person is now
       // (decision 0408, point 14): no leader, no Cell, no action.
       const merged = await this.merges.mergedLineOf(id);
       if (merged) {
+        await this.views.record(canonicalId(id), actor.personId);
         return merged;
       }
       throw new NotFoundError('No such person.');
     }
+
+    // Every read of a person's full record is recorded for the Admin, whichever screen asked
+    // (decision 0414), once the record is known to exist. The record never fails the answer:
+    // a failure to write it is logged.
+    await this.views.record(person.id, actor.personId);
 
     // The guard has already established this person is within the actor's scope,
     // so the full profile is what section 8 authorizes. `archived` is the page's read-only
@@ -576,6 +594,25 @@ export class PeopleController {
       // How many people they pastor now, so the page can say why Archive is not offered.
       pastors: await this.lifecycle.pastorsOf(person.id),
     };
+  }
+
+  /**
+   * Who opened or looked up this person's record, newest first (SKILL.md sections 7, 8 and 21,
+   * decision 0414).
+   *
+   * **The Admin's alone, under `accounts.manage`**, which by default only the Admin holds at
+   * Whole Church and section 7 now says covers this read: the owner chose that the log is shown
+   * to the Admin only, and `audit.view`, the other read of who did what, is also held by the two
+   * Senior Pastors.
+   */
+  @Get(':id/views')
+  @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'params.id' })
+  async openings(
+    @Param('id') id: string,
+    @Query() query: TreePagingQueryDto,
+  ): Promise<{ data: PersonView[]; next_cursor: string | null }> {
+    const after = query.cursor === undefined ? null : decodeViewsCursor(query.cursor);
+    return this.views.listFor(canonicalId(id), query.limit ?? 50, after);
   }
 
   /**
@@ -733,7 +770,8 @@ export class PeopleController {
           // A list row's name has the middle name's initial (decision 0375); the person's own
           // record, `GET /people/{id}`, keeps it whole.
           {
-            ...fullProfile(person),
+            // Without birthday, civil status and mobile number (decision 0414).
+            ...listedProfile(person),
             full_name: composeName(person),
             direct_leader_name: leaderNames.get(person.id) ?? null,
           }
