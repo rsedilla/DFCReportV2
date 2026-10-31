@@ -70,6 +70,21 @@ export interface PasswordChangedEmail {
 }
 
 /**
+ * Sign-in for an account's address or username was paused after ten wrong passwords
+ * (decision 0413). Sent to each active Admin, once per pause, and only where an account
+ * holds the name: what a stranger typed for nobody is not worth an Admin's attention.
+ */
+export interface SignInPausedEmail {
+  kind: 'SIGN_IN_PAUSED';
+  to: EmailRecipient;
+  /** What was typed, as typed: the address or the username. */
+  typed: { email: string } | { username: string };
+  /** The full name of the person whose account it is. */
+  holder: string;
+  pausedUntil: Date;
+}
+
+/**
  * One person opened more than a hundred person pages in an hour (decision 0414). Sent to each
  * active Admin, at most once a day for one person and twenty times a day in all.
  */
@@ -83,7 +98,11 @@ export interface ManyPagesOpenedEmail {
 }
 
 export type OutboundEmail =
-  ActivationEmail | PasswordResetEmail | PasswordChangedEmail | ManyPagesOpenedEmail;
+  | ActivationEmail
+  | PasswordResetEmail
+  | PasswordChangedEmail
+  | SignInPausedEmail
+  | ManyPagesOpenedEmail;
 
 export interface EmailPort {
   /**

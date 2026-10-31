@@ -63,7 +63,9 @@ first native client (decision 0328); the web application changes with it.
   first read after it is a year old, and never shown once it is. An alert whose send fails still
   spends that day's alert.
 - **The Privacy Notice now says so** (decision 0412, point 5): who opens or looks up a person's
-  record, and when, is kept for one year, and the Admin can see it.
+  record, and when, is kept for one year, and the Admin can see it. Its "Last updated" date, which
+  decision 0412 point 4 set to October 21, 2026, becomes the day this goes live, November 1,
+  2026, as the owner agreed.
 
 ## What it does not change
 

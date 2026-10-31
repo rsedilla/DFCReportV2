@@ -11,6 +11,7 @@ import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
+import { keepResetProof } from '@/lib/reset-proof';
 import { suggestActivationUsername, usernameHint } from '@/lib/username';
 import { cn } from '@/lib/utils';
 
@@ -137,10 +138,15 @@ export function SetPasswordForm({
 
     try {
       const name = shownUsername.trim();
-      await apiRequest<void>(path, {
+      const answer = await apiRequest<{ sign_in_proof?: string } | void>(path, {
         method: 'POST',
         body: activation && name !== '' ? { token, password, username: name } : { token, password },
       });
+      // A reset answers with a proof that lets this browser through a pause for fifteen
+      // minutes (decision 0413); kept here alone, and sent by the next sign-in.
+      if (answer && typeof answer.sign_in_proof === 'string') {
+        keepResetProof(answer.sign_in_proof);
+      }
       setDone(true);
     } catch (cause) {
       const onUsername = fieldErrorFor(cause, 'username');

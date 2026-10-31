@@ -112,3 +112,69 @@ test('the Account page offers a username and saves it with a key', async ({ page
   expect(keys).toHaveLength(1);
   expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
 });
+
+/**
+ * Ten wrong passwords pause the name (decision 0413). Its own words reach the screen, because
+ * they name the way in that still works; any other limit keeps the minute's wording.
+ */
+test('shows the pause in its own words, and any other limit as a minute', async ({ page }) => {
+  const paused =
+    'Sign-in for this username is paused for 15 minutes after 10 wrong passwords. To get in now, use "I have forgotten my password".';
+  let reason: string | undefined = 'SIGN_IN_PAUSED';
+  await page.route('**/api/v1/auth/login', (route) =>
+    route.fulfill(
+      json(
+        {
+          error: {
+            code: 'RATE_LIMITED',
+            message: reason === undefined ? 'Too many requests. Try again shortly.' : paused,
+            details: reason === undefined ? {} : { reason },
+          },
+        },
+        429,
+      ),
+    ),
+  );
+
+  await page.goto('/sign-in');
+  await page.getByLabel('Email or username').fill('rbsantiago');
+  await page.getByLabel('Password').fill('not the right passphrase');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('form').getByRole('alert')).toHaveText(paused);
+
+  reason = undefined;
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('form').getByRole('alert')).toHaveText(
+    'Too many attempts. Wait a minute and try again.',
+  );
+});
+
+/**
+ * A completed reset answers with a proof this browser keeps, and the next sign-in sends it, so
+ * this browser gets through a pause for fifteen minutes (decision 0413).
+ */
+test('keeps the proof a reset answers with, and sends it when signing in', async ({ page }) => {
+  await page.route('**/api/v1/auth/reset-password', (route) =>
+    route.fulfill(json({ sign_in_proof: 'proof-from-the-reset' })),
+  );
+  const sent: Record<string, unknown>[] = [];
+  await page.route('**/api/v1/auth/login', (route) => {
+    sent.push(route.request().postDataJSON());
+    return route.fulfill(
+      json({ error: { code: 'UNAUTHENTICATED', message: 'Username or password is incorrect.', details: {} } }, 401),
+    );
+  });
+
+  await page.goto('/reset-password?token=example-reset-token');
+  await page.getByLabel('New password', { exact: true }).fill('a long enough passphrase');
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByText('Your password has been changed')).toBeVisible();
+
+  await page.goto('/sign-in');
+  await page.getByLabel('Email or username').fill('rbsantiago');
+  await page.getByLabel('Password').fill('a long enough passphrase');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]).toMatchObject({ username: 'rbsantiago', reset_proof: 'proof-from-the-reset' });
+});

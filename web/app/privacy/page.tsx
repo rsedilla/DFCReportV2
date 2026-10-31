@@ -152,7 +152,7 @@ export default function PrivacyNoticePage() {
         </p>
       </Part>
 
-      <p className="text-muted mt-10 text-xs">Last updated: October 21, 2026</p>
+      <p className="text-muted mt-10 text-xs">Last updated: November 1, 2026</p>
       <p className="border-line mt-6 border-t pt-6 text-sm">
         <TextLink href="/sign-in">Back to sign in</TextLink>
       </p>
