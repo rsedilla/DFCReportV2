@@ -189,6 +189,11 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
       'exists only beside a second_steps row, which is guarded',
     ],
     ['second_step_challenges', 'a sign-in challenge that expires in minutes, not history'],
+    ['person_views', 'who opened a page, kept one year and then removed (decision 0414)'],
+    [
+      'person_view_alerts',
+      'when an alert was emailed, for a daily cap, not history (decision 0414)',
+    ],
     ['report_snapshots', 'stored months are a cache, always derivable (SKILL.md section 20)'],
     ['report_month_versions', 'the versions of that cache'],
     ['hierarchy_tree_version', 'one random value the in-memory tree is checked against'],

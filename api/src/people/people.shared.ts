@@ -137,6 +137,20 @@ export function fullProfile(person: PersonRecord): Record<string, unknown> {
 }
 
 /**
+ * A search row for somebody inside the viewer's scope (decision 0414): the record without the
+ * birthday, civil status and mobile number, which no list shows. Those come only with reading
+ * the one record, `GET /people/{id}`, which keeps who read it; a list that carried them would
+ * let somebody copy them a page at a time with no trace.
+ */
+export function listedProfile(person: PersonRecord): Record<string, unknown> {
+  const listed = fullProfile(person);
+  delete listed.birth_date;
+  delete listed.civil_status;
+  delete listed.mobile_number;
+  return listed;
+}
+
+/**
  * The name as a list, a table or a picker shows it: a title first where there is one
  * (decision 0271), then the first name, **the middle name's initial** and the last name
  * (decision 0375), so `Juan Santos Dela Cruz` reads `Juan S. Dela Cruz`. Display only:

@@ -59,6 +59,20 @@ export function compose(
 ): { subject: string; text: string } {
   const greeting = message.to.name.trim() === '' ? 'Hello,' : `Hello ${message.to.name},`;
 
+  if (message.kind === 'MANY_PAGES_OPENED') {
+    return {
+      subject: 'DREAMS: many person records opened in an hour',
+      text: [
+        greeting,
+        '',
+        `${message.viewer} opened ${message.pages} different person records in the last hour. Leaders seldom need that many.`,
+        '',
+        'If it was not expected, check with them, and look at "Who opened this record" on the people concerned.',
+        '',
+      ].join('\n'),
+    };
+  }
+
   if (message.kind === 'PASSWORD_CHANGED') {
     const changed = message.changedAt.toLocaleString('en-PH', {
       timeZone: 'Asia/Manila',

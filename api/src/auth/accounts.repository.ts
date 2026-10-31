@@ -169,6 +169,22 @@ export class AccountsRepository {
     return new Set(rows.map((row) => row.person_id));
   }
 
+  /**
+   * `AdminAccountsPort`. Where an alert to the Admin goes (decisions 0413 and 0414): every
+   * `ACTIVE` account holding a live `ADMIN` role. An account that cannot sign in is not one
+   * somebody is reading.
+   */
+  async activeAdministrators(): Promise<{ email: string; person_id: string }[]> {
+    return this.db
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select(['account.email', 'account.person_id'])
+      .where('role.role', '=', 'ADMIN')
+      .where('role.revoked_at', 'is', null)
+      .where('account.status', '=', 'ACTIVE')
+      .execute();
+  }
+
   /** `AdminAccountsPort`. Every Person holding an `ADMIN` role at `at` (decision 0339). */
   async personsHoldingAdminAtWithin(
     executor: Db | Transaction<Database>,

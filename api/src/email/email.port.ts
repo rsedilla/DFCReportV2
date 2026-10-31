@@ -69,7 +69,21 @@ export interface PasswordChangedEmail {
   changedAt: Date;
 }
 
-export type OutboundEmail = ActivationEmail | PasswordResetEmail | PasswordChangedEmail;
+/**
+ * One person opened more than a hundred person pages in an hour (decision 0414). Sent to each
+ * active Admin, at most once a day for one person and twenty times a day in all.
+ */
+export interface ManyPagesOpenedEmail {
+  kind: 'MANY_PAGES_OPENED';
+  to: EmailRecipient;
+  /** The full name of the person who opened them. */
+  viewer: string;
+  /** How many different person pages, in the last hour. */
+  pages: number;
+}
+
+export type OutboundEmail =
+  ActivationEmail | PasswordResetEmail | PasswordChangedEmail | ManyPagesOpenedEmail;
 
 export interface EmailPort {
   /**
