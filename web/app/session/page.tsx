@@ -14,6 +14,7 @@ import { describeGrants } from '@/lib/capability-labels';
 import { getMe, roleLabel } from '@/lib/me';
 import { getPerson } from '@/lib/people';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
+import { requestOwnEmailChange } from '@/lib/email-change';
 import { getUsernameSuggestion, setOwnUsername, usernameHint } from '@/lib/username';
 import {
   changeOwnPassword,
@@ -205,6 +206,8 @@ function SessionDetail() {
         </>
       )}
 
+      <EmailSection />
+
       <PasswordSection />
 
       <h2 className="border-line mt-12 border-t pt-8 text-base font-medium">Sign out</h2>
@@ -281,6 +284,107 @@ function SessionDetail() {
  * one. Every other device is signed out, this one stays signed in, and the holder is emailed
  * that it changed. A forgotten password still goes through the reset page.
  */
+/**
+ * The holder's own email address (decision 0415). A link goes to the new address and the
+ * address changes only when it is opened, so a typing mistake cannot lock anybody out.
+ */
+function EmailSection() {
+  const [next, setNext] = useState('');
+  const [password, setPassword] = useState('');
+  const [failure, setFailure] = useState<unknown>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  // One key per body (decision 0127): a retry of the same request replays, others are new.
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
+  const send = useMutation({
+    mutationFn: () => requestOwnEmailChange(next.trim(), password, key),
+    onSuccess: () => {
+      setSentTo(next.trim());
+      setNext('');
+      setPassword('');
+      setFailure(null);
+      setKey(crypto.randomUUID());
+    },
+    onError: (cause) => setFailure(cause),
+  });
+
+  const emailError = fieldErrorFor(failure, 'new_email');
+  const passwordError = fieldErrorFor(failure, 'current_password');
+
+  return (
+    <section aria-labelledby="email-heading" className="border-line mt-10 max-w-xl border p-5">
+      <h2 id="email-heading" className="text-lg font-bold tracking-tight">
+        Your email
+      </h2>
+      <form
+        className="mt-1 flex flex-col gap-4"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFailure(null);
+          setSentTo(null);
+          send.mutate();
+        }}
+      >
+        <p className="text-muted text-sm leading-relaxed">
+          Where your reset links are sent. We send a link to the new address and your email changes when you open it, so a typing
+          mistake cannot lock you out. Your old address is told.
+        </p>
+        <Field
+          label="New email address"
+          type="email"
+          name="new_email"
+          autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={next}
+          error={emailError}
+          onChange={(event) => {
+            setNext(event.target.value);
+            setKey(crypto.randomUUID());
+          }}
+        />
+        <Field
+          label="Current password"
+          type="password"
+          name="email_current_password"
+          autoComplete="current-password"
+          value={password}
+          error={passwordError}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setKey(crypto.randomUUID());
+          }}
+        />
+        {/* Mounted always, per `FailureNotice`'s own rule; a field's refusal is shown on it. */}
+        <FailureNotice
+          failure={
+            failure !== null && emailError === null && passwordError === null
+              ? describeFailure(failure)
+              : null
+          }
+        />
+        <div aria-live="polite">
+          {sentTo ? (
+            <p className="text-sm">
+              We sent a link to {sentTo}. Open it within 24 hours to finish. Until then your
+              email stays as it is.
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <Button
+            type="submit"
+            disabled={send.isPending || next.trim() === '' || password === ''}
+          >
+            {send.isPending ? 'Sending…' : 'Send the confirmation link'}
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function PasswordSection() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');

@@ -1341,6 +1341,57 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await expect(page.getByRole('button', { name: 'Correct the email' })).toHaveCount(0);
   });
 
+  test('starts an account in use over at a new address, asking first (decision 0415)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const accountId = '3f1b7c6e-0000-4000-8000-000000000901';
+    let email = 'marilou@example.test';
+    let status = 'ACTIVE';
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: accountId,
+            email,
+            status,
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+          },
+        }),
+      }),
+    );
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/accounts/*/email', async (route) => {
+      sent.push(route.request().postDataJSON());
+      email = 'marilou.new@example.test';
+      status = 'PENDING_ACTIVATION';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: accountId, email, status }),
+      });
+    });
+
+    await page.goto(PROFILE);
+    await expect(page.getByText(/^For someone who has lost this mailbox\./)).toBeVisible();
+    await page.getByRole('button', { name: 'Change the email', exact: true }).click();
+    expect(sent).toEqual([]);
+    await page.getByLabel('New email address').fill('marilou.new@example.test');
+    await page.getByRole('button', { name: 'Change the email and start over' }).click();
+
+    await expect(
+      page.getByText(/account starts over at marilou\.new@example\.test\. The link to choose a password went there, and marilou@example\.test was told\./),
+    ).toBeVisible();
+    expect(sent).toEqual([{ email: 'marilou.new@example.test', restart: true }]);
+    await expect(page.getByRole('button', { name: 'Change the email', exact: true })).toHaveCount(0);
+  });
+
   /** An active account holding `role`, with its second step set up (decision 0302). */
   async function accountWithSecondStep(page: Page, role: 'SENIOR_PASTOR' | 'ADMIN') {
     await page.route(ACCOUNT_ROUTE, (route) =>

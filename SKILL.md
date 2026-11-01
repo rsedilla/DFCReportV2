@@ -1633,8 +1633,24 @@ replace its email address. The new address, a fresh activation token and the aud
 are one transaction, and every outstanding token of the account is superseded, a reset
 link included, so no link sent to the old address works and the new link goes to the new
 one. An address another account holds, or the one already on the account, is refused, and
-so is an account in any other status. Changing where an account in use receives its reset
-link is a separate decision, not made here.
+so is an account in any other status, unless the administrator starts it over, below.
+
+**The address of an account in use is changed two ways** (ruling of 2026-11-01, decision
+0415). **Its holder** changes it on their Account page, giving the new address and their
+current password. A link lasting 24 hours goes to the new address, and the address changes
+only when that link is opened and confirmed on the page it opens; opening it changes nothing,
+since mail scanners follow links. Asking again replaces the earlier link. The confirmation
+fails for a disabled account and for an address another account holds by then, which is the
+only place an address in use is refused, so a request tells nobody whether an address has an
+account. When the address changes, every outstanding reset link stops working, the sessions
+are kept, and the old address is told. **An administrator** holding `accounts.manage` changes
+it on the person page for someone who has lost the mailbox, and the account starts over at
+the new address: `PENDING_ACTIVATION`, its password removed, every session ended, every
+outstanding link superseded, an activation link sent to the new address, and the old address
+told. The request says it starts the account over, so a page still showing the account as
+awaiting activation cannot do it by mistake. The administrator's own account and a disabled
+one are refused; the username and the second sign-in step are kept. An administrator could
+take an account this way, and never silently.
 
 **An administrator disables an account, and re-enables it, from the person page**
 (ruling of 2026-10-01). Both need `accounts.manage`, and neither asks for a reason.
@@ -2076,7 +2092,7 @@ capability_grants
 
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
-- an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows (activation's username suggestion included, decision 0337), and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
+- an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows (activation's username suggestion included, decision 0337), confirming a new email address from the link sent to it (decision 0415), and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
 - an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337), **and changing their own password, the current one asked** (ruling of 2026-10-14, decision 0351). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
 
 Beyond those requests, which carry what their sender asked, the decision on it, and the category and day of the Cell a handover or a restart named as they stood when it was sent (decision 0346), and the username suggestion and the refusal of a taken name, signed in or at activation, which read which names other accounts hold and nothing more about them (decision 0337, which accepts that a taken name shows an account exists), neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
@@ -4684,6 +4700,7 @@ Audit important actions, including:
 - Cell leadership assignment left with account provisioning pending
 - Account creation/activation/disablement
 - Correcting an account's email address before activation
+- An account's email address changed by its holder, or replaced by an administrator so the account starts over, with the old and the new (decision 0415)
 - A password reset sent to an account in use by an administrator (decision 0393)
 - A username set or changed, with the old and the new (decision 0337)
 - A password changed by its holder while signed in (decision 0351)
@@ -4801,12 +4818,15 @@ POST /api/v1/auth/activate/username-suggestion  the suggested username for an ac
 GET  /api/v1/auth/username-suggestion    the caller's suggested username (decision 0337)
 POST /api/v1/auth/username               sets or changes the caller's own username (decision 0337)
 POST /api/v1/auth/password               changes the caller's own password (decision 0351)
+POST /api/v1/auth/email                  asks to change the caller's own email; a link goes to the new address (decision 0415)
+POST /api/v1/auth/email/confirm          confirms it from that link (decision 0415)
 GET  /api/v1/auth/me
 
 GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles, email and username; `accounts.manage` (decisions 0276 and 0337)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 POST /api/v1/accounts/{id}/password-reset-email   a reset link to an account in use, at its own address; `accounts.manage` (decision 0393)
+POST /api/v1/accounts/{id}/email         corrects a pending account's address, or with `restart` starts an account in use over at a new one; `accounts.manage` (decisions 0300 and 0415)
 POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)
 POST /api/v1/accounts/{id}/reactivate    re-enables a disabled account; `accounts.manage` (decision 0307)
 

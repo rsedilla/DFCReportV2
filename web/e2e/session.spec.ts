@@ -981,7 +981,7 @@ test('changing the password sends the session to keep, then renews it', async ({
   });
 
   await page.goto('/session');
-  const main = page.locator('main');
+  const main = page.getByRole('region', { name: 'Your password' });
   await main.getByLabel('Current password').fill('the first long passphrase');
   await main.getByLabel('New password').fill('a second long passphrase');
   await main.getByRole('button', { name: 'Save new password' }).click();
@@ -1019,7 +1019,7 @@ test('a wrong current password is said on its field', async ({ page }) => {
   );
 
   await page.goto('/session');
-  const main = page.locator('main');
+  const main = page.getByRole('region', { name: 'Your password' });
   await main.getByLabel('Current password').fill('not the password');
   await main.getByLabel('New password').fill('a second long passphrase');
   await main.getByRole('button', { name: 'Save new password' }).click();
@@ -1044,4 +1044,110 @@ test('the Account screen links to the reset page for a new password', async ({ p
   await main.getByRole('link', { name: 'Email me a reset link' }).click();
   await expect(page).toHaveURL(/\/forgot-password$/);
   await expect(page.getByRole('button', { name: 'Email me a link' })).toBeVisible();
+});
+/**
+ * The holder's own email (decision 0415): a link goes to the new address, and nothing
+ * changes until it is confirmed there.
+ */
+test('asking to change the email sends the new address and the current password', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+  const asked: { body: Record<string, string>; key: string | null }[] = [];
+  await page.route('**/api/v1/auth/email', (route) => {
+    asked.push({
+      body: route.request().postDataJSON() as Record<string, string>,
+      key: route.request().headers()['idempotency-key'] ?? null,
+    });
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/session');
+  const section = page.getByRole('region', { name: 'Your email' });
+  await section.getByLabel('New email address').fill(' new@example.invalid ');
+  await section.getByLabel('Current password').fill('the first long passphrase');
+  await section.getByRole('button', { name: 'Send the confirmation link' }).click();
+
+  await expect(
+    section.getByText(
+      'We sent a link to new@example.invalid. Open it within 24 hours to finish. Until then your email stays as it is.',
+    ),
+  ).toBeVisible();
+  expect(asked).toHaveLength(1);
+  expect(asked[0].body).toEqual({
+    new_email: 'new@example.invalid',
+    current_password: 'the first long passphrase',
+  });
+  expect(asked[0].key).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(section.getByLabel('Current password')).toHaveValue('');
+});
+
+test('a wrong current password for the email change is said on its field', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.route('**/api/v1/auth/email', (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'That is not your current password.',
+          details: { field: 'current_password' },
+        },
+      }),
+    }),
+  );
+
+  await page.goto('/session');
+  const section = page.getByRole('region', { name: 'Your email' });
+  await section.getByLabel('New email address').fill('new@example.invalid');
+  await section.getByLabel('Current password').fill('not the password');
+  await section.getByRole('button', { name: 'Send the confirmation link' }).click();
+
+  await expect(section.getByText('That is not your current password.')).toBeVisible();
+  await expect(section.getByText(/We sent a link/)).toHaveCount(0);
+});
+
+test('the confirmation link changes nothing until its button is pressed', async ({ page }) => {
+  const confirmed: unknown[] = [];
+  await page.route('**/api/v1/auth/email/confirm', (route) => {
+    confirmed.push(route.request().postDataJSON());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ email: 'new@example.invalid' }),
+    });
+  });
+
+  await page.goto('/confirm-email?token=example-email-token');
+  await expect(page.getByRole('button', { name: 'Confirm my new email' })).toBeVisible();
+  expect(confirmed).toEqual([]);
+
+  await page.getByRole('button', { name: 'Confirm my new email' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Your email is changed' })).toBeVisible();
+  await expect(page.getByText(/is now new@example\.invalid/)).toBeVisible();
+  expect(confirmed).toEqual([{ token: 'example-email-token' }]);
+});
+
+test('a spent confirmation link says so', async ({ page }) => {
+  await page.route('**/api/v1/auth/email/confirm', (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'That link is no longer valid. Ask for a new one.',
+          details: { field: 'token' },
+        },
+      }),
+    }),
+  );
+
+  await page.goto('/confirm-email?token=example-email-token');
+  await page.getByRole('button', { name: 'Confirm my new email' }).click();
+
+  await expect(page.getByText('That link is no longer valid. Ask for a new one.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your email is changed' })).toHaveCount(0);
 });

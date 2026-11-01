@@ -125,6 +125,21 @@ describe('the development email transport (section 6)', () => {
       expect(contents).toContain('leader@example.test');
     });
 
+    // Decision 0415: an email-change token moves where an account in use is reset, so it
+    // reaches what a reset token does.
+    it('withholds an email-change token too', async () => {
+      const change = { ...message, kind: 'EMAIL_CHANGE' as const };
+
+      await new OutboxEmailAdapter(config({ emailTransport: 'outbox', emailOutboxDir: dir })).send(
+        change,
+      );
+
+      const written = await readdir(dir);
+      const contents = await readFile(join(dir, written[0]), 'utf8');
+      expect(contents).not.toContain(change.token);
+      expect(contents).toContain('withheld');
+    });
+
     it('still writes an activation token, which is the reason it exists', async () => {
       await new OutboxEmailAdapter(config({ emailTransport: 'outbox', emailOutboxDir: dir })).send(
         message,

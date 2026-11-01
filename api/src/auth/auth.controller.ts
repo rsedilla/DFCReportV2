@@ -23,7 +23,9 @@ import {
 import {
   ActivateDto,
   ActivationTokenDto,
+  ChangeEmailDto,
   ChangePasswordDto,
+  ConfirmEmailDto,
   ForgotPasswordDto,
   SetPasswordDto,
   SetUsernameDto,
@@ -121,6 +123,38 @@ export class AuthController {
       body.refresh_token,
       claim,
     );
+  }
+
+  /**
+   * Asks to change the caller's own email address, giving the current password (section 6,
+   * decision 0415). A link goes to the new address; nothing changes until it is confirmed.
+   */
+  @Post('email')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  // As `password`: each wrong current password is a guess, and each request sends an email.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @AuthenticatedOnly('Changes the email of the caller’s own account, not anything of the church.')
+  async requestEmailChange(
+    @CurrentActor() actor: Actor,
+    @Body() body: ChangeEmailDto,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<void> {
+    await this.credentials.requestEmailChange(actor, body.new_email, body.current_password, claim);
+  }
+
+  /**
+   * Confirms a new email address from the link sent to it (section 6, decision 0415).
+   *
+   * On section 7's unauthenticated list: the link is the credential, opened wherever the
+   * mail is read. No `Idempotency-Key`, as for activation; the token's single-use claim
+   * makes a replay safe.
+   */
+  @Post('email/confirm')
+  @HttpCode(HttpStatus.OK)
+  @Public('The link sent to the new address is the credential.')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async confirmEmailChange(@Body() body: ConfirmEmailDto): Promise<{ email: string }> {
+    return this.credentials.confirmEmailChange(body.token);
   }
 
   /**

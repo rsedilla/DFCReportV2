@@ -130,6 +130,11 @@ describe('storable text is refused at the edge, on every field that takes text',
     'ChangePasswordDto.current_password',
     'ChangePasswordDto.new_password',
     'ChangePasswordDto.refresh_token',
+    // Changing an email address (decision 0415): the current password is verified against
+    // its hash, and the confirmation token is compared as a sha256 hash. The new address is
+    // checked by its own validator and is not listed.
+    'ChangeEmailDto.current_password',
+    'ConfirmEmailDto.token',
   ]);
 
   const HARMLESS = 'harmless';

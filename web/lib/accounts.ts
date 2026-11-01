@@ -74,6 +74,22 @@ export async function correctAccountEmail(
 }
 
 /**
+ * Starts an account in use over at a new address, for someone who has lost the mailbox
+ * (decision 0415): signed out, password removed, an activation link to the new address.
+ */
+export async function restartAccountAtEmail(
+  accountId: string,
+  email: string,
+  idempotencyKey: string,
+): Promise<{ id: string; email: string; status: PersonAccount['status'] }> {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/email`, {
+    method: 'POST',
+    body: { email, restart: true },
+    idempotencyKey,
+  });
+}
+
+/**
  * Resets a Senior Pastor's second sign-in step, ending their sessions (decision 0302).
  * The API refuses an administrator's, which is reset on the server.
  */

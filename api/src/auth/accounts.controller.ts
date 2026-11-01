@@ -112,7 +112,8 @@ export class AccountsController {
 
   /**
    * Corrects the address of an account nobody has activated, and sends the activation
-   * email there (section 6, decision 0300). Guarded like the re-send, against the Account.
+   * email there (section 6, decision 0300). With `restart`, starts an account in use over
+   * at a new address (decision 0415). Guarded like the re-send, against the Account.
    */
   @Post(':id/email')
   @HttpCode(HttpStatus.OK)
@@ -123,7 +124,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return this.provisioning.correctEmail(id, body.email, actor, claim);
+    return this.provisioning.correctEmail(id, body.email, actor, claim, body.restart === true);
   }
 
   /**

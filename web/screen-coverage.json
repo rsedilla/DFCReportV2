@@ -48,6 +48,14 @@
       "screen": "web/app/session/page.tsx"
     },
     {
+      "route": "POST /api/v1/auth/email",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/email/confirm",
+      "screen": "web/app/confirm-email/page.tsx"
+    },
+    {
       "route": "POST /api/v1/auth/forgot-password",
       "screen": "web/app/forgot-password/page.tsx"
     },
