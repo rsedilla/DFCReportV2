@@ -224,8 +224,8 @@ export class DccAttendanceService {
    * then the Network roots where the leader's own grant puts them there — **narrowed now
    * to the people the actor holds under `dcc.take_attendance`** (owner's ruling). A leader
    * holding no account is nobody's submitter, so their checklist is empty: their people
-   * are on the nearest upline's, which is the screen their row opens. **Unless nobody above
-   * holds one, then or now**: an administrator then reads the checklist this leader would
+   * are on the nearest upline's, which is the screen their row opens. **Unless the leader is a
+   * Network root holding none**: an administrator then reads the checklist the root would
    * have with an account, and records it (decision 0418).
    */
   async leaderRoster(
@@ -717,9 +717,9 @@ export class DccAttendanceService {
     /** Whether that submitter holds `dcc.take_attendance` at Whole Church (decision 0172). */
     includesRoots: boolean,
     /**
-     * Read for an administrator, who records a leader nobody above covers, then or now
-     * (decision 0418). Only that case gains a checklist; a leader covered by somebody keeps
-     * none, their people being on that leader's.
+     * Read for an administrator, who records a Network root holding no account (decision
+     * 0418). Only a root gains a checklist this way; any other leader without an account
+     * keeps none, their people being on whoever covers them, or on the root's.
      */
     forAdministrator = false,
   ): Promise<Set<string>> {
@@ -740,11 +740,17 @@ export class DccAttendanceService {
       const holdsNow =
         (await this.accounts.personsHoldingAccounts(executor, [submitterId])).size > 0;
       accountsAt = undefined;
+      // A Network root alone (decision 0418): a leader partway down an uncovered chain keeps
+      // no checklist, their people being on the root's, and one whose own assignment has
+      // ended, with nobody above, is not a root and is not covered either.
       const unowned =
         forAdministrator &&
         !coveredThen &&
         !holdsNow &&
-        (await this.accounts.personsHoldingAccounts(executor, above)).size === 0;
+        above.length === 0 &&
+        (await this.hierarchy.rootsAsOf(executor, event.at)).some(
+          (rootId) => canonical(rootId) === canonical(submitterId),
+        );
       if (coveredThen || (!holdsNow && !unowned)) {
         return this.withRoots(executor, event, checklist, includesRoots);
       }

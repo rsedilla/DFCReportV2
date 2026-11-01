@@ -161,6 +161,48 @@ describe('an administrator records where nobody above has an account (decision 0
     expect(await leaderRoster(reader, lorenzo)).toEqual([ramon.id, pascual.id].sort());
   });
 
+  it('reads no checklist for a leader partway down the chain: their people are the root’s', async () => {
+    expect(await leaderRoster(await admin(), ramon)).toEqual([]);
+  });
+
+  it('gives the root’s Sundays to the root once they hold an account, the earlier ones included', async () => {
+    // Given after the Sunday: nobody above held one then, so the walk with the accounts held
+    // now reaches Lorenzo (decision 0403), and the administrator is no longer named.
+    await createAccount(app, db, { person: lorenzo, roles: ['LEADER'], createdAt: new Date() });
+    const all = await rows(await admin());
+
+    for (const person of [lorenzo, ramon]) {
+      expect(rowOf(all, person)).toMatchObject({
+        recorded_by_administrator: false,
+        record_for: lorenzo.id,
+      });
+    }
+  });
+
+  it('tells a reader who is not an administrator, without offering Record', async () => {
+    // Pascual leads nobody; given an account, he is a Leader whose scope reaches nobody in the
+    // chain above him, so a Whole Church reader without the on-behalf capability is needed.
+    const granter = await admin();
+    const reader = await createAccount(app, db, { person: pascual, roles: ['LEADER'] });
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: reader.id,
+        capability: 'dcc.view_subtree',
+        scope_type: 'WHOLE_CHURCH',
+        read_only: true,
+        reason: 'Invented for this case (CLAUDE.md, Secrets).',
+        granted_by: granter.id,
+      })
+      .execute();
+    const row = rowOf(await rows(reader), ramon);
+    expect(row).toMatchObject({
+      recorded_by_administrator: true,
+      may_record: false,
+      record_for: null,
+    });
+  });
+
   it('leaves the checklist of a leader somebody above covers empty', async () => {
     await createAccount(app, db, { person: lorenzo, roles: ['LEADER'], createdAt: EPOCH });
 

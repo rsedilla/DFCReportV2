@@ -21,15 +21,20 @@ both reach nobody does this apply.
 no account · Nobody above has one, so an administrator records it*. Record opens the checklist
 of the leader at the top of that chain, a Network root, with the root's people on it as though
 the root held an account: their 12, then the people of any leader beneath them holding none.
-Every other reader sees the same words and *See Checklist* alone.
+Every other reader sees the same words and *See Checklist* alone. A chain that does not end
+at a Network root, such as one through a leader whose own assignment has ended, is not
+covered: its rows say nothing about an administrator, as before. Only a root's checklist is
+read this way, never a leader's partway down the chain, whose people are on the root's.
 
 **3. The record is saved as any record made on behalf is** (decision 0313): under the
 administrator's name, the line staying the leader's obligation in every report (Section 20),
 and a mark already recorded still needing `dcc.correct_subtree` to change.
 
-**4. It ends by itself.** The day a leader in that chain is given an account, decision 0403
-gives them the Sundays from that moment, and the walk reaches them rather than nobody. The
-Sundays before it stay with the administrator until their week closes.
+**4. It ends by itself.** The day a leader in that chain is given an account, the walk from
+everyone beneath them reaches them rather than nobody, and those open Sundays are theirs, the
+earlier ones included, by decision 0403's second walk with the accounts held now. Lines owed
+by a leader above them, the root's own 12, stay with the administrator until the root holds an
+account too.
 
 **5. Nothing else moves.** *Recording Progress* still counts such a line against nobody
 (decision 0325), and the *Leaders Under Me* view is unchanged.
@@ -44,6 +49,6 @@ accounts.
 ---
 
 Decision 0418, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 9 and 19.
+Sections 9, 14, 19 and 22.
 
 Previous: [2026-11-01 — Tabs are 13rem, and a list's filters are pills and chips](0417-tabs-13rem-and-filters-as-pills.md)

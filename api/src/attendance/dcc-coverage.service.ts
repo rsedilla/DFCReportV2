@@ -917,18 +917,17 @@ export class DccCoverageService {
       ...new Set(groups.map((group) => group.recorder).filter((id): id is string => id !== null)),
     ];
     const recordable = await this.recordableBy(actor, recorders);
-    // **Where the walk reached nobody, then or now, an administrator records the line**
-    // (decision 0418), on the checklist of the leader at the top of that chain, as of the
-    // row's oldest Sunday. Every other reader keeps See checklist alone.
+    // **Where the walk reached nobody, then or now, and the chain ends at a Network root, an
+    // administrator records the line** (decision 0418), on that root's checklist, as of the
+    // row's oldest Sunday. Every reader is told so; only an administrator gets Record. A
+    // chain that ends anywhere else names nobody, as before.
     const administrator = await this.isAdministrator(actor);
     const topOf = new Map<(typeof groups)[number], string>();
-    if (administrator) {
-      for (const group of groups) {
-        if (group.recorder === null && group.sundays.length > 0) {
-          const top = await this.topOfChain(group.sundays[0], group.line.leaderId);
-          if (top !== null) {
-            topOf.set(group, top);
-          }
+    for (const group of groups) {
+      if (group.recorder === null && group.sundays.length > 0) {
+        const top = await this.topOfChain(group.sundays[0], group.line.leaderId);
+        if (top !== null) {
+          topOf.set(group, top);
         }
       }
     }
@@ -953,7 +952,8 @@ export class DccCoverageService {
         const byActor = recorder !== null && recorder === me;
         const top = topOf.get(group) ?? null;
         const mayRecord =
-          top !== null || (recorder !== null && (byActor || recordable.has(recorder)));
+          (administrator && top !== null) ||
+          (recorder !== null && (byActor || recordable.has(recorder)));
         // Named only where the reader's scope covers them (owner, 2026-10-13).
         const named =
           recorder !== null && !ownAccount && (covered === null || covered.has(recorder));
@@ -984,7 +984,7 @@ export class DccCoverageService {
           })),
           // Nobody above has an account, then or now (decision 0418). Said to every reader,
           // since it is why the row has no leader to follow up with.
-          recorded_by_administrator: recorder === null,
+          recorded_by_administrator: top !== null,
           record_for: mayRecord ? (top ?? recorder) : null,
           may_record: mayRecord,
         };
@@ -1175,7 +1175,12 @@ export class DccCoverageService {
         now,
       );
       const submitters = await this.submittersOf(event, [line.leaderId]);
-      owners.set(line.eventId, submitters.get(canonicalId(line.leaderId)) ?? null);
+      // Where nobody above holds an account, then or now, the root's checklist holds the
+      // line (decision 0418), so the person page opens that one.
+      owners.set(
+        line.eventId,
+        submitters.get(canonicalId(line.leaderId)) ?? (await this.topOfChain(event, line.leaderId)),
+      );
     }
     return owners;
   }
