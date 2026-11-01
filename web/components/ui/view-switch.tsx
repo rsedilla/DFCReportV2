@@ -42,7 +42,7 @@ export function ViewSwitch<Key extends string>({
       className={cn(
         // Narrower than `lg` the segments share the row equally, wrapping to a second row only
         // where five would not fit a phone; from `lg` each is 8rem.
-        'border-line bg-raised mt-4 grid w-full grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1 rounded-3xl border p-1',
+        'border-line bg-raised mt-4 grid w-full grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] gap-1 rounded-3xl border p-1',
         'lg:inline-grid lg:w-auto lg:auto-cols-[8rem] lg:grid-flow-col lg:grid-cols-none lg:rounded-full',
         className,
       )}

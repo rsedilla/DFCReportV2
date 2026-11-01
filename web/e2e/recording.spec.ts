@@ -3324,13 +3324,69 @@ test.describe('Pending CG Records laid out as Pending DCC Records (decision 0368
     const late = pane.getByRole('button', { name: 'Late only' });
     await expect(late).toHaveAttribute('aria-pressed', 'false');
     await late.click();
-    await expect(pane.getByRole('button', { name: 'Showing late only' })).toHaveAttribute(
+    await expect(pane.getByRole('button', { name: 'Late only' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     await expect.poll(() => asked.some((query) => query.includes('late=true'))).toBe(true);
     // The Network filter is a whole-church reader's alone (decision 0336).
-    await expect(pane.getByRole('radiogroup', { name: 'Network' })).toHaveCount(0);
+    await expect(pane.getByRole('group', { name: 'Network' })).toHaveCount(0);
+  });
+
+  test('a whole-church reader narrows by Network with a switch, and Late only is a chip (decision 0417)', async ({
+    page,
+  }) => {
+    await mockRecord(page);
+    const asked = await mockPendingCg(page);
+    // A reader holding the Cell view at Whole Church, as the Admin does.
+    await page.route('**/api/v1/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+          person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+          email: 'admin@example.invalid',
+          first_name: 'Marilou',
+          roles: ['ADMIN'],
+          screens: 'FULL',
+          people_i_oversee: true,
+          capabilities: ['cell.view_subtree', 'cell.take_attendance', 'dcc.view_subtree'].map(
+            (capability) => ({
+              capability,
+              scope_type: 'WHOLE_CHURCH',
+              scope_network: null,
+              read_only: false,
+              source: 'ROLE',
+            }),
+          ),
+        }),
+      }),
+    );
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/dashboard?list=behind');
+
+    const pane = page.getByRole('region', { name: 'Pending CG Records' });
+    const network = pane.getByRole('group', { name: 'Network' });
+    await expect(network.getByRole('button')).toHaveText(['All', 'Men’s', 'Women’s']);
+    await expect(network.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    await network.getByRole('button', { name: 'Men’s', exact: true }).click();
+    await expect(network.getByRole('button', { name: 'Men’s', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => asked.some((query) => query.includes('network=MENS'))).toBe(true);
+
+    // The chip keeps its name, and says it is on by aria-pressed and a tick.
+    const late = pane.getByRole('button', { name: 'Late only' });
+    await late.click();
+    await expect(late).toHaveAttribute('aria-pressed', 'true');
+
+    // The switch and the chip share one row on a laptop, under the search (decision 0417).
+    const rows = await Promise.all(
+      [network, late].map(async (control) => {
+        const box = (await control.boundingBox())!;
+        return Math.round(box.y + box.height / 2);
+      }),
+    );
+    expect(Math.abs(rows[0] - rows[1])).toBeLessThanOrEqual(2);
   });
 
   test('reads fifty at a time, counts what it has read, and Show more reads the next page', async ({

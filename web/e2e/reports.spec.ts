@@ -756,7 +756,7 @@ test.describe('a Full view leader’s report controls', () => {
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
    * Every tab one size, for every reader (decision 0416): two equal tabs to a row on a phone,
-   * and 11.5rem each from `sm`, as many to a row as fit.
+   * and 13rem each from `sm` (decision 0417), as many to a row as fit.
    */
   const LAYOUTS = [
     { width: 320, height: 640 },
@@ -796,14 +796,14 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             }),
           );
           const row = await which.evaluate((nav) => nav.getBoundingClientRect().width);
-          const columns = layout.width < 640 ? 2 : Math.min(tabs.length, Math.floor(row / 184));
+          const columns = layout.width < 640 ? 2 : Math.min(tabs.length, Math.floor(row / 208));
 
           expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(columns);
           for (const box of boxes) {
             expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
             if (layout.width >= 640) {
-              expect(Math.abs(box.width - 184), `${box.text} is ${box.width}px wide`).toBeLessThanOrEqual(1);
+              expect(Math.abs(box.width - 208), `${box.text} is ${box.width}px wide`).toBeLessThanOrEqual(1);
             }
           }
           const widths = boxes.map((box) => box.width);
