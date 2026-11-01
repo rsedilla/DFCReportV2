@@ -161,8 +161,8 @@ export class AuthController {
    * Begins a password reset, and answers identically whether or not the address
    * holds an account (section 6, Password reset security).
    *
-   * 204 in both cases, and the service does comparable work in both, because a
-   * measurable difference is the same disclosure the identical body exists to
+   * 204 in both cases, and the service answers both no sooner than one floor, because
+   * a measurable difference is the same disclosure the identical body exists to
    * prevent.
    */
   @Post('forgot-password')
