@@ -727,7 +727,7 @@ function RecordMeeting() {
                           setEditing(true);
                         }}
                       >
-                        Edit meeting
+                        Edit
                       </Button>
                     ) : (
                       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -1251,7 +1251,7 @@ function JoinedAfter({ members, mayEdit }: { members: RosterMember[]; mayEdit: b
         {list} joined the Cell after this was recorded.
       </span>{' '}
       {one ? `Was ${late[0].first_name} at this meeting?` : 'Were they at this meeting?'}
-      {mayEdit ? (one ? ' Press Edit meeting to add a mark.' : ' Press Edit meeting to add their marks.') : ''}
+      {mayEdit ? (one ? ' Press Edit to add a mark.' : ' Press Edit to add their marks.') : ''}
     </p>
   );
 }

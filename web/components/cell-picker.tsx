@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field } from '@/components/ui/field';
+import { SearchField } from '@/components/ui/field';
 import {
   cellShortName,
   leaderCells,
@@ -104,8 +104,14 @@ export function CellPicker({
           <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
         ) : null}
         <p className="mt-1 text-sm">{cellText(selected)}</p>
-        <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
-          Choose another Cell
+        {/* Named apart from the person picker's Change, which can share the form (2.4.6). */}
+        <Button
+          variant="secondary"
+          className="mt-3"
+          aria-label="Change Cell Group"
+          onClick={() => onSelect(null)}
+        >
+          Change
         </Button>
       </div>
     );
@@ -129,25 +135,25 @@ export function CellPicker({
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" data-picker-search>
-        <Field
+      <div className="mt-4" data-picker-search>
+        <SearchField
           label={leaders.length > 0 ? 'Or find another Cell Group' : 'Search for a Cell Group'}
           description="Type the leader’s name or the Cell ID, like CELL-000032."
-          type="search"
           name="cell_q"
           autoComplete="off"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          className="min-w-0 sm:flex-1"
+          action={
+            <Button
+              variant="secondary"
+              aria-label="Search Cells"
+              disabled={term.trim().length < 2}
+              onClick={() => setSubmitted(term.trim())}
+            >
+              Search
+            </Button>
+          }
         />
-        <Button
-          variant="secondary"
-          aria-label="Search Cells"
-          disabled={term.trim().length < 2}
-          onClick={() => setSubmitted(term.trim())}
-        >
-          Search
-        </Button>
       </div>
 
       {/* Mounted always, contents conditional, so the refusal is announced (section 23). */}

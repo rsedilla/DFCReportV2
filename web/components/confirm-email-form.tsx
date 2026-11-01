@@ -68,7 +68,7 @@ export function ConfirmEmailForm() {
         here, and your old address will be told.
       </p>
       <Button type="button" onClick={() => void onConfirm()} disabled={submitting}>
-        {submitting ? 'Confirming…' : 'Confirm my new email'}
+        {submitting ? 'Confirming…' : 'Confirm Email'}
       </Button>
     </div>
   );

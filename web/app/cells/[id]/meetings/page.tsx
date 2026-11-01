@@ -130,7 +130,7 @@ function CellMeetings() {
           {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
           {mayConfigure && meetings.data && meetings.data.cell_closed_on == null ? (
             <Button variant="secondary" onClick={() => setChanging(true)}>
-              Change when it meets
+              Change Schedule
             </Button>
           ) : null}
           {/* Beside it, under the same capability, and refused for a closed Cell the same way

@@ -12,8 +12,8 @@ import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
-import { Field } from '@/components/ui/field';
+import { CONTROL_BAR, TAB_GRID, TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
+import { SearchField } from '@/components/ui/field';
 import { CellApprovals } from '@/components/cell-approvals';
 import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
@@ -126,8 +126,8 @@ function CellsIndex() {
   // Offered only where the route would answer; the route still decides (section 1, principle 4).
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
-  // **The administrator's lists** (decision 0366): *Under 3 Member Cells*, *Inactive (3+
-  // Months) Cells* and *Closed Cells* are offered to an account holding `cell.manage_lifecycle`
+  // **The administrator's lists** (decision 0366): *Under 3 Members*, *Inactive 3+
+  // Months* and *Closed Cells* are offered to an account holding `cell.manage_lifecycle`
   // at Whole Church, which is who closes a Cell (decision 0355) and the same answer the server
   // gives as `may_close`. A Full view leader holds it over their own branch and sees Active
   // Cells alone. Keyed on a capability's reach, never on a role (decision 0323, point 5).
@@ -137,7 +137,7 @@ function CellsIndex() {
   const approver = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.approve_leadership',
   );
-  // *Awaiting CG Assignment* (decision 0381), moved here from Record: on the Full view screens,
+  // *No CG Yet* (decision 0381), moved here from Record: on the Full view screens,
   // a Full view leader's and the Admin's, keyed on the screens the server names.
   const fullScreens = me.data?.screens === 'FULL';
   const withoutACell = useWithoutACell(fullScreens);
@@ -160,7 +160,7 @@ function CellsIndex() {
   // The reader's own Cells are marked *You lead* (decision 0400).
   const leads = (cell: CellSummary) =>
     me.data !== undefined && cell.leader.person_id.toLowerCase() === me.data.person_id.toLowerCase();
-  // *Same Leader, Same Time* (decision 0392): the administrator's, as the route is.
+  // *Time Clashes* (decision 0392): the administrator's, as the route is.
   const clashes = useQuery({
     queryKey: ['schedule-clashes'],
     queryFn: ({ signal }) => getScheduleClashes(signal),
@@ -204,11 +204,11 @@ function CellsIndex() {
   const quietLabel = `${quietCount} months`;
   const everyTab: [CellsView, string, number | string | null][] = [
     ['ACTIVE', 'Active Cells', null],
-    ['NOCELL', 'Awaiting CG Assignment', withoutACell.count],
-    ['FEW', 'Under 3 Member Cells', null],
-    ['QUIET', `Inactive (${quietCount}+ Months) Cells`, null],
+    ['NOCELL', 'No CG Yet', withoutACell.count],
+    ['FEW', 'Under 3 Members', null],
+    ['QUIET', `Inactive ${quietCount}+ Months`, null],
     ['CLOSED', 'Closed Cells', null],
-    ['CLASH', 'Same Leader, Same Time', clashes.data?.length ?? null],
+    ['CLASH', 'Time Clashes', clashes.data?.length ?? null],
     ['APPROVE', 'Cells to Approve', approvals.data?.length ?? null],
   ];
   const tabs = everyTab.filter(([key]) => offered.includes(key));
@@ -239,7 +239,7 @@ function CellsIndex() {
       <div
         role="group"
         aria-label="Which Cells"
-        className={cn('mt-6 flex min-h-11 flex-wrap items-end', TAB_ROW)}
+        className={cn('mt-6 min-h-11', TAB_GRID, TAB_ROW)}
       >
         {me.data === undefined ? null : tabs.map(([key, label, count]) => (
           <button
@@ -250,7 +250,7 @@ function CellsIndex() {
               setView(key);
               go({ view: key === 'ACTIVE' ? null : key, mine: null });
             }}
-            className={cn(tabClasses(shown === key), 'inline-flex items-center gap-2')}
+            className={tabClasses(shown === key)}
           >
             {label}
             {/* A count of 0 shows no box, as on Record's tabs (decision 0349). */}
@@ -286,21 +286,21 @@ function CellsIndex() {
               go({ q: trimmed });
             }
           }}
-          className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
+          className="flex w-full min-w-0 lg:w-auto lg:min-w-72 lg:flex-1"
           noValidate
         >
-          <Field
+          <SearchField
             label="Search by Cell ID or leader"
-            type="search"
             name="q"
             autoComplete="off"
             value={term}
             onChange={(event) => setTerm(event.target.value)}
-            className="min-w-0 sm:flex-1"
+            action={
+              <Button type="submit" disabled={tooShort}>
+                {buttonLabel}
+              </Button>
+            }
           />
-          <Button type="submit" disabled={tooShort}>
-            {buttonLabel}
-          </Button>
         </form>
 
           {/*
@@ -697,9 +697,9 @@ function QuietCells({
                         type="button"
                         variant="secondary"
                         onClick={() => onClose(cell)}
-                        aria-label={`Close this Cell, ${name}, led by ${cell.leader.full_name}`}
+                        aria-label={`Close Cell, ${name}, led by ${cell.leader.full_name}`}
                       >
-                        Close this Cell
+                        Close Cell
                       </Button>
                     ) : null}
                   </td>
@@ -739,9 +739,9 @@ function QuietCells({
                     type="button"
                     variant="secondary"
                     onClick={() => onClose(cell)}
-                    aria-label={`Close this Cell, ${name}, led by ${cell.leader.full_name}`}
+                    aria-label={`Close Cell, ${name}, led by ${cell.leader.full_name}`}
                   >
-                    Close this Cell
+                    Close Cell
                   </Button>
                 </div>
               ) : null}

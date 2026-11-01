@@ -392,7 +392,7 @@ function NewPersonForm() {
             {create.isPending ? 'Adding…' : 'These are different people — add anyway'}
           </Button>
           <Button variant="secondary" onClick={() => setCandidates(null)}>
-            Go back and change the details
+            Back
           </Button>
         </div>
       </SectionFrame>
@@ -591,7 +591,7 @@ function NewPersonForm() {
 
         <FormActions>
           <Button type="submit" disabled={create.isPending || !chosenLeaderId}>
-            {create.isPending ? 'Adding…' : 'Add this person'}
+            {create.isPending ? 'Adding…' : 'Add Person'}
           </Button>
         </FormActions>
       </form>

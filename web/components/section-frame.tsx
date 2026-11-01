@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { PeopleTabs } from '@/components/people-tabs';
-import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { useOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
@@ -57,7 +57,7 @@ export function SectionFrame({ section, children }: { section: Section; children
       ) : (
         <>
           {tabShown ? (
-            <nav aria-label={chosen!.name} className={cn('mt-6 flex', TAB_ROW)}>
+            <nav aria-label={chosen!.name} className={cn('mt-6', TAB_GRID, TAB_ROW)}>
               <Link href={chosen!.href} className={tabClasses(true)}>
                 {chosen!.tab}
               </Link>

@@ -20,7 +20,7 @@ function apartLabel(minutes: number): string {
 }
 
 /**
- * *Same Leader, Same Time* (SKILL.md section 10, decision 0392): leaders whose running Cells
+ * *Time Clashes* (SKILL.md section 10, decision 0392): leaders whose running Cells
  * start less than two hours apart. The rule refuses every new one, so these were entered
  * before it; nothing about them stops working, and Admin fixes each by changing a Cell's day
  * or time or handing a Cell to the person who really leads it.
@@ -29,7 +29,7 @@ export function ScheduleClashes({ query }: { query: UseQueryResult<ScheduleClash
   return (
     <section aria-labelledby="clashes-heading" className="mt-4">
       <h2 id="clashes-heading" className="sr-only">
-        Same Leader, Same Time
+        Time Clashes
       </h2>
       <p className="text-muted max-w-3xl text-sm leading-relaxed">
         A leader whose Cell Groups start less than 2 hours apart. Fix each by changing one

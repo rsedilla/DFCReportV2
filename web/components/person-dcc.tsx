@@ -292,7 +292,7 @@ function DccHistory({
 
       {more ? (
         <Button variant="secondary" className="mt-4" onClick={onMore} disabled={loadingMore}>
-          {loadingMore ? 'Loading…' : 'Show older Sundays'}
+          {loadingMore ? 'Loading…' : 'Show More'}
         </Button>
       ) : null}
     </div>

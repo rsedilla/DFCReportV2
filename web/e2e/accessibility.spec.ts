@@ -216,7 +216,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await mockAccepted(page, '**/api/v1/auth/forgot-password');
       await page.getByLabel('Email address').fill('someone@example.invalid');
-      await page.getByRole('button', { name: 'Email me a link' }).click();
+      await page.getByRole('button', { name: 'Send Link' }).click();
       await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
     },
   },
@@ -237,7 +237,7 @@ const SCANS = [
           body: JSON.stringify({ email: 'new@example.invalid' }),
         }),
       );
-      await page.getByRole('button', { name: 'Confirm my new email' }).click();
+      await page.getByRole('button', { name: 'Confirm Email' }).click();
       await expect(page.getByRole('heading', { name: 'Your email is changed' })).toBeVisible();
     },
   },
@@ -310,7 +310,7 @@ const SCANS = [
       // The Cell and DCC sections (decisions 0248 and 0247), waited for rather than
       // assumed: each loads on its own request, and a scan before both arrive would pass on
       // a profile nobody sees.
-      await expect(page.getByRole('button', { name: 'Move to another Cell' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Change Cell' })).toBeVisible();
       await expect(page.getByText('Service removed · not counted')).toBeVisible();
       // The Growth frame, both halves, which renders nothing at all until they arrive.
       const growth = page.getByRole('region', { name: 'Growth' });
@@ -429,7 +429,7 @@ const SCANS = [
       await mockCellChoices(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Move to another Cell' }).click();
+      await page.getByRole('button', { name: 'Change Cell' }).click();
       await expect(page.getByRole('dialog').getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
     },
   },
@@ -446,7 +446,7 @@ const SCANS = [
       await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Move to another leader' }).click();
+      await page.getByRole('button', { name: 'Change Leader' }).click();
       await expect(
         page.getByRole('dialog').getByLabel('Search for a leader by name'),
       ).toBeVisible();
@@ -531,7 +531,7 @@ const SCANS = [
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await searchCells(page, 'CELL');
       await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
-      await page.getByRole('button', { name: 'Add this person' }).click();
+      await page.getByRole('button', { name: 'Add Person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Marilou Reyes Santos was added' }),
       ).toBeVisible();
@@ -547,7 +547,7 @@ const SCANS = [
       await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
       await expect(page.getByText('Teofilo Ramos', { exact: true })).toBeVisible();
     },
   },
@@ -626,7 +626,7 @@ const SCANS = [
       await page.getByLabel('Search for a leader by name').fill('ann');
       await page.getByRole('button', { name: 'Search people' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
-      await page.getByRole('button', { name: 'Add this person' }).click();
+      await page.getByRole('button', { name: 'Add Person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Is this someone already recorded?' }),
       ).toBeVisible();
@@ -706,7 +706,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(
-        page.getByRole('button', { name: /^Close this Cell, Youth · Sat/ }).filter({ visible: true }).first(),
+        page.getByRole('button', { name: /^Close Cell, Youth · Sat/ }).filter({ visible: true }).first(),
       ).toBeVisible();
     },
   },
@@ -723,7 +723,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page
-        .getByRole('button', { name: /^Close this Cell, Youth · Sat/ })
+        .getByRole('button', { name: /^Close Cell, Youth · Sat/ })
         .filter({ visible: true })
         .first()
         .click();
@@ -770,7 +770,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { level: 2, name: 'Couple · Wed' })).toBeVisible();
-      await page.getByRole('button', { name: 'Ask for a new Cell' }).click();
+      await page.getByRole('button', { name: 'Request New Cell' }).click();
       await expect(
         page.getByRole('dialog', { name: 'Ask for a new Cell' }).getByLabel('What time'),
       ).toBeVisible();
@@ -814,7 +814,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
-      await page.getByRole('button', { name: 'Change when it meets' }).click();
+      await page.getByRole('button', { name: 'Change Schedule' }).click();
       const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
       await expect(dialog.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
       await expect(dialog.getByText(/^Meets now on/)).toBeVisible();
@@ -848,7 +848,7 @@ const SCANS = [
       await mockRecordedMeetingRoster(page, 'HELD');
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Edit meeting' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
     },
   },
   {
@@ -863,7 +863,7 @@ const SCANS = [
       await mockRecordedMeetingRoster(page, 'HELD');
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Edit meeting' }).click();
+      await page.getByRole('button', { name: 'Edit' }).click();
       await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     },
   },
@@ -906,7 +906,7 @@ const SCANS = [
       await mockDccRoster(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Edit marks' }).click();
+      await page.getByRole('button', { name: 'Edit' }).click();
       await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     },
   },
@@ -1242,7 +1242,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Add Member' })).toBeVisible();
     },
   },
   {
@@ -1258,7 +1258,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Remove' }).first().click();
-      await expect(page.getByRole('button', { name: 'Yes, remove' })).toBeVisible();
+      // The row's Remove and the confirmation's share one name (decision 0416).
+      await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(2);
       await expect(page.getByText(/Past months keep counting them/).filter({ visible: true })).toBeVisible();
     },
   },
@@ -1287,7 +1288,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
-      await page.getByRole('button', { name: 'Add a member' }).click();
+      await page.getByRole('button', { name: 'Add Member' }).click();
       const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
       await dialog.getByLabel('Search for a person by name').fill('Marilou');
       await dialog.getByRole('button', { name: 'Search people' }).click();
@@ -1656,7 +1657,7 @@ const SCANS = [
       await mockSuynl(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Edit lessons' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
@@ -1814,7 +1815,7 @@ for (const theme of THEMES) {
  */
 const TARGET_SWEEP = [
   { name: 'sign-in', route: '/sign-in', settle: 'Sign in', minimum: 4 },
-  { name: 'forgot-password', route: '/forgot-password', settle: 'Email me a link', minimum: 3 },
+  { name: 'forgot-password', route: '/forgot-password', settle: 'Send Link', minimum: 3 },
   // The two links inside its sentences and "Back to sign in" (decision 0412).
   { name: 'privacy', route: '/privacy', settleRole: 'link' as const, settle: 'Back to sign in', minimum: 3 },
   {
@@ -1826,16 +1827,16 @@ const TARGET_SWEEP = [
   {
     name: 'reset-password',
     route: '/reset-password?token=example-reset-token',
-    settle: 'Save new password',
+    settle: 'Save',
     minimum: 2,
   },
   {
     name: 'confirm-email',
     route: '/confirm-email?token=example-email-token',
-    settle: 'Confirm my new email',
+    settle: 'Confirm Email',
     minimum: 1,
   },
-  { name: 'session', route: '/session', settle: 'Sign out on every device', minimum: 2 },
+  { name: 'session', route: '/session', settle: 'Sign Out Everywhere', minimum: 2 },
   // The search box, the Search button and the "Add a person" link, settled on the link because
   // it waits for the account read (decision 0350). The nav lives in the header, outside
   // `<main>`, and is counted on no route.
@@ -1848,7 +1849,7 @@ const TARGET_SWEEP = [
   },
   // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
   // its Find button, and the submit button.
-  { name: 'add a person', route: '/people/new', settle: 'Add this person', minimum: 13 },
+  { name: 'add a person', route: '/people/new', settle: 'Add Person', minimum: 13 },
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
@@ -1867,7 +1868,7 @@ const TARGET_SWEEP = [
   {
     name: 'edit a person',
     route: `/people/${PERSON_IN_SCOPE.id}/edit`,
-    settle: 'Save changes',
+    settle: 'Save',
     // Back link, 5 Field inputs, 3 civil-status radios, Save, Cancel.
     minimum: 11,
   },
@@ -2067,7 +2068,7 @@ const TARGET_SWEEP = [
     // out (decision 0287).
     name: 'growth suynl',
     route: '/growth/suynl?all=1',
-    settle: 'Edit lessons',
+    settle: 'Edit',
     minimum: 32,
   },
   {
@@ -2139,7 +2140,7 @@ const TARGET_SWEEP = [
     // **five**. Your requests renders nothing here, the sweep answering no sent requests.
     name: 'my cell',
     route: '/my-cell',
-    settle: 'Ask for a new Cell',
+    settle: 'Request New Cell',
     minimum: 5,
     recording: true,
   },
@@ -2895,17 +2896,17 @@ test('only the most specific navigation entry is marked as the current page', as
  * People carries People and, on Full view screens, Family Tree (decision 0341), each marked on
  * its own screen. # of People is under Reports (decision 0376).
  */
-test('the People item carries People, Awaiting Leader Assignment and Family Tree tabs', async ({ page }) => {
+test('the People item carries People, No Leader Yet and Family Tree tabs', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
   await mockNetworkTree(page);
 
   await page.goto('/people');
   const tabs = page.getByRole('navigation', { name: 'People' });
-  // Awaiting Leader Assignment between them since decision 0381.
+  // No Leader Yet between them since decision 0381.
   await expect(tabs.getByRole('link')).toHaveText([
       'Add People',
-      /^Awaiting Leader Assignment/,
+      /^No Leader Yet/,
       'Family Tree',
       'Absent 3+ Months',
     ]);
@@ -2915,7 +2916,7 @@ test('the People item carries People, Awaiting Leader Assignment and Family Tree
 
   await tabs.getByRole('link', { name: 'Add People', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(tabs.getByRole('link', { name: /^Awaiting Leader Assignment/ })).toBeFocused();
+  await expect(tabs.getByRole('link', { name: /^No Leader Yet/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(tabs.getByRole('link', { name: 'Family Tree', exact: true })).toBeFocused();
 });

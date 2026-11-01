@@ -33,7 +33,7 @@ test('a Full view account has the Family Tree tab, after People', async ({ page 
 
   await expect(peopleTabs(page).getByRole('link')).toHaveText([
       'Add People',
-      /^Awaiting Leader Assignment/,
+      /^No Leader Yet/,
       'Family Tree',
       'Absent 3+ Months',
     ]);

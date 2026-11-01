@@ -208,9 +208,12 @@ test.describe('the Conquest page', () => {
       );
     expect(classes.length).toBeGreaterThan(0);
 
+    // Every other row's tint is the table's stripe (decision 0416): it alternates by position
+    // and grades nothing, so it is set aside with the focus ring.
     const coloured = classes.filter(
       (token) =>
         !token.startsWith('focus-visible:') &&
+        token !== 'even:bg-accent-tint' &&
         (/accent/.test(token) ||
           /(^|:)bg-/.test(token) ||
           /(^|:)(text|border|outline|ring|fill|stroke)-(red|green|amber|yellow|lime|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|orange|success|danger|warning|positive|negative)\b/.test(

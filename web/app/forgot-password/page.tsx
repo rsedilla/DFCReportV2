@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
           />
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Sending…' : 'Email me a link'}
+            {submitting ? 'Sending…' : 'Send Link'}
           </Button>
         </form>
       )}

@@ -246,7 +246,7 @@ function Setup({
         refusal={refusal}
         footer={
           <Button variant="quiet" type="button" onClick={onBack}>
-            Back to the QR code
+            Back
           </Button>
         }
       />
@@ -366,7 +366,7 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
           I have saved these codes somewhere safe
         </label>
         <Button type="button" disabled={!saved} onClick={onDone}>
-          Continue to DFC Report
+          Continue to DREAMS
         </Button>
       </div>
     </AuthCard>

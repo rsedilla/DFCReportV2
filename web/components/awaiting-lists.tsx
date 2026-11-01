@@ -14,7 +14,7 @@ import { awaitingReassignment } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
 /**
- * Section 15's two attention lists, *Awaiting CG Assignment* and *Awaiting Leader Assignment*
+ * Section 15's two attention lists, *No CG Yet* and *No Leader Yet*
  * (decisions 0232 and 0233), each on the screen its remedy is on (decision 0381): the first a
  * tab of `Cells`, where a person is put in a Cell, and the second a tab of `People`, where a
  * person is moved to a leader. They left `Record`, which is for recording. Both ask about now.
@@ -54,7 +54,7 @@ export function useAwaitingLeader(enabled: boolean) {
   return { pages, count: countOf(pages) };
 }
 
-/** *Awaiting CG Assignment*, as a tab of `Cells` (decisions 0233 and 0381). */
+/** *No CG Yet*, as a tab of `Cells` (decisions 0233 and 0381). */
 export function AwaitingCgList() {
   const { pages } = useWithoutACell(true);
   const data = pages.data?.pages.flatMap((page) => page.data);
@@ -63,7 +63,7 @@ export function AwaitingCgList() {
     <section className="min-w-0 pt-5" aria-labelledby="without-cell-heading">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
-          Awaiting CG Assignment
+          No CG Yet
         </h2>
         <p className="text-muted text-sm">People you oversee who are not in a Cell or leading one.</p>
       </div>
@@ -75,7 +75,7 @@ export function AwaitingCgList() {
       ) : data ? (
         <>
           <ListTable
-            caption="Awaiting CG Assignment"
+            caption="No CG Yet"
             columns={['Name']}
             empty="Everybody you oversee is in a Cell."
             rows={data.map((person) => ({
@@ -94,7 +94,7 @@ export function AwaitingCgList() {
   );
 }
 
-/** *Awaiting Leader Assignment*, as a tab of `People` (decisions 0232, 0356 and 0381). */
+/** *No Leader Yet*, as a tab of `People` (decisions 0232, 0356 and 0381). */
 export function AwaitingLeaderList() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   // Who may move them: a Leader only when ticked Moves people (decision 0356). The API decides
@@ -109,7 +109,7 @@ export function AwaitingLeaderList() {
     <section className="min-w-0 pt-5" aria-labelledby="unplaced-heading">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
-          Awaiting Leader Assignment
+          No Leader Yet
         </h2>
         <p className="text-muted text-sm">
           People you oversee whose pastoral leader is not in the pastoral tree.
@@ -128,7 +128,7 @@ export function AwaitingLeaderList() {
         <>
           {/* The action that resolves an entry is the reassignment (section 19). */}
           <ListTable
-            caption="Awaiting Leader Assignment"
+            caption="No Leader Yet"
             columns={['Name', 'Previous Cell Leader']}
             empty="Nobody you oversee is waiting for a new leader."
             rows={data.map((person) => ({

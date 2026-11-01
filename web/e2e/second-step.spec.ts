@@ -73,7 +73,7 @@ test('walks through setup and shows the recovery codes once, before going on', a
   await expect(page.getByRole('heading', { name: 'Save your recovery codes' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem')).toHaveCount(10);
 
-  const go = page.getByRole('button', { name: 'Continue to DFC Report' });
+  const go = page.getByRole('button', { name: 'Continue to DREAMS' });
   await expect(go).toBeDisabled();
   await page.getByLabel('I have saved these codes somewhere safe').check();
   await go.click();
@@ -101,7 +101,7 @@ test('every control on the second-step screens is at least 24 by 24 pixels', asy
   await page.getByRole('button', { name: 'Next' }).click();
   await measure(page.getByLabel('Code'), 'the code field');
   await measure(page.getByRole('button', { name: 'Confirm' }), 'Confirm');
-  await measure(page.getByRole('button', { name: 'Back to the QR code' }), 'Back to the QR code');
+  await measure(page.getByRole('button', { name: 'Back' }), 'Back');
 
   await page.getByLabel('Code').fill(SECOND_STEP_CODE);
   await page.getByRole('button', { name: 'Confirm' }).click();
