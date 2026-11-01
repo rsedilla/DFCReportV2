@@ -4868,7 +4868,7 @@ GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor'
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
 GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classification they give (Section 9)
 GET  /api/v1/dcc/owed?month=YYYY-MM-01    the DCC records still owed in the actor's branch (decision 0301)
-GET  /api/v1/dcc/pending-leaders          the leaders in scope whose 12 are unrecorded for an open week, one row per leader and recorder, and a page holds every row of the leaders it reaches, so it may carry more rows than limit (decisions 0336 and 0403); ?late=true keeps the Sundays past their deadline (decision 0368); ?leader_id= keeps that leader's branch now, within the reader's scope; SCOPE_DENIED outside it, then NOT_FOUND naming nobody (decision 0370)
+GET  /api/v1/dcc/pending-leaders          the leaders in scope whose 12 are unrecorded for an open week, one row per leader and recorder (recorded_by_administrator where nobody above holds an account, decision 0418), and a page holds every row of the leaders it reaches, so it may carry more rows than limit (decisions 0336 and 0403); ?late=true keeps the Sundays past their deadline (decision 0368); ?leader_id= keeps that leader's branch now, within the reader's scope; SCOPE_DENIED outside it, then NOT_FOUND naming nobody (decision 0370)
 GET  /api/v1/dcc/leaders/{id}/checklist?month=YYYY-MM-01  one leader's checklist for the month, read only (decision 0301)
 GET  /api/v1/dcc/events/{id}/leaders/{leaderId}/roster  one leader's checklist for a Sunday, to record on their behalf (decision 0313)
 

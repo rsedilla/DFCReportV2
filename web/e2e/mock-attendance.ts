@@ -611,7 +611,14 @@ export async function mockDccRoster(
  */
 export async function mockLeaderDccRoster(
   page: Page,
-  { active = true }: { active?: boolean } = {},
+  {
+    active = true,
+    holdsAccount = true,
+  }: {
+    active?: boolean;
+    /** False for a leader nobody above covers, recorded by an administrator (decision 0418). */
+    holdsAccount?: boolean;
+  } = {},
 ): Promise<void> {
   await page.route('**/api/v1/dcc/events/*/leaders/*/roster*', (route) =>
     route.fulfill(
@@ -628,8 +635,8 @@ export async function mockLeaderDccRoster(
         leader: {
           person_id: OWED_LEADER_ID,
           full_name: 'Carlo Reyes',
-          holds_account: true,
-          account_active: active,
+          holds_account: holdsAccount,
+          account_active: holdsAccount && active,
         },
         data: [
           {
