@@ -10,8 +10,9 @@ import type { QueueItem } from '@/components/record-queue';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { SearchField } from '@/components/ui/field';
+import { FilterChip } from '@/components/ui/filter-chip';
 import { CONTROL_BAR, TAB_GRID, countClasses, tabClasses } from '@/components/ui/frame';
-import { RadioGroup } from '@/components/ui/radio-group';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, closedOnLabel, type PendingCgCell } from '@/lib/cells';
 import {
@@ -654,21 +655,22 @@ export function BranchNote({ filter, onClear }: { filter: PendingFilter; onClear
 export function PendingFilters({
   searchLabel,
   wholeChurch,
-  name,
   value,
   onChange,
 }: {
   searchLabel: string;
   wholeChurch: boolean;
-  /** Keeps the two bars' radio groups apart. */
-  name: string;
   value: PendingFilter;
   onChange: (next: PendingFilter) => void;
 }) {
   const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(value.q);
 
   return (
-    <div className={`mt-4 ${CONTROL_BAR}`}>
+    // The search on its own line, and under it the filters as one row of pills (decision
+    // 0416's in-page choice): the Network as a switch and Late only as a toggle, the pattern
+    // of Shopify Polaris's index filters and Material's filter chips. Every filter applies at
+    // once and none reorders (decision 0009).
+    <div className={cn('mt-4', CONTROL_BAR, 'flex-col items-stretch gap-y-4')}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -676,7 +678,7 @@ export function PendingFilters({
             onChange({ ...value, q: trimmed });
           }
         }}
-        className="flex w-full min-w-0 lg:w-auto lg:min-w-72 lg:flex-1"
+        className="flex w-full min-w-0"
         noValidate
       >
         <SearchField
@@ -692,29 +694,32 @@ export function PendingFilters({
           }
         />
       </form>
-      {wholeChurch ? (
-        <RadioGroup
-          legend="Network"
-          name={`${name}-network`}
-          value={value.network ?? 'ALL'}
-          onChange={(next) =>
-            onChange({ ...value, network: next === 'ALL' ? null : (next as 'MENS' | 'WOMENS') })
-          }
-          options={[
-            { value: 'ALL', label: 'All' },
-            { value: 'MENS', label: 'Men’s' },
-            { value: 'WOMENS', label: 'Women’s' },
-          ]}
-        />
-      ) : null}
-      <Button
-        type="button"
-        variant="secondary"
-        aria-pressed={value.late}
-        onClick={() => onChange({ ...value, late: !value.late })}
-      >
-        {value.late ? 'Showing late only' : 'Late only'}
-      </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+        {wholeChurch ? (
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            {/* The switch is named Network for a screen reader; this is its visible twin. */}
+            <span aria-hidden="true" className="field-label">
+              Network
+            </span>
+            <ViewSwitch
+              label="Network"
+              className="mt-0"
+              value={value.network ?? 'ALL'}
+              onChange={(next) =>
+                onChange({ ...value, network: next === 'ALL' ? null : (next as 'MENS' | 'WOMENS') })
+              }
+              options={[
+                { key: 'ALL', label: 'All' },
+                { key: 'MENS', label: 'Men’s' },
+                { key: 'WOMENS', label: 'Women’s' },
+              ]}
+            />
+          </div>
+        ) : null}
+        <FilterChip pressed={value.late} onChange={(late) => onChange({ ...value, late })}>
+          Late only
+        </FilterChip>
+      </div>
     </div>
   );
 }
@@ -1159,7 +1164,6 @@ export function PendingCgPane({
       <PendingFilters
         searchLabel="Search by Cell ID or leader"
         wholeChurch={wholeChurch}
-        name="pending-cg"
         value={filter}
         onChange={onFilter}
       />
@@ -1219,7 +1223,6 @@ export function PendingDccPane({
       <PendingFilters
         searchLabel="Search a leader by name or Member ID"
         wholeChurch={wholeChurch}
-        name="pending-dcc"
         value={filter}
         onChange={onFilter}
       />

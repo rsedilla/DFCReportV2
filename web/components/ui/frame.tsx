@@ -19,10 +19,10 @@ export const TAB_ROW = 'border-accent border-b-2';
 export const TAB_PANE = 'border-accent flow-root min-w-0 border-2 border-t-0 px-4 pb-5 sm:px-5';
 
 /**
- * How every tab row lays out its tabs (decision 0416): one fixed size, 11.5rem, from `sm`, and
+ * How every tab row lays out its tabs (decision 0416): one fixed size, 13rem (decision 0417), from `sm`, and
  * two equal tabs to a row on a phone, where a label may wrap only on the narrowest.
  */
-export const TAB_GRID = 'grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,11.5rem)]';
+export const TAB_GRID = 'grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,13rem)]';
 
 /**
  * One tab of a tab row, the same on every screen: one size (decision 0416), the chosen one

@@ -148,7 +148,7 @@ test.describe('the SUYNL tab', () => {
     await page.getByRole('button', { name: 'Only my disciples' }).click();
 
     await expect(page).toHaveURL(/[?&]mine=1\b/);
-    await expect(page.getByRole('button', { name: 'Showing only my disciples' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Only my disciples' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -191,7 +191,7 @@ test.describe('the SUYNL tab', () => {
     });
     await page.goto('/growth/suynl?mine=1');
 
-    const on = page.getByRole('button', { name: 'Showing only my disciples' });
+    const on = page.getByRole('button', { name: 'Only my disciples' });
     await expect(on).toHaveAttribute('aria-pressed', 'true');
     await on.click();
     await expect(page).not.toHaveURL(/[?&]mine=1\b/);

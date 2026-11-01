@@ -4363,12 +4363,13 @@ Senior Pastor and Admin are different responsibilities even when permissions ove
 
 **Each kind of control has one size and one look on every screen, for every account** (ruling of 2026-11-01, decision 0416, replacing decision 0329's tabs sized to their words):
 
-- **A tab** is 11.5rem from a small screen up, two equal tabs to a row on a phone, the chosen one filled. A list's tab takes a short name: *No Leader Yet*, *No CG Yet*, *Inactive 3+ Months*, *Time Clashes*, *Under 3 Members*.
+- **A tab** is 13rem from a small screen up (decision 0417), two equal tabs to a row on a phone, the chosen one filled. A list's tab takes a short name: *No Leader Yet*, *No CG Yet*, *Inactive 3+ Months*, *Time Clashes*, *Under 3 Members*.
 - **A choice inside a tab is a pill**: a grey rounded track, the chosen view a white pill with bold accent words, each segment 8rem, sharing the row equally on a phone, so a view never looks like another row of tabs.
 - **A stacked radio choice** is 11rem, wrapping where the column is narrow, and the full width on a phone. A roster's Present and Absent rows are unchanged.
 - **A button** is at least 9rem wide, the full width on a phone, and named by its action in at most about three words in Title Case: *Cancel* to leave without changing anything, *Back* to go back a step, *Save* to save.
 - **A table** has a solid accent header row with white words and every other body row in the pale accent tint, a stripe that grades nothing.
 - **A search box** is one search bar: about thirty characters wide, the full width on a phone, a magnifying glass inside it, and its Search button joined to it, any other button apart.
+- **A list's filters** sit on one row under its search (ruling of 2026-11-01, decision 0417): a choice of one from a few, such as the Pending lists' *Network*, is the pill above, and a filter that is on or off, such as *Late only* or *Only my disciples*, is a rounded chip that keeps its name and shows a tick when on.
 
 ---
 

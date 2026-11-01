@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-01, the trigger being decision 0416: of 415 files, 414 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0416 each moved the first two and
+2026-11-01, the trigger being decision 0417: of 416 files, 415 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0417 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-01 and triggered by 0416, and was left stale by 0417 the same day. The one before that was dated
 2026-11-01 and triggered by 0415, and was left stale by 0416 the same day. The one before that was dated
 2026-11-01 and triggered by 0414, and was left stale by 0415 the same day. The one before that was dated
 2026-11-01 and triggered by 0413, and was left stale by 0414 the same day. The one before that was dated
@@ -874,6 +875,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-01 — [Who opened this record, shown to the Admin](docs/decisions/0414-who-opened-this-record.md)
 - 2026-11-01 — [Changing the email of an account in use](docs/decisions/0415-changing-the-email-of-an-account-in-use.md)
 - 2026-11-01 — [One size for every control, with shorter names](docs/decisions/0416-one-size-for-every-control.md)
+- 2026-11-01 — [Tabs are 13rem, and a list's filters are pills and chips](docs/decisions/0417-tabs-13rem-and-filters-as-pills.md)
 
 ### Open — awaiting a ruling
 
