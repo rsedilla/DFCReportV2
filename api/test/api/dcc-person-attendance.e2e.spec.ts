@@ -249,8 +249,9 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
   it('walks past a leader with no account to the nearest one above who has one', async () => {
     const sunday = await recentSunday();
     const event = await createEvent(sunday);
-    // Nathan holds no account, and neither does Raymond above him, so the walk reaches
-    // nobody; under Manuel, who holds one, it stops at him.
+    // Nathan holds no account, and neither does Raymond above him, a Network root, so the
+    // walk reaches nobody and the line is on Raymond's own checklist, which an administrator
+    // records (decision 0418); under Manuel, who holds one, it stops at him.
     const ned = await createPerson(db, { firstName: 'Ned', network: 'MENS' });
     await assignTo(db, ned.id, nathan.id);
     await insertRecord(event, ned, true, nathan, admin);
@@ -259,7 +260,7 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
     await insertRecord(event, tim, true, manuel, admin);
 
     const nobody = await attendance(admin, ned.id).expect(200);
-    expect(nobody.body.data[0].checklist_of).toBeNull();
+    expect(nobody.body.data[0].checklist_of).toBe(raymond.id);
     const manuelS = await attendance(admin, tim.id).expect(200);
     expect(manuelS.body.data[0].checklist_of).toBe(manuel.id);
   });

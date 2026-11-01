@@ -881,7 +881,10 @@ export function PendingDccList({
       ? `${none} · Recorded by you`
       : row.recorded_by !== null
         ? `${none} · Recorded by ${row.recorded_by.full_name}`
-        : none;
+        : row.recorded_by_administrator
+          ? // Nobody above has an account, then or now (decision 0418).
+            `${none} · Nobody above has one, so an administrator records it`
+          : none;
   };
 
   const sundays = (row: PendingDccLeader) => (

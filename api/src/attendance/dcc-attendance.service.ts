@@ -224,7 +224,9 @@ export class DccAttendanceService {
    * then the Network roots where the leader's own grant puts them there — **narrowed now
    * to the people the actor holds under `dcc.take_attendance`** (owner's ruling). A leader
    * holding no account is nobody's submitter, so their checklist is empty: their people
-   * are on the nearest upline's, which is the screen their row opens.
+   * are on the nearest upline's, which is the screen their row opens. **Unless the leader is a
+   * Network root holding none**: an administrator then reads the checklist the root would
+   * have with an account, and records it (decision 0418).
    */
   async leaderRoster(
     eventId: string,
@@ -265,7 +267,17 @@ export class DccAttendanceService {
     const account = await this.accounts.accountOfPerson(this.db, leaderId);
     let lines: RosterLine[] = [];
 
-    if (account !== null) {
+    if (account === null) {
+      // **An administrator records a leader whom nobody above covers, then or now**
+      // (decision 0418): the checklist is the one this leader would have with an account.
+      // For anyone else, and for a leader somebody above does cover, it stays empty.
+      if (
+        holdsWholeChurch(authority, Capability.DccTakeAttendance) &&
+        holdsWholeChurch(authority, Capability.DccSubmitOnBehalf)
+      ) {
+        lines = await this.rosterLines(this.db, event, leaderId, false, true);
+      }
+    } else {
       const leaderAuthority = await this.authorization.authorityFor(account.id);
       lines = await this.rosterLines(
         this.db,
@@ -704,6 +716,12 @@ export class DccAttendanceService {
     submitterId: string,
     /** Whether that submitter holds `dcc.take_attendance` at Whole Church (decision 0172). */
     includesRoots: boolean,
+    /**
+     * Read for an administrator, who records a Network root holding no account (decision
+     * 0418). Only a root gains a checklist this way; any other leader without an account
+     * keeps none, their people being on whoever covers them, or on the root's.
+     */
+    forAdministrator = false,
   ): Promise<Set<string>> {
     const checklist = new Set<string>();
 
@@ -722,7 +740,18 @@ export class DccAttendanceService {
       const holdsNow =
         (await this.accounts.personsHoldingAccounts(executor, [submitterId])).size > 0;
       accountsAt = undefined;
-      if (coveredThen || !holdsNow) {
+      // A Network root alone (decision 0418): a leader partway down an uncovered chain keeps
+      // no checklist, their people being on the root's, and one whose own assignment has
+      // ended, with nobody above, is not a root and is not covered either.
+      const unowned =
+        forAdministrator &&
+        !coveredThen &&
+        !holdsNow &&
+        above.length === 0 &&
+        (await this.hierarchy.rootsAsOf(executor, event.at)).some(
+          (rootId) => canonical(rootId) === canonical(submitterId),
+        );
+      if (coveredThen || (!holdsNow && !unowned)) {
         return this.withRoots(executor, event, checklist, includesRoots);
       }
     }
@@ -794,8 +823,11 @@ export class DccAttendanceService {
     event: EventForRecording,
     submitterId: string,
     includesRoots: boolean,
+    forAdministrator = false,
   ): Promise<RosterLine[]> {
-    const checklist = [...(await this.checklist(executor, event, submitterId, includesRoots))];
+    const checklist = [
+      ...(await this.checklist(executor, event, submitterId, includesRoots, forAdministrator)),
+    ];
     const identities = await this.people.forDecisionsWithin(executor, checklist);
     const archivedThen = await this.people.archivedAtWithin(executor, checklist, event.at);
 

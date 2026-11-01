@@ -265,6 +265,8 @@ export interface PendingDccLeader {
   /** Who records it, named only where the reader's scope covers them. */
   recorded_by: { person_id: string; full_name: string } | null;
   recorded_by_you: boolean;
+  /** Nobody above holds an account, then or now, so an administrator records it (decision 0418). */
+  recorded_by_administrator?: boolean;
   /** Oldest first; the recorder, Record and See checklist follow the first. */
   sundays: { event_id: string; event_date: string; due_at: string | null; closes_at: string }[];
   record_for: string | null;

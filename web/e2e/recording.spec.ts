@@ -2518,6 +2518,22 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
 test.describe('recording a Sunday for another leader (decision 0313)', () => {
   const FOR_CARLO = `/dcc/3f1b7c6e-0000-4000-8000-000000000501?leader=${OWED_LEADER_ID}`;
 
+  test('says an administrator records a leader holding no account (decision 0418)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockLeaderDccRoster(page, { holdsAccount: false });
+
+    await page.goto(FOR_CARLO);
+
+    await expect(
+      page.getByText(
+        'These are Carlo Reyes’s people. Nobody above has an account, so an administrator records them. It is saved under your name.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/Carlo Reyes records/)).toHaveCount(0);
+  });
+
   test('says whose checklist it is, in their sections, and saves only what was marked', async ({
     page,
   }) => {
@@ -2899,6 +2915,35 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     await expect(rows).toHaveCount(2);
     await expect(rows.first()).toContainText('Has no account · Recorded by Jose Santos');
     await expect(rows.last()).toContainText('Has no account · Recorded by Ana Cruz');
+  });
+
+  test('a leader nobody above covers is recorded by an administrator, and says so (decision 0418)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    const [carlo] = PENDING_DCC_ROWS;
+    const root = '3f1b7c6e-0000-4000-8000-000000000999';
+    await mockPendingDcc(page, [
+      { ...carlo, recorded_by: null, recorded_by_administrator: true, record_for: root, may_record: true },
+    ]);
+    await mockDccOwed(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    await page.goto('/dashboard?list=dcc');
+
+    const row = page
+      .getByRole('table', { name: 'Pending DCC Records' })
+      .getByRole('row')
+      .filter({ hasText: 'Carlo Reyes' });
+    await expect(row).toContainText(
+      'Has no account · Nobody above has one, so an administrator records it',
+    );
+    // Record opens the checklist of the leader at the top of the chain.
+    await expect(row.getByRole('link', { name: /^Record/ })).toHaveAttribute(
+      'href',
+      `/dcc/3f1b7c6e-0000-4000-8000-000000000501?leader=${root}`,
+    );
   });
 
   test('a list with a further page unread counts what it read and says there is more', async ({
