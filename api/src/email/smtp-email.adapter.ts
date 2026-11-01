@@ -119,13 +119,57 @@ export function compose(
     };
   }
 
-  const path = message.kind === 'ACTIVATION' ? '/activate' : '/reset-password';
+  if (message.kind === 'EMAIL_CHANGED') {
+    const changed = message.changedAt.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    return {
+      subject: 'Your DREAMS email address was changed',
+      text: [
+        greeting,
+        '',
+        message.byAdministrator
+          ? `An administrator changed the email address of your account on ${changed} (Manila time). Your account starts over at the new address: you were signed out, and your password no longer works.`
+          : `The email address of your account was changed on ${changed} (Manila time). Reset links now go to the new address, not this one.`,
+        '',
+        'If you did not expect this, contact your church administrator straight away.',
+        '',
+      ].join('\n'),
+    };
+  }
+
+  const path =
+    message.kind === 'ACTIVATION'
+      ? '/activate'
+      : message.kind === 'EMAIL_CHANGE'
+        ? '/confirm-email'
+        : '/reset-password';
   const link = `${linkOrigin}${path}?token=${encodeURIComponent(message.token)}`;
   const expires = message.expiresAt.toLocaleString('en-PH', {
     timeZone: 'Asia/Manila',
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+
+  if (message.kind === 'EMAIL_CHANGE') {
+    return {
+      subject: 'Confirm your new DREAMS email address',
+      text: [
+        greeting,
+        '',
+        'You asked to use this address for your DREAMS account. Open this link to confirm it:',
+        '',
+        link,
+        '',
+        `The link works once and expires ${expires} (Manila time).`,
+        'If you did not ask for this, ignore this message and nothing changes.',
+        '',
+      ].join('\n'),
+    };
+  }
 
   if (message.kind === 'ACTIVATION') {
     return {

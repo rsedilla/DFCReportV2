@@ -117,6 +117,19 @@ function render(message: OutboundEmail): string {
   }
 
   // A notice carries no token and no expiry (decision 0351).
+  if (message.kind === 'EMAIL_CHANGED') {
+    return [
+      `Kind:      ${message.kind}`,
+      `To:        ${message.to.name} <${message.to.email}>`,
+      `Changed:   ${message.changedAt.toISOString()}`,
+      `By admin:  ${message.byAdministrator ? 'yes' : 'no'}`,
+      '',
+      'This message was not delivered. It was written by the development transport',
+      '(SKILL.md section 6). Nothing was sent to the address above.',
+      '',
+    ].join('\n');
+  }
+
   if (message.kind === 'PASSWORD_CHANGED') {
     return [
       `Kind:      ${message.kind}`,
@@ -136,7 +149,8 @@ function render(message: OutboundEmail): string {
     '',
   ];
 
-  // **Activation carries its token; a reset does not.** The refusal is here rather than
+  // **Activation carries its token; a reset and an email change do not** (decision 0415:
+  // the second moves where an account in use is reset, so it reaches the same). The refusal is here rather than
   // in a caller because this is the only place a token would reach disk.
   const credential =
     message.kind === 'ACTIVATION'
@@ -144,7 +158,7 @@ function render(message: OutboundEmail): string {
       : [
           'Token:     withheld (SKILL.md section 6).',
           '',
-          'A password-reset token takes over an account somebody is already using, which',
+          'A password-reset or email-change token takes over an account somebody is using, which',
           'is the access section 6 refuses an administrator. An activation token is',
           'written, because an account nobody has used cannot otherwise be reached.',
           '',

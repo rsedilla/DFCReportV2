@@ -8,10 +8,10 @@ import type { AccountTokenPurpose, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
- * Activation and password-reset tokens (SKILL.md section 6, Password reset
- * security).
+ * Activation, password-reset and email-change tokens (SKILL.md section 6, Password
+ * reset security; decision 0415).
  *
- * One service for both purposes because section 6 states one set of rules for
+ * One service for every purpose because section 6 states one set of rules for
  * them: cryptographically secure, single-use, stored only as a hash, short-lived,
  * and issuing a new one of a purpose invalidates any outstanding one of that
  * purpose for the account. Two implementations of that would be two chances to
@@ -44,6 +44,25 @@ export class AccountTokensService {
   }
 
   /**
+   * Marks every outstanding token of one purpose used: a password change ends a pending
+   * email change, so an attacker who asked for one cannot finish it after the holder has
+   * taken the account back (decision 0415).
+   */
+  async supersedeWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+    purpose: AccountTokenPurpose,
+  ): Promise<void> {
+    await trx
+      .updateTable('account_tokens')
+      .set({ used_at: new Date() })
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', purpose)
+      .where('used_at', 'is', null)
+      .execute();
+  }
+
+  /**
    * Mints a token, invalidating any outstanding one of the same purpose.
    *
    * Returns the plaintext **once**, to its caller. It is never stored and never in
@@ -68,6 +87,8 @@ export class AccountTokensService {
     accountId: string,
     purpose: AccountTokenPurpose,
     lifetimeMs: number,
+    /** The address an `EMAIL_CHANGE` token sets, and only that purpose (decision 0415). */
+    newEmail: { email: string; normalized: string } | null = null,
   ): Promise<{ token: string; expiresAt: Date }> {
     // 32 bytes from the CSPRNG, base64url so it survives a URL without escaping.
     const token = randomBytes(32).toString('base64url');
@@ -91,6 +112,8 @@ export class AccountTokensService {
         purpose,
         token_hash: hashToken(token),
         expires_at: expiresAt,
+        new_email: newEmail?.email ?? null,
+        new_email_normalized: newEmail?.normalized ?? null,
       })
       .execute();
 
@@ -124,6 +147,36 @@ export class AccountTokensService {
       .executeTakeFirst();
 
     return claimed ? { accountId: claimed.account_id } : null;
+  }
+
+  /**
+   * Redeems an `EMAIL_CHANGE` token, as {@link redeemWithin} does, and answers the address
+   * it sets as well (decision 0415).
+   */
+  async redeemEmailChangeWithin(
+    trx: Transaction<Database>,
+    token: string,
+  ): Promise<{ accountId: string; email: string; normalized: string } | null> {
+    const claimed = await trx
+      .updateTable('account_tokens')
+      .set({ used_at: new Date() })
+      .where('token_hash', '=', hashToken(token))
+      .where('purpose', '=', 'EMAIL_CHANGE')
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', new Date())
+      .returning(['account_id', 'new_email', 'new_email_normalized'])
+      .executeTakeFirst();
+
+    // Both non-null for this purpose, by `account_tokens_new_email_only_for_email_change`.
+    if (!claimed || claimed.new_email === null || claimed.new_email_normalized === null) {
+      return null;
+    }
+
+    return {
+      accountId: claimed.account_id,
+      email: claimed.new_email,
+      normalized: claimed.new_email_normalized,
+    };
   }
 
   /**

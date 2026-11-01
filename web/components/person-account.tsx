@@ -12,6 +12,7 @@ import { Tag } from '@/components/ui/tag';
 import {
   accountStatusLabel,
   correctAccountEmail,
+  restartAccountAtEmail,
   getAccountForPerson,
   provisionAccount,
   resendActivation,
@@ -65,6 +66,8 @@ export function PersonAccount({
   const [correctKey, setCorrectKey] = useState(() => crypto.randomUUID());
   // Where the link went and which address it replaced, for the line after saving.
   const [corrected, setCorrected] = useState<{ from: string; to: string } | null>(null);
+  // An account in use started over at a new address (decision 0415), for the line after.
+  const [restarted, setRestarted] = useState<{ from: string; to: string } | null>(null);
 
   const account = useQuery({
     queryKey: ['person-account', personId],
@@ -181,6 +184,12 @@ export function PersonAccount({
                   Sent to {corrected.to}. The link sent to {corrected.from} no longer works.
                 </p>
               ) : null}
+              {restarted && !corrected ? (
+                <p aria-live="polite" className="mt-2 text-sm font-medium">
+                  {firstName}&rsquo;s account starts over at {restarted.to}. The link to choose a
+                  password went there, and {restarted.from} was told.
+                </p>
+              ) : null}
               {correcting ? (
                 <form
                   className="mt-4 flex max-w-md flex-col gap-4"
@@ -271,6 +280,18 @@ export function PersonAccount({
           ) : null}
           {current.status === 'ACTIVE' ? (
             <PasswordResetRow accountId={current.id} firstName={firstName} email={current.email} />
+          ) : null}
+          {current.status === 'ACTIVE' && !own ? (
+            <ChangeEmailRow
+              accountId={current.id}
+              personId={personId}
+              firstName={firstName}
+              email={current.email}
+              onRestarted={(to) => {
+                setCorrected(null);
+                setRestarted({ from: current.email, to });
+              }}
+            />
           ) : null}
           <AccessRow
             accountId={current.id}
@@ -387,6 +408,105 @@ function PasswordResetRow({
         For someone who cannot sign in. It emails {firstName} a link to choose a new password, at{' '}
         {email}. You never see or choose the password, and the link lasts 30 minutes.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Changing the address of an account in use, for someone who has lost the mailbox (SKILL.md
+ * section 6, decision 0415). The account starts over at the new address, so it is asked
+ * before it acts. Not offered on the administrator's own account: their Account page is theirs.
+ */
+function ChangeEmailRow({
+  accountId,
+  personId,
+  firstName,
+  email,
+  onRestarted,
+}: {
+  accountId: string;
+  personId: string;
+  firstName: string;
+  email: string;
+  onRestarted: (to: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [next, setNext] = useState('');
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
+  const change = useMutation({
+    mutationFn: () => restartAccountAtEmail(accountId, next.trim(), key),
+    onSuccess: async (saved) => {
+      setOpen(false);
+      onRestarted(saved.email);
+      await queryClient.invalidateQueries({ queryKey: ['person-account', personId] });
+    },
+  });
+
+  const fieldError = fieldErrorFor(change.error, 'email');
+
+  return (
+    <div className="mt-3">
+      <FailureNotice failure={change.isError && !fieldError ? describeFailure(change.error) : null} />
+      {open ? (
+        <form
+          className="mt-1 flex max-w-md flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            change.mutate();
+          }}
+        >
+          <Field
+            label="New email address"
+            type="email"
+            name="restart-email"
+            autoComplete="off"
+            required
+            value={next}
+            error={fieldError}
+            onChange={(event) => {
+              setNext(event.target.value);
+              setKey(crypto.randomUUID());
+            }}
+          />
+          <p className="text-sm leading-relaxed">
+            {firstName}&rsquo;s account starts over at the new address. They&rsquo;re signed out
+            on every device, their password stops working, and a link to choose a new one goes to
+            the new address. {email} is told, and the change is kept in the audit log.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={next.trim() === '' || change.isPending}>
+              {change.isPending ? 'Changing…' : 'Change the email and start over'}
+            </Button>
+            <Button variant="quiet" type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <Button
+            className="mt-1"
+            variant="secondary"
+            onClick={() => {
+              // A new key each time the form opens, so a stored refusal is not replayed.
+              setKey(crypto.randomUUID());
+              setNext('');
+              change.reset();
+              setOpen(true);
+            }}
+          >
+            Change the email
+          </Button>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            For someone who has lost this mailbox. Their account starts over at the new address:
+            they are signed out everywhere, their password stops working, and a link to choose a
+            new one goes to the new address. The old address is told, and the change is kept in
+            the audit log.
+          </p>
+        </>
+      )}
     </div>
   );
 }

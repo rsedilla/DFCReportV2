@@ -24,7 +24,7 @@ export type ArchiveReason =
   | 'PASSED_AWAY';
 export type AccountStatus = 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
 export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'LEADER';
-export type AccountTokenPurpose = 'PASSWORD_RESET' | 'ACTIVATION';
+export type AccountTokenPurpose = 'PASSWORD_RESET' | 'ACTIVATION' | 'EMAIL_CHANGE';
 export type ScopeTypeValue = 'OWN_SUBTREE' | 'SUBTREE_EXCL_SELF' | 'NETWORK' | 'WHOLE_CHURCH';
 
 /** Written by the database default, never sent by the application. */
@@ -249,6 +249,9 @@ export interface AccountTokensTable {
   expires_at: ColumnType<Date, Date | string, Date | string>;
   used_at: Date | null;
   created_at: ServerTimestamp;
+  /** The address an `EMAIL_CHANGE` token sets, and only that purpose (decision 0415). */
+  new_email: ColumnType<string | null, string | null | undefined, string | null>;
+  new_email_normalized: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 /**
@@ -283,6 +286,8 @@ export type AuditAction =
   // account's own address. Targets the account; the reset itself is `password.reset`.
   | 'account.password_reset_sent'
   | 'account.email_corrected'
+  | 'account.email_changed'
+  | 'account.email_replaced'
   // Disabled and re-enabled by an administrator (decision 0307); section 21's
   // "disablement" and "Account reactivation". Each targets the account.
   | 'account.disabled'

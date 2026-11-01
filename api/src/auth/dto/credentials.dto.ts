@@ -45,11 +45,18 @@ export class ProvisionAccountDto {
   role!: AccountRole;
 }
 
-/** The address an account awaiting activation should have had (decision 0300). */
+/**
+ * The address an account awaiting activation should have had (decision 0300), or the one
+ * an account in use starts over at, which `restart` must say (decision 0415).
+ */
 export class CorrectAccountEmailDto {
   @IsEmailAddress()
   @MaxLength(320)
   email!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  restart?: boolean;
 }
 
 /** Full view on a Leader account, ticked or cleared (section 7, decision 0323). */
@@ -140,6 +147,28 @@ export class ChangePasswordDto {
   @MinLength(1)
   @MaxLength(512)
   refresh_token!: string;
+}
+
+/**
+ * Asking to change one's own email address while signed in (decision 0415). The password
+ * bound is `ChangePasswordDto`'s.
+ */
+export class ChangeEmailDto {
+  @IsEmailAddress()
+  @MaxLength(320)
+  new_email!: string;
+
+  @IsString()
+  @MaxLength(1024)
+  current_password!: string;
+}
+
+/** The link that confirms a new email address (decision 0415). */
+export class ConfirmEmailDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  token!: string;
 }
 
 /** The caller's own username (decision 0337), checked and lowercased by the service. */

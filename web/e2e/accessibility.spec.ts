@@ -223,6 +223,24 @@ const SCANS = [
   { name: 'activate', route: '/activate?token=example-activation-token' },
   { name: 'activate, link missing its token', route: '/activate' },
   { name: 'reset-password', route: '/reset-password?token=example-reset-token' },
+  // Decision 0415: the page a new address's link opens, before and after confirming.
+  { name: 'confirm-email', route: '/confirm-email?token=example-email-token' },
+  { name: 'confirm-email, link missing its token', route: '/confirm-email' },
+  {
+    name: 'confirm-email, confirmed',
+    route: '/confirm-email?token=example-email-token',
+    async arrange(page: import('@playwright/test').Page) {
+      await page.route('**/api/v1/auth/email/confirm', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ email: 'new@example.invalid' }),
+        }),
+      );
+      await page.getByRole('button', { name: 'Confirm my new email' }).click();
+      await expect(page.getByRole('heading', { name: 'Your email is changed' })).toBeVisible();
+    },
+  },
   {
     name: 'session',
     route: '/session',
@@ -1811,6 +1829,12 @@ const TARGET_SWEEP = [
     settle: 'Save new password',
     minimum: 2,
   },
+  {
+    name: 'confirm-email',
+    route: '/confirm-email?token=example-email-token',
+    settle: 'Confirm my new email',
+    minimum: 1,
+  },
   { name: 'session', route: '/session', settle: 'Sign out on every device', minimum: 2 },
   // The search box, the Search button and the "Add a person" link, settled on the link because
   // it waits for the account read (decision 0350). The nav lives in the header, outside
@@ -2361,6 +2385,16 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'Adds one control to the measured "people, before searching" state: the banner\'s "Sign in ' +
       'again", the same Button primitive measured on every screen.',
+  },
+  {
+    name: 'confirm-email, link missing its token',
+    why: 'It has no control at all: only the notice that the link is missing its token (decision 0415).',
+  },
+  {
+    name: 'confirm-email, confirmed',
+    why:
+      'Its one control is "Go to sign in", a link styled by the Button primitive measured on ' +
+      'every screen.',
   },
   {
     name: 'activate, link missing its token',

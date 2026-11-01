@@ -97,12 +97,37 @@ export interface ManyPagesOpenedEmail {
   pages: number;
 }
 
+/**
+ * The holder asked to change their address (decision 0415). Sent to the **new** address,
+ * whose holder confirms it from the link; nothing changes until they do.
+ */
+export interface EmailChangeEmail {
+  kind: 'EMAIL_CHANGE';
+  to: EmailRecipient;
+  token: string;
+  expiresAt: Date;
+}
+
+/**
+ * The address of an account was changed (decision 0415). Sent to the **old** address and
+ * carrying no token: it tells somebody who did not make the change that it happened.
+ * `byAdministrator` says whether the account started over, which signs its holder out.
+ */
+export interface EmailChangedEmail {
+  kind: 'EMAIL_CHANGED';
+  to: EmailRecipient;
+  changedAt: Date;
+  byAdministrator: boolean;
+}
+
 export type OutboundEmail =
   | ActivationEmail
   | PasswordResetEmail
   | PasswordChangedEmail
   | SignInPausedEmail
-  | ManyPagesOpenedEmail;
+  | ManyPagesOpenedEmail
+  | EmailChangeEmail
+  | EmailChangedEmail;
 
 export interface EmailPort {
   /**

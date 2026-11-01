@@ -1,7 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
-import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
+import {
+  InvariantViolationError,
+  NotFoundError,
+  UnauthenticatedError,
+} from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { DATABASE, type Db } from '../database/database.module';
@@ -18,6 +22,7 @@ import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
 import { isNamedSeniorPastor } from './authorization/senior-pastors';
 import { SecondStepService } from './second-step.service';
+import { TokensService } from './tokens.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { AccountRole, Database } from '../database/schema';
@@ -86,6 +91,7 @@ export class AccountProvisioningService {
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
     private readonly secondSteps: SecondStepService,
+    private readonly sessions: TokensService,
   ) {}
 
   /**
@@ -492,30 +498,65 @@ export class AccountProvisioningService {
    * Superseding covers a reset link as well as an activation one, because forgot-password
    * answers a `PENDING_ACTIVATION` account too (section 6). Whoever holds the old address
    * can set no password afterwards.
+   *
+   * **With `restart`, an account in use starts over at the new address** (decision 0415),
+   * for somebody who has lost the mailbox: it returns to `PENDING_ACTIVATION`, its password
+   * is removed, every session ends, and the old address is told. Without `restart` it is
+   * refused as before, so a page still showing the account as awaiting activation cannot
+   * start it over by mistake. The actor's row is locked with the target's, in id order, and
+   * must still be active, as `disable` takes them: two administrators starting each other
+   * over at once would otherwise leave nobody able to sign in.
    */
   async correctEmail(
     accountId: string,
     email: string,
     actor: Actor,
     claim: CurrentClaim,
+    restart = false,
   ): Promise<Record<string, unknown>> {
+    const changedAt = new Date();
+
     const outcome = await this.db.transaction().execute(async (trx) => {
       await this.tokens.supersedeAllWithin(trx, accountId);
 
-      const account = await trx
+      const rows = await trx
         .selectFrom('accounts')
         .select(['id', 'person_id', 'email', 'email_normalized', 'status'])
-        .where('id', '=', accountId)
+        .where('id', 'in', [accountId, actor.accountId])
+        .orderBy('id')
         .forUpdate()
-        .executeTakeFirst();
+        .execute();
+
+      const account = rows.find((row) => row.id === accountId);
 
       if (!account) {
         throw new NotFoundError('No such account.');
       }
 
-      if (account.status !== 'PENDING_ACTIVATION') {
+      if (rows.find((row) => row.id === actor.accountId)?.status !== 'ACTIVE') {
+        throw new UnauthenticatedError('Your session has ended. Sign in again.');
+      }
+
+      const restarting = account.status === 'ACTIVE' && restart;
+
+      // Again under the lock: a link whose insert had not committed when the first pass ran
+      // is invisible to it, and holds a key lock on this row until it does, so it is
+      // committed by now and would outlive the change (decision 0415). A deadlock with a
+      // link being redeemed answers `RESOURCE_BUSY`.
+      await this.tokens.supersedeAllWithin(trx, accountId);
+
+      if (restarting && accountId === actor.accountId) {
         throw new InvariantViolationError(
-          'That account is not awaiting activation, so its address is not corrected here.',
+          'You can’t start your own account over. Change your email on your Account page.',
+          { account_id: accountId },
+        );
+      }
+
+      if (account.status !== 'PENDING_ACTIVATION' && !restarting) {
+        throw new InvariantViolationError(
+          account.status === 'ACTIVE'
+            ? 'That account is in use, so changing its address starts it over, and the request must say so.'
+            : 'That account is not awaiting activation, so its address is not corrected here.',
           { account_id: accountId, status: account.status },
         );
       }
@@ -551,10 +592,24 @@ export class AccountProvisioningService {
 
       const updated = await trx
         .updateTable('accounts')
-        .set({ email: email.trim(), email_normalized: normalized })
+        .set(
+          restarting
+            ? {
+                email: email.trim(),
+                email_normalized: normalized,
+                status: 'PENDING_ACTIVATION',
+                password_hash: null,
+                updated_at: changedAt,
+              }
+            : { email: email.trim(), email_normalized: normalized },
+        )
         .where('id', '=', accountId)
         .returning(['id', 'email', 'status'])
         .executeTakeFirstOrThrow();
+
+      if (restarting) {
+        await this.sessions.revokeAllSessionsWithin(trx, accountId);
+      }
 
       const token = await this.tokens.mintWithin(
         trx,
@@ -563,14 +618,26 @@ export class AccountProvisioningService {
         ACTIVATION_LIFETIME_MS,
       );
 
-      await this.audit.writeWithin(trx, {
-        actorId: actor.accountId,
-        action: 'account.email_corrected',
-        targetType: 'account',
-        targetId: accountId,
-        before: { email: account.email },
-        after: { email: updated.email },
-      });
+      await this.audit.writeWithin(
+        trx,
+        restarting
+          ? {
+              actorId: actor.accountId,
+              action: 'account.email_replaced',
+              targetType: 'account',
+              targetId: accountId,
+              before: { email: account.email, status: account.status },
+              after: { email: updated.email, status: updated.status },
+            }
+          : {
+              actorId: actor.accountId,
+              action: 'account.email_corrected',
+              targetType: 'account',
+              targetId: accountId,
+              before: { email: account.email },
+              after: { email: updated.email },
+            },
+      );
 
       const body = { id: updated.id, email: updated.email, status: updated.status };
 
@@ -585,11 +652,30 @@ export class AccountProvisioningService {
           token: token.token,
           expiresAt: token.expiresAt,
         },
+        notice: restarting
+          ? {
+              kind: 'EMAIL_CHANGED' as const,
+              to: { email: account.email, name: person.fullName },
+              changedAt,
+              byAdministrator: true,
+            }
+          : null,
       };
     });
 
     // After the commit and never fatal, as for provisioning and a resend.
     await this.sendOrLog(outcome.message, accountId);
+
+    if (outcome.notice) {
+      try {
+        await this.email.send(outcome.notice);
+      } catch (error) {
+        this.logger.error(
+          `Could not tell the old address of account ${accountId} that it was changed.`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
 
     return outcome.body;
   }

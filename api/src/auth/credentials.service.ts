@@ -33,6 +33,9 @@ import type { CurrentClaim } from '../common/idempotency/current-idempotency.dec
 /** Section 6 gives a reset token "a short expiration (e.g. 30 minutes)". */
 const RESET_LIFETIME_MS = 30 * 60 * 1000;
 
+/** A link confirming a new email address lasts a day (decision 0415). */
+const EMAIL_CHANGE_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Setting a password: the first one, and every one after (SKILL.md section 6).
  *
@@ -93,11 +96,32 @@ export class CredentialsService {
     }
 
     try {
-      const token = await this.db
-        .transaction()
-        .execute((trx) =>
-          this.tokens.mintWithin(trx, account.id, 'PASSWORD_RESET', RESET_LIFETIME_MS),
+      const minted = await this.db.transaction().execute(async (trx) => {
+        const token = await this.tokens.mintWithin(
+          trx,
+          account.id,
+          'PASSWORD_RESET',
+          RESET_LIFETIME_MS,
         );
+
+        // **Read again under the account lock, after the mint** (decision 0415): the
+        // address may have changed, or the account been started over, since the read
+        // above. Changing it locks the row `FOR UPDATE`, which waits for this one, so
+        // either it committed first and is seen here, or it comes after and supersedes
+        // this link. A link is never minted for an address the account no longer has.
+        const locked = await trx
+          .selectFrom('accounts')
+          .select(['email', 'email_normalized', 'status'])
+          .where('id', '=', account.id)
+          .forNoKeyUpdate()
+          .executeTakeFirstOrThrow();
+
+        if (locked.status === 'DISABLED' || locked.email_normalized !== normalizeEmail(email)) {
+          throw new NoLongerAddressed();
+        }
+
+        return { token, email: locked.email };
+      });
 
       // Through `people`, which owns `persons` (section 2).
       const person = await this.people.forDecision(account.person_id);
@@ -105,9 +129,9 @@ export class CredentialsService {
       this.email
         .send({
           kind: 'PASSWORD_RESET',
-          to: { email: account.email, name: person?.fullName ?? '' },
-          token: token.token,
-          expiresAt: token.expiresAt,
+          to: { email: minted.email, name: person?.fullName ?? '' },
+          token: minted.token.token,
+          expiresAt: minted.token.expiresAt,
         })
         .catch((error: unknown) => {
           this.logger.error(
@@ -116,6 +140,10 @@ export class CredentialsService {
           );
         });
     } catch (error) {
+      // Rolled back, the address having moved: silent, as for an unknown address.
+      if (error instanceof NoLongerAddressed) {
+        return;
+      }
       this.logger.error(
         `Could not send a password reset for account ${account.id}.`,
         error instanceof Error ? error.stack : undefined,
@@ -277,6 +305,11 @@ export class CredentialsService {
     const changedAt = new Date();
 
     await this.db.transaction().execute(async (trx) => {
+      // A pending email change ends with the password (decision 0415): it may be what an
+      // attacker asked for before the holder took the account back. Tokens before the
+      // account row, the order every path takes the two tables in.
+      await this.tokens.supersedeWithin(trx, account.id, 'EMAIL_CHANGE');
+
       const locked = await trx
         .selectFrom('accounts')
         .select('password_hash')
@@ -337,6 +370,217 @@ export class CredentialsService {
     void this.sendPasswordChanged(account, changedAt);
   }
 
+  /**
+   * The holder asks to change their own address (section 6, decision 0415): the current
+   * password is asked, and a link goes to the new address. Nothing on the account changes
+   * until that link is confirmed, so a typing mistake locks nobody out.
+   *
+   * **An address another account holds is not refused here.** Refusing it would tell any
+   * signed-in person whether an address has an account; the confirmation refuses it
+   * instead, where only whoever reads that mailbox learns it.
+   */
+  async requestEmailChange(
+    actor: Actor,
+    newEmail: string,
+    currentPassword: string,
+    claim: CurrentClaim,
+  ): Promise<void> {
+    const account = await this.db
+      .selectFrom('accounts')
+      .select(['id', 'person_id', 'email_normalized', 'password_hash'])
+      .where('id', '=', actor.accountId)
+      .executeTakeFirstOrThrow();
+
+    // Outside the transaction, for the reason `setPassword` gives.
+    if (!(await this.passwords.verify(account.password_hash, currentPassword))) {
+      throw wrongCurrentPassword();
+    }
+
+    const email = newEmail.trim();
+    const normalized = normalizeEmail(email);
+
+    if (normalized === account.email_normalized) {
+      throw new InvariantViolationError('That is already your email address.', {
+        field: 'new_email',
+      });
+    }
+
+    let token: { token: string; expiresAt: Date };
+    try {
+      token = await this.mintEmailChange(account, email, normalized, claim);
+    } catch (error) {
+      // Two requests minting at once: the index allowing one outstanding link refuses the
+      // second, which has decided nothing and is retried, as for a reset sent twice.
+      if (
+        isUniqueViolation(error) &&
+        violatedConstraint(error) === 'account_tokens_one_outstanding'
+      ) {
+        throw new ResourceBusyError({ account_id: account.id });
+      }
+      throw error;
+    }
+
+    // After the commit and never fatal: asking again sends another link.
+    void this.sendOrLog(
+      account.person_id,
+      (name) => ({
+        kind: 'EMAIL_CHANGE',
+        to: { email, name },
+        token: token.token,
+        expiresAt: token.expiresAt,
+      }),
+      `Could not send the email-change link for account ${account.id}.`,
+    );
+  }
+
+  /** The transaction of {@link requestEmailChange}: the link minted, and the completion. */
+  private async mintEmailChange(
+    account: { id: string; password_hash: string | null },
+    email: string,
+    normalized: string,
+    claim: CurrentClaim,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    return this.db.transaction().execute(async (trx) => {
+      // Tokens before the account row, the order every path takes the two tables in.
+      const minted = await this.tokens.mintWithin(
+        trx,
+        account.id,
+        'EMAIL_CHANGE',
+        EMAIL_CHANGE_LIFETIME_MS,
+        { email, normalized },
+      );
+
+      const locked = await trx
+        .selectFrom('accounts')
+        .select(['status', 'password_hash'])
+        .where('id', '=', account.id)
+        .forNoKeyUpdate()
+        .executeTakeFirstOrThrow();
+
+      // Changed by another request since it was checked, as `changePassword` refuses.
+      if (locked.password_hash !== account.password_hash || locked.status !== 'ACTIVE') {
+        throw wrongCurrentPassword();
+      }
+
+      // Last statement (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 204, body: null });
+
+      return minted;
+    });
+  }
+
+  /**
+   * Confirms a new address from the link sent to it (section 6, decision 0415). The link
+   * is the credential, so this is unauthenticated, as a reset is.
+   *
+   * Every outstanding token is superseded, so a reset link already mailed to the old
+   * address stops working. The sessions are kept: the holder made this change. The old
+   * address is told.
+   */
+  async confirmEmailChange(token: string): Promise<{ email: string }> {
+    const changedAt = new Date();
+
+    const outcome = await this.db.transaction().execute(async (trx) => {
+      const claimed = await this.tokens.redeemEmailChangeWithin(trx, token);
+
+      if (!claimed) {
+        throw invalidLink();
+      }
+
+      await this.tokens.supersedeAllWithin(trx, claimed.accountId);
+
+      // `FOR UPDATE`, not `FOR NO KEY UPDATE`: only the stronger lock waits for the key lock
+      // a token insert holds on this row, which the second pass below depends on.
+      const account = await trx
+        .selectFrom('accounts')
+        .select(['id', 'person_id', 'email', 'status'])
+        .where('id', '=', claimed.accountId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+
+      // A disabled account is answered as an unknown link, for the reason `setPassword`
+      // gives. No other status reaches here: an administrator starting the account over
+      // supersedes this link.
+      if (account.status !== 'ACTIVE') {
+        throw invalidLink();
+      }
+
+      // Again under the account lock: a reset link whose insert had not committed when the
+      // first pass ran is invisible to it, and holds a key lock on this row until it does,
+      // which the `FOR UPDATE` above waited for, so it is committed by now. A reset requested
+      // after this commits reads the new address under its own lock and mints nothing for
+      // the old one. A deadlock with a link being redeemed answers `RESOURCE_BUSY`.
+      await this.tokens.supersedeAllWithin(trx, account.id);
+
+      const taken = await trx
+        .selectFrom('accounts')
+        .select('id')
+        .where('email_normalized', '=', claimed.normalized)
+        .where('id', '<>', account.id)
+        .executeTakeFirst();
+
+      if (taken) {
+        throw addressTaken();
+      }
+
+      try {
+        await trx
+          .updateTable('accounts')
+          .set({
+            email: claimed.email,
+            email_normalized: claimed.normalized,
+            updated_at: changedAt,
+          })
+          .where('id', '=', account.id)
+          .execute();
+      } catch (error) {
+        // Taken by a commit after the check above: the same answer.
+        if (isUniqueViolation(error)) {
+          throw addressTaken();
+        }
+        throw error;
+      }
+
+      await this.audit.writeWithin(trx, {
+        actorId: account.id,
+        action: 'account.email_changed',
+        targetType: 'account',
+        targetId: account.id,
+        before: { email: account.email },
+        after: { email: claimed.email },
+      });
+
+      return { account, email: claimed.email };
+    });
+
+    void this.sendOrLog(
+      outcome.account.person_id,
+      (name) => ({
+        kind: 'EMAIL_CHANGED',
+        to: { email: outcome.account.email, name },
+        changedAt,
+        byAdministrator: false,
+      }),
+      `Could not tell the old address of account ${outcome.account.id} that it was changed.`,
+    );
+
+    return { email: outcome.email };
+  }
+
+  /** Sends to a Person, and turns a failure into a log line. */
+  private async sendOrLog(
+    personId: string,
+    compose: (name: string) => OutboundEmail,
+    failure: string,
+  ): Promise<void> {
+    try {
+      const person = await this.people.forDecision(personId);
+      await this.email.send(compose(person?.fullName ?? ''));
+    } catch (error) {
+      this.logger.error(failure, error instanceof Error ? error.stack : undefined);
+    }
+  }
+
   private async sendPasswordChanged(
     account: { id: string; person_id: string; email: string },
     changedAt: Date,
@@ -373,6 +617,13 @@ export class CredentialsService {
 
     await this.db.transaction().execute(async (trx) => {
       const claimed = await this.tokens.redeemWithin(trx, token, purpose);
+
+      // Every other outstanding link ends with the new password, an email change above all
+      // (decision 0415): an attacker's pending change would otherwise outlive the reset that
+      // took the account back, and move where the next reset goes.
+      if (claimed) {
+        await this.tokens.supersedeAllWithin(trx, claimed.accountId);
+      }
 
       if (!claimed) {
         // One answer for expired, already used, and never issued. Distinguishing
@@ -492,6 +743,22 @@ export function assertPasswordIsAcceptable(password: string, field = 'password')
       { field, max_length: PASSWORD_MAX_LENGTH },
     );
   }
+}
+
+/** A reset rolled back because the account no longer has the address it was asked for. */
+class NoLongerAddressed extends Error {}
+
+function invalidLink(): ValidationFailedError {
+  return new ValidationFailedError('That link is no longer valid. Ask for a new one.', {
+    field: 'token',
+  });
+}
+
+function addressTaken(): InvariantViolationError {
+  return new InvariantViolationError(
+    'That email address already has an account, so it cannot be used for yours.',
+    { field: 'email' },
+  );
 }
 
 function wrongCurrentPassword(): ValidationFailedError {

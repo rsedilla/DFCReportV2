@@ -139,4 +139,47 @@ describe('the SMTP email transport (section 6)', () => {
     expect(text).toMatch(/Sept? 23, 2026/);
     expect(text).not.toContain('token=');
   });
+
+  it('links an email change to the confirmation page, with the token encoded', () => {
+    const { subject, text } = compose(
+      {
+        kind: 'EMAIL_CHANGE',
+        to: { email: 'new@example.test', name: 'Invented Person' },
+        token: 'abc+/=',
+        expiresAt,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(subject).toBe('Confirm your new DREAMS email address');
+    expect(text).toContain('https://app.example.test/confirm-email?token=abc%2B%2F%3D');
+  });
+
+  it('tells the old address its email changed, saying when an administrator started it over', () => {
+    const own = compose(
+      {
+        kind: 'EMAIL_CHANGED',
+        to: { email: 'old@example.test', name: 'Invented Person' },
+        changedAt: expiresAt,
+        byAdministrator: false,
+      },
+      smtp.linkOrigin,
+    );
+    const restarted = compose(
+      {
+        kind: 'EMAIL_CHANGED',
+        to: { email: 'old@example.test', name: 'Invented Person' },
+        changedAt: expiresAt,
+        byAdministrator: true,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(own.subject).toBe('Your DREAMS email address was changed');
+    expect(own.text).toContain('Reset links now go to the new address');
+    expect(restarted.text).toContain('An administrator changed the email address');
+    expect(restarted.text).toContain('you were signed out');
+    expect(own.text).not.toContain('token=');
+    expect(restarted.text).not.toContain('token=');
+  });
 });
