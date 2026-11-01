@@ -203,6 +203,25 @@ describe('an administrator records where nobody above has an account (decision 0
     });
   });
 
+  it('gives nothing to the administrator for a chain that does not end at a root', async () => {
+    // Ramon's own assignment ended while Anselmo and Benito still name him (decision 0232's
+    // shape): the walk finds nobody, and the chain ends at no Network root.
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: new Date('2021-01-01T00:00:00+08:00') })
+      .where('person_id', '=', ramon.id)
+      .where('ended_at', 'is', null)
+      .execute();
+    const reader = await admin();
+
+    expect(rowOf(await rows(reader), ramon)).toMatchObject({
+      recorded_by_administrator: false,
+      may_record: false,
+      record_for: null,
+    });
+    expect(await leaderRoster(reader, ramon)).toEqual([]);
+  });
+
   it('leaves the checklist of a leader somebody above covers empty', async () => {
     await createAccount(app, db, { person: lorenzo, roles: ['LEADER'], createdAt: EPOCH });
 

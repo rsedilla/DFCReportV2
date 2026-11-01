@@ -1157,7 +1157,8 @@ export class DccCoverageService {
    * Whose checklist holds each of a person's lines (section 9's submitter walk; decision
    * 0411): keyed by event, from the responsible leader frozen on the line, walked as of
    * that Sunday exactly as `submittersOf` walks it. Null where the line names no responsible
-   * leader, which is a Network root's own, or where the walk reaches nobody.
+   * leader, which is a Network root's own, or where the walk reaches nobody and the chain
+   * does not end at a Network root; where it does, the root (decision 0418).
    */
   async checklistOwners(
     lines: readonly { eventId: string; eventDate: string; leaderId: string | null }[],
