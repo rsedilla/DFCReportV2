@@ -265,12 +265,14 @@ describe('Pending DCC Records (decision 0336)', () => {
       may_record: true,
       record_for: raymond.id,
     });
-    // The roots hold no account and nobody is above them.
+    // The roots hold no account and nobody is above them, so the Admin records their lines
+    // on the root's own checklist (decision 0418).
     for (const root of [oriel, geraldine]) {
       expect(rowOf(rows, root)).toMatchObject({
         recorded_by: null,
-        may_record: false,
-        record_for: null,
+        recorded_by_administrator: true,
+        may_record: true,
+        record_for: root.id,
       });
     }
 

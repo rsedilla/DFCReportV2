@@ -480,11 +480,11 @@ function DccChecklist() {
       {forLeader ? (
         <div className="border-accent mt-4 max-w-2xl border-2 p-4 text-sm leading-relaxed">
           <p>
-            <strong>Recording for {forLeader.full_name}.</strong> These are the people{' '}
-            {forLeader.full_name} records. It is saved under your name
+            <strong>Recording for {forLeader.full_name}.</strong>{' '}
             {forLeader.holds_account
-              ? `, and ${forLeader.full_name} ${forLeader.account_active ? 'sees it on their own checklist.' : 'will see it once their account is active.'}`
-              : '.'}
+              ? `These are the people ${forLeader.full_name} records. It is saved under your name, and ${forLeader.full_name} ${forLeader.account_active ? 'sees it on their own checklist.' : 'will see it once their account is active.'}`
+              : // Nobody above has an account, so an administrator records (decision 0418).
+                `These are ${forLeader.full_name}’s people. Nobody above has an account, so an administrator records them. It is saved under your name.`}
           </p>
           <p className="mt-2">
             <TextLink href={`/dcc/${params.id}`}>Back to your own checklist</TextLink>

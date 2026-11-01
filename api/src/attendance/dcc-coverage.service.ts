@@ -917,6 +917,20 @@ export class DccCoverageService {
       ...new Set(groups.map((group) => group.recorder).filter((id): id is string => id !== null)),
     ];
     const recordable = await this.recordableBy(actor, recorders);
+    // **Where the walk reached nobody, then or now, and the chain ends at a Network root, an
+    // administrator records the line** (decision 0418), on that root's checklist, as of the
+    // row's oldest Sunday. Every reader is told so; only an administrator gets Record. A
+    // chain that ends anywhere else names nobody, as before.
+    const administrator = await this.isAdministrator(actor);
+    const topOf = new Map<(typeof groups)[number], string>();
+    for (const group of groups) {
+      if (group.recorder === null && group.sundays.length > 0) {
+        const top = await this.topOfChain(group.sundays[0], group.line.leaderId);
+        if (top !== null) {
+          topOf.set(group, top);
+        }
+      }
+    }
     const recorderNames = await this.people.forDecisionsWithin(this.db, recorders);
     // Who among this page's leaders holds an account now, so a row of Sundays before one was
     // given says so rather than "Has no account" (decision 0403, 3c).
@@ -932,10 +946,14 @@ export class DccCoverageService {
     const last = page.at(-1);
 
     return {
-      data: groups.map(({ line, recorder, sundays }) => {
+      data: groups.map((group) => {
+        const { line, recorder, sundays } = group;
         const ownAccount = recorder === line.leaderId;
         const byActor = recorder !== null && recorder === me;
-        const mayRecord = recorder !== null && (byActor || recordable.has(recorder));
+        const top = topOf.get(group) ?? null;
+        const mayRecord =
+          (administrator && top !== null) ||
+          (recorder !== null && (byActor || recordable.has(recorder)));
         // Named only where the reader's scope covers them (owner, 2026-10-13).
         const named =
           recorder !== null && !ownAccount && (covered === null || covered.has(recorder));
@@ -964,7 +982,10 @@ export class DccCoverageService {
             due_at: recordDueAt(event.eventDate)?.toISOString() ?? null,
             closes_at: recordClosesAt(event.eventDate).toISOString(),
           })),
-          record_for: mayRecord ? recorder : null,
+          // Nobody above has an account, then or now (decision 0418). Said to every reader,
+          // since it is why the row has no leader to follow up with.
+          recorded_by_administrator: top !== null,
+          record_for: mayRecord ? (top ?? recorder) : null,
           may_record: mayRecord,
         };
       }),
@@ -1048,6 +1069,44 @@ export class DccCoverageService {
   }
 
   /**
+   * Whether the reader is an administrator in decision 0418's sense: holding both
+   * `dcc.take_attendance` and `dcc.submit_on_behalf` at Whole Church, which by default is
+   * the `ADMIN` role alone (decision 0322).
+   */
+  private async isAdministrator(actor: Actor): Promise<boolean> {
+    const [take, onBehalf] = await Promise.all([
+      this.authorization.scopeMembership(actor, Capability.DccTakeAttendance),
+      this.authorization.scopeMembership(actor, Capability.DccSubmitOnBehalf),
+    ]);
+    return take.kind === 'WHOLE_CHURCH' && onBehalf.kind === 'WHOLE_CHURCH';
+  }
+
+  /**
+   * The leader at the top of a chain as of a Sunday: the person walked up to through
+   * pastoral leaders until one has none, a Network root (decision 0418). Bounded like every
+   * walk here; null where the leader holds no assignment then, or the walk does not end.
+   */
+  private async topOfChain(event: EventRow, leaderId: string): Promise<string | null> {
+    let node = canonicalId(leaderId);
+    const seen = new Set<string>();
+    for (let depth = 0; depth < 64; depth += 1) {
+      if (seen.has(node)) {
+        return null;
+      }
+      seen.add(node);
+      const [row] = (await this.hierarchy.assignmentsAsOf(this.db, [node], event.at)).values();
+      if (row === undefined) {
+        return null;
+      }
+      if (row.leaderId === null) {
+        return node;
+      }
+      node = canonicalId(row.leaderId);
+    }
+    return null;
+  }
+
+  /**
    * Of these leaders, those the reader may record for now: holding both
    * `dcc.take_attendance` and `dcc.submit_on_behalf` over them (decision 0313).
    */
@@ -1098,7 +1157,8 @@ export class DccCoverageService {
    * Whose checklist holds each of a person's lines (section 9's submitter walk; decision
    * 0411): keyed by event, from the responsible leader frozen on the line, walked as of
    * that Sunday exactly as `submittersOf` walks it. Null where the line names no responsible
-   * leader, which is a Network root's own, or where the walk reaches nobody.
+   * leader, which is a Network root's own, or where the walk reaches nobody and the chain
+   * does not end at a Network root; where it does, the root (decision 0418).
    */
   async checklistOwners(
     lines: readonly { eventId: string; eventDate: string; leaderId: string | null }[],
@@ -1116,7 +1176,12 @@ export class DccCoverageService {
         now,
       );
       const submitters = await this.submittersOf(event, [line.leaderId]);
-      owners.set(line.eventId, submitters.get(canonicalId(line.leaderId)) ?? null);
+      // Where nobody above holds an account, then or now, the root's checklist holds the
+      // line (decision 0418), so the person page opens that one.
+      owners.set(
+        line.eventId,
+        submitters.get(canonicalId(line.leaderId)) ?? (await this.topOfChain(event, line.leaderId)),
+      );
     }
     return owners;
   }
