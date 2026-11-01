@@ -322,7 +322,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
               setFailure(null);
             }}
           >
-            Go back and change the details
+            Back
           </Button>
         </div>
       </div>
@@ -452,7 +452,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
                         : noLeaderLabel(pathEntries, path.data?.no_leader_reason ?? null)}
                 </p>
                 <p className="text-muted text-sm leading-relaxed">
-                  Changing it is a move, not an edit. Use Move to another leader on the profile.
+                  Changing it is a move, not an edit. Use Change Leader on the profile.
                 </p>
               </div>
 
@@ -468,7 +468,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
 
           <FormActions>
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save changes'}
+              {save.isPending ? 'Saving…' : 'Save'}
             </Button>
             {/*
               A link styled as a secondary button, which is the pattern already
@@ -498,7 +498,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
       <PersonCells
         personId={id}
         personName={person.full_name}
-        note="A move is saved as soon as you confirm it. It is not part of Save changes."
+        note="A move is saved as soon as you confirm it. It is not part of Save."
       />
     </>
   );

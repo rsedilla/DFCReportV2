@@ -1,7 +1,7 @@
 'use client';
 
 import * as LabelPrimitive from '@radix-ui/react-label';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Search } from 'lucide-react';
 import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { useId } from 'react';
 
@@ -126,5 +126,67 @@ export function FieldError({ id, children }: { id: string; children: ReactNode }
       <CircleAlert aria-hidden="true" className="text-field-invalid mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
     </p>
+  );
+}
+
+/**
+ * The one search bar (decision 0416, after the USWDS search component): the box about thirty
+ * characters wide from `sm`, 30rem beside a 9rem button, and the full width on a phone; a
+ * magnifying glass inside the box on the left, and the Search button joined to the box. Any
+ * other button stays apart, outside it.
+ * The label stays above, as on every field (3.3.2); `hideLabel` keeps it for a screen reader
+ * alone where the screen has said what is searched already.
+ */
+export function SearchField({
+  label,
+  description,
+  hideLabel = false,
+  action,
+  className,
+  ...props
+}: Omit<FieldProps, 'error' | 'quietLabel' | 'descriptionBelow' | 'type'> & {
+  hideLabel?: boolean;
+  /** The Search button, joined to the right of the box from `sm`, under it on a phone. */
+  action: ReactNode;
+  className?: string;
+}) {
+  const id = useId();
+  const descriptionId = `${id}-description`;
+
+  return (
+    <div className={cn('flex w-full min-w-0 flex-col gap-1.5', className)}>
+      <LabelPrimitive.Root htmlFor={id} className={hideLabel ? 'sr-only' : 'field-label'}>
+        {label}
+      </LabelPrimitive.Root>
+
+      {description ? (
+        <p id={descriptionId} className="text-muted text-sm leading-relaxed">
+          {description}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:gap-0">
+        <div className="relative min-w-0 flex-1 sm:max-w-[30rem]">
+          <Search
+            aria-hidden="true"
+            className="text-muted pointer-events-none absolute top-1/2 left-3 z-20 size-[1.125rem] -translate-y-1/2"
+          />
+          <input
+            id={id}
+            type="search"
+            aria-describedby={description ? descriptionId : undefined}
+            className={cn(
+              'border-edge bg-surface text-ink min-h-11 w-full rounded-md border pr-3 pl-10 text-base',
+              'sm:rounded-r-none',
+              'focus-visible:outline-accent focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2',
+              'disabled:bg-raised disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+            {...props}
+          />
+        </div>
+        {/* Joined: square on its left and over the box's right border from `sm`. */}
+        <div className="flex sm:*:-ml-px sm:*:rounded-l-none">{action}</div>
+      </div>
+    </div>
   );
 }

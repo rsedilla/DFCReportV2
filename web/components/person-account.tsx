@@ -213,7 +213,7 @@ export function PersonAccount({
                   />
                   <div className="flex flex-wrap gap-3">
                     <Button type="submit" disabled={newEmail.trim() === '' || correct.isPending}>
-                      {correct.isPending ? 'Saving…' : 'Save and send to the new address'}
+                      {correct.isPending ? 'Saving…' : 'Save and Send'}
                     </Button>
                     <Button variant="quiet" type="button" onClick={() => setCorrecting(false)}>
                       Cancel
@@ -339,7 +339,7 @@ export function PersonAccount({
           />
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={email.trim() === '' || give.isPending}>
-              {give.isPending ? 'Creating…' : 'Create and send the activation email'}
+              {give.isPending ? 'Creating…' : 'Create Account'}
             </Button>
             <Button variant="quiet" type="button" onClick={() => setGiving(false)}>
               Cancel
@@ -397,7 +397,7 @@ function PasswordResetRow({
         disabled={send.isPending}
         onClick={() => send.mutate()}
       >
-        {send.isPending ? 'Sending…' : 'Send a password reset email'}
+        {send.isPending ? 'Sending…' : 'Send Reset Link'}
       </Button>
       {send.isSuccess ? (
         <p aria-live="polite" className="mt-2 text-sm font-medium">
@@ -477,7 +477,7 @@ function ChangeEmailRow({
           </p>
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={next.trim() === '' || change.isPending}>
-              {change.isPending ? 'Changing…' : 'Change the email and start over'}
+              {change.isPending ? 'Changing…' : 'Start Over'}
             </Button>
             <Button variant="quiet" type="button" onClick={() => setOpen(false)}>
               Cancel
@@ -497,7 +497,7 @@ function ChangeEmailRow({
               setOpen(true);
             }}
           >
-            Change the email
+            Change Email
           </Button>
           <p className="text-muted mt-2 text-sm leading-relaxed">
             For someone who has lost this mailbox. Their account starts over at the new address:
@@ -731,7 +731,7 @@ function SecondStepRow({
             setConfirming(true);
           }}
         >
-          Reset the second step
+          Reset Second Step
         </Button>
       )}
     </div>

@@ -4,7 +4,7 @@ import { mockSignedIn } from './mock-api';
 
 /**
  * Closing a Cell and the *No meeting in 3 months* list (SKILL.md sections 10 and 15,
- * decision 0355), the administrator's *Inactive (3+ Months) Cells* tab (decision 0366): only
+ * decision 0355), the administrator's *Inactive 3+ Months* tab (decision 0366): only
  * an account that may close is offered the tab and *Close this Cell*, the tab carries no
  * count, and every closure sends a reason, an explanation and a decision about each member.
  * Invented people throughout.
@@ -154,7 +154,7 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await page.goto('/cells?view=QUIET');
 
     const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
-    await expect(tabs).toHaveText(['Active Cells', /^Awaiting CG Assignment/]);
+    await expect(tabs).toHaveText(['Active Cells', /^No CG Yet/]);
     await expect(page.getByRole('table', { name: 'Cells you oversee' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Cells with no meeting held' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /No meeting in/ })).toHaveCount(0);
@@ -171,8 +171,8 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     const { asked } = await mockCellRoutes(page, { mayClose: true });
     await page.goto('/cells');
 
-    const tab = page.getByRole('button', { name: 'Inactive (3+ Months) Cells', exact: true });
-    await expect(tab).toHaveText('Inactive (3+ Months) Cells');
+    const tab = page.getByRole('button', { name: 'Inactive 3+ Months', exact: true });
+    await expect(tab).toHaveText('Inactive 3+ Months');
     await tab.click();
     await expect(page).toHaveURL(/view=QUIET/);
     await expect(tab).toHaveAttribute('aria-pressed', 'true');
@@ -196,7 +196,7 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await expect(row).toContainText('Did not meet 2 · Not recorded 2');
     await expect(row).toContainText('Not recorded 5');
     await expect(
-      page.getByRole('button', { name: 'Close this Cell, Youth · Tue, led by Dario Velasco' }),
+      page.getByRole('button', { name: 'Close Cell, Youth · Tue, led by Dario Velasco' }),
     ).toBeVisible();
   });
 
@@ -209,14 +209,14 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await page.goto('/cells?view=QUIET');
 
     await page
-      .getByRole('button', { name: 'Close this Cell, Youth · Tue, led by Dario Velasco' })
+      .getByRole('button', { name: 'Close Cell, Youth · Tue, led by Dario Velasco' })
       .click();
     const dialog = page.getByRole('dialog', { name: 'Close Youth · Tue' });
     await expect(dialog.getByText(/Elisa Moreno, Fidel Ramos\./)).toBeVisible();
     // The retired reason is never offered (decision 0355).
     await expect(dialog.getByRole('radio', { name: 'Members dispersed' })).toHaveCount(0);
 
-    const submit = dialog.getByRole('button', { name: 'Close this Cell' });
+    const submit = dialog.getByRole('button', { name: 'Close Cell' });
     await expect(submit).toBeDisabled();
     await dialog.getByRole('radio', { name: 'Leader moved away' }).check();
     await expect(submit).toBeDisabled();

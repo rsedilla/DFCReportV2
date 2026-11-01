@@ -235,7 +235,7 @@ function SessionDetail() {
           disabled={endSession.isPending}
           onClick={() => setEndingEverywhere(true)}
         >
-          Sign out on every device&hellip;
+          Sign Out Everywhere
         </Button>
       </div>
 
@@ -262,14 +262,14 @@ function SessionDetail() {
               disabled={endSession.isPending}
               onClick={() => endSession.mutate('everywhere')}
             >
-              Yes, sign out everywhere
+              Sign Out Everywhere
             </Button>
             <Button
               variant="secondary"
               disabled={endSession.isPending}
               onClick={() => setEndingEverywhere(false)}
             >
-              Keep them
+              Cancel
             </Button>
           </div>
         </div>
@@ -377,7 +377,7 @@ function EmailSection() {
             type="submit"
             disabled={send.isPending || next.trim() === '' || password === ''}
           >
-            {send.isPending ? 'Sending…' : 'Send the confirmation link'}
+            {send.isPending ? 'Sending…' : 'Send Link'}
           </Button>
         </div>
       </form>
@@ -467,7 +467,7 @@ function PasswordSection() {
         </div>
         <div>
           <Button type="submit" disabled={save.isPending || current === '' || next === ''}>
-            {save.isPending ? 'Saving…' : 'Save new password'}
+            {save.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </form>
@@ -553,7 +553,7 @@ function UsernameSection({ current }: { current: string | null }) {
           />
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={save.isPending || shown.trim() === ''}>
-              {save.isPending ? 'Saving…' : 'Save username'}
+              {save.isPending ? 'Saving…' : 'Save'}
             </Button>
             {current !== null ? (
               <Button
@@ -565,7 +565,7 @@ function UsernameSection({ current }: { current: string | null }) {
                   setError(null);
                 }}
               >
-                Keep {current}
+                Cancel
               </Button>
             ) : null}
           </div>

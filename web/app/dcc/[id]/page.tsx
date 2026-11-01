@@ -607,7 +607,7 @@ function DccChecklist() {
                   {me.data ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
-                        Edit marks
+                        Edit
                       </Button>
                     ) : (
                       <p className="text-muted mt-1 text-sm leading-relaxed">

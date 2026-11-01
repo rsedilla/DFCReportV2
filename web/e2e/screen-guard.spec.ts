@@ -135,7 +135,7 @@ test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and 
     'href',
     '/dashboard?list=awaiting',
   );
-  await expect(page.getByRole('button', { name: 'Change when it meets' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change category' })).toHaveCount(0);
 
   await page.goto(MEMBERS);
@@ -150,11 +150,11 @@ test('the change buttons are offered only with cell.manage_configuration', async
   await page.goto(MEETINGS);
   await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Back to Cells' })).toHaveAttribute('href', '/cells');
-  await expect(page.getByRole('button', { name: 'Change when it meets' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
 
   await mockGrants(page, ['cell.manage_configuration']);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Change when it meets' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change Schedule' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Change category' })).toBeVisible();
 });
 

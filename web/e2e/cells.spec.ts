@@ -62,7 +62,7 @@ test.describe('the Cells list', () => {
     // The Cell is named rather than coded (decisions 0261 and 0306).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
     await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
-    // Record's Awaiting CG Assignment is where that list lives (decision 0343).
+    // Record's No CG Yet is where that list lives (decision 0343).
     await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveCount(0);
     // The heading carries no line: the headline and the month say it (decision 0402).
     await expect(page.getByText('Your Cells and this month’s meetings.')).toHaveCount(0);
@@ -230,7 +230,7 @@ test.describe('the Cells total (decision 0400)', () => {
     await page.goto('/cells');
     await expect(headline(page)).toBeVisible();
 
-    for (const name of ['Closed Cells', 'Under 3 Member Cells', 'Inactive (3+ Months) Cells']) {
+    for (const name of ['Closed Cells', 'Under 3 Members', 'Inactive 3+ Months']) {
       await page.getByRole('button', { name, exact: true }).click();
       await expect(page).toHaveURL(/view=/);
       await expect(headline(page)).toHaveCount(0);
@@ -446,7 +446,7 @@ test.describe('a Cell’s meetings', () => {
     });
 
     await page.goto(MEETINGS);
-    await page.getByRole('button', { name: 'Change when it meets' }).click();
+    await page.getByRole('button', { name: 'Change Schedule' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
     await expect(dialog.getByText('Meets now on Saturday at 19:00.')).toBeVisible();
@@ -489,7 +489,7 @@ test.describe('a Cell’s meetings', () => {
       page.getByText('CELL-000007 · led by Teofilo Ramos · closed on Saturday 20 June'),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Members' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Change when it meets' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
   });
 });
 
@@ -514,7 +514,7 @@ test.describe('a Cell’s members', () => {
       page.getByText('CELL-000007 · led by Teofilo Ramos · 2 members'),
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add a member' }).click();
+    await page.getByRole('button', { name: 'Add Member' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
@@ -557,7 +557,7 @@ test.describe('a Cell’s members', () => {
     await expect(
       page.getByText('Closing this Cell ended every membership in it.', { exact: false }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add a member' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Add Member' })).toBeHidden();
   });
 
   test('a member’s name opens their profile', async ({ page }) => {
@@ -702,14 +702,14 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
     );
 
     await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
-    await page.getByRole('button', { name: 'Add to a Cell' }).click();
+    await page.getByRole('button', { name: 'Add to Cell' }).click();
 
     const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
     await expect(dialog.getByText('Their leader’s Cell Group — usually the right one', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /^Choose CELL-/ })).toHaveCount(1);
     await expect(dialog.getByRole('button', { name: `Choose ${leaderCell.cell_id}` })).toBeVisible();
     // Nothing is chosen for them: the leader still picks.
-    await expect(dialog.getByRole('button', { name: 'Choose another Cell' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Change Cell Group' })).toHaveCount(0);
 
     // A search finds the rest, and does not list the leader's Cell twice.
     await searchCells(dialog, 'CELL');
@@ -757,7 +757,7 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
     );
 
     await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
-    await page.getByRole('button', { name: 'Add to a Cell' }).click();
+    await page.getByRole('button', { name: 'Add to Cell' }).click();
     const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
 
     // Set apart: a filled Choose, not the outlined one a search result carries.

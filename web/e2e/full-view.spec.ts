@@ -291,7 +291,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
       'Add People',
-      /^Awaiting Leader Assignment/,
+      /^No Leader Yet/,
       'Family Tree',
       'Absent 3+ Months',
     ]);
@@ -380,7 +380,7 @@ test.describe('My Cell (decision 0323)', () => {
         'You do not lead a Cell. Ask for a new one, and it is sent for approval.',
       ),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Ask for a new Cell' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Request New Cell' })).toBeVisible();
   });
 
   test('asks for a new Cell led by somebody the account oversees, and lists the request sent', async ({
@@ -431,7 +431,7 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Youth · Sat' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Ask for a new Cell' }).click();
+    await page.getByRole('button', { name: 'Request New Cell' }).click();
     const dialog = page.getByRole('dialog', { name: 'Ask for a new Cell' });
     const send = dialog.getByRole('button', { name: 'Send for approval' });
     await expect(send).toBeDisabled();
@@ -490,7 +490,7 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     // The sidebar's own items prove the account has loaded before Remove's absence is read.
     await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('Cells');
     await expect(page.getByRole('link', { name: 'Rosalinda Ocampo' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Member' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
   });
 
@@ -504,7 +504,7 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await page.goto(MEMBERS);
 
     await expect(page.getByRole('link', { name: 'Rosalinda Ocampo' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Member' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
   });
 
@@ -532,7 +532,7 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await mockCellMembers(page);
     await page.goto(MEMBERS);
 
-    await page.getByRole('button', { name: 'Add a member' }).click();
+    await page.getByRole('button', { name: 'Add Member' }).click();
     const dialog = page.getByRole('dialog');
     await expect(
       dialog.getByText(
@@ -542,7 +542,7 @@ test.describe('a Cell’s members, by the screens the account has', () => {
 
     await mockGrants(page, ['cell.move_members']);
     await page.reload();
-    await page.getByRole('button', { name: 'Add a member' }).click();
+    await page.getByRole('button', { name: 'Add Member' }).click();
     await expect(
       page
         .getByRole('dialog')

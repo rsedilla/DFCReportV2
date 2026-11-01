@@ -13,8 +13,9 @@ import { cn } from '@/lib/utils';
  * wider than a 320px phone, and it scrolls inside this frame rather than making
  * the page scroll sideways, which `e2e/accessibility.spec.ts` fails on.
  *
- * Header cells are labels — small, bold, uppercase, tracked and in the accent, like a
- * field label — over a heavier rule, and body rows are divided by the decorative `line`.
+ * Bold (decision 0416): header cells are labels, small, bold, uppercase and tracked, in
+ * white on a solid accent row, and every other body row is the pale accent tint. Body rows
+ * are divided by the decorative `line`.
  *
  * **From `lg` the header row stays pinned to the top of the window while the rows scroll**
  * (owner's choice of 2026-09-15). Two things make that work, and removing either silently
@@ -52,7 +53,7 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
     <th
       scope="col"
       className={cn(
-        'border-edge text-accent bg-surface border-b-2 px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
+        'border-edge text-surface bg-accent border-b-2 px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
         'lg:sticky lg:top-0 lg:z-10 lg:border-b-0 lg:shadow-[inset_0_-2px_0_var(--color-edge)]',
         className,
       )}
@@ -61,5 +62,5 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
   );
 }
 
-/** A body row, divided from the next by the decorative rule. */
-export const rowClasses = 'border-line border-b last:border-b-0';
+/** A body row, divided from the next by the decorative rule, every other one tinted. */
+export const rowClasses = 'border-line even:bg-accent-tint border-b last:border-b-0';

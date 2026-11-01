@@ -101,10 +101,10 @@ test.describe('a person’s DCC stage', () => {
       `/dcc/${DCC_PAGE_ONE.data[0].event_id}`,
     );
 
-    await page.getByRole('button', { name: 'Show older Sundays' }).click();
+    await page.getByRole('button', { name: 'Show More' }).click();
 
     await expect(page.getByRole('heading', { name: '2024', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Show older Sundays' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Show More' })).toHaveCount(0);
   });
 
   // Decision 0260: this month's Sundays attended out of section 9's N, and last month's.
@@ -223,8 +223,8 @@ test.describe('a person’s Cell', () => {
 
     await expect(page.getByText('Leads CELL-000014', { exact: true })).toBeVisible();
     await expect(page.getByText('Not in a Cell.')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add to a Cell' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Cell' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add to Cell' })).toHaveCount(0);
   });
 
   test('a reader who moves no Cell members is offered no move, and told the Primary makes it (decision 0357)', async ({
@@ -234,7 +234,7 @@ test.describe('a person’s Cell', () => {
     await page.goto(PROFILE);
 
     await expect(page.getByText('Moves to another Cell are made by your Primary.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Cell' })).toHaveCount(0);
   });
 
   test('a reader who moves Cell members is offered the move, with no Primary line', async ({
@@ -243,7 +243,7 @@ test.describe('a person’s Cell', () => {
     await signedInMovingMembers(page);
     await page.goto(PROFILE);
 
-    await expect(page.getByRole('button', { name: 'Move to another Cell' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change Cell' })).toBeVisible();
     await expect(page.getByText('Moves to another Cell are made by your Primary.')).toHaveCount(0);
   });
 
@@ -254,7 +254,7 @@ test.describe('a person’s Cell', () => {
     await page.goto(PROFILE);
 
     await expect(page.getByText('Not in a Cell.')).toBeVisible();
-    await page.getByRole('button', { name: 'Add to a Cell' }).click();
+    await page.getByRole('button', { name: 'Add to Cell' }).click();
 
     const dialog = page.getByRole('dialog', { name: `Add ${PERSON_IN_SCOPE.full_name} to a Cell` });
     await expect(dialog.getByText('They join this Cell Group from today.')).toBeVisible();
@@ -280,7 +280,7 @@ test.describe('a person’s Cell', () => {
     });
 
     await page.goto(PROFILE);
-    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await page.getByRole('button', { name: 'Change Cell' }).click();
 
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another Cell`,
@@ -314,7 +314,7 @@ test.describe('a person’s Cell', () => {
     await mockCellChoices(page, [MENS_CELL_CHOICE]);
     await page.goto(PROFILE);
 
-    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await page.getByRole('button', { name: 'Change Cell' }).click();
     const dialog = page.getByRole('dialog');
     await searchCells(dialog, 'CELL');
 
@@ -359,7 +359,7 @@ test.describe('a person’s Cell', () => {
       );
       await page.goto(PROFILE);
 
-      await page.getByRole('button', { name: 'Move to another Cell' }).click();
+      await page.getByRole('button', { name: 'Change Cell' }).click();
       const dialog = page.getByRole('dialog');
       await searchCells(dialog, '000011');
       await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
@@ -376,7 +376,7 @@ test.describe('a person’s Cell', () => {
     await mockMembershipAdd(page, 'other-network');
     await page.goto(PROFILE);
 
-    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await page.getByRole('button', { name: 'Change Cell' }).click();
     const dialog = page.getByRole('dialog');
     await searchCells(dialog, '000011');
     await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
@@ -491,7 +491,7 @@ test.describe('editing a person', () => {
 
     await page.goto(`${PROFILE}/edit`);
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(page.getByRole('heading', { name: 'Is this someone already recorded?' })).toBeVisible();
     await expect(page.getByText('M-000777')).toBeVisible();
@@ -566,7 +566,7 @@ test.describe('editing a person', () => {
 
     await page.goto(`${PROFILE}/edit`);
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
     const anyway = page.getByRole('button', { name: 'These are different people — save anyway' });
     await anyway.click();
 
@@ -633,16 +633,16 @@ test.describe('editing a person', () => {
 
     await page.goto(`${PROFILE}/edit`);
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
     await page.getByRole('button', { name: 'These are different people — save anyway' }).click();
     await expect(page.getByText('The server is busy. Try again in a moment.')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Go back and change the details' }).click();
+    await page.getByRole('button', { name: 'Back' }).click();
     await expect(page.getByLabel('Birthday (optional)')).toHaveValue('1990-05-01');
     await expect(page.getByText('The server is busy. Try again in a moment.')).toHaveCount(0);
 
     // Saved again unchanged: the body the answer sent, so the answer's key, never the first.
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toHaveLength(3);
     expect(sent[2].body).toEqual(sent[1].body);
@@ -671,8 +671,8 @@ test.describe('editing a person', () => {
 
     await page.goto(`${PROFILE}/edit`);
     await page.getByLabel('Birthday (optional)').fill('1990-05-01');
-    await page.getByRole('button', { name: 'Save changes' }).click();
-    await page.getByRole('button', { name: 'Go back and change the details' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Back' }).click();
     await expect(page.getByLabel('Birthday (optional)')).toHaveValue('1990-05-01');
   });
 
@@ -685,7 +685,7 @@ test.describe('editing a person', () => {
     await expect(page.getByText('Only an administrator can correct this')).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Female' })).toHaveCount(0);
     await expect(
-      page.getByText('A move is saved as soon as you confirm it. It is not part of Save changes.'),
+      page.getByText('A move is saved as soon as you confirm it. It is not part of Save.'),
     ).toBeVisible();
   });
 
@@ -699,7 +699,7 @@ test.describe('editing a person', () => {
     await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
     await expect(
-      page.getByText('Changing it is a move, not an edit. Use Move to another leader on the profile.'),
+      page.getByText('Changing it is a move, not an edit. Use Change Leader on the profile.'),
     ).toBeVisible();
   });
 
@@ -726,7 +726,7 @@ test.describe('editing a person', () => {
 
     await page.getByRole('link', { name: 'Edit details' }).click();
     await page.getByLabel('Title').fill('Pastor');
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(page).toHaveURL(PROFILE);
     await expect(title).toHaveText('Pastor');
@@ -762,7 +762,7 @@ test.describe('who pastors a person', () => {
     await page.goto(PROFILE);
     // An account that may move people is not told somebody else makes moves (decision 0356).
     await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Move to another leader' }).click();
+    await page.getByRole('button', { name: 'Change Leader' }).click();
 
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
@@ -801,7 +801,7 @@ test.describe('who pastors a person', () => {
     );
 
     await page.goto(PROFILE);
-    await page.getByRole('button', { name: 'Move to another leader' }).click();
+    await page.getByRole('button', { name: 'Change Leader' }).click();
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
     });
@@ -821,7 +821,7 @@ test.describe('who pastors a person', () => {
 
     await expect(page.getByRole('link', { name: 'Edit details' })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Leader' })).toHaveCount(0);
     // In its place, who makes moves, and nothing to ask with (decision 0356).
     await expect(page.getByText('Moves to another leader are made by your Primary.')).toBeVisible();
   });
@@ -846,7 +846,7 @@ test.describe('who pastors a person', () => {
     // below is measured against a loaded account rather than before it arrives.
     await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Leader' })).toHaveCount(0);
     await expect(page.getByText('Moves to another leader are made by your Primary.')).toHaveCount(0);
   });
 
@@ -887,7 +887,7 @@ test.describe('dialogs', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(PROFILE);
-    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await page.getByRole('button', { name: 'Change Cell' }).click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
@@ -900,7 +900,7 @@ test.describe('dialogs', () => {
     await expect(dialog).toBeHidden();
 
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await page.getByRole('button', { name: 'Change Cell' }).click();
     await expect(dialog.getByLabel(/Search for a Cell Group|Or find another Cell Group/)).toBeVisible();
     const centred = await dialog.boundingBox();
     expect(centred).not.toBeNull();
@@ -991,7 +991,7 @@ test.describe('the Add and Edit person forms', () => {
     await page.getByLabel('First name').fill('Marilou');
     await page.getByLabel('Last name').fill('Santos');
     await page.getByRole('radio', { name: 'Married' }).check();
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(bodies).toHaveLength(1);
@@ -1063,7 +1063,7 @@ test.describe('the Add and Edit person forms', () => {
 
     await page.goto(`${PROFILE}/edit`);
     await page.getByLabel('Title, optional').fill('Bishop');
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toHaveLength(1);
@@ -1098,7 +1098,7 @@ test.describe('the Add and Edit person forms', () => {
     await page.goto(`${PROFILE}/edit`);
     await expect(page.getByLabel('First name')).toBeVisible();
     await expect(page.getByLabel('Title, optional')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toHaveLength(1);
@@ -1173,7 +1173,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await page.getByRole('button', { name: 'Give Marilou an account' }).click();
     await page.getByLabel('Email address').fill('marilou@example.test');
     await page.getByRole('radio', { name: 'Senior Pastor' }).check();
-    await page.getByRole('button', { name: 'Create and send the activation email' }).click();
+    await page.getByRole('button', { name: 'Create Account' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toEqual({
@@ -1254,7 +1254,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
         /^For someone who cannot sign in\. It emails \w+ a link to choose a new password, at marilou@example\.test\. You never see or choose the password, and the link lasts 30 minutes\.$/,
       ),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Send a password reset email' }).click();
+    await page.getByRole('button', { name: 'Send Reset Link' }).click();
 
     await expect(page.getByText('Sent to marilou@example.test. The link lasts 30 minutes.')).toBeVisible();
     expect(sent).toEqual([`/api/v1/accounts/${accountId}/password-reset-email`]);
@@ -1264,7 +1264,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       await page.reload();
       await expect(page.getByRole('heading', { name: /Account/ })).toBeVisible();
       await expect(page.getByText(/^marilou@example\.test · Leader/)).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Send a password reset email' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Send Reset Link' })).toHaveCount(0);
     }
   });
 
@@ -1304,7 +1304,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await page.goto(PROFILE);
     await page.getByRole('button', { name: 'Correct the email' }).click();
     await page.getByLabel('Correct email address').fill('right@example.test');
-    await page.getByRole('button', { name: 'Save and send to the new address' }).click();
+    await page.getByRole('button', { name: 'Save and Send' }).click();
 
     await expect(
       page.getByText(
@@ -1380,16 +1380,16 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
 
     await page.goto(PROFILE);
     await expect(page.getByText(/^For someone who has lost this mailbox\./)).toBeVisible();
-    await page.getByRole('button', { name: 'Change the email', exact: true }).click();
+    await page.getByRole('button', { name: 'Change Email', exact: true }).click();
     expect(sent).toEqual([]);
     await page.getByLabel('New email address').fill('marilou.new@example.test');
-    await page.getByRole('button', { name: 'Change the email and start over' }).click();
+    await page.getByRole('button', { name: 'Start Over' }).click();
 
     await expect(
       page.getByText(/account starts over at marilou\.new@example\.test\. The link to choose a password went there, and marilou@example\.test was told\./),
     ).toBeVisible();
     expect(sent).toEqual([{ email: 'marilou.new@example.test', restart: true }]);
-    await expect(page.getByRole('button', { name: 'Change the email', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Email', exact: true })).toHaveCount(0);
   });
 
   /** An active account holding `role`, with its second step set up (decision 0302). */
@@ -1425,7 +1425,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
 
     await page.goto(PROFILE);
     await expect(page.getByText(/^Second step set up (28 Sep|Sep 28)\./)).toBeVisible();
-    await page.getByRole('button', { name: 'Reset the second step' }).click();
+    await page.getByRole('button', { name: 'Reset Second Step' }).click();
     await expect(page.getByText(/signed out on every device/)).toBeVisible();
     expect(reset).toEqual([]);
 
@@ -1444,7 +1444,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
 
     await page.goto(PROFILE);
     await expect(page.getByText('An administrator’s second step is reset on the server.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Reset the second step' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Reset Second Step' })).toHaveCount(0);
   });
 
   /** An account answered as `status`, which a disable or re-enable changes (decision 0307). */
@@ -1743,7 +1743,7 @@ test.describe('adding a person with a Cell', () => {
     await fillTheForm(page);
     await searchCells(page, '000011');
     await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([
@@ -1765,9 +1765,9 @@ test.describe('adding a person with a Cell', () => {
 
     // A Cell chosen and then narrowed away is no longer chosen.
     await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
-    await expect(page.getByRole('button', { name: 'Choose another Cell' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change Cell Group' })).toBeVisible();
     await page.getByRole('radio', { name: 'Male', exact: true }).check();
-    await expect(page.getByRole('button', { name: 'Choose another Cell' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Change Cell Group' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Choose CELL-000019' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Choose CELL-000011' })).toHaveCount(0);
   });
@@ -1779,7 +1779,7 @@ test.describe('adding a person with a Cell', () => {
     const sent = await mockMembershipAdd(page, 'accepted');
 
     await fillTheForm(page);
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([]);
@@ -1794,7 +1794,7 @@ test.describe('adding a person with a Cell', () => {
     await fillTheForm(page);
     await searchCells(page, '000011');
     await page.getByRole('button', { name: 'Choose CELL-000011' }).click();
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect(
       page.getByRole('heading', { name: `${PERSON_IN_SCOPE.full_name} was added` }),

@@ -78,6 +78,8 @@ const TEXT_PAIRS = [
   // The Cell picker's box of their leader's Cells, and its "listed above" line: `ink` text on
   // the tint, with `accent` filled buttons and an `accent` link in it (owner, 2026-10-26).
   ['ink', 'accent-tint'],
+  // Every other table row is the tint (decision 0416), and a row's secondary words are `muted`.
+  ['muted', 'accent-tint'],
   // The sidebar, and a phone's top bar and tab bar (owner, 2026-10-19): mint items on
   // emerald, the current item white on a darker emerald, and the application's name and
   // the section name in white on emerald.

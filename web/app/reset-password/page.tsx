@@ -16,7 +16,7 @@ export default function ResetPasswordPage() {
       <Suspense fallback={<p className="text-muted text-sm">Loading…</p>}>
         <SetPasswordForm
           path="/api/v1/auth/reset-password"
-          submitLabel="Save new password"
+          submitLabel="Save"
           successTitle="Your password has been changed"
           successBody="Any other device signed in to this account has been signed out. Sign in again with your new password."
         />

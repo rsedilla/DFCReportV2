@@ -44,7 +44,7 @@ const LINK =
  * or merged, and refuses somebody already in the Cell; section 7 decides whether this
  * actor may act on this Cell at all.
  *
- * **A name opens the person's profile**, where Move to another Cell already lives, so
+ * **A name opens the person's profile**, where Change Cell already lives, so
  * this page carries no move of its own.
  *
  * **The Cell is named the way every other Cells screen names it**, from this month's
@@ -172,11 +172,11 @@ function CellMembers() {
                 setAdding(true);
               }}
             >
-              Add a member
+              Add Member
             </Button>
             {mayClose ? (
               <Button variant="secondary" onClick={() => setClosing(true)}>
-                Close this Cell
+                Close Cell
               </Button>
             ) : null}
           </div>
@@ -361,10 +361,10 @@ function RemoveControl({
     <div className="flex flex-col items-end gap-2">
       <div className="flex flex-wrap justify-end gap-3">
         <Button type="button" onClick={onConfirm} disabled={pending}>
-          {pending ? 'Removing…' : 'Yes, remove'}
+          {pending ? 'Removing…' : 'Remove'}
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
-          Keep
+          Cancel
         </Button>
       </div>
       <p className="text-muted max-w-xs text-right text-sm leading-relaxed">

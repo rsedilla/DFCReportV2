@@ -41,7 +41,6 @@ export function RadioGroup<T extends string>({
   error,
   disabled = false,
   layout = 'stacked',
-  even = false,
   descriptionBelow = false,
 }: {
   legend: string;
@@ -66,8 +65,6 @@ export function RadioGroup<T extends string>({
    * faint fill alone were too hard to read, above all on a page that cannot be changed.
    */
   layout?: 'stacked' | 'row';
-  /** Every choice the same width from `sm`, as wide as the longest (decision 0332). */
-  even?: boolean;
   /**
    * The description under the choices rather than above them, for a group set beside
    * another (`FieldPair`), so the two rows of choices line up (decision 0410). Stacked only.
@@ -107,9 +104,9 @@ export function RadioGroup<T extends string>({
         className={
           row
             ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
-            : even
-              ? 'mt-1 flex flex-col gap-2 sm:inline-grid sm:auto-cols-fr sm:grid-flow-col'
-              : 'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
+            : // Every choice one size, 11rem, wrapping where the column is narrow; one a line,
+              // full width, on a phone (decision 0416).
+              'mt-1 flex flex-col gap-2 sm:grid sm:grid-cols-[repeat(auto-fill,11rem)]'
         }
       >
         {options.map((option) => {
@@ -122,7 +119,7 @@ export function RadioGroup<T extends string>({
                 'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
                 row
                   ? 'relative w-[5.25rem] justify-center gap-1 px-1 sm:w-28 sm:gap-1.5'
-                  : 'flex-1 gap-2.5 px-3 sm:flex-none sm:min-w-32',
+                  : 'w-full min-w-0 gap-2.5 px-3',
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
                 checked

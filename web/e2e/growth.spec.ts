@@ -287,7 +287,7 @@ test.describe('the SUYNL tab', () => {
     await expect(row).toContainText('10 of 10');
     await expect(row.getByRole('button', { name: /^Close/ })).toHaveCount(0);
 
-    await row.getByRole('button', { name: 'Edit lessons' }).click();
+    await row.getByRole('button', { name: 'Edit' }).click();
 
     const boxes = page.getByRole('checkbox', { name: /, Lualhati Dizon$/ });
     await expect(boxes).toHaveCount(10);
@@ -301,7 +301,7 @@ test.describe('the SUYNL tab', () => {
     const traffic = await openSuynl(page, 'accepted', '/growth/suynl?all=1');
 
     const row = page.getByRole('row', { name: /Lualhati Dizon/ });
-    await row.getByRole('button', { name: 'Edit lessons' }).click();
+    await row.getByRole('button', { name: 'Edit' }).click();
     await row.getByRole('button', { name: 'Close, Lualhati Dizon' }).click();
 
     await expect(row.getByText('Graduated 14 August 2026')).toBeVisible();
@@ -313,7 +313,7 @@ test.describe('the SUYNL tab', () => {
     await openSuynl(page, 'accepted', '/growth/suynl?all=1');
 
     const row = page.getByRole('row', { name: /Lualhati Dizon/ });
-    await row.getByRole('button', { name: 'Edit lessons' }).click();
+    await row.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('checkbox', { name: /^Lesson 10, .*Lualhati Dizon$/ }).uncheck();
 
     await expect(row).toContainText('9 of 10');
@@ -551,7 +551,7 @@ test.describe('the SUYNL list opens on those still to finish (decisions 0287 and
     expect(lastList(traffic.lists).has('step')).toBe(false);
     const row = page.getByRole('row').filter({ has: page.getByRole('link', { name: 'Lualhati Dizon' }) });
     await expect(row.getByText('Graduated 14 August 2026')).toBeVisible();
-    await expect(row.getByRole('button', { name: 'Edit lessons' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Edit' })).toBeVisible();
   });
 
   // Decision 0386: hidden, not withdrawn, so both addresses still answer.

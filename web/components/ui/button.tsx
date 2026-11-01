@@ -45,7 +45,8 @@ const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
  */
 export function buttonClasses(variant: NonNullable<ButtonProps['variant']> = 'primary'): string {
   return cn(
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4',
+    // One size (decision 0416): at least 9rem from `sm`, the full width on a phone.
+    'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-4 text-center sm:w-auto sm:min-w-36',
     // A label rather than a sentence: small, bold, uppercase and tracked, which is
     // what distinguishes an action from the prose around it without a colour.
     'text-xs font-bold tracking-[0.07em] uppercase transition-colors',
@@ -54,6 +55,12 @@ export function buttonClasses(variant: NonNullable<ButtonProps['variant']> = 'pr
     VARIANTS[variant],
   );
 }
+
+/**
+ * An arrow or other icon with no words: a 44px square, never the one button size of decision
+ * 0416, which is for a button named in words.
+ */
+export const ICON_BUTTON = 'w-auto min-w-11 px-3 sm:min-w-11';
 
 export function Button({ className, variant = 'primary', type, ...props }: ButtonProps) {
   return (

@@ -187,7 +187,7 @@ function CountTable({
         <tbody>
           {table.rows.map((row) => (
             // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
-            <tr key={row.leader.id} className={`${rowClasses} even:bg-raised`}>
+            <tr key={row.leader.id} className={rowClasses}>
               <td className="px-3 py-3">
                 <BranchLink leader={row.leader} />
               </td>

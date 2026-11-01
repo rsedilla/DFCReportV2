@@ -349,14 +349,14 @@ function Graduated({ row, onCorrect }: { row: SuynlPerson; onCorrect: () => void
       <span>Graduated {row.graduated_on ? longDay(row.graduated_on) : ''}</span>
       {row.may_file ? (
         <Button variant="secondary" onClick={onCorrect}>
-          Edit lessons
+          Edit
         </Button>
       ) : null}
     </p>
   );
 }
 
-/** Opened with Edit lessons and nothing changed yet: Close folds it again. */
+/** Opened with Edit and nothing changed yet: Close folds it again. */
 function closable(
   row: SuynlPerson,
   opened: Set<string>,

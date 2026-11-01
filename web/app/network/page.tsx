@@ -12,6 +12,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { PeopleTabs } from '@/components/people-tabs';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { Button, buttonClasses } from '@/components/ui/button';
+import { SearchField } from '@/components/ui/field';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -38,10 +39,10 @@ import { useScreenAddress } from '@/lib/screen-address';
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
-/** How many search results show before "Show 10 more" (decision 0252). */
+/** How many search results show before "Show More" (decision 0252). */
 const SEARCH_STEP = 10;
 
-/** How many direct disciples show before "Show 20 more" (decision 0252). */
+/** How many direct disciples show before "Show More" (decision 0252). */
 const STEP = 20;
 
 /**
@@ -429,7 +430,7 @@ function NetworkScreen() {
             {!filtering && (visible < rows.length || branch.hasNextPage) ? (
               <p className="mt-3">
                 <Button variant="secondary" onClick={showMore} disabled={waitingForRows}>
-                  {waitingForRows ? 'Loading…' : 'Show 20 more'}
+                  {waitingForRows ? 'Loading…' : 'Show More'}
                 </Button>
               </p>
             ) : null}
@@ -730,24 +731,23 @@ function Search() {
   return (
     <div className="min-w-0">
       <form role="search" onSubmit={submit} className="flex flex-wrap gap-2">
-        <label htmlFor="network-search" className="sr-only">
-          Search by name
-        </label>
-        <input
-          id="network-search"
-          type="search"
+        <SearchField
+          label="Search by name"
+          hideLabel
+          autoComplete="off"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Search by name"
-          className="border-edge bg-surface min-h-11 w-64 max-w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:flex-none"
+          action={
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}
+            >
+              Search
+            </Button>
+          }
         />
-        <Button
-          type="submit"
-          variant="secondary"
-          disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}
-        >
-          Search
-        </Button>
         {asked === null ? null : (
           <Button
             variant="quiet"
@@ -786,7 +786,7 @@ function Search() {
               {visible < found.length || results.hasNextPage ? (
                 <p className="mt-3">
                   <Button variant="secondary" onClick={more} disabled={results.isFetchingNextPage}>
-                    Show 10 more
+                    Show More
                   </Button>
                 </p>
               ) : null}

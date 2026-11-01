@@ -727,8 +727,18 @@ test.describe('a Full view leader’s report controls', () => {
             page.getByRole('button', { name: 'The period before' }),
           ].map(async (control) => Math.round((await control.boundingBox())!.y)),
         );
+        // One row is one bottom edge: the switch's track stands taller than a button (decision 0416).
+        const bottoms = await Promise.all(
+          [
+            page.getByRole('group', { name: 'Report period' }),
+            page.getByRole('button', { name: 'The period before' }),
+          ].map(async (control) => {
+            const box = (await control.boundingBox())!;
+            return Math.round(box.y + box.height);
+          }),
+        );
         if (row) {
-          expect(new Set(tops).size, `${path}: the two controls share one row`).toBe(1);
+          expect(Math.abs(bottoms[0] - bottoms[1]), `${path}: the two controls share one row`).toBeLessThanOrEqual(1);
         } else {
           expect(tops[0]).toBeLessThan(tops[1]);
         }
@@ -745,22 +755,19 @@ test.describe('a Full view leader’s report controls', () => {
 
 test.describe('the tabs at a phone, a tablet and a desktop', () => {
   /**
-   * A whole-church reader's five (decisions 0292, 0376 and 0407): equal, three across on a phone
-   * and one row from `sm`. A Full view leader's five (decisions 0361 and 0380): sized to their words in
-   * one row from `sm`, a label wrapping inside its tab on a phone.
+   * Every tab one size, for every reader (decision 0416): two equal tabs to a row on a phone,
+   * and 11.5rem each from `sm`, as many to a row as fit.
    */
   const LAYOUTS = [
-    // On a phone a Full view leader's five sit two by two, equal.
-    { width: 320, height: 640, columns: { church: 3, branch: 2 }, rows: { church: 2, branch: 3 } },
-    { width: 375, height: 812, columns: { church: 3, branch: 2 }, rows: { church: 2, branch: 3 } },
-    { width: 768, height: 1024, columns: { church: 5, branch: 5 }, rows: { church: 1, branch: 1 } },
-    { width: 1280, height: 800, columns: { church: 5, branch: 5 }, rows: { church: 1, branch: 1 } },
+    { width: 320, height: 640 },
+    { width: 375, height: 812 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 800 },
   ] as const;
 
   for (const { reader, church, tabs } of READERS) {
-    const count = church ? 'church' : 'branch';
     for (const layout of LAYOUTS) {
-      test(`for ${reader}, at ${layout.width}px the ${tabs.length} tabs sit ${layout.columns[count]} across, and no report scrolls sideways`, async ({
+      test(`for ${reader}, at ${layout.width}px the ${tabs.length} tabs are one size, and no report scrolls sideways`, async ({
         page,
       }) => {
         test.setTimeout(60_000);
@@ -781,7 +788,6 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
               return {
                 text: link.textContent,
                 left: Math.round(box.left),
-                top: Math.round(box.top),
                 width: box.width,
                 height: box.height,
                 scroll: link.scrollWidth,
@@ -789,37 +795,19 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
               };
             }),
           );
+          const row = await which.evaluate((nav) => nav.getBoundingClientRect().width);
+          const columns = layout.width < 640 ? 2 : Math.min(tabs.length, Math.floor(row / 184));
 
-          expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(
-            layout.columns[count],
-          );
-          expect(new Set(boxes.map((box) => box.top)).size, `${tab.path}: rows`).toBe(
-            layout.rows[count],
-          );
+          expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(columns);
           for (const box of boxes) {
             expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
+            if (layout.width >= 640) {
+              expect(Math.abs(box.width - 184), `${box.text} is ${box.width}px wide`).toBeLessThanOrEqual(1);
+            }
           }
           const widths = boxes.map((box) => box.width);
-          if (count === 'church') {
-            // Equal buttons: every tab as wide as the others, within a pixel.
-            expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
-          } else {
-            // Sized to their words, from the left (decision 0361): # of People is narrower than
-            // # of Cell Leaders. On a phone the five sit two by two without passing the row's edge.
-            if (layout.width >= 640) {
-              expect(widths[4], `${tab.path}: # of People is stretched`).toBeLessThan(widths[3]);
-            }
-            const row = await which.evaluate((nav) => nav.getBoundingClientRect().right);
-            const last = boxes[boxes.length - 1];
-            // From `lg` the row leaves room after the last tab. At 768px the tabs can fill it
-            // exactly where a font renders wider (CI's Linux, decision 0378), so only the edge holds there.
-            if (layout.width >= 1024) {
-              expect(last.left + last.width, `${tab.path}: the tabs fill the row`).toBeLessThan(row - 1);
-            } else {
-              expect(last.left + last.width, `${tab.path}: a tab passes the row`).toBeLessThanOrEqual(row + 0.5);
-            }
-          }
+          expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
 
           const { scrollWidth, clientWidth } = await page.evaluate(() => ({
             scrollWidth: document.documentElement.scrollWidth,

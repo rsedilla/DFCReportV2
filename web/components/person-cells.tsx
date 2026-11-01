@@ -93,14 +93,14 @@ export function PersonCells({
           {cells.data.membership ? (
             me.data === undefined ? null : mayMoveMembers ? (
               <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
-                Move to another Cell
+                Change Cell
               </Button>
             ) : isLeader ? (
               <p className="text-muted mt-3 text-sm">Moves to another Cell are made by your Primary.</p>
             ) : null
           ) : cells.data.leads.length === 0 ? (
             <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
-              Add to a Cell
+              Add to Cell
             </Button>
           ) : null}
 

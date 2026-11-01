@@ -11,7 +11,7 @@ import {
 import { mockCells } from './mock-attendance';
 
 /**
- * *Awaiting CG Assignment* on `Cells` and *Awaiting Leader Assignment* on `People` (SKILL.md
+ * *No CG Yet* on `Cells` and *No Leader Yet* on `People` (SKILL.md
  * sections 15, 17 and 19; decision 0381), moved from `Record`, which is for recording. Each keeps
  * its count, its fifty at a time and the person's page its names open. Names are invented
  * (CLAUDE.md, Secrets).
@@ -72,7 +72,7 @@ const FORMER = {
   full_name: 'Rogelio Mendoza',
 };
 
-test.describe('Awaiting CG Assignment, a tab of Cells (decision 0381)', () => {
+test.describe('No CG Yet, a tab of Cells (decision 0381)', () => {
   test('sits after Active Cells with its count, and lists who is in no Cell', async ({ page }) => {
     await arrange(page);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -80,12 +80,12 @@ test.describe('Awaiting CG Assignment, a tab of Cells (decision 0381)', () => {
 
     const tabs = cellTabs(page).getByRole('button');
     await expect(tabs.nth(0)).toHaveText('Active Cells');
-    await expect(tabs.nth(1)).toHaveText(/^Awaiting CG Assignment\s*2$/);
+    await expect(tabs.nth(1)).toHaveText(/^No CG Yet\s*2$/);
 
     await tabs.nth(1).click();
     await expect(page).toHaveURL(/[?&]view=NOCELL/);
     await expect(tabs.nth(1)).toHaveAttribute('aria-pressed', 'true');
-    const table = page.getByRole('table', { name: 'Awaiting CG Assignment' });
+    const table = page.getByRole('table', { name: 'No CG Yet' });
     await expect(table.getByRole('columnheader')).toHaveText(['Name']);
     await expect(table.getByRole('link', { name: 'Bituin Carreon' })).toHaveAttribute(
       'href',
@@ -107,14 +107,14 @@ test.describe('Awaiting CG Assignment, a tab of Cells (decision 0381)', () => {
     );
     await page.goto('/cells?view=NOCELL');
 
-    await expect(cellTabs(page).getByRole('button', { name: /^Awaiting CG Assignment\s*2\+$/ })).toBeVisible();
-    const table = page.getByRole('table', { name: 'Awaiting CG Assignment' });
+    await expect(cellTabs(page).getByRole('button', { name: /^No CG Yet\s*2\+$/ })).toBeVisible();
+    const table = page.getByRole('table', { name: 'No CG Yet' });
     await expect(table.getByRole('link')).toHaveCount(2);
     await page.getByRole('button', { name: 'Show more' }).click();
     await expect(table.getByRole('link', { name: 'Soledad Aquino' })).toBeVisible();
     expect(cursors).toContain('page-two');
     await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
-    await expect(cellTabs(page).getByRole('button', { name: /^Awaiting CG Assignment\s*3$/ })).toBeVisible();
+    await expect(cellTabs(page).getByRole('button', { name: /^No CG Yet\s*3$/ })).toBeVisible();
   });
 
   test('an empty list keeps its table, says so in one row, and its tab shows no count', async ({
@@ -125,8 +125,8 @@ test.describe('Awaiting CG Assignment, a tab of Cells (decision 0381)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/cells?view=NOCELL');
 
-    await expect(cellTabs(page).getByRole('button', { name: /^Awaiting CG Assignment$/ })).toBeVisible();
-    const table = page.getByRole('table', { name: 'Awaiting CG Assignment' });
+    await expect(cellTabs(page).getByRole('button', { name: /^No CG Yet$/ })).toBeVisible();
+    const table = page.getByRole('table', { name: 'No CG Yet' });
     await expect(table.getByRole('cell')).toHaveText(['Everybody you oversee is in a Cell.']);
 
     // Below lg the same sentence stands in for the cards.
@@ -142,11 +142,11 @@ test.describe('Awaiting CG Assignment, a tab of Cells (decision 0381)', () => {
     await mockAdministrator(page);
     await page.goto('/cells');
 
-    await expect(cellTabs(page).getByRole('button').nth(1)).toHaveText(/^Awaiting CG Assignment/);
+    await expect(cellTabs(page).getByRole('button').nth(1)).toHaveText(/^No CG Yet/);
   });
 });
 
-test.describe('Awaiting Leader Assignment, a tab of People (decision 0381)', () => {
+test.describe('No Leader Yet, a tab of People (decision 0381)', () => {
   test('sits between Add People and Family Tree with its count, and lists who needs a leader', async ({
     page,
   }) => {
@@ -156,17 +156,17 @@ test.describe('Awaiting Leader Assignment, a tab of People (decision 0381)', () 
 
     await expect(peopleTabs(page).getByRole('link')).toHaveText([
       'Add People',
-      /^Awaiting Leader Assignment\s*2$/,
+      /^No Leader Yet\s*2$/,
       'Family Tree',
       'Absent 3+ Months',
     ]);
-    await peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment/ }).click();
+    await peopleTabs(page).getByRole('link', { name: /^No Leader Yet/ }).click();
     await expect(page).toHaveURL(/\/people\/awaiting-leader$/);
     await expect(
-      peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment/ }),
+      peopleTabs(page).getByRole('link', { name: /^No Leader Yet/ }),
     ).toHaveAttribute('aria-current', 'page');
 
-    const table = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
+    const table = page.getByRole('table', { name: 'No Leader Yet' });
     await expect(table.getByRole('columnheader')).toHaveText(['Name', 'Previous Cell Leader']);
     await expect(
       table.getByRole('row').filter({ hasText: 'Amihan Bacani' }).getByRole('cell'),
@@ -192,12 +192,12 @@ test.describe('Awaiting Leader Assignment, a tab of People (decision 0381)', () 
     );
     await page.goto('/people/awaiting-leader');
 
-    await expect(peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment\s*2\+$/ })).toBeVisible();
-    const table = page.getByRole('table', { name: 'Awaiting Leader Assignment' });
+    await expect(peopleTabs(page).getByRole('link', { name: /^No Leader Yet\s*2\+$/ })).toBeVisible();
+    const table = page.getByRole('table', { name: 'No Leader Yet' });
     await page.getByRole('button', { name: 'Show more' }).click();
     await expect(table.getByRole('link', { name: 'Zenaida Flores' })).toBeVisible();
     expect(cursors).toContain('page-two');
-    await expect(peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment\s*3$/ })).toBeVisible();
+    await expect(peopleTabs(page).getByRole('link', { name: /^No Leader Yet\s*3$/ })).toBeVisible();
   });
 
   test('an empty list keeps its table and says so in one row', async ({ page }) => {
@@ -206,8 +206,8 @@ test.describe('Awaiting Leader Assignment, a tab of People (decision 0381)', () 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/people/awaiting-leader');
 
-    await expect(peopleTabs(page).getByRole('link', { name: /^Awaiting Leader Assignment$/ })).toBeVisible();
-    await expect(page.getByRole('table', { name: 'Awaiting Leader Assignment' }).getByRole('cell')).toHaveText([
+    await expect(peopleTabs(page).getByRole('link', { name: /^No Leader Yet$/ })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'No Leader Yet' }).getByRole('cell')).toHaveText([
       'Nobody you oversee is waiting for a new leader.',
     ]);
   });
@@ -220,11 +220,11 @@ test.describe('where the two lists are offered (decision 0381)', () => {
     await arrange(page);
     await page.goto('/dashboard?list=nocell');
     await expect(page).toHaveURL(/\/cells\?view=NOCELL$/);
-    await expect(page.getByRole('table', { name: 'Awaiting CG Assignment' })).toBeAttached();
+    await expect(page.getByRole('table', { name: 'No CG Yet' })).toBeAttached();
 
     await page.goto('/dashboard?list=leader');
     await expect(page).toHaveURL(/\/people\/awaiting-leader$/);
-    await expect(page.getByRole('table', { name: 'Awaiting Leader Assignment' })).toBeAttached();
+    await expect(page.getByRole('table', { name: 'No Leader Yet' })).toBeAttached();
   });
 
   test('the recording screens have neither tab', async ({ page }) => {

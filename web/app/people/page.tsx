@@ -11,7 +11,7 @@ import { buttonClasses } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field } from '@/components/ui/field';
+import { SearchField } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
@@ -138,19 +138,20 @@ function PeopleList() {
           className="border-line bg-raised mt-6 flex flex-col gap-3 border p-4 sm:flex-row sm:items-end"
           noValidate
         >
-          <Field
+          <SearchField
             label="Search by name or Member ID"
-            type="search"
             name="q"
             autoComplete="off"
             value={term}
             onChange={(event) => setTerm(event.target.value)}
-            className="min-w-0 sm:flex-1"
+            action={
+              <Button type="submit" disabled={tooShort}>
+                {buttonLabel}
+              </Button>
+            }
           />
-          <div className="flex gap-3">
-            <Button type="submit" disabled={tooShort}>
-              {buttonLabel}
-            </Button>
+          {/* Add kept apart from the search bar (decision 0416). */}
+          <div className="flex gap-3 sm:ml-3">
             {mayAdd ? (
               // Reads Add, the tab being Add People (owner, 2026-10-15, decision 0354); its name
               // says what it adds, and holds the word shown (WCAG 2.5.3).
