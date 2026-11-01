@@ -5,13 +5,13 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { useAwaitingLeader } from '@/components/awaiting-lists';
-import { TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
+import { TAB_GRID, TAB_PANE, TAB_ROW, countClasses, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { useOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /**
- * The tabs of the People item: People, then Awaiting Leader Assignment (decision 0381) and
+ * The tabs of the People item: People, then No Leader Yet (decision 0381) and
  * Family Tree (decision 0341) on Full view screens alone. *# of People* is a report and is under Reports (decision 0376). Each is its own
  * address, so Back, a reload and every existing link keep working. The chosen tab opens into
  * the pane that holds everything of it (owner's choice of 2026-10-05). *Absent 3+ Months* is the
@@ -21,7 +21,7 @@ const TABS = [
   // Named for what the tab is for (owner, 2026-10-15, decision 0354); the sidebar item stays People.
   { href: '/people', label: 'Add People', name: undefined, fullOnly: false },
   // Moved here from Record (decision 0381), with its count.
-  { href: '/people/awaiting-leader', label: 'Awaiting Leader Assignment', name: undefined, fullOnly: true },
+  { href: '/people/awaiting-leader', label: 'No Leader Yet', name: undefined, fullOnly: true },
   { href: '/family-tree', label: 'Family Tree', name: undefined, fullOnly: true },
   // No count (owner, 2026-10-16, decision 0397).
   { href: '/people/absent', label: 'Absent 3+ Months', name: undefined, fullOnly: true },
@@ -58,12 +58,8 @@ export function PeopleTabs({
   return (
     <>
       {tabbed && shown.length > 0 ? (
-        // Four tabs sit two by two on a phone and in one row from `sm`, as a Full view leader's
-        // five reports do (decision 0361); three still fit one row at 320px.
-        <nav
-          aria-label="People"
-          className={cn(shown.length > 3 ? 'mt-6 grid grid-cols-2 sm:flex' : 'mt-6 flex', TAB_ROW)}
-        >
+        // Every tab one size (decision 0416).
+        <nav aria-label="People" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
           {shown.map((tab) => {
             const active = tab.href === current;
 
@@ -73,11 +69,7 @@ export function PeopleTabs({
                 href={tab.href}
                 aria-current={active && !within ? 'page' : undefined}
                 aria-label={tab.name}
-                className={cn(
-                  tabClasses(active),
-                  'inline-flex items-center gap-2',
-                  shown.length > 3 && 'justify-center px-1.5 py-1 text-center sm:px-4',
-                )}
+                className={tabClasses(active)}
               >
                 {tab.label}
                 {/* Its count, as it had on Record; a 0 shows no box (decision 0349). */}

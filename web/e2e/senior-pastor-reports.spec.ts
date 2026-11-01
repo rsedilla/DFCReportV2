@@ -135,7 +135,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     // No length but the month, and no second switch for it (decision 0398).
     await expect(page.getByRole('group', { name: 'Report period' }).getByRole('button')).toHaveText([
       'Monthly',
-      'Last 12 months',
+      '12 Months',
     ]);
 
     await page.getByRole('button', { name: 'The period before' }).click();
@@ -245,10 +245,10 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   // No second row: the lengths and the twelve months are one switch (decision 0398).
   await expect(page.getByRole('group', { name: 'Which view' })).toHaveCount(0);
   const view = page.getByRole('group', { name: 'Report period' });
-  await expect(view.getByRole('button')).toHaveText(['Monthly', 'Last 12 months']);
+  await expect(view.getByRole('button')).toHaveText(['Monthly', '12 Months']);
   await expect(view.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
 
-  await view.getByRole('button', { name: 'Last 12 months' }).click();
+  await view.getByRole('button', { name: '12 Months' }).click();
   await expect(page).toHaveURL(/\/trends\?figure=CELL_LEADERS$/);
   await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
   const tabs = page.getByRole('navigation', { name: 'Which report' });
@@ -259,7 +259,7 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
 
   const back = page.getByRole('group', { name: 'Report period' });
-  await expect(back.getByRole('button', { name: 'Last 12 months' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(back.getByRole('button', { name: '12 Months' })).toHaveAttribute('aria-pressed', 'true');
   // The twelve months have no month to step.
   await expect(page.getByRole('button', { name: 'The period before' })).toHaveCount(0);
   await back.getByRole('button', { name: 'Monthly' }).click();
@@ -277,9 +277,9 @@ test('the Senior Pastors’ attendance switch keeps four lengths, and a length c
 
   await page.goto('/reports/cells');
   const view = page.getByRole('group', { name: 'Report period' });
-  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year', 'Last 12 months']);
+  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year', '12 Months']);
 
-  await view.getByRole('button', { name: 'Last 12 months' }).click();
+  await view.getByRole('button', { name: '12 Months' }).click();
   await expect(page).toHaveURL(/\/trends$/);
   await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }).click();
   await expect(page).toHaveURL(/\/reports\/cells\?period=quarter$/);
@@ -307,16 +307,11 @@ test.describe('one size for every report control (decision 0398)', () => {
           return { width: Math.round(box.width), height: Math.round(box.height) };
         }),
       );
-      // On a phone *Last 12 months* takes the whole last row, twice the others.
-      const lengths = width === 360 ? boxes.slice(0, 4) : boxes;
-      // Within a pixel: a row's leftover pixel falls to one column.
-      expect(Math.max(...lengths.map((box) => box.width)) - Math.min(...lengths.map((box) => box.width))).toBeLessThanOrEqual(1);
+      // One size (decision 0416): within a pixel, a row's leftover pixel falling to one column.
+      expect(Math.max(...boxes.map((box) => box.width)) - Math.min(...boxes.map((box) => box.width))).toBeLessThanOrEqual(1);
       for (const box of boxes) {
         // 44px tall: one line of words, and the target size (2.5.8).
         expect(box.height).toBe(44);
-      }
-      if (width === 360) {
-        expect(Math.abs(boxes[4].width - 2 * boxes[0].width)).toBeLessThanOrEqual(2);
       }
     });
   }

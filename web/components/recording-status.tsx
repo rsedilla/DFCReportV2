@@ -68,8 +68,7 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
       <div className={`mt-4 ${CONTROL_BAR}`}>
         <ViewSwitch
           label="Period"
-          even
-          className="w-full sm:w-64"
+          className="mt-0"
           options={[
             { key: 'WEEK', label: 'Week' },
             { key: 'MONTH', label: 'Month' },
@@ -201,8 +200,7 @@ export function LeaderRecordingStatusPanel({
       <div className={CONTROL_BAR}>
         <ViewSwitch
           label="Period"
-          even
-          className="w-full sm:w-64"
+          className="mt-0"
           options={[
             { key: 'WEEK', label: 'Week' },
             { key: 'MONTH', label: 'Month' },
@@ -445,7 +443,7 @@ function LeaderTable({
         <tbody>
           {rows.map((row) => (
             // Every other row shaded, never numbered (owner, 2026-10-09).
-            <tr key={row.leader.id} className={`${rowClasses} even:bg-raised`}>
+            <tr key={row.leader.id} className={rowClasses}>
               <td className="px-3 py-3 align-top">
                 <BranchLink row={row} />
               </td>

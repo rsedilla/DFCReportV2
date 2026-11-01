@@ -9,8 +9,8 @@ import { NAME_LINK, ShowMore } from '@/components/awaiting-lists';
 import type { QueueItem } from '@/components/record-queue';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field } from '@/components/ui/field';
-import { CONTROL_BAR, countClasses, tabClasses } from '@/components/ui/frame';
+import { SearchField } from '@/components/ui/field';
+import { CONTROL_BAR, TAB_GRID, countClasses, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, closedOnLabel, type PendingCgCell } from '@/lib/cells';
@@ -66,18 +66,17 @@ export function TabBar<Key extends string>({
   onChoose: (key: Key) => void;
 }) {
   return (
-    // **Every button one size, as wide as the longest label** (decision 0332): two to a row
-    // and filling it on a phone, two to a row at their own width from `sm`, and one row from
-    // `lg`. The outer row keeps the full-width rule the chosen tab joins.
+    // **Every tab one size** (decision 0416): two to a row on a phone, one fixed width from `sm`.
+    // The outer row keeps the full-width rule the chosen tab joins.
     <div role="group" aria-label={label} className={cn('border-line border-b', className)}>
-      <div className="grid grid-cols-2 sm:inline-grid lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
+      <div className={TAB_GRID}>
       {tabs.map((tab) => (
         <button
           key={tab.key}
           type="button"
           aria-pressed={tab.key === current}
           onClick={() => onChoose(tab.key)}
-          className={cn(tabClasses(tab.key === current), 'justify-center py-2 text-center')}
+          className={tabClasses(tab.key === current)}
         >
           {tab.label}
           {/* A count of 0 is left off (decision 0349): a row of zeros hid the lists with work. */}
@@ -677,21 +676,21 @@ export function PendingFilters({
             onChange({ ...value, q: trimmed });
           }
         }}
-        className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
+        className="flex w-full min-w-0 lg:w-auto lg:min-w-72 lg:flex-1"
         noValidate
       >
-        <Field
+        <SearchField
           label={searchLabel}
-          type="search"
           name="q"
           autoComplete="off"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          className="min-w-0 sm:flex-1"
+          action={
+            <Button type="submit" disabled={tooShort}>
+              {buttonLabel}
+            </Button>
+          }
         />
-        <Button type="submit" disabled={tooShort}>
-          {buttonLabel}
-        </Button>
       </form>
       {wholeChurch ? (
         <RadioGroup

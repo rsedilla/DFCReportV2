@@ -69,7 +69,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
 
   if (me.screens === 'RECORDING') {
     // Record, People, Cells as My Cell, and SUYNL (decision 0323): no Reports, no Cells list,
-    // no Awaiting Leader Assignment or Family Tree.
+    // no No Leader Yet or Family Tree.
     return (
       at(/^\/people(\/new)?$/) ||
       person ||

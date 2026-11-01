@@ -19,13 +19,19 @@ export const TAB_ROW = 'border-accent border-b-2';
 export const TAB_PANE = 'border-accent flow-root min-w-0 border-2 border-t-0 px-4 pb-5 sm:px-5';
 
 /**
- * One tab of a tab row, the same on every screen (owner's choice of 2026-10-10): sized to
- * its words, the chosen one filled, its words in title case (decision 0332). `px-3` below `sm` lets three tabs fit a 320px phone.
- * The others' words are in the accent (owner, 2026-10-19), so a tab never reads as body text.
+ * How every tab row lays out its tabs (decision 0416): one fixed size, 11.5rem, from `sm`, and
+ * two equal tabs to a row on a phone, where a label may wrap only on the narrowest.
+ */
+export const TAB_GRID = 'grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,11.5rem)]';
+
+/**
+ * One tab of a tab row, the same on every screen: one size (decision 0416), the chosen one
+ * filled, its words in title case (decision 0332), centred in the tab. The others' words are
+ * in the accent (owner, 2026-10-19), so a tab never reads as body text.
  */
 export function tabClasses(active: boolean): string {
   return [
-    'focus-visible:outline-accent inline-flex min-h-11 items-center gap-2 border border-b-0 px-3 sm:px-4',
+    'focus-visible:outline-accent inline-flex min-h-11 min-w-0 items-center justify-center gap-2 border border-b-0 px-2 py-2 text-center sm:px-3',
     'text-sm font-bold',
     'focus-visible:outline-2 focus-visible:-outline-offset-2',
     active ? 'bg-accent text-surface border-accent' : 'border-line text-accent hover:bg-raised',

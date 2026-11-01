@@ -47,7 +47,7 @@ test.describe('Add a person: Not given yet (decision 0328)', () => {
     await page.getByLabel('Search for a leader by name').fill('ann');
     await page.getByRole('button', { name: 'Search people' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect.poll(() => bodies.length, { message: 'the person was never sent' }).toBe(1);
     expect(bodies[0]).toMatchObject({

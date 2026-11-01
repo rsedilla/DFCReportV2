@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field } from '@/components/ui/field';
+import { SearchField } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   CLOSURE_REASONS,
@@ -34,7 +34,7 @@ const EXPLANATION_MAX = 500;
  *
  * **A reason, an explanation and a decision about every member.** The explanation is what the
  * Senior Pastors read on the closed Cell. Section 10 asks that members be dealt with
- * explicitly: here they are all left without a Cell, to appear on Cells' *Awaiting CG Assignment* (decision 0381), or
+ * explicitly: here they are all left without a Cell, to appear on Cells' *No CG Yet* (decision 0381), or
  * all moved to one Cell the administrator finds by its ID or leader.
  *
  * **A closure is never reversed** (section 10), so the button says what it does.
@@ -209,30 +209,28 @@ export function CloseCellDialog({
         {members.data && members.data.length > 0 ? (
           <p className="text-muted text-sm leading-relaxed">
             {members.data.map((member) => member.full_name).join(', ')}.
-            {where === 'NONE' ? ' They will appear under Awaiting CG Assignment on Cells.' : null}
+            {where === 'NONE' ? ' They will appear under No CG Yet on Cells.' : null}
           </p>
         ) : null}
 
         {where === 'MOVE' ? (
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <Field
-                label="Find the Cell by its ID or leader"
-                type="search"
-                name="destination"
-                autoComplete="off"
-                value={term}
-                onChange={(event) => setTerm(event.target.value)}
-                className="min-w-0 sm:flex-1"
-              />
-              <Button
-                variant="secondary"
-                disabled={term.trim().length < 2}
-                onClick={() => setAsked(term.trim())}
-              >
-                Search
-              </Button>
-            </div>
+            <SearchField
+              label="Find the Cell by its ID or leader"
+              name="destination"
+              autoComplete="off"
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              action={
+                <Button
+                  variant="secondary"
+                  disabled={term.trim().length < 2}
+                  onClick={() => setAsked(term.trim())}
+                >
+                  Search
+                </Button>
+              }
+            />
             {found.data ? (
               <RadioGroup
                 legend="Move them to"
@@ -266,7 +264,7 @@ export function CloseCellDialog({
         {/* A column below `lg`, so each button is full width in the sheet. */}
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
           <Button type="submit" disabled={!ready || send.isPending}>
-            {send.isPending ? 'Closing…' : 'Close this Cell'}
+            {send.isPending ? 'Closing…' : 'Close Cell'}
           </Button>
           <Button variant="secondary" onClick={close}>
             Cancel

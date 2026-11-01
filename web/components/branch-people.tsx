@@ -174,7 +174,7 @@ export function BranchCountsPanel({
               <tbody>
                 {data.rows.map((row, index) => (
                   // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
-                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
+                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
                     <td className="px-3 py-3">
                       {row.leader === null ? (
                         <span className="text-muted">A leader not named here</span>

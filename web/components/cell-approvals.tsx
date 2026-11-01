@@ -138,10 +138,10 @@ function ApprovalCard({ request, wholeChurch }: { request: ApprovalRequest; whol
               disabled={busy || reason === '' || (reason === 'OTHER' && note.trim() === '')}
               onClick={() => decline.mutate()}
             >
-              {decline.isPending ? 'Declining…' : 'Decline request'}
+              {decline.isPending ? 'Declining…' : 'Decline'}
             </Button>
             <Button variant="secondary" disabled={busy} onClick={() => setDeclining(false)}>
-              Keep it waiting
+              Cancel
             </Button>
           </div>
         </div>

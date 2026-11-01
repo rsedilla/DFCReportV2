@@ -56,7 +56,7 @@ test.describe('a recorded Cell meeting', () => {
 
     await expect(page.getByText('Already recorded')).toBeVisible();
     await expect(page.getByText('needs permission to correct records')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 
     const present = page.getByRole('radio', { name: 'Present' }).first();
     await expect(present).toBeChecked();
@@ -97,7 +97,7 @@ test.describe('a recorded Cell meeting', () => {
     const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
 
     await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
@@ -123,7 +123,7 @@ test.describe('a recorded Cell meeting', () => {
     ).toBeVisible();
     await expect(page.getByText('The marks below are what is stored.')).toBeVisible();
     await expect(page.getByText(/A correction replaces the whole roster/)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeDisabled();
   });
@@ -228,7 +228,7 @@ test.describe('a recorded Cell meeting', () => {
     await mockRecordedMeetingRoster(page, 'HELD');
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
 
     // The reader leaves the tab past the week's close and comes back: the roster is stale
@@ -392,7 +392,7 @@ test.describe('a recorded Cell meeting', () => {
     );
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
     await page.getByRole('button', { name: 'Save correction' }).click();
     await expect(page.getByText(/^Someone else changed this meeting after you opened it\./)).toBeVisible();
@@ -435,7 +435,7 @@ test.describe('a recorded Cell meeting', () => {
     );
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
     const save = page.getByRole('button', { name: 'Save correction' });
     await save.click();
@@ -468,7 +468,7 @@ test.describe('a recorded Cell meeting', () => {
     });
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page
       .getByRole('group', { name: 'Rosalinda Ocampo' })
       .getByRole('radio', { name: 'Absent' })
@@ -582,7 +582,7 @@ test.describe('a recorded Cell meeting', () => {
     );
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Did not meet' }).check();
     await page.getByRole('radio', { name: 'Leader could not be there' }).check();
     await page.getByLabel('Why is this being corrected?').fill('Filed as met by mistake');
@@ -617,7 +617,7 @@ test.describe('a recorded Cell meeting', () => {
     );
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page
       .getByRole('group', { name: 'Rosalinda Ocampo' })
       .getByRole('radio', { name: 'Absent' })
@@ -631,7 +631,7 @@ test.describe('a recorded Cell meeting', () => {
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText(/^Changed by someone else/)).toHaveCount(0);
     // And a new edit starts with none.
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await expect(page.getByText(/^Changed by someone else/)).toHaveCount(0);
   });
 
@@ -683,7 +683,7 @@ test.describe('a recorded Cell meeting', () => {
     const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Absent' }).first().check();
     await page.unroute('**/api/v1/cells/*/meetings/*/roster');
     await mockRecordedMeetingRoster(page, 'HELD', { version: 4 });
@@ -691,7 +691,7 @@ test.describe('a recorded Cell meeting', () => {
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]).toMatchObject({ version: 3 });
 
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Present' }).nth(1).check();
     await page.getByRole('button', { name: 'Save correction' }).click();
     await expect.poll(() => sent.length).toBe(2);
@@ -707,7 +707,7 @@ test.describe('a recorded Cell meeting', () => {
     const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Did not meet' }).check();
     await page.getByRole('radio', { name: 'Leader could not be there' }).check();
 
@@ -759,7 +759,7 @@ test.describe('a recorded Cell meeting', () => {
     );
     await expect(
       page.getByText(
-        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting? Press Edit meeting to add a mark.',
+        'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting? Press Edit to add a mark.',
       ),
     ).toBeVisible();
     await expect(
@@ -781,7 +781,7 @@ test.describe('a recorded Cell meeting', () => {
         'Marco Dizon joined the Cell after this was recorded. Was Marco at this meeting?',
       ),
     ).toBeVisible();
-    await expect(page.getByText(/Press Edit meeting/)).toHaveCount(0);
+    await expect(page.getByText(/Press Edit/)).toHaveCount(0);
   });
 
   test('corrects Did not meet to Met, with the whole roster and a reason', async ({ page }) => {
@@ -793,7 +793,7 @@ test.describe('a recorded Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('radio', { name: 'Met', exact: true }).check();
 
     await page.getByRole('radio', { name: 'Present' }).first().check();
@@ -822,7 +822,7 @@ test.describe('a recorded Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit meeting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
   });
 });
 
@@ -967,7 +967,7 @@ test('ends a DCC edit in progress when the Sunday stops taking records', async (
   await mockDccRoster(page);
 
   await page.goto('/dcc/3f1b7c6e-0000-4000-8000-000000000501');
-  await page.getByRole('button', { name: 'Edit marks' }).click();
+  await page.getByRole('button', { name: 'Edit' }).click();
   await page
     .getByRole('group', { name: 'Rosalinda Ocampo' })
     .getByRole('radio', { name: 'Absent' })
@@ -1009,7 +1009,7 @@ test.describe('a Sunday with a mark already recorded', () => {
     await expect(
       page.getByText('Changing a recorded mark needs permission to correct records'),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit marks' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 
     const recorded = page.getByRole('group', { name: RECORDED.name }).getByRole('radio', {
       name: 'Present',
@@ -1043,7 +1043,7 @@ test.describe('a Sunday with a mark already recorded', () => {
     });
 
     await page.goto(SUNDAY);
-    await page.getByRole('button', { name: 'Edit marks' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
 
     await page
       .getByRole('group', { name: RECORDED.name })
@@ -1126,7 +1126,7 @@ test.describe('a Sunday with a mark already recorded', () => {
     });
 
     await page.goto(SUNDAY);
-    await page.getByRole('button', { name: 'Edit marks' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('group', { name: RECORDED.name }).getByRole('radio', { name: 'Absent' }).check();
 
     // Somebody else corrects the same person meanwhile.
@@ -2755,8 +2755,8 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     for (const name of [
       'Pending CG Records',
       'Pending DCC Records',
-      'Awaiting Leader Assignment',
-      'Awaiting CG Assignment',
+      'No Leader Yet',
+      'No CG Yet',
     ]) {
       await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(0);
     }
@@ -2945,7 +2945,7 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     );
 
     // The two people lists left Record (decision 0381).
-    for (const name of [/^Awaiting Leader Assignment/, /^Awaiting CG Assignment/]) {
+    for (const name of [/^No Leader Yet/, /^No CG Yet/]) {
       await expect(recordLists(page).getByRole('button', { name })).toHaveCount(0);
     }
 
@@ -3393,7 +3393,7 @@ test.describe('Pending CG Records laid out as Pending DCC Records (decision 0368
     ]);
   });
 });
-test.describe('Awaiting Leader Assignment for a reader who may not move people (decision 0356)', () => {
+test.describe('No Leader Yet for a reader who may not move people (decision 0356)', () => {
   const JUNE_20 = new Date('2026-06-20T02:00:00Z');
 
   async function mockList(page: Page) {
@@ -3581,7 +3581,7 @@ test.describe('marking the rest of a Cell meeting Absent', () => {
     await expect(page.getByText('Already recorded')).toBeVisible();
     await expect(page.getByRole('button', { name: /Absent$/ })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Edit meeting' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('button', { name: 'Mark the 1 left Absent' }).click();
     await expect(mark(page, 0, 'Present')).toBeChecked();
     await expect(mark(page, 1, 'Absent')).toBeChecked();

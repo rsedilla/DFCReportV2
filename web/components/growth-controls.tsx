@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
+import { SearchField } from '@/components/ui/field';
 import { isBranchReader } from '@/components/reports-tabs';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { CONTROL_BAR, TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { useSearchTerm } from '@/lib/search-term';
@@ -51,7 +51,7 @@ export function GrowthTabs({
   return (
     <>
       {tabbed ? (
-        <nav aria-label="Growth" className={cn('mt-6 flex', TAB_ROW)}>
+        <nav aria-label="Growth" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
           {tabs.map((tab) => {
             const active = tab.href === current;
 
@@ -206,18 +206,18 @@ export function GrowthFilters({
         }
       }}
     >
-      <Field
+      <SearchField
         label="Search by name or Member ID"
-        type="search"
         name="q"
         autoComplete="off"
         value={term}
         onChange={(event) => setTerm(event.target.value)}
-        className="w-full min-w-0 sm:w-auto sm:flex-1"
+        action={
+          <Button type="submit" disabled={tooShort}>
+            {buttonLabel}
+          </Button>
+        }
       />
-      <Button type="submit" disabled={tooShort}>
-        {buttonLabel}
-      </Button>
       {offersMine ? (
         <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
           {mine ? 'Showing only my disciples' : 'Only my disciples'}

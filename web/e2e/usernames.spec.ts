@@ -105,7 +105,7 @@ test('the Account page offers a username and saves it with a key', async ({ page
   await expect(section.getByLabel('Username')).toHaveValue('rbsantiago');
   await expect(section.getByText('Optional. Sign in with it or with your email address.')).toBeVisible();
 
-  await section.getByRole('button', { name: 'Save username' }).click();
+  await section.getByRole('button', { name: 'Save' }).click();
 
   await expect(section.getByText('rbsantiago', { exact: true })).toBeVisible();
   await expect(section.getByRole('button', { name: 'Change username' })).toBeVisible();
@@ -167,7 +167,7 @@ test('keeps the proof a reset answers with, and sends it when signing in', async
 
   await page.goto('/reset-password?token=example-reset-token');
   await page.getByLabel('New password', { exact: true }).fill('a long enough passphrase');
-  await page.getByRole('button', { name: 'Save new password' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Your password has been changed')).toBeVisible();
 
   await page.goto('/sign-in');

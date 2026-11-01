@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 
-import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import type { RangeKind } from '@/lib/report-range';
@@ -153,19 +153,8 @@ export function ReportsTabs({
       {tabbed ? (
         <nav
           aria-label="Which report"
-          className={cn(
-            // The five labels fit one row from a small screen up (owner, 2026-10-09). A
-            // whole-church reader's five take three a row on a phone, as their six did, and the
-            // Senior Pastors' two. A Full view leader's five sit two by two on a phone, equal,
-            // and from `sm` in one row sized to their words.
-            'mt-6',
-            branch
-              ? 'grid grid-cols-2 sm:flex'
-              : seniorPastor
-                ? 'grid grid-cols-2 sm:grid-cols-5'
-                : 'grid grid-cols-3 sm:grid-cols-5',
-            TAB_ROW,
-          )}
+          // Every tab one size, for every reader (decision 0416).
+          className={cn('mt-6', TAB_GRID, TAB_ROW)}
         >
           {tabs.map((tab) => {
             const active = tab.key === current;
@@ -189,17 +178,7 @@ export function ReportsTabs({
                 }
                 aria-current={active ? 'page' : undefined}
                 aria-label={tab.name}
-                className={
-                  branch
-                    ? // Tighter below `sm`, so the three fit a 320px phone with their words wrapped,
-                      // with room to spare for a wider font: `px-2` left 3px too few on Linux.
-                      cn(tabClasses(active), 'px-1.5')
-                    : cn(
-                        'focus-visible:outline-accent inline-flex min-h-11 items-center justify-center border border-b-0 px-3 py-2 text-center',
-                        'text-sm font-bold focus-visible:outline-2 focus-visible:-outline-offset-2',
-                        active ? 'bg-accent text-surface border-accent' : 'border-line text-ink hover:bg-raised',
-                      )
-                }
+                className={tabClasses(active)}
               >
                 {tab.label}
               </Link>
@@ -260,26 +239,15 @@ export function ReportViewSwitch({
 
   const options: { key: RangeKind | 'TREND'; label: string }[] = [
     ...periods.map((key) => ({ key, label: PERIOD_LABEL[key] })),
-    { key: 'TREND', label: 'Last 12 months' },
+    { key: 'TREND', label: '12 Months' },
   ];
 
   return (
     <ViewSwitch<RangeKind | 'TREND'>
       label="Report period"
-      // Every button one width, as wide as *Last 12 months*, in one row from `sm` up. On a phone
-      // two a row and *Last 12 months* the whole last row, so no label breaks (decision 0398).
-      className="mt-0 grid w-full grid-cols-2 sm:flex sm:w-auto sm:flex-nowrap"
-      options={options.map((option, index) => ({
-        ...option,
-        className: cn(
-          'justify-center px-2 text-center sm:w-29',
-          // Alone on its row only where the lengths fill theirs: a # tab's two share one.
-          options.length % 2 === 1 && option.key === 'TREND' && 'col-span-2',
-          // The grid's rows and columns share one border, as the row's buttons do.
-          index >= 2 && '-mt-px sm:mt-0',
-          index > 0 && index % 2 === 0 && 'ml-0 sm:-ml-px',
-        ),
-      }))}
+      // One size, as every switch is (decision 0416); *12 Months* keeps to one line.
+      className="mt-0"
+      options={options}
       value={value}
       onChange={(next) => {
         if (next === value) {

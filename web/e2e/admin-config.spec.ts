@@ -245,7 +245,7 @@ test.describe('Change category (decision 0367)', () => {
     });
     await page.goto(MEETINGS);
 
-    await expect(page.getByRole('button', { name: 'Change when it meets' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change Schedule' })).toBeVisible();
     await page.getByRole('button', { name: 'Change category' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('It is a Youth Cell now.');

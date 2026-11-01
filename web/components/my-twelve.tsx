@@ -68,8 +68,7 @@ export function PeriodTabs({
       options={PERIODS.filter(([key]) => kinds === undefined || kinds.includes(key)).map(
         ([key, label]) => ({ key, label }),
       )}
-      even={labelled ? 'content' : true}
-      className={labelled ? 'mt-2' : inBar ? 'mt-0 w-auto' : undefined}
+      className={labelled ? 'mt-2' : inBar ? 'mt-0' : undefined}
       value={value}
       onChange={onChange}
     />
@@ -405,7 +404,7 @@ export function BranchTwelve({
           </thead>
           <tbody>
             {twelve.rows.map((row, index) => (
-              <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
+              <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
                 <td className="px-3 py-3">
                   {row.leader === null ? (
                     <span className="text-muted">A leader you don’t oversee</span>
@@ -571,7 +570,7 @@ export function RootLeadersTwelve({
               <tbody>
                 {rows.map((row, index) => (
                   // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
-                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={`${rowClasses} even:bg-raised`}>
+                  <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
                     <td className="px-3 py-3">
                       {row.leader === null ? (
                         <span className="text-muted">A leader you don’t oversee</span>

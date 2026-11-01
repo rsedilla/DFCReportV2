@@ -253,7 +253,7 @@ function PersonDetail() {
             ) : null}
             {mayMove ? (
               <Button variant="secondary" onClick={() => setMoving(true)}>
-                Move to another leader
+                Change Leader
               </Button>
             ) : null}
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>

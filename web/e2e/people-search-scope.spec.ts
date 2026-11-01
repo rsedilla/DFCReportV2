@@ -239,7 +239,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     const searches = await recordSearches(page);
 
     await page.goto(MEMBERS);
-    await page.getByRole('button', { name: 'Add a member' }).click();
+    await page.getByRole('button', { name: 'Add Member' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     // The note is what says the leader has been read, so the search below is made with
@@ -296,7 +296,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
     // Answered, and refused, before the search is made, so the case measures the fallback
     // rather than a search sent before the read came back.
     await leaderRead;
-    await page.getByRole('button', { name: 'Add a member' }).click();
+    await page.getByRole('button', { name: 'Add Member' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
@@ -322,7 +322,7 @@ test.describe('which Network a picker searches (decision 0299)', () => {
 
     // `PERSON_IN_SCOPE` is a woman, read in full, so her Network comes from her sex.
     await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
-    await page.getByRole('button', { name: 'Move to another leader' }).click();
+    await page.getByRole('button', { name: 'Change Leader' }).click();
 
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,

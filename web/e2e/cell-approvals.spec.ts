@@ -12,7 +12,7 @@ import { mockCells } from './mock-attendance';
 
 /**
  * Cells to Approve, a tab of the Cells page (SKILL.md section 10, decisions 0352 and 0353),
- * section 15's *Fewer than 3 members* as the administrator's *Under 3 Member Cells* tab, and
+ * section 15's *Fewer than 3 members* as the administrator's *Under 3 Members* tab, and
  * which tabs each account is offered (decision 0366). The route decides what the reader may
  * approve; these cases pin what the screen shows and sends.
  */
@@ -91,11 +91,11 @@ test.describe('Cells to Approve (decision 0352)', () => {
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
       'Active Cells',
-      /^Awaiting CG Assignment/,
-      'Under 3 Member Cells',
-      'Inactive (3+ Months) Cells',
+      /^No CG Yet/,
+      'Under 3 Members',
+      'Inactive 3+ Months',
       'Closed Cells',
-      /^Same Leader, Same Time/,
+      /^Time Clashes/,
       /^Cells to Approve\s*1$/,
     ]);
 
@@ -133,7 +133,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await page.goto('/cells?view=APPROVE');
     await page.getByRole('button', { name: 'Decline', exact: true }).click();
-    const decline = page.getByRole('button', { name: 'Decline request' });
+    const decline = page.getByRole('button', { name: 'Decline' });
     await expect(decline).toBeDisabled();
     await page.getByRole('radio', { name: 'Not the right time yet' }).check();
     await decline.click();
@@ -154,10 +154,10 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await page.goto('/cells');
 
-    // Awaiting CG Assignment beside it since decision 0381.
+    // No CG Yet beside it since decision 0381.
     await expect(page.getByRole('group', { name: 'Which Cells' }).getByRole('button')).toHaveText([
       'Active Cells',
-      /^Awaiting CG Assignment/,
+      /^No CG Yet/,
     ]);
     // The total stays with the list it counts (decision 0400).
     await expect(page.getByRole('heading', { name: /^\d+ Cells?$/ })).toBeVisible();
@@ -174,7 +174,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
       'Active Cells',
-      /^Awaiting CG Assignment/,
+      /^No CG Yet/,
       /^Cells to Approve\s*1$/,
     ]);
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
@@ -201,7 +201,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
   });
 });
 
-test.describe('Under 3 Member Cells (decisions 0353 and 0366)', () => {
+test.describe('Under 3 Members (decisions 0353 and 0366)', () => {
   test('is the administrator’s tab, and asks the server for those Cells', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
     await mockSignedIn(page);
@@ -216,7 +216,7 @@ test.describe('Under 3 Member Cells (decisions 0353 and 0366)', () => {
     await page.goto('/cells');
     // The filters left the bar and became tabs.
     await expect(page.getByRole('button', { name: /fewer than 3 members/i })).toHaveCount(0);
-    const tab = page.getByRole('button', { name: 'Under 3 Member Cells' });
+    const tab = page.getByRole('button', { name: 'Under 3 Members' });
     await expect(tab).toHaveAttribute('aria-pressed', 'false');
     await tab.click();
 
@@ -231,7 +231,7 @@ test.describe('Under 3 Member Cells (decisions 0353 and 0366)', () => {
   });
 });
 
-test.describe('Same Leader, Same Time (decision 0392)', () => {
+test.describe('Time Clashes (decision 0392)', () => {
   const CLASHES = [
     {
       leader: {
@@ -272,8 +272,8 @@ test.describe('Same Leader, Same Time (decision 0392)', () => {
     await page.goto('/cells');
     const tab = page
       .getByRole('group', { name: 'Which Cells' })
-      .getByRole('button', { name: /^Same Leader, Same Time/ });
-    await expect(tab).toHaveText(/^Same Leader, Same Time\s*1$/);
+      .getByRole('button', { name: /^Time Clashes/ });
+    await expect(tab).toHaveText(/^Time Clashes\s*1$/);
     await tab.click();
 
     await expect(page).toHaveURL(/view=CLASH/);
@@ -317,7 +317,7 @@ test.describe('Same Leader, Same Time (decision 0392)', () => {
       'aria-pressed',
       'true',
     );
-    await expect(page.getByRole('button', { name: /^Same Leader, Same Time/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Time Clashes/ })).toHaveCount(0);
     expect(asked).toBe(false);
   });
 });

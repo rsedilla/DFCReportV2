@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field } from '@/components/ui/field';
+import { SearchField } from '@/components/ui/field';
 import { describeFailure } from '@/lib/messages';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import {
@@ -147,8 +147,14 @@ export function PersonPicker({
           <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
         ) : null}
         <p className="mt-1 text-sm">{selectedName}</p>
-        <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
-          Choose someone else
+        {/* Named apart from the Cell picker's Change, which can share the form (2.4.6). */}
+        <Button
+          variant="secondary"
+          className="mt-3"
+          aria-label="Change person"
+          onClick={() => onSelect(null)}
+        >
+          Change
         </Button>
       </div>
     );
@@ -167,26 +173,26 @@ export function PersonPicker({
         </p>
       ) : null}
 
-      {/* Stacked on a phone, inline from `sm` up — as on the people search. */}
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end" data-picker-search>
-        <Field
+      {/* The one search bar (decision 0416). */}
+      <div className="mt-3" data-picker-search>
+        <SearchField
           label={searchLabel}
-          type="search"
           name="leader_q"
           autoComplete="off"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          className="min-w-0 sm:flex-1"
+          action={
+            // Named apart from the Cell picker's Search, which can share the page (2.4.6).
+            <Button
+              variant="secondary"
+              aria-label="Search people"
+              disabled={term.trim().length < minimum}
+              onClick={() => setSubmitted(term)}
+            >
+              Search
+            </Button>
+          }
         />
-        {/* Named apart from the Cell picker's Search, which can share the page (2.4.6). */}
-        <Button
-          variant="secondary"
-          aria-label="Search people"
-          disabled={term.trim().length < minimum}
-          onClick={() => setSubmitted(term)}
-        >
-          Search
-        </Button>
       </div>
 
       {/*

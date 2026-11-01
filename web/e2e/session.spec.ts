@@ -867,8 +867,10 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
   await page.goto('/session');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Account and session');
 
-  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
-  await page.getByRole('button', { name: 'Yes, sign out everywhere' }).click();
+  // The trigger and the confirmation share one name (decision 0416): the confirmation is
+  // the second, below the trigger.
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).first().click();
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).last().click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Sign in');
 
   whoAmI = 'Oriel';
@@ -899,24 +901,26 @@ test('names the role the server honours, and asks before ending every other sess
   await expect(page.getByText('Leader', { exact: true })).toBeVisible();
 
   // The question comes first, and nothing has happened while it stands.
-  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).first().click();
   await expect(page.getByText(/including any phone you are not holding/)).toBeVisible();
   expect(endedEverywhere).toBe(0);
 
   // A second click on the trigger cannot reach the confirmation: it re-opens the panel
   // that is already open, which is why the confirmation renders below the trigger rather
   // than in its slot.
-  await page.getByRole('button', { name: /^Sign out on every device/ }).dblclick();
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).first().dblclick();
   expect(endedEverywhere).toBe(0);
 
-  await page.getByRole('button', { name: 'Keep them' }).click();
-  await expect(page.getByRole('button', { name: 'Yes, sign out everywhere' })).toBeHidden();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'Sign Out Everywhere' })).toHaveCount(1);
   expect(endedEverywhere).toBe(0);
 
   // And the confirmation does what it says, which the first version of this case never
   // asserted — it pinned the guard and left the guarded action untested.
-  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
-  await page.getByRole('button', { name: 'Yes, sign out everywhere' }).click();
+  // The trigger and the confirmation share one name (decision 0416): the confirmation is
+  // the second, below the trigger.
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).first().click();
+  await page.getByRole('button', { name: 'Sign Out Everywhere' }).last().click();
   await expect.poll(() => endedEverywhere).toBe(1);
 });
 
@@ -984,7 +988,7 @@ test('changing the password sends the session to keep, then renews it', async ({
   const main = page.getByRole('region', { name: 'Your password' });
   await main.getByLabel('Current password').fill('the first long passphrase');
   await main.getByLabel('New password').fill('a second long passphrase');
-  await main.getByRole('button', { name: 'Save new password' }).click();
+  await main.getByRole('button', { name: 'Save' }).click();
 
   await expect(
     main.getByText('Your password is changed. Your other devices are signed out.'),
@@ -1022,7 +1026,7 @@ test('a wrong current password is said on its field', async ({ page }) => {
   const main = page.getByRole('region', { name: 'Your password' });
   await main.getByLabel('Current password').fill('not the password');
   await main.getByLabel('New password').fill('a second long passphrase');
-  await main.getByRole('button', { name: 'Save new password' }).click();
+  await main.getByRole('button', { name: 'Save' }).click();
 
   await expect(main.getByText('That is not your current password.')).toBeVisible();
   await expect(main.getByText('Your password is changed.')).toHaveCount(0);
@@ -1043,7 +1047,7 @@ test('the Account screen links to the reset page for a new password', async ({ p
 
   await main.getByRole('link', { name: 'Email me a reset link' }).click();
   await expect(page).toHaveURL(/\/forgot-password$/);
-  await expect(page.getByRole('button', { name: 'Email me a link' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send Link' })).toBeVisible();
 });
 /**
  * The holder's own email (decision 0415): a link goes to the new address, and nothing
@@ -1066,7 +1070,7 @@ test('asking to change the email sends the new address and the current password'
   const section = page.getByRole('region', { name: 'Your email' });
   await section.getByLabel('New email address').fill(' new@example.invalid ');
   await section.getByLabel('Current password').fill('the first long passphrase');
-  await section.getByRole('button', { name: 'Send the confirmation link' }).click();
+  await section.getByRole('button', { name: 'Send Link' }).click();
 
   await expect(
     section.getByText(
@@ -1102,7 +1106,7 @@ test('a wrong current password for the email change is said on its field', async
   const section = page.getByRole('region', { name: 'Your email' });
   await section.getByLabel('New email address').fill('new@example.invalid');
   await section.getByLabel('Current password').fill('not the password');
-  await section.getByRole('button', { name: 'Send the confirmation link' }).click();
+  await section.getByRole('button', { name: 'Send Link' }).click();
 
   await expect(section.getByText('That is not your current password.')).toBeVisible();
   await expect(section.getByText(/We sent a link/)).toHaveCount(0);
@@ -1120,10 +1124,10 @@ test('the confirmation link changes nothing until its button is pressed', async 
   });
 
   await page.goto('/confirm-email?token=example-email-token');
-  await expect(page.getByRole('button', { name: 'Confirm my new email' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm Email' })).toBeVisible();
   expect(confirmed).toEqual([]);
 
-  await page.getByRole('button', { name: 'Confirm my new email' }).click();
+  await page.getByRole('button', { name: 'Confirm Email' }).click();
 
   await expect(page.getByRole('heading', { name: 'Your email is changed' })).toBeVisible();
   await expect(page.getByText(/is now new@example\.invalid/)).toBeVisible();
@@ -1146,7 +1150,7 @@ test('a spent confirmation link says so', async ({ page }) => {
   );
 
   await page.goto('/confirm-email?token=example-email-token');
-  await page.getByRole('button', { name: 'Confirm my new email' }).click();
+  await page.getByRole('button', { name: 'Confirm Email' }).click();
 
   await expect(page.getByText('That link is no longer valid. Ask for a new one.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your email is changed' })).toHaveCount(0);

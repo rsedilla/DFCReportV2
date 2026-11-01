@@ -94,7 +94,7 @@ export function ArchivePersonDialog({
       >
         <p className="text-sm leading-relaxed">
           Archiving never deletes. From now they are left out of every count, their Cell
-          membership ends, and anyone they pastor appears on Awaiting Leader Assignment. You can
+          membership ends, and anyone they pastor appears on No Leader Yet. You can
           restore them later.
         </p>
 

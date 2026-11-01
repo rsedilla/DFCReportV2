@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { buttonClasses } from '@/components/ui/button';
+import { ICON_BUTTON, buttonClasses } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
 import { hasNotBegun, monthLabel, openUntilLabel, shiftMonth } from '@/lib/reporting-month';
 import { cn } from '@/lib/utils';
@@ -59,7 +59,7 @@ export function MonthPicker({
           // A name rather than an icon alone (4.1.2), and the icon is hidden from
           // the accessibility tree so it is not announced twice.
           aria-label={`Show ${monthLabel(shiftMonth(month, -1))}`}
-          className={cn(buttonClasses('secondary'), 'px-3')}
+          className={cn(buttonClasses('secondary'), ICON_BUTTON)}
         >
           <ChevronLeft aria-hidden="true" className="size-4" />
         </button>
@@ -68,7 +68,7 @@ export function MonthPicker({
           onClick={() => onChange(next)}
           disabled={nextIsRefused}
           aria-label={`Show ${monthLabel(next)}`}
-          className={cn(buttonClasses('secondary'), 'px-3')}
+          className={cn(buttonClasses('secondary'), ICON_BUTTON)}
         >
           <ChevronRight aria-hidden="true" className="size-4" />
         </button>

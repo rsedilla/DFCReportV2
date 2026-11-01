@@ -17,7 +17,7 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
+import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   categoryLabel,
@@ -63,7 +63,7 @@ function MyCell() {
           <p className="text-muted text-sm">The Cells you lead, in {monthLabel(month)}.</p>
         </div>
         <Button variant="secondary" onClick={() => setAsking(true)}>
-          Ask for a new Cell
+          Request New Cell
         </Button>
       </div>
 
@@ -73,7 +73,7 @@ function MyCell() {
 
       {/* One tab and its pane, the frame every other account's screens have (owner,
           2026-10-19), so the Cells do not float on the page. */}
-      <nav aria-label="Cells" className={`mt-6 flex ${TAB_ROW}`}>
+      <nav aria-label="Cells" className={`mt-6 ${TAB_GRID} ${TAB_ROW}`}>
         <Link href="/my-cell" aria-current="page" className={tabClasses(true)}>
           My Cell
         </Link>

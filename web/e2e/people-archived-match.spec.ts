@@ -111,7 +111,7 @@ test.describe('an archived match (decisions 0404 and 0405)', () => {
     await page.getByLabel('Search for a leader by name').fill('ann');
     await page.getByRole('button', { name: 'Search people' }).click();
     await page.getByRole('button', { name: 'Choose' }).first().click();
-    await page.getByRole('button', { name: 'Add this person' }).click();
+    await page.getByRole('button', { name: 'Add Person' }).click();
 
     await expect(
       page.getByRole('heading', { name: 'Is this someone already recorded?' }),

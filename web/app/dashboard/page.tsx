@@ -364,7 +364,6 @@ function Dashboard() {
               ]}
               value={filter}
               onChange={(next) => go({ kind: next === 'DCC' ? 'dcc' : null })}
-              even="content"
             />
 
             {mayOversee ? (
@@ -372,7 +371,6 @@ function Dashboard() {
               <RadioGroup
                 legend="Whose"
                 name="queue-whose"
-                even
                 value={shownWhose}
                 onChange={(next) => {
                   setWhose(next);

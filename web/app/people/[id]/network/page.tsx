@@ -54,7 +54,7 @@ function PastoralNetwork() {
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Who pastors whom, from the top of the Network down to this person. To move them to
-        another leader, use Move to another leader on their profile.
+        another leader, use Change Leader on their profile.
       </p>
 
       <div className="mt-8">
