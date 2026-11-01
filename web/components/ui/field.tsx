@@ -154,7 +154,14 @@ export function SearchField({
   const descriptionId = `${id}-description`;
 
   return (
-    <div className={cn('flex w-full min-w-0 flex-col gap-1.5', className)}>
+    <div
+      // In a row of controls it takes 39rem and shrinks, so a filter beside it keeps its
+      // place; anywhere else it fills its column up to 39rem, never forcing it wider.
+      className={cn(
+        'flex w-full min-w-0 flex-col gap-1.5 sm:max-w-[39rem] sm:flex-[1_1_39rem]',
+        className,
+      )}
+    >
       <LabelPrimitive.Root htmlFor={id} className={hideLabel ? 'sr-only' : 'field-label'}>
         {label}
       </LabelPrimitive.Root>

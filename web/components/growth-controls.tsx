@@ -6,6 +6,7 @@ import { type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SearchField } from '@/components/ui/field';
+import { FilterChip } from '@/components/ui/filter-chip';
 import { isBranchReader } from '@/components/reports-tabs';
 import { CONTROL_BAR, TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { getMe } from '@/lib/me';
@@ -219,9 +220,9 @@ export function GrowthFilters({
         }
       />
       {offersMine ? (
-        <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
-          {mine ? 'Showing only my disciples' : 'Only my disciples'}
-        </Button>
+        <FilterChip pressed={mine} onChange={onMine}>
+          Only my disciples
+        </FilterChip>
       ) : null}
     </form>
   );

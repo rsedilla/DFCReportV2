@@ -105,8 +105,10 @@ export function RadioGroup<T extends string>({
           row
             ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
             : // Every choice one size, 11rem, wrapping where the column is narrow; one a line,
-              // full width, on a phone (decision 0416).
-              'mt-1 flex flex-col gap-2 sm:grid sm:grid-cols-[repeat(auto-fill,11rem)]'
+              // full width, on a phone (decision 0416). A flex row rather than an auto-fill grid:
+              // inside a control bar the group is as wide as its content, and a grid sized by
+              // its column count then had one column and stacked every choice.
+              'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
         }
       >
         {options.map((option) => {
@@ -119,7 +121,7 @@ export function RadioGroup<T extends string>({
                 'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
                 row
                   ? 'relative w-[5.25rem] justify-center gap-1 px-1 sm:w-28 sm:gap-1.5'
-                  : 'w-full min-w-0 gap-2.5 px-3',
+                  : 'w-full min-w-0 gap-2.5 px-3 sm:w-44',
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
                 checked
