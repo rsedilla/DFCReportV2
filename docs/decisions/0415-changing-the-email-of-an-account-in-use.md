@@ -22,7 +22,10 @@ whether an address has an account.
 
 **3. When the address changes**, every outstanding reset link stops working, so the old
 mailbox can no longer reset the password. The person's sessions are kept. The old address
-is told, and the change is recorded as `account.email_changed` with both addresses.
+is told, and the change is recorded as `account.email_changed` with both addresses. The
+other way round, a password reset, an activation or a password change ends a pending
+change's link, so a change asked for by whoever had the password does not outlive the
+holder taking the account back.
 
 **4. An administrator changes the address of an account in use from the person page**, for
 someone who has lost the mailbox (`POST /api/v1/accounts/{id}/email` with `restart: true`,
@@ -55,6 +58,6 @@ question decision 0300 left open.
 ---
 
 Decision 0415, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 6, 21 and 22.
+Sections 6, 7, 21 and 22.
 
 Previous: [2026-11-01 — Who opened this record, shown to the Admin](0414-who-opened-this-record.md)

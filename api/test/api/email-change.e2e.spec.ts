@@ -212,6 +212,52 @@ describe('changing the email of an account in use (decision 0415)', () => {
       expect(redeemed.status).toBe(422);
     });
 
+    it('ends a pending link when the password is reset, so taking the account back sticks', async () => {
+      await ask({ new_email: 'attacker@example.test' }).expect(204);
+      const link = await sentEmail('EMAIL_CHANGE');
+      await server().post('/api/v1/auth/forgot-password').send({ email: holder.email });
+      const reset = await sentEmail('PASSWORD_RESET');
+      await server()
+        .post('/api/v1/auth/reset-password')
+        .send({ token: reset.token, password: FRESH })
+        .expect(200);
+
+      expect((await confirm(link.token)).status).toBe(422);
+      expect((await storedAccount(holder.id)).email).toBe(holder.email);
+    });
+
+    it('ends a pending link when the password is changed while signed in', async () => {
+      await ask({ new_email: 'attacker@example.test' }).expect(204);
+      const link = await sentEmail('EMAIL_CHANGE');
+      const device = await signIn(holder.email);
+      await server()
+        .post('/api/v1/auth/password')
+        .set('Authorization', `Bearer ${device.body.access_token}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          current_password: PASSWORD,
+          new_password: FRESH,
+          refresh_token: device.body.refresh_token,
+        })
+        .expect(204);
+
+      expect((await confirm(link.token)).status).toBe(422);
+      expect((await storedAccount(holder.id)).email).toBe(holder.email);
+    });
+
+    it('answers requests sent at once with success or a retry, never a server error', async () => {
+      const answers = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => ask({ new_email: `at-once-${i}@example.test` })),
+      );
+
+      for (const answer of answers) {
+        expect([204, 503]).toContain(answer.status);
+        if (answer.status === 503) {
+          expect(answer.body.error.code).toBe('RESOURCE_BUSY');
+        }
+      }
+    });
+
     it('fails for an account disabled since the link was sent', async () => {
       await ask().expect(204);
       const link = await sentEmail('EMAIL_CHANGE');

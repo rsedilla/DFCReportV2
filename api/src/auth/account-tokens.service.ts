@@ -44,6 +44,25 @@ export class AccountTokensService {
   }
 
   /**
+   * Marks every outstanding token of one purpose used: a password change ends a pending
+   * email change, so an attacker who asked for one cannot finish it after the holder has
+   * taken the account back (decision 0415).
+   */
+  async supersedeWithin(
+    trx: Transaction<Database>,
+    accountId: string,
+    purpose: AccountTokenPurpose,
+  ): Promise<void> {
+    await trx
+      .updateTable('account_tokens')
+      .set({ used_at: new Date() })
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', purpose)
+      .where('used_at', 'is', null)
+      .execute();
+  }
+
+  /**
    * Mints a token, invalidating any outstanding one of the same purpose.
    *
    * Returns the plaintext **once**, to its caller. It is never stored and never in

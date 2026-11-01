@@ -280,6 +280,11 @@ export class CredentialsService {
     const changedAt = new Date();
 
     await this.db.transaction().execute(async (trx) => {
+      // A pending email change ends with the password (decision 0415): it may be what an
+      // attacker asked for before the holder took the account back. Tokens before the
+      // account row, the order every path takes the two tables in.
+      await this.tokens.supersedeWithin(trx, account.id, 'EMAIL_CHANGE');
+
       const locked = await trx
         .selectFrom('accounts')
         .select('password_hash')
@@ -375,7 +380,42 @@ export class CredentialsService {
       });
     }
 
-    const token = await this.db.transaction().execute(async (trx) => {
+    let token: { token: string; expiresAt: Date };
+    try {
+      token = await this.mintEmailChange(account, email, normalized, claim);
+    } catch (error) {
+      // Two requests minting at once: the index allowing one outstanding link refuses the
+      // second, which has decided nothing and is retried, as for a reset sent twice.
+      if (
+        isUniqueViolation(error) &&
+        violatedConstraint(error) === 'account_tokens_one_outstanding'
+      ) {
+        throw new ResourceBusyError({ account_id: account.id });
+      }
+      throw error;
+    }
+
+    // After the commit and never fatal: asking again sends another link.
+    void this.sendOrLog(
+      account.person_id,
+      (name) => ({
+        kind: 'EMAIL_CHANGE',
+        to: { email, name },
+        token: token.token,
+        expiresAt: token.expiresAt,
+      }),
+      `Could not send the email-change link for account ${account.id}.`,
+    );
+  }
+
+  /** The transaction of {@link requestEmailChange}: the link minted, and the completion. */
+  private async mintEmailChange(
+    account: { id: string; password_hash: string | null },
+    email: string,
+    normalized: string,
+    claim: CurrentClaim,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    return this.db.transaction().execute(async (trx) => {
       // Tokens before the account row, the order every path takes the two tables in.
       const minted = await this.tokens.mintWithin(
         trx,
@@ -402,18 +442,6 @@ export class CredentialsService {
 
       return minted;
     });
-
-    // After the commit and never fatal: asking again sends another link.
-    void this.sendOrLog(
-      account.person_id,
-      (name) => ({
-        kind: 'EMAIL_CHANGE',
-        to: { email, name },
-        token: token.token,
-        expiresAt: token.expiresAt,
-      }),
-      `Could not send the email-change link for account ${account.id}.`,
-    );
   }
 
   /**
@@ -449,6 +477,12 @@ export class CredentialsService {
       if (account.status !== 'ACTIVE') {
         throw invalidLink();
       }
+
+      // Again under the account lock: a reset link whose insert had not committed when the
+      // first pass ran is invisible to it, and holds a key lock on this row until it does,
+      // so it is committed by now. Left live, it would reach the old address after the
+      // change. A deadlock with a reset being redeemed answers `RESOURCE_BUSY`.
+      await this.tokens.supersedeAllWithin(trx, account.id);
 
       const taken = await trx
         .selectFrom('accounts')
@@ -555,6 +589,13 @@ export class CredentialsService {
 
     await this.db.transaction().execute(async (trx) => {
       const claimed = await this.tokens.redeemWithin(trx, token, purpose);
+
+      // Every other outstanding link ends with the new password, an email change above all
+      // (decision 0415): an attacker's pending change would otherwise outlive the reset that
+      // took the account back, and move where the next reset goes.
+      if (claimed) {
+        await this.tokens.supersedeAllWithin(trx, claimed.accountId);
+      }
 
       if (!claimed) {
         // One answer for expired, already used, and never issued. Distinguishing

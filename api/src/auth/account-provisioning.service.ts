@@ -539,6 +539,12 @@ export class AccountProvisioningService {
 
       const restarting = account.status === 'ACTIVE' && restart;
 
+      // Again under the lock: a link whose insert had not committed when the first pass ran
+      // is invisible to it, and holds a key lock on this row until it does, so it is
+      // committed by now and would outlive the change (decision 0415). A deadlock with a
+      // link being redeemed answers `RESOURCE_BUSY`.
+      await this.tokens.supersedeAllWithin(trx, accountId);
+
       if (restarting && accountId === actor.accountId) {
         throw new InvariantViolationError(
           'You can’t start your own account over. Change your email on your Account page.',
