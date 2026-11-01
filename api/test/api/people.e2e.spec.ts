@@ -2198,7 +2198,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
   });
 
   describe('church-wide search (SKILL.md section 8)', () => {
-    it('returns the full profile for someone in the searcher scope', async () => {
+    it('returns the listed profile for someone in the searcher scope', async () => {
       const response = await search(raymondAccount, 'Manuel');
 
       expect(response.status).toBe(200);
@@ -2206,10 +2206,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         (row) => row.id === manuel.id,
       );
 
+      // A list row carries no birthday, civil status or mobile number: those come only with
+      // reading the one record, which is kept (decision 0414).
       expect(found).toMatchObject({ scope: 'FULL', member_id: expect.any(String) });
-      expect(found).toHaveProperty('birth_date');
-      expect(found).toHaveProperty('civil_status');
-      expect(found).toHaveProperty('mobile_number');
+      expect(found).not.toHaveProperty('birth_date');
+      expect(found).not.toHaveProperty('civil_status');
+      expect(found).not.toHaveProperty('mobile_number');
     });
 
     it('returns only identifying fields for someone outside it', async () => {

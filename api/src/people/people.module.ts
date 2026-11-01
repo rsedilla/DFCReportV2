@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { SettingsModule } from '../admin/settings/settings.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { EmailModule } from '../email/email.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 
@@ -16,6 +17,7 @@ import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
 import { PeopleSexCorrectionService } from './people.sex-correction.service';
+import { PersonViewsService } from './person-views.service';
 
 /**
  * Owns `persons` and `person_lifecycle` (SKILL.md section 2, Modules). **No other
@@ -72,7 +74,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * it after the lock — and this split neither detected nor prevented that.
  */
 @Module({
-  imports: [HierarchyModule, NetworksModule, AuthorizationModule, SettingsModule],
+  imports: [HierarchyModule, NetworksModule, AuthorizationModule, SettingsModule, EmailModule],
   // **Three controllers, one module**, because section 22 mounts the tree routes at
   // `/network` and `/leaders` while the data they walk is this module's and
   // `hierarchy`'s. They live here rather than in `hierarchy` because `people` already
@@ -83,6 +85,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
   providers: [
     PeopleService,
     PeopleReadService,
+    PersonViewsService,
     PeopleDuplicatesService,
     PeopleImportService,
     PeopleSexCorrectionService,

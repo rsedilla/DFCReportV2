@@ -105,6 +105,22 @@ describe('the SMTP email transport (section 6)', () => {
     expect(text).toMatch(/Sept? 23, 2026/);
   });
 
+  it('tells the Admin who opened how many person records in an hour', () => {
+    const { subject, text } = compose(
+      {
+        kind: 'MANY_PAGES_OPENED',
+        to: { email: 'admin@example.test', name: 'Invented Admin' },
+        viewer: 'Invented Person',
+        pages: 101,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(subject).toBe('DREAMS: many person records opened in an hour');
+    expect(text).toContain('Invented Person opened 101 different person records in the last hour');
+    expect(text).not.toContain('token=');
+  });
+
   it('tells the Admin which name was paused, whose account it is, and when it opens', () => {
     const { subject, text } = compose(
       {

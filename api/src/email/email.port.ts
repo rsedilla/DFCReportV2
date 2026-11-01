@@ -85,6 +85,19 @@ export interface SignInPausedEmail {
 }
 
 /**
+ * One person opened more than a hundred person pages in an hour (decision 0414). Sent to each
+ * active Admin, at most once a day for one person and twenty times a day in all.
+ */
+export interface ManyPagesOpenedEmail {
+  kind: 'MANY_PAGES_OPENED';
+  to: EmailRecipient;
+  /** The full name of the person who opened them. */
+  viewer: string;
+  /** How many different person pages, in the last hour. */
+  pages: number;
+}
+
+/**
  * The holder asked to change their address (decision 0415). Sent to the **new** address,
  * whose holder confirms it from the link; nothing changes until they do.
  */
@@ -112,6 +125,7 @@ export type OutboundEmail =
   | PasswordResetEmail
   | PasswordChangedEmail
   | SignInPausedEmail
+  | ManyPagesOpenedEmail
   | EmailChangeEmail
   | EmailChangedEmail;
 

@@ -20,8 +20,8 @@ import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
   networkLabel,
+  type PersonRow,
   searchPeople,
-  type Person,
 } from '@/lib/people';
 import { useScreenAddress } from '@/lib/screen-address';
 import { useSearchTerm } from '@/lib/search-term';
@@ -246,7 +246,7 @@ function PeopleList() {
   );
 }
 
-function PersonName({ person }: { person: Person }) {
+function PersonName({ person }: { person: PersonRow }) {
   return (
     <>
       <Link
@@ -266,12 +266,12 @@ function PersonName({ person }: { person: Person }) {
   );
 }
 
-function leaderOf(person: Person): string {
+function leaderOf(person: PersonRow): string {
   return person.direct_leader_name ?? '';
 }
 
 /** "Young Pro · Sat", "Leads Young Pro · Sat", or "Not in a Cell"; nothing while unread. */
-function cellOf(person: Person, cells: PersonCells | undefined): string {
+function cellOf(person: PersonRow, cells: PersonCells | undefined): string {
   if (person.scope !== 'FULL' || cells === undefined) {
     return '';
   }

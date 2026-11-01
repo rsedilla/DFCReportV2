@@ -189,6 +189,11 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
       'exists only beside a second_steps row, which is guarded',
     ],
     ['second_step_challenges', 'a sign-in challenge that expires in minutes, not history'],
+    ['person_views', 'who opened a page, kept one year and then removed (decision 0414)'],
+    [
+      'person_view_alerts',
+      'when an alert was emailed, for a daily cap, not history (decision 0414)',
+    ],
     ['sign_in_pauses', 'a pause that lasts fifteen minutes, not history (decision 0413)'],
     [
       'sign_in_pause_alerts',

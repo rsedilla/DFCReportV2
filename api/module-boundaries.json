@@ -28,6 +28,8 @@
   ],
   "owners": {
     "persons": "people",
+    "person_views": "people",
+    "person_view_alerts": "people",
     "person_lifecycle": "people",
     "network_assignments": "networks",
     "pastoral_assignments": "hierarchy",

@@ -357,6 +357,65 @@ const SCANS = [
     },
   },
   {
+    // The Admin's section at the page's foot (decision 0414), with a second page to show.
+    name: 'person profile, who opened this record',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-11-01T04:00:00Z'));
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+      // `accounts.manage` at Whole Church, the Admin's, which the section is offered to.
+      await page.route('**/api/v1/auth/me', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+            person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+            email: 'admin@example.invalid',
+            first_name: 'Marilou',
+            roles: ['ADMIN'],
+            screens: 'FULL',
+            people_i_oversee: true,
+            capabilities: ['people.view_subtree', 'people.create', 'accounts.manage'].map((capability) => ({
+              capability,
+              scope_type: 'WHOLE_CHURCH',
+              scope_network: null,
+              read_only: false,
+              source: 'ROLE',
+            })),
+          }),
+        }),
+      );
+      await page.route('**/api/v1/accounts/for-person/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ account: null }) }),
+      );
+      await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}/views*`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [
+              {
+                viewer: { person_id: '11111111-1111-4111-8111-111111111111', full_name: 'Corazon Batac' },
+                relation: 'PASTORAL_LEADER',
+                viewed_at: '2026-11-01T01:14:00Z',
+              },
+            ],
+            next_cursor: 'next-page',
+          }),
+        }),
+      );
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      const section = page.getByRole('region', { name: 'Who opened this record' });
+      await expect(section.getByRole('button', { name: 'Show more' })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
     // The Move dialog, the first dialog in the application: a modal `<dialog>` over the
     // profile, with its Cell choice.
     name: 'person profile, moving to another cell',
@@ -2235,6 +2294,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Reached by pressing Cells behind, which this sweep cannot do. Beyond the measured ' +
       '"dashboard" buttons and month cards its only controls are a Cell link per row, carrying ' +
       'min-h-6 as the name links measured on "cells" do.',
+  },
+  {
+    name: 'person profile, who opened this record',
+    why:
+      'Adds the Admin’s "Who opened this record" section to the measured "person profile": ' +
+      'lines of text and one Show more button, the Button classes measured on every screen.',
   },
   {
     name: 'person profile, moving to another cell',

@@ -206,6 +206,10 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "GET /api/v1/people/:id/views",
+      "screen": "web/components/person-views.tsx"
+    },
+    {
       "route": "POST /api/v1/accounts",
       "screen": "web/components/person-account.tsx"
     },
