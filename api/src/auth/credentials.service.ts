@@ -96,11 +96,32 @@ export class CredentialsService {
     }
 
     try {
-      const token = await this.db
-        .transaction()
-        .execute((trx) =>
-          this.tokens.mintWithin(trx, account.id, 'PASSWORD_RESET', RESET_LIFETIME_MS),
+      const minted = await this.db.transaction().execute(async (trx) => {
+        const token = await this.tokens.mintWithin(
+          trx,
+          account.id,
+          'PASSWORD_RESET',
+          RESET_LIFETIME_MS,
         );
+
+        // **Read again under the account lock, after the mint** (decision 0415): the
+        // address may have changed, or the account been started over, since the read
+        // above. Changing it locks the row `FOR UPDATE`, which waits for this one, so
+        // either it committed first and is seen here, or it comes after and supersedes
+        // this link. A link is never minted for an address the account no longer has.
+        const locked = await trx
+          .selectFrom('accounts')
+          .select(['email', 'email_normalized', 'status'])
+          .where('id', '=', account.id)
+          .forNoKeyUpdate()
+          .executeTakeFirstOrThrow();
+
+        if (locked.status === 'DISABLED' || locked.email_normalized !== normalizeEmail(email)) {
+          throw new NoLongerAddressed();
+        }
+
+        return { token, email: locked.email };
+      });
 
       // Through `people`, which owns `persons` (section 2).
       const person = await this.people.forDecision(account.person_id);
@@ -108,9 +129,9 @@ export class CredentialsService {
       this.email
         .send({
           kind: 'PASSWORD_RESET',
-          to: { email: account.email, name: person?.fullName ?? '' },
-          token: token.token,
-          expiresAt: token.expiresAt,
+          to: { email: minted.email, name: person?.fullName ?? '' },
+          token: minted.token.token,
+          expiresAt: minted.token.expiresAt,
         })
         .catch((error: unknown) => {
           this.logger.error(
@@ -119,6 +140,10 @@ export class CredentialsService {
           );
         });
     } catch (error) {
+      // Rolled back, the address having moved: silent, as for an unknown address.
+      if (error instanceof NoLongerAddressed) {
+        return;
+      }
       this.logger.error(
         `Could not send a password reset for account ${account.id}.`,
         error instanceof Error ? error.stack : undefined,
@@ -464,11 +489,13 @@ export class CredentialsService {
 
       await this.tokens.supersedeAllWithin(trx, claimed.accountId);
 
+      // `FOR UPDATE`, not `FOR NO KEY UPDATE`: only the stronger lock waits for the key lock
+      // a token insert holds on this row, which the second pass below depends on.
       const account = await trx
         .selectFrom('accounts')
         .select(['id', 'person_id', 'email', 'status'])
         .where('id', '=', claimed.accountId)
-        .forNoKeyUpdate()
+        .forUpdate()
         .executeTakeFirstOrThrow();
 
       // A disabled account is answered as an unknown link, for the reason `setPassword`
@@ -480,8 +507,9 @@ export class CredentialsService {
 
       // Again under the account lock: a reset link whose insert had not committed when the
       // first pass ran is invisible to it, and holds a key lock on this row until it does,
-      // so it is committed by now. Left live, it would reach the old address after the
-      // change. A deadlock with a reset being redeemed answers `RESOURCE_BUSY`.
+      // which the `FOR UPDATE` above waited for, so it is committed by now. A reset requested
+      // after this commits reads the new address under its own lock and mints nothing for
+      // the old one. A deadlock with a link being redeemed answers `RESOURCE_BUSY`.
       await this.tokens.supersedeAllWithin(trx, account.id);
 
       const taken = await trx
@@ -716,6 +744,9 @@ export function assertPasswordIsAcceptable(password: string, field = 'password')
     );
   }
 }
+
+/** A reset rolled back because the account no longer has the address it was asked for. */
+class NoLongerAddressed extends Error {}
 
 function invalidLink(): ValidationFailedError {
   return new ValidationFailedError('That link is no longer valid. Ask for a new one.', {
