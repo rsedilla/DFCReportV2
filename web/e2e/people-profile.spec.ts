@@ -21,6 +21,8 @@ import {
   mockSignedIn,
   mockWithoutEditBasic,
   searchCells,
+  expectTwoKeys,
+  writeKeys,
 } from './mock-api';
 import { mockPastoralPath } from './mock-attendance';
 
@@ -1808,5 +1810,56 @@ test.describe('adding a person with a Cell', () => {
       'href',
       PROFILE,
     );
+  });
+});
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('a move made again sends a new key', () => {
+  test('moving a person back to an earlier leader', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await mockPastoralPath(page);
+    await page.route('**/api/v1/people/*/pastoral-leader', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+    const keys = writeKeys(page, 'PUT', /\/pastoral-leader$/);
+    await page.goto(PROFILE);
+
+    const dialog = page.getByRole('dialog', {
+      name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
+    });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Change Leader' }).click();
+      await dialog.getByLabel('Search for a leader by name').fill('ann');
+      await dialog.getByRole('button', { name: 'Search people' }).click();
+      await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
+      await dialog.getByRole('button', { name: `Move under ${PERSON_WITHHELD.full_name}` }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
+  });
+
+  test('moving a member back into a Cell they left', async ({ page }) => {
+    await signedInMovingMembers(page);
+    await mockCellChoices(page);
+    await mockMembershipAdd(page, 'accepted');
+    const keys = writeKeys(page, 'POST', /\/members$/);
+    await page.goto(PROFILE);
+
+    const dialog = page.getByRole('dialog', {
+      name: `Move ${PERSON_IN_SCOPE.full_name} to another Cell`,
+    });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Change Cell' }).click();
+      await searchCells(dialog, 'CELL');
+      await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
+      await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
   });
 });

@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * The API, as far as the accessibility sweep is concerned.
@@ -1346,4 +1346,28 @@ export async function mockMyPeople(page: Page): Promise<void> {
     (url) => url.pathname === '/api/v1/cells/people/mine',
     (route) => route.fulfill(json({ data: MY_PEOPLE_ROWS, next_cursor: null })),
   );
+}
+
+/**
+ * The `Idempotency-Key` of every `method` request whose path matches `path`, in order.
+ *
+ * For the cases that save one body twice: the server answers a key it has seen with the
+ * stored answer for 24 hours (section 22), so a second save under the first one's key
+ * writes nothing. Two saves must send two keys, even when the bodies are the same.
+ */
+export function writeKeys(page: Page, method: string, path: RegExp): string[] {
+  const keys: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === method && path.test(new URL(request.url()).pathname)) {
+      keys.push(request.headers()['idempotency-key'] ?? '');
+    }
+  });
+  return keys;
+}
+
+/** Two saves, two keys: the assertion every `writeKeys` case ends on. */
+export async function expectTwoKeys(keys: string[]): Promise<void> {
+  await expect.poll(() => keys.length).toBe(2);
+  expect(keys[0]).not.toBe('');
+  expect(keys[1]).not.toBe(keys[0]);
 }

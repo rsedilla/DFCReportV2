@@ -24,7 +24,7 @@ import {
   type CellCategory,
   type CellSummary,
 } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -61,6 +61,7 @@ export function RestartCellDialog({
   const [time, setTime] = useState(cell.schedule.time_of_day);
   const [members, setMembers] = useState<ChosenMember[]>([...NO_MEMBERS]);
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const send = useMutation({
     mutationFn: () =>
       requestCellRestart(
@@ -74,6 +75,7 @@ export function RestartCellDialog({
         },
         idempotencyKeyFor(
           'restart',
+          writeKey,
           cell.id,
           category,
           day,
@@ -82,6 +84,7 @@ export function RestartCellDialog({
         ),
       ),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['cells'] });
       onSent(cell.id);
       close();

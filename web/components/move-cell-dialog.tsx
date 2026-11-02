@@ -15,7 +15,7 @@ import {
   type PersonCells,
 } from '@/lib/cells';
 import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { getPerson, networkOfSex } from '@/lib/people';
 
 /**
@@ -70,10 +70,12 @@ export function MoveCellDialog({
   });
   const network = person.data ? networkOfSex(person.data.sex) : null;
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const move = useMutation({
     mutationFn: (cell: CellSummary) =>
-      addCellMember(cell.id, personId, idempotencyKeyFor('add', cell.id, personId)),
+      addCellMember(cell.id, personId, idempotencyKeyFor('add', writeKey, cell.id, personId)),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['person-cells', personId] });
       // A placed person leaves Cells' No CG Yet (decision 0381).
       await queryClient.invalidateQueries({ queryKey: ['people-without-a-cell'] });

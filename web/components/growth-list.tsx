@@ -11,7 +11,7 @@ import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { ApiRequestError } from '@/lib/api-client';
 import { type GrowthListQuery } from '@/lib/growth';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { useCursorPages } from '@/lib/cursor-pages';
@@ -103,11 +103,16 @@ export function useGrowthSave<Counts, Row extends PersonRow, Entry, Change>({
   onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
-  const idempotencyKey = useMemo(() => idempotencyKeyFor(list.name, changes), [list.name, changes]);
+  const [writeKey, renewWriteKey] = useWriteKey();
+  const idempotencyKey = useMemo(
+    () => idempotencyKeyFor(list.name, writeKey, changes),
+    [list.name, writeKey, changes],
+  );
 
   const save = useMutation({
     mutationFn: () => submit(changes, idempotencyKey),
     onSuccess: async () => {
+      renewWriteKey();
       onSaved();
       await queryClient.invalidateQueries({ queryKey: [`${list.name}-people`] });
       await queryClient.invalidateQueries({ queryKey: [`${list.name}-counts`] });

@@ -728,3 +728,38 @@ test('the reader\'s own row says another leader records it (decision 0280)', asy
   ).toBeVisible();
   await expect(page.getByRole('checkbox')).toHaveCount(0);
 });
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('a Growth save made again sends a new key', () => {
+  test('ticking a SUYNL lesson again after it was saved', async ({ page }) => {
+    const traffic = await openSuynl(page);
+
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }).check();
+      await page.getByRole('button', { name: 'Save 1 change' }).click();
+      await expect.poll(() => traffic.submitted.length).toBe(time + 1);
+      await expect(page.getByRole('button', { name: 'Save 1 change' })).toHaveCount(0);
+    }
+    expect(traffic.submitted[1].body).toEqual(traffic.submitted[0].body);
+    expect(traffic.submitted[0].key).toMatch(UUID);
+    expect(traffic.submitted[1].key).not.toBe(traffic.submitted[0].key);
+  });
+
+  test('ticking a Training graduation again after it was saved', async ({ page }) => {
+    const traffic = await openTraining(page, '/growth/training?all=1');
+
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('checkbox', { name: 'Life Class, Ernani Pascual' }).check();
+      await page.getByRole('button', { name: 'Save 1 change' }).click();
+      await expect.poll(() => traffic.submitted.length).toBe(time + 1);
+      await expect(page.getByRole('button', { name: 'Save 1 change' })).toHaveCount(0);
+    }
+    expect(traffic.submitted[1].body).toEqual(traffic.submitted[0].body);
+    expect(traffic.submitted[0].key).toMatch(UUID);
+    expect(traffic.submitted[1].key).not.toBe(traffic.submitted[0].key);
+  });
+});

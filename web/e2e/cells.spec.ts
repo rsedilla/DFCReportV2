@@ -18,6 +18,8 @@ import {
   mockPersonCells,
   mockSignedIn,
   searchCells,
+  expectTwoKeys,
+  writeKeys,
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
@@ -784,5 +786,119 @@ test.describe('the Cell picker (owner’s choices, 2026-09-21 and 2026-09-30)', 
 
     await dialog.getByRole('button', { name: 'Show it' }).click();
     await expect(choose).toBeFocused();
+  });
+});
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('a Cell save made again sends a new key', () => {
+  test('creating the same Cell twice', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellApprover(page);
+    await mockPeople(page);
+    await mockCellMembersEmpty(page);
+    await mockCellCreated(page);
+    const keys = writeKeys(page, 'POST', /^\/api\/v1\/cells$/);
+
+    for (let time = 0; time < 2; time += 1) {
+      await page.goto('/cells/new');
+      await page.getByLabel('Search for the leader by name').fill('Marilou');
+      await page.getByRole('button', { name: 'Search people' }).click();
+      await page.getByRole('button', { name: 'Choose' }).first().click();
+      await page.getByRole('radio', { name: 'Young Pro' }).check();
+      await page.getByRole('combobox', { name: 'Meets every' }).selectOption({ label: 'Friday' });
+      await page.getByLabel('At').fill('19:30');
+      await page.getByRole('button', { name: 'Create Cell' }).click();
+      await expect(page).toHaveURL(`/cells/${CREATED_CELL.id}/members`);
+    }
+    await expectTwoKeys(keys);
+  });
+
+  test('changing when it meets back to an earlier day', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await mockGrants(page, ['cell.manage_configuration']);
+    await page.route('**/api/v1/cells/*/schedule', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+    const keys = writeKeys(page, 'PUT', /\/schedule$/);
+    await page.goto(MEETINGS);
+
+    const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Change Schedule' }).click();
+      await dialog.getByRole('radio', { name: 'Wednesday' }).check();
+      await dialog.getByLabel('What time').fill('20:00');
+      await dialog.getByRole('button', { name: 'Move to Wednesday from 1 July 2026' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
+  });
+
+  test('adding a member back after removing them, and removing them again', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['cell.move_members']);
+    await mockPeople(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+    await mockMembershipAdd(page, 'accepted');
+    await page.route('**/api/v1/cells/*/members/*', (route) =>
+      route.request().method() === 'DELETE'
+        ? route.fulfill({ status: 204, body: '' })
+        : route.fallback(),
+    );
+    const adds = writeKeys(page, 'POST', /\/members$/);
+    const removals = writeKeys(page, 'DELETE', /\/members\/[^/]+$/);
+    await page.goto(MEMBERS);
+
+    const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Add Member' }).click();
+      await dialog.getByLabel('Search for a person by name').fill('Marilou');
+      await dialog.getByRole('button', { name: 'Search people' }).click();
+      await dialog.getByRole('button', { name: 'Choose' }).first().click();
+      await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(dialog).toBeHidden();
+
+      // The row's Remove becomes the confirmation's, which shares its name (decision 0416).
+      await page.getByRole('button', { name: 'Remove' }).first().click();
+      await expect(page.getByText(/Past months keep counting them/).filter({ visible: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Remove' }).first().click();
+      await expect.poll(() => removals.length).toBe(time + 1);
+    }
+    await expectTwoKeys(adds);
+    await expectTwoKeys(removals);
+  });
+
+  test('asking for the same restart twice', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellAdministrator(page);
+    await mockCellsWithClosed(page);
+    await mockMemberSearch(page);
+    await page.route('**/api/v1/cells/leadership-requests', (route) =>
+      route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'r1', state: 'PENDING' }),
+      }),
+    );
+    const keys = writeKeys(page, 'POST', /\/leadership-requests$/);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    for (let time = 0; time < 2; time += 1) {
+      // As after a decline: the row offers the restart again.
+      await page.goto('/cells');
+      await page.getByRole('button', { name: 'Closed Cells' }).click();
+      await page.getByRole('button', { name: 'Restart Young Pro · Fri, led by Paolo Reyes' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Restart Young Pro · Fri' });
+      await chooseThreeMembers(dialog);
+      await dialog.getByRole('button', { name: 'Send for approval' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
   });
 });

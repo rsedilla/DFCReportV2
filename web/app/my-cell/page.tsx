@@ -29,7 +29,7 @@ import {
   requestNewCell,
   type CellCategory,
 } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { monthLabel, reportingMonthOf } from '@/lib/reporting-month';
 
@@ -135,6 +135,7 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
   // Three members besides the leader (decision 0353).
   const [members, setMembers] = useState<ChosenMember[]>([...NO_MEMBERS]);
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const send = useMutation({
     mutationFn: () =>
       requestNewCell(
@@ -147,6 +148,7 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
         },
         idempotencyKeyFor(
           'new-cell',
+          writeKey,
           leader?.id ?? '',
           category,
           day,
@@ -155,6 +157,7 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
         ),
       ),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['sent-requests'] });
       close();
     },

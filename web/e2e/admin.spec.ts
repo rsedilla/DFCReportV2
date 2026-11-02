@@ -273,6 +273,36 @@ test.describe('the Settings tab (decision 0425)', () => {
       '/admin?tab=settings',
     );
   });
+  test('sends a new key for each change, so changing back is saved and not replayed', async ({
+    page,
+  }) => {
+    // Found on the live site, 2026-11-02: a key built from the value alone made 4, 3, 4 send
+    // the first save's key again, and the server answered it from its store, saving nothing.
+    const traffic = await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const months = page.getByRole('region', { name: 'No meeting in' });
+    for (const value of ['4', '3', '4']) {
+      await months.getByRole('button', { name: 'Change' }).click();
+      await months.getByLabel('Months').selectOption(value);
+      await months.getByRole('button', { name: 'Save' }).click();
+      await expect(months).toContainText(`${value} months`);
+    }
+    const verse = page.getByRole('region', { name: 'Verse on Record' });
+    for (const reference of ['Test A 1:1 (KJV)', 'Test B 2:2 (KJV)', 'Test A 1:1 (KJV)']) {
+      await verse.getByRole('button', { name: 'Change' }).click();
+      await verse.getByLabel('Verse').fill(`Words for ${reference}.`);
+      await verse.getByLabel('Reference').fill(reference);
+      await verse.getByRole('button', { name: 'Save' }).click();
+      await expect(verse).toContainText(reference);
+    }
+
+    const keys = traffic.writes.map((write) => write.key);
+    expect(keys).toHaveLength(6);
+    expect(new Set(keys).size).toBe(6);
+  });
+
   test('changes the verse with a key, and empty boxes clear it', async ({ page }) => {
     const traffic = await mockSettings(page);
     await mockEncounterSeasons(page);

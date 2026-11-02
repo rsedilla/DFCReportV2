@@ -13,7 +13,7 @@ import {
   changeCellCategory,
   type CellCategory,
 } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -46,14 +46,16 @@ export function CellCategoryDialog({
   const queryClient = useQueryClient();
   const [category, setCategory] = useState('');
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const save = useMutation({
     mutationFn: () =>
       changeCellCategory(
         cellId,
         category as CellCategory,
-        idempotencyKeyFor('category', cellId, category),
+        idempotencyKeyFor('category', writeKey, cellId, category),
       ),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['cells'] });
       await queryClient.invalidateQueries({ queryKey: ['cell-meetings', cellId] });
       onSaved(category as CellCategory);

@@ -11,7 +11,7 @@ import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { cellShortName, type PersonCells } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { correctSex, networkOfSex, sexLabel, type Network, type Sex } from '@/lib/people';
@@ -93,6 +93,7 @@ export function CorrectSexDialog({
   const ledCells = cells?.leads ?? [];
   const blocked = isRoot || disciples.length > 0 || ledCells.length > 0;
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const save = useMutation({
     mutationFn: () => {
       const trimmed = reason.trim();
@@ -104,10 +105,11 @@ export function CorrectSexDialog({
           ...(leader ? { pastoral_leader_id: leader.id } : {}),
           ...(date !== '' ? { effective_date: date } : {}),
         },
-        idempotencyKeyFor('correct-sex', personId, to, trimmed, leader?.id ?? '', date),
+        idempotencyKeyFor('correct-sex', writeKey, personId, to, trimmed, leader?.id ?? '', date),
       );
     },
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['person', personId] });
       await queryClient.invalidateQueries({ queryKey: ['pastoral-path'] });
       await queryClient.invalidateQueries({ queryKey: ['person-cells', personId] });

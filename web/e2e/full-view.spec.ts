@@ -12,6 +12,8 @@ import {
   mockPeopleWithoutACell,
   mockScreens,
   mockSignedIn,
+  expectTwoKeys,
+  writeKeys,
 } from './mock-api';
 import {
   CELL_WITH_MEETINGS,
@@ -1303,5 +1305,45 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     const tabs = page.getByRole('group', { name: 'Outstanding work' }).getByRole('button');
     await expect(tabs).toHaveCount(3);
     await expect(page.getByRole('button', { name: 'Recording Progress' })).toHaveCount(0);
+  });
+});
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('a request made again sends a new key', () => {
+  test('asking for the same new Cell twice, as after a decline', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+    await mockPeople(page);
+    await mockMemberSearch(page);
+    await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>
+      route.fulfill(json({ data: [], next_cursor: null })),
+    );
+    await page.route('**/api/v1/cells/leadership-requests', (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill(json({ id: '3f1b7c6e-0000-4000-8000-000000000951', state: 'PENDING' }, 201))
+        : route.fallback(),
+    );
+    const keys = writeKeys(page, 'POST', /\/leadership-requests$/);
+    await page.goto('/my-cell');
+
+    const dialog = page.getByRole('dialog', { name: 'Ask for a new Cell' });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Request New Cell' }).click();
+      await dialog.getByLabel('Search for the leader by name').fill('Marilou');
+      await dialog.getByRole('button', { name: 'Search people' }).first().click();
+      await dialog.getByRole('button', { name: 'Choose' }).first().click();
+      await dialog.getByRole('radio', { name: 'Couple' }).check();
+      await dialog.getByRole('radio', { name: 'Wednesday' }).check();
+      await dialog.getByLabel('What time').fill('19:30');
+      await chooseThreeMembers(dialog);
+      await dialog.getByRole('button', { name: 'Send for approval' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
   });
 });

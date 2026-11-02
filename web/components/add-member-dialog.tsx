@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { addCellMember, membershipFailure } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { getPerson, networkOfPerson } from '@/lib/people';
 
 /**
@@ -54,10 +54,12 @@ export function AddMemberDialog({
   });
   const network = leader.data ? networkOfPerson(leader.data) : null;
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const add = useMutation({
     mutationFn: (person: { id: string; full_name: string }) =>
-      addCellMember(cellId, person.id, idempotencyKeyFor('add', cellId, person.id)),
+      addCellMember(cellId, person.id, idempotencyKeyFor('add', writeKey, cellId, person.id)),
     onSuccess: async (_result, person) => {
+      renewWriteKey();
       // The list, and the Cell's own line above it, which carries the member count this
       // addition has just moved.
       await queryClient.invalidateQueries({ queryKey: ['cell-members', cellId] });
