@@ -252,7 +252,17 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
         trx,
       );
       pending = post(admin, body(mark.id)).then((response) => response);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Committed only once the creation is seen waiting on a lock, so the case proves the wait
+      // rather than racing it.
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const waiting = await sql<{ n: number }>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock'`.execute(db);
+        if (waiting.rows[0].n > 0) break;
+        if (Date.now() > deadline) throw new Error('The creation never waited on the close.');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
     });
 
     const response = await pending!;

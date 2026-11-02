@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type Actor } from '../../auth/authorization/authorization.service';
 import { DccCalendarService } from '../../attendance/dcc-calendar.service';
 import { InvariantViolationError, ValidationFailedError } from '../../common/errors/api-error';
+import { boundLockWaitsWithin } from '../../database/person-lock';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../../database/database.module';
 import { SettingsService } from '../settings/settings.service';
@@ -103,6 +104,9 @@ export class SettingsRoutesService {
     const through = await this.calendar.horizon();
 
     return this.db.transaction().execute(async (trx) => {
+      // Its row lock is taken outside any advisory lock, so it bounds its own wait (section 24):
+      // a tree import holds the row shared for its whole run.
+      await boundLockWaitsWithin(trx);
       if (!(await this.settings.closeInitialEncodingWithin(trx, actor.accountId))) {
         throw new InvariantViolationError('Initial encoding is already closed.');
       }
