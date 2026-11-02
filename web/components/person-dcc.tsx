@@ -115,7 +115,7 @@ export function PersonDcc({ personId }: { personId: string }) {
                   events={monthEvents(previous)}
                   month={lastMonth}
                 />
-                {previous.data?.open ? ` · ${openUntil(lastMonth).toLowerCase()}` : ''}
+                {previous.data?.open ? ` · ${openUntil(lastMonth).replace(/^Open/, 'open')}` : ''}
               </p>
             </Card>
           </div>

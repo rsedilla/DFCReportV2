@@ -136,14 +136,16 @@ function Suynl({
             {row.lessons.length} of 10 lessons · latest {longDay(latest)}
           </>
         )}
-        <ul className="mt-2 flex flex-wrap gap-1" aria-label="Lessons">
+        {/* Ten across always: a wrap left the tenth alone on a line on a phone. The boxes are
+            marks rather than controls, so they may shrink below 24px to fit. */}
+        <ul className="mt-2 grid max-w-[17.25rem] grid-cols-10 gap-1" aria-label="Lessons">
           {LESSONS.map((lesson) => {
             const done = row.lessons.some((entry) => entry.lesson === lesson);
 
             return (
               <li
                 key={lesson}
-                className="border-edge inline-flex size-6 items-center justify-center border text-xs"
+                className="border-edge inline-flex aspect-square items-center justify-center border text-xs"
               >
                 <span aria-hidden="true">{done ? '✓' : ''}</span>
                 <span className="sr-only">
