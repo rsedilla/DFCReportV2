@@ -515,7 +515,8 @@ function Detail({
         {!value && add ? (
           <>
             {' · '}
-            <TextLink href={add.href} aria-label={`Add ${add.what}`}>
+            {/* 24px, as Correct beside Sex is: a 44px link pushed the row's words below its label. */}
+            <TextLink href={add.href} aria-label={`Add ${add.what}`} className="min-h-6">
               Add
             </TextLink>
           </>

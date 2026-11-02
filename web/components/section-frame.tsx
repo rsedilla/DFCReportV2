@@ -53,7 +53,8 @@ export function SectionFrame({ section, children }: { section: Section; children
         {section === 'people' ? 'People' : chosen!.name}
       </p>
       {section === 'people' ? (
-        <PeopleTabs current="/people" within>
+        // No tab chosen: a person's page is no tab's, and "Add People" chosen read as adding one.
+        <PeopleTabs current={null}>
           <div className="pt-4">{children}</div>
         </PeopleTabs>
       ) : (

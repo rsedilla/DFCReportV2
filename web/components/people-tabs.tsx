@@ -32,13 +32,13 @@ const TABS = [
 
 export function PeopleTabs({
   current,
-  within = false,
   children,
 }: {
-  /** `/network`, Branch, opens for no account since decision 0379 and marks no tab. */
-  current: (typeof TABS)[number]['href'] | '/network';
-  /** A page reached from the tab rather than the tab itself: shown chosen, not the current page. */
-  within?: boolean;
+  /**
+   * `/network`, Branch, opens for no account since decision 0379 and marks no tab; nor does
+   * `null`, a person's page, which no tab lists.
+   */
+  current: (typeof TABS)[number]['href'] | '/network' | null;
   children: ReactNode;
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
@@ -73,7 +73,7 @@ export function PeopleTabs({
               <Link
                 key={tab.href}
                 href={tab.href}
-                aria-current={active && !within ? 'page' : undefined}
+                aria-current={active ? 'page' : undefined}
                 aria-label={tab.name}
                 className={tabClasses(active)}
               >

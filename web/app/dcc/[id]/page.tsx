@@ -317,6 +317,7 @@ function DccChecklist() {
     (line) => line.record === null && edits[line.person_id] !== undefined,
   );
   const markedCount = lines.length - unmarkedCount;
+  const sections = sectionsOf(lines, leaderId ?? me.data?.person_id ?? null, forLeader?.full_name ?? null);
   // A new mark, or a recorded one changed: what makes a Save worth offering.
   const changed = lines.some((line) => {
     const edit = edits[line.person_id];
@@ -629,14 +630,13 @@ function DccChecklist() {
             </p>
           ) : (
             <>
-              <p className="mt-4 text-right text-sm">
-                {markedCount} of {lines.length} marked
-              </p>
-              {sectionsOf(
-                lines,
-                leaderId ?? me.data?.person_id ?? null,
-                forLeader?.full_name ?? null,
-              ).map((section) => (
+              {/* The whole count, unless one counted section already says it in its heading. */}
+              {sections.length === 1 && sections[0].counted ? null : (
+                <p className="mt-4 text-right text-sm">
+                  {markedCount} of {lines.length} marked
+                </p>
+              )}
+              {sections.map((section) => (
                 <section key={section.key} aria-labelledby={`section-${section.key}`} className="mt-6">
                   <h2 id={`section-${section.key}`} className="text-base font-bold">
                     {section.title}
