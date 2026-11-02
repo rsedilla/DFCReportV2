@@ -1,3 +1,7 @@
+'use client';
+
+import { useCallback, useState } from 'react';
+
 /**
  * An idempotency key derived from the request it belongs to (SKILL.md sections 22
  * and 23; decision 0127).
@@ -50,4 +54,24 @@ export function idempotencyKeyFor(...parts: unknown[]): string {
   // Version 4 and the RFC variant, so the value satisfies the boundary's own
   // `@IsUUID()` rather than merely looking like a UUID.
   return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4)}${d}`;
+}
+
+/**
+ * A key part for one write, renewed once that write succeeds.
+ *
+ * A body alone is not enough to tell two writes apart wherever a screen can undo
+ * what it saved and then save it again: add a member, remove them, add them back;
+ * move a person to another leader and back; set a category, change it, set it back.
+ * The third save carries the first one's body, the server answers a key it has
+ * seen with the stored answer for 24 hours (section 22), and nothing is written
+ * while the screen reports success.
+ *
+ * So the key is the body *and* this part. A retry after a failure or a dropped
+ * response keeps the part and so the key, which is what decision 0127 asks; a
+ * success renews it, so the next write is a new request even if its body repeats.
+ */
+export function useWriteKey(): [string, () => void] {
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const renew = useCallback(() => setKey(crypto.randomUUID()), []);
+  return [key, renew];
 }

@@ -21,7 +21,7 @@ import {
   type CellMember,
 } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
@@ -104,10 +104,16 @@ function CellMembers() {
     queryFn: ({ signal }) => listCellMembers(params.id, pages.cursor, signal),
   });
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const remove = useMutation({
     mutationFn: (personId: string) =>
-      removeCellMember(params.id, personId, idempotencyKeyFor('remove', params.id, personId)),
+      removeCellMember(
+        params.id,
+        personId,
+        idempotencyKeyFor('remove', writeKey, params.id, personId),
+      ),
     onSuccess: async () => {
+      renewWriteKey();
       setRemoving(null);
       // Both, because the line above the list carries the Cell's member count and this
       // screen is what changes it: the count comes from the meetings read, not from the

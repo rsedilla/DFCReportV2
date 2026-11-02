@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { PERSON_IN_SCOPE, mockGrants, mockPeople, mockSignedIn } from './mock-api';
+import {
+  PERSON_IN_SCOPE,
+  mockGrants,
+  mockPeople,
+  mockSignedIn,
+  expectTwoKeys,
+  writeKeys,
+} from './mock-api';
 import {
   CELL_WITH_MEETINGS,
   mockCellMeetings,
@@ -268,5 +275,57 @@ test.describe('Change category (decision 0367)', () => {
 
     await expect(page.getByRole('link', { name: 'Members' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Change category' })).toHaveCount(0);
+  });
+});
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('a configuration save made again sends a new key', () => {
+  test('correcting sex the same way twice', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockPastoralPath(page);
+    await mockAdministrator(page);
+    await mockBranchAndSearch(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}/sex`, (route) =>
+      route.fulfill(json({ ...PERSON_IN_SCOPE, sex: 'MALE', network: 'MENS' })),
+    );
+    const keys = writeKeys(page, 'PUT', /\/sex$/);
+    await page.goto(PROFILE);
+
+    const dialog = page.getByRole('dialog', { name: `Correct ${PERSON_IN_SCOPE.full_name}’s sex` });
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Correct sex' }).click();
+      await dialog.getByLabel('Why is it being corrected? (required)').fill('Entered as female by mistake');
+      await dialog.getByLabel('Search for a leader by name').fill('Rodel');
+      await dialog.getByRole('button', { name: 'Search people' }).click();
+      await dialog.getByRole('button', { name: 'Choose' }).first().click();
+      await dialog.getByRole('button', { name: 'Correct to Male' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
+  });
+
+  test('changing the category back', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await mockGrants(page, ['cell.manage_configuration']);
+    await page.route('**/api/v1/cells/*/category', (route) =>
+      route.fulfill(json({ id: CELL_WITH_MEETINGS.id, category: 'COUPLE' })),
+    );
+    const keys = writeKeys(page, 'PUT', /\/category$/);
+    await page.goto(`/cells/${CELL_WITH_MEETINGS.id}/meetings`);
+
+    const dialog = page.getByRole('dialog');
+    for (let time = 0; time < 2; time += 1) {
+      await page.getByRole('button', { name: 'Change category' }).click();
+      await dialog.getByRole('radio', { name: 'Couple' }).check();
+      await dialog.getByRole('button', { name: 'Make it Couple' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
   });
 });

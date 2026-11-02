@@ -9,7 +9,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { CELL_DAYS, changeCellSchedule, dayOfWeekLabel, listCellMeetings } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { monthLabel, reportingMonthOf, shiftMonth } from '@/lib/reporting-month';
 
@@ -61,14 +61,16 @@ export function CellScheduleDialog({
     enabled: open,
   });
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const save = useMutation({
     mutationFn: () =>
       changeCellSchedule(
         cellId,
         { day_of_week: Number(day), time_of_day: time },
-        idempotencyKeyFor('schedule', cellId, day, time),
+        idempotencyKeyFor('schedule', writeKey, cellId, day, time),
       ),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['cells'] });
       await queryClient.invalidateQueries({ queryKey: ['cell-meetings', cellId] });
       onSaved(effectiveFrom);

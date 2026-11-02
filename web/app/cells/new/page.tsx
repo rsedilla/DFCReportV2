@@ -23,7 +23,7 @@ import {
   dayOfWeekLabel,
   type CellCategory,
 } from '@/lib/cells';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -51,6 +51,7 @@ function NewCellForm() {
   const [day, setDay] = useState('');
   const [time, setTime] = useState('');
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const create = useMutation({
     mutationFn: () =>
       createCell(
@@ -60,9 +61,10 @@ function NewCellForm() {
           day_of_week: Number(day),
           time_of_day: time,
         },
-        idempotencyKeyFor('new-cell', leader?.id ?? '', category, day, time),
+        idempotencyKeyFor('new-cell', writeKey, leader?.id ?? '', category, day, time),
       ),
     onSuccess: async (cell) => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['cells'] });
       router.push(`/cells/${cell.id}/members`);
     },

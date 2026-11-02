@@ -8,6 +8,8 @@ import {
   mockPeople,
   mockScreens,
   mockSignedIn,
+  expectTwoKeys,
+  writeKeys,
 } from './mock-api';
 import { mockCells } from './mock-attendance';
 
@@ -184,5 +186,39 @@ test.describe('A person’s page (decision 0397)', () => {
     await expect(page.getByText('Peacefully, at home')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
+  });
+});
+
+/**
+ * A save whose body repeats an earlier one, as changing something back does, sends a new
+ * `Idempotency-Key`. Found on 2026-11-02: keys built from the body alone were answered from
+ * the server's store for 24 hours (section 22), so the repeat wrote nothing.
+ */
+test.describe('an archive made again sends a new key', () => {
+  test('archiving somebody again, with the same reason, after a restore', async ({ page }) => {
+    await arrange(page);
+    await mockLifecycleAdministrator(page);
+    await page.route('**/api/v1/accounts/for-person/*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ account: { id: 'acc-1', status: 'ACTIVE' } }),
+      }),
+    );
+    await page.route('**/api/v1/people/*/archive', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+    const keys = writeKeys(page, 'POST', /\/archive$/);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/people/absent');
+
+    const dialog = page.getByRole('dialog', { name: 'Archive Dalisay Ocampo' });
+    for (let time = 0; time < 2; time += 1) {
+      await table(page).getByRole('row').nth(1).getByRole('button', { name: 'Archive' }).click();
+      await dialog.getByRole('radio', { name: 'Moved away', exact: true }).check();
+      await dialog.getByRole('button', { name: 'Archive' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectTwoKeys(keys);
   });
 });

@@ -9,7 +9,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { ApiRequestError } from '@/lib/api-client';
 import { reassignPastoralLeader } from '@/lib/hierarchy';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { getPerson, networkOfPerson } from '@/lib/people';
 
@@ -59,6 +59,7 @@ export function MoveLeaderDialog({
   });
   const network = moved.data ? networkOfPerson(moved.data) : null;
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const move = useMutation({
     mutationFn: () => {
       if (chosen === null) {
@@ -69,10 +70,11 @@ export function MoveLeaderDialog({
         personId,
         chosen.id,
         trimmed || undefined,
-        idempotencyKeyFor('reassign', personId, chosen.id, trimmed),
+        idempotencyKeyFor('reassign', writeKey, personId, chosen.id, trimmed),
       );
     },
     onSuccess: async () => {
+      renewWriteKey();
       close();
       await queryClient.invalidateQueries({ queryKey: ['pastoral-path'] });
       await queryClient.invalidateQueries({ queryKey: ['awaiting-reassignment'] });

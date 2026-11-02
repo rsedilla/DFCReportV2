@@ -8,7 +8,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { getAccountForPerson } from '@/lib/accounts';
-import { idempotencyKeyFor } from '@/lib/idempotency';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { ARCHIVE_REASONS, archivePerson, archiveReasonLabel, type ArchiveReason } from '@/lib/lifecycle';
 import { describeFailure } from '@/lib/messages';
 
@@ -48,6 +48,7 @@ export function ArchivePersonDialog({
   const asksAboutAccess =
     account.data?.account != null && account.data.account.status !== 'DISABLED';
 
+  const [writeKey, renewWriteKey] = useWriteKey();
   const send = useMutation({
     mutationFn: () =>
       archivePerson(
@@ -57,9 +58,10 @@ export function ArchivePersonDialog({
           ...(note.trim() === '' ? {} : { note: note.trim() }),
           ...(asksAboutAccess ? { account_access: access } : {}),
         },
-        idempotencyKeyFor('archive-person', person.id, reason, note.trim(), asksAboutAccess ? access : ''),
+        idempotencyKeyFor('archive-person', writeKey, person.id, reason, note.trim(), asksAboutAccess ? access : ''),
       ),
     onSuccess: async () => {
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['person', person.id] });
       await queryClient.invalidateQueries({ queryKey: ['people-absent'] });
       await queryClient.invalidateQueries({ queryKey: ['people-archived'] });
