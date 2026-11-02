@@ -35,9 +35,9 @@ Settled in [SKILL.md](SKILL.md) §2. Changing it requires a recorded decision, n
 - **Database** — PostgreSQL 16, with hand-written SQL migrations and no ORM
 - **Web** — Next.js + TypeScript as a pure client: no API routes, no server actions
 - **Styling** — Tailwind CSS, with a palette that carries no judgement (§13)
-- **Mobile** — Android and iOS later, against the same API
+- **Mobile** — the same web application, added to the home screen as the phone app; no App Store or Play Store app (decision 0424)
 
-The API is the product. The web application is its first client; the phones are the next two. All three surfaces are used concurrently, so the API is stateless, token-authenticated, and detects write conflicts rather than resolving them silently.
+The API is the product. The web application is its one client, on laptops and on phones, used concurrently, so the API is stateless, token-authenticated, and detects write conflicts rather than resolving them silently.
 
 ## The rules broken most often by accident
 

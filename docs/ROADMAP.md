@@ -310,11 +310,9 @@ The interface clause is part of the criterion rather than an assumption behind i
 
 ---
 
-## Later — Mobile
+## Mobile — the web application, installed
 
-Against the same `/api/v1`. The client framework is not chosen and is not settled here — a stack decision is recorded in `CLAUDE.md` and amended into `SKILL.md` §2, never in a roadmap.
-
-Nothing built before Mobile should need to change — Stages 1 through 7, and the unnumbered screens block among them, which this sentence enumerated past until that block existed. That is what the API-first constraint and the separate deployables were bought for — if a mobile client forces an API change, something in the earlier stages was built as a web feature rather than as an API.
+There is no native stage. The owner ruled on 2026-11-01 that no App Store or Play Store app is built: the web application, added to a phone's home screen, is the phone app (decision 0424, `SKILL.md` §2). Phones are a current surface of every stage above, not a later one.
 
 ---
 
