@@ -14,6 +14,8 @@ import {
 
 import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
+import { TreePagingQueryDto } from '../people/dto/network.dto';
+import { MyPeopleService } from './my-people.service';
 import { UuidParamPipe } from '../common/uuid-param.pipe';
 import { PeopleReadService } from '../people/people.read.service';
 import { composeName } from '../people/people.shared';
@@ -68,6 +70,7 @@ export class CellsController {
     // The scope set is the authorization module's to compute rather than this
     // controller's to re-derive.
     private readonly authorization: AuthorizationService,
+    private readonly myPeople: MyPeopleService,
   ) {}
 
   /**
@@ -254,6 +257,32 @@ export class CellsController {
       })),
       next_cursor: encodeRosterCursor(nextCursor),
     };
+  }
+
+  /**
+   * `GET /api/v1/cells/people/mine`: the reader's people two levels down, each with their leader
+   * and Cell, as one plain list (SKILL.md section 19, decision 0422). The two levels are the
+   * reader's own tree, so `people.view_subtree` against the reader admits every row; a Cell is
+   * given only where `cell.view_subtree` reaches the person too.
+   */
+  @Get('people/mine')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async mine(
+    @Query() query: TreePagingQueryDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const { rows, nextCursor } = await this.myPeople.page(actor, {
+      cursor: decodeRosterCursor(query.cursor),
+      limit: query.limit ?? 50,
+    });
+    return { data: rows, next_cursor: encodeRosterCursor(nextCursor) };
+  }
+
+  /** How many people `GET /cells/people/mine` holds, directly and beneath (decision 0422). */
+  @Get('people/mine/counts')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async mineCounts(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    return this.myPeople.counts(actor);
   }
 
   /**

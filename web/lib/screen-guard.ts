@@ -48,6 +48,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/admin(\/|$)/)) {
     return holdsWholeChurch(me, 'accounts.manage');
   }
+  // My People is the recording screens' (decision 0422); a Full view leader reads the same list
+  // inside Family Tree.
+  if (at(/^\/people\/mine$/)) {
+    return me.screens === 'RECORDING';
+  }
   // Every account has its own Account page and Record, and a Sunday's checklist from Record.
   if (at(/^\/(session|dashboard|dcc)(\/|$)/)) {
     return true;
@@ -58,7 +63,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   // A person's own page and the pages it opens, reached from a name.
   const person =
     at(/^\/people\/[^/]+(\/|$)/) &&
-    !at(/^\/people\/(new|awaiting-leader|number-of-people|absent)(\/|$)/);
+    !at(/^\/people\/(new|awaiting-leader|number-of-people|absent|mine)(\/|$)/);
   // The reports the Senior Pastors and a Full view leader have (decisions 0326 and 0380), and
   // their last twelve months (decision 0377). The address # of People had under People forwards.
   const fiveReports =
@@ -77,6 +82,8 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     // no No Leader Yet or Family Tree.
     return (
       at(/^\/people(\/new)?$/) ||
+      // My People (decision 0422).
+      at(/^\/people\/mine$/) ||
       person ||
       at(/^\/my-cell(\/|$)/) ||
       cellRecord ||

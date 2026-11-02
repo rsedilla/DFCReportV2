@@ -9,6 +9,7 @@ import {
   mockAccountsAdministrator,
   mockAdminArea,
   mockAdministrator,
+  mockMyPeople,
   mockCellCreator,
   mockAbsentPeople,
   mockAwaitingReassignment,
@@ -1752,6 +1753,19 @@ const SCANS = [
     },
   },
   {
+    // Decision 0422: a leader without Full view's people two levels down, a plain list.
+    name: 'my people',
+    route: '/people/mine',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockScreens(page, 'RECORDING');
+      await mockMyPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: '3 people under you' })).toBeVisible();
+    },
+  },
+  {
     // Decision 0419: what needs the administrator, as tiles and panels.
     name: 'admin',
     route: '/admin',
@@ -2177,6 +2191,15 @@ const TARGET_SWEEP = [
     route: '/my-cell',
     settle: 'Request New Cell',
     minimum: 5,
+    recording: true,
+  },
+  {
+    // The two People tabs, Add People and My People (decision 0422); the list holds no control.
+    name: 'my people',
+    route: '/people/mine',
+    settleRole: 'heading' as const,
+    settle: '3 people under you',
+    minimum: 2,
     recording: true,
   },
   // The Admin area is a Whole Church holder of `accounts.manage`'s (decision 0419), so it is
@@ -2637,6 +2660,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // two view capabilities, and no other screen reads them.
   await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree', 'cell.move_members', 'cell.manage_configuration']);
   await mockPersonGrowth(page);
+  await mockMyPeople(page);
   await mockBranchPeople(page);
   await mockBranchCounts(page);
   await mockBranchTrends(page);

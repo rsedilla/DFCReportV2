@@ -396,6 +396,14 @@
       "screen": "web/app/people/[id]/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/people/mine",
+      "screen": "web/components/my-people-list.tsx"
+    },
+    {
+      "route": "GET /api/v1/cells/people/mine/counts",
+      "screen": "web/components/my-people-list.tsx"
+    },
+    {
       "route": "GET /api/v1/cells/people/membership",
       "reason": "The same for a page of people at once, the People list's Cell column (checklist row perf-people-list-cells).",
       "screen": "web/app/people/page.tsx"

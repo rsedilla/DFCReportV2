@@ -239,7 +239,8 @@ test.describe('where the two lists are offered (decision 0381)', () => {
     });
     await page.goto('/people');
 
-    await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People']);
+    // Add People and My People (decision 0422), and neither list.
+    await expect(peopleTabs(page).getByRole('link')).toHaveText(['Add People', 'My People']);
     expect(asked).toEqual([]);
   });
 

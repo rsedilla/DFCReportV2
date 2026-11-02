@@ -3,14 +3,18 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { MyPeopleList } from '@/components/my-people-list';
 import { PeopleTabs } from '@/components/people-tabs';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
+import { useScreenAddress } from '@/lib/screen-address';
 import { getBranch, getMyBranch, type Branch, type BranchNode } from '@/lib/network';
 
 const LINK =
@@ -33,12 +37,26 @@ const FETCH = '200';
  * screen, so a deep branch stays readable; each line still says how many it leads.
  */
 export default function FamilyTreePage() {
+  return (
+    <Suspense>
+      <FamilyTree />
+    </Suspense>
+  );
+}
+
+function FamilyTree() {
+  const search = useSearchParams();
+  const go = useScreenAddress();
   const mine = useQuery({
     queryKey: ['network-branch', 'mine', 'tree'],
     queryFn: ({ signal }) => getMyBranch(undefined, signal, FETCH),
   });
 
   const roots = mine.data?.roots ?? [];
+  // **A Tree / List switch, for a reader in the tree** (decision 0422): the List is their people
+  // two levels down, plain. A reader holding no assignment starts at the roots and has the tree.
+  const inTree = mine.data !== undefined && roots.length === 0;
+  const list = inTree && search.get('view') === 'list';
 
   return (
     <AppShell>
@@ -49,8 +67,21 @@ export default function FamilyTreePage() {
 
         <PeopleTabs current="/family-tree">
           <FailureNotice failure={mine.isError ? describeFailure(mine.error) : null} />
+          {inTree ? (
+            <ViewSwitch<'tree' | 'list'>
+              label="Show"
+              options={[
+                { key: 'tree', label: 'Tree' },
+                { key: 'list', label: 'List' },
+              ]}
+              value={list ? 'list' : 'tree'}
+              onChange={(next) => go({ view: next === 'list' ? 'list' : null })}
+            />
+          ) : null}
           {mine.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>
+          ) : list ? (
+            <MyPeopleList />
           ) : mine.data === undefined ? null : (
             <section aria-label="Family Tree" className={`mt-6 ${FRAME}`}>
               <ul className="[--tree-cap:4] [--tree-step:14px] sm:[--tree-cap:8] sm:[--tree-step:22px]">

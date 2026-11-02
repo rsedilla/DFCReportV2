@@ -1257,3 +1257,38 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
 
   return asked;
 }
+
+/** A leader's people two levels down (decision 0422), invented. */
+export const MY_PEOPLE_ROWS = [
+  {
+    person_id: '3f1b7c6e-0000-4000-8000-000000000921',
+    full_name: 'Arturo Villaruel',
+    leader: null,
+    cell: { cell_id: 'CELL-000021', category: 'YOUTH', day_of_week: 5 },
+    cell_withheld: false,
+  },
+  {
+    person_id: '3f1b7c6e-0000-4000-8000-000000000922',
+    full_name: 'Bituin Carreon',
+    leader: null,
+    cell: null,
+    cell_withheld: false,
+  },
+  {
+    person_id: '3f1b7c6e-0000-4000-8000-000000000923',
+    full_name: 'Ernani Pascual',
+    leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000921', full_name: 'Arturo Villaruel' },
+    cell: { cell_id: 'CELL-000021', category: 'YOUTH', day_of_week: 5 },
+    cell_withheld: false,
+  },
+];
+
+export async function mockMyPeople(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/people/mine/counts', (route) =>
+    route.fulfill(json({ all: 3, direct: 2, beneath: 1 })),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/v1/cells/people/mine',
+    (route) => route.fulfill(json({ data: MY_PEOPLE_ROWS, next_cursor: null })),
+  );
+}
