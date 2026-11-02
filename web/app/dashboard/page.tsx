@@ -48,6 +48,7 @@ import {
 } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 import { mayStillBeOpen, monthOpenUntilLabel } from '@/lib/weekly-deadline';
+import { getRecordVerse } from '@/lib/settings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -276,6 +277,8 @@ function Dashboard() {
         )}
       </div>
 
+      <RecordVerseCard />
+
       <div className="mt-6">
         <FailureNotice failure={failure} />
       </div>
@@ -500,3 +503,33 @@ function Dashboard() {
 const RECORD_TABS = ['awaiting', 'behind', 'dcc', 'status'] as const;
 
 type RecordTab = (typeof RECORD_TABS)[number];
+
+/**
+ * The verse an administrator sets for Record (decision 0425), under the welcome, for every
+ * account. Nothing is drawn where none is set, or while it is read, or where the read fails:
+ * it encourages, and a missing verse is no failure to report.
+ */
+function RecordVerseCard() {
+  const verse = useQuery({
+    queryKey: ['record-verse'],
+    queryFn: ({ signal }) => getRecordVerse(signal),
+    staleTime: 10 * 60_000,
+  });
+
+  if (!verse.data?.text) {
+    return null;
+  }
+
+  return (
+    <figure className="bg-accent-tint mt-4 max-w-3xl rounded-xl px-4 py-3 sm:px-5">
+      <blockquote className="text-ink text-[0.9375rem] leading-relaxed italic">
+        “{verse.data.text}”
+      </blockquote>
+      {verse.data.reference ? (
+        <figcaption className="text-accent mt-1.5 text-sm font-semibold">
+          {verse.data.reference}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}

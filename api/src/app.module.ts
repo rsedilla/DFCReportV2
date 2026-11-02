@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { SettingsModule } from './admin/settings/settings.module';
+import { SettingsRoutesModule } from './admin/settings-routes/settings-routes.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountThrottlerGuard } from './auth/authorization/account-throttler.guard';
@@ -77,6 +78,7 @@ import { TrainingModule } from './training/training.module';
     SuynlModule,
     ConquestModule,
     TrainingModule,
+    SettingsRoutesModule,
     CellRelationshipsBindingModule,
     AdminAccountsBindingModule,
     PersonArchiveCellsBindingModule,

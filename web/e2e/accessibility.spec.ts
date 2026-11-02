@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAccountsAdministrator,
   mockAdminArea,
+  mockSettings,
   mockAdministrator,
   mockMyPeople,
   mockCellCreator,
@@ -1479,16 +1480,17 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('table', { name: 'Encounter seasons' })).toBeVisible();
-      await expect(page.getByText('Only an administrator may add or change these dates.')).toBeVisible();
+      await expect(page.getByText('An administrator sets these dates in Admin, under Settings.')).toBeVisible();
     },
   },
   {
     // An administrator's view: every column, an Edit per season, and Add.
     name: 'encounter seasons, administrator',
-    route: '/growth/training/encounters',
+    route: '/admin?tab=settings',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockAdministrator(page);
+      await mockAccountsAdministrator(page);
+      await mockSettings(page);
       await mockEncounterSeasons(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1499,10 +1501,11 @@ const SCANS = [
   {
     // Adding a season: the Men and Women fieldsets, four date fields and their hints.
     name: 'encounter seasons, adding a season',
-    route: '/growth/training/encounters',
+    route: '/admin?tab=settings',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockAdministrator(page);
+      await mockAccountsAdministrator(page);
+      await mockSettings(page);
       await mockEncounterSeasons(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1515,10 +1518,11 @@ const SCANS = [
   {
     // A save the API refused: its message in the form, and the form kept.
     name: 'encounter seasons, refused',
-    route: '/growth/training/encounters',
+    route: '/admin?tab=settings',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockAdministrator(page);
+      await mockAccountsAdministrator(page);
+      await mockSettings(page);
       await mockEncounterSeasons(page, { outcome: 'refused' });
     },
     async arrange(page: import('@playwright/test').Page) {

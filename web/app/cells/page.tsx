@@ -158,6 +158,10 @@ function CellsIndex() {
   const fewOnly = shown === 'FEW';
   // Section 15's *No meeting in 3 months* (decision 0355).
   const quietOnly = shown === 'QUIET';
+  const cellCounts = useQuery({
+    queryKey: ['cells-counts'],
+    queryFn: ({ signal }) => getCellCounts(signal),
+  });
   // *Only my Cells* belongs to Closed Cells alone. Active Cells lists the reader's own first
   // and marks them, under one total that filters nothing (decision 0400).
   const mineApplies = closed;
@@ -200,11 +204,12 @@ function CellsIndex() {
   const nextPage = () => {
     if (!cells.isPlaceholderData) pages.next(cells.data?.next_cursor);
   };
-  // The number is the church-wide setting's (decision 0355), known once the Inactive list has
-  // answered; three until then, which is the setting's seeded value and which nothing in the
-  // product can change today.
+  // The number is the church-wide setting's (decision 0355), sent with the counts so the tab
+  // is named rightly before the list is opened (decision 0425); the open list's own window,
+  // then three, the setting's seeded value, only while the counts have not answered.
   const quietMonths = cells.data?.no_meeting_months ?? [];
-  const quietCount = (quietOnly ? quietMonths.length : 0) || 3;
+  const quietCount =
+    cellCounts.data?.attention_months || (quietOnly ? quietMonths.length : 0) || 3;
   const quietLabel = `${quietCount} months`;
   const everyTab: [CellsView, string, number | string | null][] = [
     ['ACTIVE', 'Active Cells', null],
@@ -482,11 +487,13 @@ function CellsIndex() {
             <Table caption="Cells you oversee" className="mt-6 hidden lg:block" tableClassName="table-fixed">
               <thead>
                 <tr>
-                  <HeaderCell className="w-[27%]">Cell</HeaderCell>
-                  <HeaderCell className="w-[27%]">Leader</HeaderCell>
-                  <HeaderCell className="w-[11%] pr-7 text-right">Members</HeaderCell>
-                  <HeaderCell className="w-[19%]">Meets</HeaderCell>
-                  <HeaderCell className="w-[16%] text-right">Recorded</HeaderCell>
+                  {/* Text first and numbers last, right-aligned with their headings, as every
+                      table's number columns are (decision 0425). */}
+                  <HeaderCell className="w-[26%]">Cell</HeaderCell>
+                  <HeaderCell className="w-[26%]">Leader</HeaderCell>
+                  <HeaderCell className="w-[20%]">Meets</HeaderCell>
+                  <HeaderCell className="w-[12%] text-right">Members</HeaderCell>
+                  <HeaderCell className="w-[16%] text-right">Meetings Recorded</HeaderCell>
                 </tr>
               </thead>
               <tbody>
@@ -508,15 +515,14 @@ function CellsIndex() {
                       {leads(cell) ? <YouLead /> : null}
                     </td>
                     <td className="px-3 py-3">{cell.leader.full_name}</td>
-                    <td className="px-3 py-3 pr-7 text-right tabular-nums">{cell.member_count}</td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
                     </td>
+                    <td className="px-3 py-3 text-right tabular-nums">{cell.member_count}</td>
                     <td className="px-3 py-3 text-right whitespace-nowrap">
                       <CoverageFigure
                         recorded={cell.coverage.recorded}
                         scheduled={cell.coverage.scheduled}
-                        unit="meetings"
                       />
                     </td>
                   </tr>
@@ -696,10 +702,11 @@ function QuietCells({
           <tr>
             <HeaderCell>Cell</HeaderCell>
             <HeaderCell>Leader</HeaderCell>
-            <HeaderCell>Members</HeaderCell>
             {months.map((each) => (
               <HeaderCell key={each}>{shortMonthLabel(each)}</HeaderCell>
             ))}
+            {/* Last of the figures, right-aligned, as on Active Cells (decision 0425). */}
+            <HeaderCell className="text-right">Members</HeaderCell>
             {anyMayClose ? (
               <HeaderCell>
                 <span className="sr-only">Close</span>
@@ -719,12 +726,12 @@ function QuietCells({
                   </Link>
                 </td>
                 <td className="px-3 py-3">{cell.leader.full_name}</td>
-                <td className="px-3 py-3">{cell.member_count}</td>
                 {(cell.no_meeting ?? []).map((entry) => (
                   <td key={entry.month} className="px-3 py-3 text-sm">
                     {quietMonthText(entry)}
                   </td>
                 ))}
+                <td className="px-3 py-3 text-right tabular-nums">{cell.member_count}</td>
                 {anyMayClose ? (
                   <td className="px-3 py-3">
                     {cell.may_close ? (

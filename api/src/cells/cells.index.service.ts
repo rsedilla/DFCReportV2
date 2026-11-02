@@ -139,8 +139,14 @@ export class CellsIndexService {
    * now, for the reader's scope and for the Cells they lead. The same scope and the same
    * filter as {@link list}, counted rather than paged, so the Cells page's totals do not
    * read every Cell with its figures to count it.
+   *
+   * **With them, the attention threshold** (decision 0425), so *Inactive N+ Months* is named
+   * by the church-wide setting before its list is opened. One number the whole church shares,
+   * which describes nobody; any reader of the counts is shown it.
    */
-  async counts(actor: Actor): Promise<{ in_scope: number; led_by_me: number }> {
+  async counts(
+    actor: Actor,
+  ): Promise<{ in_scope: number; led_by_me: number; attention_months: number }> {
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const now = await databaseNow(this.db);
 
@@ -149,7 +155,9 @@ export class CellsIndexService {
       this.cells.countCellsInScope(this.db, leadersToList(membership, actor, true), now),
     ]);
 
-    return { in_scope: inScope, led_by_me: ledByMe };
+    const attentionMonths = await this.settings.cellAttentionMonthsWithin(this.db);
+
+    return { in_scope: inScope, led_by_me: ledByMe, attention_months: attentionMonths };
   }
 
   async list(

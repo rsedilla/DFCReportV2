@@ -708,7 +708,9 @@ export type SettingKey =
    * The first Sunday the DCC calendar covers (section 9). Seeded null and set
    * once by the generation command's first run; an Admin may move it afterwards.
    */
-  | 'dcc_calendar_start';
+  | 'dcc_calendar_start'
+  /** The verse under Record's welcome, `{ text, reference }`, both null for none (decision 0425). */
+  | 'record_verse';
 
 export interface SettingsTable {
   key: SettingKey;

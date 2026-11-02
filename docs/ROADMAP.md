@@ -300,7 +300,7 @@ The interface clause is part of the criterion rather than an assumption behind i
 ## Stage 7 — Rollout
 
 - Leaders encode their own Cell members, network by network
-- **Close the initial-encoding phase** by the audited Admin action (§2)
+- **Close the initial-encoding phase** by the audited Admin action (§2), on the Admin's Settings tab (decision 0425)
 - Backups verified by an actual restore (§24)
 - `/security-review` across the codebase
 

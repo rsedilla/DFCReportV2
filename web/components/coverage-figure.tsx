@@ -34,8 +34,9 @@ export function CoverageFigure({
   headline?: boolean;
   recorded: number | null;
   scheduled: number | null;
-  /** What is being counted — "meetings recorded", "leaders have recorded". */
-  unit: string;
+  /** What is being counted — "meetings recorded", "leaders have recorded"; left out where a
+   *  table's column heading already names it. */
+  unit?: string;
 }) {
   if (recorded === null || scheduled === null) {
     return <span className="text-muted text-sm">Nothing owed yet</span>;
@@ -50,7 +51,7 @@ export function CoverageFigure({
       <span className={headline ? 'text-xl font-semibold tabular-nums' : 'font-medium tabular-nums'}>
         {scheduled}
       </span>
-      <span className="text-muted"> {unit}</span>
+      {unit ? <span className="text-muted"> {unit}</span> : null}
     </span>
   );
 }

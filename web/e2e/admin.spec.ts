@@ -5,8 +5,12 @@ import {
   mockAdminArea,
   mockAdministrator,
   mockScreens,
+  mockRecordVerse,
+  mockSettings,
   mockSignedIn,
+  RECORD_VERSE,
 } from './mock-api';
+import { mockEncounterSeasons } from './mock-growth';
 
 /**
  * The Admin area (SKILL.md section 19, ruling of 2026-11-02, decision 0419): who sees it, where it
@@ -186,5 +190,175 @@ test.describe('the Admin area’s Accounts', () => {
     await expect(page.getByRole('table', { name: 'Accounts' })).toBeHidden();
     await expect(page.getByRole('link', { name: 'Herminia Lazaro' })).toBeVisible();
     await expect(page.getByText('Leader · Waiting for activation')).toBeVisible();
+  });
+});
+
+test.describe('the Settings tab (decision 0425)', () => {
+  test('shows each church-wide setting, the calendar start without a control, and the Encounter seasons', async ({
+    page,
+  }) => {
+    await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const tabs = page.getByRole('group', { name: 'Admin' });
+    await expect(tabs.getByRole('button')).toHaveText(['Home', 'Accounts', 'Settings']);
+    await expect(tabs.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'true');
+
+    const months = page.getByRole('region', { name: 'No meeting in' });
+    await expect(months).toContainText('3 months');
+    await expect(months.getByRole('button', { name: 'Change' })).toBeVisible();
+
+    const calendar = page.getByRole('region', { name: 'DCC calendar' });
+    await expect(calendar).toContainText('Ready to 31 Oct 2027');
+    await expect(calendar).toContainText('Starts Sunday 5 Jan 2025.');
+    await expect(calendar.getByRole('button')).toHaveCount(0);
+
+    const encoding = page.getByRole('region', { name: 'Initial encoding' });
+    await expect(encoding).toContainText('Open');
+    await expect(encoding.getByRole('button', { name: 'Close Encoding' })).toBeVisible();
+
+    await expect(page.getByRole('button', { name: 'Add an Encounter season' })).toBeVisible();
+  });
+
+  test('changes the months with a key and shows the new value', async ({ page }) => {
+    const traffic = await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const months = page.getByRole('region', { name: 'No meeting in' });
+    await months.getByRole('button', { name: 'Change' }).click();
+    await months.getByLabel('Months').selectOption('4');
+    await months.getByRole('button', { name: 'Save' }).click();
+
+    await expect(months).toContainText('4 months');
+    expect(traffic.writes).toHaveLength(1);
+    expect(traffic.writes[0].path).toBe('/api/v1/settings/cell-attention-months');
+    expect(traffic.writes[0].body).toEqual({ months: 4 });
+    expect(traffic.writes[0].key).toBeTruthy();
+  });
+
+  test('closes encoding only after the dialog is confirmed, and offers no way back', async ({
+    page,
+  }) => {
+    const traffic = await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const encoding = page.getByRole('region', { name: 'Initial encoding' });
+    await encoding.getByRole('button', { name: 'Close Encoding' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Close initial encoding?' });
+    await expect(dialog).toContainText('It cannot be opened again.');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    expect(traffic.writes).toHaveLength(0);
+
+    await encoding.getByRole('button', { name: 'Close Encoding' }).click();
+    await dialog.getByRole('button', { name: 'Close Encoding' }).click();
+
+    await expect(encoding).toContainText('Closed');
+    await expect(encoding.getByRole('button')).toHaveCount(0);
+    expect(traffic.writes.map((write) => write.path)).toEqual([
+      '/api/v1/settings/initial-encoding/close',
+    ]);
+  });
+
+  test('Home carries how far the DCC calendar reaches, linking to Settings', async ({ page }) => {
+    await mockSettings(page);
+    await openAdmin(page);
+
+    const line = page.getByText('Ready to 31 Oct 2027');
+    await expect(line).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute(
+      'href',
+      '/admin?tab=settings',
+    );
+  });
+  test('changes the verse with a key, and empty boxes clear it', async ({ page }) => {
+    const traffic = await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const verse = page.getByRole('region', { name: 'Verse on Record' });
+    await expect(verse).toContainText('1 Peter 5:2 (NIV)');
+    await verse.getByRole('button', { name: 'Change' }).click();
+    await expect(verse.getByLabel('Verse')).toHaveValue(RECORD_VERSE.text);
+    await verse.getByLabel('Verse').fill('For God so loved the world.');
+    await verse.getByLabel('Reference').fill('John 3:16 (NIV)');
+    await verse.getByRole('button', { name: 'Save' }).click();
+    await expect(verse).toContainText('John 3:16 (NIV)');
+
+    await verse.getByRole('button', { name: 'Change' }).click();
+    await verse.getByLabel('Verse').fill('');
+    await verse.getByLabel('Reference').fill('');
+    await verse.getByRole('button', { name: 'Save' }).click();
+    await expect(verse).toContainText('No verse');
+
+    expect(traffic.writes.map((write) => [write.path, write.body])).toEqual([
+      [
+        '/api/v1/settings/record-verse',
+        { text: 'For God so loved the world.', reference: 'John 3:16 (NIV)' },
+      ],
+      ['/api/v1/settings/record-verse', { text: null, reference: null }],
+    ]);
+    expect(traffic.writes.every((write) => write.key)).toBe(true);
+  });
+});
+
+test.describe('the verse on Record (decision 0425)', () => {
+  test('sits under the welcome, with its reference', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockRecordVerse(page);
+    await page.goto('/dashboard');
+
+    const verse = page.locator('main figure');
+    await expect(verse.locator('blockquote')).toHaveText(`“${RECORD_VERSE.text}”`);
+    await expect(verse.locator('figcaption')).toHaveText('1 Peter 5:2 (NIV)');
+  });
+
+  test('draws nothing when no verse is set', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('heading', { name: 'Welcome, Marilou' })).toBeVisible();
+    await expect(page.locator('main figure')).toHaveCount(0);
+  });
+
+});
+
+test.describe('Inactive N+ Months carries the setting (decision 0425)', () => {
+  test('on Home and on Cells, before the list is opened', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAdmin(page);
+    // Installed after the Admin area's own counts, so this answer wins.
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ in_scope: 186, led_by_me: 0, attention_months: 4 }),
+      }),
+    );
+    await page.reload();
+
+    await expect(page.getByRole('link', { name: 'Inactive 4+ Months' })).toHaveAttribute(
+      'href',
+      '/cells?view=QUIET',
+    );
+    await expect(page.getByRole('link', { name: 'Inactive 3+ Months' })).toHaveCount(0);
+  });
+
+  test('offers two to six months, three the usual', async ({ page }) => {
+    await mockSettings(page);
+    await mockEncounterSeasons(page);
+    await openAdmin(page, '/admin?tab=settings');
+
+    const months = page.getByRole('region', { name: 'No meeting in' });
+    await months.getByRole('button', { name: 'Change' }).click();
+    await expect(months.getByLabel('Months').locator('option')).toHaveText([
+      '2 months',
+      '3 months (usual)',
+      '4 months',
+      '5 months',
+      '6 months',
+    ]);
   });
 });

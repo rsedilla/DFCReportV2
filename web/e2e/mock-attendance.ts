@@ -103,9 +103,12 @@ export function closedAsked(url: string): boolean {
  */
 export async function mockCellCounts(
   page: Page,
-  counts: { in_scope: number; led_by_me: number },
+  counts: { in_scope: number; led_by_me: number; attention_months?: number },
 ): Promise<void> {
-  await page.route('**/api/v1/cells/counts', (route) => route.fulfill(json(counts)));
+  // Three, the setting's seeded value, unless a case sets another (decision 0425).
+  await page.route('**/api/v1/cells/counts', (route) =>
+    route.fulfill(json({ attention_months: 3, ...counts })),
+  );
 }
 
 function noClosedCells() {

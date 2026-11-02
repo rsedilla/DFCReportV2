@@ -121,7 +121,7 @@ function Suynl() {
             <p className="mt-2 text-sm">No Encounter season has been set yet.</p>
           )}
           <p className="mt-2 text-sm">
-            <Link href="/growth/training/encounters" className={link}>
+            <Link href={mayChange ? '/admin?tab=settings' : '/growth/training/encounters'} className={link}>
               {mayChange ? 'Encounter seasons: add or change dates' : 'Every Encounter season'}
             </Link>
           </p>
