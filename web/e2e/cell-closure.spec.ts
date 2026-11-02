@@ -171,7 +171,10 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     const { asked } = await mockCellRoutes(page, { mayClose: true });
     await page.goto('/cells');
 
-    const tab = page.getByRole('button', { name: 'Inactive 3+ Months', exact: true });
+    await page.getByRole('button', { name: 'Needs Attention' }).click();
+    const tab = page
+      .getByRole('group', { name: 'Which list' })
+      .getByRole('button', { name: 'Inactive 3+ Months', exact: true });
     await expect(tab).toHaveText('Inactive 3+ Months');
     await tab.click();
     await expect(page).toHaveURL(/view=QUIET/);

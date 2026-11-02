@@ -297,7 +297,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ]);
   });
 
-  test('SUYNL is reached from its own item, with SUYNL its one Growth tab', async ({ page }) => {
+  test('SUYNL is reached from its own item, with no one-tab Growth row (decision 0420)', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockPeople(page);
@@ -309,9 +309,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page).toHaveURL(/\/growth\/suynl$/);
     await expect(page.getByRole('heading', { level: 1, name: 'SUYNL' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' }).first()).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Growth' }).getByRole('link')).toHaveText([
-      'SUYNL',
-    ]);
+    await expect(page.getByRole('navigation', { name: 'Growth' })).toHaveCount(0);
     await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('SUYNL');
   });
 });

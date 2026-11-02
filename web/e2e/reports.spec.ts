@@ -69,11 +69,17 @@ async function expectReadOnly(page: Page) {
  * label keeps its words as the link's name.
  */
 const TABS = [
-  { label: 'Cell Groups', path: '/reports/cells', dated: true },
-  { label: 'DCC', path: '/reports/dcc', dated: true },
-  { label: 'Encounter Readiness', path: '/reports/suynl', dated: false },
-  { label: 'Training', path: '/reports/training', dated: false },
-  { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
+  // Cell Groups and DCC are one tab with a switch inside it (decision 0420).
+  { label: 'Attendance', path: '/reports/cells', dated: true, pages: ['/reports/cells', '/reports/dcc'] },
+  { label: 'Encounter Readiness', path: '/reports/suynl', dated: false, pages: ['/reports/suynl'] },
+  { label: 'Training', path: '/reports/training', dated: false, pages: ['/reports/training'] },
+  {
+    label: '# of People',
+    name: 'Number of people',
+    path: '/reports/number-of-people',
+    dated: true,
+    pages: ['/reports/number-of-people'],
+  },
 ] as const;
 
 /**
@@ -81,21 +87,28 @@ const TABS = [
  * reads reports over one Network. No Encounter Readiness, Training or Conquest.
  */
 const BRANCH_TABS = [
-  { label: 'CG Attendance', path: '/reports/cells', dated: true },
-  { label: 'DCC Attendance', path: '/reports/dcc', dated: true },
+  { label: 'Attendance', path: '/reports/cells', dated: true, pages: ['/reports/cells', '/reports/dcc'] },
   {
     label: '# of Cell Groups',
     name: 'Number of Cell Groups',
     path: '/reports/number-of-cells',
     dated: true,
+    pages: ['/reports/number-of-cells'],
   },
   {
     label: '# of Cell Leaders',
     name: 'Number of Cell Leaders',
     path: '/reports/number-of-cell-leaders',
     dated: true,
+    pages: ['/reports/number-of-cell-leaders'],
   },
-  { label: '# of People', name: 'Number of people', path: '/reports/number-of-people', dated: true },
+  {
+    label: '# of People',
+    name: 'Number of people',
+    path: '/reports/number-of-people',
+    dated: true,
+    pages: ['/reports/number-of-people'],
+  },
 ] as const;
 
 /** Each reader, with the tabs they are shown. */
@@ -128,12 +141,13 @@ async function mockEveryReport(page: Page, { church = false }: { church?: boolea
 test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
   for (const { reader, church, tabs } of READERS) {
     for (const tab of tabs) {
-      test(`for ${reader}, ${tab.label} carries exactly the ${tabs.length} tabs and is the one marked current`, async ({
+      for (const path of tab.pages) {
+      test(`for ${reader}, ${path} carries exactly the ${tabs.length} tabs and marks ${tab.label} current`, async ({
         page,
       }) => {
         await page.clock.setFixedTime(NOW);
         await mockEveryReport(page, { church });
-        await page.goto(tab.path);
+        await page.goto(path);
 
         await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
         const which = page.getByRole('navigation', { name: 'Which report' });
@@ -150,8 +164,31 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
         // The old two-link switch is gone rather than kept beside the tabs.
         await expect(page.getByRole('list', { name: 'Which report' })).toHaveCount(0);
       });
+      }
     }
   }
+
+  test('Attendance switches between Cell Group and DCC, keeping the month (decision 0420)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page);
+    await page.goto('/reports/dcc?month=2026-05-01');
+
+    const which = page.getByRole('group', { name: 'Which attendance' });
+    await expect(which.getByRole('button', { name: 'DCC' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(which.getByRole('button', { name: 'Cell Group' })).toHaveAttribute('aria-pressed', 'false');
+    await which.getByRole('button', { name: 'Cell Group' }).click();
+    await expect(page).toHaveURL(/\/reports\/cells\?month=2026-05-01$/);
+    await expect(
+      page.getByRole('group', { name: 'Which attendance' }).getByRole('button', { name: 'Cell Group' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // A count's tab offers no such switch.
+    await page.goto('/reports/number-of-cells');
+    await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Which attendance' })).toHaveCount(0);
+  });
 
   test('Reports carries no Conquest: it is an item of the sidebar (decision 0407)', async ({
     page,
@@ -176,7 +213,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await page.goto('/reports/cells');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link')).toHaveCount(5);
+    await expect(which.getByRole('link')).toHaveCount(4);
     // Nor a Conquest item in their sidebar (decision 0407).
     await expect(page.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
     for (const name of ['Encounter Readiness', 'Training', 'Conquest']) {
@@ -198,7 +235,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect(page.getByText('Your screens are Record, Reports, People, Cells and SUYNL.')).toBeVisible();
   });
 
-  test('the month travels to every one of a Full view leader’s five', async ({
+  test('the month travels to every one of a Full view leader’s four tabs', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
@@ -226,7 +263,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect.poll(() => periods).toContain('2026-05-01');
   });
 
-  test('for a whole-church reader the month travels to Cell Groups and DCC, and never to the Growth three', async ({
+  test('for a whole-church reader the month travels to Attendance and # of People, and never to the Growth two', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
@@ -778,6 +815,7 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
         for (const tab of tabs) {
           await page.goto(tab.path);
           const which = page.getByRole('navigation', { name: 'Which report' });
+          // Four tabs, an even row, so none fills a row of its own (decision 0420).
           await expect(which.getByRole('link')).toHaveCount(tabs.length);
           await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
           await page.evaluate(() => document.fonts.ready);

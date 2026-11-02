@@ -137,6 +137,7 @@ export function ReportsTabs({
   children: ReactNode;
 }) {
   // Which tabs follow the screens the server names (decision 0323, point 5), never a role.
+  const router = useRouter();
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const branch = isBranchReader(me.data);
@@ -147,6 +148,30 @@ export function ReportsTabs({
   // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
   // the report inside is not remounted when the answer arrives.
   const tabbed = !me.isPending;
+  // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
+  // owner's layout): a switch inside it chooses which, and each keeps its own address.
+  const attendance = current === 'cells' || current === 'dcc';
+  const rowTabs = tabs.flatMap((tab) =>
+    tab.key === 'dcc'
+      ? []
+      : tab.key === 'cells'
+        ? [{ ...tab, label: 'Attendance', name: undefined }]
+        : [tab],
+  );
+  const trendView = (seniorPastor || branch) && view === 'trend';
+  const hrefOf = (tab: { key: ReportTab; path: string }) => {
+    const dated =
+      tab.key === 'cells' ||
+      tab.key === 'dcc' ||
+      tab.key === 'number-of-cells' ||
+      tab.key === 'number-of-cell-leaders' ||
+      tab.key === 'number-of-people';
+    return trendView
+      ? trendHref(TREND_FIGURE[tab.key as keyof typeof TREND_FIGURE], leader)
+      : month && dated
+        ? `${tab.path}?month=${month}`
+        : tab.path;
+  };
 
   return (
     <>
@@ -156,26 +181,13 @@ export function ReportsTabs({
           // Every tab one size, for every reader (decision 0416).
           className={cn('mt-6', TAB_GRID, TAB_ROW)}
         >
-          {tabs.map((tab) => {
-            const active = tab.key === current;
-            const trend = (seniorPastor || branch) && view === 'trend';
-            const dated =
-              tab.key === 'cells' ||
-              tab.key === 'dcc' ||
-              tab.key === 'number-of-cells' ||
-              tab.key === 'number-of-cell-leaders' ||
-              tab.key === 'number-of-people';
+          {rowTabs.map((tab) => {
+            const active = tab.key === 'cells' ? attendance : tab.key === current;
 
             return (
               <Link
                 key={tab.key}
-                href={
-                  trend
-                    ? trendHref(TREND_FIGURE[tab.key as keyof typeof TREND_FIGURE], leader)
-                    : month && dated
-                      ? `${tab.path}?month=${month}`
-                      : tab.path
-                }
+                href={hrefOf(tab)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={tab.name}
                 className={tabClasses(active)}
@@ -186,7 +198,25 @@ export function ReportsTabs({
           })}
         </nav>
       ) : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
+      <div className={tabbed ? TAB_PANE : 'mt-6'}>
+        {tabbed && attendance ? (
+          <ViewSwitch<'cells' | 'dcc'>
+            label="Which attendance"
+            options={[
+              { key: 'cells', label: 'Cell Group' },
+              { key: 'dcc', label: 'DCC' },
+            ]}
+            value={current}
+            onChange={(next) => {
+              const tab = tabs.find((each) => each.key === next);
+              if (next !== current && tab) {
+                router.push(hrefOf(tab));
+              }
+            }}
+          />
+        ) : null}
+        {children}
+      </div>
     </>
   );
 }

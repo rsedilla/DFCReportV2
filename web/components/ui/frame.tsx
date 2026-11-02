@@ -20,9 +20,11 @@ export const TAB_PANE = 'border-accent flow-root min-w-0 border-2 border-t-0 px-
 
 /**
  * How every tab row lays out its tabs (decision 0416): one fixed size, 13rem (decision 0417), from `sm`, and
- * two equal tabs to a row on a phone, where a label may wrap only on the narrowest.
+ * two equal tabs to a row on a phone, where a label may wrap only on the narrowest. **On a phone an
+ * odd last tab fills its row** (decision 0420), rather than standing half width beside a gap.
  */
-export const TAB_GRID = 'grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,13rem)]';
+export const TAB_GRID =
+  'grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,13rem)] [&>:last-child:nth-child(odd)]:col-span-2 sm:[&>:last-child:nth-child(odd)]:col-span-1';
 
 /**
  * One tab of a tab row, the same on every screen: one size (decision 0416), the chosen one

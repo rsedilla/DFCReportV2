@@ -306,16 +306,15 @@ test.describe('the Encounter seasons page', () => {
     );
   });
 
-  test('for a Full view leader, SUYNL is marked current and the way back (decision 0360)', async ({
+  test('for a Full view leader, there is no one-tab row, and SUYNL is the way back (decisions 0360 and 0420)', async ({
     page,
   }) => {
     await mockEncounterSeasons(page);
     await page.goto('/growth/training/encounters');
 
     await expect(page.getByText('The Encounter God Weekends, set by an administrator.')).toBeVisible();
-    const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
-    await expect(tabs.locator('a[aria-current="page"]')).toHaveText('SUYNL');
+    // A row holding one tab is not drawn (decision 0420).
+    await expect(page.getByRole('navigation', { name: 'Growth' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Back to Training' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Back to SUYNL' })).toHaveAttribute(
       'href',
