@@ -242,6 +242,25 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     expect(response.body.error.message).toMatch(/request-and-approve/);
   });
 
+  it('waits for a close in flight and is then refused, never created after it (decision 0425)', async () => {
+    // The close's write held open in a transaction of its own: a creation reading the phase
+    // under its shared lock waits for it, and reads it closed once it commits. A plain read
+    // would answer the committed `true` and create the Cell after the close.
+    let pending: Promise<request.Response> | undefined;
+    await db.transaction().execute(async (trx) => {
+      await sql`UPDATE settings SET value = 'false'::jsonb WHERE key = 'initial_encoding_open'`.execute(
+        trx,
+      );
+      pending = post(admin, body(mark.id)).then((response) => response);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    const response = await pending!;
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    expect(await db.selectFrom('cell_leaderships').select('id').execute()).toHaveLength(0);
+  });
+
   it('refuses an archived prospective leader', async () => {
     const archived = await createPerson(db, {
       firstName: 'Rico',

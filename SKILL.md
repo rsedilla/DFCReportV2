@@ -1113,6 +1113,8 @@ It follows that an elapsed wait must answer `RESOURCE_BUSY` **wherever it is rai
 
 **The last-name lock an add takes (Section 3, decision 0401) comes before every other lock**, the person locks included: it is the first lock the add's transaction takes, and only that add takes it, so no operation holds a person lock or a row lock and then waits on it. Its key is prefixed apart from the person keys and is never sorted among them.
 
+**The initial-encoding setting's row is read under a shared lock by every operation the phase permits, and taken exclusively by the close alone** (ruling of 2026-11-02, decision 0425), so a direct Cell creation or a tree import reading while a close is in flight waits for it and then reads it closed. The readers take it after their advisory locks; the close takes no lock any reader holds, so the two only ever wait, never cycle.
+
 **Advisory locks first, then row locks: every person the operation will write a relationship row for, then every `cells` row it will touch.** An operation needing both classes takes them in that order, never the reverse. The version the in-memory tree is checked against (Section 24) is moved by a deferred trigger, so its row lock comes after every lock the writer?s own statements take.
 
 The order is not a preference. A Cell membership write takes an advisory lock on the person and then, at commit, a row lock on the Cell, because the deferred trigger checking that Cell's state reads it `FOR SHARE` — so the pair was already fixed by an existing writer before any rule was written about it, and an operation taking Cell rows first and reaching back for a person runs the two in the opposite order. That is a genuine cycle rather than a wait, and the database answers it by choosing a victim.

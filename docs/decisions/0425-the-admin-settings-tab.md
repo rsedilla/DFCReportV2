@@ -23,7 +23,9 @@ screen that names it, as section 15 already said it should, the counts route sen
 **3. Initial encoding is closed here, once**, at `POST /api/v1/settings/initial-encoding/close`,
 after a dialog saying it cannot be undone (section 2, decision 0047). Nothing reopens it; a
 second close is refused as `INVARIANT_VIOLATION`, and of two closes at one moment one
-succeeds, the write naming the open value.
+succeeds, the write naming the open value. A direct Cell creation or a tree import reads the
+setting under a shared lock, so one reading while a close is in flight waits for it and is then
+refused (section 24, owner's choice of 2026-11-02).
 
 **4. The DCC calendar is shown and not changed**: how far it reaches and the first Sunday it
 covers. The first Sunday is set once by the scheduled command (section 9), and moving it

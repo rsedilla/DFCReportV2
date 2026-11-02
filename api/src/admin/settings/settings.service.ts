@@ -61,6 +61,30 @@ export class SettingsService {
   }
 
   /**
+   * Whether the phase is open, **read under a shared lock on its row** (decision 0425), for an
+   * operation the phase permits. The close takes the row exclusively, so an operation reading
+   * while a close is in flight waits for it and then reads it closed, rather than reading the
+   * committed `true` and committing after the close did, which is the relaxation outliving its
+   * end. Section 24 places the lock.
+   */
+  async initialEncodingOpenSharedWithin(transaction: Transaction<Database>): Promise<boolean> {
+    const row = await transaction
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', 'initial_encoding_open')
+      .forShare()
+      .executeTakeFirst();
+
+    if (row === undefined) {
+      throw new Error(
+        'The setting `initial_encoding_open` is missing. Migration 0002 seeds it, so an absent ' +
+          'row means the database is not fully migrated. Run `npm run migrate:up`.',
+      );
+    }
+    return row.value === true;
+  }
+
+  /**
    * The first Sunday the DCC calendar covers, or null before any run has set it
    * (SKILL.md sections 7 and 9).
    *
