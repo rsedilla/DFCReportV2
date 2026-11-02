@@ -38,9 +38,15 @@ ticked, and the name opens the person's page, where the account is managed (deci
 `GET /api/v1/accounts` and its counts through `GET /api/v1/accounts/counts`.
 
 **6. The Audit Log tab, when built, shows the whole log**, newest first, searched and filtered,
-to the accounts of point 1 alone, and reading it is not itself logged (owner, 2026-11-02).
+and reading it is not itself logged. It is the Admin's alone: it is read under `audit.view`, and
+the Senior Pastor role no longer holds that capability by default, which Section 7 gave it
+(owner, 2026-11-02). No route read the log, so nothing a Senior Pastor could see changes.
+
+**7. Home carries the date the DCC calendar reaches**, as Section 9 promised the Admin dashboard
+would, added with the Settings tab (owner, 2026-11-02). The dashboard's other items in Section 19
+already have a home, which that section now names.
 
 Decision 0419, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.md](../../SKILL.md)
-Sections 19 and 22.
+Sections 7, 19 and 22.
 
 Previous: [2026-11-01 — An administrator records a DCC line where nobody above has an account](0418-an-administrator-records-where-nobody-above-has-an-account.md)

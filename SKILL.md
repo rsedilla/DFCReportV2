@@ -1805,7 +1805,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.approve_leadership` | — | Whole Church | subtree, excl. self, with Approves Cells and Full view |
 | `cell.manage_lifecycle` | — | Whole Church | own/subtree, which closes nothing (decision 0355) |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree, with Full view |
-| `audit.view` | Whole Church | Whole Church | — |
+| `audit.view` | — | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
 | `settings.manage` | — | Whole Church | — |
 | `accounts.manage` | — | Whole Church | — |
@@ -2013,7 +2013,7 @@ account_roles
 - revoked_at         nullable
 ```
 
-`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_pastoral_assignment` and `audit.view` — and, since decision 0326, not on `people.manage_lifecycle`, which this sentence still listed until decision 0397 — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role, **and at most one of `SENIOR_PASTOR` and `ADMIN` in total**.
+`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_pastoral_assignment` — and, since decision 0326, not on `people.manage_lifecycle`, which this sentence still listed until decision 0397, and since decision 0419 not on `audit.view`, the Audit Log being the Admin's alone — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role, **and at most one of `SENIOR_PASTOR` and `ADMIN` in total**.
 
 An account's effective authority is the union of its roles' defaults, and Admin's set is a superset of a Senior Pastor's — so an `ADMIN` row beside a `SENIOR_PASTOR` one does not produce a Senior Pastor who also helps with administration. It produces an account holding every capability in the system, for which every exclusion this section writes for the role is void.
 
@@ -4357,7 +4357,7 @@ Admin focuses on platform operations:
 - Audit Logs
 - System Settings
 
-**It is the `Admin` item, with four tabs in this order: Home, Accounts, Settings, Audit Log** (ruling of 2026-11-02, decision 0419). *Home* lists what needs the administrator now across the whole church, each count opening its list: Cells to approve, No Leader Yet, accounts never activated and sign-ins paused, then Pending CG Records and Pending DCC Records, then counts of people, accounts and Cells. *Accounts* lists every account in first-name order, searched by name, username or email and filtered by *Active*, *Waiting for activation*, *Sign-ins paused*, *Second step not set up* or *Disabled*, each a chip with its count and one on at a time; a row's name opens the person's page, where the account is managed. There is no Security tab. *Settings* and *Audit Log* are built with their routes; the Audit Log shows the whole log newest first to the accounts the item is for, and reading it is not itself logged.
+**It is the `Admin` item, with four tabs in this order: Home, Accounts, Settings, Audit Log** (ruling of 2026-11-02, decision 0419). *Home* lists what needs the administrator now across the whole church, each count opening its list: Cells to approve, No Leader Yet, accounts never activated and sign-ins paused, then Pending CG Records and Pending DCC Records, then counts of people, accounts and Cells. *Accounts* lists every account in first-name order, searched by name, username or email and filtered by *Active*, *Waiting for activation*, *Sign-ins paused*, *Second step not set up* or *Disabled*, each a chip with its count and one on at a time; a row's name opens the person's page, where the account is managed. There is no Security tab. *Settings* and *Audit Log* are built with their routes. The Audit Log shows the whole log newest first, under `audit.view`, which only the Admin role holds by default, and reading it is not itself logged. Home also carries the date the DCC calendar reaches (Section 9), added with the Settings tab. The rest of the list above already has a home: roles and permissions are the ticks in a person's Account section (decisions 0323, 0352 and 0356), people, Networks and pastoral assignments are `People` and a person's page, and DCC and Cell Attendance administration are `Record`.
 
 Senior Pastor and Admin are different responsibilities even when permissions overlap.
 

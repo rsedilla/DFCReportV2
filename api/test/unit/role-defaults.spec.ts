@@ -112,7 +112,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
-  'audit.view': { SENIOR_PASTOR: 'WHOLE_CHURCH', ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  'audit.view': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'records.backdate_effective_date': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'settings.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'accounts.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
