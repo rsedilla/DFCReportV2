@@ -602,8 +602,7 @@ export class PeopleController {
    *
    * **The Admin's alone, under `accounts.manage`**, which by default only the Admin holds at
    * Whole Church and section 7 now says covers this read: the owner chose that the log is shown
-   * to the Admin only, and `audit.view`, the other read of who did what, is also held by the two
-   * Senior Pastors.
+   * to the Admin only.
    */
   @Get(':id/views')
   @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'params.id' })
