@@ -62,7 +62,7 @@ function MyCell() {
           <h1 className="text-2xl font-semibold tracking-tight">My Cell</h1>
           <p className="text-muted text-sm">The Cells you lead, in {monthLabel(month)}.</p>
         </div>
-        <Button variant="secondary" onClick={() => setAsking(true)}>
+        <Button onClick={() => setAsking(true)}>
           Request New Cell
         </Button>
       </div>

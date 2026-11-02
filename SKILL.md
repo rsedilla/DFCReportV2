@@ -4365,13 +4365,15 @@ Senior Pastor and Admin are different responsibilities even when permissions ove
 
 ### Every control one size
 
-**Each kind of control has one size and one look on every screen, for every account** (ruling of 2026-11-01, decision 0416, replacing decision 0329's tabs sized to their words):
+**Each kind of control has one size and one look on every screen, for every account** (ruling of 2026-11-01, decision 0416, replacing decision 0329's tabs sized to their words; the look softened by the ruling of 2026-11-02, decision 0423):
 
-- **A tab** is 13rem from a small screen up (decision 0417), two equal tabs to a row on a phone, an odd last tab filling its row (decision 0420), the chosen one filled. A row holding one tab is not drawn (decision 0420): Growth with *SUYNL* alone shows its pane without one, while Record's one list for a recording account keeps its tab, which names the list (decision 0323). A list's tab takes a short name: *No Leader Yet*, *No CG Yet*, *Inactive 3+ Months*, *Time Clashes*, *Under 3 Members*.
+- **The page is pale grey and what sits on it is a white card** with rounded corners, a light rule and a faint shadow: a tab's pane, a frame, a control bar, a table. Corners are 8px on a button or field and 12px on a card. Labels, buttons and sidebar items keep their words as written rather than in capitals, and a label is a pill, every label of one kind alike, so colour never tells one from another.
+
+- **A tab** is 13rem from a small screen up (decision 0417), two equal tabs to a row on a phone, an odd last tab filling its row (decision 0420), the chosen one underlined in the accent rather than filled (decision 0423). A row holding one tab is not drawn (decision 0420): Growth with *SUYNL* alone shows its pane without one, while Record's one list for a recording account keeps its tab, which names the list (decision 0323). A list's tab takes a short name: *No Leader Yet*, *No CG Yet*, *Inactive 3+ Months*, *Time Clashes*, *Under 3 Members*.
 - **A choice inside a tab is a pill**: a grey rounded track, the chosen view a white pill with bold accent words, each segment 8rem, sharing the row equally on a phone, so a view never looks like another row of tabs.
 - **A stacked radio choice** is 11rem, wrapping where the column is narrow, and the full width on a phone. A roster's Present and Absent rows are unchanged.
-- **A button** is at least 9rem wide, the full width on a phone, and named by its action in at most about three words in Title Case: *Cancel* to leave without changing anything, *Back* to go back a step, *Save* to save.
-- **A table** has a solid accent header row with white words and every other body row in the pale accent tint, a stripe that grades nothing.
+- **A button** is at least 9rem wide, the full width on a phone, and named by its action in at most about three words in Title Case: *Cancel* to leave without changing anything, *Back* to go back a step, *Save* to save. A screen's main action is filled in the accent and the others are white with their words in the accent (decision 0423).
+- **A table** has a light header row, small grey capitals on the pale grey, and white body rows divided by a rule (decision 0423, replacing decision 0416's solid header and striped rows).
 - **A search box** is one search bar: about thirty characters wide, the full width on a phone, a magnifying glass inside it, and its Search button joined to it, any other button apart.
 - **A list's filters** sit on one row under its search (ruling of 2026-11-01, decision 0417): a choice of one from a few, such as the Pending lists' *Network*, is the pill above, and a filter that is on or off, such as *Late only* or *Only my disciples*, is a rounded chip that keeps its name and shows a tick when on.
 

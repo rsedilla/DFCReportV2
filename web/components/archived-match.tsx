@@ -2,7 +2,7 @@ import { TextLink } from '@/components/ui/text-link';
 import { isWithheld, type DuplicateCandidate, type ShownCandidate } from '@/lib/people';
 
 const TAG_CLASS =
-  'border-ink text-ink mr-2 inline-block border px-1.5 text-xs font-bold tracking-[0.06em] uppercase';
+  'border-line bg-surface text-ink mr-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold';
 
 /**
  * What a candidate the reader may see in full says beneath their name and Member ID

@@ -18,9 +18,8 @@ import { cn } from '@/lib/utils';
  * encoding meeting status, coverage or a leader in colour.
  *
  * The words carry the meaning in both appearances, so colour is never the only
- * indicator (1.4.1). `solid` is `surface` text on `accent` and `outline` is `ink`
- * on `surface` with an `edge` boundary, all pairs `scripts/check-contrast.mjs`
- * already holds.
+ * indicator (1.4.1). `solid` is `accent` text on `accent-tint` and `outline` is `ink`
+ * on `surface` inside a `line` rule, pairs `scripts/check-contrast.mjs` already holds.
  */
 export function Tag({
   appearance = 'solid',
@@ -30,11 +29,12 @@ export function Tag({
   return (
     <span
       className={cn(
-        'inline-flex items-center border px-1.5 py-0.5 text-[0.6875rem] leading-none font-bold',
-        'tracking-[0.07em] whitespace-nowrap uppercase',
+        // A pill with its words as written (decision 0423).
+        'inline-flex items-center rounded-full border px-2.5 py-1 text-xs leading-none font-semibold',
+        'whitespace-nowrap',
         appearance === 'solid'
-          ? 'border-accent bg-accent text-surface'
-          : 'border-edge text-ink bg-transparent',
+          ? 'border-accent-tint bg-accent-tint text-accent'
+          : 'border-line text-ink bg-surface',
         className,
       )}
       {...props}

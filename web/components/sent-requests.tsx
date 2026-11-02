@@ -64,7 +64,7 @@ export function SentRequests() {
               <p className="font-medium">{title(request)}</p>
               <p className="text-muted mt-1 text-sm">{subline(request)}</p>
             </div>
-            <span className="border-ink border px-2 py-1 text-xs font-bold tracking-[0.06em] uppercase">
+            <span className="bg-accent-tint text-ink rounded-full px-3 py-1 text-sm font-semibold">
               {STATE[request.state]}
               {request.state === 'APPROVED' && request.cell?.cell_id ? (
                 <>
