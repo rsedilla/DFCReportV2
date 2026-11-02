@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path';
 import {
   PERSON_IN_SCOPE,
   mockAccepted,
+  mockAccountsAdministrator,
+  mockAdminArea,
   mockAdministrator,
   mockCellCreator,
   mockAbsentPeople,
@@ -1749,6 +1751,35 @@ const SCANS = [
       await expect(page.getByText('Not yet').filter({ visible: true })).toBeVisible();
     },
   },
+  {
+    // Decision 0419: what needs the administrator, as tiles and panels.
+    name: 'admin',
+    route: '/admin',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAccountsAdministrator(page);
+      await mockAdminArea(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Review' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'People and accounts' })).toContainText('1,284');
+    },
+  },
+  {
+    // Every account, searched and filtered by chips, a table from `lg` and cards below it.
+    name: 'admin accounts',
+    route: '/admin?tab=accounts',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAccountsAdministrator(page);
+      await mockAdminArea(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('link', { name: 'Teofilo Ramos' }).filter({ visible: true }).first(),
+      ).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -2143,6 +2174,27 @@ const TARGET_SWEEP = [
     settle: 'Request New Cell',
     minimum: 5,
     recording: true,
+  },
+  // The Admin area is a Whole Church holder of `accounts.manage`'s (decision 0419), so it is
+  // measured as one, after every other account's routes.
+  {
+    // Two tabs, six tiles' links and the eight links of the two panels: **sixteen**.
+    name: 'admin',
+    route: '/admin',
+    settleRole: 'link' as const,
+    settle: 'Review',
+    minimum: 16,
+    admin: true,
+  },
+  {
+    // Two tabs, the search and Search, six chips, a name link per account in the table and in
+    // the cards below `lg` (six), and the two pager buttons: **eighteen**.
+    name: 'admin accounts',
+    route: '/admin?tab=accounts',
+    settleRole: 'link' as const,
+    settle: 'Teofilo Ramos',
+    minimum: 18,
+    admin: true,
   },
 ] as const;
 
@@ -2541,8 +2593,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // One test visits every route in `TARGET_SWEEP`, so the per-test default, which is sized
   // for one page, does not fit it: it timed out between routes while measuring nothing
   // wrong. Each settle below keeps its own expect timeout, so a route that never renders
-  // still fails on that route.
-  test.setTimeout(120_000);
+  // still fails on that route. 180 seconds since the Admin area's two routes (decision 0419):
+  // at 120 the full suite under load ran out on a route before them.
+  test.setTimeout(180_000);
 
   // The month the mocks describe, for the reason `mockDashboard` gives, and after the
   // 27 June meeting the sweep opens for recording.
@@ -2598,6 +2651,10 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     }
     if ('recording' in entry && entry.recording) {
       await mockScreens(page, 'RECORDING');
+    }
+    if ('admin' in entry && entry.admin) {
+      await mockAccountsAdministrator(page);
+      await mockAdminArea(page);
     }
 
     await page.goto(route);
@@ -3104,10 +3161,11 @@ test('the home page lands the Senior Pastors on Reports', async ({ page }) => {
 });
 
 /**
- * The Admin reads the whole church and lands on Record, where its work is (decision 0372):
- * reading the whole church no longer decides it.
+ * A whole-church reader lands on Record (decision 0372): reading the whole church does not decide
+ * it. The Admin lands on the Admin area, which `accounts.manage` decides (decision 0419), and that
+ * is pinned in `admin.spec.ts`; this account holds every Admin capability but that one.
  */
-test('the home page lands the Admin, a whole-church reader, on Record', async ({ page }) => {
+test('the home page lands a whole-church reader without accounts.manage on Record', async ({ page }) => {
   await mockSignedIn(page);
   await mockAdministrator(page);
 

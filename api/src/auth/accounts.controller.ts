@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
 import { Capability } from './authorization/capabilities';
@@ -9,6 +9,8 @@ import {
 } from '../common/idempotency/current-idempotency.decorator';
 import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
+import { AccountsListService } from './accounts-list.service';
+import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 import { CredentialsService } from './credentials.service';
 import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
@@ -19,6 +21,7 @@ import {
   SetFullViewDto,
   SetMovesPeopleDto,
 } from './dto/credentials.dto';
+import { AccountsListDto } from './dto/accounts-list.dto';
 
 import type { Actor } from './authorization/authorization.service';
 
@@ -38,6 +41,7 @@ export class AccountsController {
     private readonly secondSteps: SecondStepService,
     private readonly access: AccountAccessService,
     private readonly credentials: CredentialsService,
+    private readonly accountsList: AccountsListService,
   ) {}
 
   /**
@@ -61,6 +65,31 @@ export class AccountsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * Every account, for the Admin area's Accounts tab (sections 19 and 22, decision 0419).
+   *
+   * A church target, so only a Whole Church holder of `accounts.manage` reads it: the list
+   * names every account in the church, and the Admin area is for that holder alone.
+   */
+  @Get()
+  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
+  async list(@Query() query: AccountsListDto): Promise<Record<string, unknown>> {
+    const { rows, nextCursor } = await this.accountsList.list({
+      q: query.q ?? null,
+      filter: query.filter ?? 'ALL',
+      limit: query.limit ?? 50,
+      cursor: decodeRosterCursor(query.cursor),
+    });
+    return { data: rows, next_cursor: encodeRosterCursor(nextCursor) };
+  }
+
+  /** How many accounts each filter of the list holds (decision 0419), guarded as the list is. */
+  @Get('counts')
+  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
+  async counts(): Promise<Record<string, unknown>> {
+    return this.accountsList.counts();
   }
 
   /**

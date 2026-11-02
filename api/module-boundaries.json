@@ -132,6 +132,13 @@
       "table": "persons",
       "kind": "join",
       "reason": "Decision 0266 gives the Cells list a closed view, searched as the running view is (decision 0261) by Cell ID or by the last leader’s name. Rooted in cells and joined for that predicate, for the same reason as cellsInScope. Section 2 argues the shape; the instances are not enumerated there."
+    },
+    {
+      "file": "src/auth/accounts-list.service.ts",
+      "method": "list",
+      "table": "persons",
+      "kind": "join",
+      "reason": "The Admin area lists every account (decision 0419) in first-name order, searched by name as well as by username and email. Rooted in accounts and joined to persons for that name, as cellsInScope is for a leader’s name."
     }
   ]
 }

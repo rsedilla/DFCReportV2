@@ -158,3 +158,52 @@ export function accountStatusLabel(status: PersonAccount['status']): string {
       ? 'Active'
       : 'Disabled';
 }
+
+/** The Admin area's Accounts filters (decision 0419); `ALL` is every account. */
+export const ACCOUNT_FILTERS = [
+  'ALL',
+  'ACTIVE',
+  'PENDING_ACTIVATION',
+  'PAUSED',
+  'NO_SECOND_STEP',
+  'DISABLED',
+] as const;
+
+export type AccountFilter = (typeof ACCOUNT_FILTERS)[number];
+
+/** One row of the Admin area's Accounts list (decision 0419). */
+export interface AccountListRow {
+  account_id: string;
+  person_id: string;
+  name: string;
+  email: string;
+  username: string | null;
+  roles: AccountRole[];
+  status: PersonAccount['status'];
+  created_at: string;
+  /** Sign-in paused after ten wrong passwords (decision 0413), until this instant. */
+  paused_until: string | null;
+  second_step: { required: boolean; set_up_at: string | null };
+  full_view: boolean;
+  approves_cells: boolean;
+  moves_people: boolean;
+}
+
+export async function listAccounts(
+  params: { q?: string; filter?: AccountFilter; cursor?: string | null },
+  signal?: AbortSignal,
+): Promise<{ data: AccountListRow[]; next_cursor: string | null }> {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.filter && params.filter !== 'ALL') query.set('filter', params.filter);
+  if (params.cursor) query.set('cursor', params.cursor);
+  const suffix = query.toString();
+  return authenticatedRequest(`/api/v1/accounts${suffix ? `?${suffix}` : ''}`, { signal });
+}
+
+/** How many accounts each filter holds, keyed by the filter in lower case. */
+export type AccountCounts = Record<Lowercase<AccountFilter>, number>;
+
+export async function getAccountCounts(signal?: AbortSignal): Promise<AccountCounts> {
+  return authenticatedRequest<AccountCounts>('/api/v1/accounts/counts', { signal });
+}

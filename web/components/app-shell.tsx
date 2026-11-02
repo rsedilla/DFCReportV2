@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   LayoutGrid,
   type LucideIcon,
+  ShieldCheck,
   Sprout,
   Trophy,
   Users,
@@ -123,6 +124,8 @@ const SUYNL: NavEntry = {
   icon: Sprout,
   matches: ['/growth'],
 };
+/** The Admin area (decision 0419): set apart from the items above, never one of them. */
+const ADMIN: NavEntry = { href: '/admin', label: 'Admin', icon: ShieldCheck, matches: ['/admin'] };
 const ACCOUNT: NavEntry = {
   href: '/session',
   label: 'Account and session',
@@ -215,6 +218,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // which today is the Admin and the two Senior Pastors.
   const conquest =
     me.data !== undefined && holdsWholeChurch(me.data, 'conquest.view_subtree') ? [CONQUEST] : [];
+  // **The Admin area follows `accounts.manage` at Whole Church** (decision 0419), by default the
+  // Admin alone, and the API guards every read it makes with the same capability.
+  const administers = me.data !== undefined && holdsWholeChurch(me.data, 'accounts.manage');
   const links = me.isPending
     ? []
     : [
@@ -255,7 +261,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   let longest = -1;
 
   // On the note no item is current: the page is none of them.
-  for (const link of offered ? [...links, ACCOUNT] : []) {
+  for (const link of offered ? [...links, ACCOUNT, ...(administers ? [ADMIN] : [])] : []) {
     for (const match of link.matches) {
       const length = matchedLength(pathname, match);
 
@@ -311,6 +317,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const accountActive = current?.href === ACCOUNT.href;
+  const adminActive = current?.href === ADMIN.href;
 
   const names = links.map((link) => link.label);
   const screensLine =
@@ -331,6 +338,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="truncate text-base font-bold tracking-tight">
             {current?.label ?? APPLICATION_NAME}
           </p>
+          {/* **On a phone the Admin area is a button here, beside the account** (decision 0419),
+              not a seventh button of the bar along the bottom. */}
+          {administers ? (
+            <Link
+              href={ADMIN.href}
+              aria-current={adminActive ? 'page' : undefined}
+              className={cn(
+                'focus-visible:outline-sidebar-current-ink ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-sm font-bold',
+                'focus-visible:outline-2 focus-visible:-outline-offset-2',
+                adminActive
+                  ? 'bg-sidebar-current shadow-[inset_0_-3px_0_var(--sidebar-current-ink)]'
+                  : 'hover:bg-sidebar-current',
+              )}
+            >
+              <ShieldCheck aria-hidden="true" strokeWidth={1.5} className="size-6" />
+              {ADMIN.label}
+            </Link>
+          ) : null}
           <Link
             href={ACCOUNT.href}
             aria-current={accountActive ? 'page' : undefined}
@@ -388,7 +413,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               it sits under the person's name at the foot of the sidebar; below `lg` it
               is the button in the bar across the top, and this block is not rendered.
             */}
-            <div className="lg:border-sidebar-ink/40 hidden lg:mt-auto lg:flex lg:flex-col lg:border-t lg:pt-4">
+            {/* **On a laptop the Admin area is the last item, below a rule** (decision 0419), apart
+                from the daily items above it. Its own landmark, so Main still lists those alone. */}
+            {administers ? (
+              <div className="lg:border-sidebar-ink/40 hidden lg:mt-auto lg:flex lg:flex-col lg:border-t lg:pt-4 lg:pb-4">
+                <p className="text-sidebar-ink px-3 pb-1 text-[0.6875rem] font-medium">
+                  For the administrator
+                </p>
+                <nav aria-label="Administration" className="flex flex-col">
+                  {renderItem(ADMIN)}
+                </nav>
+              </div>
+            ) : null}
+            <div
+              className={cn(
+                'lg:border-sidebar-ink/40 hidden lg:flex lg:flex-col lg:border-t lg:pt-4',
+                administers ? null : 'lg:mt-auto',
+              )}
+            >
               {me.data?.first_name ? (
                 <p className="text-sidebar-current-ink px-3 text-sm">{me.data.first_name}</p>
               ) : null}

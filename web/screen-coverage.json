@@ -202,6 +202,14 @@
       "screen": "web/components/correct-sex-dialog.tsx"
     },
     {
+      "route": "GET /api/v1/accounts",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/accounts/counts",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
       "route": "GET /api/v1/accounts/for-person/:person_id",
       "screen": "web/components/person-account.tsx"
     },
