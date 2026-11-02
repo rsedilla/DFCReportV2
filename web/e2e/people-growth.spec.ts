@@ -281,3 +281,44 @@ test('nothing in the frame is graded by colour; only its links carry the accent'
 
   expect(coloured).toEqual([]);
 });
+
+/**
+ * Three columns from 1536px, and the two of today below it (decision 0426). Measured by
+ * where each box's heading starts, since what the decision fixes is which column holds it.
+ */
+test.describe('a person’s page on a wide screen (decision 0426)', () => {
+  const box = async (page: Page, name: string) =>
+    (await page.getByRole('heading', { name, exact: true }).boundingBox())!;
+
+  test('sets DCC, Growth over the Cell, and the details three across at 1920', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await openProfile(page, BOTH);
+    await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cell Group Information' })).toBeVisible();
+
+    const dcc = await box(page, 'Recent Sundays');
+    const growth = await box(page, 'Growth');
+    const cell = await box(page, 'Cell Group Information');
+    const details = await box(page, 'Details');
+    expect(dcc.x).toBeLessThan(growth.x);
+    expect(growth.x).toBeLessThan(details.x);
+    expect(cell.x).toBe(growth.x);
+    expect(cell.y).toBeGreaterThan(growth.y);
+  });
+
+  test('keeps two columns at 1440, Growth under DCC and the Cell over the details', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openProfile(page, BOTH);
+    await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible();
+
+    const dcc = await box(page, 'Recent Sundays');
+    const growth = await box(page, 'Growth');
+    const cell = await box(page, 'Cell Group Information');
+    const details = await box(page, 'Details');
+    expect(growth.x).toBe(dcc.x);
+    expect(cell.x).toBe(details.x);
+    expect(details.x).toBeGreaterThan(dcc.x);
+  });
+});
