@@ -73,7 +73,7 @@ const SENIOR_PASTOR: RoleDefaults = {
   // is what makes section 10's "at any scope" true.
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
-  [Capability.AuditView]: ScopeType.WholeChurch,
+  // `audit.view` is the Admin's alone since decision 0419: the Audit Log is the Admin area's.
   [Capability.ConquestViewSubtree]: ScopeType.WholeChurch,
   [Capability.SuynlViewSubtree]: ScopeType.WholeChurch,
   [Capability.TrainingViewSubtree]: ScopeType.WholeChurch,

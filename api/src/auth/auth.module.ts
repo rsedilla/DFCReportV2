@@ -13,6 +13,7 @@ import { AccountAccessService } from './account-access.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { AccountTokensService } from './account-tokens.service';
 import { AccountsController } from './accounts.controller';
+import { AccountsListService } from './accounts-list.service';
 import { AccountsRepository } from './accounts.repository';
 import { AuthController } from './auth.controller';
 import { CredentialsService } from './credentials.service';
@@ -55,6 +56,7 @@ import { UsernamesService } from './usernames.service';
   providers: [
     AccountAccessService,
     AccountProvisioningService,
+    AccountsListService,
     AccountTokensService,
     AccountsRepository,
     AuthService,

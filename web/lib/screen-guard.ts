@@ -43,6 +43,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/conquest(\/|$)/) || at(/^\/(growth|reports)\/conquest$/)) {
     return holdsWholeChurch(me, 'conquest.view_subtree');
   }
+  // The Admin area opens for whoever its item is drawn for: a holder of `accounts.manage` at
+  // Whole Church (decision 0419).
+  if (at(/^\/admin(\/|$)/)) {
+    return holdsWholeChurch(me, 'accounts.manage');
+  }
   // Every account has its own Account page and Record, and a Sunday's checklist from Record.
   if (at(/^\/(session|dashboard|dcc)(\/|$)/)) {
     return true;

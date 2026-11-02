@@ -148,6 +148,33 @@ export async function mockWithoutEditBasic(page: Page): Promise<void> {
  * (decision 0296).
  */
 export async function mockAdministrator(page: Page): Promise<void> {
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities: administratorCapabilities() })),
+  );
+}
+
+/**
+ * The administrator above, also holding `accounts.manage` at Whole Church as the role does,
+ * which is what draws the Admin item and lands the account on it (decision 0419). Separate from
+ * `mockAdministrator` so that no case written before that ruling meets the item.
+ */
+export async function mockAccountsAdministrator(page: Page): Promise<void> {
+  const capabilities = [
+    ...administratorCapabilities(),
+    {
+      capability: 'accounts.manage',
+      scope_type: 'WHOLE_CHURCH',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
+  );
+}
+
+function administratorCapabilities() {
   const wholeChurch = (capability: string) => ({
     capability,
     scope_type: 'WHOLE_CHURCH',
@@ -170,10 +197,7 @@ export async function mockAdministrator(page: Page): Promise<void> {
     // Merging two records of one person is the Admin's alone (decision 0408).
     wholeChurch('people.merge'),
   ];
-
-  await page.route('**/api/v1/auth/me', (route) =>
-    route.fulfill(json({ ...ME, roles: ['ADMIN'], capabilities })),
-  );
+  return capabilities;
 }
 
 /**
@@ -1125,4 +1149,111 @@ export async function mockSignInRefused(page: Page): Promise<void> {
 /** A request that succeeds with no body, as the 204 endpoints do. */
 export async function mockAccepted(page: Page, pattern: string): Promise<void> {
   await page.route(pattern, (route) => route.fulfill({ status: 204, body: '' }));
+}
+
+/** One row of the Admin area's Accounts list (decision 0419), invented. */
+export const ADMIN_ACCOUNT_ROWS = [
+  {
+    account_id: '3f1b7c6e-0000-4000-8000-000000000901',
+    person_id: '3f1b7c6e-0000-4000-8000-000000000911',
+    name: 'Teofilo Ramos',
+    email: 'teofilo@example.invalid',
+    username: 'teofilo',
+    roles: ['LEADER'],
+    status: 'ACTIVE',
+    created_at: '2026-10-01T02:00:00.000Z',
+    paused_until: null,
+    second_step: { required: false, set_up_at: null },
+    full_view: true,
+    approves_cells: false,
+    moves_people: true,
+  },
+  {
+    account_id: '3f1b7c6e-0000-4000-8000-000000000902',
+    person_id: '3f1b7c6e-0000-4000-8000-000000000912',
+    name: 'Herminia Lazaro',
+    email: 'herminia@example.invalid',
+    username: null,
+    roles: ['LEADER'],
+    status: 'PENDING_ACTIVATION',
+    created_at: '2026-10-28T02:00:00.000Z',
+    paused_until: null,
+    second_step: { required: false, set_up_at: null },
+    full_view: false,
+    approves_cells: false,
+    moves_people: false,
+  },
+  {
+    account_id: '3f1b7c6e-0000-4000-8000-000000000903',
+    person_id: '3f1b7c6e-0000-4000-8000-000000000913',
+    name: 'Marilou Santos',
+    email: 'admin@example.invalid',
+    username: 'marilou',
+    roles: ['ADMIN'],
+    status: 'ACTIVE',
+    created_at: '2026-09-01T02:00:00.000Z',
+    paused_until: '2026-11-02T03:00:00.000Z',
+    second_step: { required: true, set_up_at: '2026-09-01T03:00:00.000Z' },
+    full_view: false,
+    approves_cells: false,
+    moves_people: false,
+  },
+];
+
+/**
+ * Every read the Admin area makes (decision 0419), answered with invented figures. Returns the
+ * query strings the accounts list was asked with.
+ */
+export async function mockAdminArea(page: Page): Promise<string[]> {
+  const asked: string[] = [];
+  const three = [{}, {}, {}];
+
+  await page.route('**/api/v1/accounts/counts', (route) =>
+    route.fulfill(
+      json({ all: 221, active: 212, pending_activation: 6, paused: 1, no_second_step: 2, disabled: 3 }),
+    ),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/v1/accounts',
+    (route) => {
+      asked.push(new URL(route.request().url()).search);
+      return route.fulfill(json({ data: ADMIN_ACCOUNT_ROWS, next_cursor: null }));
+    },
+  );
+  await page.route((url) => url.pathname === '/api/v1/cells/leadership-requests', (route) =>
+    route.fulfill(json({ data: [{}, {}], next_cursor: null })),
+  );
+  await page.route('**/api/v1/people/awaiting-reassignment*', (route) =>
+    route.fulfill(json({ data: three, next_cursor: null })),
+  );
+  await page.route('**/api/v1/cells/meetings/pending*', (route) =>
+    route.fulfill(json({ data: three, next_cursor: 'more' })),
+  );
+  await page.route('**/api/v1/dcc/pending-leaders*', (route) =>
+    route.fulfill(json({ data: [{}, {}], next_cursor: null })),
+  );
+  await page.route('**/api/v1/cells/counts', (route) =>
+    route.fulfill(json({ in_scope: 186, led_by_me: 0 })),
+  );
+  await page.route('**/api/v1/reports/church-counts*', (route) =>
+    route.fulfill(
+      json({
+        period: '2026-11',
+        current: true,
+        at: '2026-11-02T02:00:00.000Z',
+        whole_church: {
+          cell_groups: 186,
+          youth: 40,
+          young_pro: 50,
+          couple: 30,
+          cell_leaders: 180,
+          people: 1284,
+        },
+        tables: null,
+        others: null,
+      }),
+    ),
+  );
+
+  return asked;
 }
