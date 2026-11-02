@@ -3001,9 +3001,10 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
 
   // A long tab label squeezed its count narrower than the number, which ran over the box's
   // edge (owner, 2026-10-19). The widest count a list shows is "50+", so every box is given
-  // it and measured, on the narrowest phone and on a computer.
+  // it and measured, on the narrowest phone and on a computer. Every count is one pale pill,
+  // the chosen tab's included (decision 0423), so none is told from another by its colour.
   for (const width of [320, 1280]) {
-    test(`every count box holds "50+" at ${width}px, filled, the chosen tab's the other way round`, async ({
+    test(`every count box holds "50+" at ${width}px, every one the same filled pill`, async ({
       page,
     }) => {
       await page.clock.setFixedTime(JUNE_20);
@@ -3016,20 +3017,19 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
       const measured = await boxes.evaluateAll((spans) =>
         spans.map((span) => {
           span.textContent = '50+';
-          const button = getComputedStyle(span.parentElement!);
           const box = getComputedStyle(span);
 
           return {
             fits: span.scrollWidth <= span.clientWidth,
-            // Filled with its tab's words' colour: the accent, or on the chosen tab the page's.
-            filled: box.backgroundColor === button.color,
+            fill: box.backgroundColor,
           };
         }),
       );
 
       expect(measured.length).toBeGreaterThan(1);
       expect(measured.every((box) => box.fits)).toBe(true);
-      expect(measured.every((box) => box.filled)).toBe(true);
+      expect(measured[0].fill).not.toBe('rgba(0, 0, 0, 0)');
+      expect(new Set(measured.map((box) => box.fill)).size).toBe(1);
     });
   }
 

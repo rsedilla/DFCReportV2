@@ -161,7 +161,7 @@ export function RangeNavigator({
       {quiet ? (
         open ? <span className="text-muted text-sm">· so far</span> : null
       ) : open === undefined ? null : (
-        <span className="border-edge border px-2 py-0.5 text-xs font-bold tracking-[0.07em] uppercase">
+        <span className="border-line bg-surface rounded-full border px-2.5 py-0.5 text-xs font-semibold">
           {open ? periodOpenUntilLabel(rangeEndOf(kind, start)) : 'Closed'}
         </span>
       )}

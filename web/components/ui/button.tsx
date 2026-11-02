@@ -29,8 +29,9 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-accent text-surface border-accent',
-  secondary: 'bg-surface text-ink border-edge hover:bg-raised',
+  primary: 'bg-accent text-surface border-accent shadow-sm',
+  // Quiet beside the one filled action (decision 0423): white, its words in the accent.
+  secondary: 'bg-surface text-accent border-line shadow-sm hover:bg-raised',
   quiet: 'bg-transparent text-ink border-transparent hover:bg-raised',
 };
 
@@ -47,9 +48,9 @@ export function buttonClasses(variant: NonNullable<ButtonProps['variant']> = 'pr
   return cn(
     // One size (decision 0416): at least 9rem from `sm`, the full width on a phone.
     'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-4 text-center sm:w-auto sm:min-w-36',
-    // A label rather than a sentence: small, bold, uppercase and tracked, which is
-    // what distinguishes an action from the prose around it without a colour.
-    'text-xs font-bold tracking-[0.07em] uppercase transition-colors',
+    // Its words as written, in Title Case (decision 0423): the shape of a button, rather than
+    // capitals, is what tells an action from the prose around it.
+    'text-sm font-semibold transition-colors',
     'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
     'disabled:cursor-not-allowed disabled:opacity-60',
     VARIANTS[variant],

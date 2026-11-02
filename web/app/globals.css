@@ -88,16 +88,16 @@
     'Segoe UI', Roboto, sans-serif;
 
   /*
-   * Square corners everywhere: cards, inputs, buttons, tags and dialogs. Setting
-   * the scale to zero here, rather than removing `rounded-*` from each call site,
-   * is what keeps a screen written next month square without anyone remembering.
+   * Rounded corners, one scale for every screen (decision 0423, replacing the square
+   * corners kept since 2026-09-14): 8px on a button or field, 12px on a card or a pane.
+   * Set here rather than at each call site, so a screen written next month matches.
    */
-  --radius-xs: 0;
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
 }
 
 :root {
@@ -108,10 +108,10 @@
   --ink: #111111;
   --muted: #6b6b6b;
   /*
-   * A soft green, as plain to see as the grey it replaced (owner, 2026-10-19, after darkening
-   * it from #d6d6d6 on 2026-10-09). Decorative, so 1.4.11 does not bind it.
+   * A light green-grey rule between rows and round cards (decision 0423), the cards themselves
+   * standing on the `raised` page. Decorative, so 1.4.11 does not bind it.
    */
-  --line: #6fa585;
+  --line: #dbe5df;
   /*
    * Emerald, the sidebar's colour (owner, 2026-10-19), on fields, buttons and boxes. A focused
    * one stays distinct: its accent ring sits 2px outside the border, past a gap of surface.
@@ -167,7 +167,7 @@
     --raised: #1c1c1c;
     --ink: #f2f2f2;
     --muted: #a6a6a6;
-    --line: #4a7a5c;
+    --line: #2f3d35;
     --edge: #3f9a66;
     /* The church website's own light green. */
     --accent: #1dce78;

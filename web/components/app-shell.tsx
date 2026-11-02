@@ -299,7 +299,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           'text-[0.6875rem] leading-none font-bold',
           // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
           'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
-          'lg:text-[0.8125rem] lg:tracking-[0.08em] lg:uppercase',
+          // Its words as written, on a rounded row (decision 0423).
+          'lg:rounded-lg lg:text-[0.9375rem] lg:font-semibold',
           // **The current item is white on a darker emerald, with a white bar, and the
           // others mint on emerald** (owner, 2026-10-19, replacing red on pale red): the bar
           // along the top of a tab, down the left of a sidebar row. The bar is a change of
@@ -327,7 +328,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <RequireSession>
-      <div className="min-h-dvh lg:flex">
+      <div className="bg-raised min-h-dvh lg:flex">
         {/*
           **The bar across the top below `lg`.** It names where you are and holds the
           account, which is not a navigation item (ruling of 2026-09-14). The section

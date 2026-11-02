@@ -391,7 +391,7 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
     case 'COMPLETED':
       return (
         // Its own red, which section 19 names, now that the accent is green.
-        <span className="bg-tag-red-tint text-tag-red inline-block px-2 py-0.5 text-xs font-bold tracking-[0.08em] uppercase">
+        <span className="bg-tag-red-tint text-tag-red inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold">
           Completed
         </span>
       );

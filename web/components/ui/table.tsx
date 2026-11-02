@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
  * wider than a 320px phone, and it scrolls inside this frame rather than making
  * the page scroll sideways, which `e2e/accessibility.spec.ts` fails on.
  *
- * Bold (decision 0416): header cells are labels, small, bold, uppercase and tracked, in
- * white on a solid accent row, and every other body row is the pale accent tint. Body rows
- * are divided by the decorative `line`.
+ * Light (decision 0423, replacing decision 0416's solid header): a white card with rounded
+ * corners, header cells small, bold, uppercase and tracked in `muted` on `raised`, and body
+ * rows white, divided by the decorative `line`.
  *
  * **From `lg` the header row stays pinned to the top of the window while the rows scroll**
  * (owner's choice of 2026-09-15). Two things make that work, and removing either silently
@@ -39,7 +39,12 @@ export function Table({
   children: ReactNode;
 }) {
   return (
-    <div className={cn('overflow-x-auto lg:overflow-visible', className)}>
+    <div
+      className={cn(
+        'border-line bg-surface overflow-x-auto rounded-xl border lg:overflow-visible',
+        className,
+      )}
+    >
       <table className={cn('w-full border-collapse text-left text-sm', tableClassName)}>
         <caption className="sr-only">{caption}</caption>
         {children}
@@ -53,8 +58,11 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
     <th
       scope="col"
       className={cn(
-        'border-edge text-surface bg-accent border-b-2 px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
-        'lg:sticky lg:top-0 lg:z-10 lg:border-b-0 lg:shadow-[inset_0_-2px_0_var(--color-edge)]',
+        // A light header (decision 0423): small muted capitals on the raised grey, so the
+        // figures below it, not the header, are what the eye lands on.
+        'border-line text-muted bg-raised border-b px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
+        'lg:sticky lg:top-0 lg:z-10 lg:border-b-0 lg:shadow-[inset_0_-1px_0_var(--color-line)]',
+        'first:rounded-tl-xl last:rounded-tr-xl',
         className,
       )}
       {...props}
@@ -63,4 +71,4 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
 }
 
 /** A body row, divided from the next by the decorative rule, every other one tinted. */
-export const rowClasses = 'border-line even:bg-accent-tint border-b last:border-b-0';
+export const rowClasses = 'border-line border-b last:border-b-0';
