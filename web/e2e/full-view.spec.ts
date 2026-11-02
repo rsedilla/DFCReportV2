@@ -276,9 +276,10 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/people');
 
     await expect(mainNavigation(page).getByRole('link', { name: 'Cells' })).toBeVisible();
-    // The People tab alone, in the same frame (owner, 2026-10-19).
+    // The People tab and My People (decision 0422).
     await expect(page.getByRole('navigation', { name: 'People' }).getByRole('link')).toHaveText([
       'Add People',
+      'My People',
     ]);
     await expect(page.getByRole('link', { name: 'Branch', exact: true })).toHaveCount(0);
   });

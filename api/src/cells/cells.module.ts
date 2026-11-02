@@ -7,6 +7,7 @@ import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
+import { MyPeopleService } from './my-people.service';
 import { CellsController } from './cells.controller';
 import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
@@ -81,6 +82,7 @@ import { PersonArchiveCellsAdapter } from './person-archive.adapter';
   controllers: [CellsController],
   providers: [
     CellsService,
+    MyPeopleService,
     CellsLeadershipRequestService,
     CellsIndexService,
     CellsMembershipService,

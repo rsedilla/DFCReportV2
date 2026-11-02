@@ -19,12 +19,15 @@ import { cn } from '@/lib/utils';
  */
 const TABS = [
   // Named for what the tab is for (owner, 2026-10-15, decision 0354); the sidebar item stays People.
-  { href: '/people', label: 'Add People', name: undefined, fullOnly: false },
+  { href: '/people', label: 'Add People', name: undefined, fullOnly: false, recordingOnly: false },
+  // A leader without Full view's people two levels down (decision 0422); a Full view leader
+  // reads the same list inside Family Tree.
+  { href: '/people/mine', label: 'My People', name: undefined, fullOnly: false, recordingOnly: true },
   // Moved here from Record (decision 0381), with its count.
-  { href: '/people/awaiting-leader', label: 'No Leader Yet', name: undefined, fullOnly: true },
-  { href: '/family-tree', label: 'Family Tree', name: undefined, fullOnly: true },
+  { href: '/people/awaiting-leader', label: 'No Leader Yet', name: undefined, fullOnly: true, recordingOnly: false },
+  { href: '/family-tree', label: 'Family Tree', name: undefined, fullOnly: true, recordingOnly: false },
   // No count (owner, 2026-10-16, decision 0397).
-  { href: '/people/absent', label: 'Absent 3+ Months', name: undefined, fullOnly: true },
+  { href: '/people/absent', label: 'Absent 3+ Months', name: undefined, fullOnly: true, recordingOnly: false },
 ] as const;
 
 export function PeopleTabs({
@@ -44,11 +47,14 @@ export function PeopleTabs({
   // Senior Pastors reach a person's page from a name and have no People item, so no tab.
   const offered = useOffered();
   const shown = TABS.filter(
-    (tab) => (!tab.fullOnly || me.data?.screens === 'FULL') && offered(tab.href),
+    (tab) =>
+      (!tab.fullOnly || me.data?.screens === 'FULL') &&
+      (!tab.recordingOnly || me.data?.screens === 'RECORDING') &&
+      offered(tab.href),
   );
 
-  // **The recording screens have the People tab alone** (decision 0323), as one tab in the same
-  // frame (owner, 2026-10-19); Family Tree is the Full view screens' (decision 0341), keyed
+  // **The recording screens have the People tab and My People** (decisions 0323 and 0422);
+  // Family Tree is the Full view screens' (decision 0341), keyed
   // on the screens the server names and never on a
   // capability. No tabs until the server names the screens either, so no tab flashes (owner,
   // 2026-10-11). The pane stays where it is either way, so the screen inside it is not

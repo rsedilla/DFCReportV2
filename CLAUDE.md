@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-02, the trigger being decision 0421: of 420 files, 419 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0421 each moved the first two and
+2026-11-02, the trigger being decision 0422: of 421 files, 420 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0422 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-02 and triggered by 0421, and was left stale by 0422 the same day. The one before that was dated
 2026-11-02 and triggered by 0420, and was left stale by 0421 the same day. The one before that was dated
 2026-11-02 and triggered by 0419, and was left stale by 0420 the same day. The one before that was dated
 2026-11-01 and triggered by 0418, and was left stale by 0419 the next day. The one before that was dated
@@ -884,6 +885,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-02 — [The Admin area: who sees it, where it sits, and its Accounts list](docs/decisions/0419-the-admin-area.md)
 - 2026-11-02 — [Fewer tabs: Needs Attention on Cells, Attendance on Reports](docs/decisions/0420-fewer-tabs.md)
 - 2026-11-02 — [Account is as wide as a list, and lists no permissions](docs/decisions/0421-account-full-width.md)
+- 2026-11-02 — [My People: a leader's people two levels down, as a plain list](docs/decisions/0422-my-people.md)
 
 ### Open — awaiting a ruling
 
