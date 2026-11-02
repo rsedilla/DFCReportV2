@@ -3,7 +3,7 @@
 ## Purpose
 Use this skill when designing, implementing, reviewing, or extending the G12 Church Management System. The system manages people, pastoral hierarchy, Men's and Women's Networks, DCC attendance, Cell Group attendance, Cell Leaders, network development, authentication, authorization, reporting, and drill-down analytics.
 
-The system is web-first and must remain API-first so Android and iOS applications can be added later without duplicating business logic.
+The system is web-first and API-first. One web application serves laptops and phones, and on a phone it is installed to the home screen as the phone app; no Android or iOS app is built for the App Store or Play Store (owner ruling of 2026-11-01, decision 0424). Business logic lives in the API, never in the web application.
 
 ---
 
@@ -30,9 +30,8 @@ The system is web-first and must remain API-first so Android and iOS application
 Preferred logical architecture:
 
 ```text
-Desktop Web  ──┐
-Mobile Web   ──┤   three client surfaces, used concurrently
-Android/iOS  ──┘
+Desktop Web  ──┐   two client surfaces, used concurrently
+Mobile Web   ──┘   (in the browser, or installed to the home screen)
                |
                v
         REST API /api/v1                  separately deployable
@@ -66,7 +65,7 @@ Two reasons decide the backend, and both come from requirements rather than tast
 
 **Authorization must be enforced structurally.** Section 7 makes the API the sole authority, and Section 22 sketches roughly forty endpoints, each needing a capability check and a scope check. NestJS guards make that declarative and reviewable in one line, and an endpoint that fails to declare a capability fails closed. On a team, the alternative — remembering to call a check inside every handler — erodes: the check is only as reliable as the least familiar developer writing the newest route.
 
-**Mobile clients cannot be force-updated.** An installed app keeps calling `/api/v1` for months after the web client has moved on, and an iOS release passes through review before it can reach anyone. The API must therefore be deployable independently of the web application. If the API ships inside the web app, no web change can be released without redeploying the API that every phone depends on. Separate deployables is a requirement here, not a preference.
+**The API is deployed apart from the web application.** This was first argued from native apps that cannot be force-updated, and there will be none (decision 0424). The separation stays: the web application holds no API routes and no rules (below), so the API is the one place a rule lives, and an API fix that changes no shape ships without a web build. A change that narrows the API ships with the web application's matching change in one deployment (Section 22).
 
 One reason decides the migration and data-access tooling, and it is the same reason.
 
@@ -74,7 +73,7 @@ One reason decides the migration and data-access tooling, and it is the same rea
 
 The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
 
-**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. This says nothing about the native clients: their framework is not chosen, and a platform toolkit is a different question from a web component library. That ruling is open, and is indexed as open in `CLAUDE.md`.
+**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. There is no native client for it to bind (decision 0424).
 
 The ordinary reason is that they bring a second styling engine, which duplicates and fights the first.
 
@@ -86,17 +85,17 @@ The collision is that those frameworks make the prohibited use the *easy* one. `
 
 Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. The web application conforms to **WCAG 2.2 Level AA**, with one stated exception (Section 23, Accessibility), so the primitives are chosen for whether they meet it rather than for how they look.
 
-### The frontend is a client, like the phones
+### The frontend is a client
 
-The Next.js application contains **no API routes and no server actions**. It consumes `/api/v1` exactly as the Android and iOS apps will.
+The Next.js application contains **no API routes and no server actions**. It consumes `/api/v1` as any client would.
 
-Any logic placed in the web application is logic the mobile apps do not have. Core business rules live in the backend domain layer so that all three surfaces behave identically — and so that a rule fixed once is fixed everywhere.
+Any logic placed in the web application is logic the API does not enforce. Core business rules live in the backend domain layer so that a laptop and a phone behave identically — and so that a rule fixed once is fixed everywhere.
 
 If this boundary proves hard to hold, replace Next.js with a plain React SPA, which removes the option entirely. The framework matters less than the boundary.
 
-### Three surfaces, used together
+### Two surfaces, used together
 
-Desktop web, mobile web, and the native apps are used concurrently, by the same people and by different people against the same records. Mobile web is the bridge: leaders will open the web application on their phones long before a native app exists, so responsive design is an immediate requirement rather than preparation for the future.
+Desktop web and mobile web are used concurrently, by the same people and by different people against the same records, so responsive design is a requirement from the first screen. **The web application is the phone app** (owner ruling of 2026-11-01, decision 0424): a leader adds it to the home screen, where it opens full screen with its own icon, and no App Store or Play Store app is built. It keeps no offline copy of itself, so it opens the version on the server every time.
 
 The API must therefore be stateless, must support several concurrent sessions per account (Section 6), and must detect write conflicts rather than resolving them silently (Sections 14 and 23).
 
@@ -1339,7 +1338,7 @@ alone. *This section said "Do not require 2-step verification/MFA in V1" until t
   Senior Pastor's step. An administrator's step is reset only by a server command, never
   through the product, so no administrator can remove another's. A reset ends the account's
   sessions.
-- **It binds every client.** The step is part of sign-in at the API, so the Android and iOS apps (Section 2) meet it exactly as the web does, and setup there offers the key as text beside the QR code.
+- **It binds every client.** The step is part of sign-in at the API, so it binds the app installed on a phone (Section 2) exactly as a browser, and setup offers the key as text beside the QR code for a person setting it up on the phone that will read it.
 - **The authenticator secret is stored encrypted**, under a key held in the environment rather than the database (Section 24). It is the one credential stored in the database that the server must read back, so it cannot be hashed; a copy of the database or a backup yields no usable secret. The API refuses to start without the key.
 - **A code is accepted once, and guessing is bounded.** A used code is refused; a sign-in
   that has passed the password allows five wrong codes before it must start again; Section 24's
@@ -1359,7 +1358,7 @@ That is what makes a password permissible. A password *is* a cognitive function 
 
 ### Tokens, not browser sessions
 
-Authentication is token-based from the first release: a short-lived access token plus a refresh token. Do not build a cookie-and-server-session model for the web application and plan to add tokens for mobile later. The API serves three client surfaces (Section 2), and only two of them are browsers.
+Authentication is token-based from the first release: a short-lived access token plus a refresh token. Do not build a cookie-and-server-session model for the web application. The API answers every client the same way (Section 2), and tokens keep it free of anything a browser alone provides.
 
 ### Several devices at once
 
@@ -2260,7 +2259,7 @@ Leaders may search the Person directory by name. **It finds the searcher's own p
 
 **A church-wide search is bounded and recorded** (ruling of 2026-09-28, decision 0303). It returns at most 20 people per request, and a `limit` above 20 is refused rather than cut. An account may make at most 30 a minute. Each one is written to the audit log with the term as searched and how many people it returned, and a refused search writes nothing (Section 21). This binds every request for the church-wide directory, which since decision 0389 only a Whole Church scope may make.
 
-**Who opened or looked up a person's record is kept for a year, and shown to the Admin** (owner, 2026-11-01, decision 0414). Each read of a person's full record (`GET /api/v1/people/{id}`) is kept, with who and when, whichever screen asked: the person's page, and also the screens that read a record to name or check a person, such as a Reports or Branch drill-down or a Cell dialog. Lists and searches are not kept, nor a read of one's own record, nor a refused one. **So a list or search row carries no birthday, civil status or mobile number** (owner, 2026-11-01): no list shows them, and a list that carried them would hand them over a page at a time with nothing kept. They come only with reading the one record. Section 22 permits the narrowing before the first native client (decision 0328), and the web application changed with it. A second read of the same record by the same person within ten minutes is the same one. The Admin reads it at the foot of the person's page, *Who opened this record*, newest first, through `GET /api/v1/people/{id}/views` under `accounts.manage` at Whole Church, which by default only the Admin holds (Section 7). A viewer who is the person's pastoral leader now is marked so. A row is removed at the first read after it is a year old, and never shown once it is. It is written once the record has been read, and a failure to write it is logged and never fails the answer. **When one person reads more than a hundred different people's records in an hour, each active Admin is emailed**, at most once a day for one person and twenty times a day in all (Manila days), as decision 0413 caps the sign-in alert; a send that fails still spends that day's alert.
+**Who opened or looked up a person's record is kept for a year, and shown to the Admin** (owner, 2026-11-01, decision 0414). Each read of a person's full record (`GET /api/v1/people/{id}`) is kept, with who and when, whichever screen asked: the person's page, and also the screens that read a record to name or check a person, such as a Reports or Branch drill-down or a Cell dialog. Lists and searches are not kept, nor a read of one's own record, nor a refused one. **So a list or search row carries no birthday, civil status or mobile number** (owner, 2026-11-01): no list shows them, and a list that carried them would hand them over a page at a time with nothing kept. They come only with reading the one record. Section 22 permitted the narrowing (decision 0328), and the web application changed with it. A second read of the same record by the same person within ten minutes is the same one. The Admin reads it at the foot of the person's page, *Who opened this record*, newest first, through `GET /api/v1/people/{id}/views` under `accounts.manage` at Whole Church, which by default only the Admin holds (Section 7). A viewer who is the person's pastoral leader now is marked so. A row is removed at the first read after it is a year old, and never shown once it is. It is written once the record has been read, and a failure to write it is logged and never fails the answer. **When one person reads more than a hundred different people's records in an hour, each active Admin is emailed**, at most once a day for one person and twenty times a day in all (Manila days), as decision 0413 caps the sign-in alert; a send that fails still spends that day's alert.
 
 **The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and Edit details as a name, the birthday or the mobile number is changed (decision 0396), and never by this screen. **Since decision 0389 the pickers are narrowed with the screen**, each to the searcher's own scope, naming who ran a Cell meeting adding the leaders above them. A Cell may still hold members its leader does not pastor (Section 10), added by an actor whose scope reaches them or moved by one whose `cell.move_members` covers both Cells (decision 0357).
 
@@ -4927,9 +4926,9 @@ GET  /api/v1/reports/network-summary
 
 ### Conventions
 
-Three clients consume this API concurrently (Section 2) and mobile builds cannot be force-updated, so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
+Every client, on a laptop or a phone, consumes this API concurrently (Section 2), so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
 
-All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — only one of the three surfaces is a browser.
+All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — the API answers data, and the web application draws it.
 
 **`/api/v1/accounts` is separate from `/api/v1/auth` deliberately.** Everything
 under `/auth` is either on Section 7's closed unauthenticated list or acts solely
@@ -4991,7 +4990,7 @@ Naming the Cell filter now, before Stage 3 builds it, is the rule applied to its
 
 Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
 
-A field name that differs between two endpoints for one concept is a permanent cost on three client codebases that cannot be force-updated, and the only moment to fix one is before any client depends on it.
+A field name that differs between two endpoints for one concept is a cost on every screen that reads both, and the cheapest moment to fix one is before any screen depends on it.
 
 #### One list in this API is bounded in length
 
@@ -5009,7 +5008,7 @@ of the request, refused at the boundary.
 **The qualifier is exact rather than cautious.** The hazard is a recursive walk, so
 a body nothing walks cannot produce one; the *rule* is therefore never violated by a
 route that does not read its body, only unenforced there. That is stated because
-three clients branch on this section and would otherwise read the rule as absolute.
+a client branches on this section and would otherwise read the rule as absolute.
 
 **What enforces it is a walk over a bound argument**, which is where the rule can be
 escaped. The identifier boundary walks whatever a route binds; the idempotency
@@ -5111,7 +5110,7 @@ Offset pagination is not used. Rows inserted while a client is paging shift ever
 
 Collection endpoints do not return total counts. A count over a large scoped set is expensive on every page, and totals are a reporting concern with their own endpoints and their own rules (Section 20).
 
-**A list of people ordered by name is ordered by first name, then surname, then Member ID** (ruling of 2026-10-17, decision 0359), or the record's identifier as that last tie-break where a cursor already carried it (the People search and the lists that page like it), the order a name is read in, wherever the list is assembled, in SQL or in application code, and a cursor over it carries the three in that order. A title is never compared (decision 0271). The list of duplicate candidates (Section 3) keeps its own order, and a page open across the change from surname order (decision 0359) may skip or repeat rows once, which the owner accepted before the first native release, as decision 0328 did for narrowing the API.
+**A list of people ordered by name is ordered by first name, then surname, then Member ID** (ruling of 2026-10-17, decision 0359), or the record's identifier as that last tie-break where a cursor already carried it (the People search and the lists that page like it), the order a name is read in, wherever the list is assembled, in SQL or in application code, and a cursor over it carries the three in that order. A title is never compared (decision 0271). The list of duplicate candidates (Section 3) keeps its own order, and a page open across the change from surname order (decision 0359) may skip or repeat rows once, which the owner accepted, as decisions 0328 and 0424 do for narrowing the API.
 
 #### Errors
 
@@ -5150,7 +5149,7 @@ One envelope, always:
 
 Where the answer is **yes**, the refusal reached no decision about the request and answers `RESOURCE_BUSY`. Where the answer is **no** — where the body itself has to change before any attempt can succeed — the refusal is a decision about this body, answers `INVARIANT_VIOLATION`, and its message says what to change.
 
-The message is not additionally required to say that a new key is needed. That follows from the key rule below — a key belongs to a body, so a client changing its body takes a new one — and a refusal restating it on every occasion would be one more sentence for three clients to render. What the message owes is the change; the key rule is the client's.
+The message is not additionally required to say that a new key is needed. That follows from the key rule below — a key belongs to a body, so a client changing its body takes a new one — and a refusal restating it on every occasion would be one more sentence for every screen to render. What the message owes is the change; the key rule is the client's.
 
 The question is the status rather than the wording, because the Idempotency rules below split on the status and nothing else: a 4xx is stored against the key and replayed for the retention, so a 409 whose own message says "retry" tells the client to do the one thing that cannot work. This is the same rule the Idempotency section states for a new code, applied to the codes that already exist.
 
@@ -5267,7 +5266,7 @@ idempotency_keys
   **The status is therefore load-bearing, and a new code is placed by which side of that split it belongs on.** A transient condition that reached no decision — contention on a lock, in `RESOURCE_BUSY` (Section 5) — must be a 5xx, or every later retry of that key replays it. Adding a retryable condition below 500 would require the store/release rule to grow an exception, and an exception each new code has to remember is exactly what this section avoids elsewhere. `RATE_LIMITED` (429) is not one: the limit is applied before any key is claimed, so there is no claim to store it against.
 - **The fingerprint is taken over a canonicalized body**: object keys sorted, arrays left in order, because order is meaning in an array. Nothing forbids a client reordering object keys on a retry and several JSON libraries do, and treating that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which this section makes permanent and says must never be retried, turning an ordinary retry into a dead end.
 - **A password in the body is fingerprinted keyed** (ruling of 2026-10-14, decision 0351): a top-level `current_password` or `new_password` enters the hash as a keyed digest under a secret held in the environment, so the stored fingerprint is not a plain hash of a password. Two bodies still fingerprint alike only where their passwords are equal.
-- **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.
+- **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because a client branches on it.
 - **A replay reproduces the status and the body, and nothing else.** Headers are not stored and are not reproduced, so **no state-changing endpoint may put meaning in a response header** — a `Location` or an `ETag` that a client needs would not survive a retry. Stated as a constraint on endpoints rather than as a limitation of the store, because that is the direction it binds.
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
@@ -5282,7 +5281,7 @@ This follows from the two rules above and is stated because getting it backwards
 
 The duplicate-acknowledgement flow (Section 3) is where this bites first and hardest, and it is worth naming because the sequence looks like one write and is two. The refusal asking for acknowledgement is a 409, so it is **stored** against the key. The resubmission adds `acknowledged_duplicate_ids` — a different body — so reusing that key is refused permanently and the Person can never be created, which is precisely the block Section 3 says must never happen. Any refusal that leaves a field to be corrected behaves the same way: a `SCOPE_DENIED` on the pastoral leader, a cross-Network refusal, a validation failure on one field.
 
-Three client surfaces consume this API and none of the native ones can be force-updated (Section 2), so this is written here rather than left for each to rediscover.
+Every client meets this (Section 2), so it is written here rather than left for each screen to rediscover.
 
 This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 
@@ -5308,11 +5307,9 @@ Sorting a leader's **own Cells** by those figures is permitted and useful — th
 
 #### Versioning
 
-`/api/v1` remains available and behaviourally unchanged for as long as any client calls it. An installed mobile build keeps calling it for months, and an iOS release passes through review before it can reach anyone.
+**`/api/v1` may be narrowed where the web application ships the matching change in the same deployment** (owner rulings of 2026-10-10, decision 0328, and 2026-11-01, decision 0424). There is no installed build that cannot be updated: the phone app is this web application, which keeps no copy of itself and opens the deployed version each time. A browser tab, or a phone app left open, still holding the previous page is refused until it reloads, which is the accepted cost. **Narrowing** is any change an older page could trip on: removing a field, renaming one, narrowing a type, or changing the meaning of an existing value, and every one of these is permitted on the same terms. An additive change, a new optional field or a new endpoint, needs no matching change at all, so when in doubt, add rather than change. No `/api/v2` is required while the web application is the only client.
 
-Additive changes — a new optional field, a new endpoint — do not require a new version. Removing a field, renaming one, narrowing a type, or changing the meaning of an existing value does. When in doubt, add rather than change.
-
-**Until the first native client is released, `/api/v1` may be narrowed** where the web application ships the matching change in the same deployment (owner ruling of 2026-10-10, decision 0328). The rule above exists for installed builds that cannot be updated, and before one is released there are none. A browser tab still holding the previous page is refused until it reloads, which is the accepted cost. From the first native release the rule above applies without exception.
+A native client would need `/api/v1` to stay unchanged for as long as an installed build calls it, because a store release cannot be forced on anyone. None is built, and adding one is a new ruling that restores that rule before the first release.
 
 Controllers/routes should delegate to authorization and application/domain services rather than containing SQL/business logic directly.
 
@@ -5320,7 +5317,7 @@ Controllers/routes should delegate to authorization and application/domain servi
 
 ## 23. Offline / Mobile Readiness
 
-Web UI must be responsive from the beginning. Leaders will use the web application on phones before any native app exists, so mobile is a current surface, not a future one (Section 2).
+Web UI must be responsive from the beginning. Leaders use the web application on their phones, where it is the phone app, so mobile is a current surface, not a future one (Section 2).
 
 **Two rendering engines are supported, and they are what the conformance claim below is tested against: Blink and WebKit — each for a different thing** (ruling of 2026-09-10). **Blink** carries the automated conformance check: axe-core over every route, in both themes, a violation failing the build. **WebKit** carries the layout check, at the two viewport widths that bind — the narrowest, where overflow is hardest, and the widest at which anything changes. Axe is not run twice: its rules are computed from the accessibility tree and the resolved styles, which is not where the engines differ, while layout is; and a second full engine roughly doubles a job that is worthless if it becomes slow enough to skip. Blink covers Chrome, Edge and every Chromium browser; WebKit covers Safari, and with it *every* browser on iOS, since iOS permits no other engine — so Chrome on an iPhone is WebKit and a Chromium-only check says nothing about any iPhone. Gecko is not supported: no phone or tablet in use here runs it, and no leader has asked for Firefox. Supporting it later is an ordinary decision and not an amendment to this section; claiming iOS works without testing WebKit is what this rule forbids.
 
@@ -5363,7 +5360,7 @@ Two constraints come with it, and both are conformance rather than taste:
 - It meets **3:1 against the surface behind it** (1.4.11), because the invalid state of a control is exactly the "visible state of a component" that criterion names.
 - It is **never the only indicator**. A field in error carries text saying what is wrong, and is associated with that text programmatically. Colour alone fails 1.4.1, and a leader recording attendance in a hall may not see it at all.
 
-The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is, and it is indexed as open in `CLAUDE.md`.
+There is no native client (Section 2, decision 0424): the phone app is this web application, so this conformance claim covers it on a phone as on a laptop.
 
 ### Required from the first write endpoint
 
@@ -5380,7 +5377,7 @@ These are not deferred. They are cheap to design in and expensive to retrofit, a
 - background sync and queueing
 - partial or delta synchronisation
 
-Do not build offline complexity before it is needed. Do not make architectural choices that prevent it — in particular, never let the server assign an identity that the client needed before it could sync.
+Do not build offline complexity before it is needed. Do not make architectural choices that prevent it — in particular, never let the server assign an identity that the client needed before it could sync. **Building it takes a ruling first** (owner, 2026-11-02, decision 0424): working offline keeps a copy of the application on the phone, which ends Section 22's permission to narrow `/api/v1` in step with the web application, as a native client would, so that ruling restores a stable version before the first offline release. Attendance marks kept on the device (decision 0345) are data, not a copy of the application, and are not that.
 
 ---
 
@@ -5528,7 +5525,7 @@ When generating or reviewing code for this system:
 15. Never let frontend code be the sole authority for roles, permissions, scope, classifications, or report calculations.
 16. Prefer derived reports from normalized source data over manually entered aggregate totals.
 17. Keep infrastructure/provider-specific integrations behind adapters/interfaces where practical.
-18. Preserve API versioning for future mobile clients.
+18. Change `/api/v1` only in step with the web application, and add rather than change where either will do (Section 22).
 19. Never reuse a pattern from elsewhere in this system without first stating **why it has that shape**, and checking whether the reason holds where it is going.
 
 Rule 19 is the only one here that is about the act of writing rather than about the domain, and it earns its place because it is the mistake this system's own history keeps producing. A guard, an executor threaded through a call chain, a floor over closed rows, a test that holds a lock — each was copied from a working use into a new one where part of the original justification did not carry, and each looked right at the call site.
