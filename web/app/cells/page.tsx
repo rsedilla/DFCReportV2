@@ -285,6 +285,8 @@ function CellsIndex() {
         {attentionShown ? (
           <ViewSwitch<CellsView>
             label="Which list"
+            // Two by two on a phone, rather than three and a lone fourth.
+            className="grid-cols-2"
             options={attention.map(([key, label, count]) => ({
               key,
               label,
