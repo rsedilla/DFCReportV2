@@ -1963,7 +1963,7 @@ settings
 - updated_at
 ```
 
-The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), and the first Sunday the DCC calendar covers (Section 9).
+The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), the first Sunday the DCC calendar covers (Section 9), and the verse on `Record` (Section 19, decision 0425).
 
 `records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), Cell leadership (Section 11), and a Cell's category and schedule (Section 10). It also governs amending attendance after its week has closed (Sections 9 and 13), and **closing a Cell with an effective date earlier than the current day** (Section 10) — neither of which is an effective-dated relationship, so this is a list of what the capability reaches, not a rule from which the next item can be derived.
 
@@ -2095,9 +2095,9 @@ capability_grants
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
 - an endpoint reachable **without authentication**, which is a closed list: sign-in (both its steps, and setting up the second where Section 6 requires one), token refresh, the password reset and activation flows (activation's username suggestion included, decision 0337), confirming a new email address from the link sent to it (decision 0415), and the liveness probe. These have no token to present yet, are presenting the refresh token as the credential, or are presenting a link mailed to the holder as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
-- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337), **and changing their own password, the current one asked** (ruling of 2026-10-14, decision 0351), **and asking to change their own email address, the current password asked** (ruling of 2026-11-01, decision 0415). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions, **and setting their own username and reading its suggestion** (ruling of 2026-10-13, decision 0337), **and changing their own password, the current one asked** (ruling of 2026-10-14, decision 0351), **and asking to change their own email address, the current password asked** (ruling of 2026-11-01, decision 0415). **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request. **Or because it reads the verse on `Record`**, the one setting every signed-in account is shown, which describes nobody (ruling of 2026-11-02, decision 0425); changing it still needs `settings.manage`
 
-Beyond those requests, which carry what their sender asked, the decision on it, and the category and day of the Cell a handover or a restart named as they stood when it was sent (decision 0346), and the username suggestion and the refusal of a taken name, signed in or at activation, which read which names other accounts hold and nothing more about them (decision 0337, which accepts that a taken name shows an account exists), neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
+Beyond those requests, which carry what their sender asked, the decision on it, and the category and day of the Cell a handover or a restart named as they stood when it was sent (decision 0346), and the username suggestion and the refusal of a taken name, signed in or at activation, which read which names other accounts hold and nothing more about them (decision 0337, which accepts that a taken name shows an account exists), none ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting other than reading the verse on `Record`. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -4829,6 +4829,7 @@ Recommended REST areas:
 /api/v1/suynl                             Section 28
 /api/v1/training                          Section 28
 /api/v1/encounter-seasons                 Section 28 (decision 0296)
+/api/v1/settings                          Section 7 (decision 0425)
 ```
 
 Examples:
@@ -4855,6 +4856,12 @@ POST /api/v1/accounts/{id}/password-reset-email   a reset link to an account in 
 POST /api/v1/accounts/{id}/email         corrects a pending account's address, or with `restart` starts an account in use over at a new one; `accounts.manage` (decisions 0300 and 0415)
 POST /api/v1/accounts/{id}/disable       disables another account; `accounts.manage` (decision 0307)
 POST /api/v1/accounts/{id}/reactivate    re-enables a disabled account; `accounts.manage` (decision 0307)
+
+GET  /api/v1/settings                         the church-wide settings and the DCC calendar's reach; `settings.manage` at Whole Church (decision 0425)
+PATCH /api/v1/settings/cell-attention-months  two to six months; `settings.manage` at Whole Church (decision 0425)
+POST /api/v1/settings/initial-encoding/close  closes initial encoding, once (Section 2); `settings.manage` at Whole Church (decision 0425)
+GET  /api/v1/settings/record-verse            the verse on `Record`, read by every signed-in account (Section 7, decision 0425)
+PUT  /api/v1/settings/record-verse            sets or clears it; `settings.manage` at Whole Church (decision 0425)
 
 GET  /api/v1/people                       the actor's own scope, listed or searched; `church_wide=true` for the directory, term required, a Whole Church scope only; `upline=true` adds the actor's leaders above (Section 8, decision 0389)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one

@@ -128,12 +128,14 @@ export function Public(reason: string): CustomDecorator<string> {
  * the caller's own session rather than on church data: reading one's own token
  * claims, signing out, ending one's own sessions. Or, since decision 0269, because it
  * returns only records the caller's own account created: the Cell leadership
- * requests they sent.
+ * requests they sent. Or, since decision 0425, because it reads the verse on Record,
+ * the one setting every signed-in account is shown.
  *
  * This is the only way past the capability guard, and it is deliberately narrow.
- * Beyond those requests, which name the Person and the Cell their sender named, it
- * never covers an endpoint that reads or writes a Person, a Cell, attendance or a
- * report, whoever the subject is. The reason is required and is reviewed.
+ * Beyond those requests, which name the Person and the Cell their sender named, and
+ * that verse, it never covers an endpoint that reads or writes a Person, a Cell,
+ * attendance, a report or a setting, whoever the subject is. The reason is required
+ * and is reviewed (SKILL.md section 7 is the list).
  */
 export function AuthenticatedOnly(reason: string): CustomDecorator<string> {
   return SetMetadata(AUTHENTICATED_ONLY_METADATA, reason);

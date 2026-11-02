@@ -23,8 +23,10 @@ import {
 /**
  * `/api/v1/settings` (SKILL.md sections 7 and 19, decision 0425): the Admin's Settings tab.
  *
- * **Everything here is under `settings.manage` against the church**, read included: the
- * values are church-wide operational settings and the tab is the administrator's. The
+ * **Everything here is under `settings.manage` against the church but the verse's read**,
+ * which every signed-in account makes because Record shows the verse to everyone (section 7
+ * names it among the authenticated-only reads). The values are church-wide operational
+ * settings and the tab is the administrator's. The
  * capability is Whole Church only (section 7), so a church target is covered by a Whole
  * Church grant and nothing narrower, as the Encounter season routes are.
  */

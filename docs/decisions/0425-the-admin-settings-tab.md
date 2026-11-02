@@ -9,8 +9,9 @@ to the database. The owner was shown the tab and Home's new line on a laptop and
 ## The ruling
 
 **1. *Settings* is the third tab**, after Home and Accounts, for a holder of
-`settings.manage` at Whole Church, and every route behind it carries that capability: a
-read at `GET /api/v1/settings`, and the two changes below. Each change is audited as
+`settings.manage` at Whole Church, and every route behind it carries that capability but
+one: a read at `GET /api/v1/settings`, and the changes below. The one is the verse's read
+(point 6), which section 7 now names among its authenticated-only reads. Each change is audited as
 `setting.changed` with its previous and new values (sections 7 and 21).
 
 **2. The attention threshold is changed here**, from two to six whole months, three the

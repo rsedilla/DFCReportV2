@@ -154,7 +154,9 @@ describe('Admin settings (decision 0425)', () => {
       .execute();
 
     const response = await setMonths(leader, 5).expect(403);
-    expect(['CAPABILITY_DENIED', 'SCOPE_DENIED']).toContain(response.body.error.code);
+    // A Whole-Church-only capability held narrower covers nothing (section 7): the account
+    // holds it, so the refusal is of the church target's scope.
+    expect(response.body.error.code).toBe('SCOPE_DENIED');
     expect(await setting('cell_attention_months')).toBe(3);
   });
 

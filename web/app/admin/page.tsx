@@ -679,7 +679,7 @@ function Settings() {
 
           <SettingRow
             title="No meeting in"
-            help="A Cell with no meeting held for this long is listed under Inactive Cells."
+            help="A Cell with no meeting held for this long is listed under Cells, Needs Attention."
             value={`${data.cell_attention_months} ${data.cell_attention_months === 1 ? 'month' : 'months'}`}
             action={
               months === null ? (
