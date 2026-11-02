@@ -10,13 +10,17 @@ it on a summary, and order it people first, settings next, the record of changes
 
 **1. The Admin area is for an account holding `accounts.manage` at Whole Church**, which by
 default is the `ADMIN` role alone: a Senior Pastor never holds it (decision 0110). The screen
-follows the capabilities `GET /api/v1/auth/me` names, never the role, and the API guards every
-read the area makes with the same capability, so a typed address shows such a reader nothing.
+follows the capabilities `GET /api/v1/auth/me` names, never the role. The Accounts reads carry
+`accounts.manage` at Whole Church, and every other read the area makes is guarded by its own
+route as it is elsewhere; the screen guard keeps the area from anybody else, and authorizes
+nothing (Section 1, principle 4).
 
 **2. It is set apart from the daily items.** On a laptop it is the last item of the sidebar, below
 the others and a rule, under the words *For the administrator*. On a phone it is an *Admin*
 button in the top bar beside the account button, not a seventh button in the bottom bar. It is
-the landing screen of the accounts it is for, as Section 19 said it would be.
+the landing screen of the accounts it is for, as Section 19 said it would be, which amends
+decision 0372's landing on Record for them. Like `Conquest` (decision 0407) it follows one
+capability at Whole Church rather than the screens the server names.
 
 **3. It has four tabs, in this order: Home, Accounts, Settings, Audit Log.** Home and Accounts
 are built with this ruling; Settings and Audit Log follow with the routes they need. There is

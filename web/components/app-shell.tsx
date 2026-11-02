@@ -219,7 +219,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const conquest =
     me.data !== undefined && holdsWholeChurch(me.data, 'conquest.view_subtree') ? [CONQUEST] : [];
   // **The Admin area follows `accounts.manage` at Whole Church** (decision 0419), by default the
-  // Admin alone, and the API guards every read it makes with the same capability.
+  // Admin alone. Its Accounts reads carry that capability; its other reads keep their own guards.
   const administers = me.data !== undefined && holdsWholeChurch(me.data, 'accounts.manage');
   const links = me.isPending
     ? []

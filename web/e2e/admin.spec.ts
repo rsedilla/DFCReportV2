@@ -134,7 +134,7 @@ test.describe('the Admin area’s Accounts', () => {
     await expect(row('Teofilo Ramos')).toContainText('Leader');
     await expect(row('Teofilo Ramos')).toContainText('Full view, Moves people');
     await expect(row('Herminia Lazaro')).toContainText('Waiting for activation');
-    await expect(row('Herminia Lazaro')).toContainText('Email sent 28 Oct');
+    await expect(row('Herminia Lazaro')).toContainText('Given 28 Oct');
     await expect(row('Marilou Santos')).toContainText('Active, sign-in paused');
     await expect(row('Marilou Santos')).toContainText('Second step set up');
     await expect(row('Teofilo Ramos').getByRole('link', { name: 'Teofilo Ramos' })).toHaveAttribute(
@@ -148,8 +148,10 @@ test.describe('the Admin area’s Accounts', () => {
     const asked = await openAdmin(page, '/admin?tab=accounts');
 
     const chips = page.getByRole('group', { name: 'Show' });
-    await expect(chips.getByRole('button', { name: /Waiting for activation\s*6/ })).toBeVisible();
-    await expect(chips.getByRole('button', { name: /^All\s*221/ })).toHaveAttribute(
+    // The count is shown and kept out of the chip's name, which never changes.
+    await expect(chips.getByRole('button', { name: 'Waiting for activation', exact: true })).toContainText('6');
+    await expect(chips).toHaveAccessibleDescription(/Waiting for activation 6/);
+    await expect(chips.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

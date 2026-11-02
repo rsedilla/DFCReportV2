@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -197,6 +198,77 @@ describe('the Admin area’s accounts list (decision 0419)', () => {
 
     expect(await names('?filter=NO_SECOND_STEP')).toEqual([]);
     expect((await get(admin, '/counts').expect(200)).body.no_second_step).toBe(0);
+  });
+
+  it('finds a sign-in paused under the username as well as the email address', async () => {
+    const account = await leader(bruno);
+    await db
+      .updateTable('accounts')
+      .set({ username: 'brunol' })
+      .where('id', '=', account.id)
+      .execute();
+    await db
+      .insertInto('sign_in_pauses')
+      .values({
+        identifier: 'username:brunol',
+        paused_until: new Date(Date.now() + 60 * 60 * 1000),
+      })
+      .execute();
+
+    expect(await names('?filter=PAUSED')).toEqual(['Bruno Lacson']);
+  });
+
+  it('reads a second step that was reset as not set up, and a revoked role as not held', async () => {
+    // Carla's second step was reset (decision 0302), so she owes one again.
+    const carlaAccount = await createAccount(app, db, { person: carla, roles: ['ADMIN'] });
+    await db
+      .updateTable('second_steps')
+      .set({ revoked_at: new Date() })
+      .where('account_id', '=', carlaAccount.id)
+      .execute();
+    // Dario held ADMIN once and is a Leader now, so he owes no second step.
+    const darioAccount = await leader(dario);
+    await db
+      .insertInto('account_roles')
+      .values({
+        account_id: darioAccount.id,
+        role: 'ADMIN',
+        granted_by: admin.id,
+      })
+      .execute();
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: sql`granted_at + interval '1 second'` })
+      .where('account_id', '=', darioAccount.id)
+      .where('role', '=', 'ADMIN')
+      .execute();
+
+    expect(await names('?filter=NO_SECOND_STEP')).toEqual(['Carla Mendez']);
+    const rows = (await get(admin, '').expect(200)).body.data as Row[];
+    const carlaRow = rows.find((row) => row.name === 'Carla Mendez');
+    const darioRow = rows.find((row) => row.name === 'Dario Navarro');
+    expect(carlaRow?.second_step).toEqual({ required: true, set_up_at: null });
+    expect(darioRow?.roles).toEqual(['LEADER']);
+    expect(darioRow?.second_step.required).toBe(false);
+  });
+
+  it('pages between two people of one first name by their last name', async () => {
+    const other = await createPerson(db, {
+      firstName: 'Bruno',
+      lastName: 'Abella',
+      network: 'MENS',
+    });
+    await assignTo(db, other.id, bruno.id);
+    await leader(other);
+    await leader(bruno);
+
+    const first = await get(admin, '?limit=2').expect(200);
+    expect((first.body.data as Row[]).map((row) => row.name)).toEqual([
+      'Adele Ocampo',
+      'Bruno Abella',
+    ]);
+    const second = await get(admin, `?limit=2&cursor=${first.body.next_cursor}`).expect(200);
+    expect((second.body.data as Row[]).map((row) => row.name)).toEqual(['Bruno Lacson']);
   });
 
   it('refuses an unknown filter', async () => {

@@ -313,7 +313,8 @@ function stateOf(row: AccountListRow): string {
 /** What is set on the account, in a few words. */
 function detailsOf(row: AccountListRow): string {
   if (row.status === 'PENDING_ACTIVATION') {
-    return `Email sent ${new Intl.DateTimeFormat('en-GB', {
+    // When the account was given, not when its latest email went: a resend is not recorded here.
+    return `Given ${new Intl.DateTimeFormat('en-GB', {
       day: 'numeric',
       month: 'short',
       timeZone: 'Asia/Manila',
@@ -378,7 +379,20 @@ function Accounts() {
             }
           />
         </form>
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-3">
+        {counts.data ? (
+          <p id="account-counts" className="sr-only">
+            {ACCOUNT_FILTERS.map(
+              (each) =>
+                `${FILTER_LABELS[each]} ${counts.data[each.toLowerCase() as Lowercase<AccountFilter>]}`,
+            ).join(', ')}
+          </p>
+        ) : null}
+        <div
+          role="group"
+          aria-label="Show"
+          aria-describedby={counts.data ? 'account-counts' : undefined}
+          className="flex flex-wrap gap-3"
+        >
           {ACCOUNT_FILTERS.map((each) => {
             const count = counts.data?.[each.toLowerCase() as Lowercase<AccountFilter>];
             return (
@@ -389,7 +403,13 @@ function Accounts() {
                 onChange={(next) => go({ filter: next && each !== 'ALL' ? each : null })}
               >
                 {FILTER_LABELS[each]}
-                {count === undefined ? null : <span className="tabular-nums">{count}</span>}
+                {/* Hidden from the name, which never changes (the chip's contract); the count
+                    is read from the group's description below instead. */}
+                {count === undefined ? null : (
+                  <span aria-hidden="true" className="tabular-nums">
+                    {count}
+                  </span>
+                )}
               </FilterChip>
             );
           })}
