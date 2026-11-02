@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -122,6 +123,69 @@ describe('my people, two levels down (decision 0422)', () => {
     const second = await get(reader, `?limit=2&cursor=${first.body.next_cursor}`).expect(200);
     expect((second.body.data as Row[]).map((row) => row.person_id)).toEqual([celso.id]);
     expect(second.body.next_cursor).toBeNull();
+  });
+
+  /** The reader's account with its role revoked, so it holds only what a case grants it. */
+  async function stripRoles(account: TestAccount): Promise<TestAccount> {
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: sql`granted_at + interval '1 second'` })
+      .where('account_id', '=', account.id)
+      .execute();
+    return account;
+  }
+
+  async function grant(account: TestAccount, scope: 'OWN_SUBTREE' | 'NETWORK') {
+    const admin = await createAccount(app, db, {
+      person: await createPerson(db, { firstName: 'Adele', network: 'WOMENS' }),
+      roles: ['ADMIN'],
+    });
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: account.id,
+        capability: 'people.view_subtree',
+        scope_type: scope,
+        scope_network: scope === 'NETWORK' ? 'MENS' : null,
+        read_only: true,
+        reason: 'Invented for this case (CLAUDE.md, Secrets).',
+        granted_by: admin.id,
+      })
+      .execute();
+  }
+
+  it('refuses an account holding no people.view_subtree, on both routes', async () => {
+    const bare = await stripRoles(reader);
+
+    expect((await get(bare, '').expect(403)).body.error.code).toBe('CAPABILITY_DENIED');
+    expect((await get(bare, '/counts').expect(403)).body.error.code).toBe('CAPABILITY_DENIED');
+  });
+
+  it('withholds each Cell from a reader who may not read Cells', async () => {
+    // people.view_subtree over their own branch, and no cell.view_subtree at all.
+    const reader2 = await stripRoles(reader);
+    await grant(reader2, 'OWN_SUBTREE');
+
+    const rows = (await get(reader2, '').expect(200)).body.data as Row[];
+    expect(rows.map((row) => row.person_id)).toEqual([anselmo.id, benito.id, celso.id]);
+    for (const row of rows) {
+      expect(row.cell).toBeNull();
+      expect(row.cell_withheld).toBe(true);
+    }
+  });
+
+  it('lists the reader’s own two levels under a Network-wide grant, never the rest of the Network', async () => {
+    // Pascual's grant reaches the whole Men's Network; his list is still his own tree, which is
+    // nobody: the rows come from the tree, never from the grant.
+    const wide = await createAccount(app, db, { person: pascual, roles: [] });
+    await grant(wide, 'NETWORK');
+
+    expect((await get(wide, '').expect(200)).body.data).toEqual([]);
+    expect((await get(wide, '/counts').expect(200)).body).toEqual({
+      all: 0,
+      direct: 0,
+      beneath: 0,
+    });
   });
 
   it('answers a reader with nobody under them with an empty list', async () => {

@@ -260,14 +260,6 @@ export class CellsController {
   }
 
   /**
-   * `GET /api/v1/cells/people/membership?person_id=…` — the route below for a page of people
-   * at once (checklist row perf-people-list-cells), `cell.view_subtree` per person (decision
-   * 0248). The guard checks the actor themselves first, so a grant that does not cover its
-   * own holder refuses the whole batch where the route below would answer some people. The
-   * scope is read once, and a person it does not reach is left out, as is an identifier
-   * naming nobody: that tells a caller nothing the route below's refusal would not.
-   */
-  /**
    * `GET /api/v1/cells/people/mine`: the reader's people two levels down, each with their leader
    * and Cell, as one plain list (SKILL.md section 19, decision 0422). The two levels are the
    * reader's own tree, so `people.view_subtree` against the reader admits every row; a Cell is
@@ -293,6 +285,14 @@ export class CellsController {
     return this.myPeople.counts(actor);
   }
 
+  /**
+   * `GET /api/v1/cells/people/membership?person_id=…` — the route below for a page of people
+   * at once (checklist row perf-people-list-cells), `cell.view_subtree` per person (decision
+   * 0248). The guard checks the actor themselves first, so a grant that does not cover its
+   * own holder refuses the whole batch where the route below would answer some people. The
+   * scope is read once, and a person it does not reach is left out, as is an identifier
+   * naming nobody: that tells a caller nothing the route below's refusal would not.
+   */
   @Get('people/membership')
   @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
   async peopleCells(
