@@ -12,7 +12,7 @@ import {
 } from '../common/errors/api-error';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
-import { lockPersonsWithin } from '../database/person-lock';
+import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { composeName, type PersonPlacement } from './people.shared';
@@ -580,12 +580,15 @@ export class PeopleImportService {
    * Section 2: the import runs inside the initial-encoding phase, and a relaxation
    * reachable after its phase closed is not a temporary one.
    *
-   * Read inside the caller's transaction rather than before it, so that a close
-   * committing alongside is seen. The script asks the same question first, for a
-   * better message; this is the one that decides.
+   * Read inside the caller's transaction, under a shared lock on the setting's row
+   * (decision 0425), so that a close in flight is waited for and seen. The script asks
+   * the same question first, for a better message; this is the one that decides.
    */
   private async assertEncodingPhaseOpen(transaction: Transaction<Database>): Promise<void> {
-    if (!(await this.settings.initialEncodingOpenWithin(transaction))) {
+    // The shared lock below is taken before any advisory lock sets the bound, so it sets it
+    // itself: a wait on a close in flight answers RESOURCE_BUSY rather than holding on.
+    await boundLockWaitsWithin(transaction);
+    if (!(await this.settings.initialEncodingOpenSharedWithin(transaction))) {
       throw new InvariantViolationError(
         'The initial-encoding phase is closed, so the leadership-tree import cannot run. ' +
           'Everyone below the spine is encoded by the leader who holds them (section 2).',

@@ -15,13 +15,10 @@ import type { Transaction } from 'kysely';
  * table and seeded both keys eighteen months of rulings ago, and the value that
  * bounds the initial-encoding relaxation had never been consulted by anything.
  *
- * **No setter for the encoding phase exists here, deliberately.** Section 7 puts
- * every change behind `settings.manage` with an audit entry carrying the previous
- * and new values, and section 2 closes the encoding phase by "a deliberate, audited
- * Admin action" — which is an endpoint, and `docs/ROADMAP.md` puts it in Stage 7.
- * Writing that setter now would mean writing its authorization as a comment, which
- * is the failure this repository keeps correcting. A method with no caller is the
- * other one.
+ * **The encoding phase's setter closes it and nothing reopens it.** It arrived with its
+ * endpoint, `POST /settings/initial-encoding/close` under `settings.manage` (decision
+ * 0425), rather than before it: a setter written ahead of its route would have carried
+ * its authorization as a comment.
  *
  * **The DCC calendar's floor is different on both counts** (ruling of 2026-09-11),
  * which is why its setter is here and that one is not: its authorization is already
@@ -61,6 +58,30 @@ export class SettingsService {
    */
   async initialEncodingOpenWithin(executor: Db | Transaction<Database>): Promise<boolean> {
     return (await this.readFlag(executor, 'initial_encoding_open')) === true;
+  }
+
+  /**
+   * Whether the phase is open, **read under a shared lock on its row** (decision 0425), for an
+   * operation the phase permits. The close takes the row exclusively, so an operation reading
+   * while a close is in flight waits for it and then reads it closed, rather than reading the
+   * committed `true` and committing after the close did, which is the relaxation outliving its
+   * end. Section 24 places the lock.
+   */
+  async initialEncodingOpenSharedWithin(transaction: Transaction<Database>): Promise<boolean> {
+    const row = await transaction
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', 'initial_encoding_open')
+      .forShare()
+      .executeTakeFirst();
+
+    if (row === undefined) {
+      throw new Error(
+        'The setting `initial_encoding_open` is missing. Migration 0002 seeds it, so an absent ' +
+          'row means the database is not fully migrated. Run `npm run migrate:up`.',
+      );
+    }
+    return row.value === true;
   }
 
   /**
@@ -142,6 +163,151 @@ export class SettingsService {
     });
 
     return true;
+  }
+
+  /**
+   * Change the attention threshold, and audit it — or, where it already holds that value,
+   * do neither (decision 0425). A write that changes nothing records nothing, as section 7
+   * says of a write that writes nothing.
+   *
+   * The row is locked first, so the audit entry's previous value is the one this replaced.
+   * Returns whether it wrote.
+   */
+  async setCellAttentionMonthsWithin(
+    transaction: Transaction<Database>,
+    actorId: string,
+    months: number,
+  ): Promise<boolean> {
+    await this.lockWithin(transaction, 'cell_attention_months');
+    const previous = await this.cellAttentionMonthsWithin(transaction);
+
+    if (previous === months) {
+      return false;
+    }
+
+    await transaction
+      .updateTable('settings')
+      .set({ value: sql<Json>`to_jsonb(${months}::int)`, updated_at: sql<Date>`now()` })
+      .where('key', '=', 'cell_attention_months')
+      .execute();
+
+    await this.audit.writeWithin(transaction, {
+      actorId,
+      action: 'setting.changed',
+      targetType: 'setting',
+      targetId: 'cell_attention_months',
+      before: { value: previous },
+      after: { value: months },
+    });
+
+    return true;
+  }
+
+  /**
+   * Close the initial-encoding phase, once (section 2, decision 0047; the setter decision
+   * 0425 gives it). The row is locked, so of two administrators closing it together one
+   * closes it and the other is told it is already closed. **It is never reopened**: no
+   * method here sets the flag back, and section 2 is that the relaxation has an end.
+   *
+   * Returns whether it closed it; false where it was already closed.
+   */
+  async closeInitialEncodingWithin(
+    transaction: Transaction<Database>,
+    actorId: string,
+  ): Promise<boolean> {
+    await this.lockWithin(transaction, 'initial_encoding_open');
+
+    // The update names the open value as well as the key, so a close that lost a race
+    // changes no row and is told so, whatever the lock above did or did not serialize.
+    const closed = await transaction
+      .updateTable('settings')
+      .set({ value: sql<Json>`'false'::jsonb`, updated_at: sql<Date>`now()` })
+      .where('key', '=', 'initial_encoding_open')
+      .where(sql<boolean>`value = 'true'::jsonb`)
+      .executeTakeFirst();
+
+    if (closed.numUpdatedRows === 0n) {
+      return false;
+    }
+
+    await this.audit.writeWithin(transaction, {
+      actorId,
+      action: 'setting.changed',
+      targetType: 'setting',
+      targetId: 'initial_encoding_open',
+      before: { value: true },
+      after: { value: false },
+    });
+
+    return true;
+  }
+
+  /**
+   * The verse under Record's welcome (decision 0425): its words and reference, or both null.
+   * A value that is not that shape is refused rather than shown, as the threshold's is.
+   */
+  async recordVerseWithin(
+    executor: Db | Transaction<Database>,
+  ): Promise<{ text: string | null; reference: string | null }> {
+    const value = await this.readFlag(executor, 'record_verse');
+    const verse = value as { text?: unknown; reference?: unknown } | null;
+    const text = verse?.text ?? null;
+    const reference = verse?.reference ?? null;
+
+    if (
+      (text !== null && typeof text !== 'string') ||
+      (reference !== null && typeof reference !== 'string') ||
+      (text === null) !== (reference === null)
+    ) {
+      throw new Error('The setting `record_verse` is not a verse and its reference.');
+    }
+    return { text, reference };
+  }
+
+  /**
+   * Change the verse, and audit it, or, where it already holds those words, do neither.
+   * Returns whether it wrote.
+   */
+  async setRecordVerseWithin(
+    transaction: Transaction<Database>,
+    actorId: string,
+    verse: { text: string | null; reference: string | null },
+  ): Promise<boolean> {
+    await this.lockWithin(transaction, 'record_verse');
+    const previous = await this.recordVerseWithin(transaction);
+
+    if (previous.text === verse.text && previous.reference === verse.reference) {
+      return false;
+    }
+
+    await transaction
+      .updateTable('settings')
+      .set({
+        value: sql<Json>`jsonb_build_object('text', ${verse.text}::text, 'reference', ${verse.reference}::text)`,
+        updated_at: sql<Date>`now()`,
+      })
+      .where('key', '=', 'record_verse')
+      .execute();
+
+    await this.audit.writeWithin(transaction, {
+      actorId,
+      action: 'setting.changed',
+      targetType: 'setting',
+      targetId: 'record_verse',
+      before: { value: previous },
+      after: { value: verse },
+    });
+
+    return true;
+  }
+
+  private async lockWithin(transaction: Transaction<Database>, key: SettingKey): Promise<void> {
+    await transaction
+      .selectFrom('settings')
+      .select('key')
+      .where('key', '=', key)
+      .forUpdate()
+      .executeTakeFirst();
   }
 
   private async readFlag(executor: Db | Transaction<Database>, key: SettingKey): Promise<unknown> {

@@ -229,12 +229,12 @@ export class CellsService {
    * Section 2: this path exists only while initial encoding is open, and closes
    * with it.
    *
-   * Asked inside the caller's transaction, so the answer cannot be the state the
-   * request arrived with — closing the phase is an audited Admin action and may
-   * commit between a pooled read and this write.
+   * Asked inside the caller's transaction and under a shared lock on the setting's row
+   * (decision 0425), so a close in flight is waited for and then seen: a plain read at
+   * READ COMMITTED would answer the committed `true` and let this commit after the close.
    */
   private async assertEncodingPhaseOpen(trx: Transaction<Database>): Promise<void> {
-    if (!(await this.settings.initialEncodingOpenWithin(trx))) {
+    if (!(await this.settings.initialEncodingOpenSharedWithin(trx))) {
       throw new InvariantViolationError(
         'Initial encoding is closed, so a Cell is no longer created directly. Every Cell ' +
           'now comes into existence through request-and-approve (SKILL.md section 10).',

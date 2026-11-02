@@ -55,9 +55,9 @@ test.describe('the Cells list', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
-      'Members',
       'Meets',
-      'Recorded',
+      'Members',
+      'Meetings Recorded',
     ]);
     // The Cell is named rather than coded (decisions 0261 and 0306).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
@@ -217,8 +217,13 @@ test.describe('the Cells total (decision 0400)', () => {
 
     const table = page.getByRole('table', { name: 'Cells you oversee' });
     await expect(table.getByRole('columnheader', { name: 'Members' })).toHaveCSS('text-align', 'right');
-    await expect(table.getByRole('columnheader', { name: 'Recorded' })).toHaveCSS('text-align', 'right');
-    await expect(table.locator('tbody tr').first().locator('td').nth(2)).toHaveCSS('text-align', 'right');
+    await expect(table.getByRole('columnheader', { name: 'Meetings Recorded' })).toHaveCSS(
+      'text-align',
+      'right',
+    );
+    // Text first and the two numbers last (decision 0425): Members is the fourth column.
+    await expect(table.locator('tbody tr').first().locator('td').nth(3)).toHaveCSS('text-align', 'right');
+    await expect(table.locator('tbody tr').first().locator('td').nth(4)).toHaveCSS('text-align', 'right');
     await expect(table).toHaveCSS('table-layout', 'fixed');
   });
 

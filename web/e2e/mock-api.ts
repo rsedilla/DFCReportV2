@@ -80,6 +80,26 @@ export async function mockSignedIn(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/refresh', (route) => route.fulfill(json(SESSION_TOKENS)));
 
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json(ME)));
+
+  // No verse on Record unless a case sets one (decision 0425).
+  await page.route('**/api/v1/settings/record-verse', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill(json({ text: null, reference: null }))
+      : route.fallback(),
+  );
+}
+
+/** The verse an administrator set, as Record reads it (decision 0425). */
+export const RECORD_VERSE = {
+  text: 'Be shepherds of God’s flock that is under your care, watching over them—not because you must, but because you are willing, as God wants you to be; not pursuing dishonest gain, but eager to serve.',
+  reference: '1 Peter 5:2 (NIV)',
+};
+
+/** Record's verse set, read by any signed-in account. Installed after `mockSignedIn`. */
+export async function mockRecordVerse(page: Page): Promise<void> {
+  await page.route('**/api/v1/settings/record-verse', (route) =>
+    route.request().method() === 'GET' ? route.fulfill(json(RECORD_VERSE)) : route.fallback(),
+  );
 }
 
 /** `conquest.view_subtree` at Whole Church, which the Admin and Senior Pastor roles hold. */
@@ -1204,6 +1224,41 @@ export const ADMIN_ACCOUNT_ROWS = [
  * Every read the Admin area makes (decision 0419), answered with invented figures. Returns the
  * query strings the accounts list was asked with.
  */
+/**
+ * `/api/v1/settings` (decision 0425): the church-wide settings, with encoding open or closed,
+ * and its two writes, recorded with their keys so a case can assert what was sent.
+ */
+export async function mockSettings(
+  page: Page,
+  { open = true }: { open?: boolean } = {},
+): Promise<{ writes: { path: string; body: unknown; key: string | undefined }[] }> {
+  const writes: { path: string; body: unknown; key: string | undefined }[] = [];
+  let current = {
+    cell_attention_months: 3,
+    initial_encoding_open: open,
+    dcc_calendar_start: '2025-01-05',
+    dcc_calendar_through: '2027-10-31',
+    record_verse: RECORD_VERSE as { text: string | null; reference: string | null },
+  };
+  await page.route('**/api/v1/settings**', (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET' && path === '/api/v1/settings') {
+      return route.fulfill(json(current));
+    }
+    writes.push({ path, body: request.postDataJSON(), key: request.headers()['idempotency-key'] });
+    if (path.endsWith('/record-verse')) {
+      current = { ...current, record_verse: request.postDataJSON() as typeof current.record_verse };
+    } else if (path.endsWith('/cell-attention-months')) {
+      current = { ...current, cell_attention_months: (request.postDataJSON() as { months: number }).months };
+    } else {
+      current = { ...current, initial_encoding_open: false };
+    }
+    return route.fulfill(json(current));
+  });
+  return { writes };
+}
+
 export async function mockAdminArea(page: Page): Promise<string[]> {
   const asked: string[] = [];
   const three = [{}, {}, {}];
@@ -1233,7 +1288,7 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
     route.fulfill(json({ data: [{}, {}], next_cursor: null })),
   );
   await page.route('**/api/v1/cells/counts', (route) =>
-    route.fulfill(json({ in_scope: 186, led_by_me: 0 })),
+    route.fulfill(json({ in_scope: 186, led_by_me: 0, attention_months: 3 })),
   );
   await page.route('**/api/v1/reports/church-counts*', (route) =>
     route.fulfill(

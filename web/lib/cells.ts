@@ -980,6 +980,8 @@ export async function getPeopleCells(
 export interface CellCounts {
   in_scope: number;
   led_by_me: number;
+  /** The church-wide setting *Inactive N+ Months* is named by (decision 0425). */
+  attention_months: number;
 }
 
 /**

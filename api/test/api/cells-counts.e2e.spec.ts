@@ -116,14 +116,14 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
     const response = await counts(raymondAccount);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ in_scope: 4, led_by_me: 2 });
+    expect(response.body).toEqual({ in_scope: 4, led_by_me: 2, attention_months: 3 });
   });
 
   it('counts the whole church for a Whole Church reader, who leads none', async () => {
     const response = await counts(adminAccount);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ in_scope: 5, led_by_me: 0 });
+    expect(response.body).toEqual({ in_scope: 5, led_by_me: 0, attention_months: 3 });
   });
 
   it.each([
@@ -137,6 +137,7 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
     expect(response.body).toEqual({
       in_scope: await listed(account(), false),
       led_by_me: await listed(account(), true),
+      attention_months: 3,
     });
   });
 
@@ -171,8 +172,20 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
     expect(response.body).toEqual({
       in_scope: await listed(raymondAccount, false),
       led_by_me: await listed(raymondAccount, true),
+      attention_months: 3,
     });
-    expect(response.body).toEqual({ in_scope: 5, led_by_me: 3 });
+    expect(response.body).toEqual({ in_scope: 5, led_by_me: 3, attention_months: 3 });
+  });
+
+  it('carries the attention threshold the church has set (decision 0425)', async () => {
+    await db
+      .updateTable('settings')
+      .set({ value: sql`'5'::jsonb` })
+      .where('key', '=', 'cell_attention_months')
+      .execute();
+
+    const response = await counts(raymondAccount).expect(200);
+    expect(response.body.attention_months).toBe(5);
   });
 
   it('refuses a reader holding no cell.view_subtree, at the API', async () => {

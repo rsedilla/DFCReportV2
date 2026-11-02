@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { mockAdministrator, mockSignedIn, mockWholeChurchReader } from './mock-api';
+import {
+  mockAccountsAdministrator,
+  mockAdministrator,
+  mockSettings,
+  mockSignedIn,
+  mockWholeChurchReader,
+} from './mock-api';
 import {
   ENCOUNTER_DECEMBER,
   PARTY_TOO_LATE,
@@ -66,10 +72,11 @@ test.describe('the Encounter seasons page', () => {
     await mockSignedIn(page);
   });
 
-  test('an administrator sees every date, an Edit per season and Add', async ({ page }) => {
-    await mockAdministrator(page);
+  test('an administrator sees every date, an Edit per season and Add, on Admin’s Settings tab', async ({ page }) => {
+    await mockAccountsAdministrator(page);
+    await mockSettings(page);
     await mockEncounterSeasons(page);
-    await page.goto('/growth/training/encounters');
+    await page.goto('/admin?tab=settings');
 
     const table = list(page).getByRole('table', { name: 'Encounter seasons' });
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -103,9 +110,10 @@ test.describe('the Encounter seasons page', () => {
   test('adding a season shows both halves with their hints, and saves with a key', async ({
     page,
   }) => {
-    await mockAdministrator(page);
+    await mockAccountsAdministrator(page);
+    await mockSettings(page);
     const traffic = await mockEncounterSeasons(page);
-    await page.goto('/growth/training/encounters');
+    await page.goto('/admin?tab=settings');
 
     await list(page).getByRole('button', { name: 'Add an Encounter season' }).click();
 
@@ -161,9 +169,10 @@ test.describe('the Encounter seasons page', () => {
   });
 
   test('editing a season sends all four dates to that season with a key', async ({ page }) => {
-    await mockAdministrator(page);
+    await mockAccountsAdministrator(page);
+    await mockSettings(page);
     const traffic = await mockEncounterSeasons(page);
-    await page.goto('/growth/training/encounters');
+    await page.goto('/admin?tab=settings');
 
     await list(page).getByRole('button', { name: 'Edit December 2026' }).click();
 
@@ -199,9 +208,10 @@ test.describe('the Encounter seasons page', () => {
   });
 
   test('a save the API refuses shows its message and keeps the form', async ({ page }) => {
-    await mockAdministrator(page);
+    await mockAccountsAdministrator(page);
+    await mockSettings(page);
     const traffic = await mockEncounterSeasons(page, { outcome: 'refused' });
-    await page.goto('/growth/training/encounters');
+    await page.goto('/admin?tab=settings');
 
     await list(page).getByRole('button', { name: 'Add an Encounter season' }).click();
     const men = page.getByRole('group', { name: 'Men', exact: true });
@@ -232,7 +242,7 @@ test.describe('the Encounter seasons page', () => {
     const traffic = await mockEncounterSeasons(page, { shows: 'MENS' });
     await page.goto('/growth/training/encounters');
 
-    await expect(page.getByText('Only an administrator may add or change these dates.')).toBeVisible();
+    await expect(page.getByText('An administrator sets these dates in Admin, under Settings.')).toBeVisible();
     const table = list(page).getByRole('table', { name: 'Encounter seasons' });
     // Their own Network's half, and no column for the other.
     await expect(table.getByRole('columnheader')).toHaveText([
@@ -247,6 +257,19 @@ test.describe('the Encounter seasons page', () => {
     ]);
     await expect(page.locator('main').getByRole('button')).toHaveCount(0);
     await expect(page.locator('main input')).toHaveCount(0);
+    expect(traffic.writes).toHaveLength(0);
+  });
+
+  test('an administrator reads the list here and changes it only on Admin’s Settings tab (decision 0425)', async ({
+    page,
+  }) => {
+    await mockAdministrator(page);
+    const traffic = await mockEncounterSeasons(page);
+    await page.goto('/growth/training/encounters');
+
+    await expect(list(page).getByRole('table', { name: 'Encounter seasons' })).toBeVisible();
+    await expect(page.getByText('An administrator sets these dates in Admin, under Settings.')).toBeVisible();
+    await expect(list(page).getByRole('button')).toHaveCount(0);
     expect(traffic.writes).toHaveLength(0);
   });
 
@@ -369,7 +392,7 @@ test.describe('the SUYNL report’s Next Encounter', () => {
       useInnerText: true,
     });
     await expect(next.getByRole('link')).toHaveText('Encounter seasons: add or change dates');
-    await expect(next.getByRole('link')).toHaveAttribute('href', '/growth/training/encounters');
+    await expect(next.getByRole('link')).toHaveAttribute('href', '/admin?tab=settings');
   });
 
   test("shows a Men's Network reader the Men's steps alone, unnamed, and the plain link", async ({
@@ -478,9 +501,10 @@ test.describe('the SUYNL report’s Next Encounter', () => {
 test('every target an administrator is offered is at least 24px', async ({ page }) => {
   await page.clock.setFixedTime(at('2026-09-26'));
   await mockSignedIn(page);
-  await mockAdministrator(page);
+  await mockAccountsAdministrator(page);
+  await mockSettings(page);
   await mockEncounterSeasons(page);
-  await page.goto('/growth/training/encounters');
+  await page.goto('/admin?tab=settings');
   await expect(page.getByRole('button', { name: 'Edit December 2026' })).toBeVisible();
 
   const measure = async (state: string, minimum: number) => {

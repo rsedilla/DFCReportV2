@@ -435,9 +435,11 @@ function LeaderTable({
           <tr>
             {/* The roots' direct disciples are their Primaries (owner, 2026-10-09). */}
             <HeaderCell>{nameHeader}</HeaderCell>
-            <HeaderCell>Cell group recorded</HeaderCell>
-            <HeaderCell>DCC checklist recorded</HeaderCell>
-            <HeaderCell>Status</HeaderCell>
+            {/* Figures right-aligned with their headings, as every report table's are
+                (decision 0425); the Status label after them. */}
+            <HeaderCell className="text-right">Cell group recorded</HeaderCell>
+            <HeaderCell className="text-right">DCC checklist recorded</HeaderCell>
+            <HeaderCell className="pl-7">Status</HeaderCell>
           </tr>
         </thead>
         <tbody>
@@ -447,13 +449,13 @@ function LeaderTable({
               <td className="px-3 py-3 align-top">
                 <BranchLink row={row} />
               </td>
-              <td className="px-3 py-3 align-top tabular-nums">
+              <td className="px-3 py-3 text-right align-top tabular-nums">
                 <RowFigure row={row} list="cell" deadline={deadline} open={open} onPending={onPending} />
               </td>
-              <td className="px-3 py-3 align-top tabular-nums">
+              <td className="px-3 py-3 text-right align-top tabular-nums">
                 <RowFigure row={row} list="dcc" deadline={deadline} open={open} onPending={onPending} />
               </td>
-              <td className="px-3 py-3 align-top">
+              <td className="px-3 py-3 pl-7 align-top">
                 <StatusLabel status={row.status} />
               </td>
             </tr>

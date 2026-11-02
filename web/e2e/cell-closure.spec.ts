@@ -163,6 +163,26 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
       .toBe(true);
   });
 
+  test('the tab carries the setting before the list is opened (decision 0425)', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCloser(page);
+    await mockCellRoutes(page, { mayClose: true });
+    // Installed last, so this answer wins: the church has set four months.
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ in_scope: 2, led_by_me: 1, attention_months: 4 }),
+      }),
+    );
+    await page.goto('/cells');
+
+    await page.getByRole('button', { name: 'Needs Attention' }).click();
+    const list = page.getByRole('group', { name: 'Which list' });
+    await expect(list.getByRole('button', { name: 'Inactive 4+ Months', exact: true })).toBeVisible();
+    await expect(list.getByRole('button', { name: 'Inactive 3+ Months', exact: true })).toHaveCount(0);
+  });
+
   test('the administrator sees each month in words, with no count on the tab', async ({
     page,
   }) => {
@@ -189,10 +209,11 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
-      'Members',
       'Jul 2026',
       'Aug 2026',
       'Sep 2026',
+      // Last of the figures, right-aligned, as on Active Cells (decision 0425).
+      'Members',
       'Close',
     ]);
     const row = table.getByRole('row', { name: /Youth · Tue/ });

@@ -275,6 +275,9 @@ describe('settings (SKILL.md section 7)', () => {
       // The phase is open, and is closed once by an audited Admin action
       // (section 2).
       { key: 'initial_encoding_open', value: true, updated_by: null },
+      // The verse on Record, none in the test seed; migration 0038 seeds the owner's
+      // verse on a real database (decision 0425).
+      { key: 'record_verse', value: { text: null, reference: null }, updated_by: null },
     ]);
   });
 
@@ -300,7 +303,7 @@ describe('settings (SKILL.md section 7)', () => {
     ).rejects.toThrow(/change the value instead/);
 
     const rows = await db.selectFrom('settings').select('key').execute();
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
   });
 });
 

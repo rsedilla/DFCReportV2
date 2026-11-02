@@ -210,6 +210,26 @@
       "screen": "web/app/admin/page.tsx"
     },
     {
+      "route": "GET /api/v1/settings",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/settings/record-verse",
+      "screen": "web/app/dashboard/page.tsx"
+    },
+    {
+      "route": "PUT /api/v1/settings/record-verse",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
+      "route": "PATCH /api/v1/settings/cell-attention-months",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/settings/initial-encoding/close",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
       "route": "GET /api/v1/accounts/for-person/:person_id",
       "screen": "web/components/person-account.tsx"
     },
@@ -468,11 +488,11 @@
     },
     {
       "route": "POST /api/v1/encounter-seasons",
-      "screen": "web/app/growth/training/encounters/page.tsx"
+      "screen": "web/components/encounter-seasons-frame.tsx"
     },
     {
       "route": "PATCH /api/v1/encounter-seasons/:id",
-      "screen": "web/app/growth/training/encounters/page.tsx"
+      "screen": "web/components/encounter-seasons-frame.tsx"
     },
     {
       "route": "GET /api/v1/conquest/counts",
