@@ -38,6 +38,8 @@ const input =
 
 interface Draft {
   id: string | null;
+  /** One per opening of the form, so a change back to earlier dates is a write, not a replay. */
+  editKey: string;
   mens: string;
   womens: string;
   mensParty: string;
@@ -47,6 +49,7 @@ interface Draft {
 function draftOf(season: ShownSeason | null): Draft {
   return {
     id: season?.id ?? null,
+    editKey: crypto.randomUUID(),
     mens: season?.mens_encounter_on ?? '',
     womens: season?.womens_encounter_on ?? '',
     mensParty: season?.mens_lc_party_on ?? '',
@@ -84,7 +87,13 @@ export function EncounterSeasonsFrame({ editable }: { editable: boolean }) {
         : null,
     [draft],
   );
-  const key = useMemo(() => idempotencyKeyFor('encounter-season', draft?.id, body), [draft?.id, body]);
+  // The form's own key is part of it, so changing a season back to dates it held earlier the
+  // same day is a new write rather than a replay of the earlier one; a retry of the same save
+  // still sends the same key.
+  const key = useMemo(
+    () => idempotencyKeyFor('encounter-season', draft?.editKey, draft?.id, body),
+    [draft?.editKey, draft?.id, body],
+  );
 
   const save = useMutation({
     mutationFn: () =>
@@ -97,14 +106,14 @@ export function EncounterSeasonsFrame({ editable }: { editable: boolean }) {
     },
   });
 
-  const change = (field: keyof Omit<Draft, 'id'>, value: string) => {
+  const change = (field: keyof Omit<Draft, 'id' | 'editKey'>, value: string) => {
     setDraft((current) => (current ? { ...current, [field]: value } : current));
     save.reset();
   };
 
   const field = (
     label: string,
-    name: keyof Omit<Draft, 'id'>,
+    name: keyof Omit<Draft, 'id' | 'editKey'>,
     hint: string,
   ) => (
     // The hint is described by, not part of, the field's name (WCAG 1.3.1).

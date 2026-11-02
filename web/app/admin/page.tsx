@@ -557,6 +557,9 @@ function Settings() {
     queryFn: ({ signal }) => getSettings(signal),
   });
   const [months, setMonths] = useState<number | null>(null);
+  // One per opening of an editor: every save of that edit, retries included, sends one key,
+  // and the next edit another, so changing back to an earlier value is never a replay of it.
+  const [editKey, setEditKey] = useState(() => crypto.randomUUID());
   const [verse, setVerse] = useState<{ text: string; reference: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -565,9 +568,13 @@ function Settings() {
     draft.text.trim() === '' && draft.reference.trim() === ''
       ? { text: null, reference: null }
       : { text: draft.text.trim(), reference: draft.reference.trim() };
+  // **Each key carries the edit it belongs to.** The server answers a key it has seen with the
+  // stored answer for a day, so a key built from the value alone made changing back to an
+  // earlier value replay that earlier save and store nothing (found on the live site,
+  // 2026-11-02). A retry of the same save still sends the same key.
   const saveVerse = useMutation({
     mutationFn: (draft: { text: string; reference: string }) =>
-      setRecordVerse(verseBody(draft), idempotencyKeyFor('record-verse', verseBody(draft))),
+      setRecordVerse(verseBody(draft), idempotencyKeyFor('record-verse', editKey, verseBody(draft))),
     onSuccess: async (data) => {
       queries.setQueryData(['settings'], data);
       setVerse(null);
@@ -577,7 +584,10 @@ function Settings() {
 
   const saveMonths = useMutation({
     mutationFn: (value: number) =>
-      setCellAttentionMonths(value, idempotencyKeyFor('cell-attention-months', value)),
+      setCellAttentionMonths(
+        value,
+        idempotencyKeyFor('cell-attention-months', editKey, value),
+      ),
     onSuccess: async (data) => {
       queries.setQueryData(['settings'], data);
       setMonths(null);
@@ -620,6 +630,7 @@ function Settings() {
                   variant="secondary"
                   onClick={() => {
                     saveVerse.reset();
+                    setEditKey(crypto.randomUUID());
                     setVerse({
                       text: data.record_verse.text ?? '',
                       reference: data.record_verse.reference ?? '',
@@ -687,6 +698,7 @@ function Settings() {
                   variant="secondary"
                   onClick={() => {
                     saveMonths.reset();
+                    setEditKey(crypto.randomUUID());
                     setMonths(data.cell_attention_months);
                   }}
                 >
