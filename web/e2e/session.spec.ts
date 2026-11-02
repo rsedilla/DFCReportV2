@@ -924,9 +924,10 @@ test('names the role the server honours, and asks before ending every other sess
   await expect.poll(() => endedEverywhere).toBe(1);
 });
 
-test('the Account page names permissions in plain words, never as codes (audit of 2026-10-06)', async ({
+test('the Account page names who is signed in, lists no permissions, and draws no tab row (owner, 2026-11-02)', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await mockSignedIn(page);
   await page.route('**/api/v1/people/9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9', (route) =>
     route.fulfill({
@@ -939,14 +940,19 @@ test('the Account page names permissions in plain words, never as codes (audit o
 
   const main = page.locator('main');
   await expect(main.getByText('Marilou Santos · M-000412')).toBeVisible();
-  await expect(main.getByRole('heading', { name: 'What you can do' })).toBeVisible();
-  await expect(main.getByText('Add a person', { exact: true })).toBeVisible();
-  await expect(main.getByText('See reports (view only)', { exact: true })).toBeVisible();
-  await expect(main.getByText("Men's Network", { exact: true })).toBeVisible();
-  await expect(main.getByText('Whole Church', { exact: true })).toBeVisible();
-  for (const code of ['people.create', 'OWN_SUBTREE', 'WHOLE_CHURCH', 'GRANT', '4f8c1d6a']) {
-    await expect(main).not.toContainText(code);
-  }
+  await expect(main.getByText('Who you are signed in as, and how you sign in.')).toBeVisible();
+  // The list of what the account may do is gone, and the one tab that named the page with it.
+  await expect(main.getByRole('heading', { name: 'What you can do' })).toHaveCount(0);
+  await expect(main.getByText('Add a person', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Account' })).toHaveCount(0);
+
+  // On a laptop the three boxes stand side by side, on one line.
+  const tops = await Promise.all(
+    ['Username', 'Your email', 'Your password'].map(async (name) =>
+      Math.round((await page.getByRole('region', { name }).boundingBox())!.y),
+    ),
+  );
+  expect(new Set(tops).size).toBe(1);
 });
 
 /**

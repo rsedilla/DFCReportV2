@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
-import { describeGrants } from '@/lib/capability-labels';
 import { getMe, roleLabel } from '@/lib/me';
 import { getPerson } from '@/lib/people';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
@@ -97,7 +96,7 @@ function SessionDetail() {
   });
 
   return (
-    <main id="main" className={PAGE_WIDTH.NARROW} data-form-layout>
+    <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
       <SectionFrame section="account">
       <h1 className="text-xl font-semibold tracking-tight">Account and session</h1>
 
@@ -112,7 +111,7 @@ function SessionDetail() {
       ) : null}
 
       <p className="text-muted mt-2 text-sm leading-relaxed">
-        Who you are signed in as, and what this account lets you do.
+        Who you are signed in as, and how you sign in.
       </p>
 
       {session.isPending ? (
@@ -178,37 +177,20 @@ function SessionDetail() {
             </dd>
           </dl>
 
-          <UsernameSection current={session.data.username ?? null} />
-
-          {/*
-            The account's grants in plain words, grouped by how far each reaches (audit of
-            2026-10-06). The server checks every action; nothing here grants anything.
-          */}
-          <h2 className="mt-10 text-base font-medium">What you can do</h2>
-          {session.data.capabilities.length === 0 ? (
-            <p className="text-muted mt-2 text-sm">This account has no permissions yet.</p>
-          ) : (
-            <dl className="border-line mt-4 grid gap-x-6 gap-y-3 border-t pt-4 sm:grid-cols-[12rem_1fr]">
-              {describeGrants(session.data.capabilities).map((group) => (
-                <div key={group.reach} className="contents">
-                  <dt className="text-sm font-medium">{group.reach}</dt>
-                  <dd className="text-muted text-sm leading-relaxed">
-                    <ul>
-                      {group.actions.map((action) => (
-                        <li key={action}>{action}</li>
-                      ))}
-                    </ul>
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )}
         </>
       )}
 
-      <EmailSection />
-
-      <PasswordSection />
+      {/*
+        **The three things a person changes about their account, side by side on a laptop**
+        (owner, 2026-11-02), stacked on a phone. The list of what the account may do is gone
+        (owner, 2026-11-02): the server checks every action, and the list was long and read as
+        settings to change.
+      */}
+      <div className="mt-8 grid gap-5 lg:grid-cols-3 lg:items-start">
+        {session.data ? <UsernameSection current={session.data.username ?? null} /> : null}
+        <EmailSection />
+        <PasswordSection />
+      </div>
 
       <h2 className="border-line mt-12 border-t pt-8 text-base font-medium">Sign out</h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -312,7 +294,7 @@ function EmailSection() {
   const passwordError = fieldErrorFor(failure, 'current_password');
 
   return (
-    <section aria-labelledby="email-heading" className="border-line mt-10 max-w-xl border p-5">
+    <section aria-labelledby="email-heading" className="border-line max-w-xl border p-5 lg:max-w-none">
       <h2 id="email-heading" className="text-lg font-bold tracking-tight">
         Your email
       </h2>
@@ -409,7 +391,7 @@ function PasswordSection() {
   const nextError = fieldErrorFor(failure, 'new_password');
 
   return (
-    <section aria-labelledby="password-heading" className="border-line mt-10 max-w-xl border p-5">
+    <section aria-labelledby="password-heading" className="border-line max-w-xl border p-5 lg:max-w-none">
       <h2 id="password-heading" className="text-lg font-bold tracking-tight">
         Your password
       </h2>
@@ -513,7 +495,7 @@ function UsernameSection({ current }: { current: string | null }) {
   });
 
   return (
-    <section aria-labelledby="username-heading" className="border-line mt-8 max-w-xl border p-5">
+    <section aria-labelledby="username-heading" className="border-line max-w-xl border p-5 lg:max-w-none">
       <h2 id="username-heading" className="text-lg font-bold tracking-tight">
         Username
       </h2>

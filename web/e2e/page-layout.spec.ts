@@ -70,11 +70,11 @@ test.describe('page widths (decision 0402)', () => {
       .toBe(true);
   });
 
-  test('Account keeps 768px, being read top to bottom (decision 0410)', async ({ page }) => {
+  test('Account is as wide as a list (decision 0421, replacing 0410 for Account)', async ({ page }) => {
     await page.goto('/session');
     await expect(page.getByRole('heading', { name: 'Account and session' })).toBeVisible();
 
-    await expect(main(page)).toHaveCSS('max-width', '768px');
+    await expect(main(page)).toHaveCSS('max-width', '1280px');
   });
 });
 
