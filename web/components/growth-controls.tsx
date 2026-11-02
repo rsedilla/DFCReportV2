@@ -39,8 +39,9 @@ export function GrowthTabs({
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  // **On the recording screens SUYNL is an item of its own** (decision 0323), shown as one tab
-  // in the same frame (owner, 2026-10-19): Training is refused to such an account.
+  // **On the recording screens SUYNL is an item of its own** (decision 0323): Training is refused
+  // to such an account. It was shown as one tab in the same frame (owner, 2026-10-19) until
+  // decision 0420.
   // No tabs until the server names the screens, so they never flash (owner, 2026-10-11).
   // The pane stays where it is either way, so the screen inside is not remounted.
   const tabbed = !me.isPending;
@@ -49,9 +50,12 @@ export function GrowthTabs({
   // back beside it. Conquest is not a Growth tab (decision 0407).
   const suynlOnly = me.data?.screens === 'RECORDING' || isBranchReader(me.data);
   const tabs = suynlOnly ? TABS.filter((tab) => tab.href === '/growth/suynl') : TABS;
+  // **A row holding one tab is not drawn** (ruling of 2026-11-02, decision 0420): it offers no
+  // choice. The pane keeps its frame, closed along the top.
+  const row = tabbed && tabs.length > 1;
   return (
     <>
-      {tabbed ? (
+      {row ? (
         <nav aria-label="Growth" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
           {tabs.map((tab) => {
             const active = tab.href === current;
@@ -69,7 +73,9 @@ export function GrowthTabs({
           })}
         </nav>
       ) : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
+      <div className={row ? TAB_PANE : tabbed ? cn(TAB_PANE, 'mt-6 border-t-2') : 'mt-6'}>
+        {children}
+      </div>
     </>
   );
 }

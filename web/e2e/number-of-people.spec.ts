@@ -45,8 +45,7 @@ test.describe('a Full view leader’s # of People', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which report' });
     await expect(tabs.getByRole('link')).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
+      'Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',

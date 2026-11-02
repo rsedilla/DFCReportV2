@@ -230,7 +230,8 @@ test.describe('the Cells total (decision 0400)', () => {
     await page.goto('/cells');
     await expect(headline(page)).toBeVisible();
 
-    for (const name of ['Closed Cells', 'Under 3 Members', 'Inactive 3+ Months']) {
+    // Under 3 Members and Inactive 3+ Months are in the Needs Attention switch (decision 0420).
+    for (const name of ['Closed Cells', 'Needs Attention', 'Under 3 Members', 'Inactive 3+ Months']) {
       await page.getByRole('button', { name, exact: true }).click();
       await expect(page).toHaveURL(/view=/);
       await expect(headline(page)).toHaveCount(0);

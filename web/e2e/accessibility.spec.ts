@@ -1319,7 +1319,7 @@ const SCANS = [
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-      ).toHaveText('CG Attendance');
+      ).toHaveText('Attendance');
     },
   },
   {
@@ -2000,13 +2000,14 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
-    // The five Reports tabs, the two views and the month's two arrows: **nine**; the names open
-    // nothing (decision 0380). Settled on the last name, which renders from the data.
+    // The four Reports tabs (decision 0420), the two views and the month's two arrows:
+    // **eight**; the names open nothing (decision 0380). Settled on the last name, which
+    // renders from the data.
     name: 'number of people',
     route: '/reports/number-of-people',
     settleRole: 'cell' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 9,
+    minimum: 8,
   },
   {
     // The three People tabs, the open and closed disclosure buttons, each name link and Show
@@ -2027,15 +2028,16 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's five report tabs (decision 0380), the one switch's three, Weekly,
-    // Monthly and Last 12 months (decision 0398), and the navigator's two: **ten**. No Figures
+    // A Full view leader's four report tabs and the Cell Group / DCC switch's two (decision
+    // 0420), the one switch's three, Weekly, Monthly and Last 12 months (decision 0398), and the
+    // navigator's two: **eleven**. No Figures
     // for, and the names of their 12 open nothing. Settled on the last name, which renders from
     // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'cell' as const,
     settle: 'Teresita Alcantara',
-    minimum: 10,
+    minimum: 11,
   },
   {
     // The same controls, and the Back link: **eleven**.
@@ -2054,31 +2056,33 @@ const TARGET_SWEEP = [
     minimum: 10,
   },
   {
-    // The five report tabs, the switch's Monthly and Last 12 months (decision 0398) and the
-    // month's two arrows: **nine** (decision 0380).
+    // The four report tabs (decision 0420), the switch's Monthly and Last 12 months (decision
+    // 0398) and the month's two arrows: **eight** (decision 0380).
     name: 'number of cell groups, own branch',
     route: '/reports/number-of-cells',
     settleRole: 'cell' as const,
     settle: 'Efren Dimaculangan',
-    minimum: 9,
+    minimum: 8,
   },
   {
-    // The five report tabs and the switch's three (decisions 0380 and 0398): **eight**. Show the
-    // figures is a `summary`, which this count does not take.
+    // The four report tabs and the Cell Group / DCC switch's two (decision 0420), and the
+    // switch's three (decisions 0380 and 0398): **nine**. Show the figures is a `summary`, which
+    // this count does not take.
     name: 'last 12 months, own branch',
     route: '/trends',
     settleRole: 'heading' as const,
     settle: 'CG Attendance · Your branch',
-    minimum: 8,
+    minimum: 9,
   },
   {
-    // A Full view leader's one Growth tab and Back to SUYNL (decision 0360), the sweep's
-    // account being no administrator: **two**. The table holds no control for it.
+    // Back to SUYNL alone, a Full view leader's one Growth tab being drawn as no row (decisions
+    // 0360 and 0420), the sweep's account being no administrator: **one**. The table holds no
+    // control for it.
     name: 'encounter seasons',
     route: '/growth/training/encounters',
     settleRole: 'link' as const,
     settle: 'Back to SUYNL',
-    minimum: 2,
+    minimum: 1,
   },
   {
     // Back link and two radios per person across two people. No Save: it appears once
@@ -2092,15 +2096,15 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The one tab (decision 0360), two cards (decision 0386), the search, Search and the filter,
-    // four name links, twenty boxes across the two rows the reader may file for, Edit lessons
-    // on the graduated row, and the two pager buttons. Settled on Edit lessons, which renders
+    // No tab, the one tab being drawn as no row (decisions 0360 and 0420), two cards (decision
+    // 0386), the search, Search and the filter, four name links, twenty boxes across the two
+    // rows the reader may file for, Edit lessons on the graduated row, and the two pager buttons. Settled on Edit lessons, which renders
     // from the data. Everyone, by address, because the opening view leaves the graduated row
     // out (decision 0287).
     name: 'growth suynl',
     route: '/growth/suynl?all=1',
     settle: 'Edit',
-    minimum: 32,
+    minimum: 31,
   },
   {
     // The one tab (decision 0360), the link to the Encounter seasons (decision 0296), six cards, the search,

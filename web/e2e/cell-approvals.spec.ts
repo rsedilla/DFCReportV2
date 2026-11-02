@@ -87,16 +87,26 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await page.goto('/cells');
 
-    // The administrator's seven tabs (decisions 0366, 0381 and 0392).
+    // The administrator's four tabs (decision 0420): the lists that ask for action share one.
     const tabs = page.getByRole('group', { name: 'Which Cells' });
     await expect(tabs.getByRole('button')).toHaveText([
       'Active Cells',
+      'Needs Attention',
+      'Closed Cells',
+      /^Cells to Approve\s*1$/,
+    ]);
+    // It opens on the first of them, with a switch to the rest.
+    await tabs.getByRole('button', { name: 'Needs Attention' }).click();
+    await expect(page).toHaveURL(/view=NOCELL/);
+    await expect(tabs.getByRole('button', { name: 'Needs Attention' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('group', { name: 'Which list' }).getByRole('button')).toHaveText([
       /^No CG Yet/,
       'Under 3 Members',
       'Inactive 3+ Months',
-      'Closed Cells',
       /^Time Clashes/,
-      /^Cells to Approve\s*1$/,
     ]);
 
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
@@ -214,9 +224,10 @@ test.describe('Under 3 Members (decisions 0353 and 0366)', () => {
     });
 
     await page.goto('/cells');
-    // The filters left the bar and became tabs.
+    // The filters left the bar and became tabs, and then lists under Needs Attention (decision 0420).
     await expect(page.getByRole('button', { name: /fewer than 3 members/i })).toHaveCount(0);
-    const tab = page.getByRole('button', { name: 'Under 3 Members' });
+    await page.getByRole('button', { name: 'Needs Attention' }).click();
+    const tab = page.getByRole('group', { name: 'Which list' }).getByRole('button', { name: 'Under 3 Members' });
     await expect(tab).toHaveAttribute('aria-pressed', 'false');
     await tab.click();
 
@@ -270,8 +281,9 @@ test.describe('Time Clashes (decision 0392)', () => {
     );
 
     await page.goto('/cells');
+    await page.getByRole('button', { name: 'Needs Attention' }).click();
     const tab = page
-      .getByRole('group', { name: 'Which Cells' })
+      .getByRole('group', { name: 'Which list' })
       .getByRole('button', { name: /^Time Clashes/ });
     await expect(tab).toHaveText(/^Time Clashes\s*1$/);
     await tab.click();
@@ -322,7 +334,7 @@ test.describe('Time Clashes (decision 0392)', () => {
   });
 });
 
-test.describe('the Cells tabs on a phone (decision 0366)', () => {
+test.describe('the Cells tabs on a phone (decisions 0366 and 0420)', () => {
   for (const width of [320, 390]) {
     test(`wrap at ${width}px, with every tab inside the screen and no sideways scroll`, async ({
       page,
@@ -335,7 +347,7 @@ test.describe('the Cells tabs on a phone (decision 0366)', () => {
 
       await page.goto('/cells');
       const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
-      await expect(tabs).toHaveCount(7);
+      await expect(tabs).toHaveCount(4);
 
       const tops = new Set<number>();
       for (const tab of await tabs.all()) {
@@ -351,4 +363,37 @@ test.describe('the Cells tabs on a phone (decision 0366)', () => {
       ).toBe(true);
     });
   }
+});
+
+test.describe('fewer tabs (decision 0420)', () => {
+  test('a Full view leader ticked Approves Cells keeps No CG Yet as its own tab', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockTickedApprover(page);
+    await mockQueue(page);
+
+    await page.goto('/cells');
+    const tabs = page.getByRole('group', { name: 'Which Cells' });
+    await expect(tabs.getByRole('button')).toHaveText(['Active Cells', /^No CG Yet/, /^Cells to Approve/]);
+    await expect(tabs.getByRole('button', { name: 'Needs Attention' })).toHaveCount(0);
+  });
+
+  test('on a phone an odd last tab fills its row', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockTickedApprover(page);
+    await mockQueue(page);
+
+    await page.goto('/cells');
+    const tabs = page.getByRole('group', { name: 'Which Cells' });
+    const buttons = tabs.getByRole('button');
+    await expect(buttons).toHaveCount(3);
+    const row = await tabs.boundingBox();
+    const first = await buttons.nth(0).boundingBox();
+    const last = await buttons.nth(2).boundingBox();
+    // Two to a row, the third alone filling the second row.
+    expect(Math.abs(last!.width - row!.width)).toBeLessThanOrEqual(2);
+    expect(first!.width).toBeLessThan(row!.width / 2 + 2);
+  });
 });

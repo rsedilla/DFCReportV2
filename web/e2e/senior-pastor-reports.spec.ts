@@ -33,7 +33,7 @@ const MENS_TABLE = `${SP_MENS_ROOT.full_name}’s leaders`;
 const WOMENS_TABLE = `${SP_WOMENS_ROOT.full_name}’s leaders`;
 
 test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
-  test('are CG attendance, DCC attendance and the three counts, each count named in words', async ({
+  test('are Attendance and the three counts, each count named in words (decision 0420)', async ({
     page,
   }) => {
     await seniorPastor(page);
@@ -43,8 +43,7 @@ test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
     await expect(tabs).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
+      'Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',
@@ -322,7 +321,7 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
   const graph = (page: Page) => page.getByRole('img', { name: /, November 2025 to October 2026: / });
 
-  test('has the same five figures as tabs, keeping the leader chosen', async ({ page }) => {
+  test('has the same four tabs, keeping the leader chosen', async ({ page }) => {
     await seniorPastor(page);
     await mockChurchCounts(page);
     const asked = await mockTrends(page);
@@ -331,8 +330,7 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
     await expect(tabs).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
+      'Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',

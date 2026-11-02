@@ -77,15 +77,15 @@ test.describe('the Growth tabs', () => {
     await expect(tabs.getByRole('link')).toHaveText(['SUYNL', 'Training']);
   });
 
-  test('are SUYNL alone for a Full view leader, and Training by its address shows the note (decisions 0360 and 0379)', async ({
+  test('are not drawn for a Full view leader, SUYNL alone, and Training by its address shows the note (decisions 0360, 0379 and 0420)', async ({
     page,
   }) => {
     await openSuynl(page);
     await mockTraining(page);
 
-    const tabs = page.getByRole('navigation', { name: 'Growth' });
-    await expect(tabs.getByRole('link')).toHaveText(['SUYNL']);
-    await expect(tabs.getByRole('link', { name: 'SUYNL' })).toHaveAttribute('aria-current', 'page');
+    // A row holding one tab is not drawn (decision 0420); the sidebar marks SUYNL current.
+    await expect(page.getByRole('navigation', { name: 'Growth' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'SUYNL' })).toBeVisible();
 
     // Hidden, not withdrawn, and not offered by its address either (decision 0379).
     await page.goto('/growth/training');

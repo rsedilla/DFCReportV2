@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-02, the trigger being decision 0419: of 418 files, 417 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0419 each moved the first two and
+2026-11-02, the trigger being decision 0420: of 419 files, 418 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0420 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-02 and triggered by 0419, and was left stale by 0420 the same day. The one before that was dated
 2026-11-01 and triggered by 0418, and was left stale by 0419 the next day. The one before that was dated
 2026-11-01 and triggered by 0417, and was left stale by 0418 the same day. The one before that was dated
 2026-11-01 and triggered by 0416, and was left stale by 0417 the same day. The one before that was dated
@@ -880,6 +881,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-01 — [Tabs are 13rem, and a list's filters are pills and chips](docs/decisions/0417-tabs-13rem-and-filters-as-pills.md)
 - 2026-11-01 — [An administrator records a DCC line where nobody above has an account](docs/decisions/0418-an-administrator-records-where-nobody-above-has-an-account.md)
 - 2026-11-02 — [The Admin area: who sees it, where it sits, and its Accounts list](docs/decisions/0419-the-admin-area.md)
+- 2026-11-02 — [Fewer tabs: Needs Attention on Cells, Attendance on Reports](docs/decisions/0420-fewer-tabs.md)
 
 ### Open — awaiting a ruling
 

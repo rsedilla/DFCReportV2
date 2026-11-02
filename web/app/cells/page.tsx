@@ -19,6 +19,7 @@ import { CloseCellDialog } from '@/components/close-cell-dialog';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
 import { ScheduleClashes } from '@/components/schedule-clashes';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import {
   categoryLabel,
   cellShortName,
@@ -47,6 +48,9 @@ const PAGE_SIZE = 10;
 /** The page's tabs, each a view of one address (decisions 0366 and 0381). */
 const VIEWS = ['ACTIVE', 'NOCELL', 'FEW', 'QUIET', 'CLOSED', 'CLASH', 'APPROVE'] as const;
 type CellsView = (typeof VIEWS)[number];
+
+/** The lists that ask for action, one tab between them where more than one is offered (decision 0420). */
+const ATTENTION: readonly CellsView[] = ['NOCELL', 'FEW', 'QUIET', 'CLASH'];
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -212,6 +216,20 @@ function CellsIndex() {
     ['APPROVE', 'Cells to Approve', approvals.data?.length ?? null],
   ];
   const tabs = everyTab.filter(([key]) => offered.includes(key));
+  // **The lists that ask for action share one tab, *Needs Attention*, where more than one is
+  // offered** (decision 0420): a switch inside it chooses the list, and each keeps its address.
+  // A Full view leader is offered *No CG Yet* alone, which keeps its own tab.
+  const attention = tabs.filter(([key]) => ATTENTION.includes(key));
+  const grouped = attention.length > 1;
+  const attentionShown = grouped && ATTENTION.includes(shown);
+  type TabEntry = [CellsView, string, number | string | null, boolean];
+  const tabRow: TabEntry[] = tabs.flatMap(([key, label, count]): TabEntry[] => {
+    if (!grouped || !ATTENTION.includes(key)) {
+      return [[key, label, count, shown === key]];
+    }
+    // The group stands where its first list stood, and opens on that list.
+    return key === attention[0][0] ? [[key, 'Needs Attention', null, attentionShown]] : [];
+  });
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -241,21 +259,21 @@ function CellsIndex() {
         aria-label="Which Cells"
         className={cn('mt-6 min-h-11', TAB_GRID, TAB_ROW)}
       >
-        {me.data === undefined ? null : tabs.map(([key, label, count]) => (
+        {me.data === undefined ? null : tabRow.map(([key, label, count, active]) => (
           <button
-            key={key}
+            key={label}
             type="button"
-            aria-pressed={shown === key}
+            aria-pressed={active}
             onClick={() => {
               setView(key);
               go({ view: key === 'ACTIVE' ? null : key, mine: null });
             }}
-            className={tabClasses(shown === key)}
+            className={tabClasses(active)}
           >
             {label}
             {/* A count of 0 shows no box, as on Record's tabs (decision 0349). */}
             {count && count !== '0' ? (
-              <span className={countClasses(shown === key)}>
+              <span className={countClasses(active)}>
                 {count}
               </span>
             ) : null}
@@ -264,6 +282,23 @@ function CellsIndex() {
       </div>
 
       <div className={TAB_PANE}>
+        {attentionShown ? (
+          <ViewSwitch<CellsView>
+            label="Which list"
+            // Two by two on a phone, rather than three and a lone fourth.
+            className="grid-cols-2"
+            options={attention.map(([key, label, count]) => ({
+              key,
+              label,
+              count: count && count !== '0' ? String(count) : null,
+            }))}
+            value={shown}
+            onChange={(next) => {
+              setView(next);
+              go({ view: next, mine: null });
+            }}
+          />
+        ) : null}
         {shown === 'APPROVE' ? (
           <CellApprovals wholeChurch={holdsWholeChurch(me.data, 'cell.approve_leadership')} />
         ) : shown === 'NOCELL' ? (
