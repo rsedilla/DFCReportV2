@@ -280,8 +280,11 @@ function TrendsChart({
     setHidden(next);
     remember('trends-hidden', next);
   };
+  // A fixed list rather than `Intl`, whose short September is "Sept" beside "Aug" and "Oct".
   const short = (month: string) =>
-    new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][
+      Number(month.slice(5, 7)) - 1
+    ];
 
   // Drawn at the width it is shown at, so its labels stay 12px on a phone rather than
   // shrinking with a fixed drawing (owner's request to tidy, 2026-10-09).
