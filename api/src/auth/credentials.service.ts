@@ -33,6 +33,9 @@ import type { CurrentClaim } from '../common/idempotency/current-idempotency.dec
 /** Section 6 gives a reset token "a short expiration (e.g. 30 minutes)". */
 const RESET_LIFETIME_MS = 30 * 60 * 1000;
 
+/** How long a reset request takes to answer, whether or not the address has an account. */
+export const RESET_ANSWER_FLOOR_MS = 300;
+
 /** A link confirming a new email address lasts a day (decision 0415). */
 const EMAIL_CHANGE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
@@ -70,18 +73,25 @@ export class CredentialsService {
    * an error on the hit path and a success on the miss path is the same oracle
    * wearing a different hat.
    *
-   * **The timing is not equalized, and that is a known gap rather than a claim.**
-   * The miss branch returns after one `SELECT`; the hit branch runs a transaction,
-   * so the two are distinguishable by a caller who measures. An earlier version of
-   * this comment asserted the opposite — that the branches did "comparable work" —
-   * which was false of the code beneath it.
+   * **Both answers wait until `RESET_ANSWER_FLOOR_MS` has passed.** The miss branch
+   * returns after one `SELECT` and the hit branch runs a transaction, so without the
+   * floor the two are told apart by a caller who measures. The floor sits well above
+   * what the hit branch takes, so both answer at the floor; a hit slower than it, under
+   * load, still answers later, and that is the gap left.
    *
-   * **Delivery is not awaited**, which keeps the gap at the scale of one database
-   * write. A real provider takes around a second to accept a message, and awaiting it
-   * would make the hit path slower by that much. `PasswordService` does the honest
-   * version of equalizing for sign-in, where the comparison is one hash against one.
+   * **Delivery is not awaited**: a real provider takes around a second to accept a
+   * message, which would put the hit branch past the floor every time.
    */
   async requestPasswordReset(email: string): Promise<void> {
+    const started = Date.now();
+    await this.beginReset(email);
+    const left = RESET_ANSWER_FLOOR_MS - (Date.now() - started);
+    if (left > 0) {
+      await new Promise((resolve) => setTimeout(resolve, left));
+    }
+  }
+
+  private async beginReset(email: string): Promise<void> {
     const account = await this.db
       .selectFrom('accounts')
       .select(['id', 'person_id', 'email', 'status'])

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import request from 'supertest';
 
+import { RESET_ANSWER_FLOOR_MS } from '../../src/auth/credentials.service';
 import { PasswordService } from '../../src/auth/password.service';
 import { codeForStep, stepAt } from '../../src/auth/second-step.crypto';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -1643,6 +1644,18 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
 
       expect(outbox(app).sent).toHaveLength(1);
       expect(outbox(app).last('PASSWORD_RESET')?.to.email).toBe('ester@example.test');
+    });
+
+    it('takes no less than the floor to answer, for an address that exists and one that does not', async () => {
+      // A miss answered after one SELECT and a hit after a transaction would tell a
+      // caller who measures which addresses hold an account.
+      await activeEster();
+
+      for (const email of ['ester@example.test', 'nobody@example.test']) {
+        const started = Date.now();
+        await forgot(email).expect(204);
+        expect(Date.now() - started).toBeGreaterThanOrEqual(RESET_ANSWER_FLOOR_MS);
+      }
     });
 
     it('replaces the password and ends every existing session', async () => {
