@@ -43,7 +43,9 @@ export function SectionFrame({ section, children }: { section: Section; children
   // A tab whose page is not on this account's screens is not offered (decision 0379): the
   // Senior Pastors reach a Cell's pages from Record and have no Cells list.
   const offered = useOffered();
-  const tabShown = chosen !== null && offered(chosen.href);
+  // **Account draws no tab row** (owner, 2026-11-02): one tab that names the page itself offers
+  // no choice, as decision 0420 says of Growth. Cells and Record keep theirs, which lead back.
+  const tabShown = chosen !== null && section !== 'account' && offered(chosen.href);
 
   return (
     <>
@@ -63,7 +65,17 @@ export function SectionFrame({ section, children }: { section: Section; children
               </Link>
             </nav>
           ) : null}
-          <div className={tabShown ? cn(TAB_PANE, 'pt-4') : 'mt-6'}>{children}</div>
+          <div
+            className={
+              tabShown
+                ? cn(TAB_PANE, 'pt-4')
+                : section === 'account'
+                  ? cn(TAB_PANE, 'mt-6 border-t-2 pt-4')
+                  : 'mt-6'
+            }
+          >
+            {children}
+          </div>
         </>
       )}
     </>
