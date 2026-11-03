@@ -64,7 +64,7 @@ test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
 test.describe('the three counts (decisions 0326 and 0327)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test('# of Cells: Total and the three categories, a table per root headed Primaries', async ({
+  test('# of Cells: Total and the four categories, a table per root headed Primaries', async ({
     page,
   }) => {
     await seniorPastor(page);
@@ -73,13 +73,14 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-cells');
 
     const counts = page.getByRole('region', { name: 'Number of Cell Groups' });
-    await expect(counts.getByRole('term')).toHaveText(['Total', 'Youth', 'Young Pro', 'Couple']);
-    await expect(counts.getByRole('definition')).toHaveText(['5', '1', '3', '1']);
+    await expect(counts.getByRole('term')).toHaveText(['Total', 'J12 Kids', 'Youth', 'Young Pro', 'Couple']);
+    await expect(counts.getByRole('definition')).toHaveText(['5', '0', '1', '3', '1']);
 
     const mens = page.getByRole('table', { name: MENS_TABLE });
     await expect(mens.getByRole('columnheader')).toHaveText([
       'Primaries',
       'Total',
+      'J12 Kids',
       'Youth',
       'Young Pro',
       'Couple',
@@ -93,11 +94,40 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
       SP_PRIMARIES.abad.full_name,
       '2',
       '0',
+      '0',
       '2',
       '0',
     ]);
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
-    await expect(page.getByText('Total 1 · Youth 0 · Young Pro 0 · Couple 1')).toBeVisible();
+    await expect(page.getByText('Total 1 · J12 Kids 0 · Youth 0 · Young Pro 0 · Couple 1')).toBeVisible();
+  });
+
+  test('# of Cells sets its five figures on one line, and on a phone Total across the top', async ({
+    page,
+  }) => {
+    await seniorPastor(page);
+    await mockChurchCounts(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/reports/number-of-cells');
+
+    const tiles = page
+      .getByRole('region', { name: 'Number of Cell Groups' })
+      .locator('dl')
+      .first()
+      .locator('> div');
+    await expect(tiles).toHaveCount(5);
+    const boxes = async () =>
+      Promise.all((await tiles.all()).map(async (tile) => (await tile.boundingBox())!));
+    expect(new Set((await boxes()).map((box) => box.y)).size).toBe(1);
+
+    // On a phone: Total alone on the first line, then the four two by two (decision 0429).
+    await page.setViewportSize({ width: 390, height: 844 });
+    const [total, kids, youth, youngPro, couple] = await boxes();
+    expect(kids.y).toBeGreaterThan(total.y);
+    expect(kids.y).toBe(youth.y);
+    expect(youngPro.y).toBe(couple.y);
+    expect(youngPro.y).toBeGreaterThan(kids.y);
+    expect(total.width).toBeGreaterThan(kids.width * 1.5);
   });
 
   test('# of Cell Leaders and # of people each show their one figure', async ({ page }) => {

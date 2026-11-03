@@ -896,6 +896,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-02 — [The Admin's Settings tab](docs/decisions/0425-the-admin-settings-tab.md)
 - 2026-11-03 — [A person's page sets its boxes three across on a wide screen](docs/decisions/0426-a-persons-page-three-across-on-a-wide-screen.md)
 - 2026-11-03 — [The Cells list shows each Cell's ID under its name](docs/decisions/0427-the-cells-list-shows-each-cell-id.md)
+- 2026-11-03 — [J12 Kids, a fourth Cell category, first in order](docs/decisions/0429-j12-kids-a-fourth-cell-category.md)
 
 ### Open — awaiting a ruling
 

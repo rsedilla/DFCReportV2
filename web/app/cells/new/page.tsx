@@ -112,6 +112,7 @@ function NewCellForm() {
 
           <RadioGroup
             legend="Category"
+            columns={4}
             name="category"
             required
             value={category}

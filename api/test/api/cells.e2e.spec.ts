@@ -117,6 +117,15 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     expect(rows.rows).toEqual([{ category: 'YOUTH', day_of_week: 6, person_id: mark.id }]);
   });
 
+  it('creates a J12 Kids Cell, and refuses a category the specification does not name', async () => {
+    // The fourth category (decision 0429), and the list still closed beyond it.
+    const response = await post(admin, { ...body(mark.id), category: 'J12_KIDS' }).expect(201);
+    expect(response.body).toMatchObject({ category: 'J12_KIDS' });
+
+    const refused = await post(admin, { ...body(mark.id), category: 'TEENS' }).expect(422);
+    expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
   it('starts the schedule row at the Cell own created_at, to the microsecond', async () => {
     // Section 10 requires the two to be written from one expression, because
     // equality with a column on another table is exact: an application-computed

@@ -14,7 +14,13 @@ import { EMAIL_PORT } from '../../src/email/email.port';
 
 import { CapturingEmailAdapter } from './capturing-email.adapter';
 
-import type { AccountRole, Database, NetworkName, Sex } from '../../src/database/schema';
+import type {
+  AccountRole,
+  CellCategory,
+  Database,
+  NetworkName,
+  Sex,
+} from '../../src/database/schema';
 
 /**
  * Fixture data is invented, always. The church holds records for minors and this
@@ -443,7 +449,7 @@ export interface TestCell {
    * fixture rather than restating the default. A test that restates it passes if the
    * default changes underneath it and stops testing what its name says.
    */
-  category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+  category: CellCategory;
   dayOfWeek: number;
   timeOfDay: string;
 }
@@ -470,7 +476,7 @@ export async function createCell(
   db: Kysely<Database>,
   options: {
     leader: TestPerson;
-    category?: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+    category?: CellCategory;
     /** ISO 8601: 1 is Monday, 7 is Sunday (section 20). */
     dayOfWeek?: number;
     timeOfDay?: string;

@@ -18,10 +18,10 @@ import { authenticatedRequest } from './session';
  * screen is given a comparator.
  */
 
-export type CellCategory = 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+export type CellCategory = 'J12_KIDS' | 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
 
-/** The three categories, in the order every Cell form offers them. */
-export const CELL_CATEGORIES: readonly CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+/** The four categories, youngest to oldest, the order every Cell form offers them (decision 0429). */
+export const CELL_CATEGORIES: readonly CellCategory[] = ['J12_KIDS', 'YOUTH', 'YOUNG_PRO', 'COUPLE'];
 
 /** A Cell's meeting day as an ISO 8601 weekday, 1 Monday through 7 Sunday (section 20). */
 export const CELL_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -487,6 +487,8 @@ export function cellShortName(cell: {
 
 export function categoryLabel(category: CellCategory): string {
   switch (category) {
+    case 'J12_KIDS':
+      return 'J12 Kids';
     case 'YOUTH':
       return 'Youth';
     case 'YOUNG_PRO':

@@ -136,6 +136,7 @@ export function RestartCellDialog({
 
         <RadioGroup
           legend="Category"
+          columns={2}
           name="category"
           value={category}
           onChange={setCategory}

@@ -157,6 +157,8 @@ export interface LeaderRecordingStatus {
 /** The Senior Pastors' *Number of Cells* and *Number of people* for one scope (decision 0326). */
 export interface ChurchCountFigures {
   cellGroups: number;
+  /** Since decision 0429. */
+  j12Kids: number;
   youth: number;
   youngPro: number;
   couple: number;
@@ -1430,6 +1432,7 @@ export class ReportingService {
 
         return {
           cellGroups: counted.length,
+          j12Kids: counted.filter((cell) => cell.category === 'J12_KIDS').length,
           youth: counted.filter((cell) => cell.category === 'YOUTH').length,
           youngPro: counted.filter((cell) => cell.category === 'YOUNG_PRO').length,
           couple: counted.filter((cell) => cell.category === 'COUPLE').length,
@@ -1566,6 +1569,7 @@ export class ReportingService {
 
         return {
           cellGroups: counted.length,
+          j12Kids: counted.filter((cell) => cell.category === 'J12_KIDS').length,
           youth: counted.filter((cell) => cell.category === 'YOUTH').length,
           youngPro: counted.filter((cell) => cell.category === 'YOUNG_PRO').length,
           couple: counted.filter((cell) => cell.category === 'COUPLE').length,

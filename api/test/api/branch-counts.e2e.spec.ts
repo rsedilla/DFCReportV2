@@ -139,7 +139,15 @@ describe('GET /reports/counts/branch and /reports/trends/branch (decision 0380)'
       .set('Authorization', `Bearer ${as.accessToken}`);
   }
 
-  const FIELDS = ['cell_groups', 'youth', 'young_pro', 'couple', 'cell_leaders', 'people'] as const;
+  const FIELDS = [
+    'cell_groups',
+    'j12_kids',
+    'youth',
+    'young_pro',
+    'couple',
+    'cell_leaders',
+    'people',
+  ] as const;
   type Figures = Record<(typeof FIELDS)[number], number>;
   interface Counts {
     current: boolean;

@@ -273,6 +273,7 @@ async function commitmentsOfWithin(
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const CATEGORY_NAMES: Record<CellCategory, string> = {
+  J12_KIDS: 'J12 Kids',
   YOUTH: 'Youth',
   YOUNG_PRO: 'Young Pro',
   COUPLE: 'Couple',
