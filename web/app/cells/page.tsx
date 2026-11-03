@@ -418,6 +418,7 @@ function CellsIndex() {
                       <span className="font-medium">
                         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                       </span>
+                      <CellIdLine cellId={cell.cell_id} />
                     </td>
                     <td className="px-3 py-3">{cell.leader.full_name}</td>
                     <td className="px-3 py-3">
@@ -513,6 +514,7 @@ function CellsIndex() {
                         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
                       </Link>
                       {leads(cell) ? <YouLead /> : null}
+                      <CellIdLine cellId={cell.cell_id} />
                     </td>
                     <td className="px-3 py-3">{cell.leader.full_name}</td>
                     <td className="px-3 py-3 whitespace-nowrap">
@@ -632,6 +634,11 @@ function CellsHeadline() {
 }
 
 /** The mark on the reader's own Cell, in words, so the row's tint is never the only sign. */
+/** A Cell's ID under its name: the Cells page alone shows it on a list (decision 0427). */
+function CellIdLine({ cellId }: { cellId: string }) {
+  return <span className="text-muted block text-sm font-normal tabular-nums">{cellId}</span>;
+}
+
 function YouLead() {
   return (
     <span className="text-accent ml-2 inline-block border border-current px-1.5 py-0.5 align-middle text-[11px] font-bold tracking-[0.06em] whitespace-nowrap uppercase">
@@ -724,6 +731,7 @@ function QuietCells({
                   <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={`${LINK} font-medium`}>
                     {name}
                   </Link>
+                  <CellIdLine cellId={cell.cell_id} />
                 </td>
                 <td className="px-3 py-3">{cell.leader.full_name}</td>
                 {(cell.no_meeting ?? []).map((entry) => (
@@ -763,6 +771,7 @@ function QuietCells({
                   {name}
                 </Link>
               </h2>
+              <CellIdLine cellId={cell.cell_id} />
               <p className="text-muted mt-1 text-sm">
                 {cell.leader.full_name} · {cell.member_count}{' '}
                 {cell.member_count === 1 ? 'member' : 'members'}
@@ -857,6 +866,7 @@ function ClosedCellCard({
       <h2 className="text-base font-medium">
         {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
       </h2>
+      <CellIdLine cellId={cell.cell_id} />
       <dl className="text-muted mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         <div className="flex gap-2">
           <dt>Last leader</dt>
@@ -889,16 +899,19 @@ function CellCard({ cell, month, mine }: { cell: CellSummary; month: string; min
   return (
     <li className={cn('border-line border p-4', mine && 'bg-accent-tint shadow-[inset_4px_0_0_var(--accent)]')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-base font-medium">
-          {/*
-            `inline-flex` with a 24px minimum height, because 2.5.8 measures the
-            target and not the text.
-          */}
-          <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
-            {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-          </Link>
-          {mine ? <YouLead /> : null}
-        </h2>
+        <div>
+          <h2 className="text-base font-medium">
+            {/*
+              `inline-flex` with a 24px minimum height, because 2.5.8 measures the
+              target and not the text.
+            */}
+            <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
+              {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
+            </Link>
+            {mine ? <YouLead /> : null}
+          </h2>
+          <CellIdLine cellId={cell.cell_id} />
+        </div>
         <CoverageFigure
           recorded={cell.coverage.recorded}
           scheduled={cell.coverage.scheduled}
