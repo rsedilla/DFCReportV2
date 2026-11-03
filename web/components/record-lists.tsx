@@ -1157,8 +1157,8 @@ export function PendingCgPane({
           Pending CG Records
         </h2>
         <p className="text-muted text-sm">
-          Cell Groups in your branch with a meeting not yet recorded. Press Record where it
-          is yours to record; for the rest, follow up with their leader.
+          These Cell Groups in your branch have meetings not yet recorded. Record the ones
+          that are yours, and remind their leader about the rest.
         </p>
       </div>
       <PendingFilters
@@ -1216,8 +1216,8 @@ export function PendingDccPane({
           Pending DCC Records
         </h2>
         <p className="text-muted text-sm">
-          Leaders in your branch who still owe a DCC Sunday. Press Record where it is yours
-          to record; for the rest, follow up with them.
+          These leaders have DCC Sundays not yet recorded. Record the ones that are yours,
+          and remind the others.
         </p>
       </div>
       <PendingFilters
