@@ -140,7 +140,12 @@ export function RangeNavigator({
       <div>
         {/* Beside the one switch, which carries no label either (decision 0398). */}
         {labelled === 'bare' ? null : <p className="field-label">{RANGE_NOUN[kind]}</p>}
-        <div className={labelled === 'bare' ? 'flex items-center' : 'mt-2 flex items-center'}>
+        {/* It wraps, so "so far" takes the next line on a 320px phone rather than the edge. */}
+        <div
+          className={
+            labelled === 'bare' ? 'flex flex-wrap items-center' : 'mt-2 flex flex-wrap items-center'
+          }
+        >
           {before}
           {/* One width for every month, so the arrows do not move as it steps (decision 0398). */}
           <span className="border-line bg-surface inline-flex min-h-11 min-w-36 items-center justify-center border-y px-3 text-sm font-bold">
