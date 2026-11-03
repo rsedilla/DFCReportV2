@@ -997,7 +997,8 @@ export async function getCellCounts(signal?: AbortSignal): Promise<CellCounts> {
  *
  * **The same-Network refusal names both Networks.** It arrives with `member_network` and
  * `cell_network` in `details`, so it is said plainly rather than in the server's wording,
- * which cites the specification. Every other refusal keeps the server's own message.
+ * which cites the specification. The capability refusals are said in words too, never by the
+ * capability's name. Every other refusal keeps the server's own message.
  */
 export function membershipFailure(error: unknown, personName: string, cellHandle: string): Failure {
   // Somebody already in another Cell is moved, which needs `cell.move_members` (decision 0357).
@@ -1010,6 +1011,15 @@ export function membershipFailure(error: unknown, personName: string, cellHandle
           : 'You move members only between Cells of your own branch. Other moves are made by the Admin.',
       aboutInput: false,
     };
+  }
+
+  // An account that may not add anybody to a Cell, in words rather than the capability's name.
+  if (
+    error instanceof ApiRequestError &&
+    error.code === 'CAPABILITY_DENIED' &&
+    error.details.capability === 'cell.manage_membership'
+  ) {
+    return { message: 'People are added to a Cell by their leader or the Admin.', aboutInput: false };
   }
 
   if (error instanceof ApiRequestError && error.code === 'INVARIANT_VIOLATION') {
