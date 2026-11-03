@@ -525,7 +525,7 @@ export interface AuditLogTable {
 }
 
 export type CellState = 'ACTIVE' | 'CLOSED';
-// Youngest to oldest, the order every screen shows; J12 Kids since decision 0429.
+// Youngest to oldest, the order every screen shows; J12 Kids since decision 0431.
 export type CellCategory = 'J12_KIDS' | 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
 export type CellClosureReason =
   | 'MERGED_INTO_ANOTHER_CELL'

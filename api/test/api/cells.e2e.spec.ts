@@ -118,7 +118,7 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
   });
 
   it('creates a J12 Kids Cell, and refuses a category the specification does not name', async () => {
-    // The fourth category (decision 0429), and the list still closed beyond it.
+    // The fourth category (decision 0431), and the list still closed beyond it.
     const response = await post(admin, { ...body(mark.id), category: 'J12_KIDS' }).expect(201);
     expect(response.body).toMatchObject({ category: 'J12_KIDS' });
 

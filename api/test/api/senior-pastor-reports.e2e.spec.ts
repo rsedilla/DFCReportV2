@@ -324,7 +324,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
 
     it('counts a J12 Kids Cell in its own figure, the four categories adding up to Cell Groups', async () => {
       await buildChurch();
-      // Ben leads one, beside the six Cells of the church built above (decision 0429).
+      // Ben leads one, beside the six Cells of the church built above (decision 0431).
       await cellOf(ben, 'J12_KIDS');
       const last = shiftMonth(await currentMonth(), -1);
 

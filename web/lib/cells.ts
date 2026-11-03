@@ -20,7 +20,7 @@ import { authenticatedRequest } from './session';
 
 export type CellCategory = 'J12_KIDS' | 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
 
-/** The four categories, youngest to oldest, the order every Cell form offers them (decision 0429). */
+/** The four categories, youngest to oldest, the order every Cell form offers them (decision 0431). */
 export const CELL_CATEGORIES: readonly CellCategory[] = ['J12_KIDS', 'YOUTH', 'YOUNG_PRO', 'COUPLE'];
 
 /** A Cell's meeting day as an ISO 8601 weekday, 1 Monday through 7 Sunday (section 20). */

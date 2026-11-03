@@ -157,7 +157,7 @@ export interface LeaderRecordingStatus {
 /** The Senior Pastors' *Number of Cells* and *Number of people* for one scope (decision 0326). */
 export interface ChurchCountFigures {
   cellGroups: number;
-  /** Since decision 0429. */
+  /** Since decision 0431. */
   j12Kids: number;
   youth: number;
   youngPro: number;

@@ -120,7 +120,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
       Promise.all((await tiles.all()).map(async (tile) => (await tile.boundingBox())!));
     expect(new Set((await boxes()).map((box) => box.y)).size).toBe(1);
 
-    // On a phone: Total alone on the first line, then the four two by two (decision 0429).
+    // On a phone: Total alone on the first line, then the four two by two (decision 0431).
     await page.setViewportSize({ width: 390, height: 844 });
     const [total, kids, youth, youngPro, couple] = await boxes();
     expect(kids.y).toBeGreaterThan(total.y);

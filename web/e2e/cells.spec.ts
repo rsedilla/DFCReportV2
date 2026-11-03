@@ -412,7 +412,7 @@ test.describe('New Cell', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/cells/new');
 
-    // Decision 0429: J12 Kids, Youth, Young Pro, Couple, and on a laptop on one line.
+    // Decision 0431: J12 Kids, Youth, Young Pro, Couple, and on a laptop on one line.
     const choices = page.getByRole('group', { name: 'Category' }).locator('label');
     await expect(choices).toHaveText(['J12 Kids', 'Youth', 'Young Pro', 'Couple']);
     const tops = await Promise.all((await choices.all()).map(async (each) => (await each.boundingBox())!.y));

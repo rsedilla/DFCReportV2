@@ -28,7 +28,7 @@ const TAB: Record<CountFigure, ReportTab> = {
 export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
   CELLS: [
     // Every Cell is J12 Kids, Youth, Young Pro or Couple, so the Cell Groups are their total
-    // (owner, 2026-10-09), and the four run youngest to oldest after it (decision 0429).
+    // (owner, 2026-10-09), and the four run youngest to oldest after it (decision 0431).
     ['cell_groups', 'Total'],
     ['j12_kids', 'J12 Kids'],
     ['youth', 'Youth'],
@@ -108,7 +108,7 @@ export function ChurchCountsPanel({
             className={
               figure === 'CELLS'
                 ? // Five on one line; on a phone the total across the top, the four two by two
-                  // (decision 0429).
+                  // (decision 0431).
                   'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
                 : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
             }

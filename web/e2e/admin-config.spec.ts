@@ -256,7 +256,7 @@ test.describe('Change category (decision 0367)', () => {
     await page.getByRole('button', { name: 'Change category' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('It is a Youth Cell now.');
-    // The other three, youngest first (decision 0429).
+    // The other three, youngest first (decision 0431).
     await expect(dialog.getByRole('radio')).toHaveCount(3);
     await expect(dialog.getByRole('group', { name: 'New category' }).locator('label')).toHaveText([
       'J12 Kids',

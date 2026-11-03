@@ -1,7 +1,7 @@
 -- migrate:up
 
 -- ---------------------------------------------------------------------------
--- A fourth Cell category, J12 Kids (SKILL.md section 10, decision 0429)
+-- A fourth Cell category, J12 Kids (SKILL.md section 10, decision 0431)
 --
 -- Additive: one value added to `cell_category`, and nothing written. Placed first, so the
 -- type's own order is the one every screen shows, youngest to oldest: J12 Kids, Youth,
@@ -22,7 +22,7 @@ BEGIN
      OR EXISTS (SELECT 1 FROM cell_leadership_requests
                 WHERE category::text = 'J12_KIDS' OR named_cell_category::text = 'J12_KIDS') THEN
     RAISE EXCEPTION 'J12 Kids is in use by a Cell or a request; this migration cannot be reverted '
-      'without rewriting that history (decision 0429).';
+      'without rewriting that history (decision 0431).';
   END IF;
 END
 $$;

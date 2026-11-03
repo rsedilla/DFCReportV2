@@ -74,7 +74,7 @@ export function RadioGroup<T extends string>({
   /**
    * Choices in equal columns rather than at 11rem each, for a short fixed list that must sit
    * on one line: `4` puts four across from `lg` and two across below it, `2` two across from
-   * `sm`, as a dialog's width allows (decision 0429, the four Cell categories). One a line on
+   * `sm`, as a dialog's width allows (decision 0431, the four Cell categories). One a line on
    * a phone either way. Stacked only.
    */
   columns?: 2 | 4;
@@ -228,7 +228,7 @@ export function RadioGroup<T extends string>({
   // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
   return (
     // `min-w-0` because a fieldset is otherwise as wide as its widest line of choices, so
-    // they ran past a narrow dialog rather than wrapping (decision 0429's fourth category).
+    // they ran past a narrow dialog rather than wrapping (decision 0431's fourth category).
     <fieldset
       className="flex min-w-0 flex-col gap-1.5"
       aria-describedby={describedBy}
