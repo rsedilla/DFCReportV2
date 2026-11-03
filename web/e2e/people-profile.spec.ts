@@ -18,6 +18,7 @@ import {
   ARCHIVED_MATCHES,
   mockArchivedMatches,
   mockPossibleMatches,
+  mockScreens,
   mockSignedIn,
   mockWithoutEditBasic,
   searchCells,
@@ -386,6 +387,49 @@ test.describe('a person’s Cell', () => {
       await expect(dialog.getByText('SKILL.md')).toHaveCount(0);
     });
   }
+
+  test('a Senior Pastor is offered no Cell to add a person to', async ({ page }) => {
+    await signedInWithPeople(page);
+    // A Senior Pastor holds no `cell.manage_membership` (decision 0326), so Add to Cell would
+    // only end in a refusal.
+    await mockScreens(page, 'SENIOR_PASTOR');
+    await mockPersonCells(page, { membership: null, leads: [] });
+    await page.goto(PROFILE);
+
+    await expect(page.getByText('Not in a Cell.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add to Cell' })).toHaveCount(0);
+  });
+
+  test('an add refused for the capability says who adds, never its name', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPersonCells(page, { membership: null, leads: [] });
+    await mockCellChoices(page);
+    await page.route('**/api/v1/cells/*/members', (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({
+            status: 403,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: {
+                code: 'CAPABILITY_DENIED',
+                message: 'You do not hold cell.manage_membership.',
+                details: { capability: 'cell.manage_membership' },
+              },
+            }),
+          })
+        : route.fallback(),
+    );
+    await page.goto(PROFILE);
+
+    await page.getByRole('button', { name: 'Add to Cell' }).click();
+    const dialog = page.getByRole('dialog');
+    await searchCells(dialog, '000011');
+    await dialog.getByRole('button', { name: 'Choose CELL-000011' }).click();
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+
+    await expect(dialog.getByText('People are added to a Cell by their leader or the Admin.')).toBeVisible();
+    await expect(dialog.getByText(/cell\.manage_membership/)).toHaveCount(0);
+  });
 
   test('a refusal for the other Network names both Networks in plain words', async ({ page }) => {
     await signedInMovingMembers(page);

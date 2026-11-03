@@ -47,6 +47,14 @@ const CAPABILITIES = [
     read_only: true,
     source: 'GRANT',
   },
+  // A Leader adds somebody in no Cell to a Cell of their own branch.
+  {
+    capability: 'cell.manage_membership',
+    scope_type: 'OWN_SUBTREE',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  },
 ];
 
 function json(body: unknown, status = 200) {
@@ -279,10 +287,13 @@ export async function mockScreens(
     ...(screens === 'RECORDING'
       ? CAPABILITIES.filter((grant) => grant.capability !== 'reports.view_subtree')
       : CAPABILITIES
-          // A Senior Pastor holds no `people.create` and no `people.edit_basic` (decision 0326).
+          // A Senior Pastor holds no `people.create`, no `people.edit_basic` and no
+          // `cell.manage_membership` (decision 0326).
           .filter(
             (grant) =>
-              grant.capability !== 'people.create' && grant.capability !== 'people.edit_basic',
+              grant.capability !== 'people.create' &&
+              grant.capability !== 'people.edit_basic' &&
+              grant.capability !== 'cell.manage_membership',
           )
           .map((grant) =>
             grant.capability === 'reports.view_subtree'
