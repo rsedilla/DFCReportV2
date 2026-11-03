@@ -155,8 +155,9 @@ function PersonDetail() {
     person.error instanceof ApiRequestError &&
     (person.error.code === 'SCOPE_DENIED' || person.error.code === 'CAPABILITY_DENIED');
 
+  // Up to 1600px from `2xl`, where its boxes sit three across (decision 0426).
   return (
-    <main id="main" className={PAGE_WIDTH.RECORD}>
+    <main id="main" className={cn(PAGE_WIDTH.RECORD, '2xl:max-w-[100rem]')}>
       <SectionFrame section="people">
       {offered('/people') ? (
         <p className="text-sm">
@@ -297,15 +298,26 @@ function PersonDetail() {
 
           {/*
             Their attendance on the left, the facts about them on the right, from `lg`;
-            below it one column in the order it always had.
+            below it one column in the order it always had. From `2xl` three columns
+            (decision 0426): DCC; Growth over the Cell; the details. The two column
+            wrappers dissolve there so their boxes are placed on the one grid. The second
+            row is `1fr` so the two tall columns spanning both rows size it, and the first
+            row stays as tall as Growth, which keeps the Cell box right beneath it.
           */}
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <div className="flex min-w-0 flex-col gap-4">
-          <PersonDcc personId={id} />
-          <PersonGrowth personId={id} memberId={person.data.member_id} />
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] 2xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(0,4fr)] 2xl:grid-rows-[auto_1fr]">
+          <div className="flex min-w-0 flex-col gap-4 2xl:contents">
+          <div className="min-w-0 2xl:col-start-1 2xl:row-span-2 2xl:row-start-1 2xl:self-start">
+            <PersonDcc personId={id} />
           </div>
-          <div className="flex min-w-0 flex-col gap-4">
-          <PersonCells personId={id} personName={person.data.full_name} className="" />
+          <div className="min-w-0 2xl:col-start-2 2xl:row-start-1 2xl:self-start">
+            <PersonGrowth personId={id} memberId={person.data.member_id} />
+          </div>
+          </div>
+          <div className="flex min-w-0 flex-col gap-4 2xl:contents">
+          <div className="min-w-0 2xl:col-start-2 2xl:row-start-2 2xl:self-start">
+            <PersonCells personId={id} personName={person.data.full_name} className="" />
+          </div>
+          <div className="flex min-w-0 flex-col gap-4 2xl:col-start-3 2xl:row-span-2 2xl:row-start-1 2xl:self-start">
           <section aria-labelledby="details-heading" className={FRAME}>
             <h2 id="details-heading" className="field-label">
               Details
@@ -363,6 +375,7 @@ function PersonDetail() {
           ) : null}
           {/* Who opened this record, for the Admin alone (decision 0414). */}
           {mayReadViews ? <PersonViews personId={id} /> : null}
+          </div>
           </div>
           </div>
 
