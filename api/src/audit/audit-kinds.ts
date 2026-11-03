@@ -23,9 +23,9 @@ export type AuditKind = (typeof AUDIT_KINDS)[number];
  *
  * *Moves* is somebody leaving one leader or Cell for another, which an administrator looks for
  * on its own; joining a first Cell or leaving one without another is *Cells*. It also holds
- * every effective date set in the past, which is one action whatever it dates: usually a
- * move, but also a backdated Cell closure or sex correction, whose own entries sit under
- * *Cells* and *People*.
+ * every effective date set in the past, which is one action whatever it dates: a move, a
+ * Cell closure or a sex correction. The last two have their own entries under *Cells* and
+ * *People*.
  */
 export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'>> = {
   'person.created': 'PEOPLE',
