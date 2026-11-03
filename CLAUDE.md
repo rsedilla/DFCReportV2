@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-03, the trigger being decision 0426: of 425 files, 424 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0426 each moved the first two and
+2026-11-03, the trigger being decision 0427: of 426 files, 425 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0427 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-03 and triggered by 0426, and was left stale by 0427 the same day. The one before that was dated
 2026-11-02 and triggered by 0425, and was left stale by 0426 the next day. The one before that was dated
 2026-11-02 and triggered by 0424, and was left stale by 0425 the same day. The one before that was dated
 2026-11-02 and triggered by 0423, and was left stale by 0424 the same day. The one before that was dated
@@ -894,6 +895,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-02 — [The website is the phone app](docs/decisions/0424-the-website-is-the-phone-app.md)
 - 2026-11-02 — [The Admin's Settings tab](docs/decisions/0425-the-admin-settings-tab.md)
 - 2026-11-03 — [A person's page sets its boxes three across on a wide screen](docs/decisions/0426-a-persons-page-three-across-on-a-wide-screen.md)
+- 2026-11-03 — [The Cells list shows each Cell's ID under its name](docs/decisions/0427-the-cells-list-shows-each-cell-id.md)
 
 ### Open — awaiting a ruling
 

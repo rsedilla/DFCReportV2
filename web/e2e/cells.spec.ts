@@ -31,6 +31,7 @@ import {
   mockClosedCellMeetings,
   mockCells,
   mockCellsWithClosed,
+  mockQuietCells,
 } from './mock-attendance';
 
 /**
@@ -76,6 +77,41 @@ test.describe('the Cells list', () => {
     // A phone card carries the member count the table does (walkthrough, 2026-09-21).
     const card = page.getByRole('listitem').filter({ hasText: 'Couple · Wed' });
     await expect(card).toContainText(/Members\s*4/);
+  });
+
+  test('shows each Cell ID under its name, on a laptop and on a phone', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells');
+
+    // The Cells page alone shows a Cell's ID on a list (decision 0427).
+    const table = page.getByRole('table', { name: 'Cells you oversee' });
+    const row = table.getByRole('row', { name: /Couple · Wed/ });
+    await expect(row.getByRole('cell').first()).toContainText('CELL-000011');
+    // Under the name, not run into the link.
+    await expect(row.getByRole('link', { name: 'Couple · Wed' })).toHaveText('Couple · Wed');
+    const nameBox = await row.getByRole('link', { name: 'Couple · Wed' }).boundingBox();
+    const idBox = await row.getByText('CELL-000011').boundingBox();
+    expect(idBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height - 1);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const card = page.getByRole('listitem').filter({ hasText: 'Couple · Wed' });
+    await expect(card.getByText('CELL-000011')).toBeVisible();
+  });
+
+  test('shows the Cell ID on the Cells with no meeting too', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellAdministrator(page, { approver: true });
+    await mockQuietCells(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells?view=QUIET');
+    const quiet = page.getByRole('table', { name: 'Cells with no meeting held' });
+    await expect(quiet.getByRole('row', { name: /Youth · Sat/ })).toContainText('CELL-000007');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole('listitem').filter({ hasText: 'Youth · Sat' }).getByText('CELL-000007'),
+    ).toBeVisible();
   });
 });
 
@@ -660,6 +696,8 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     const restarted = table.getByRole('row', { name: /Restarted as Couple · Wed/ });
     await expect(restarted).toContainText('Restarted as Couple · Wed');
     await expect(restarted).not.toContainText('CELL-000021');
+    // Its own ID is shown under its name (decision 0427).
+    await expect(restarted.getByText('CELL-000009')).toBeVisible();
     await expect(restarted.getByRole('button')).toHaveCount(0);
 
     const inError = table.getByRole('row', { name: /Created in error/ });
