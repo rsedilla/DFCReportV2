@@ -218,6 +218,27 @@ describe('the Audit Log (decision 0428)', () => {
     expect(await actions(`?q=${cell.cellId.toLowerCase()}`)).toEqual(['cell_schedule.changed']);
   });
 
+  it('finds an entry through its own subject, not through somebody or a Cell in its detail', async () => {
+    // A membership names its Cell only in the detail; its subject is the person (section 21).
+    await entry({
+      action: 'cell_membership.added',
+      targetType: 'person',
+      targetId: carla.id,
+      after: { cell_id: cell.cellId, cell_uuid: cell.id },
+    });
+    await entry({
+      action: 'pastoral_assignment.transferred',
+      targetType: 'person',
+      targetId: dario.id,
+      before: { leader_id: carla.id },
+      after: { leader_id: bruno.id },
+    });
+
+    expect(await actions(`?q=${cell.cellId}`)).toEqual([]);
+    expect(await actions('?q=mendez')).toEqual(['cell_membership.added']);
+    expect(await actions('?q=lacson')).toEqual([]);
+  });
+
   it('refuses a cursor it cannot read', async () => {
     await get(admin, '?cursor=not-a-cursor').expect(422);
   });

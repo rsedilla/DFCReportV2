@@ -122,7 +122,7 @@ const WHAT: Record<string, string> = {
   'cell_attendance.corrected': 'CG attendance corrected',
   'cell_attendance.amended': 'CG attendance changed after its week closed',
   'cell_meeting.rescheduled': 'CG meeting moved to another day',
-  'cell_meeting.not_held': 'CG meeting recorded as not held',
+  'cell_meeting.not_held': 'CG meeting recorded as Did not meet',
   'cell_meeting.status_corrected': 'CG meeting status corrected',
   'cell_meeting.facilitator_recorded': 'Who ran the CG meeting recorded',
   'suynl_lesson.confirmed': 'SUYNL lesson filed',

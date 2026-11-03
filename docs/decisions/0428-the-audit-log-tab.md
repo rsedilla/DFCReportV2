@@ -13,8 +13,10 @@ with no actor; what happened, in words, with its detail and its reason beneath; 
 about, linked to that person's page or that Cell's. It is a table on a laptop and a card per entry
 on a phone.
 
-**2. It is searched and narrowed.** A search finds the entries about a person or made by one, by
-name or Member ID, and the entries about a Cell, by its Cell ID. One of eight chips narrows it,
+**2. It is searched and narrowed.** A search finds the entries whose subject is a person, or that
+a person made, by name or Member ID, and those whose subject is a Cell, by its Cell ID. An entry
+that names somebody only in its detail, such as the leaders a move went from and to or the Cell a
+member joined, is found through its own subject and not through them. One of eight chips narrows it,
 one on at a time: *Everything*, *People*, *Moves*, *Cells*, *Attendance*, *Growth*, *Accounts*
 and *Settings*. Every action belongs to exactly one of the seven, and the API holds that
 assignment so a new action cannot be added without one. There is no date filter.

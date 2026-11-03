@@ -22,7 +22,10 @@ export type AuditKind = (typeof AUDIT_KINDS)[number];
  * vocabulary does not compile until it is placed (decision 0428, point 2).
  *
  * *Moves* is somebody leaving one leader or Cell for another, which an administrator looks for
- * on its own; joining a first Cell or leaving one without another is *Cells*.
+ * on its own; joining a first Cell or leaving one without another is *Cells*. It also holds
+ * every effective date set in the past, which is one action whatever it dates: usually a
+ * move, but also a backdated Cell closure or sex correction, whose own entries sit under
+ * *Cells* and *People*.
  */
 export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'>> = {
   'person.created': 'PEOPLE',
