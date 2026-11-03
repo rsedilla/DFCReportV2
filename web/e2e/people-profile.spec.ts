@@ -205,6 +205,21 @@ test.describe('a person’s DCC stage', () => {
     expect(link!.y).toBeLessThanOrEqual(date!.y);
   });
 
+  test('on the narrowest phone, keeps Open Sunday inside its row', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto(PROFILE);
+
+    // Found by the audit of 3 November: at 320 the date and the link were wider than the row,
+    // and the link ran about 30px past its edge.
+    const rows = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: /Open Sunday/ }) });
+    await expect(rows.first()).toBeVisible();
+    for (const row of await rows.all()) {
+      const [box, link] = [await row.boundingBox(), await row.getByRole('link', { name: /Open Sunday/ }).boundingBox()];
+      expect(link!.x + link!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
+    }
+  });
+
   test('says plainly when the account may not read it, without the API’s wording', async ({
     page,
   }) => {
