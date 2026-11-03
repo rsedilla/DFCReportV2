@@ -13,9 +13,9 @@ anybody see outside their own scope. The owner was shown what other systems do a
 **1. `audit.view` is Whole Church only.** It joins Section 7's capabilities for which a grant at
 any narrower scope covers nothing.
 
-**2. Reading the log needs the `ADMIN` role as well.** `GET /api/v1/audit-log` refuses any other
-account with `CAPABILITY_DENIED` naming the role, so even a Whole Church grant of `audit.view` to
-a Leader or a Senior Pastor reads nothing.
+**2. Reading the log needs the `ADMIN` role as well.** `GET /api/v1/audit-log` refuses an
+account holding `audit.view` at Whole Church without that role with `CAPABILITY_DENIED` naming
+the role, so even a Whole Church grant to a Leader or a Senior Pastor reads nothing.
 
 **3. The log keeps storing the values.** It cannot be edited, and it is the one place that
 answers "what was it before?" when a record is questioned. If anybody besides the Admin is ever
@@ -25,8 +25,8 @@ to read it, a later ruling decides what they see, such as which field changed wi
 
 Logging guidance generally says to keep sensitive personal data out of logs or to mask it, and
 where old and new values must be kept, to let as few people as possible read them. The Admin
-already sees every person's record, so the log shows them nothing new; anybody else would be
-shown what Section 8 keeps from them.
+already sees every person's current record; anybody else would be shown what Section 8 keeps
+from them.
 
 ---
 

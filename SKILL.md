@@ -2148,7 +2148,7 @@ This is stated in Section 7 because the consequence is an authorization one. Inv
 
 It is refused whether or not the particular correction turns out to force a reassignment. The capability moves a person between Networks either way, and a rule that switched itself off depending on whether the target currently holds an edge would be one nobody could reason about — including the actor, who cannot see that state before submitting.
 
-This is the one authorization rule in the system decided by **role** rather than by capability, and Section 5 states it that way deliberately: what matters is that Admin and the Senior Pastors sit outside the pastoral incentive the rule guards against, not that they hold something extra.
+This rule is decided by **role** rather than by capability, and Section 5 states it that way deliberately: what matters is that Admin and the Senior Pastors sit outside the pastoral incentive the rule guards against, not that they hold something extra.
 
 **A capability this catalog gives only at Whole Church, apart from a default a tick
 selects, covers nothing when granted narrower.** The guard cannot hold that on its own: it asks whether a grant covers
