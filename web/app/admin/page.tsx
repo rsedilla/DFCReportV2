@@ -23,6 +23,18 @@ import {
   getAccountCounts,
   listAccounts,
 } from '@/lib/accounts';
+import {
+  AUDIT_KINDS,
+  AUDIT_KIND_LABELS,
+  type AuditEntry,
+  type AuditKind,
+  type AuditLogPage,
+  describeEntry,
+  entryAbout,
+  entryActor,
+  entryWhen,
+  listAuditLog,
+} from '@/lib/audit-log';
 import { listApprovalRequests } from '@/lib/cell-approvals';
 import { getCellCounts, getPendingCgCells } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
@@ -48,16 +60,18 @@ import { cn } from '@/lib/utils';
 
 /**
  * The Admin area (SKILL.md section 19, ruling of 2026-11-02, decision 0419): what needs the
- * administrator now, every account, and the church-wide settings (decision 0425). Audit Log
- * follows with its route.
+ * administrator now, every account, the church-wide settings (decision 0425), and the audit
+ * log (decision 0428).
  *
  * For a holder of `accounts.manage` at Whole Church, which the screen guard checks and the API
- * enforces on every read below.
+ * enforces on every read below; the Audit Log is read under `audit.view` at Whole Church,
+ * which the Admin role holds beside it.
  */
 const TABS = [
   ['home', 'Home'],
   ['accounts', 'Accounts'],
   ['settings', 'Settings'],
+  ['audit', 'Audit Log'],
 ] as const;
 
 type AdminTab = (typeof TABS)[number][0];
@@ -78,7 +92,8 @@ function AdminScreen() {
     queryFn: ({ signal }) => getMe(signal),
   });
   const asked = search.get('tab');
-  const tab: AdminTab = asked === 'accounts' || asked === 'settings' ? asked : 'home';
+  const tab: AdminTab =
+    asked === 'accounts' || asked === 'settings' || asked === 'audit' ? asked : 'home';
   const administers = me.data !== undefined && holdsWholeChurch(me.data, 'accounts.manage');
 
   return (
@@ -95,7 +110,9 @@ function AdminScreen() {
               key={key}
               type="button"
               aria-pressed={tab === key}
-              onClick={() => go({ tab: key === 'home' ? null : key, q: null, filter: null })}
+              onClick={() =>
+                go({ tab: key === 'home' ? null : key, q: null, filter: null, kind: null })
+              }
               className={tabClasses(tab === key)}
             >
               {label}
@@ -108,6 +125,8 @@ function AdminScreen() {
             <Accounts />
           ) : tab === 'settings' ? (
             <Settings />
+          ) : tab === 'audit' ? (
+            <AuditLog />
           ) : (
             <Home />
           )}
@@ -538,6 +557,157 @@ function Accounts() {
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * The whole audit log, newest first (decision 0428): searched by a person's name or Member ID
+ * or a Cell ID, and narrowed by one chip at a time. Reading it is not itself logged.
+ */
+function AuditLog() {
+  const search = useSearchParams();
+  const go = useScreenAddress();
+  const submitted = search.get('q') ?? '';
+  const kindParam = search.get('kind');
+  const kind: AuditKind = AUDIT_KINDS.includes(kindParam as AuditKind)
+    ? (kindParam as AuditKind)
+    : 'EVERYTHING';
+  const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
+  const pages = useCursorPages(`${submitted}|${kind}`);
+
+  const key = ['audit-log', submitted, kind, pages.cursor];
+  const log = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => listAuditLog({ q: submitted, kind, cursor: pages.cursor }, signal),
+    placeholderData: keepPreviousPage(key, 3),
+  });
+  const names = log.data?.names ?? {};
+
+  return (
+    <>
+      <div className={`mt-4 ${CONTROL_BAR}`}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!tooShort) {
+              go({ q: trimmed });
+            }
+          }}
+          className="flex w-full min-w-0"
+          noValidate
+        >
+          <SearchField
+            label="Search by person, Member ID or Cell ID"
+            name="q"
+            autoComplete="off"
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            action={
+              <Button type="submit" disabled={tooShort}>
+                {buttonLabel}
+              </Button>
+            }
+          />
+        </form>
+        <div role="group" aria-label="Show" className="flex flex-wrap gap-3">
+          {AUDIT_KINDS.map((each) => (
+            <FilterChip
+              key={each}
+              pressed={kind === each}
+              // One on at a time: pressing the one on returns to Everything.
+              onChange={(next) => go({ kind: next && each !== 'EVERYTHING' ? each : null })}
+            >
+              {AUDIT_KIND_LABELS[each]}
+            </FilterChip>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-muted mt-4 text-sm">
+        Everything recorded, newest first. Reading it is not itself recorded.
+      </p>
+
+      <div className="mt-6">
+        <FailureNotice failure={log.isError ? describeFailure(log.error) : null} />
+      </div>
+
+      <div {...pageTurnProps(log.isPlaceholderData)}>
+        {log.isPending ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : log.data && log.data.data.length === 0 ? (
+          <p className="text-muted mt-6 text-sm">
+            {submitted !== '' ? `Nothing in the log matches “${submitted}”.` : 'Nothing is in this list.'}
+          </p>
+        ) : log.data ? (
+          <>
+            <Table caption="Audit Log" className="mt-6 hidden lg:block">
+              <thead>
+                <tr>
+                  <HeaderCell>When</HeaderCell>
+                  <HeaderCell>Who did it</HeaderCell>
+                  <HeaderCell>What</HeaderCell>
+                  <HeaderCell>About</HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {log.data.data.map((entry) => {
+                  const { what, detail } = describeEntry(entry, names);
+                  return (
+                    <tr key={entry.id} className={rowClasses}>
+                      <td className="px-3 py-3 text-sm whitespace-nowrap">{entryWhen(entry.occurred_at)}</td>
+                      <td className="px-3 py-3">{entryActor(entry, names)}</td>
+                      <td className="px-3 py-3">
+                        {what}
+                        {detail ? <span className="text-muted block text-sm">{detail}</span> : null}
+                      </td>
+                      <td className="px-3 py-3">
+                        <EntryAbout entry={entry} names={names} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+
+            <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+              {log.data.data.map((entry) => {
+                const { what, detail } = describeEntry(entry, names);
+                return (
+                  <li key={entry.id} className={cn(FRAME, 'p-4')}>
+                    <p className="text-muted text-sm">{entryWhen(entry.occurred_at)}</p>
+                    <p className="mt-1 font-semibold">{what}</p>
+                    {detail ? <p className="text-muted text-sm break-words">{detail}</p> : null}
+                    <p className="mt-2 text-sm">
+                      About <EntryAbout entry={entry} names={names} /> · by {entryActor(entry, names)}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <CursorPager
+              label="Audit Log"
+              page={pages.page}
+              nextCursor={log.data.next_cursor}
+              onPrevious={pages.previous}
+              onNext={() => pages.next(log.data?.next_cursor)}
+            />
+          </>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/** What an entry was about, linked where it has a page. */
+function EntryAbout({ entry, names }: { entry: AuditEntry; names: AuditLogPage['names'] }) {
+  const about = entryAbout(entry, names);
+  return about.href === null ? (
+    <span>{about.label}</span>
+  ) : (
+    <Link href={about.href} className="inline-flex min-h-6 items-center underline underline-offset-4">
+      {about.label}
+    </Link>
   );
 }
 

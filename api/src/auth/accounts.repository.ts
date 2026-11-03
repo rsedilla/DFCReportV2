@@ -269,6 +269,35 @@ export class AccountsRepository {
       .where('id', '=', id)
       .execute();
   }
+
+  /**
+   * Each account's Person, keyed by account, for naming who made an audit entry and whom an
+   * entry about an account concerns (decision 0428). Here because `auth` owns `accounts`.
+   */
+  async personsOfAccounts(accountIds: readonly string[]): Promise<Map<string, string>> {
+    if (accountIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.db
+      .selectFrom('accounts')
+      .select(['id', 'person_id'])
+      .where('id', 'in', [...accountIds])
+      .execute();
+    return new Map(rows.map((row) => [row.id, row.person_id]));
+  }
+
+  /** The accounts these Persons hold, for finding the audit entries they made (decision 0428). */
+  async accountsOfPersons(personIds: readonly string[]): Promise<string[]> {
+    if (personIds.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .selectFrom('accounts')
+      .select('id')
+      .where('person_id', 'in', [...personIds])
+      .execute();
+    return rows.map((row) => row.id);
+  }
 }
 
 /**

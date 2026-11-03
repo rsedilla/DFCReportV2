@@ -4,6 +4,7 @@ import {
   mockAccountsAdministrator,
   mockAdminArea,
   mockAdministrator,
+  mockAuditLog,
   mockScreens,
   mockRecordVerse,
   mockSettings,
@@ -193,6 +194,91 @@ test.describe('the Admin area’s Accounts', () => {
   });
 });
 
+test.describe('the Audit Log tab (decision 0428)', () => {
+  test('lists each entry in words: when, who, what with its detail, and what it was about', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockAuditLog(page);
+    await openAdmin(page, '/admin?tab=audit');
+
+    await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveAttribute('aria-pressed', 'true');
+    const table = page.getByRole('table', { name: 'Audit Log' });
+    await expect(table.getByRole('columnheader')).toHaveText(['When', 'Who did it', 'What', 'About']);
+    const row = (text: string) => table.getByRole('row').filter({ hasText: text });
+
+    // Manila time, eight hours ahead of the instant stored.
+    await expect(row('Moved to another leader')).toContainText('2 Nov 2026, 9:33 pm');
+    await expect(row('Moved to another leader')).toContainText('Rosario Dimaculangan');
+    await expect(row('Moved to another leader')).toContainText('From Celestina Abad to Teodoro Vergara');
+    await expect(row('Moved to another leader').getByRole('link', { name: 'Lorenzo Pascual' })).toHaveAttribute(
+      'href',
+      '/people/3f1b7c6e-0000-4000-8000-000000000952',
+    );
+    await expect(row('Cell category changed')).toContainText('Youth to Young Pro');
+    await expect(row('Cell category changed').getByRole('link', { name: 'CELL-000004' })).toHaveAttribute(
+      'href',
+      '/cells/3f1b7c6e-0000-4000-8000-000000000955/meetings',
+    );
+    await expect(row('DCC changed after its week closed')).toContainText(
+      'Sunday 20 September 2026, present · Reason: The paper attendance arrived late.',
+    );
+    await expect(row('Setting changed')).toContainText('4 to 3');
+    await expect(row('Setting changed')).toContainText('No meeting in (months)');
+    // Nobody made the pause: the system did.
+    await expect(row('Sign-in paused')).toContainText('System');
+    await expect(row('Sign-in paused')).toContainText('Teodoro Vergara');
+  });
+
+  test('narrows by one chip at a time, and pressing the one on returns to Everything', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const asked = await mockAuditLog(page);
+    await openAdmin(page, '/admin?tab=audit');
+
+    const chips = page.getByRole('group', { name: 'Show' });
+    await expect(chips.getByRole('button')).toHaveText([
+      'Everything',
+      'People',
+      'Moves',
+      'Cells',
+      'Attendance',
+      'Growth',
+      'Accounts',
+      'Settings',
+    ]);
+    await chips.getByRole('button', { name: 'Moves' }).click();
+    await expect(page).toHaveURL(/kind=MOVES/);
+    await expect.poll(() => asked.at(-1)).toContain('kind=MOVES');
+    await chips.getByRole('button', { name: 'Moves' }).click();
+    await expect(page).not.toHaveURL(/kind=/);
+  });
+
+  test('searches by a person, a Member ID or a Cell ID', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const asked = await mockAuditLog(page);
+    await openAdmin(page, '/admin?tab=audit');
+
+    await page.getByLabel('Search by person, Member ID or Cell ID').fill('CELL-000004');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(/q=CELL-000004/);
+    await expect.poll(() => asked.at(-1)).toContain('q=CELL-000004');
+  });
+
+  test('shows each entry as a card on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await mockAuditLog(page);
+    await openAdmin(page, '/admin?tab=audit');
+
+    await expect(page.getByRole('table', { name: 'Audit Log' })).toBeHidden();
+    const card = page.getByRole('listitem').filter({ hasText: 'Moved to another leader' });
+    await expect(card).toContainText('From Celestina Abad to Teodoro Vergara');
+    await expect(card).toContainText('by Rosario Dimaculangan');
+    await expect(card.getByRole('link', { name: 'Lorenzo Pascual' })).toBeVisible();
+  });
+});
+
 test.describe('the Settings tab (decision 0425)', () => {
   test('shows each church-wide setting, the calendar start without a control, and the Encounter seasons', async ({
     page,
@@ -202,7 +288,8 @@ test.describe('the Settings tab (decision 0425)', () => {
     await openAdmin(page, '/admin?tab=settings');
 
     const tabs = page.getByRole('group', { name: 'Admin' });
-    await expect(tabs.getByRole('button')).toHaveText(['Home', 'Accounts', 'Settings']);
+    // Decision 0419's four tabs, the fourth since decision 0428.
+    await expect(tabs.getByRole('button')).toHaveText(['Home', 'Accounts', 'Settings', 'Audit Log']);
     await expect(tabs.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-pressed', 'true');
 
     const months = page.getByRole('region', { name: 'No meeting in' });
