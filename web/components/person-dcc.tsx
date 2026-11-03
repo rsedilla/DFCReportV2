@@ -254,10 +254,14 @@ function DccHistory({
                   // The link keeps its place on the right at every width, so a thumb finds
                   // "Open Sunday" in the same spot on each row; on a phone the removed tag
                   // goes under the date instead of pushing the link onto a line of its own.
-                  className="flex items-start justify-between gap-4 py-1"
+                  // Only on a 320px phone, where the date and the link together are wider than
+                  // the row, does the link drop to a line of its own, still on the right.
+                  className="flex flex-wrap items-start justify-between gap-x-4 py-1"
                 >
                   {/* The removed tag under the date at every width: the column is narrow from `lg`. */}
-                  <div className="flex flex-col items-start gap-1 py-2.5 text-sm">
+                  {/* Starts at 9rem and grows, so the row wraps only when 9rem and the link
+                      cannot share it; the removed tag then wraps inside, not the link below. */}
+                  <div className="flex min-w-0 grow basis-36 flex-col items-start gap-1 py-2.5 text-sm">
                     <span>
                       <span className="text-accent font-medium">{dayLabel(line.event_date)}</span>
                       <span className={line.removed ? 'text-muted ml-3' : 'ml-3'}>
@@ -279,7 +283,7 @@ function DccHistory({
                         ? `/dcc/${line.event_id}?leader=${encodeURIComponent(line.checklist_of)}`
                         : `/dcc/${line.event_id}`
                     }
-                    className="shrink-0 text-sm"
+                    className="ml-auto shrink-0 text-sm"
                   >
                     Open Sunday<span className="sr-only">, {line.event_date}</span>
                   </TextLink>
