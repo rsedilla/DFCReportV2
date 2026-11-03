@@ -47,6 +47,11 @@ export function PersonCells({
   const mayMoveMembers = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.move_members',
   );
+  // Adding needs `cell.manage_membership`, which a Senior Pastor does not hold (decision 0326):
+  // offering it would end in a refusal. The route still decides the Cell's scope.
+  const mayAddMembers = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'cell.manage_membership',
+  );
   // The line names the Primary, so it is for a Leader; a Senior Pastor has no Primary.
   const isLeader = me.data?.roles.includes('LEADER') ?? false;
 
@@ -88,7 +93,7 @@ export function PersonCells({
           {/*
             A move needs `cell.move_members`, which a Leader holds only when ticked Moves
             people (decision 0357): anybody else is offered no button and asks for nothing.
-            Adding somebody in no Cell stays every leader's.
+            Adding somebody in no Cell stays every leader's, and is offered to nobody else.
           */}
           {cells.data.membership ? (
             me.data === undefined ? null : mayMoveMembers ? (
@@ -98,7 +103,7 @@ export function PersonCells({
             ) : isLeader ? (
               <p className="text-muted mt-3 text-sm">Moves to another Cell are made by your Primary.</p>
             ) : null
-          ) : cells.data.leads.length === 0 ? (
+          ) : cells.data.leads.length === 0 && mayAddMembers ? (
             <Button variant="secondary" className="mt-4" onClick={() => setMoving(true)}>
               Add to Cell
             </Button>
