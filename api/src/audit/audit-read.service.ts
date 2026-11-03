@@ -4,8 +4,11 @@ import { sql } from 'kysely';
 import { AccountsRepository } from '../auth/accounts.repository';
 import { CURSOR_INSTANT_FORMAT } from '../cells/leadership-request-cursor';
 import { CellsReadService } from '../cells/cells.read.service';
+import { ValidationFailedError } from '../common/errors/api-error';
 import { canonicalId, isUuid } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
+import { normalizeName } from '../people/duplicate-matching';
+import { SEARCH_MINIMUM } from '../people/dto/people.dto';
 import { PeopleReadService } from '../people/people.read.service';
 import { KIND_OF_ACTION, actionsOfKind, type AuditKind } from './audit-kinds';
 import { type AuditLogCursor } from './audit-log-cursor';
@@ -34,8 +37,8 @@ export interface AuditLogRow {
 
 /**
  * The most people one name search is widened to. A two-letter name can match more people than
- * this in a large church, and then the entries of the rest are not found by it; a longer name,
- * or a Member ID, finds them.
+ * this in a large church, and then the entries of the rest are not found by it; the answer says
+ * so (`truncated`, decision 0429), and a longer name, or a Member ID, finds them.
  */
 export const SEARCH_PEOPLE_CEILING = 1000;
 
@@ -66,12 +69,15 @@ export class AuditReadService {
     rows: AuditLogRow[];
     names: Record<string, { name: string; member_id: string }>;
     nextCursor: AuditLogCursor | null;
+    /** The search matched more people than it looks through (decision 0429). */
+    truncated: boolean;
   }> {
     const { q, kind, limit, cursor } = options;
     const matching = q === null ? null : await this.matching(q);
+    const truncated = matching?.truncated ?? false;
 
     if (matching !== null && matching.isEmpty) {
-      return { rows: [], names: {}, nextCursor: null };
+      return { rows: [], names: {}, nextCursor: null, truncated };
     }
 
     let query = this.db
@@ -180,6 +186,7 @@ export class AuditReadService {
         found.length > limit && last !== undefined
           ? { occurredAt: last.occurred_at_key, id: last.id }
           : null,
+      truncated,
     };
   }
 
@@ -193,21 +200,43 @@ export class AuditReadService {
     accounts: string[];
     cells: string[];
     isEmpty: boolean;
+    truncated: boolean;
   }> {
     const term = q.trim();
 
     if (/^cell-?\d*$/i.test(term)) {
       const digits = term.replace(/^cell-?/i, '');
       const cells = await this.cells.idsWithCodePrefix(`CELL-${digits}`);
-      return { people: [], accounts: [], cells, isEmpty: cells.length === 0 };
+      return { people: [], accounts: [], cells, isEmpty: cells.length === 0, truncated: false };
     }
 
-    const { rows } = await this.people.searchByName(term, SEARCH_PEOPLE_CEILING, null, null, {
-      memberId: true,
-    });
+    // **The minimum is counted on the term as it is searched** (decision 0429), as the People
+    // search counts it: `a-` and ` a` pass the DTO's bound on the raw string and search for one
+    // letter. A Member ID is matched by its start and needs no such count.
+    if (
+      !/^m-?\d+$/i.test(term) &&
+      normalizeName(term).replace(/\s+/g, '').length < SEARCH_MINIMUM
+    ) {
+      throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
+    }
+
+    const { rows, nextCursor } = await this.people.searchByName(
+      term,
+      SEARCH_PEOPLE_CEILING,
+      null,
+      null,
+      { memberId: true },
+    );
     const people = rows.map((row) => canonicalId(row.id));
     const accounts = await this.accounts.accountsOfPersons(people);
-    return { people, accounts, cells: [], isEmpty: people.length === 0 };
+    return {
+      people,
+      accounts,
+      cells: [],
+      isEmpty: people.length === 0,
+      // More people match than the search looks through, and the answer says so (decision 0429).
+      truncated: nextCursor !== null,
+    };
   }
 
   /**

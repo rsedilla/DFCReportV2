@@ -49,8 +49,13 @@ export interface AuditLogPage {
   data: AuditEntry[];
   /** Every Person the page mentions, by identifier. */
   names: Record<string, { name: string; member_id: string }>;
+  /** The search matched more people than the server looks through (decision 0429). */
+  truncated: boolean;
   next_cursor: string | null;
 }
+
+/** How many people a name search looks through, which the screen names when it is reached. */
+export const SEARCH_PEOPLE_CEILING = 1000;
 
 export async function listAuditLog(
   params: { q?: string; kind?: AuditKind; cursor?: string | null },

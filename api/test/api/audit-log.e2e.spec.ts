@@ -243,6 +243,28 @@ describe('the Audit Log (decision 0428)', () => {
     await get(admin, '?cursor=not-a-cursor').expect(422);
   });
 
+  it('says when a name matches more people than it looks through (decision 0429)', async () => {
+    await sql`
+      INSERT INTO persons (id, first_name, last_name, birth_date, sex, civil_status)
+      SELECT gen_random_uuid(), 'Zarabulk', 'Fixture' || g, '1985-06-15', 'FEMALE', 'SINGLE'
+      FROM generate_series(1, 1001) AS g
+    `.execute(db);
+    await entry({ action: 'person.created', targetType: 'person', targetId: carla.id });
+
+    const many = await get(admin, '?q=zarabulk').expect(200);
+    expect(many.body.truncated).toBe(true);
+    const few = await get(admin, '?q=mendez').expect(200);
+    expect(few.body.truncated).toBe(false);
+    expect((await get(admin).expect(200)).body.truncated).toBe(false);
+  });
+
+  it('counts the two letters on the name as it is searched (decision 0429)', async () => {
+    const refused = await get(admin, '?q=a-').expect(422);
+    expect(refused.body.error.details).toMatchObject({ field: 'q' });
+    await get(admin, '?q=Jr').expect(422);
+    await get(admin, '?q=M-0').expect(200);
+  });
+
   it('writes nothing to the log when it is read', async () => {
     await entry({ action: 'person.created', targetType: 'person', targetId: carla.id });
     await get(admin).expect(200);
@@ -286,7 +308,7 @@ describe('the Audit Log (decision 0428)', () => {
       await get(reader).expect(403);
     });
 
-    it('admits a Whole Church grant of audit.view', async () => {
+    it('refuses a Leader even with a Whole Church grant of audit.view (decision 0430)', async () => {
       const reader = await createAccount(app, db, { person: bruno, roles: ['LEADER'] });
       await db
         .insertInto('capability_grants')
@@ -299,7 +321,8 @@ describe('the Audit Log (decision 0428)', () => {
           granted_by: admin.id,
         })
         .execute();
-      await get(reader).expect(200);
+      const refused = await get(reader).expect(403);
+      expect(refused.body.error.details).toMatchObject({ required_role: 'ADMIN' });
     });
 
     it('refuses a request with no session', async () => {

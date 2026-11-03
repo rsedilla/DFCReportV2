@@ -266,6 +266,23 @@ test.describe('the Audit Log tab (decision 0428)', () => {
     await expect.poll(() => asked.at(-1)).toContain('q=CELL-000004');
   });
 
+  test('says when a name matches more people than the search looks through (decision 0429)', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockAuditLog(page, { truncatedFor: 'ma' });
+    await openAdmin(page, '/admin?tab=audit');
+    const cut = page.getByText(/More than 1,000 people match/);
+    await expect(cut).toHaveCount(0);
+
+    await page.getByLabel('Search by person, Member ID or Cell ID').fill('ma');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(cut).toHaveText(
+      'More than 1,000 people match “ma”, so some entries may not be shown. Type more of the name, or use a Member ID.',
+    );
+    await expect(cut).toHaveAttribute('role', 'status');
+  });
+
   test('shows each entry as a card on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await mockAuditLog(page);

@@ -1331,17 +1331,26 @@ export const AUDIT_LOG_PAGE = {
     [AUDIT_FROM]: { name: 'Celestina Abad', member_id: 'M-000903' },
     [AUDIT_TO]: { name: 'Teodoro Vergara', member_id: 'M-000904' },
   },
+  truncated: false,
   next_cursor: null,
 };
 
-/** `GET /api/v1/audit-log`, keeping each query string asked for. */
-export async function mockAuditLog(page: Page): Promise<string[]> {
+/**
+ * `GET /api/v1/audit-log`, keeping each query string asked for. `truncatedFor` answers a
+ * search for that term as cut at the people ceiling (decision 0429).
+ */
+export async function mockAuditLog(
+  page: Page,
+  { truncatedFor }: { truncatedFor?: string } = {},
+): Promise<string[]> {
   const asked: string[] = [];
   await page.route(
     (url) => url.pathname === '/api/v1/audit-log',
     (route) => {
-      asked.push(new URL(route.request().url()).search);
-      return route.fulfill(json(AUDIT_LOG_PAGE));
+      const url = new URL(route.request().url());
+      asked.push(url.search);
+      const truncated = truncatedFor !== undefined && url.searchParams.get('q') === truncatedFor;
+      return route.fulfill(json({ ...AUDIT_LOG_PAGE, truncated }));
     },
   );
   return asked;

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module';
+import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
 import { PeopleModule } from '../people/people.module';
 import { AuditLogController } from './audit-log.controller';
@@ -11,10 +12,11 @@ import { AuditReadService } from './audit-read.service';
  *
  * Separate because `AuditModule` is global and every module writes through it; the reader
  * asks `people`, `auth` and `cells` for the names an entry carries, and importing them into
- * the writer would make it depend on modules that depend on it.
+ * the writer would make it depend on modules that depend on it. `AuthorizationModule` reads
+ * the reader's roles, the log being the Admin's alone (decision 0430).
  */
 @Module({
-  imports: [PeopleModule, AuthModule, CellsModule],
+  imports: [PeopleModule, AuthModule, AuthorizationModule, CellsModule],
   controllers: [AuditLogController],
   providers: [AuditReadService],
 })

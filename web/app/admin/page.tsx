@@ -29,6 +29,7 @@ import {
   type AuditEntry,
   type AuditKind,
   type AuditLogPage,
+  SEARCH_PEOPLE_CEILING,
   describeEntry,
   entryAbout,
   entryActor,
@@ -626,6 +627,14 @@ function AuditLog() {
       <p className="text-muted mt-4 text-sm">
         Everything recorded, newest first. Reading it is not itself recorded.
       </p>
+
+      {/* A search that matched more people than are looked through says so (decision 0429). */}
+      {log.data?.truncated ? (
+        <p role="status" className="mt-4 text-sm font-medium">
+          More than {SEARCH_PEOPLE_CEILING.toLocaleString('en-US')} people match “{submitted}”, so
+          some entries may not be shown. Type more of the name, or use a Member ID.
+        </p>
+      ) : null}
 
       <div className="mt-6">
         <FailureNotice failure={log.isError ? describeFailure(log.error) : null} />
