@@ -1270,6 +1270,103 @@ export async function mockSettings(
   return { writes };
 }
 
+const AUDIT_ADMIN = '3f1b7c6e-0000-4000-8000-000000000951';
+const AUDIT_ADMIN_ACCOUNT = '3f1b7c6e-0000-4000-8000-000000000961';
+const AUDIT_MOVED = '3f1b7c6e-0000-4000-8000-000000000952';
+const AUDIT_FROM = '3f1b7c6e-0000-4000-8000-000000000953';
+const AUDIT_TO = '3f1b7c6e-0000-4000-8000-000000000954';
+const AUDIT_CELL = '3f1b7c6e-0000-4000-8000-000000000955';
+
+/** One page of the Audit Log (decision 0428): a move, a Cell change, a setting and a pause. */
+export const AUDIT_LOG_PAGE = {
+  data: [
+    {
+      id: '3f1b7c6e-0000-4000-8000-000000000971',
+      occurred_at: '2026-11-02T13:33:00.000Z',
+      action: 'pastoral_assignment.transferred',
+      kind: 'MOVES',
+      actor: { account_id: AUDIT_ADMIN_ACCOUNT, person_id: AUDIT_ADMIN },
+      target: { type: 'person', id: AUDIT_MOVED, person_id: AUDIT_MOVED, cell_code: null },
+      before: { leader_id: AUDIT_FROM },
+      after: { leader_id: AUDIT_TO },
+      reason: null,
+    },
+    {
+      id: '3f1b7c6e-0000-4000-8000-000000000972',
+      occurred_at: '2026-11-02T13:30:00.000Z',
+      action: 'cell_category.changed',
+      kind: 'CELLS',
+      actor: { account_id: AUDIT_ADMIN_ACCOUNT, person_id: AUDIT_ADMIN },
+      target: { type: 'cell', id: AUDIT_CELL, person_id: null, cell_code: 'CELL-000004' },
+      before: { category: 'YOUTH' },
+      after: { category: 'YOUNG_PRO' },
+      reason: null,
+    },
+    {
+      id: '3f1b7c6e-0000-4000-8000-000000000973',
+      occurred_at: '2026-10-30T08:10:00.000Z',
+      action: 'dcc_attendance.amended',
+      kind: 'ATTENDANCE',
+      actor: { account_id: AUDIT_ADMIN_ACCOUNT, person_id: AUDIT_ADMIN },
+      target: { type: 'person', id: AUDIT_FROM, person_id: AUDIT_FROM, cell_code: null },
+      before: null,
+      after: { present: true, event_date: '2026-09-20' },
+      reason: 'The paper attendance arrived late.',
+    },
+    {
+      id: '3f1b7c6e-0000-4000-8000-000000000974',
+      occurred_at: '2026-10-28T01:00:00.000Z',
+      action: 'setting.changed',
+      kind: 'SETTINGS',
+      actor: { account_id: AUDIT_ADMIN_ACCOUNT, person_id: AUDIT_ADMIN },
+      target: { type: 'setting', id: 'cell_attention_months', person_id: null, cell_code: null },
+      before: { value: 4 },
+      after: { value: 3 },
+      reason: null,
+    },
+    {
+      id: '3f1b7c6e-0000-4000-8000-000000000975',
+      occurred_at: '2026-10-27T00:00:00.000Z',
+      action: 'sign_in.paused',
+      kind: 'ACCOUNTS',
+      actor: null,
+      target: { type: 'account', id: '3f1b7c6e-0000-4000-8000-000000000962', person_id: AUDIT_TO, cell_code: null },
+      before: null,
+      after: null,
+      reason: null,
+    },
+  ],
+  names: {
+    [AUDIT_ADMIN]: { name: 'Rosario Dimaculangan', member_id: 'M-000901' },
+    [AUDIT_MOVED]: { name: 'Lorenzo Pascual', member_id: 'M-000902' },
+    [AUDIT_FROM]: { name: 'Celestina Abad', member_id: 'M-000903' },
+    [AUDIT_TO]: { name: 'Teodoro Vergara', member_id: 'M-000904' },
+  },
+  truncated: false,
+  next_cursor: null,
+};
+
+/**
+ * `GET /api/v1/audit-log`, keeping each query string asked for. `truncatedFor` answers a
+ * search for that term as cut at the people ceiling (decision 0429).
+ */
+export async function mockAuditLog(
+  page: Page,
+  { truncatedFor }: { truncatedFor?: string } = {},
+): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route(
+    (url) => url.pathname === '/api/v1/audit-log',
+    (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url.search);
+      const truncated = truncatedFor !== undefined && url.searchParams.get('q') === truncatedFor;
+      return route.fulfill(json({ ...AUDIT_LOG_PAGE, truncated }));
+    },
+  );
+  return asked;
+}
+
 export async function mockAdminArea(page: Page): Promise<string[]> {
   const asked: string[] = [];
   const three = [{}, {}, {}];

@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { SettingsModule } from './admin/settings/settings.module';
 import { SettingsRoutesModule } from './admin/settings-routes/settings-routes.module';
 import { AuditModule } from './audit/audit.module';
+import { AuditReadModule } from './audit/audit-read.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountThrottlerGuard } from './auth/authorization/account-throttler.guard';
 import { AccessTokenGuard } from './auth/authorization/access-token.guard';
@@ -66,6 +67,7 @@ import { TrainingModule } from './training/training.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     IdempotencyModule,
     AuditModule,
+    AuditReadModule,
     SettingsModule,
     AuthModule,
     AuthorizationModule,

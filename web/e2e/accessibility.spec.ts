@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAccountsAdministrator,
   mockAdminArea,
+  mockAuditLog,
   mockSettings,
   mockAdministrator,
   mockMyPeople,
@@ -1798,6 +1799,22 @@ const SCANS = [
       ).toBeVisible();
     },
   },
+  {
+    // The whole audit log in words (decision 0428), a table from `lg` and cards below it.
+    name: 'admin audit log',
+    route: '/admin?tab=audit',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAccountsAdministrator(page);
+      await mockAdminArea(page);
+      await mockAuditLog(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('link', { name: 'Lorenzo Pascual' }).filter({ visible: true }).first(),
+      ).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -2225,6 +2242,16 @@ const TARGET_SWEEP = [
     settleRole: 'link' as const,
     settle: 'Teofilo Ramos',
     minimum: 18,
+    admin: true,
+  },
+  {
+    // Four tabs, the search and Search, eight chips, the five About links of the table, and
+    // the two pager buttons: **twenty-one**.
+    name: 'admin audit log',
+    route: '/admin?tab=audit',
+    settleRole: 'link' as const,
+    settle: 'Lorenzo Pascual',
+    minimum: 21,
     admin: true,
   },
 ] as const;
@@ -2687,6 +2714,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     if ('admin' in entry && entry.admin) {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
+      await mockAuditLog(page);
     }
 
     await page.goto(route);

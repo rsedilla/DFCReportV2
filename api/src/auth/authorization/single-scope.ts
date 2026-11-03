@@ -30,6 +30,11 @@ import { ScopeType } from './scopes';
  * `audit.view` grants strictly *less* than the default, so there is no escalation
  * to close — and the rule was removing authority section 7 contemplates.
  *
+ * **Decision 0430 adds it on a different ground**, by owner ruling rather than by that
+ * predicate: an entry carries the values it changed, so a reader of any narrower scope would
+ * read every Person's birthday and mobile number through the log. The machinery the
+ * paragraph above defends is retired with it.
+ *
  * A stated list is a second copy that can go stale, which is the real objection to
  * it. `single-scope.spec.ts` is the answer: it asserts the membership, so a role
  * default edited in Stage 3 cannot silently add or remove protection.
@@ -56,6 +61,9 @@ export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = new Set([
   Capability.AccountsManage,
   Capability.RolesManage,
   Capability.CellApproveLeadership,
+  // The log is the Admin's alone since decision 0430, its entries holding birthdays, mobile
+  // numbers and what was searched for. Its route also requires the `ADMIN` role.
+  Capability.AuditView,
 ]);
 
 /**
