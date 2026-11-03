@@ -26,21 +26,24 @@ test.describe('a Full view leader’s # of Cell Groups and # of Cell Leaders', (
 
     const region = page.getByRole('region', { name: 'Number of Cell Groups' });
     await expect(region.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
-    await expect(region.locator('dl')).toHaveText(/Total\s*10\s*Youth\s*5\s*Young Pro\s*3\s*Couple\s*2/);
+    await expect(region.locator('dl')).toHaveText(
+      /Total\s*10\s*J12 Kids\s*0\s*Youth\s*5\s*Young Pro\s*3\s*Couple\s*2/,
+    );
     const table = page.getByRole('table', { name: 'Your 12' });
     await expect(table.getByRole('columnheader')).toHaveText([
       'Leader',
       'Total',
+      'J12 Kids',
       'Youth',
       'Young Pro',
       'Couple',
     ]);
     await expect(table.locator('tbody tr')).toHaveText([
-      /^Consuelo Bautista\s*4\s*2\s*1\s*1$/,
-      /^Efren Dimaculangan\s*2\s*1\s*1\s*0$/,
-      /^A leader not named here\s*3\s*1\s*1\s*1$/,
-      /^You\s*1\s*1\s*0\s*0$/,
-      /^Total\s*10\s*5\s*3\s*2$/,
+      /^Consuelo Bautista\s*4\s*0\s*2\s*1\s*1$/,
+      /^Efren Dimaculangan\s*2\s*0\s*1\s*1\s*0$/,
+      /^A leader not named here\s*3\s*0\s*1\s*1\s*1$/,
+      /^You\s*1\s*0\s*1\s*0\s*0$/,
+      /^Total\s*10\s*0\s*5\s*3\s*2$/,
     ]);
     // A name is plain text and opens nothing (decision 0380).
     await expect(table.getByRole('link')).toHaveCount(0);
