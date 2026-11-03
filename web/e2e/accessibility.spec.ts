@@ -2787,8 +2787,10 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
  * - **1024** — `PAGE_WIDTH.INDEX` exactly, so the list screens stop growing too:
  *   the narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait. **The
  *   width the sidebar first appears at**, and 1440 is where the content column
- *   beside it stops growing — so 1512, 1920 and a 4K panel all render what 1440
- *   renders, with more margin.
+ *   beside it stops growing for every page but one.
+ * - **1920** — a person's page sets its boxes three across from Tailwind's `2xl`,
+ *   1536px, and runs to 1600px (decision 0426), so the widest laptop in use is
+ *   scanned too; a 4K panel renders what it renders, with more margin.
  */
 const VIEWPORT_WIDTHS = [
   { name: '320px, the narrowest phone in use', width: 320, height: 568, crossBrowser: true },
@@ -2803,16 +2805,24 @@ const VIEWPORT_WIDTHS = [
   // unexamined.
   { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768, crossBrowser: true },
   // **Where the content column stops growing beside the sidebar, and therefore
-  // the new last width at which anything can break.** At 1024 the sidebar takes
-  // 240px and the content is squeezed below `PAGE_WIDTH.INDEX`; by 1440 it has
-  // reached that constraint and a wider display adds margin rather than
-  // rearranging anything — so 1512, 1920 and a 4K panel all render what this
-  // renders. Scanning only 1024 would have left every real laptop and desktop
-  // covered by an argument that had stopped being true.
+  // the last width at which anything can break on every page but a person's.**
+  // At 1024 the sidebar takes 240px and the content is squeezed below
+  // `PAGE_WIDTH.INDEX`; by 1440 it has reached that constraint. Scanning only 1024
+  // would have left every real laptop and desktop covered by an argument that had
+  // stopped being true.
   {
     name: '1440px, the sidebar with the content column at full width',
     width: 1440,
     height: 900,
+    crossBrowser: true,
+  },
+  // **A person's page in three columns** (decision 0426), which begins at `2xl`,
+  // 1536px, and stops growing at 1600px beside the sidebar: the widest laptop in
+  // the owner's list, and now the last width at which anything changes.
+  {
+    name: '1920px, a person’s page in three columns',
+    width: 1920,
+    height: 1080,
     crossBrowser: true,
   },
 ];

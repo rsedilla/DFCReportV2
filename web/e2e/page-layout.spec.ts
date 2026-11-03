@@ -7,7 +7,7 @@ import { mockCells } from './mock-attendance';
  * How wide a page is, and what its heading carries (decision 0402).
  *
  * A list or a table widens to 1280px beside the sidebar, one person's page stays at
- * 1024px, and a form widens to 1280px in sections (decision 0410); all three start at the same place beside the sidebar,
+ * 1024px below 1536px and runs to 1600px from it (decision 0426), and a form widens to 1280px in sections (decision 0410); all three start at the same place beside the sidebar,
  * so moving between them moves only the right-hand edge. A heading carries no line
  * that only repeats its title, tabs or headline.
  */
@@ -29,10 +29,14 @@ test.describe('page widths (decision 0402)', () => {
     await expect(main(page)).toHaveCSS('margin-left', '0px');
   });
 
-  test("one person's page stays 1024px wide", async ({ page }) => {
+  test("one person's page is up to 1600px from 1536px, and 1024px below it (decision 0426)", async ({
+    page,
+  }) => {
     await page.goto(`/people/${PERSON_IN_SCOPE.id}`);
     await expect(page.getByRole('heading', { name: PERSON_IN_SCOPE.full_name })).toBeVisible();
+    await expect(main(page)).toHaveCSS('max-width', '1600px');
 
+    await page.setViewportSize({ width: 1440, height: 900 });
     await expect(main(page)).toHaveCSS('max-width', '1024px');
   });
 
