@@ -2638,7 +2638,7 @@ Leader, category and schedule are not columns here. Each is effective-dated in i
 
 ### Cell ID generation
 
-The internal UUID is the key every relationship points at. The Cell ID is a human-readable handle for staff, reports, and conversation — the same split as Person (Section 3, Two identifiers, two jobs). A screen shows it on the Cell's own pages and where a Cell is chosen, and elsewhere names the Cell by its category and meeting day where the screen is given them (decision 0306).
+The internal UUID is the key every relationship points at. The Cell ID is a human-readable handle for staff, reports, and conversation — the same split as Person (Section 3, Two identifiers, two jobs). A screen shows it on the Cell's own pages and where a Cell is chosen, and elsewhere names the Cell by its category and meeting day where the screen is given them (decision 0306). The Cells page is the one list that also shows it, under each Cell's name, because it is where a Cell is looked up and its search finds one by its ID (decision 0427).
 
 - Format `CELL-` followed by six zero-padded digits, from a database sequence.
 - Assigned once, at creation, by the server. Immutable thereafter.
