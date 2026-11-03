@@ -2650,11 +2650,14 @@ The last rule matters more here than it looks. Category is editable and the Cell
 
 ### Cell categories
 
-Exactly:
+Exactly, youngest to oldest, which is the order every screen and every report column shows them in:
 
+- `J12_KIDS`, shown as *J12 Kids*
 - `YOUTH`
 - `YOUNG_PRO`
 - `COUPLE`
+
+**J12 Kids is the fourth category, and the first in order** (ruling of 2026-11-03, decision 0431). It is a Cell like the others in every rule: its members share their leader's Network, so a J12 Kids Cell is boys with boys or girls with girls, and it is counted beside the other three in *# of Cell Groups*, whose four categories add up to its total.
 
 A Cell Leader can lead one or many Cell Groups. Never assume one Cell Leader = one Cell Group.
 
@@ -2673,7 +2676,7 @@ Mark
 cell_categories
 - id
 - cell_id
-- category           YOUTH | YOUNG_PRO | COUPLE
+- category           J12_KIDS | YOUTH | YOUNG_PRO | COUPLE
 - actor_id
 - started_at
 - ended_at           nullable
@@ -2873,7 +2876,7 @@ cell_leadership_requests
 - kind                    NEW_CELL | HANDOVER
 - prospective_leader_id
 - requested_by
-- category                YOUTH | YOUNG_PRO | COUPLE, required where kind is NEW_CELL
+- category                J12_KIDS | YOUTH | YOUNG_PRO | COUPLE, required where kind is NEW_CELL
 - day_of_week             required where kind is NEW_CELL
 - time_of_day             required where kind is NEW_CELL
 - state                   PENDING | APPROVED | DECLINED
@@ -4052,6 +4055,7 @@ Show, for the selected scope:
 - Cell Leaders
 - Cell Groups
 - Cell Group categories:
+  - J12 Kids
   - Youth
   - Young Pro
   - Couple
@@ -5524,7 +5528,7 @@ When generating or reviewing code for this system:
 4. Never store age as authoritative data; derive it from birthday.
 5. Never add civil-status values beyond Single, Married, Widowed unless requirements explicitly change.
 6. Never add sex values beyond Male and Female unless requirements explicitly change.
-7. Never add Cell categories beyond Youth, Young Pro, Couple unless requirements explicitly change.
+7. Never add Cell categories beyond J12 Kids, Youth, Young Pro, Couple unless requirements explicitly change (J12 Kids added by decision 0431).
 8. Never add Cell meeting statuses beyond `HELD`, `RESCHEDULED`, and `NOT_HELD` (Section 1, Principle 8), and never infer `NOT_HELD` from missing data.
 9. Never introduce negative/judgmental leader labels or analytics.
 10. Never assume one Cell Leader has only one Cell.
@@ -5574,7 +5578,7 @@ CELL GROUP
   |
   +-- Cell ID
   +-- Leader
-  +-- Youth / Young Pro / Couple
+  +-- J12 Kids / Youth / Young Pro / Couple
   +-- Day
   +-- Time
   +-- Members (current & historical)

@@ -93,6 +93,7 @@ export function CellCategoryDialog({
 
         <RadioGroup
           legend="New category"
+          columns={2}
           name="category"
           value={category}
           onChange={setCategory}

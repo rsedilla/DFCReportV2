@@ -1528,6 +1528,7 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
 function countFigures(figures: ChurchCountFigures): Record<string, number> {
   return {
     cell_groups: figures.cellGroups,
+    j12_kids: figures.j12Kids,
     youth: figures.youth,
     young_pro: figures.youngPro,
     couple: figures.couple,

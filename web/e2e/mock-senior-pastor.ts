@@ -33,6 +33,7 @@ function figures(cells: [number, number, number], leaders: number, people: numbe
   const [youth, youngPro, couple] = cells;
   return {
     cell_groups: youth + youngPro + couple,
+    j12_kids: 0,
     youth,
     young_pro: youngPro,
     couple,
@@ -140,6 +141,7 @@ export async function mockBranchCounts(page: Page): Promise<{ leader: string; pe
   const asked: { leader: string; period: string }[] = [];
   const figures = (youth: number, youngPro: number, couple: number, leaders: number, people: number) => ({
     cell_groups: youth + youngPro + couple,
+    j12_kids: 0,
     youth,
     young_pro: youngPro,
     couple,

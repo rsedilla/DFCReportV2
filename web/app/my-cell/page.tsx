@@ -220,6 +220,7 @@ function AskForNewCell({ open, onClose }: { open: boolean; onClose: () => void }
 
         <RadioGroup
           legend="Category"
+          columns={2}
           name="category"
           value={category}
           onChange={setCategory}
