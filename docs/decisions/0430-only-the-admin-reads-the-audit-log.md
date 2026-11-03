@@ -21,6 +21,11 @@ the role, so even a Whole Church grant to a Leader or a Senior Pastor reads noth
 answers "what was it before?" when a record is questioned. If anybody besides the Admin is ever
 to read it, a later ruling decides what they see, such as which field changed without its value.
 
+**4. The open question of what period a read of the log asks about is retired.** It waited for
+a read serving a grant narrower than Whole Church, which points 1 and 2 make impossible, so its
+answer could change nobody's view of an entry. The owner retired it on 2026-11-03. A later ruling
+that lets anybody besides the Admin read the log must answer it again.
+
 ## Why
 
 Logging guidance generally says to keep sensitive personal data out of logs or to mask it, and

@@ -45,11 +45,9 @@ export interface CellScopePort {
    * the first dated *read*: a dated resolution serving a *recording* capability is not a
    * read in section 7's sense (decision 0186). `leaderForScopeAsOf` below is, arriving
    * with the Cell monthly report (decision 0220) — and it retires nothing else by doing
-   * so. The audit-log question is often described as waiting on "the first dated read";
-   * it does not, and `CLAUDE.md` says so in terms: what settles it is the first
-   * `audit.view` route serving a grant narrower than Whole Church, because a report
-   * resolves no audit entry and cannot decide how a Cell-targeted one is dated. The
-   * Admin's Audit Log (decision 0428) is read at Whole Church alone and did not settle it.**
+   * so. The audit-log question waited on an `audit.view` route serving a grant narrower
+   * than Whole Church, never on "the first dated read", and decision 0430 retired it:
+   * the log is the Admin's at Whole Church alone, so no such route can exist.**
    *
    * **This method serves a viewing capability since decision 0204**, which moved
    * `GET /api/v1/cells/{id}/members` onto `cell.view_subtree`. That does not make it
