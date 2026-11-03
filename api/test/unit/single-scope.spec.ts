@@ -12,13 +12,14 @@ import { WHOLE_CHURCH_ONLY, grantCoversNothing } from '../../src/auth/authorizat
  * stops being protected. Nothing else would fail.
  */
 describe('capabilities held only at Whole Church (section 7)', () => {
-  it('is exactly the eight section 7 argues the escalation for', () => {
+  it('is exactly the ten section 7 argues the escalation for', () => {
     // Changing this list is a change to SKILL.md section 7 and a deploy, the way
     // ROLE_DEFAULTS is. If a capability is added here without section 7 stating
     // why a narrower grant would be an escalation, that is the review question.
     expect([...WHOLE_CHURCH_ONLY].sort()).toEqual(
       [
         Capability.AccountsManage,
+        Capability.AuditView,
         Capability.CellApproveLeadership,
         Capability.PeopleCorrectSex,
         Capability.PeopleManageLifecycle,
@@ -31,27 +32,21 @@ describe('capabilities held only at Whole Church (section 7)', () => {
     );
   });
 
-  it('excludes audit.view, which section 7 contemplates at a narrower scope', () => {
-    // **The false positive that came of deriving this set.** Section 7 says an
-    // audit entry "resolves through its target", which is machinery with no
-    // purpose unless the capability can be held narrower — at Whole Church the
-    // target is never consulted. And the line immediately after it, "a setting is
-    // Whole Church only, and is never in scope at any narrower value", is the
-    // specification's own way of saying what this file says; audit is deliberately
-    // not written that way.
-    //
-    // A narrower `audit.view` grants strictly less than the Whole Church default,
-    // so there is no escalation to close and the rule was removing authority
-    // section 7 offers.
-    expect(WHOLE_CHURCH_ONLY.has(Capability.AuditView)).toBe(false);
-    expect(grantCoversNothing(Capability.AuditView, ScopeType.OwnSubtree)).toBe(false);
+  it('includes audit.view since decision 0430, whatever narrower scope it is granted at', () => {
+    // Section 7 once kept it grantable narrower, an entry resolving through its target.
+    // Decision 0430 retired that: an entry carries the values it changed, birthdays and
+    // mobile numbers among them, so the log is the Admin's alone.
+    for (const scope of [ScopeType.OwnSubtree, ScopeType.SubtreeExclSelf, ScopeType.Network]) {
+      expect(grantCoversNothing(Capability.AuditView, scope)).toBe(true);
+    }
+    expect(grantCoversNothing(Capability.AuditView, ScopeType.WholeChurch)).toBe(false);
   });
 
   it('excludes every capability a Leader holds by default', () => {
     // The weaker property the derived version accidentally keyed on. It is true —
     // a capability Leaders hold at own/subtree obviously may be held there — but
-    // it is not sufficient, which is the whole lesson: it admitted `audit.view`,
-    // which no Leader holds and which may still be granted narrowly.
+    // it is not sufficient, which is the whole lesson: it admitted `audit.view` when
+    // section 7 still let it be granted narrowly, before decision 0430.
     for (const capability of Object.keys(ROLE_DEFAULTS.LEADER) as Capability[]) {
       expect(WHOLE_CHURCH_ONLY.has(capability)).toBe(false);
     }

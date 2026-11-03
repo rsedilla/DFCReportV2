@@ -1373,6 +1373,29 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }));
   }
 
+  /** Each Cell's `CELL-000000` handle, keyed by Cell, for the Audit Log (decision 0428). */
+  async codesOf(cellIds: readonly string[]): Promise<Map<string, string>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.db
+      .selectFrom('cells')
+      .select(['id', 'cell_id'])
+      .where('id', 'in', [...cellIds])
+      .execute();
+    return new Map(rows.map((row) => [row.id, row.cell_id]));
+  }
+
+  /** The Cells whose handle starts with this, for finding their audit entries (decision 0428). */
+  async idsWithCodePrefix(prefix: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('cells')
+      .select('id')
+      .where('cell_id', 'like', `${escapeLike(prefix.toUpperCase())}%`)
+      .execute();
+    return rows.map((row) => row.id);
+  }
+
   /**
    * When each of these people first opened a Cell (SKILL.md section 27, *Open a cell*):
    * the earliest start among the Cells whose first leadership is theirs, leaving out a

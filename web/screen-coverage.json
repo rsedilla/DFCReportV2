@@ -210,6 +210,10 @@
       "screen": "web/app/admin/page.tsx"
     },
     {
+      "route": "GET /api/v1/audit-log",
+      "screen": "web/app/admin/page.tsx"
+    },
+    {
       "route": "GET /api/v1/settings",
       "screen": "web/app/admin/page.tsx"
     },
