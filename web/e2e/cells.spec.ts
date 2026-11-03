@@ -400,6 +400,37 @@ test.describe('New Cell', () => {
       },
     ]);
   });
+
+  test('offers the four categories youngest first, and sends J12 Kids as J12_KIDS', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellApprover(page);
+    await mockPeople(page);
+    await mockCellMembersEmpty(page);
+    const sent = await mockCellCreated(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/cells/new');
+
+    // Decision 0431: J12 Kids, Youth, Young Pro, Couple, and on a laptop on one line.
+    const choices = page.getByRole('group', { name: 'Category' }).locator('label');
+    await expect(choices).toHaveText(['J12 Kids', 'Youth', 'Young Pro', 'Couple']);
+    const tops = await Promise.all((await choices.all()).map(async (each) => (await each.boundingBox())!.y));
+    expect(new Set(tops).size).toBe(1);
+
+    await page.getByLabel('Search for the leader by name').fill('Marilou');
+    await page.getByRole('button', { name: 'Search people' }).click();
+    await page.getByRole('button', { name: 'Choose' }).first().click();
+    await page.getByRole('radio', { name: 'J12 Kids' }).check();
+    await page.getByRole('combobox', { name: 'Meets every' }).selectOption({ label: 'Saturday' });
+    await page.getByLabel('At').fill('09:00');
+    await page.getByRole('button', { name: 'Create Cell' }).click();
+
+    await expect(page).toHaveURL(`/cells/${CREATED_CELL.id}/members`);
+    expect(sent).toEqual([
+      { cell_leader_id: PERSON_IN_SCOPE.id, category: 'J12_KIDS', day_of_week: 6, time_of_day: '09:00' },
+    ]);
+  });
 });
 
 test.describe('a Cell’s meetings', () => {

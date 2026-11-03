@@ -256,8 +256,20 @@ test.describe('Change category (decision 0367)', () => {
     await page.getByRole('button', { name: 'Change category' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('It is a Youth Cell now.');
-    await expect(dialog.getByRole('radio')).toHaveCount(2);
+    // The other three, youngest first (decision 0431).
+    await expect(dialog.getByRole('radio')).toHaveCount(3);
+    await expect(dialog.getByRole('group', { name: 'New category' }).locator('label')).toHaveText([
+      'J12 Kids',
+      'Young Pro',
+      'Couple',
+    ]);
     await expect(dialog.getByRole('radio', { name: 'Youth' })).toHaveCount(0);
+    // Every choice inside the dialog: they wrap rather than run past its edge.
+    const edge = (await dialog.boundingBox())!;
+    for (const label of await dialog.locator('label').all()) {
+      const box = (await label.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(edge.x + edge.width);
+    }
     await expect(dialog).toContainText('It takes effect today.');
 
     await dialog.getByRole('radio', { name: 'Couple' }).check();

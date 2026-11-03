@@ -1406,6 +1406,7 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
         at: '2026-11-02T02:00:00.000Z',
         whole_church: {
           cell_groups: 186,
+          j12_kids: 0,
           youth: 40,
           young_pro: 50,
           couple: 30,

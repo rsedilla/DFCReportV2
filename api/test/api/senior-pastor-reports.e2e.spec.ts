@@ -107,7 +107,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
 
   async function cellOf(
     person: TestPerson,
-    category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE',
+    category: 'J12_KIDS' | 'YOUTH' | 'YOUNG_PRO' | 'COUPLE',
     createdAt: Date = LONG_AGO,
   ): Promise<TestCell> {
     return createCell(db, { leader: person, category, createdAt });
@@ -116,7 +116,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
   /** A category change at an instant, as section 10 makes one: close and open together. */
   async function recategorise(
     cell: TestCell,
-    category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE',
+    category: 'J12_KIDS' | 'YOUTH' | 'YOUNG_PRO' | 'COUPLE',
     at: Date,
   ): Promise<void> {
     await db.transaction().execute(async (trx) => {
@@ -166,7 +166,15 @@ describe('Senior Pastor reports (decision 0326)', () => {
       .set('Authorization', `Bearer ${as.accessToken}`);
   }
 
-  const FIELDS = ['cell_groups', 'youth', 'young_pro', 'couple', 'cell_leaders', 'people'] as const;
+  const FIELDS = [
+    'cell_groups',
+    'j12_kids',
+    'youth',
+    'young_pro',
+    'couple',
+    'cell_leaders',
+    'people',
+  ] as const;
   type Figures = Record<(typeof FIELDS)[number], number>;
   interface CountRow extends Figures {
     leader: { id: string };
@@ -267,16 +275,20 @@ describe('Senior Pastor reports (decision 0326)', () => {
       expect(body.current).toBe(false);
       expect(body.whole_church).toEqual({
         cell_groups: 6,
+        j12_kids: 0,
         youth: 2,
         young_pro: 2,
         couple: 2,
         cell_leaders: 6,
         people: 9,
       });
-      // Every Cell here has a category, so the three add up to Cell Groups.
-      expect(body.whole_church.youth + body.whole_church.young_pro + body.whole_church.couple).toBe(
-        body.whole_church.cell_groups,
-      );
+      // Every Cell here has a category, so the four add up to Cell Groups.
+      expect(
+        body.whole_church.j12_kids +
+          body.whole_church.youth +
+          body.whole_church.young_pro +
+          body.whole_church.couple,
+      ).toBe(body.whole_church.cell_groups);
 
       // The Men's root's table first, though Gemma sorts first by name.
       expect(body.tables!.map((table) => table.root.id)).toEqual([oriel.id, gemma.id]);
@@ -299,6 +311,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       // Others: both roots (Oriel's own Cell among them), Adele and Ines, and Xavier.
       expect(body.others).toEqual({
         cell_groups: 3,
+        j12_kids: 0,
         youth: 1,
         young_pro: 1,
         couple: 1,
@@ -306,6 +319,25 @@ describe('Senior Pastor reports (decision 0326)', () => {
         people: 5,
       });
 
+      expectReconciles(body);
+    });
+
+    it('counts a J12 Kids Cell in its own figure, the four categories adding up to Cell Groups', async () => {
+      await buildChurch();
+      // Ben leads one, beside the six Cells of the church built above (decision 0431).
+      await cellOf(ben, 'J12_KIDS');
+      const last = shiftMonth(await currentMonth(), -1);
+
+      const body = (await counts(pastor, last).expect(200)).body as Counts;
+
+      expect(body.whole_church).toMatchObject({ cell_groups: 7, j12_kids: 1, youth: 2 });
+      expect(
+        body.whole_church.j12_kids +
+          body.whole_church.youth +
+          body.whole_church.young_pro +
+          body.whole_church.couple,
+      ).toBe(body.whole_church.cell_groups);
+      expect(rowOf(body, ben)).toMatchObject({ cell_groups: 1, j12_kids: 1, cell_leaders: 1 });
       expectReconciles(body);
     });
 
@@ -347,6 +379,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       // one was YOUTH, and Paz was current.
       expect(earlier.whole_church).toEqual({
         cell_groups: 2,
+        j12_kids: 0,
         youth: 2,
         young_pro: 0,
         couple: 0,
@@ -356,6 +389,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
       // Last month: closed, created and recategorised, and Paz archived.
       expect(later.whole_church).toEqual({
         cell_groups: 2,
+        j12_kids: 0,
         youth: 0,
         young_pro: 1,
         couple: 1,
@@ -490,6 +524,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
     /** What a past month reads with the three Cells left out. */
     const WITHOUT_ERRONEOUS: Figures = {
       cell_groups: 3,
+      j12_kids: 0,
       youth: 2,
       young_pro: 1,
       couple: 0,
@@ -539,6 +574,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
 
       expect(body.whole_church).toEqual({
         cell_groups: 6,
+        j12_kids: 0,
         youth: 2,
         young_pro: 2,
         couple: 2,

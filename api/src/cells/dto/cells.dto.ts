@@ -27,7 +27,7 @@ import type {
 } from '../../database/schema';
 import { IsStorableText } from '../../common/text/is-storable-text';
 
-const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+const CATEGORIES: CellCategory[] = ['J12_KIDS', 'YOUTH', 'YOUNG_PRO', 'COUPLE'];
 
 /** Section 10: `kind` is a closed enumeration; a third value is an amendment. */
 const REQUEST_KINDS: CellRequestKind[] = ['NEW_CELL', 'HANDOVER'];

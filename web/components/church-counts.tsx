@@ -12,6 +12,7 @@ import { describeFailure } from '@/lib/messages';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 
 export type CountFigure = 'CELLS' | 'CELL_LEADERS' | 'PEOPLE';
 type Figure = CountFigure;
@@ -26,8 +27,10 @@ const TAB: Record<CountFigure, ReportTab> = {
 /** Each # tab's columns, shared with a Full view leader's branch (decision 0380). */
 export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, string][]> = {
   CELLS: [
-    // Every Cell is Youth, Young Pro or Couple, so the Cell Groups are their total (owner, 2026-10-09).
+    // Every Cell is J12 Kids, Youth, Young Pro or Couple, so the Cell Groups are their total
+    // (owner, 2026-10-09), and the four run youngest to oldest after it (decision 0431).
     ['cell_groups', 'Total'],
+    ['j12_kids', 'J12 Kids'],
     ['youth', 'Youth'],
     ['young_pro', 'Young Pro'],
     ['couple', 'Couple'],
@@ -104,12 +107,20 @@ export function ChurchCountsPanel({
           <dl
             className={
               figure === 'CELLS'
-                ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4'
+                ? // Five on one line; on a phone the total across the top, the four two by two
+                  // (decision 0431).
+                  'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
                 : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
             }
           >
             {COUNT_COLUMNS[figure].map(([key, label]) => (
-              <div key={key} className="border-line border p-3">
+              <div
+                key={key}
+                className={cn(
+                  'border-line border p-3',
+                  figure === 'CELLS' && key === 'cell_groups' && 'col-span-2 sm:col-span-1',
+                )}
+              >
                 <dt className="text-ink text-sm font-bold">{label}</dt>
                 <dd className="mt-1 text-xl font-bold tabular-nums">
                   {data.whole_church[key].toLocaleString()}

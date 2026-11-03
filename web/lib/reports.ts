@@ -428,6 +428,8 @@ function twelveParams(
 /** One scope's *Number of Cells* and *Number of people* (decision 0326). */
 export interface ChurchCountFigures {
   cell_groups: number;
+  /** Since decision 0431. */
+  j12_kids: number;
   youth: number;
   young_pro: number;
   couple: number;

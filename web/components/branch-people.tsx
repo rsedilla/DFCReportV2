@@ -14,6 +14,7 @@ import { getPerson } from '@/lib/people';
 import { monthFromQuery } from '@/lib/reporting-month';
 import { getBranchCounts, getBranchPeople, type ChurchCountFigures } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 
 /** The three # tabs' labels, as the Senior Pastors' (decision 0326). */
 const LABEL: Record<CountFigure, string> = {
@@ -142,12 +143,20 @@ export function BranchCountsPanel({
             <dl
               className={
                 figure === 'CELLS'
-                  ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4'
+                  ? // Five on one line; on a phone the total across the top, the four two by
+                    // two (decision 0431).
+                    'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
                   : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
               }
             >
               {columns.map(([key, label]) => (
-                <div key={key} className="border-line border p-3">
+                <div
+                  key={key}
+                  className={cn(
+                    'border-line border p-3',
+                    figure === 'CELLS' && key === 'cell_groups' && 'col-span-2 sm:col-span-1',
+                  )}
+                >
                   <dt className="text-ink text-sm font-bold">{label}</dt>
                   <dd className="mt-1 text-xl font-bold tabular-nums">
                     {value(data.total, key).toLocaleString()}

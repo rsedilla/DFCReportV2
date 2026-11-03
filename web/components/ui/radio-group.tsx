@@ -42,6 +42,7 @@ export function RadioGroup<T extends string>({
   disabled = false,
   layout = 'stacked',
   descriptionBelow = false,
+  columns,
 }: {
   legend: string;
   description?: string;
@@ -70,6 +71,13 @@ export function RadioGroup<T extends string>({
    * another (`FieldPair`), so the two rows of choices line up (decision 0410). Stacked only.
    */
   descriptionBelow?: boolean;
+  /**
+   * Choices in equal columns rather than at 11rem each, for a short fixed list that must sit
+   * on one line: `4` puts four across from `lg` and two across below it, `2` two across from
+   * `sm`, as a dialog's width allows (decision 0431, the four Cell categories). One a line on
+   * a phone either way. Stacked only.
+   */
+  columns?: 2 | 4;
 }) {
   const id = useId();
   const row = layout === 'row';
@@ -104,11 +112,16 @@ export function RadioGroup<T extends string>({
         className={
           row
             ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
-            : // Every choice one size, 11rem, wrapping where the column is narrow; one a line,
-              // full width, on a phone (decision 0416). A flex row rather than an auto-fill grid:
-              // inside a control bar the group is as wide as its content, and a grid sized by
-              // its column count then had one column and stacked every choice.
-              'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
+            : columns === 4
+              ? 'mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4'
+              : columns === 2
+                ? 'mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2'
+                : // Every choice one size, 11rem, wrapping where the column is narrow; one a
+                  // line, full width, on a phone (decision 0416). A flex row rather than an
+                  // auto-fill grid: inside a control bar the group is as wide as its content,
+                  // and a grid sized by its column count then had one column and stacked every
+                  // choice.
+                  'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap'
         }
       >
         {options.map((option) => {
@@ -121,7 +134,7 @@ export function RadioGroup<T extends string>({
                 'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
                 row
                   ? 'relative w-[5.25rem] justify-center gap-1 px-1 sm:w-28 sm:gap-1.5'
-                  : 'w-full min-w-0 gap-2.5 px-3 sm:w-44',
+                  : cn('w-full min-w-0 gap-2.5 px-3', columns === undefined && 'sm:w-44'),
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
                 checked
@@ -214,7 +227,13 @@ export function RadioGroup<T extends string>({
   // announced when focus reached an option. axe cannot see this: the ids
   // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
   return (
-    <fieldset className="flex flex-col gap-1.5" aria-describedby={describedBy} disabled={disabled}>
+    // `min-w-0` because a fieldset is otherwise as wide as its widest line of choices, so
+    // they ran past a narrow dialog rather than wrapping (decision 0431's fourth category).
+    <fieldset
+      className="flex min-w-0 flex-col gap-1.5"
+      aria-describedby={describedBy}
+      disabled={disabled}
+    >
       <legend className="field-label">{legend}</legend>
       {body}
     </fieldset>

@@ -139,7 +139,15 @@ describe('GET /reports/counts/branch and /reports/trends/branch (decision 0380)'
       .set('Authorization', `Bearer ${as.accessToken}`);
   }
 
-  const FIELDS = ['cell_groups', 'youth', 'young_pro', 'couple', 'cell_leaders', 'people'] as const;
+  const FIELDS = [
+    'cell_groups',
+    'j12_kids',
+    'youth',
+    'young_pro',
+    'couple',
+    'cell_leaders',
+    'people',
+  ] as const;
   type Figures = Record<(typeof FIELDS)[number], number>;
   interface Counts {
     current: boolean;
@@ -170,6 +178,26 @@ describe('GET /reports/counts/branch and /reports/trends/branch (decision 0380)'
     expect(body.own).toMatchObject({ cell_groups: 1, youth: 1, cell_leaders: 1, people: 1 });
     expect(body.total).toMatchObject({ cell_groups: 4, cell_leaders: 3, people: 4 });
     // The reconciliation section 20 asks of a drill-down, field by field.
+    for (const field of FIELDS) {
+      expect(body.rows.reduce((sum, row) => sum + row[field], 0) + body.own[field]).toBe(
+        body.total[field],
+      );
+    }
+  });
+
+  it('counts a J12 Kids Cell in the branch, the four categories adding up to Cell Groups', async () => {
+    // Fe leads one (decision 0431): her row, and the box above it, gain it.
+    await createCell(db, { leader: fe, category: 'J12_KIDS', createdAt: LONG_AGO });
+    const body = (await counts(anaAccount, ana.id, await monthOffset(-1)).expect(200))
+      .body as Counts;
+
+    expect(body.rows[1]).toMatchObject({ cell_groups: 1, j12_kids: 1, cell_leaders: 1 });
+    expect(body.total).toMatchObject({ cell_groups: 5, j12_kids: 1 });
+    for (const figures of [body.total, body.own, ...body.rows]) {
+      expect(figures.j12_kids + figures.youth + figures.young_pro + figures.couple).toBe(
+        figures.cell_groups,
+      );
+    }
     for (const field of FIELDS) {
       expect(body.rows.reduce((sum, row) => sum + row[field], 0) + body.own[field]).toBe(
         body.total[field],
