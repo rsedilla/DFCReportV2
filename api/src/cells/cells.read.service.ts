@@ -2199,11 +2199,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
          -- removes is the work. The actor sits in an ON clause the planner cannot push
          -- through a LIMIT 1, so without this every Dashboard load crosses all ~800
          -- Cells (SKILL.md section 2) with the month's days and evaluates two laterals
-         -- per pair — twice over in the close week. It has to be a separate predicate
-         -- rather than a filter inside the lateral: moving the person in there would
-         -- pick the actor's own leadership row instead of the governing one, silently
-         -- changing the rule from "is this meeting yours" to "did you ever lead it".
-         -- Every leader (null) has no such predicate to apply.
+         -- per pair — up to three times over while earlier months are open. It has to
+         -- be a separate predicate rather than a filter inside the lateral: moving the
+         -- person in there would pick the actor's own leadership row instead of the
+         -- governing one, silently changing the rule from "is this meeting yours" to
+         -- "did you ever lead it". Every leader (null) has no such predicate to apply.
          AND ${
            leaders === null
              ? sql`TRUE`

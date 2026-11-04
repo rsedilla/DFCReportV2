@@ -782,12 +782,14 @@ export class DccCoverageService {
     }
 
     const now = await databaseNow(this.db);
-    // A Sunday still open is in this month or the last: a week closes about three weeks after
-    // it, and a Sunday before the weekly rule at the end of the next month's 7th (decision 0335).
+    // A Sunday still open is in this month or one of the two before it: a week closes three
+    // Mondays after its due Monday, 29 to 35 days after its month's last day, which can fall in
+    // the month after next (decision 0434); a Sunday before the weekly rule closes at the end of
+    // the next month's 7th (decision 0335). Closed Sundays are dropped below.
     const rows = await this.db
       .selectFrom('dcc_events')
       .select(['id', 'event_date', 'removed_at', 'removal_reason'])
-      .where('event_date', '>=', previousMonth(reportingMonthOf(manilaDayOf(now))))
+      .where('event_date', '>=', previousMonth(previousMonth(reportingMonthOf(manilaDayOf(now)))))
       .orderBy('event_date')
       .execute();
     const events = rows

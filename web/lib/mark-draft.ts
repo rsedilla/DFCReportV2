@@ -14,12 +14,12 @@ import { useCallback, useEffect, useState } from 'react';
  * **Only marks are kept**, never a note, a reason or who ran a meeting, and each draft is keyed
  * on the screen and on the person signed in, so a draft is never offered to somebody else on a
  * shared phone. Signing out or in on this device, or the server ending the session, deletes
- * every draft (`clearMarkDrafts`), and one older than four weeks is not offered back, about when
- * the week it was for closes (decisions 0335 and 0387).
+ * every draft (`clearMarkDrafts`), and one older than five weeks is not offered back, about when
+ * the week it was for closes (decisions 0335, 0387 and 0434).
  */
 
 const PREFIX = 'dfc.marks:';
-const KEEP_MS = 28 * 24 * 60 * 60 * 1000;
+const KEEP_MS = 35 * 24 * 60 * 60 * 1000;
 
 export const LEAVE_WARNING =
   'You have marks you have not saved. Leave this page? They stay on this device until you save or discard them.';
@@ -53,7 +53,7 @@ function write<T>(key: string, value: T | null): void {
     } else {
       // **The time is when the marks were made, not when the screen was opened.** A restored
       // draft is written straight back, unchanged; restamping it there moved the note's time
-      // to the last opening and restarted its four weeks on every visit. So the stored time
+      // to the last opening and restarted its five weeks on every visit. So the stored time
       // stays until a mark changes.
       const before = read<T>(key);
       const json = JSON.stringify(value);

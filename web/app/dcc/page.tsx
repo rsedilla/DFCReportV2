@@ -183,7 +183,7 @@ function YourMonth() {
     });
   }
 
-  // Only the month shown: a closed Cell's queue can carry last month's work in the close week.
+  // Only the month shown: a closed Cell's queue can carry an earlier month's work while it is open.
   const shown = items
     .filter((item) => item.date.startsWith(month.slice(0, 8)))
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));

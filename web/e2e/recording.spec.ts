@@ -1727,6 +1727,55 @@ test.describe('the Record queue', () => {
     ).toBeVisible();
   });
 
+  // A week closes three Mondays after its due Monday (decision 0434), so a month can stay open
+  // into the month after next: November 2026 ends on Monday the 30th, whose week closes at noon
+  // on Monday 4 January 2027. Record asks for both earlier months while each may be open.
+  test('lists the month before last’s Cell meetings while that month is open (decision 0434)', async ({
+    page,
+  }) => {
+    // 10:00 on Saturday 2 January 2027 in Manila.
+    await page.clock.setFixedTime(new Date('2027-01-02T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2027-01-01': { meetings: [] },
+      '2026-12-01': { meetings: [] },
+      '2026-11-01': { meetings: [awaitingRow('2026-11-30', '2026-11-01')] },
+    });
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/meetings/awaiting')) {
+        asked.push(request.url());
+      }
+    });
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('link', { name: /^Record Young Pro · / })).toBeVisible();
+    expect(asked.some((url) => url.includes('month=2026-11-01'))).toBe(true);
+    expect(asked.some((url) => url.includes('month=2026-12-01'))).toBe(true);
+  });
+
+  test('stops asking for the month before last once its last week has closed', async ({ page }) => {
+    // 10:00 on Tuesday 5 January 2027 in Manila, the day after November's last week closed.
+    await page.clock.setFixedTime(new Date('2027-01-05T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2027-01-01': { meetings: [awaitingRow('2027-01-02', '2027-01-01')] },
+      '2026-12-01': { meetings: [] },
+    });
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/meetings/awaiting')) {
+        asked.push(request.url());
+      }
+    });
+
+    await page.goto('/dashboard');
+
+    // January's row has arrived, so an absence below is not a page still loading.
+    await expect(page.getByRole('link', { name: /^Record Young Pro · / })).toBeVisible();
+    expect(asked.some((url) => url.includes('month=2026-11-01'))).toBe(false);
+    expect(asked.some((url) => url.includes('month=2026-12-01'))).toBe(true);
+  });
+
   // A month past its 7th answers shut and empty rather than refusing, so the screen has
   // nothing to decide: it lists what it was given, which is nothing.
   test('lists no Cell meeting from a month the server has shut', async ({ page }) => {

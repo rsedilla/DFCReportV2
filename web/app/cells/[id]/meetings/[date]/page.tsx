@@ -451,11 +451,12 @@ function RecordMeeting() {
       // 2026-09-17). The queue used to be assembled from `['cell-meetings', id, month]`
       // and so was cleared by the line above; it is now its own route under
       // `['meetings-awaiting', month]`, which that prefix does not reach. The month is
-      // left off deliberately: in the close week the Dashboard holds two months and a
-      // meeting recorded now may belong to either, so naming one would leave the other
-      // asserting work that is done. Section 19 puts this queue above the figures so a
-      // leader can trust it, and a queue that still lists what was just recorded breaks
-      // that as surely as one that lists nothing because a read failed.
+      // left off deliberately: while an earlier month is open the Dashboard holds two or
+      // three months (decision 0434) and a meeting recorded now may belong to any of them,
+      // so naming one would leave the others asserting work that is done. Section 19 puts
+      // this queue above the figures so a leader can trust it, and a queue that still lists
+      // what was just recorded breaks that as surely as one that lists nothing because a
+      // read failed.
       await queryClient.invalidateQueries({ queryKey: ['meetings-awaiting'] });
       resetForm();
     },
