@@ -336,7 +336,8 @@ test.describe('My Cell (decision 0323)', () => {
       'My Cell',
     ]);
     await expect(page.getByText('The Cells you lead, in June 2026.')).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2 })).toHaveText([
+    // The Cells' own cards, below the count of those in the reader's care (decision 0438).
+    await expect(page.getByRole('listitem').getByRole('heading', { level: 2 })).toHaveText([
       'Youth · Sat',
       'Couple · Wed',
     ]);
@@ -365,6 +366,47 @@ test.describe('My Cell (decision 0323)', () => {
     for (const request of index) {
       expect(request).toContain('led_by=me');
     }
+  });
+
+  test('counts the Cell Groups in the account’s care as of today (decision 0438)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill({ json: { in_scope: 5, led_by_me: 2, attention_months: 3 } }),
+    );
+
+    await page.goto('/my-cell');
+
+    await expect(
+      page.getByRole('heading', { level: 2, name: '5 Cell Groups in your care' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('2 you lead · 3 led by your leaders · as of today'),
+    ).toBeVisible();
+  });
+
+  test('names the scope rather than "0 you lead" where the account leads none (decision 0438)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill({ json: { in_scope: 3, led_by_me: 0, attention_months: 3 } }),
+    );
+
+    await page.goto('/my-cell');
+
+    await expect(
+      page.getByRole('heading', { level: 2, name: '3 Cell Groups in your care' }),
+    ).toBeVisible();
+    await expect(page.getByText('People you oversee · as of today')).toBeVisible();
+    await expect(page.getByText('0 you lead')).toHaveCount(0);
   });
 
   test('says so when the account leads no Cell, and still offers to ask for one', async ({

@@ -4328,7 +4328,7 @@ People     My People and Search (Sections 3 and 8), No Leader Yet on the Full vi
 Cells      the Cell Leaders module (Section 15): Active Cells; No CG Yet on the Full view screens (decision 0381); for the Admin, Under 3 Members, Inactive 3+ Months, Time Clashes and Closed Cells (decision 0366); and Cells to Approve for an account holding cell.approve_leadership (decision 0352); the lists asking for action under one Needs Attention tab where more than one is offered (decision 0420)
 Growth     SUYNL and Training (Section 28)
 Conquest   the four G12 goals, for holders of `conquest.view_subtree` at Whole Church, by default the Admin and the two Senior Pastors (Section 27, decision 0407)
-Cells      a Leader account without Full view: its own Cells, on the page titled My Cell (Section 15, decisions 0323 and 0371)
+Cells      a Leader account without Full view: its own Cells, on the page titled My Cell (Section 15, decisions 0323 and 0371; it opens on how many Cell Groups are in the reader's care as of today, at every level of their branch, as My People lists its people, decision 0438)
 SUYNL      a Leader account, with Full view or without, in Growth's place: the Growth SUYNL tab (Section 28, decisions 0323, 0360 and 0383)
 ```
 

@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-04, the trigger being decisions 0436 and 0437: of 436 files, 435 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0437 each moved the first two and
+2026-11-04, the trigger being decision 0438: of 437 files, 436 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0438 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-04 and triggered by decisions 0436 and 0437, and was left stale by 0438 the same day. The one before that was dated
 2026-11-04 and triggered by 0435, and was left stale by 0436 and 0437 the same day. The one before that was dated
 2026-11-04 and triggered by 0434, and was left stale by 0435 the same day. The one before that was dated
 2026-11-04 and triggered by 0433, and was left stale by 0434 the same day. The one before that was dated
@@ -914,6 +915,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-04 — [A browser session signs out after thirty minutes idle](docs/decisions/0435-a-browser-session-signs-out-when-idle.md)
 - 2026-11-04 — [A leader's people are "in your care"](docs/decisions/0436-a-leaders-people-are-in-their-care.md)
 - 2026-11-04 — [My People reaches every level, and says who leads each Cell](docs/decisions/0437-my-people-reaches-every-level.md)
+- 2026-11-04 — [My Cell counts the Cell Groups in the leader's care](docs/decisions/0438-my-cell-counts-the-cell-groups-in-your-care.md)
 
 ### Open — awaiting a ruling
 
