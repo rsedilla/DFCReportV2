@@ -109,9 +109,9 @@ test.describe('the SUYNL tab', () => {
   test('shows two counts, and a card narrows the list and the address', async ({ page }) => {
     const traffic = await openSuynl(page);
 
-    await expect(page.getByText('4 people you oversee, as of today.')).toBeVisible();
+    await expect(page.getByText('4 people in your care.')).toBeVisible();
     // Each abbreviation is spelled out once, under the heading (UI label audit, Medium 7).
-    await expect(page.getByText('SUYNL is Start Up Your New Life, ten lessons taken one to one.')).toBeVisible();
+    await expect(page.getByText('Start Up Your New Life (SUYNL): ten lessons, taken one to one.')).toBeVisible();
     const notStarted = page.getByRole('button', { name: /^Not started/ });
     const inProgress = page.getByRole('button', { name: /^In progress/ });
     await expect(notStarted).toContainText('1');

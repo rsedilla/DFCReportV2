@@ -20,7 +20,7 @@ import {
   shortDate,
   type AbsentPerson,
 } from '@/lib/lifecycle';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { careWords, getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 
 /** A Cell as the lists name it, "Young Pro · Sat" (decision 0259). */
@@ -76,6 +76,7 @@ export function AbsentPanel() {
 }
 
 function AbsentList({ mayArchive }: { mayArchive: boolean }) {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const [archiving, setArchiving] = useState<AbsentPerson | null>(null);
   const pages = useInfiniteQuery({
     queryKey: ['people-absent'],
@@ -110,7 +111,7 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
           <ListTable
             caption="Absent 3+ Months"
             columns={columns}
-            empty="Nobody you oversee has been away three months."
+            empty={`No one ${careWords(me.data, 'people.view_subtree')} has been away three months. Praise God!`}
             rows={data.map((person) => ({
               key: person.id,
               cells: [

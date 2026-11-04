@@ -1907,7 +1907,7 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
 
-    await expect(page.getByText('Nothing to record. You’re up to date.')).toBeVisible();
+    await expect(page.getByText('All recorded. Thank you for your faithfulness!')).toBeVisible();
     // Each tab says what it is for (owner, 2026-10-26).
     await expect(
       page.getByText(
@@ -3528,7 +3528,7 @@ test.describe('Pending CG Records laid out as Pending DCC Records (decision 0368
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
     // No count box: the button's whole name is its label.
     await expect(recordLists(page).getByRole('button', { name: 'Pending CG Records', exact: true })).toBeVisible();
-    await expect(page.getByText(/No Cell you oversee has a meeting still to record/)).toHaveCount(0);
+    await expect(page.getByText(/Every Cell Group in your care is up to date/)).toHaveCount(0);
   });
 
   test('an empty list says so in one row, and Late only says it in its own words', async ({ page }) => {
@@ -3536,7 +3536,7 @@ test.describe('Pending CG Records laid out as Pending DCC Records (decision 0368
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard?list=behind');
 
-    await expect(table(page).getByRole('cell')).toHaveText(['No Cell you oversee has a meeting still to record.']);
+    await expect(table(page).getByRole('cell')).toHaveText(['Every Cell Group in your care is up to date.']);
     await page.getByRole('region', { name: 'Pending CG Records' }).getByRole('button', { name: 'Late only' }).click();
     await expect(table(page).getByRole('cell')).toHaveText([
       'No Cell you oversee has a meeting past its deadline.',

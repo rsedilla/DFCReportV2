@@ -23,6 +23,7 @@ import {
   type SuynlChange,
   type SuynlPerson,
 } from '@/lib/growth';
+import { careWords } from '@/lib/me';
 
 /**
  * The SUYNL tab of Growth (SKILL.md section 28; decisions 0278 to 0282, and the owner's
@@ -172,9 +173,9 @@ function SuynlTab() {
         </h1>
         <p className="text-muted text-sm">
           {counts.data
-            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} you oversee, as of today.`
-            : 'The people you oversee, as of today.'}{' '}
-          SUYNL is Start Up Your New Life, ten lessons taken one to one.
+            ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} ${careWords(me.data, 'suynl.view_subtree')}.`
+            : `The people ${careWords(me.data, 'suynl.view_subtree')}.`}{' '}
+          Start Up Your New Life (SUYNL): ten lessons, taken one to one.
         </p>
       </div>
 

@@ -170,7 +170,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
       /^No CG Yet/,
     ]);
     // The total stays with the list it counts (decision 0400).
-    await expect(page.getByRole('heading', { name: /^\d+ Cells?$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^\d+ Cell Groups? in your care$/ })).toBeVisible();
   });
 
   test('is a Primary’s tab once they are ticked Approves Cells', async ({ page }) => {

@@ -6,7 +6,7 @@ import { PeopleTabs } from '@/components/people-tabs';
 
 /**
  * *My People*, a second tab of People for a leader without Full view (SKILL.md section 19,
- * decision 0422): their people two levels down, as a plain list.
+ * decisions 0422 and 0437): everyone in their branch, at every level, as a plain list.
  */
 export default function MyPeoplePage() {
   return (

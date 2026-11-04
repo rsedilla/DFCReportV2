@@ -1181,7 +1181,7 @@ export function PendingCgPane({
                 ? 'No Cell you oversee has a meeting past its deadline.'
                 : filter.q !== '' || filter.network !== null
                   ? 'No Cell matching this has a meeting still to record.'
-                  : 'No Cell you oversee has a meeting still to record.'
+                  : `Every Cell Group ${wholeChurch ? 'in the church' : 'in your care'} is up to date.`
             }
           />
           <ShowMore pages={pages} />
@@ -1240,7 +1240,7 @@ export function PendingDccPane({
                 ? 'No leader you oversee has a Sunday past its deadline.'
                 : filter.q !== '' || filter.network !== null
                   ? 'No leader matching this is behind on DCC.'
-                  : 'No leader you oversee is behind on DCC.'
+                  : `Every leader ${wholeChurch ? 'in the church' : 'in your care'} is up to date on DCC.`
             }
             chosenId={chosen?.id ?? null}
             onChoose={onChoose}

@@ -613,14 +613,19 @@ function CellsHeadline() {
     <div className="border-accent mt-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b-2 pb-2">
       <h2 className="text-2xl font-bold tracking-tight">
         <span className="text-accent tabular-nums">{total ?? '–'}</span>{' '}
-        {total === 1 ? 'Cell' : 'Cells'}
+        {wholeChurch
+          ? total === 1
+            ? 'Cell'
+            : 'Cells'
+          : // A leader's, in the words of decision 0436.
+            `${total === 1 ? 'Cell Group' : 'Cell Groups'} in your care`}
       </h2>
       <p className="text-sm">
         {mine > 0 ? (
           <>
             <span className="font-semibold tabular-nums">{mine}</span> you lead ·{' '}
             <span className="font-semibold tabular-nums">{others ?? '–'}</span>{' '}
-            {wholeChurch ? 'others in the church' : 'under your leaders'}
+            {wholeChurch ? 'others in the church' : 'led by your leaders'}
           </>
         ) : wholeChurch ? (
           'Whole Church'

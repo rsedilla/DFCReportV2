@@ -8,7 +8,7 @@ import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { peopleWithoutACell } from '@/lib/cells';
-import { getMe } from '@/lib/me';
+import { careWords, getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
 import { cn } from '@/lib/utils';
@@ -56,6 +56,7 @@ export function useAwaitingLeader(enabled: boolean) {
 
 /** *No CG Yet*, as a tab of `Cells` (decisions 0233 and 0381). */
 export function AwaitingCgList() {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const { pages } = useWithoutACell(true);
   const data = pages.data?.pages.flatMap((page) => page.data);
 
@@ -77,7 +78,7 @@ export function AwaitingCgList() {
           <ListTable
             caption="No CG Yet"
             columns={['Name']}
-            empty="Everybody you oversee is in a Cell."
+            empty={`Everyone ${careWords(me.data, 'cell.view_subtree')} is in a Cell Group.`}
             rows={data.map((person) => ({
               key: person.id,
               cells: [
@@ -130,7 +131,7 @@ export function AwaitingLeaderList() {
           <ListTable
             caption="No Leader Yet"
             columns={['Name', 'Previous Cell Leader']}
-            empty="Nobody you oversee is waiting for a new leader."
+            empty={`Everyone ${careWords(me.data, 'people.view_subtree')} has a leader.`}
             rows={data.map((person) => ({
               key: person.id,
               cells: [

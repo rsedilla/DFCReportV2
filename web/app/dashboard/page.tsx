@@ -325,7 +325,7 @@ function Dashboard() {
             <p className="text-sm leading-relaxed">
               {churchStatus
                 ? 'How many leaders in the church recorded on time, week by week or month by month.'
-                : 'How many leaders in your branch recorded on time, week by week or month by month.'}
+                : 'How your leaders are doing with their records, week by week or month by month.'}
             </p>
             {churchStatus ? (
               <RecordingStatusPanel onPending={openPending} />
@@ -424,7 +424,7 @@ function Dashboard() {
               <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-                Nothing to record. You&rsquo;re up to date.
+                All recorded. Thank you for your faithfulness!
               </p>
             ) : branchView ? (
               <LeaderGroups

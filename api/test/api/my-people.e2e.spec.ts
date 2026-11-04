@@ -20,18 +20,25 @@ interface Row {
   person_id: string;
   full_name: string;
   leader: { person_id: string; full_name: string } | null;
-  cell: { cell_id: string; category: string | null; day_of_week: number | null } | null;
+  cell: {
+    cell_id: string;
+    category: string | null;
+    day_of_week: number | null;
+    led_by: { person_id: string; full_name: string; first_name: string } | null;
+  } | null;
   cell_withheld: boolean;
 }
 
 /**
- * A leader's people two levels down, as one plain list (SKILL.md section 19, decision 0422).
+ * A leader's people as one plain list (SKILL.md section 19, decisions 0422 and 0437): two levels
+ * down for a Full view account, which the fixtures give by default, and every level for one
+ * without Full view.
  *
  * Lorenzo is a root; Ramon is under him and reads the list. Anselmo and Benito are under Ramon,
  * Celso is under Anselmo and a member of Anselmo's Cell, and Dante is under Celso, three levels
  * down. Pascual is Ramon's sibling under Lorenzo. Fixture names are invented (CLAUDE.md, Secrets).
  */
-describe('my people, two levels down (decision 0422)', () => {
+describe('my people (decisions 0422 and 0437)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 
@@ -90,15 +97,21 @@ describe('my people, two levels down (decision 0422)', () => {
     // Their own people have no leader named: the reader is it.
     expect(a.leader).toBeNull();
     // Anselmo leads the Cell; Benito belongs to none.
-    expect(a.cell).toEqual({ cell_id: cellId, category: 'YOUNG_PRO', day_of_week: 5 });
+    expect(a.cell).toEqual({
+      cell_id: cellId,
+      category: 'YOUNG_PRO',
+      day_of_week: 5,
+      led_by: { person_id: anselmo.id, full_name: 'Anselmo Diaz', first_name: 'Anselmo' },
+    });
     expect(b.cell).toBeNull();
     expect(b.cell_withheld).toBe(false);
     // Celso is under Anselmo and a member of his Cell.
     expect(c.leader).toEqual({ person_id: anselmo.id, full_name: 'Anselmo Diaz' });
     expect(c.cell?.cell_id).toBe(cellId);
+    expect(c.cell?.led_by?.first_name).toBe('Anselmo');
   });
 
-  it('leaves out the third level and anyone outside the reader’s branch', async () => {
+  it('leaves out the third level for a Full view account, and anyone outside the reader’s branch', async () => {
     const ids = ((await get(reader, '').expect(200)).body.data as Row[]).map(
       (row) => row.person_id,
     );
@@ -109,11 +122,64 @@ describe('my people, two levels down (decision 0422)', () => {
     expect(ids).not.toContain(ramon.id);
   });
 
-  it('counts them, directly and beneath', async () => {
+  it('counts them, directly and beneath, and says the list stops at two levels', async () => {
     expect((await get(reader, '/counts').expect(200)).body).toEqual({
       all: 3,
       direct: 2,
       beneath: 1,
+      every_level: false,
+    });
+  });
+
+  describe('without Full view (decision 0437)', () => {
+    let recording: TestAccount;
+
+    beforeEach(async () => {
+      await db
+        .updateTable('accounts')
+        .set({ full_view: false, moves_people: false, approves_cells: false })
+        .where('id', '=', reader.id)
+        .execute();
+      recording = reader;
+    });
+
+    it('lists every level of the reader’s branch, each with their own leader', async () => {
+      const rows = (await get(recording, '').expect(200)).body.data as Row[];
+
+      expect(rows.map((row) => row.person_id)).toEqual([anselmo.id, benito.id, celso.id, dante.id]);
+      expect(rows[3].leader).toEqual({ person_id: celso.id, full_name: expect.any(String) });
+      expect(rows[3].leader?.full_name.startsWith('Celso')).toBe(true);
+      expect(rows.map((row) => row.person_id)).not.toContain(pascual.id);
+    });
+
+    it('counts every level, and says so', async () => {
+      expect((await get(recording, '/counts').expect(200)).body).toEqual({
+        all: 4,
+        direct: 2,
+        beneath: 2,
+        every_level: true,
+      });
+    });
+
+    it('pages across the deeper levels by the cursor it hands back', async () => {
+      const first = await get(recording, '?limit=3').expect(200);
+      const second = await get(recording, `?limit=3&cursor=${first.body.next_cursor}`).expect(200);
+      expect((second.body.data as Row[]).map((row) => row.person_id)).toEqual([dante.id]);
+      expect(second.body.next_cursor).toBeNull();
+    });
+
+    it('names the reader as the leader of a Cell they lead themselves', async () => {
+      const own = await createCell(db, { leader: ramon, category: 'YOUNG_PRO', dayOfWeek: 6 });
+      const emilio = await addCellMember(db, own, { firstName: 'Emilio', under: ramon.id });
+
+      const rows = (await get(recording, '').expect(200)).body.data as Row[];
+      const row = rows.find((r) => r.person_id === emilio.id);
+      expect(row?.cell?.cell_id).toBe(own.cellId);
+      expect(row?.cell?.led_by).toEqual({
+        person_id: ramon.id,
+        full_name: 'Ramon Ilagan',
+        first_name: 'Ramon',
+      });
     });
   });
 
@@ -166,8 +232,9 @@ describe('my people, two levels down (decision 0422)', () => {
     const reader2 = await stripRoles(reader);
     await grant(reader2, 'OWN_SUBTREE');
 
+    // An account holding no role has no Full view, so the list reaches every level.
     const rows = (await get(reader2, '').expect(200)).body.data as Row[];
-    expect(rows.map((row) => row.person_id)).toEqual([anselmo.id, benito.id, celso.id]);
+    expect(rows.map((row) => row.person_id)).toEqual([anselmo.id, benito.id, celso.id, dante.id]);
     for (const row of rows) {
       expect(row.cell).toBeNull();
       expect(row.cell_withheld).toBe(true);
@@ -185,6 +252,7 @@ describe('my people, two levels down (decision 0422)', () => {
       all: 0,
       direct: 0,
       beneath: 0,
+      every_level: true,
     });
   });
 
@@ -196,6 +264,7 @@ describe('my people, two levels down (decision 0422)', () => {
       all: 0,
       direct: 0,
       beneath: 0,
+      every_level: false,
     });
   });
 

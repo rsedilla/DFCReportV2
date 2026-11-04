@@ -83,7 +83,7 @@ function MyCell() {
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : cells.data && cells.data.data.length === 0 ? (
           <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-            You do not lead a Cell. Ask for a new one, and it is sent for approval.
+            You don&rsquo;t lead a Cell Group yet. Request one and it will be sent for approval.
           </p>
         ) : (
           <ul className="mt-6 grid gap-4 sm:grid-cols-2">
