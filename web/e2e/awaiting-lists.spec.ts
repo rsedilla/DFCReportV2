@@ -127,13 +127,13 @@ test.describe('No CG Yet, a tab of Cells (decision 0381)', () => {
 
     await expect(cellTabs(page).getByRole('button', { name: /^No CG Yet$/ })).toBeVisible();
     const table = page.getByRole('table', { name: 'No CG Yet' });
-    await expect(table.getByRole('cell')).toHaveText(['Everybody you oversee is in a Cell.']);
+    await expect(table.getByRole('cell')).toHaveText(['Everyone in your care is in a Cell Group.']);
 
     // Below lg the same sentence stands in for the cards.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
     await expect(
-      page.getByRole('listitem').filter({ hasText: 'Everybody you oversee is in a Cell.' }),
+      page.getByRole('listitem').filter({ hasText: 'Everyone in your care is in a Cell Group.' }),
     ).toBeVisible();
   });
 
@@ -208,7 +208,7 @@ test.describe('No Leader Yet, a tab of People (decision 0381)', () => {
 
     await expect(peopleTabs(page).getByRole('link', { name: /^No Leader Yet$/ })).toBeVisible();
     await expect(page.getByRole('table', { name: 'No Leader Yet' }).getByRole('cell')).toHaveText([
-      'Nobody you oversee is waiting for a new leader.',
+      'Everyone in your care has a leader.',
     ]);
   });
 });

@@ -82,3 +82,12 @@ export function holdsWholeChurch(me: SessionDescription | undefined, capability:
     (grant) => grant.capability === capability && grant.scope_type === 'WHOLE_CHURCH',
   );
 }
+
+/**
+ * How a sentence names the people a list ranges over (decision 0436): "in your care" for a
+ * leader's own, "in the church" for a reader holding the list's capability church-wide, whose
+ * sentences are not about people in their care.
+ */
+export function careWords(me: SessionDescription | undefined, capability: string): string {
+  return holdsWholeChurch(me, capability) ? 'in the church' : 'in your care';
+}

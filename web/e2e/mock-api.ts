@@ -1422,13 +1422,24 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
   return asked;
 }
 
-/** A leader's people two levels down (decision 0422), invented. */
+/** A leader's people (decisions 0422 and 0437), invented. Arturo leads CELL-000021. */
+const ARTURO = {
+  person_id: '3f1b7c6e-0000-4000-8000-000000000921',
+  full_name: 'Arturo Villaruel',
+  first_name: 'Arturo',
+};
+
 export const MY_PEOPLE_ROWS = [
   {
     person_id: '3f1b7c6e-0000-4000-8000-000000000921',
     full_name: 'Arturo Villaruel',
     leader: null,
-    cell: { cell_id: 'CELL-000021', category: 'YOUTH', day_of_week: 5 },
+    cell: {
+      cell_id: 'CELL-000021',
+      category: 'YOUTH',
+      day_of_week: 5,
+      led_by: ARTURO,
+    },
     cell_withheld: false,
   },
   {
@@ -1442,14 +1453,37 @@ export const MY_PEOPLE_ROWS = [
     person_id: '3f1b7c6e-0000-4000-8000-000000000923',
     full_name: 'Ernani Pascual',
     leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000921', full_name: 'Arturo Villaruel' },
-    cell: { cell_id: 'CELL-000021', category: 'YOUTH', day_of_week: 5 },
+    cell: {
+      cell_id: 'CELL-000021',
+      category: 'YOUTH',
+      day_of_week: 5,
+      led_by: ARTURO,
+    },
+    cell_withheld: false,
+  },
+  {
+    person_id: '3f1b7c6e-0000-4000-8000-000000000924',
+    full_name: 'Lualhati Ramos',
+    leader: null,
+    // A Cell the signed-in reader leads, which the row says is led by "you".
+    cell: {
+      cell_id: 'CELL-000022',
+      category: 'COUPLE',
+      day_of_week: 7,
+      led_by: {
+        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+        full_name: 'Reader Name',
+        first_name: 'Reader',
+      },
+    },
     cell_withheld: false,
   },
 ];
 
-export async function mockMyPeople(page: Page): Promise<void> {
+/** `everyLevel` is what the server says for the account: true without Full view (0437). */
+export async function mockMyPeople(page: Page, everyLevel = true): Promise<void> {
   await page.route('**/api/v1/cells/people/mine/counts', (route) =>
-    route.fulfill(json({ all: 3, direct: 2, beneath: 1 })),
+    route.fulfill(json({ all: 4, direct: 3, beneath: 1, every_level: everyLevel })),
   );
   await page.route(
     (url) => url.pathname === '/api/v1/cells/people/mine',

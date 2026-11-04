@@ -378,7 +378,7 @@ test.describe('My Cell (decision 0323)', () => {
 
     await expect(
       page.getByText(
-        'You do not lead a Cell. Ask for a new one, and it is sent for approval.',
+        'You don’t lead a Cell Group yet. Request one and it will be sent for approval.',
       ),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Request New Cell' })).toBeVisible();
@@ -1290,7 +1290,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await expect(page.getByText(/and everyone beneath them/)).toHaveCount(0);
     // The whole list again, which was read before the figure was clicked.
     await expect(
-      page.getByText('No Cell you oversee has a meeting still to record.').first(),
+      page.getByText('Every Cell Group in your care is up to date.').first(),
     ).toBeVisible();
     expect(pending.some((params) => !params.has('leader_id'))).toBe(true);
   });

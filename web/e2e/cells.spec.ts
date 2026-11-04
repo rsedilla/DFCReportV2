@@ -178,7 +178,9 @@ test.describe('the Cells total (decision 0400)', () => {
     await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
   });
 
-  const headline = (page: Page) => page.getByRole('heading', { name: /^\d+ Cells?$/ });
+  // A leader's reads in the words of decision 0437.
+  const headline = (page: Page) =>
+    page.getByRole('heading', { name: /^\d+ Cell Groups? in your care$/ });
 
   test('heads the list with one total, with how many the reader leads, as of today', async ({
     page,
@@ -187,8 +189,8 @@ test.describe('the Cells total (decision 0400)', () => {
     await mockCellTotals(page);
     await page.goto('/cells');
 
-    await expect(headline(page)).toHaveText('5 Cells');
-    await expect(page.getByText('1 you lead · 4 under your leaders · as of today')).toBeVisible();
+    await expect(headline(page)).toHaveText('5 Cell Groups in your care');
+    await expect(page.getByText('1 you lead · 4 led by your leaders · as of today')).toBeVisible();
     // Information only: neither of decision 0289's two cards is left, and nothing filters.
     await expect(page.getByRole('button', { name: /^Cells you (lead|oversee)/ })).toHaveCount(0);
   });
@@ -201,7 +203,7 @@ test.describe('the Cells total (decision 0400)', () => {
     await mockSignedIn(page);
     const asked = await mockCellTotals(page);
     await page.goto('/cells');
-    await expect(headline(page)).toHaveText('5 Cells');
+    await expect(headline(page)).toHaveText('5 Cell Groups in your care');
 
     expect(asked.filter((url) => url.pathname === '/api/v1/cells/counts')).toHaveLength(1);
     expect(asked.filter((url) => url.searchParams.get('limit') === '200')).toHaveLength(0);

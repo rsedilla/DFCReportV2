@@ -260,8 +260,9 @@ export class CellsController {
   }
 
   /**
-   * `GET /api/v1/cells/people/mine`: the reader's people two levels down, each with their leader
-   * and Cell, as one plain list (SKILL.md section 19, decision 0422). The two levels are the
+   * `GET /api/v1/cells/people/mine`: the reader's people, each with their leader and Cell and
+   * who leads that Cell, as one plain list (SKILL.md section 19, decisions 0422 and 0437): every
+   * level for an account without Full view, two for a Full view account. All of it is the
    * reader's own tree, so `people.view_subtree` against the reader admits every row; a Cell is
    * given only where `cell.view_subtree` reaches the person too.
    */
@@ -278,7 +279,7 @@ export class CellsController {
     return { data: rows, next_cursor: encodeRosterCursor(nextCursor) };
   }
 
-  /** How many people `GET /cells/people/mine` holds, directly and beneath (decision 0422). */
+  /** How many people `GET /cells/people/mine` holds, directly and beneath, and whether it reaches every level (decisions 0422 and 0437). */
   @Get('people/mine/counts')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
   async mineCounts(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {

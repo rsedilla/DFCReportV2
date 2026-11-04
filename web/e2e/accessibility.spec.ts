@@ -1767,7 +1767,7 @@ const SCANS = [
       await mockMyPeople(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: '3 people under you' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '4 people in your care' })).toBeVisible();
     },
   },
   {
@@ -2219,7 +2219,7 @@ const TARGET_SWEEP = [
     name: 'my people',
     route: '/people/mine',
     settleRole: 'heading' as const,
-    settle: '3 people under you',
+    settle: '4 people in your care',
     minimum: 2,
     recording: true,
   },
