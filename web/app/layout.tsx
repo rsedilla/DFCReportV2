@@ -33,13 +33,22 @@ export const metadata: Metadata = {
 };
 
 /**
- * Responsive from the beginning. Leaders will open this on their phones long
- * before a native app exists, so mobile web is a current surface rather than
- * preparation for the future (SKILL.md section 23).
+ * Responsive from the beginning. Leaders open this on their phones, installed to the home screen
+ * rather than from an app store (decision 0424), so mobile web is the surface rather than
+ * preparation for another (SKILL.md section 23).
  */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // **The page runs to the screen's edges, and its bars keep clear of what the phone draws there**
+  // (decision 0439).
+  // Without `cover`, iOS reports every safe-area inset as zero, so in the installed app the
+  // home indicator sat over the tab bar's labels while `env(safe-area-inset-bottom)` asked for
+  // room it was never given (owner, 2026-11-04). The bottom inset is taken by the tab bar, the
+  // page's bottom padding, the Save bars and a dialog; the side insets, which a phone turned
+  // sideways has, by the body, the tab bar and a dialog. Zoom is left on (WCAG 1.4.4), unlike the many
+  // apps that pair `cover` with turning it off.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
