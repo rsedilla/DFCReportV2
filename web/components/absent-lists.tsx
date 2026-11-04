@@ -29,6 +29,19 @@ function cellName(cell: { cell_id: string; category: string | null; day_of_week:
 }
 
 /**
+ * The three months, "August, September, and October 2026", the year said once where they share
+ * it and on each month where they do not (decision 0432).
+ */
+function threeMonths(months: readonly string[]): string {
+  const names = months.map(monthName);
+  if (months.every((month) => month.slice(0, 4) === months[0].slice(0, 4))) {
+    const bare = names.map((name) => name.replace(/ \d{4}$/, ''));
+    return `${bare[0]}, ${bare[1]}, and ${names[2]}`;
+  }
+  return `${names[0]}, ${names[1]}, and ${names[2]}`;
+}
+
+/**
  * People's *Absent 3+ Months* tab (SKILL.md section 19, decision 0397). A Full view leader reads
  * their branch; the Admin reads the church, with Archive on each row, and has an *Absent 3+
  * Months | Archived* switch. No count on the tab (owner, 2026-10-16).
@@ -79,10 +92,9 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
     <>
       {months.length === 3 ? (
         <p className="text-muted mt-3 text-sm leading-relaxed">
-          Nobody marked Present at a Cell meeting or DCC Sunday in {monthName(months[0])},{' '}
-          {monthName(months[1])} and {monthName(months[2])}, and marked Absent at least once in
-          each. Only months they were in a Cell or under a leader all month count, so nobody new
-          is listed. Not the Participation report, which looks back over a rolling window.
+          This list shows people who were never marked Present at a Cell meeting or DCC Sunday
+          in {threeMonths(months)}, but were marked Absent at least once each month. Only full
+          months in a Cell Group or under a leader count, so new members are excluded.
         </p>
       ) : null}
       {!mayArchive ? (

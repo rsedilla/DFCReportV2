@@ -985,10 +985,11 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
       '2 of 4 leaders',
       '3 leaders still to record',
     ]);
+    // Nobody owed reads as a dash, said as "None owed" (decision 0432).
     await expect(rows.nth(2).getByRole('cell')).toHaveText([
       'Dionisio Yap',
-      '0 of 0 leaders',
-      '0 of 0 leaders',
+      '—None owed',
+      '—None owed',
       'Nothing owed',
     ]);
     // Each name opens that leader's page, Branch having left People (decision 0364).

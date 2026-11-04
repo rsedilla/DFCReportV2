@@ -43,7 +43,12 @@ test.describe('Absent 3+ Months (decision 0397)', () => {
     await expect(tab).toHaveText('Absent 3+ Months');
     await expect(tab).toHaveAttribute('aria-current', 'page');
 
-    await expect(page.getByText(/in March 2026, April 2026 and May 2026/)).toBeVisible();
+    // The year said once where the three months share it (decision 0432).
+    await expect(
+      page.getByText(
+        'This list shows people who were never marked Present at a Cell meeting or DCC Sunday in March, April, and May 2026, but were marked Absent at least once each month. Only full months in a Cell Group or under a leader count, so new members are excluded.',
+      ),
+    ).toBeVisible();
     await expect(table(page).getByRole('columnheader')).toHaveText([
       'Name',
       'Leader',
@@ -59,6 +64,16 @@ test.describe('Absent 3+ Months (decision 0397)', () => {
     await expect(page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
     await expect(page.getByRole('group', { name: 'Show' })).toHaveCount(0);
     await expect(page.getByText('The administrator archives, after talking with the Senior Pastors.')).toBeVisible();
+  });
+
+  test('names each month with its year where the three cross a year (decision 0432)', async ({ page }) => {
+    await arrange(page);
+    await page.route('**/api/v1/people/absent*', (route) =>
+      route.fulfill({ json: { data: [], next_cursor: null, months: ['2025-11', '2025-12', '2026-01'] } }),
+    );
+    await page.goto('/people/absent');
+
+    await expect(page.getByText(/in November 2025, December 2025, and January 2026, but/)).toBeVisible();
   });
 
   test('is not on the recording screens', async ({ page }) => {
