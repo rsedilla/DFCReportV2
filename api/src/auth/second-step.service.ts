@@ -142,6 +142,7 @@ export class SecondStepService {
     challengeToken: string,
     code: string,
     deviceLabel: string | null,
+    browser = true,
   ): Promise<SessionTokens & { recovery_codes: string[] }> {
     const outcome = await this.db
       .transaction()
@@ -205,7 +206,7 @@ export class SecondStepService {
       });
 
     const { account, codes } = unwrap(outcome);
-    return { ...(await this.issue(account, deviceLabel)), recovery_codes: codes };
+    return { ...(await this.issue(account, deviceLabel, browser)), recovery_codes: codes };
   }
 
   /** Every later sign-in: a code from the app, or one recovery code. */
@@ -213,6 +214,7 @@ export class SecondStepService {
     challengeToken: string,
     answer: { code?: string; recoveryCode?: string },
     deviceLabel: string | null,
+    browser = true,
   ): Promise<SessionTokens> {
     const outcome = await this.db
       .transaction()
@@ -246,7 +248,7 @@ export class SecondStepService {
         return { ok: true, value: account };
       });
 
-    return this.issue(unwrap(outcome), deviceLabel);
+    return this.issue(unwrap(outcome), deviceLabel, browser);
   }
 
   /**
@@ -489,9 +491,13 @@ export class SecondStepService {
     );
   }
 
-  private async issue(account: AccountRecord, deviceLabel: string | null): Promise<SessionTokens> {
+  private async issue(
+    account: AccountRecord,
+    deviceLabel: string | null,
+    browser: boolean,
+  ): Promise<SessionTokens> {
     await this.accounts.recordLogin(account.id);
-    const refresh = await this.tokens.issueRefreshToken(account.id, deviceLabel);
+    const refresh = await this.tokens.issueRefreshToken(account.id, deviceLabel, browser);
 
     return {
       access_token: this.tokens.issueAccessToken(account.id, account.person_id),

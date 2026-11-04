@@ -18,6 +18,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { isBranchReader } from '@/components/reports-tabs';
+import { IdleGuard } from '@/components/idle-guard';
 import { RequireSession } from '@/components/require-session';
 import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
@@ -328,6 +329,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <RequireSession>
+      {/* A browser session signs out after thirty minutes idle (decision 0435). */}
+      <IdleGuard />
       <div className="bg-raised min-h-dvh lg:flex">
         {/*
           **The bar across the top below `lg`.** It names where you are and holds the

@@ -346,6 +346,10 @@ export class CredentialsService {
         .where('account_id', '=', account.id)
         .where('revoked_at', 'is', null)
         .where('expires_at', '>', changedAt)
+        // An idle browser session is not renewable either (decision 0435).
+        .where((eb) =>
+          eb.or([eb('idle_expires_at', 'is', null), eb('idle_expires_at', '>', changedAt)]),
+        )
         .executeTakeFirst();
 
       // Only a session a refresh would still renew is kept: one an earlier revocation

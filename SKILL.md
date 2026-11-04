@@ -1199,9 +1199,12 @@ refresh_tokens
 - expires_at
 - last_used_at       nullable
 - revoked_at         nullable
+- idle_expires_at    nullable, a browser session's idle deadline (decision 0435)
 ```
 
 An access token lives **15 minutes**. A refresh token lives 30 days from issue and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
+
+**A session begun in a browser signs out after thirty minutes without activity; one begun in the app installed on a phone or tablet's home screen keeps the thirty days** (ruling of 2026-11-04, decision 0435). An app installed on a computer signs out as a browser does. Activity is a click, tap, key, scroll or pointer movement in any DREAMS tab of the browser, every tab being one session; at twenty-eight minutes a box asks whether somebody is still there, with *Stay signed in* and *Sign out now*, and at thirty the session is signed out as *Sign out* signs it out, the sign-in page saying why. The client tells the server at sign-in which the session begins in (`session_kind`, `BROWSER` by default, or `INSTALLED`), and the server holds a deadline of its own for a session that says it began in a browser: its refresh token carries `idle_expires_at`, thirty-five minutes after issue and renewed with each rotation, and a refresh past it is refused as an expired one is and is no reuse signal. The client renews on any activity two minutes or more after its last renewal, and an idle tab renews nothing, so while renewals succeed the server's deadline falls at least thirty-three minutes after the last activity, after the client's warning and sign-out. The kind is what the client says, so the deadline guards a session left behind, not one whose client says `INSTALLED`. A session signed in before this carries no server deadline until it signs in again, though a browser still signs it out when idle, and an idle sign-out deletes unsaved attendance marks as any sign-out does (decision 0345).
 
 `replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. It governs what happens when a revoked token is *presented*: one carrying a replacement was rotated, so presenting it again is a reuse signal; one without was revoked by a sign-out or by an account-wide revocation, and is simply refused. Without the column those cases are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
 
@@ -1330,7 +1333,7 @@ read the whole church, minors' records included. `LEADER` accounts sign in with 
 alone. *This section said "Do not require 2-step verification/MFA in V1" until that ruling.*
 
 - **It is asked at password sign-in and nowhere else.** A refresh asks for nothing, so a
-  signed-in device keeps its 30 days. A password reset or an activation does not pass the
+  signed-in device keeps its 30 days, a browser's while it is not idle (decision 0435). A password reset or an activation does not pass the
   step; the next sign-in asks for the code.
 - **An account that owes the step and has none is walked through setup at sign-in** — a QR
   code, then one code to confirm it — and receives no session until it is done. When the

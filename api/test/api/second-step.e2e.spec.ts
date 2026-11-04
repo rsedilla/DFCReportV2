@@ -358,4 +358,47 @@ describe('the second sign-in step (SKILL.md section 6, decision 0302)', () => {
     expect(await forPerson(leader.personId)).toEqual({ required: false, set_up_at: null });
     expect((await forPerson(admin.personId)).set_up_at).toEqual(expect.any(String));
   });
+
+  it('passes the session kind through the second step (decision 0435)', async () => {
+    const newest = async () =>
+      db
+        .selectFrom('refresh_tokens')
+        .select(['idle_expires_at'])
+        .where('account_id', '=', admin.id)
+        .orderBy('issued_at', 'desc')
+        .executeTakeFirstOrThrow();
+
+    const browser = await answer((await login(admin)).body.challenge, { code: codeNow() });
+    expect(browser.status).toBe(200);
+    expect((await newest()).idle_expires_at).not.toBeNull();
+
+    const installed = await http()
+      .post('/api/v1/auth/second-step')
+      .send({
+        challenge: (await login(admin)).body.challenge,
+        code: codeNow(1),
+        session_kind: 'INSTALLED',
+      });
+    expect(installed.status).toBe(200);
+    expect((await newest()).idle_expires_at).toBeNull();
+
+    const setUpInstalled = await login(pastor);
+    const setup = await http()
+      .post('/api/v1/auth/second-step/setup')
+      .send({ challenge: setUpInstalled.body.challenge });
+    const confirmed = await http()
+      .post('/api/v1/auth/second-step/setup/confirm')
+      .send({
+        challenge: setUpInstalled.body.challenge,
+        code: codeForStep(setup.body.key as string, stepAt(new Date())),
+        session_kind: 'INSTALLED',
+      });
+    expect(confirmed.status).toBe(200);
+    const pastorToken = await db
+      .selectFrom('refresh_tokens')
+      .select(['idle_expires_at'])
+      .where('account_id', '=', pastor.id)
+      .executeTakeFirstOrThrow();
+    expect(pastorToken.idle_expires_at).toBeNull();
+  });
 });

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsEmailAddress } from '../../common/text/is-email-address';
 
@@ -44,6 +44,13 @@ export class LoginDto {
   @MaxLength(100)
   @IsStorableText()
   reset_proof?: string;
+  /**
+   * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
+   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   */
+  @IsOptional()
+  @IsIn(['BROWSER', 'INSTALLED'])
+  session_kind?: 'BROWSER' | 'INSTALLED';
 }
 
 export class RefreshDto {
@@ -78,6 +85,13 @@ export class SecondStepConfirmDto extends SecondStepSetupDto {
   @MaxLength(120)
   @IsStorableText()
   device_label?: string;
+  /**
+   * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
+   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   */
+  @IsOptional()
+  @IsIn(['BROWSER', 'INSTALLED'])
+  session_kind?: 'BROWSER' | 'INSTALLED';
 }
 
 /** A code from the app, or one recovery code. The controller refuses both or neither. */
@@ -99,6 +113,13 @@ export class SecondStepDto extends SecondStepSetupDto {
   @MaxLength(120)
   @IsStorableText()
   device_label?: string;
+  /**
+   * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
+   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   */
+  @IsOptional()
+  @IsIn(['BROWSER', 'INSTALLED'])
+  session_kind?: 'BROWSER' | 'INSTALLED';
 }
 
 export class LogoutDto {

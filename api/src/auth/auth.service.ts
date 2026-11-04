@@ -56,6 +56,8 @@ export class AuthService {
     password: string,
     deviceLabel: string | null,
     resetProof: string | null = null,
+    /** A session begun in a browser rather than the installed app (decision 0435). */
+    browser = true,
   ): Promise<SessionTokens | SecondStepChallenge> {
     // Ten wrong passwords for this name pause it (decision 0413). Asked before the
     // account is looked up, so a pause answers alike whether or not one holds the name,
@@ -108,7 +110,7 @@ export class AuthService {
     }
 
     await this.accounts.recordLogin(account.id);
-    return this.issue(account.id, account.person_id, deviceLabel);
+    return this.issue(account.id, account.person_id, deviceLabel, browser);
   }
 
   /**
@@ -191,7 +193,7 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
-    if (row.expires_at.getTime() <= Date.now()) {
+    if (row.expires_at.getTime() <= Date.now() || idleExpired(row)) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
@@ -261,7 +263,8 @@ export class AuthService {
       return null;
     }
 
-    if (replacement.expires_at.getTime() <= Date.now()) {
+    // An idle browser session is not renewable through a retry either (decision 0435).
+    if (replacement.expires_at.getTime() <= Date.now() || idleExpired(replacement)) {
       return null;
     }
 
@@ -446,8 +449,9 @@ export class AuthService {
     accountId: string,
     personId: string,
     deviceLabel: string | null,
+    browser: boolean,
   ): Promise<SessionTokens> {
-    const refresh = await this.tokens.issueRefreshToken(accountId, deviceLabel);
+    const refresh = await this.tokens.issueRefreshToken(accountId, deviceLabel, browser);
 
     return {
       access_token: this.tokens.issueAccessToken(accountId, personId),
@@ -474,4 +478,12 @@ function signInPaused(who: SignInName, pausedUntil: Date | null): ApiError {
       ? { reason: 'SIGN_IN_PAUSED' }
       : { reason: 'SIGN_IN_PAUSED', paused_until: pausedUntil.toISOString() },
   );
+}
+
+/**
+ * Whether a browser session has gone unrenewed past its idle span (decision 0435). A
+ * session begun in the installed app carries none and never is.
+ */
+function idleExpired(row: { idle_expires_at: Date | null }): boolean {
+  return row.idle_expires_at !== null && row.idle_expires_at.getTime() <= Date.now();
 }
