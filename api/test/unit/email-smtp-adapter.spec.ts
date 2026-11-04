@@ -55,8 +55,8 @@ describe('the SMTP email transport (section 6)', () => {
 
   const expiresAt = new Date('2026-09-22T16:00:00.000Z');
 
-  it('links an activation to the web client, with the token encoded', () => {
-    const { subject, text } = compose(
+  it('welcomes an activation from the church, with the verse, the token encoded and a button', () => {
+    const { subject, text, html } = compose(
       {
         kind: 'ACTIVATION',
         to: { email: 'a@example.test', name: 'Invented Person' },
@@ -66,11 +66,35 @@ describe('the SMTP email transport (section 6)', () => {
       smtp.linkOrigin,
     );
 
-    expect(subject).toBe('Set your password for DREAMS');
+    expect(subject).toBe('Welcome to Doulos For Christ Church');
     expect(text).toContain('https://app.example.test/activate?token=a%2Bb%2Fc%3D');
     expect(text).toContain('Hello Invented Person,');
+    expect(text).toContain('Matthew 25:21');
+    expect(text.trimEnd().split('\n').slice(-3)).toEqual([
+      'In Christ,',
+      'The DREAMS team',
+      'Doulos For Christ Church',
+    ]);
     // 16:00 UTC is midnight in Manila, the next day.
     expect(text).toMatch(/Sept? 23, 2026/);
+    // The HTML puts the link behind a button, its `&` and `=` escaped as an attribute.
+    expect(html).toContain('href="https://app.example.test/activate?token=a%2Bb%2Fc%3D"');
+    expect(html).toContain('>Set my password</a>');
+  });
+
+  it('escapes a name in the HTML, so a name is never markup', () => {
+    const { html } = compose(
+      {
+        kind: 'ACTIVATION',
+        to: { email: 'a@example.test', name: '<b>Invented</b> & Co' },
+        token: 'tok',
+        expiresAt,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(html).toContain('Hello &lt;b&gt;Invented&lt;/b&gt; &amp; Co,');
+    expect(html).not.toContain('<b>Invented</b>');
   });
 
   it('links a reset to the reset page', () => {
