@@ -296,7 +296,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           // (2.5.8). `min-w-0` so the tabs share 320px without pushing past it.
           // `flex-auto`: each tab starts from its own label's width and shares what is left,
           // so a long label (Reports) is not squeezed to the width of a short one (Cells).
-          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-1',
+          // 2px each side, so the Admin's six words fit 320px whole wherever the font renders a
+          // pixel wider (the Linux browser the build runs did, at 12px).
+          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-0.5',
           // Sentence case at 12px (owner, 2026-11-04, decision 0439; 11px from 2026-09-24): the
           // Admin's six labels still fit 320px, which accessibility.spec.ts checks whole. Grey,
           // and the current one extra bold.
