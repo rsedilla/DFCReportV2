@@ -340,8 +340,8 @@ function Dashboard() {
             {/* What the tab is for; a Recording-only account reads it in the heading above. */}
             {recordingOnly ? null : (
               <p className="mb-4 text-sm leading-relaxed">
-                Your own meetings and Sundays still to record. Each week is due by 12 noon on the
-                second Monday after it.
+                Please record your own Cell Group meetings and DCC Sundays. Each week is due by 12
+                noon on the second Monday after it.
               </p>
             )}
             <ViewSwitch

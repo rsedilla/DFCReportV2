@@ -20,6 +20,7 @@ import {
   type RecordingRow,
   type RecordingRowStatus,
 } from '@/lib/reports';
+import { cn } from '@/lib/utils';
 
 type Kind = 'WEEK' | 'MONTH';
 
@@ -397,14 +398,21 @@ function StatusLabel({ status }: { status: RecordingRowStatus }) {
       );
     case 'STILL_TO_RECORD':
       return (
-        <span>
+        // Bold, so the rows to follow up stand out (decision 0432); the words carry it.
+        <span className="font-semibold">
           {status.leaders} {status.leaders === 1 ? 'leader' : 'leaders'} still to record
         </span>
       );
     case 'NOTHING_OWED':
-      return <span>Nothing owed</span>;
+      return <span className="text-muted">Nothing owed</span>;
   }
 }
+
+/**
+ * This table's headings in sentence case, without the shared header's tracked capitals
+ * (decision 0432), so the figures below them are what the eye reads.
+ */
+const HEADER = 'text-[13px] font-semibold tracking-normal normal-case';
 
 /** One root's direct leaders, each opening that leader's branch (decision 0325, point 4). */
 function LeaderTable({
@@ -434,28 +442,28 @@ function LeaderTable({
         <thead>
           <tr>
             {/* The roots' direct disciples are their Primaries (owner, 2026-10-09). */}
-            <HeaderCell>{nameHeader}</HeaderCell>
+            <HeaderCell className={HEADER}>{nameHeader}</HeaderCell>
             {/* Figures right-aligned with their headings, as every report table's are
                 (decision 0425); the Status label after them. */}
-            <HeaderCell className="text-right">Cell group recorded</HeaderCell>
-            <HeaderCell className="text-right">DCC checklist recorded</HeaderCell>
-            <HeaderCell className="pl-7">Status</HeaderCell>
+            <HeaderCell className={cn(HEADER, 'text-right')}>Cell group recorded</HeaderCell>
+            <HeaderCell className={cn(HEADER, 'text-right')}>DCC checklist recorded</HeaderCell>
+            <HeaderCell className={cn(HEADER, 'pl-7')}>Status</HeaderCell>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            // Every other row shaded, never numbered (owner, 2026-10-09).
-            <tr key={row.leader.id} className={rowClasses}>
-              <td className="px-3 py-3 align-top">
+            // Every other row shaded, never numbered (owner, 2026-10-09; decision 0432).
+            <tr key={row.leader.id} className={cn(rowClasses, 'even:bg-raised/50')}>
+              <td className="px-3 py-2.5 align-middle">
                 <BranchLink row={row} />
               </td>
-              <td className="px-3 py-3 text-right align-top tabular-nums">
+              <td className="px-3 py-2.5 text-right align-middle tabular-nums">
                 <RowFigure row={row} list="cell" deadline={deadline} open={open} onPending={onPending} />
               </td>
-              <td className="px-3 py-3 text-right align-top tabular-nums">
+              <td className="px-3 py-2.5 text-right align-middle tabular-nums">
                 <RowFigure row={row} list="dcc" deadline={deadline} open={open} onPending={onPending} />
               </td>
-              <td className="px-3 py-3 pl-7 align-top">
+              <td className="px-3 py-2.5 pl-7 align-middle">
                 <StatusLabel status={row.status} />
               </td>
             </tr>
@@ -506,6 +514,15 @@ function RowFigure({
   onPending?: OpenPending;
 }) {
   const column = list === 'cell' ? row.cell : row.dcc;
+  // Nobody owed: a quiet dash rather than "0 of 0 leaders" on most rows (decision 0432).
+  if (column.owed === 0) {
+    return (
+      <span className="text-muted">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">None owed</span>
+      </span>
+    );
+  }
   const text = rowFigure(column, deadline);
   if (
     onPending === undefined ||

@@ -1862,7 +1862,7 @@ test.describe('the Record queue', () => {
     // Each tab says what it is for (owner, 2026-10-26).
     await expect(
       page.getByText(
-        'Your own meetings and Sundays still to record. Each week is due by 12 noon on the second Monday after it.',
+        'Please record your own Cell Group meetings and DCC Sundays. Each week is due by 12 noon on the second Monday after it.',
       ),
     ).toBeVisible();
     // A 0 shows no box (decision 0350).

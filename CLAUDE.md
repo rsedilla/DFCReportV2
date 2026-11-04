@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-03, the trigger being decision 0431: of 430 files, 429 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0431 each moved the first two and
+2026-11-03, the trigger being decision 0432: of 431 files, 430 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0432 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-03 and triggered by 0431, and was left stale by 0432 the same day. The one before that was dated
 2026-11-03 and triggered by 0429 and 0430, and was left stale by 0431 the same day. The one before that was dated
 2026-11-03 and triggered by 0428, and was left stale by 0429 the same day. The one before that was dated
 2026-11-03 and triggered by 0427, and was left stale by 0428 the same day. The one before that was dated
@@ -903,6 +904,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-03 — [The Audit Log's name search says when it is cut](docs/decisions/0429-the-audit-log-search-says-when-it-is-cut.md)
 - 2026-11-03 — [Only the Admin reads the audit log](docs/decisions/0430-only-the-admin-reads-the-audit-log.md)
 - 2026-11-03 — [J12 Kids, a fourth Cell category, first in order](docs/decisions/0431-j12-kids-a-fourth-cell-category.md)
+- 2026-11-03 — [Plainer Record words, and a quieter Recording Progress table](docs/decisions/0432-plainer-record-words-and-a-quieter-recording-progress-table.md)
 
 ### Open — awaiting a ruling
 
