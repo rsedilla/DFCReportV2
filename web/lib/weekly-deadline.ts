@@ -1,12 +1,12 @@
 /**
- * The weekly deadline's labels (SKILL.md section 13, decisions 0335 and 0387): each week is due
- * at 12 noon on the second Monday after it and closes two Mondays later, from the week of
+ * The weekly deadline's labels (SKILL.md section 13, decisions 0335, 0387 and 0434): each week is
+ * due at 12 noon on the second Monday after it and closes three Mondays later, from the week of
  * 26 October 2026.
  *
  * **The server decides; these only word what it decided.** Every row that can be recorded
  * carries its own `due_at` and `closes_at` from the API, and every period its `open` flag.
  * What is computed here is the wording of a month's close, which the API sends as a flag
- * rather than a date, and whether last month is worth asking about at all. The first Monday
+ * rather than a date, and whether an earlier month is worth asking about at all. The first Monday
  * matches `weeklyDeadlineFrom` in `api/src/common/time/submission-window.ts`.
  */
 
@@ -27,7 +27,7 @@ function lastDayOf(reportingMonth: string): string {
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
-/** "Mon 23 Nov" for a `YYYY-MM-DD` day, in no zone, as a date is a date. */
+/** "Mon 30 Nov" for a `YYYY-MM-DD` day, in no zone, as a date is a date. */
 function shortDay(date: string): string {
   const [year, month, day] = date.split('-').map(Number);
 
@@ -55,10 +55,10 @@ function dayClose(date: string): { day: string; noon: boolean } {
     return { day: new Date(Date.UTC(year, month, 7)).toISOString().slice(0, 10), noon: false };
   }
 
-  return { day: addDays(week, 28), noon: true };
+  return { day: addDays(week, 35), noon: true };
 }
 
-/** "Open until Mon 23 Nov, 12NN", or "Open until 7 November" for a month before the weekly rule. */
+/** "Open until Mon 30 Nov, 12NN", or "Open until 7 November" for a month before the weekly rule. */
 export function monthOpenUntilLabel(reportingMonth: string): string {
   return openUntil(monthClose(reportingMonth));
 }
@@ -69,7 +69,7 @@ export function periodOpenUntilLabel(lastDay: string): string {
 }
 
 /**
- * "Still open, until Mon 23 Nov, 12 noon": the same close in a sentence, for the note under a
+ * "Still open, until Mon 30 Nov, 12 noon": the same close in a sentence, for the note under a
  * Full view leader's report controls (decision 0363), where a tag would read as a button.
  */
 export function periodStillOpenNote(lastDay: string): string {
@@ -112,7 +112,7 @@ function noonLabel(instant: string): string {
 
 /**
  * A row's deadline in words (decision 0335): "Due Mon 9 Nov, 12NN" until it is due, then
- * "Late · closes Mon 23 Nov, 12NN". A row from before the weekly rule has no deadline and
+ * "Late · closes Mon 30 Nov, 12NN". A row from before the weekly rule has no deadline and
  * says when it closes. Null where the server sent neither, as an older answer would.
  */
 export function deadlineLabel(

@@ -22,12 +22,12 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
 
 /**
- * The weekly deadline (SKILL.md section 13, decisions 0335 and 0387): a week is due at 12 noon
- * the second Monday after it, a record first made after that is Late, and the week closes two
- * Mondays later.
+ * The weekly deadline (SKILL.md section 13, decisions 0335, 0387 and 0434): a week is due at
+ * 12 noon the second Monday after it, a record first made after that is Late, and the week
+ * closes three Mondays later.
  *
  * **The rule starts on 26 October 2026, and no real clock reaches a closed week of it before
- * 23 November**, so this file moves the start to a Monday ten weeks before the database's own
+ * 30 November**, so this file moves the start to a Monday ten weeks before the database's own
  * week through `WEEKLY_DEADLINE_FROM`, which only a test process reads. Every date is computed
  * from the database's day, as the other attendance suites do. Fixture names are invented.
  */
@@ -238,8 +238,8 @@ describe('The weekly deadline (decision 0335)', () => {
         .set('Idempotency-Key', randomUUID())
         .send({ records: [{ person_id: bob.id, present: true, version: null }] });
 
-    // Five weeks back closed at noon on last Monday; last week closes in three weeks.
-    const closed = await submit(await createEvent(week(5).day(7))).expect(409);
+    // Six weeks back closed at noon on last Monday; last week closes in four weeks.
+    const closed = await submit(await createEvent(week(6).day(7))).expect(409);
     expect(closed.body.error.code).toBe('PERIOD_CLOSED');
 
     await submit(await createEvent(week(1).day(7))).expect(201);
@@ -257,7 +257,7 @@ describe('The weekly deadline (decision 0335)', () => {
         .expect(200);
 
     const open = week(1).day(3);
-    const shut = week(5).day(3);
+    const shut = week(6).day(3);
     const months = [...new Set([open, shut].map((day) => `${day.slice(0, 7)}-01`))];
     const meetings = (await Promise.all(months.map(awaiting))).flatMap(
       (response) =>
@@ -267,7 +267,7 @@ describe('The weekly deadline (decision 0335)', () => {
     const row = meetings.find((meeting) => meeting.scheduled_date === open);
     expect(row?.due_at).toBe((recordDueAt(open) as Date).toISOString());
     expect(new Date(row?.closes_at ?? 0).getTime() - new Date(row?.due_at ?? 0).getTime()).toBe(
-      14 * 24 * 60 * 60 * 1000,
+      21 * 24 * 60 * 60 * 1000,
     );
     expect(meetings.some((meeting) => meeting.scheduled_date === shut)).toBe(false);
   });

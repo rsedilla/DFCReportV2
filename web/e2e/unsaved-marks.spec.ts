@@ -221,7 +221,7 @@ test.describe('a DCC checklist with marks not yet saved', () => {
   test('keeps the time the marks were made when the screen opens, and not the opening', async ({
     page,
   }) => {
-    // Restamped on every opening, a draft's note named the last visit and its four weeks
+    // Restamped on every opening, a draft's note named the last visit and its five weeks
     // never ran out. A changed mark is new and takes a new time.
     const madeAt = Date.now() - 27 * 24 * 60 * 60 * 1000;
     await page.addInitScript(
@@ -256,13 +256,13 @@ test.describe('a DCC checklist with marks not yet saved', () => {
   });
 
   for (const [days, offered] of [
-    [27, true],
-    [29, false],
+    [34, true],
+    [36, false],
   ] as const) {
-    test(`${offered ? 'offers back' : 'does not offer back'} marks made ${days} days ago (decision 0387)`, async ({
+    test(`${offered ? 'offers back' : 'does not offer back'} marks made ${days} days ago (decision 0434)`, async ({
       page,
     }) => {
-      // Four weeks, about when the week the marks were for closes.
+      // Five weeks, about when the week the marks were for closes.
       await page.addInitScript(
         ([key, person, age]) => {
           window.localStorage.setItem(

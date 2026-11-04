@@ -46,8 +46,8 @@ interface Row {
  * Women's is `Grace -> Hanna`. `Oscar` holds an Admin account and no place in the tree. Every
  * Cell meets on yesterday's weekday, so it owes yesterday's meeting and the one a week before,
  * and every date comes from the database's day. The weekly rule is moved to January 2026, so
- * a week closes two Mondays after it is due (decisions 0335 and 0387). Fixture names are invented
- * (CLAUDE.md, Secrets).
+ * a week closes three Mondays after it is due (decisions 0335, 0387 and 0434). Fixture names are
+ * invented (CLAUDE.md, Secrets).
  */
 describe('Pending CG Records (decision 0368)', () => {
   let app: INestApplication;

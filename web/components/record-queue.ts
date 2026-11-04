@@ -129,21 +129,24 @@ function dccEntries(
 
 /**
  * Update Records' reads (SKILL.md section 19): this month's Cell meetings and Sundays still to
- * record, last month's in its close week, and the branch's DCC records still owed under Leaders
- * Under Me, with whether any is still loading or has failed. The Record screen draws what
+ * record, those of each earlier month still open, and the branch's DCC records still owed under
+ * Leaders Under Me, with whether any is still loading or has failed. The Record screen draws what
  * this returns and decides nothing about it.
  */
 export function useUpdateRecordsQueue({
   month,
-  previousMonth,
-  inCloseWeek,
+  openPastMonths,
   shownWhose,
   branchView,
   whoseKnown,
 }: {
   month: string;
-  previousMonth: string;
-  inCloseWeek: boolean;
+  /**
+   * The earlier months that may still be open, oldest first: up to two, since a week closes
+   * three Mondays after its due Monday and a month can stay open into the month after next
+   * (decision 0434).
+   */
+  openPastMonths: readonly string[];
   shownWhose: Whose;
   branchView: boolean;
   whoseKnown: boolean;
@@ -190,53 +193,65 @@ export function useUpdateRecordsQueue({
     })),
   });
 
-  // **Last month's outstanding work, read only in the close week.** A month that has
-  // shut answers `open: false` and an empty list rather than refusing, so nothing here
-  // has to decide whether it is still the leader's to record.
-  const awaitingPrevious = useQuery({
-    queryKey: ['meetings-awaiting', previousMonth, shownWhose],
-    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal, shownWhose),
-    enabled: inCloseWeek && whoseKnown,
-  });
-
-  const dccEventsPrevious = useQuery({
-    queryKey: ['dcc-events', previousMonth, 'sundays-only'],
-    queryFn: ({ signal }) => listDccEvents(previousMonth, signal, { coverage: false }),
-    enabled: inCloseWeek,
-  });
-
-  const recordablePrevious = (dccEventsPrevious.data?.data ?? []).filter(
-    (event) => event.recordable,
-  );
-
-  const checklistsPrevious = useQueries({
-    queries: recordablePrevious.map((event) => ({
-      queryKey: ['dcc-roster-whole', event.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getWholeDccRoster(event.id, signal),
+  // **Each earlier month's outstanding work, read while it may still be open** (decision
+  // 0434). A month that has shut answers `open: false` and an empty list rather than refusing,
+  // so nothing here has to decide whether it is still the leader's to record.
+  const awaitingPast = useQueries({
+    queries: openPastMonths.map((past) => ({
+      queryKey: ['meetings-awaiting', past, shownWhose],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        listMeetingsAwaiting(past, signal, shownWhose),
+      enabled: whoseKnown,
     })),
+  });
+
+  const dccEventsPast = useQueries({
+    queries: openPastMonths.map((past) => ({
+      queryKey: ['dcc-events', past, 'sundays-only'],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        listDccEvents(past, signal, { coverage: false }),
+    })),
+  });
+
+  const recordablePast = openPastMonths.map((past, index) => ({
+    month: past,
+    events: (dccEventsPast[index]?.data?.data ?? []).filter((event) => event.recordable),
+  }));
+
+  const checklistsPast = useQueries({
+    queries: recordablePast.flatMap(({ events }) =>
+      events.map((event) => ({
+        queryKey: ['dcc-roster-whole', event.id],
+        queryFn: ({ signal }: { signal: AbortSignal }) => getWholeDccRoster(event.id, signal),
+      })),
+    ),
   });
 
   // **The branch's DCC records still owed** (decision 0301): one request per open month,
   // read only while Leaders Under Me is chosen. A closed month owes nothing and answers
-  // empty, so last month is asked for in the close week alone.
+  // empty, so an earlier month is asked for only while it may still be open.
   const owedNow = useQuery({
     queryKey: ['dcc-owed', month],
     queryFn: ({ signal }) => getDccOwed(month, signal),
     enabled: branchView && whoseKnown,
   });
-  const owedPrevious = useQuery({
-    queryKey: ['dcc-owed', previousMonth],
-    queryFn: ({ signal }) => getDccOwed(previousMonth, signal),
-    enabled: branchView && whoseKnown && inCloseWeek,
+  const owedPast = useQueries({
+    queries: openPastMonths.map((past) => ({
+      queryKey: ['dcc-owed', past],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getDccOwed(past, signal),
+      enabled: branchView && whoseKnown,
+    })),
   });
   const owedRows: OwedRow[] = [
-    ...(owedPrevious.data?.data ?? []).map((row) => ({ ...row, month: previousMonth })),
+    ...openPastMonths.flatMap((past, index) =>
+      (owedPast[index]?.data?.data ?? []).map((row) => ({ ...row, month: past })),
+    ),
     ...(owedNow.data?.data ?? []).map((row) => ({ ...row, month })),
   ];
   const owedPending =
-    branchView && (owedNow.isPending || (inCloseWeek && owedPrevious.isPending));
+    branchView && (owedNow.isPending || owedPast.some((query) => query.isPending));
   const owedFailure = branchView
-    ? [owedNow, owedPrevious].find((query) => query.isError)
+    ? [owedNow, ...owedPast].find((query) => query.isError)
     : undefined;
 
   // **Pending until every read the queue is built from has answered**, including the
@@ -244,29 +259,40 @@ export function useUpdateRecordsQueue({
   // resolve. Until then an empty queue would say "nothing awaiting" when nothing is
   // yet known.
   //
-  // Last month's two indexes count only in the close week: a query that is not enabled
-  // stays pending for ever, and would otherwise hold the queue on "Loading…".
+  // An earlier month's reads exist only while it may still be open, so a closed month
+  // never holds the queue on "Loading…".
   const queuePending =
     awaiting.isPending ||
     dccEvents.isPending ||
     checklists.some((query) => query.isPending) ||
-    (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
-    checklistsPrevious.some((query) => query.isPending);
+    awaitingPast.some((query) => query.isPending) ||
+    dccEventsPast.some((query) => query.isPending) ||
+    checklistsPast.some((query) => query.isPending);
+
+  // Each earlier month's checklists, in the order `checklistsPast` asked for them.
+  const pastDccEntries: QueueItem[] = [];
+  let checklistAt = 0;
+  for (const { month: past, events } of recordablePast) {
+    pastDccEntries.push(
+      ...dccEntries(events, checklistsPast.slice(checklistAt, checklistAt + events.length), past),
+    );
+    checklistAt += events.length;
+  }
 
   // **Oldest first, and the page says so.** Date order is the one order that ranks
-  // nobody, and it puts last month's entries before this month's. A Cell meeting and a
+  // nobody, and it puts earlier months' entries before this month's. A Cell meeting and a
   // Sunday on the same date keep that order, because the sort is stable and the Cell
   // entries come first.
   const queue = [
     ...cellEntries(awaiting.data),
-    ...cellEntries(awaitingPrevious.data),
+    ...awaitingPast.flatMap((query) => cellEntries(query.data)),
     ...dccEntries(recordableEvents, checklists, month),
-    ...dccEntries(recordablePrevious, checklistsPrevious, previousMonth),
+    ...pastDccEntries,
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   // A queue built from a read that failed is not a queue, so it says nothing at all
   // and leaves the failure notice above to speak.
-  const previousFailed = [awaitingPrevious, dccEventsPrevious, ...checklistsPrevious].find(
+  const previousFailed = [...awaitingPast, ...dccEventsPast, ...checklistsPast].find(
     (query) => query.isError,
   );
 

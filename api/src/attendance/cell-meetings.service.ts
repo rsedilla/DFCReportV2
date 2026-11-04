@@ -27,6 +27,7 @@ import {
   databaseNow,
   isMonthOpen,
   isRecordOpen,
+  monthClosesAt,
   recordClosesAt,
   recordDueAt,
   reportingMonthOf,
@@ -747,12 +748,14 @@ export class CellMeetingsService implements RecordedMeetingsPort {
           ? null
           : [...view.personIds];
 
-    // A meeting still open is in this month or the last: a week closes about two weeks after
-    // its due Monday (decision 0335). Each month is asked for while it is open.
+    // A meeting still open is in this month or one of the two before it: a week closes three
+    // Mondays after its due Monday, 29 to 35 days after its month's last day, which can fall
+    // in the month after next (decision 0434). Each month is asked for while it is open.
     const current = reportingMonthOf(manilaDayOf(now));
     const months: string[] = [];
-    for (const month of [previousMonth(current), current]) {
-      if (await isMonthOpen(this.db, month)) {
+    for (const month of [previousMonth(previousMonth(current)), previousMonth(current), current]) {
+      // On the request's one instant (decision 0160), as every row below is decided.
+      if (now.getTime() < monthClosesAt(month).getTime()) {
         months.push(month);
       }
     }

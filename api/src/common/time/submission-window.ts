@@ -97,7 +97,7 @@ export function windowClosesAt(reportingMonth: string): Date {
  * keeps the monthly close and is never Late.
  *
  * **Movable in the test suite alone**, because no real clock reaches a closed week of the
- * new rule before 23 November 2026: `WEEKLY_DEADLINE_FROM` is read only where `NODE_ENV`
+ * new rule before 30 November 2026: `WEEKLY_DEADLINE_FROM` is read only where `NODE_ENV`
  * is `test`, and refused if it is not a Monday that exists.
  */
 export function weeklyDeadlineFrom(): string {
@@ -148,16 +148,16 @@ export function recordDueAt(day: string): Date | null {
 }
 
 /**
- * The first instant no leader may record or correct the record dated `day`: two Mondays
+ * The first instant no leader may record or correct the record dated `day`: three Mondays
  * after its deadline at 12 noon, or for a week before the weekly rule the end of the
- * 7th of the month after its own (decisions 0335 and 0387).
+ * 7th of the month after its own (decisions 0335, 0387 and 0434).
  */
 export function recordClosesAt(day: string): Date {
   const week = weekStartOf(day);
 
   return week < weeklyDeadlineFrom()
     ? windowClosesAt(reportingMonthOf(day))
-    : noonOf(plusDays(week, 28));
+    : noonOf(plusDays(week, 35));
 }
 
 /**

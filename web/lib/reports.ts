@@ -530,7 +530,10 @@ export interface Trends {
   figure: TrendFigure;
   months: string[];
   current: string;
-  /** One per month: whether it is still open, the current one and last month until the 7th. */
+  /**
+   * One per month: whether it is still open, the current one and any earlier one until its last
+   * week closes.
+   */
   open: boolean[];
   /** Whole Church first (`leader` null), then each root's branch; or one leader's branch. */
   lines: {

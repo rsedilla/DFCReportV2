@@ -79,14 +79,16 @@ export default function DashboardPage() {
 function Dashboard() {
   const month = reportingMonthOf();
   const today = todayInManila();
-  const previousMonth = shiftMonth(month, -1);
 
-  // **While last month may still be open**: until its last week closes, between the 22nd
-  // and the 28th (section 13, decisions 0335 and 0387), or the 7th for a month before the weekly
-  // rule. Section 13 has every leader see their own outstanding work "always" (owner's
-  // choice of 2026-09-15). The browser's clock only decides whether to ask; the server's
-  // `open` flag and each row's own week decide what is shown.
-  const inCloseWeek = mayStillBeOpen(previousMonth, today);
+  // **Each earlier month while it may still be open**: until its last week closes, 29 to 35
+  // days after its last day, which can fall in the month after next (section 13, decisions
+  // 0335, 0387 and 0434), or the 7th for a month before the weekly rule. So up to two months
+  // back, oldest first. Section 13 has every leader see their own outstanding work "always"
+  // (owner's choice of 2026-09-15). The browser's clock only decides whether to ask; the
+  // server's `open` flag and each row's own week decide what is shown.
+  const openPastMonths = [shiftMonth(month, -2), shiftMonth(month, -1)].filter((past) =>
+    mayStillBeOpen(past, today),
+  );
 
   // Which list, which kind and whose are in the address, so Back from a meeting or a
   // checklist returns to the list it was opened from. The defaults drop out of it.
@@ -198,8 +200,7 @@ function Dashboard() {
     owedFailure,
   } = useUpdateRecordsQueue({
     month,
-    previousMonth,
-    inCloseWeek,
+    openPastMonths,
     shownWhose,
     branchView,
     whoseKnown,
@@ -389,19 +390,24 @@ function Dashboard() {
             ) : null}
 
             {/*
-              The close of last month's open work, once, above the branch view (decision
-              0311). Each row still carries its own month label.
+              The close of each earlier month's open work, once, above the branch view
+              (decisions 0311 and 0434). Each row still carries its own month label.
             */}
-            {branchView &&
-            (filter === 'CELLS'
-              ? shown.some((item) => item.month === previousMonth)
-              : owedRows.some((row) => row.month === previousMonth)) ? (
-              <p className="mt-4 text-sm">
-                {monthOpenUntilLabel(previousMonth).endsWith('12NN')
-                  ? `${monthLabel(previousMonth).split(' ')[0]} is ${monthOpenUntilLabel(previousMonth).replace(/^Open/, 'open')}.`
-                  : `${monthLabel(previousMonth).split(' ')[0]} is open until the end of ${dayLabel(`${month.slice(0, 8)}07`)}.`}
-              </p>
-            ) : null}
+            {branchView
+              ? openPastMonths
+                  .filter((past) =>
+                    filter === 'CELLS'
+                      ? shown.some((item) => item.month === past)
+                      : owedRows.some((row) => row.month === past),
+                  )
+                  .map((past) => (
+                    <p key={past} className="mt-4 text-sm">
+                      {monthOpenUntilLabel(past).endsWith('12NN')
+                        ? `${monthLabel(past).split(' ')[0]} is ${monthOpenUntilLabel(past).replace(/^Open/, 'open')}.`
+                        : `${monthLabel(past).split(' ')[0]} is open until the end of ${dayLabel(`${month.slice(0, 8)}07`)}.`}
+                    </p>
+                  ))
+              : null}
 
             {filter === 'DCC' && branchView ? (
               owedFailure ? null : owedPending ? (
