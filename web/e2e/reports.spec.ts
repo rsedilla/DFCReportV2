@@ -71,15 +71,15 @@ async function expectReadOnly(page: Page) {
 const TABS = [
   // Cell Groups and DCC are one tab with a switch inside it (decision 0420).
   { label: 'Attendance', path: '/reports/cells', dated: true, pages: ['/reports/cells', '/reports/dcc'] },
+  // The three # figures are one tab with a switch inside it (decision 0433).
+  {
+    label: 'Counts',
+    path: '/reports/number-of-cells',
+    dated: true,
+    pages: ['/reports/number-of-cells', '/reports/number-of-cell-leaders', '/reports/number-of-people'],
+  },
   { label: 'Encounter Readiness', path: '/reports/suynl', dated: false, pages: ['/reports/suynl'] },
   { label: 'Training', path: '/reports/training', dated: false, pages: ['/reports/training'] },
-  {
-    label: '# of People',
-    name: 'Number of people',
-    path: '/reports/number-of-people',
-    dated: true,
-    pages: ['/reports/number-of-people'],
-  },
 ] as const;
 
 /**
@@ -190,6 +190,44 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect(page.getByRole('group', { name: 'Which attendance' })).toHaveCount(0);
   });
 
+  test('the Admin’s Counts switches between Cell Groups, Cell Leaders and People, keeping the month, on the month’s row (decision 0433)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page, { church: true });
+    await page.goto('/reports/number-of-cells?month=2026-05-01');
+
+    const which = page.getByRole('group', { name: 'Which count' });
+    await expect(which.getByRole('button')).toHaveText(['Cell Groups', 'Cell Leaders', 'People']);
+    await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('region', { name: 'Number of Cell Groups' })).toBeVisible();
+
+    // The switch and the month share one row of the control bar.
+    const month = page.getByRole('button', { name: 'The period before' }).first();
+    const [switchBox, monthBox] = [await which.boundingBox(), await month.boundingBox()];
+    expect(switchBox && monthBox && Math.abs(switchBox.y + switchBox.height - (monthBox.y + monthBox.height))).toBeLessThan(8);
+
+    await which.getByRole('button', { name: 'Cell Leaders' }).click();
+    await expect(page).toHaveURL(/\/reports\/number-of-cell-leaders\?month=2026-05-01$/);
+    await page.getByRole('group', { name: 'Which count' }).getByRole('button', { name: 'People' }).click();
+    await expect(page).toHaveURL(/\/reports\/number-of-people\?month=2026-05-01$/);
+    await expect(
+      page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
+    ).toHaveText('Counts');
+  });
+
+  test('a Full view leader keeps the three # tabs and has no Counts switch (decision 0433)', async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockEveryReport(page);
+    await page.goto('/reports/number-of-cells');
+
+    await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Which report' }).getByRole('link')).toHaveText(
+      BRANCH_TABS.map((each) => each.label),
+    );
+    await expect(page.getByRole('group', { name: 'Which count' })).toHaveCount(0);
+  });
+
   test('Reports carries no Conquest: it is an item of the sidebar (decision 0407)', async ({
     page,
   }) => {
@@ -275,7 +313,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     const which = page.getByRole('navigation', { name: 'Which report' });
     await expect(which.getByRole('link')).toHaveCount(TABS.length);
     for (const tab of TABS) {
-      await expect(which.getByRole('link', { name: 'name' in tab ? tab.name : tab.label, exact: true })).toHaveAttribute(
+      await expect(which.getByRole('link', { name: tab.label, exact: true })).toHaveAttribute(
         'href',
         tab.dated ? `${tab.path}?month=2026-05-01` : tab.path,
       );

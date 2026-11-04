@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
 import { RangeNavigator } from '@/components/my-twelve';
-import { ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
+import { CountsSwitch, ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -78,6 +78,8 @@ export function ChurchCountsPanel({
     <section aria-label={LABEL[figure]}>
       {/* The same ‹ › month control as CG and DCC attendance (owner, 2026-10-09), in the same bar. */}
       <div className={`mt-4 ${CONTROL_BAR}`}>
+        {/* The Admin's Counts switch, on the month's row (decision 0433). */}
+        <CountsSwitch tab={TAB[figure]} month={month} />
         {/* Monthly or the last 12 months, beside the month (decision 0398). */}
         <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
