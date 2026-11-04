@@ -20,18 +20,28 @@ const PEOPLE_TAB = {
   path: '/reports/number-of-people',
 } as const;
 
+/** The three # figures the Admin's *Counts* tab holds behind its switch (decision 0433). */
+const COUNT_KEYS = ['number-of-cells', 'number-of-cell-leaders', 'number-of-people'] as const;
+type CountKey = (typeof COUNT_KEYS)[number];
+const COUNT_PATHS: Record<CountKey, string> = {
+  'number-of-cells': '/reports/number-of-cells',
+  'number-of-cell-leaders': '/reports/number-of-cell-leaders',
+  'number-of-people': '/reports/number-of-people',
+};
+
 /**
- * A whole-church reader's five (decision 0292; Filed Reports withdrawn, decision 0340; *# of
- * People* moved here from People, decision 0376). Conquest is an item of the sidebar of its
- * own (decision 0407).
+ * A whole-church reader's, the Admin's (decision 0292; Filed Reports withdrawn, decision 0340;
+ * *# of People* moved here from People, decision 0376). Conquest is an item of the sidebar of
+ * its own (decision 0407). **The three # figures are one tab, *Counts*** (decision 0433), as Cell
+ * Groups and DCC are one, *Attendance*: Attendance, Counts, Encounter Readiness, Training.
  */
 const TABS = [
   { key: 'cells', label: 'Cell Groups', path: '/reports/cells' },
   { key: 'dcc', label: 'DCC', path: '/reports/dcc' },
+  { key: 'number-of-cells', label: 'Counts', path: '/reports/number-of-cells' },
   // Named for what it shows (decision 0378); Growth's SUYNL is where lessons are ticked.
   { key: 'suynl', label: 'Encounter Readiness', path: '/reports/suynl' },
   { key: 'training', label: 'Training', path: '/reports/training' },
-  PEOPLE_TAB,
 ] as const;
 
 /** The two # tabs the Senior Pastors and a Full view leader share (decisions 0326 and 0380). */
@@ -151,6 +161,8 @@ export function ReportsTabs({
   // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
   // owner's layout): a switch inside it chooses which, and each keeps its own address.
   const attendance = current === 'cells' || current === 'dcc';
+  // The Admin's *Counts* holds the three # figures (decision 0433).
+  const counts = !seniorPastor && !branch && (COUNT_KEYS as readonly string[]).includes(current);
   const rowTabs = tabs.flatMap((tab) =>
     tab.key === 'dcc'
       ? []
@@ -182,7 +194,12 @@ export function ReportsTabs({
           className={cn('mt-6', TAB_GRID, TAB_ROW)}
         >
           {rowTabs.map((tab) => {
-            const active = tab.key === 'cells' ? attendance : tab.key === current;
+            const active =
+              tab.key === 'cells'
+                ? attendance
+                : tab.key === 'number-of-cells' && !seniorPastor && !branch
+                  ? counts
+                  : tab.key === current;
 
             return (
               <Link
@@ -235,6 +252,41 @@ export function periodsOf(tab: ReportTab, seniorPastor: boolean): readonly Range
   }
   // A Full view leader's Weekly and Monthly (decision 0380); the Senior Pastors' four.
   return seniorPastor ? ['WEEK', 'MONTH', 'QUARTER', 'YEAR'] : ['WEEK', 'MONTH'];
+}
+
+/**
+ * The Admin's *Counts* switch, *Cell Groups*, *Cell Leaders* and *People* (decision 0433): each
+ * figure keeps its own address and the month travels, as Attendance's *Cell Group* and *DCC* do.
+ * It sits in the figure's control bar beside the month, so the two take one row. Renders nothing
+ * for the Senior Pastors and a Full view leader, whose three # figures are tabs of their own.
+ */
+export function CountsSwitch({ tab, month }: { tab: ReportTab; month: string }) {
+  const router = useRouter();
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  if (me.data === undefined || me.data.screens === 'SENIOR_PASTOR' || isBranchReader(me.data)) {
+    return null;
+  }
+  if (!(COUNT_KEYS as readonly string[]).includes(tab)) {
+    return null;
+  }
+
+  return (
+    <ViewSwitch<CountKey>
+      label="Which count"
+      className="mt-0"
+      options={[
+        { key: 'number-of-cells', label: 'Cell Groups' },
+        { key: 'number-of-cell-leaders', label: 'Cell Leaders' },
+        { key: 'number-of-people', label: 'People' },
+      ]}
+      value={tab as CountKey}
+      onChange={(next) => {
+        if (next !== tab) {
+          router.push(`${COUNT_PATHS[next]}?month=${month}`);
+        }
+      }}
+    />
+  );
 }
 
 /**
