@@ -51,6 +51,7 @@
  * revoke.
  */
 import { ApiRequestError, apiRequest } from './api-client';
+import { forgetActivity, noteActivity, noteRenewed, sessionKind } from './idle';
 import { clearMarkDrafts } from './mark-draft';
 import { resetProof } from './reset-proof';
 
@@ -319,6 +320,9 @@ function adopt(tokens: SessionTokens): string {
 function beginSession(tokens: SessionTokens): void {
   clearMarkDrafts();
   adopt(tokens);
+  // A sign-in is activity, and the session it begins was just renewed (decision 0435).
+  noteActivity(Date.now(), true);
+  noteRenewed();
 }
 
 /** Forget this device's tokens without calling the API. */
@@ -330,6 +334,7 @@ export function forgetSession(): void {
   writeStoredRefreshToken(null);
   // Attendance marks kept and not saved go with the session (decision 0345).
   clearMarkDrafts();
+  forgetActivity();
   announce();
 }
 
@@ -416,6 +421,9 @@ export async function signIn(
       password,
       device_label: deviceLabel ?? undefined,
       reset_proof: resetProof() ?? undefined,
+      // A browser session ends after a spell without activity; the installed app's does
+      // not (decision 0435).
+      session_kind: sessionKind(),
     },
   });
 
@@ -435,7 +443,12 @@ export async function completeSecondStep(
 ): Promise<void> {
   const tokens = await apiRequest<SessionTokens>('/api/v1/auth/second-step', {
     method: 'POST',
-    body: { challenge, ...answer, device_label: deviceLabel ?? undefined },
+    body: {
+      challenge,
+      ...answer,
+      device_label: deviceLabel ?? undefined,
+      session_kind: sessionKind(),
+    },
   });
 
   beginSession(tokens);
@@ -464,7 +477,7 @@ export async function confirmSecondStepSetup(
     SessionTokens & { recovery_codes: string[] }
   >('/api/v1/auth/second-step/setup/confirm', {
     method: 'POST',
-    body: { challenge, code, device_label: deviceLabel ?? undefined },
+    body: { challenge, code, device_label: deviceLabel ?? undefined, session_kind: sessionKind() },
   });
 
   beginSession(tokens);
@@ -704,6 +717,15 @@ function refreshSession(): Promise<string> {
 
   inFlight = attempt;
   return attempt;
+}
+
+/**
+ * Renews the session while somebody is active (decision 0435), so the server's idle
+ * deadline moves on under somebody reading a page that asks it for nothing.
+ */
+export async function renewSession(): Promise<void> {
+  await refreshSession();
+  noteRenewed();
 }
 
 /**

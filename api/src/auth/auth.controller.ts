@@ -206,6 +206,7 @@ export class AuthController {
       body.password,
       body.device_label ?? null,
       body.reset_proof ?? null,
+      body.session_kind !== 'INSTALLED',
     );
   }
 
@@ -227,6 +228,7 @@ export class AuthController {
       body.challenge,
       { code: body.code, recoveryCode: body.recovery_code },
       body.device_label ?? null,
+      body.session_kind !== 'INSTALLED',
     );
   }
 
@@ -250,7 +252,12 @@ export class AuthController {
   async confirmSetup(
     @Body() body: SecondStepConfirmDto,
   ): Promise<SessionTokens & { recovery_codes: string[] }> {
-    return this.secondSteps.confirmSetup(body.challenge, body.code, body.device_label ?? null);
+    return this.secondSteps.confirmSetup(
+      body.challenge,
+      body.code,
+      body.device_label ?? null,
+      body.session_kind !== 'INSTALLED',
+    );
   }
 
   @Post('refresh')

@@ -7,6 +7,7 @@ import { UnauthenticatedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
 import type { Database } from '../database/schema';
+import { sql } from 'kysely';
 import type { Transaction } from 'kysely';
 
 /**
@@ -18,6 +19,19 @@ import type { Transaction } from 'kysely';
  */
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_DAYS = 30;
+
+/**
+ * How long a browser session may go unrenewed before it stops being renewable (decision
+ * 0435). The web client signs out after thirty minutes without activity, and renews on any
+ * activity two minutes or more after its last renewal, so while renewals succeed this
+ * deadline falls at least thirty-three minutes after the last activity and the client's
+ * warning and sign-out come first. A session begun in the installed app has none.
+ */
+export const BROWSER_IDLE_MINUTES = 35;
+
+function idleDeadline(from: Date): Date {
+  return new Date(from.getTime() + BROWSER_IDLE_MINUTES * 60 * 1000);
+}
 
 export interface AccessTokenClaims {
   /** The account. */
@@ -86,6 +100,11 @@ export class TokensService {
   async issueRefreshToken(
     accountId: string,
     deviceLabel: string | null,
+    /**
+     * A session begun in a browser rather than the installed app (decision 0435). A
+     * browser by default, the safer of the two.
+     */
+    browser = true,
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(32).toString('base64url');
     const issuedAt = new Date();
@@ -105,6 +124,7 @@ export class TokensService {
         // whatever the two disagreed by.
         issued_at: issuedAt,
         expires_at: expiresAt,
+        idle_expires_at: browser ? idleDeadline(issuedAt) : null,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -117,12 +137,21 @@ export class TokensService {
     account_id: string;
     issued_at: Date;
     expires_at: Date;
+    idle_expires_at: Date | null;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   } | null> {
     const row = await this.db
       .selectFrom('refresh_tokens')
-      .select(['id', 'account_id', 'issued_at', 'expires_at', 'revoked_at', 'replaced_by_id'])
+      .select([
+        'id',
+        'account_id',
+        'issued_at',
+        'expires_at',
+        'idle_expires_at',
+        'revoked_at',
+        'replaced_by_id',
+      ])
       .where('token_hash', '=', hashToken(token))
       .executeTakeFirst();
 
@@ -143,12 +172,21 @@ export class TokensService {
     account_id: string;
     issued_at: Date;
     expires_at: Date;
+    idle_expires_at: Date | null;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   } | null> {
     const row = await this.db
       .selectFrom('refresh_tokens')
-      .select(['id', 'account_id', 'issued_at', 'expires_at', 'revoked_at', 'replaced_by_id'])
+      .select([
+        'id',
+        'account_id',
+        'issued_at',
+        'expires_at',
+        'idle_expires_at',
+        'revoked_at',
+        'replaced_by_id',
+      ])
       .where('id', '=', id)
       .executeTakeFirst();
 
@@ -236,7 +274,7 @@ export class TokensService {
         .set({ revoked_at: now, last_used_at: now })
         .where('id', '=', id)
         .where('revoked_at', 'is', null)
-        .returning('id')
+        .returning(['id', 'idle_expires_at'])
         .executeTakeFirst();
 
       if (!claimed) {
@@ -255,6 +293,9 @@ export class TokensService {
           device_label: deviceLabel,
           issued_at: issuedAt,
           expires_at: expiresAt,
+          // A browser session stays one: each replacement gets a fresh idle span from
+          // now, and a session begun in the installed app keeps none (decision 0435).
+          idle_expires_at: claimed.idle_expires_at === null ? null : idleDeadline(issuedAt),
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -360,9 +401,16 @@ export class TokensService {
       // marker: its row is dated a millisecond after it, so its next refresh is a session
       // the marker does not reach, while every access token issued before the change is.
       if (keep !== null) {
+        const keptFrom = new Date(revokedAt.getTime() + 1);
         await trx
           .updateTable('refresh_tokens')
-          .set({ issued_at: new Date(revokedAt.getTime() + 1) })
+          // A browser session's idle deadline moves with it, a password change being
+          // activity, so the row never holds a deadline at or before its own issue
+          // (decision 0435); the installed app's stays none.
+          .set({
+            issued_at: keptFrom,
+            idle_expires_at: sql<Date | null>`CASE WHEN idle_expires_at IS NULL THEN NULL ELSE ${idleDeadline(keptFrom)}::timestamptz END`,
+          })
           .where('id', '=', keep)
           .where('account_id', '=', accountId)
           .where('revoked_at', 'is', null)

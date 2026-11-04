@@ -27,11 +27,14 @@ export function Dialog({
   open,
   onClose,
   title,
+  describedBy,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** The element that says what the dialog is about, read with its title. */
+  describedBy?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -45,6 +48,9 @@ export function Dialog({
 
     if (open && !dialog.open) {
       dialog.showModal();
+      // The control a dialog marks as its safe answer takes the first focus, rather than
+      // whichever control comes first.
+      dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     }
     if (!open && dialog.open) {
       dialog.close();
@@ -55,6 +61,7 @@ export function Dialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      aria-describedby={describedBy}
       onClose={onClose}
       className={cn(
         'bg-surface text-ink border-edge backdrop:bg-black/50',

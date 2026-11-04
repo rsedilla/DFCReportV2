@@ -182,6 +182,11 @@ export interface RefreshTokensTable {
   expires_at: ColumnType<Date, Date | string, Date | string>;
   last_used_at: Date | null;
   revoked_at: Date | null;
+  /**
+   * When a browser session stops being renewable if nobody has used it; null for a
+   * session begun in the installed app (decision 0435).
+   */
+  idle_expires_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
 }
 
 /**

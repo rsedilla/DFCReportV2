@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
 import { SecondStep } from '@/components/second-step';
@@ -41,6 +41,9 @@ export default function SignInPage() {
   // An administrator or Senior Pastor is asked for a second step after the password
   // (SKILL.md section 6, decision 0302).
   const [challenge, setChallenge] = useState<SecondStepChallenge | null>(null);
+  // Signed out for a spell without activity (decision 0435): said once, above the form.
+  // Read from the address in the browser, which the prerendered page does not know.
+  const idle = useSyncExternalStore(never, signedOutIdle, () => false);
 
   async function arrive() {
     router.replace(await resolveLanding());
@@ -112,6 +115,15 @@ export default function SignInPage() {
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+        {idle && failure === null ? (
+          <p
+            role="status"
+            className="border-accent bg-accent-tint text-ink rounded-lg border p-3 text-sm leading-relaxed"
+          >
+            You were signed out after 30 minutes without activity, to keep members&rsquo;
+            details safe. Sign in again to continue.
+          </p>
+        ) : null}
         <FailureNotice failure={failure} />
 
         {/* Either one signs in (decision 0337); `username` so a password manager fills it. */}
@@ -143,4 +155,13 @@ export default function SignInPage() {
       </form>
     </AuthCard>
   );
+}
+
+/** The address does not change under the page, so there is nothing to subscribe to. */
+function never(): () => void {
+  return () => {};
+}
+
+function signedOutIdle(): boolean {
+  return new URLSearchParams(window.location.search).get('reason') === 'idle';
 }

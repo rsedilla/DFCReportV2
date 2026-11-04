@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-04, the trigger being decision 0434: of 433 files, 432 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0434 each moved the first two and
+2026-11-04, the trigger being decision 0435: of 434 files, 433 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0435 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-04 and triggered by 0434, and was left stale by 0435 the same day. The one before that was dated
 2026-11-04 and triggered by 0433, and was left stale by 0434 the same day. The one before that was dated
 2026-11-03 and triggered by 0432, and was left stale by 0433 the next day. The one before that was dated
 2026-11-03 and triggered by 0431, and was left stale by 0432 the same day. The one before that was dated
@@ -909,6 +910,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-03 — [Plainer Record words, and a quieter Recording Progress table](docs/decisions/0432-plainer-record-words-and-a-quieter-recording-progress-table.md)
 - 2026-11-03 — [The Admin's three counts are one tab, Counts](docs/decisions/0433-the-admins-three-counts-are-one-tab.md)
 - 2026-11-04 — [Late lasts three weeks](docs/decisions/0434-late-lasts-three-weeks.md)
+- 2026-11-04 — [A browser session signs out after thirty minutes idle](docs/decisions/0435-a-browser-session-signs-out-when-idle.md)
 
 ### Open — awaiting a ruling
 
