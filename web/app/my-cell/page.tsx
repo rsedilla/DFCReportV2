@@ -25,6 +25,7 @@ import {
   CELL_DAYS,
   cellShortName,
   dayOfWeekLabel,
+  getCellCounts,
   listCells,
   requestNewCell,
   type CellCategory,
@@ -55,6 +56,16 @@ function MyCell() {
     queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
   });
 
+  // The Cell Groups in the reader's care as of today, every level of their branch, as My People
+  // lists its people (decision 0438): the counts the Cells page's totals read (decision 0309).
+  // One small call, alongside the list.
+  const counts = useQuery({
+    queryKey: ['cell-counts'],
+    queryFn: ({ signal }) => getCellCounts(signal),
+  });
+  const inCare = counts.data?.in_scope ?? 0;
+  const mine = counts.data?.led_by_me ?? 0;
+
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -79,6 +90,22 @@ function MyCell() {
         </Link>
       </nav>
       <div className={TAB_PANE}>
+        <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
+        {inCare > 0 ? (
+          <div className="mt-5">
+            <h2 className="text-2xl font-semibold">
+              <span className="text-accent tabular-nums">{inCare}</span>{' '}
+              {inCare === 1 ? 'Cell Group' : 'Cell Groups'} in your care
+            </h2>
+            {/* As the Cells page says it, "People you oversee" where they lead none (0317). */}
+            <p className="text-muted text-sm">
+              {mine > 0
+                ? `${mine} you lead · ${inCare - mine} led by your leaders`
+                : 'People you oversee'}{' '}
+              · as of today
+            </p>
+          </div>
+        ) : null}
         {cells.isPending ? (
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : cells.data && cells.data.data.length === 0 ? (
