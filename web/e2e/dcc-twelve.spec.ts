@@ -4,13 +4,13 @@ import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import { mockDccReport, mockDccTwelve, TWELVE } from './mock-attendance';
 
 /**
- * DCC: Weekly, Monthly, Quarterly and Year, each opening on My 12 (SKILL.md sections 9, 13,
- * 19 and 20; decision 0294).
+ * DCC: Weekly and Monthly, each opening on My 12, and Yearly the last 12 months (SKILL.md
+ * sections 9, 13, 19 and 20; decisions 0294 and 0443).
  *
  * `api/test/api/reporting-dcc-twelve.e2e.spec.ts` pins the figures and who may read them.
  * This pins what the screen does with them: which period it asks for, the coverage line and
- * the Sundays under it, the table with the reader alone as their own row, "How often people
- * came" on Monthly only, and Year's month-by-month table. The shared account is a Full view
+ * the Sundays under it, the table with the reader alone as their own row, and "How often people
+ * came" on Monthly only. The shared account is a Full view
  * leader, who reads their branch's cards and their 12 with Total second (decision 0340); a
  * whole-church reader keeps the table decision 0294 gave them.
  *
@@ -41,26 +41,9 @@ const PERIODS = [
     start: '2026-06-01',
     what: 'in the month',
   },
-  {
-    button: 'Quarterly',
-    address: 'period=quarter',
-    kind: 'QUARTER',
-    start: '2026-04-01',
-    what: 'in the quarter',
-  },
-  {
-    button: 'Year',
-    address: 'period=year',
-    kind: 'YEAR',
-    start: '2026-01-01',
-    what: 'in the year',
-  },
 ] as const;
 
-/**
- * `church` reads as a whole-church reader, who keeps the running quarter and year; a leader
- * is offered finished ones only (decision 0310, pinned in `finished-periods.spec.ts`).
- */
+/** `church` reads as a whole-church reader, who has Figures for and a coverage line. */
 async function arrange(
   page: Page,
   { church, ...options }: { expectPeriod?: string; today?: string; church?: boolean } = {},
@@ -70,7 +53,6 @@ async function arrange(
   if (church) {
     await mockWholeChurchReader(page);
   }
-  // Year's month-by-month table reads the monthly report once per month begun.
   await mockDccReport(page);
   return mockDccTwelve(page, { today: TODAY, ...options });
 }
@@ -104,7 +86,7 @@ async function cellsOf(row: Locator): Promise<string[]> {
   return (await row.getByRole('cell').allTextContents()).map((text) => text.trim());
 }
 
-test.describe('the four periods (decision 0294)', () => {
+test.describe('Weekly, Monthly and Yearly (decisions 0294 and 0443)', () => {
   test('opens on Monthly, and each button asks DCC’s My 12 for its own period', async ({
     page,
   }) => {
@@ -112,7 +94,7 @@ test.describe('the four periods (decision 0294)', () => {
     await page.goto('/reports/dcc');
 
     const group = periodGroup(page);
-    await expect(group.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year']);
+    await expect(group.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
     await expect(group.getByRole('button', { name: 'Monthly' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -125,7 +107,7 @@ test.describe('the four periods (decision 0294)', () => {
       leader_id: null,
     });
 
-    for (const each of [PERIODS[3], PERIODS[2], PERIODS[0], PERIODS[1]]) {
+    for (const each of [PERIODS[0], PERIODS[1]]) {
       await group.getByRole('button', { name: each.button }).click();
       if (each.kind === 'MONTH') {
         await expect(page).toHaveURL(/\/reports\/dcc$/);
@@ -138,22 +120,26 @@ test.describe('the four periods (decision 0294)', () => {
       );
       await expectAsked(asked, { kind: each.kind, start: each.start, period: '2026-06-01' });
     }
+
+    // Yearly is the last 12 months, its own screen (decision 0443).
+    await group.getByRole('button', { name: 'Yearly' }).click();
+    await expect(page).toHaveURL(/\/trends\?figure=DCC$/);
   });
 
-  // A whole-church reader's: a Full view leader has no quarter or year (decision 0380).
-  test('a closed period is read as of its last month, and one not begun opens the current one', async ({
+  test('a past month is read as of itself, an old quarter or year address opens the month, and one not begun opens the current one', async ({
     page,
   }) => {
     const asked = await arrange(page, { church: true });
 
-    await page.goto('/reports/dcc?period=quarter&start=2026-01-01');
-    await expectAsked(asked, { kind: 'QUARTER', start: '2026-01-01', period: '2026-03-01' });
-
     await page.goto('/reports/dcc?month=2026-05-01');
     await expectAsked(asked, { kind: 'MONTH', start: '2026-05-01', period: '2026-05-01' });
 
-    await page.goto('/reports/dcc?period=year&start=2025-01-01');
-    await expectAsked(asked, { kind: 'YEAR', start: '2025-01-01', period: '2025-12-01' });
+    // Withdrawn by decision 0443: the month opens instead.
+    for (const old of ['period=quarter&start=2026-01-01', 'period=year&start=2025-01-01']) {
+      await page.goto(`/reports/dcc?${old}`);
+      await expect(page.locator('main').getByText('June 2026', { exact: true })).toBeVisible();
+    }
+    expect(asked.some((query) => ['QUARTER', 'YEAR'].includes(query.get('kind') ?? ''))).toBe(false);
 
     await page.goto('/reports/dcc?month=2026-07-01');
     await expect(page.locator('main').getByText('June 2026', { exact: true })).toBeVisible();
@@ -416,11 +402,11 @@ test.describe('My 12 on DCC', () => {
 
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(page.getByLabel('Figures for')).toHaveCount(0);
-    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly', '12 Months']);
+    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
   });
 });
 
-test.describe('How often people came, and Year', () => {
+test.describe('How often people came, and no month-by-month table', () => {
   test('is shown on Monthly alone, and adds up to the same people as My 12', async ({ page }) => {
     await arrange(page);
     await page.goto('/reports/dcc');
@@ -442,23 +428,11 @@ test.describe('How often people came, and Year', () => {
     await expect(page.getByRole('region', { name: 'How often people came' })).toHaveCount(0);
   });
 
-  test('Year keeps its month-by-month table beneath My 12, and no other period shows one', async ({
+  test('no period shows a month-by-month table, the calendar year being withdrawn (decision 0443)', async ({
     page,
   }) => {
     await arrange(page, { church: true });
-    await page.goto('/reports/dcc?period=year');
-
-    const months = page.getByRole('heading', { name: 'Month by month, January to June 2026' });
-    await expect(months).toBeVisible();
-    // DCC for the thing, Sunday for the day (UI label audit, Medium 6).
-    await expect(page.getByText(/Owed and Filed count DCC records;/)).toBeVisible();
-    await expect(page.getByRole('table', { name: /^DCC, / })).toBeVisible();
-    // A whole-church reader's table is headed by the church rather than "My 12".
-    const twelve = page.getByRole('heading', { name: / · their journey$/ });
-    const [top, bottom] = await Promise.all([twelve.boundingBox(), months.boundingBox()]);
-    expect(top!.y).toBeLessThan(bottom!.y);
-
-    for (const each of PERIODS.filter((period) => period.kind !== 'YEAR')) {
+    for (const each of PERIODS) {
       await page.goto(`/reports/dcc?${each.address}`);
       await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /^Month by month/ })).toHaveCount(0);

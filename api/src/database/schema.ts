@@ -229,10 +229,24 @@ export interface SignInPausesTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
-/** When the Admin was emailed about a pause, for the daily caps (decision 0413). */
+/** When the Admin was emailed about a pause, for the daily caps (decisions 0413, 0441). */
 export interface SignInPauseAlertsTable {
   account_id: string;
   sent_at: ColumnType<Date, Date | undefined, never>;
+  /** A pause of a name after wrong passwords, or of an account's second step after wrong codes. */
+  kind: ColumnType<'PASSWORD' | 'SECOND_STEP', 'PASSWORD' | 'SECOND_STEP' | undefined, never>;
+}
+
+/**
+ * The wrong second-step codes of one account in the last fifteen minutes, and the pause they
+ * start at the tenth (section 6, decision 0441). Transient: removed by a right code, by a reset
+ * of the step, and a day after it was last touched.
+ */
+export interface SecondStepPausesTable {
+  account_id: string;
+  failed_at: ColumnType<Date[], Date[] | undefined, Date[]>;
+  paused_until: Date | null;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
 export interface SecondStepChallengesTable {
@@ -327,6 +341,7 @@ export type AuditAction =
   // Sign-in for an account's address or username paused after ten wrong passwords
   // (decision 0413). A system action: nobody signed in caused it. Targets the account.
   | 'sign_in.paused'
+  | 'second_step.paused'
   // The holder changing it while signed in (decision 0351).
   | 'password.changed'
   | 'role.granted'
@@ -955,6 +970,7 @@ export interface Database {
   second_step_challenges: SecondStepChallengesTable;
   sign_in_pauses: SignInPausesTable;
   sign_in_pause_alerts: SignInPauseAlertsTable;
+  second_step_pauses: SecondStepPausesTable;
   cells: CellsTable;
   cell_categories: CellCategoriesTable;
   cell_schedules: CellSchedulesTable;

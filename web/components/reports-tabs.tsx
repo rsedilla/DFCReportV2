@@ -170,7 +170,10 @@ export function ReportsTabs({
         ? [{ ...tab, label: 'Attendance', name: undefined }]
         : [tab],
   );
-  const trendView = (seniorPastor || branch) && view === 'trend';
+  // Every reader's Attendance has Yearly (decision 0443), so its two reports keep it; the counts
+  // keep it for the Senior Pastors and a Full view leader, whose counts have it too.
+  const keepsTrend = (key: ReportTab) =>
+    view === 'trend' && (seniorPastor || branch || key === 'cells' || key === 'dcc');
   const hrefOf = (tab: { key: ReportTab; path: string }) => {
     const dated =
       tab.key === 'cells' ||
@@ -178,7 +181,7 @@ export function ReportsTabs({
       tab.key === 'number-of-cells' ||
       tab.key === 'number-of-cell-leaders' ||
       tab.key === 'number-of-people';
-    return trendView
+    return keepsTrend(tab.key)
       ? trendHref(TREND_FIGURE[tab.key as keyof typeof TREND_FIGURE], leader)
       : month && dated
         ? `${tab.path}?month=${month}`
@@ -245,14 +248,33 @@ const PERIOD_LABEL: Record<RangeKind, string> = {
   YEAR: 'Year',
 };
 
-/** The lengths each tab offers beside its last twelve months (decision 0398). */
-export function periodsOf(tab: ReportTab, seniorPastor: boolean): readonly RangeKind[] {
-  if (tab !== 'cells' && tab !== 'dcc') {
-    return ['MONTH'];
-  }
-  // A Full view leader's Weekly and Monthly (decision 0380); the Senior Pastors' four.
-  return seniorPastor ? ['WEEK', 'MONTH', 'QUARTER', 'YEAR'] : ['WEEK', 'MONTH'];
+/**
+ * The lengths each tab offers beside its last twelve months (decision 0398): Attendance's
+ * Weekly and Monthly for every reader, the quarter and the calendar year withdrawn (decision
+ * 0443), and a count's month.
+ */
+export function periodsOf(tab: ReportTab): readonly RangeKind[] {
+  return tab === 'cells' || tab === 'dcc' ? ['WEEK', 'MONTH'] : ['MONTH'];
 }
+
+/** Yearly's small graph, so the button says what it opens (owner, 2026-11-05). */
+const GRAPH_ICON = (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className="shrink-0"
+  >
+    <path d="M4 19h16" />
+    <path d="M4 15l4-6 4 2 4-5 4 4" />
+  </svg>
+);
 
 /**
  * The Admin's *Counts* switch, *Cell Groups*, *Cell Leaders* and *People* (decision 0433): each
@@ -313,22 +335,29 @@ export function ReportViewSwitch({
   const router = useRouter();
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
-  if (!(seniorPastor || isBranchReader(me.data)) || !(tab in TREND_FIGURE)) {
+  const attendance = tab === 'cells' || tab === 'dcc';
+  // Attendance's switch is every reader's (decision 0443); a count's, the Senior Pastors' and a
+  // Full view leader's alone, whose counts have twelve months.
+  if (
+    me.data === undefined ||
+    !(tab in TREND_FIGURE) ||
+    !(attendance || seniorPastor || isBranchReader(me.data))
+  ) {
     return null;
   }
   const path = SENIOR_PASTOR_TABS.find((each) => each.key === tab)!.path;
-  const periods = periodsOf(tab, seniorPastor);
 
-  const options: { key: RangeKind | 'TREND'; label: string }[] = [
-    ...periods.map((key) => ({ key, label: PERIOD_LABEL[key] })),
-    { key: 'TREND', label: '12 Months' },
+  const options: { key: RangeKind | 'TREND'; label: string; icon?: ReactNode }[] = [
+    ...periodsOf(tab).map((key) => ({ key, label: PERIOD_LABEL[key] })),
+    { key: 'TREND', label: 'Yearly', icon: GRAPH_ICON },
   ];
 
-  return (
+  const switcher = (
     <ViewSwitch<RangeKind | 'TREND'>
       label="Report period"
-      // One size, as every switch is (decision 0416); *12 Months* keeps to one line.
-      className="mt-0"
+      // Attendance's sits on the line beside Cell Group and DCC (decision 0443); a count's, in
+      // its control bar beside the month. One size, as every switch is (decision 0416).
+      className={attendance ? 'lg:ml-2' : 'mt-0'}
       options={options}
       value={value}
       onChange={(next) => {
@@ -344,6 +373,18 @@ export function ReportViewSwitch({
         }
       }}
     />
+  );
+
+  return attendance ? (
+    <>
+      {switcher}
+      {/* Said whichever is chosen, so nobody has to open Yearly to learn what it is. */}
+      <p className="text-muted mt-2 text-sm">
+        Yearly is a graph of the last 12 months, one point a month.
+      </p>
+    </>
+  ) : (
+    switcher
   );
 }
 

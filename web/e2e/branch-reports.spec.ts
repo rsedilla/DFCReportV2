@@ -80,8 +80,8 @@ test.describe('a Full view leader’s Last 12 months', () => {
     await page.goto('/reports/number-of-cells');
 
     const view = page.getByRole('group', { name: 'Report period' });
-    await expect(view.getByRole('button')).toHaveText(['Monthly', '12 Months']);
-    await view.getByRole('button', { name: '12 Months' }).click();
+    await expect(view.getByRole('button')).toHaveText(['Monthly', 'Yearly']);
+    await view.getByRole('button', { name: 'Yearly' }).click();
     await expect(page).toHaveURL(/\/trends\?figure=CELLS$/);
     await expect(
       page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
@@ -98,8 +98,8 @@ test.describe('a Full view leader’s Last 12 months', () => {
     await expect(page.getByRole('combobox', { name: 'Show' })).toHaveCount(0);
     // The one switch, its twelve months chosen, and no month to step (decision 0398).
     const view = page.getByRole('group', { name: 'Report period' });
-    await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', '12 Months']);
-    await expect(view.getByRole('button', { name: '12 Months' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
+    await expect(view.getByRole('button', { name: 'Yearly' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'The period before' })).toHaveCount(0);
     await expect(page.getByRole('group', { name: 'Graph' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Bars' })).toHaveCount(0);

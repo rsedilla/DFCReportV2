@@ -226,6 +226,42 @@ export class SignInPauseService {
    * nineteen and both send the twentieth.
    */
   async recordPause(accountId: string, identifier: string, pausedUntil: Date): Promise<boolean> {
+    return this.recordAlert(accountId, 'PASSWORD', (trx, email) =>
+      this.audit.writeWithin(trx, {
+        actorId: null,
+        action: 'sign_in.paused',
+        targetType: 'account',
+        targetId: accountId,
+        // The name as it was compared, `email:…` or `username:…`, so the log says which name
+        // was paused even if the account's username changes later.
+        after: { name: identifier, paused_until: pausedUntil.toISOString(), admin_emailed: email },
+      }),
+    );
+  }
+
+  /**
+   * The same for a pause of an account's second step after ten wrong codes (decision 0441).
+   * Its once a day for one account is counted apart from the password pause's, because a code
+   * pause means the password is known, which is worse news than guessing at it; the twenty a
+   * day in all are shared.
+   */
+  async recordSecondStepPause(accountId: string, pausedUntil: Date): Promise<boolean> {
+    return this.recordAlert(accountId, 'SECOND_STEP', (trx, email) =>
+      this.audit.writeWithin(trx, {
+        actorId: null,
+        action: 'second_step.paused',
+        targetType: 'account',
+        targetId: accountId,
+        after: { paused_until: pausedUntil.toISOString(), admin_emailed: email },
+      }),
+    );
+  }
+
+  private async recordAlert(
+    accountId: string,
+    kind: 'PASSWORD' | 'SECOND_STEP',
+    record: (trx: Transaction<Database>, email: boolean) => Promise<unknown>,
+  ): Promise<boolean> {
     return this.db.transaction().execute(async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext('sign_in_pause_alerts'))`.execute(trx);
       await trx
@@ -237,24 +273,21 @@ export class SignInPauseService {
         .selectFrom('sign_in_pause_alerts')
         .select([
           sql<number>`count(*)::int`.as('all'),
-          sql<number>`count(*) FILTER (WHERE account_id = ${accountId})::int`.as('mine'),
+          sql<number>`count(*) FILTER (WHERE account_id = ${accountId} AND kind = ${kind})::int`.as(
+            'mine',
+          ),
         ])
         .where(sql<boolean>`sent_at >= ${MANILA_TODAY}`)
         .executeTakeFirstOrThrow();
       const email = today.mine === 0 && today.all < ALERTS_PER_DAY;
 
       if (email) {
-        await trx.insertInto('sign_in_pause_alerts').values({ account_id: accountId }).execute();
+        await trx
+          .insertInto('sign_in_pause_alerts')
+          .values({ account_id: accountId, kind })
+          .execute();
       }
-      await this.audit.writeWithin(trx, {
-        actorId: null,
-        action: 'sign_in.paused',
-        targetType: 'account',
-        targetId: accountId,
-        // The name as it was compared, `email:…` or `username:…`, so the log says which name
-        // was paused even if the account's username changes later.
-        after: { name: identifier, paused_until: pausedUntil.toISOString(), admin_emailed: email },
-      });
+      await record(trx, email);
       return email;
     });
   }

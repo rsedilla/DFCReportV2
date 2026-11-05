@@ -1132,6 +1132,27 @@ test.describe('the Add and Edit person forms', () => {
   });
   // Decision 0374: only the Admin is shown the Title box and sends a title. Anybody else edits
   // the rest and leaves a recorded title as it is.
+  test('Save with nothing changed sends nothing and goes back to the person (decision 0442)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    const sent: string[] = [];
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() === 'PATCH') {
+        sent.push(route.request().method());
+      }
+      return route.fallback();
+    });
+
+    await page.goto(`${PROFILE}/edit`);
+    await expect(page.getByLabel('First name')).toBeVisible();
+    await page.getByRole('button', { name: 'Save' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(sent).toEqual([]);
+  });
+
   test('show a leader no Title box on Add or Edit, and send no title from them', async ({
     page,
   }) => {
@@ -1159,6 +1180,8 @@ test.describe('the Add and Edit person forms', () => {
     await page.goto(`${PROFILE}/edit`);
     await expect(page.getByLabel('First name')).toBeVisible();
     await expect(page.getByLabel('Title, optional')).toHaveCount(0);
+    // A change, since a save that changes nothing sends nothing (decision 0442).
+    await page.getByLabel('First name').fill('Renamed');
     await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));

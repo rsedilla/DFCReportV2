@@ -1,11 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
-import { mockCellReport, mockCellTwelve, TWELVE } from './mock-attendance';
+import { mockCellTwelve, TWELVE } from './mock-attendance';
 
 /**
- * Cell Groups: Weekly, Monthly, Quarterly and Year, each opening on My 12 (SKILL.md sections
- * 12, 13 and 20; decision 0293).
+ * Cell Groups: Weekly and Monthly, each opening on My 12, and Yearly the last 12 months
+ * (SKILL.md sections 12, 13 and 20; decisions 0293 and 0443).
  *
  * `api/test/api/reporting-cells-twelve.e2e.spec.ts` pins the figures and who may read them.
  * This pins what the screen does with them: which period it asks for, what the address
@@ -41,44 +41,21 @@ const PERIODS = [
     label: 'June 2026',
     what: 'in the month',
   },
-  {
-    button: 'Quarterly',
-    address: 'period=quarter',
-    kind: 'QUARTER',
-    start: '2026-04-01',
-    label: 'Q2 2026 · Apr–Jun',
-    what: 'in the quarter',
-  },
-  {
-    button: 'Year',
-    address: 'period=year',
-    kind: 'YEAR',
-    start: '2026-01-01',
-    label: '2026',
-    what: 'in the year',
-  },
 ] as const;
 
 /** Each period's previous one, which the navigator's ‹ opens. */
 const BEFORE = {
   WEEK: { label: '8 Jun – 14 Jun 2026', start: '2026-06-08', period: '2026-06-01', open: true },
   MONTH: { label: 'May 2026', start: '2026-05-01', period: '2026-05-01', open: false },
-  QUARTER: { label: 'Q1 2026 · Jan–Mar', start: '2026-01-01', period: '2026-03-01', open: false },
-  YEAR: { label: '2025', start: '2025-01-01', period: '2025-12-01', open: false },
 } as const;
 
-/**
- * `church` reads as a whole-church reader, who keeps the running quarter and year; a leader
- * is offered finished ones only (decision 0310, pinned in `finished-periods.spec.ts`).
- */
+/** `church` reads as a whole-church reader, who has Figures for and a coverage line. */
 async function arrange(page: Page, options: { ownCells?: number; church?: boolean } = {}) {
   await page.clock.setFixedTime(NOW);
   await mockSignedIn(page);
   if (options.church) {
     await mockWholeChurchReader(page);
   }
-  // Year's month-by-month table reads the monthly report once per month begun.
-  await mockCellReport(page);
   return mockCellTwelve(page, { today: TODAY, ownCells: options.ownCells });
 }
 
@@ -110,7 +87,7 @@ async function cellsOf(row: Locator): Promise<string[]> {
   return (await row.getByRole('cell').allTextContents()).map((text) => text.trim());
 }
 
-test.describe('the four periods (decision 0293)', () => {
+test.describe('Weekly, Monthly and Yearly (decisions 0293 and 0443)', () => {
   test('opens on Monthly, and each button asks for its own period and keeps it in the address', async ({
     page,
   }) => {
@@ -118,7 +95,10 @@ test.describe('the four periods (decision 0293)', () => {
     await page.goto('/reports/cells');
 
     const group = periodGroup(page);
-    await expect(group.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year']);
+    await expect(group.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
+    await expect(
+      page.getByText('Yearly is a graph of the last 12 months, one point a month.'),
+    ).toBeVisible();
     await expect(group.getByRole('button', { name: 'Monthly' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -133,7 +113,7 @@ test.describe('the four periods (decision 0293)', () => {
 
     // Switching length always opens the current period, so Monthly's address names no month
     // and no period at all.
-    for (const each of [PERIODS[3], PERIODS[2], PERIODS[0], PERIODS[1]]) {
+    for (const each of [PERIODS[0], PERIODS[1]]) {
       await group.getByRole('button', { name: each.button }).click();
       if (each.kind === 'MONTH') {
         await expect(page).toHaveURL(/\/reports\/cells$/);
@@ -153,6 +133,10 @@ test.describe('the four periods (decision 0293)', () => {
 
     // Monthly is addressed by `month` alone, as the other reports address it.
     await expect(page).not.toHaveURL(/[?&]period=/);
+
+    // Yearly is the last 12 months, its own screen (decision 0443).
+    await group.getByRole('button', { name: 'Yearly' }).click();
+    await expect(page).toHaveURL(/\/trends$/);
   });
 
   test('an address opens the period it names, and a reload keeps it', async ({ page }) => {
@@ -173,22 +157,18 @@ test.describe('the four periods (decision 0293)', () => {
     await expect(periodLabel(page, '8 Jun – 14 Jun 2026')).toBeVisible();
     await expectAsked(asked, { kind: 'WEEK', start: '2026-06-08' });
 
-    // A closed quarter is read as of its last month.
-    await page.goto('/reports/cells?period=quarter&start=2026-01-01');
-    await expect(periodLabel(page, 'Q1 2026 · Jan–Mar')).toBeVisible();
-    await expectAsked(asked, { kind: 'QUARTER', start: '2026-01-01', period: '2026-03-01' });
-
-    await page.goto('/reports/cells?period=year&start=2025-01-01');
-    await expect(periodLabel(page, '2025')).toBeVisible();
-    await expectAsked(asked, { kind: 'YEAR', start: '2025-01-01', period: '2025-12-01' });
-
     await page.goto('/reports/cells?month=2026-05-01');
     await expect(periodLabel(page, 'May 2026')).toBeVisible();
     await expectAsked(asked, { kind: 'MONTH', start: '2026-05-01', period: '2026-05-01' });
 
+    // An address naming a quarter or a year, kept from before, opens the month (decision 0443).
+    for (const old of ['period=quarter&start=2026-01-01', 'period=year&start=2025-01-01']) {
+      await page.goto(`/reports/cells?${old}`);
+      await expect(periodLabel(page, 'June 2026')).toBeVisible();
+    }
+    expect(asked.some((query) => ['QUARTER', 'YEAR'].includes(query.get('kind') ?? ''))).toBe(false);
+
     // A period that has not begun is not reported (decision 0216): the current one opens.
-    await page.goto('/reports/cells?period=quarter&start=2026-07-01');
-    await expect(periodLabel(page, 'Q2 2026 · Apr–Jun')).toBeVisible();
     await page.goto('/reports/cells?period=week&start=2026-06-29');
     await expect(periodLabel(page, '15 Jun – 21 Jun 2026')).toBeVisible();
 
@@ -226,7 +206,7 @@ test.describe('the navigator', () => {
     test(`${each.button}: › stops at the current period, and ‹ opens the one before`, async ({
       page,
     }) => {
-      const asked = await arrange(page, { church: each.kind === 'QUARTER' || each.kind === 'YEAR' });
+      const asked = await arrange(page);
       await page.goto(`/reports/cells?${each.address}`);
 
       const before = page.getByRole('button', { name: 'The period before' });
@@ -443,7 +423,7 @@ test.describe('Figures for', () => {
 
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
     await expect(page.getByLabel('Figures for')).toHaveCount(0);
-    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly', '12 Months']);
+    await expect(periodGroup(page).getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
   });
 
   test('offers a whole-church reader everyone in scope and the two pastors by name', async ({
@@ -473,11 +453,8 @@ test.describe('the coverage line', () => {
       await arrange(page, { church: true });
       await page.goto(`/reports/cells?${each.address}`);
 
-      // Year 2026 is due through the end of June, the current month; the week, the month and
-      // Q2 all end by then, so they say nothing more.
-      const due = each.kind === 'YEAR' ? ', due through 30 June' : '';
       const line = page.locator('main p').filter({ hasText: /meetings recorded/ });
-      await expect(line).toHaveText(`6 of 8 meetings recorded ${each.what}${due}`);
+      await expect(line).toHaveText(`6 of 8 meetings recorded ${each.what}`);
       // Filed Reports is withdrawn, and the line's link with it.
       await expect(line.getByRole('link')).toHaveCount(0);
       await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
@@ -498,19 +475,12 @@ test.describe('the coverage line', () => {
     await expect(note).toHaveText('Closed.');
   });
 
-  test('a past month reads that month, and a closed year says nothing about due', async ({
-    page,
-  }) => {
+  test('a past month reads that month', async ({ page }) => {
     await arrange(page, { church: true });
 
     await page.goto('/reports/cells?month=2026-05-01');
     await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveText(
       '6 of 8 meetings recorded in the month',
-    );
-
-    await page.goto('/reports/cells?period=year&start=2025-01-01');
-    await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveText(
-      '6 of 8 meetings recorded in the year',
     );
   });
 });
@@ -528,10 +498,10 @@ test.describe('the sentence under My 12', () => {
       'Everyone who came to a Cell in the week, counted once, at their stage so far. Open a name to see their 12.',
     );
 
-    // A closed quarter: by its end, and nothing about so far.
-    await page.goto('/reports/cells?period=quarter&start=2026-01-01');
+    // A closed month: by its end, and nothing about so far.
+    await page.goto('/reports/cells?month=2026-05-01');
     await expect(sentence).toHaveText(
-      'Everyone who came to a Cell in the quarter, counted once, at their stage by its end. Open a name to see their 12.',
+      'Everyone who came to a Cell in the month, counted once, at their stage by its end. Open a name to see their 12.',
     );
   });
 
@@ -610,21 +580,10 @@ test.describe('a guard month the server disagrees with', () => {
   });
 });
 
-test.describe('Year', () => {
-  test('keeps its month-by-month table beneath My 12, and no other period shows one', async ({
-    page,
-  }) => {
+test.describe('no month-by-month table (decision 0443)', () => {
+  test('no period shows one, the calendar year being withdrawn', async ({ page }) => {
     await arrange(page, { church: true });
-    await page.goto('/reports/cells?period=year');
-
-    const months = page.getByRole('heading', { name: 'Month by month, January to June 2026' });
-    await expect(months).toBeVisible();
-    // A whole-church reader's table is headed by the church rather than "My 12".
-    const twelve = page.getByRole('heading', { name: / · their journey$/ });
-    const [top, bottom] = await Promise.all([twelve.boundingBox(), months.boundingBox()]);
-    expect(top!.y).toBeLessThan(bottom!.y);
-
-    for (const each of PERIODS.filter((period) => period.kind !== 'YEAR')) {
+    for (const each of PERIODS) {
       await page.goto(`/reports/cells?${each.address}`);
       await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /^Month by month/ })).toHaveCount(0);

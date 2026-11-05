@@ -100,6 +100,7 @@ const WHAT: Record<string, string> = {
   'second_step.set_up': 'Second sign-in step set up',
   'second_step.reset': 'Second sign-in step reset',
   'second_step.recovery_code_used': 'Recovery code used',
+  'second_step.paused': 'Second step paused after wrong codes',
   'directory.searched': 'Searched the whole church',
   'directory.matched': 'Possible duplicate shown outside the branch',
   'password.reset': 'Password reset',

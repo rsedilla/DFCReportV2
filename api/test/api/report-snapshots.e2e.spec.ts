@@ -148,6 +148,7 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['person_views', 'who opened a page'],
       ['person_view_alerts', 'who opened a page'],
       ['sign_in_pauses', 'sign-in state'],
+      ['second_step_pauses', 'sign-in state'],
       ['sign_in_pause_alerts', 'sign-in state'],
       ['cell_leadership_requests', 'a request is not a leadership until approved'],
       [

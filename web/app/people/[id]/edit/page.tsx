@@ -179,12 +179,13 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     // is a different body and takes a new key in the same handler.
     mutationFn: ({ changes, key }: { changes: PersonEdit; key: string }) =>
       editPerson(id, changes, key),
-    // The saved record replaces the cached one before the profile opens. Without this the
-    // profile showed the copy it held from before the edit for up to `staleTime`, so a
-    // saved change looked unsaved and was saved a second time (owner, 2026-09-22).
-    // The lists that show the name are marked stale and not waited for.
-    onSuccess: (saved) => {
-      queryClient.setQueryData(['person', id], saved);
+    // The cached record is dropped before the profile opens, so it reads the record afresh.
+    // Kept, the profile showed the copy from before the edit for up to `staleTime`, so a saved
+    // change looked unsaved and was saved a second time (owner, 2026-09-22). The save answers
+    // with the basic details only (decision 0442), and the read it is replaced by is one
+    // decision 0414 keeps. The lists that show the name are marked stale and not waited for.
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['person', id], exact: true });
       void queryClient.invalidateQueries({ queryKey: ['people'] });
       void queryClient.invalidateQueries({ queryKey: ['pastoral-path'] });
       router.push(`/people/${id}`);
@@ -233,6 +234,21 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     }
     if (acknowledged.length > 0) {
       changes.acknowledged_duplicate_ids = acknowledged;
+    }
+
+    // Nothing differs from what is recorded: there is nothing to save, and the API would write
+    // nothing (decision 0442), so this sends nothing and goes back to the person's page.
+    const unchanged =
+      (!mayTitle || (changes.title ?? null) === person.title) &&
+      changes.first_name === person.first_name &&
+      changes.middle_name === person.middle_name &&
+      changes.last_name === person.last_name &&
+      changes.civil_status === person.civil_status &&
+      changes.mobile_number === person.mobile_number &&
+      (changes.birth_date === undefined || changes.birth_date === person.birth_date);
+    if (unchanged) {
+      router.push(`/people/${id}`);
+      return;
     }
 
     setCandidates(null);

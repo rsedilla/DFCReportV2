@@ -45,6 +45,16 @@ export function SecondStep({
 
   /** A refusal of what was typed stays on the field; anything else ends the sign-in. */
   function refusal(cause: unknown): string | Failure {
+    // Ten wrong codes for the account paused its second step (decision 0441): this sign-in
+    // is closed, so the words are shown back at the password.
+    if (
+      cause instanceof ApiRequestError &&
+      cause.code === 'RATE_LIMITED' &&
+      cause.details.reason === 'SECOND_STEP_PAUSED'
+    ) {
+      onSignInAgain(cause.message);
+      return '';
+    }
     if (cause instanceof ApiRequestError && cause.code === 'UNAUTHENTICATED') {
       if (cause.details.reason === 'CODE_INCORRECT') {
         return cause.message;

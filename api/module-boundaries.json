@@ -44,6 +44,7 @@
     "second_step_challenges": "auth",
     "sign_in_pauses": "auth",
     "sign_in_pause_alerts": "auth",
+    "second_step_pauses": "auth",
     "cells": "cells",
     "cell_categories": "cells",
     "cell_schedules": "cells",

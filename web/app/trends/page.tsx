@@ -81,6 +81,7 @@ function TrendsScreen() {
   // A Full view leader draws their own branch alone (decision 0380): no Show list, no bars.
   const branch = isBranchReader(me.data);
   const leader = branch ? null : search.get('leader');
+  const attendance = figure === 'CG' || figure === 'DCC';
   const current = monthFromQuery(null);
 
   const trends = useQuery({
@@ -119,9 +120,15 @@ function TrendsScreen() {
       {/* The Senior Pastors' twelve months are a view of Reports (decision 0377): the same tabs,
           and the one switch back to a length first in the bar (decision 0398). */}
       <ReportsTabs current={TAB_OF[figure]} view="trend" leader={leader}>
+        {/* Attendance's Weekly, Monthly and Yearly sit on the line beside Cell Group and DCC
+            (decision 0443); a count's sits in its bar, beside Show. */}
+        {attendance ? <ReportViewSwitch tab={TAB_OF[figure]} value="TREND" leader={leader} /> : null}
+        {/* A Full view leader draws their own branch alone, with no Show list (decision 0380). */}
+        {branch && attendance ? null : (
         <div className={`mt-4 ${CONTROL_BAR}`}>
-          <ReportViewSwitch tab={TAB_OF[figure]} value="TREND" leader={leader} />
-          {/* A Full view leader draws their own branch alone, with no Show list (decision 0380). */}
+          {attendance ? null : (
+            <ReportViewSwitch tab={TAB_OF[figure]} value="TREND" leader={leader} />
+          )}
           {branch ? null : (
           <div>
             <label htmlFor="trends-show" className="field-label block">
@@ -150,6 +157,7 @@ function TrendsScreen() {
           </div>
           )}
         </div>
+        )}
 
         <div className="mt-4">
           <FailureNotice failure={trends.isError ? describeFailure(trends.error) : null} />

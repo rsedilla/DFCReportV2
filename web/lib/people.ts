@@ -201,13 +201,16 @@ export type PersonEdit = Partial<
   acknowledged_duplicate_ids?: string[];
 };
 
-/** The key is the caller's, for the reason given on `createPerson`. */
+/**
+ * The key is the caller's, for the reason given on `createPerson`. Answered with the basic
+ * details only, as a list row is (decision 0442): the rest comes with reading the record.
+ */
 export async function editPerson(
   id: string,
   changes: PersonEdit,
   idempotencyKey: string,
-): Promise<PersonFull> {
-  return authenticatedRequest<PersonFull>(`/api/v1/people/${encodeURIComponent(id)}`, {
+): Promise<PersonListed> {
+  return authenticatedRequest<PersonListed>(`/api/v1/people/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: changes,
     idempotencyKey,

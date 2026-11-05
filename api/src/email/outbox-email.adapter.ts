@@ -116,6 +116,20 @@ function render(message: OutboundEmail): string {
     ].join('\n');
   }
 
+  // A notice to the Admin carries no token (decision 0441).
+  if (message.kind === 'SECOND_STEP_PAUSED') {
+    return [
+      `Kind:      ${message.kind}`,
+      `To:        ${message.to.name} <${message.to.email}>`,
+      `Holder:    ${message.holder}`,
+      `Until:     ${message.pausedUntil.toISOString()}`,
+      '',
+      'This message was not delivered. It was written by the development transport',
+      '(SKILL.md section 6). Nothing was sent to the address above.',
+      '',
+    ].join('\n');
+  }
+
   // A notice carries no token and no expiry (decision 0351).
   if (message.kind === 'EMAIL_CHANGED') {
     return [

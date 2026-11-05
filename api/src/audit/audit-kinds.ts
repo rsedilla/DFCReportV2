@@ -57,6 +57,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'second_step.set_up': 'ACCOUNTS',
   'second_step.reset': 'ACCOUNTS',
   'second_step.recovery_code_used': 'ACCOUNTS',
+  'second_step.paused': 'ACCOUNTS',
   'directory.searched': 'ACCOUNTS',
   'directory.matched': 'ACCOUNTS',
   'password.reset': 'ACCOUNTS',

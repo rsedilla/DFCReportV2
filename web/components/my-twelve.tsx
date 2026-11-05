@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { ViewSwitch } from '@/components/ui/view-switch';
 import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
 import { rangeEndOf, rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
 import { periodOpenUntilLabel } from '@/lib/weekly-deadline';
@@ -13,13 +12,6 @@ const STAGES: readonly [keyof Classification, string][] = [
   ['third_timer', '3rd Timer'],
   ['fourth_timer', '4th Timer'],
   ['regular', 'Regular'],
-];
-
-const PERIODS: readonly [RangeKind, string][] = [
-  ['WEEK', 'Weekly'],
-  ['MONTH', 'Monthly'],
-  ['QUARTER', 'Quarterly'],
-  ['YEAR', 'Year'],
 ];
 
 /** The label above a labelled navigator (decision 0363). */
@@ -36,44 +28,6 @@ const WHAT: Record<RangeKind, string> = {
   QUARTER: 'in the quarter',
   YEAR: 'in the year',
 };
-
-/**
- * Weekly, Monthly, Quarterly and Year (decision 0293), as the small switch inside the
- * report's pane: a view of the report the tab chose. Buttons rather than links: each is a
- * view of the same report and address.
- */
-export function PeriodTabs({
-  value,
-  onChange,
-  inBar = false,
-  labelled = false,
-  kinds,
-}: {
-  value: RangeKind;
-  onChange: (value: RangeKind) => void;
-  /** The lengths offered, all four unless named: a Full view leader's two (decision 0380). */
-  kinds?: readonly RangeKind[];
-  /** Inside the control bar, beside the period it chooses (the Senior Pastors, owner 2026-10-09). */
-  inBar?: boolean;
-  /**
-   * Under its *Show* label in a Full view leader's one row of controls (decision 0363, owner
-   * 2026-10-18): each button as wide as the longest word, so the row fits beside the period
-   * and Figures for.
-   */
-  labelled?: boolean;
-}) {
-  return (
-    <ViewSwitch
-      label="Report period"
-      options={PERIODS.filter(([key]) => kinds === undefined || kinds.includes(key)).map(
-        ([key, label]) => ({ key, label }),
-      )}
-      className={labelled ? 'mt-2' : inBar ? 'mt-0' : undefined}
-      value={value}
-      onChange={onChange}
-    />
-  );
-}
 
 /**
  * The period being shown and the way to the one before and after it. Forward stops at the

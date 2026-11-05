@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { countClasses } from '@/components/ui/frame';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +32,8 @@ export function ViewSwitch<Key extends string>({
     label: string;
     name?: string;
     count?: string | null;
+    /** A small picture before the words, hidden from a screen reader (Yearly's graph). */
+    icon?: ReactNode;
   }[];
   value: Key;
   onChange: (key: Key) => void;
@@ -65,6 +69,7 @@ export function ViewSwitch<Key extends string>({
                 : 'text-ink hover:bg-surface/60',
             )}
           >
+            {option.icon}
             {option.label}
             {option.count === undefined || option.count === null ? null : (
               // The accent's own count box on every segment: the chosen pill is white.
