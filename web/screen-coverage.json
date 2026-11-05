@@ -37,19 +37,19 @@
     },
     {
       "route": "GET /api/v1/auth/username-suggestion",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "POST /api/v1/auth/username",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "POST /api/v1/auth/password",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "POST /api/v1/auth/email",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "POST /api/v1/auth/email/confirm",
@@ -86,31 +86,31 @@
     },
     {
       "route": "POST /api/v1/auth/logout",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "POST /api/v1/auth/logout-all",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "GET /api/v1/auth/me",
-      "screen": "web/app/session/page.tsx"
+      "screen": "web/app/(app)/session/page.tsx"
     },
     {
       "route": "GET /api/v1/people",
-      "screen": "web/app/people/page.tsx"
+      "screen": "web/app/(app)/people/page.tsx"
     },
     {
       "route": "POST /api/v1/people",
-      "screen": "web/app/people/new/page.tsx"
+      "screen": "web/app/(app)/people/new/page.tsx"
     },
     {
       "route": "GET /api/v1/people/:id",
-      "screen": "web/app/people/[id]/page.tsx"
+      "screen": "web/app/(app)/people/[id]/page.tsx"
     },
     {
       "route": "PATCH /api/v1/people/:id",
-      "screen": "web/app/people/[id]/edit/page.tsx"
+      "screen": "web/app/(app)/people/[id]/edit/page.tsx"
     },
     {
       "route": "GET /api/v1/people/duplicate-candidates",
@@ -133,12 +133,12 @@
     },
     {
       "route": "GET /api/v1/people/:id/merge-preview",
-      "screen": "web/app/people/[id]/merge/page.tsx",
+      "screen": "web/app/(app)/people/[id]/merge/page.tsx",
       "note": "What would refuse the merge, read before the button is offered (decision 0408)."
     },
     {
       "route": "POST /api/v1/people/:id/merge",
-      "screen": "web/app/people/[id]/merge/page.tsx",
+      "screen": "web/app/(app)/people/[id]/merge/page.tsx",
       "note": "The Admin joins a duplicate into the record kept (decision 0408)."
     },
     {
@@ -154,17 +154,17 @@
     {
       "route": "GET /api/v1/people/:id/pastoral-path",
       "reason": "§8 asks for the chain when a profile is opened: the profile names the person's direct leader from it, and My Network shows the whole chain.",
-      "screen": "web/app/people/[id]/page.tsx"
+      "screen": "web/app/(app)/people/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/network/my-tree",
       "reason": "The branch the Network screen opened on, and since decision 0341 the first generation of Family Tree: the signed-in person, their direct disciples by name, and the headcounts of the tree now (decision 0252).",
-      "screen": "web/app/family-tree/page.tsx"
+      "screen": "web/app/(app)/family-tree/page.tsx"
     },
     {
       "route": "GET /api/v1/leaders/:id/children",
       "reason": "Anybody else's branch: Family Tree opens a leader's disciples with it (decision 0341), as the Network screen did (decision 0252).",
-      "screen": "web/app/family-tree/page.tsx"
+      "screen": "web/app/(app)/family-tree/page.tsx"
     },
     {
       "route": "GET /api/v1/leaders/:id/dcc-behind",
@@ -203,35 +203,35 @@
     },
     {
       "route": "GET /api/v1/accounts",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "GET /api/v1/accounts/counts",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "GET /api/v1/audit-log",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "GET /api/v1/settings",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "GET /api/v1/settings/record-verse",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "PUT /api/v1/settings/record-verse",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "PATCH /api/v1/settings/cell-attention-months",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "POST /api/v1/settings/initial-encoding/close",
-      "screen": "web/app/admin/page.tsx"
+      "screen": "web/app/(app)/admin/page.tsx"
     },
     {
       "route": "GET /api/v1/accounts/for-person/:person_id",
@@ -303,36 +303,36 @@
     },
     {
       "route": "GET /api/v1/reports/trends",
-      "screen": "web/app/trends/page.tsx"
+      "screen": "web/app/(app)/trends/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/trends/branch",
-      "screen": "web/app/trends/page.tsx"
+      "screen": "web/app/(app)/trends/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/owed",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/pending-leaders",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/leaders/:id/checklist",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/leaders/:leaderId/roster",
-      "screen": "web/app/dcc/[id]/page.tsx"
+      "screen": "web/app/(app)/dcc/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/cells",
       "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet. It is ACTIVE-only, so it does not by itself discharge §19's requirement that a closed Cell's meetings stay reachable while their month is open.",
-      "screen": "web/app/cells/page.tsx"
+      "screen": "web/app/(app)/cells/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/counts",
-      "screen": "web/app/cells/page.tsx"
+      "screen": "web/app/(app)/cells/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/schedule-clashes",
@@ -347,7 +347,7 @@
     {
       "route": "GET /api/v1/dcc/events",
       "reason": "The month's DCC events (decision 0227), read by the reader's month to place their own checklist on each Sunday and to show a removed Sunday with its reason.",
-      "screen": "web/app/dcc/page.tsx"
+      "screen": "web/app/(app)/dcc/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
@@ -357,67 +357,67 @@
     {
       "route": "GET /api/v1/cells/:id/members",
       "reason": "The Cell roster (§12). Cell Attendance reads it, and it is the roster view §12 keeps separate from the statistical report.",
-      "screen": "web/app/cells/[id]/members/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/members/page.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/members",
       "reason": "Adding a member is part of running a Cell during the pilot month (§10).",
-      "screen": "web/app/cells/[id]/members/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/members/page.tsx"
     },
     {
       "route": "DELETE /api/v1/cells/:id/members/:person_id",
       "reason": "The other half of membership, and a move is one transaction (§10).",
-      "screen": "web/app/cells/[id]/members/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/members/page.tsx"
     },
     {
       "route": "PUT /api/v1/cells/:id/schedule",
       "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13).",
-      "screen": "web/app/cells/[id]/meetings/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/meetings/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/meetings/pending",
       "reason": "Record's CG Records Due, laid out as DCC Records Due is (decision 0368).",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/meetings/awaiting",
       "reason": "§19's recording queue, and the only surface that names a closed Cell's meetings (ruling of 2026-09-17).",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings",
       "reason": "Cell Meetings. §19 puts meetings awaiting a record above the numbers on every leader's dashboard.",
-      "screen": "web/app/cells/[id]/meetings/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/meetings/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings/:meetingId/roster",
       "reason": "Who there is to record (§13). Cell Meetings calls it before a submission.",
-      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/meetings/:meetingId/submit",
       "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week.",
-      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
+      "screen": "web/app/(app)/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/roster",
       "reason": "The DCC checklist (§9). A leader marking it must see who is already marked.",
-      "screen": "web/app/dcc/[id]/page.tsx"
+      "screen": "web/app/(app)/dcc/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/dcc/events/:id/submit",
       "reason": "DCC recording, the second half of the pilot's month cycle (§9).",
-      "screen": "web/app/dcc/[id]/page.tsx"
+      "screen": "web/app/(app)/dcc/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/people/:id/attendance",
       "reason": "One person's DCC classification and the Sundays behind it (decision 0247), shown in the DCC section of the person profile.",
-      "screen": "web/app/people/[id]/page.tsx"
+      "screen": "web/app/(app)/people/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/people/:id/membership",
       "reason": "The Cell a person belongs to, with its leader, and the Cells they lead (decision 0248), shown on the person profile and on Edit.",
-      "screen": "web/app/people/[id]/page.tsx"
+      "screen": "web/app/(app)/people/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/people/mine",
@@ -430,12 +430,12 @@
     {
       "route": "GET /api/v1/cells/people/membership",
       "reason": "The same for a page of people at once, the People list's Cell column (checklist row perf-people-list-cells).",
-      "screen": "web/app/people/page.tsx"
+      "screen": "web/app/(app)/people/page.tsx"
     },
     {
       "route": "POST /api/v1/cells",
       "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). New Cell, from the Cells list, is how the pilot's Cells are set up.",
-      "screen": "web/app/cells/new/page.tsx"
+      "screen": "web/app/(app)/cells/new/page.tsx"
     },
     {
       "route": "PUT /api/v1/cells/:id/category",
@@ -472,23 +472,23 @@
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/cells/monthly",
-      "screen": "web/app/dashboard/page.tsx"
+      "screen": "web/app/(app)/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/cells/twelve",
-      "screen": "web/app/reports/cells/page.tsx"
+      "screen": "web/app/(app)/reports/cells/page.tsx"
     },
     {
       "route": "GET /api/v1/reports/dcc/twelve",
-      "screen": "web/app/reports/dcc/page.tsx"
+      "screen": "web/app/(app)/reports/dcc/page.tsx"
     },
     {
       "route": "GET /api/v1/encounter-seasons",
-      "screen": "web/app/growth/training/encounters/page.tsx"
+      "screen": "web/app/(app)/growth/training/encounters/page.tsx"
     },
     {
       "route": "POST /api/v1/encounter-seasons",
@@ -501,52 +501,52 @@
     {
       "route": "GET /api/v1/conquest/counts",
       "reason": "Conquest’s four count cards (section 27, decision 0407).",
-      "screen": "web/app/conquest/page.tsx"
+      "screen": "web/app/(app)/conquest/page.tsx"
     },
     {
       "route": "GET /api/v1/conquest/people",
       "reason": "Conquest’s list (section 27, decision 0407).",
-      "screen": "web/app/conquest/page.tsx"
+      "screen": "web/app/(app)/conquest/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/counts",
       "reason": "The SUYNL tab’s three count cards (decision 0281).",
-      "screen": "web/app/growth/suynl/page.tsx"
+      "screen": "web/app/(app)/growth/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/people",
       "reason": "The SUYNL tab’s list (section 28).",
-      "screen": "web/app/growth/suynl/page.tsx"
+      "screen": "web/app/(app)/growth/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/readiness",
       "reason": "The readiness table on Reports, SUYNL (decision 0297).",
-      "screen": "web/app/reports/suynl/page.tsx"
+      "screen": "web/app/(app)/reports/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/readiness/:id",
       "reason": "The same table for a leader the reader opened (decision 0297).",
-      "screen": "web/app/reports/suynl/page.tsx"
+      "screen": "web/app/(app)/reports/suynl/page.tsx"
     },
     {
       "route": "POST /api/v1/suynl/submit",
       "reason": "The SUYNL tab’s save bar (section 28; decision 0282).",
-      "screen": "web/app/growth/suynl/page.tsx"
+      "screen": "web/app/(app)/growth/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/training/counts",
       "reason": "The Training tab’s count cards (decision 0281).",
-      "screen": "web/app/growth/training/page.tsx"
+      "screen": "web/app/(app)/growth/training/page.tsx"
     },
     {
       "route": "GET /api/v1/training/people",
       "reason": "The Training tab’s list (section 28).",
-      "screen": "web/app/growth/training/page.tsx"
+      "screen": "web/app/(app)/growth/training/page.tsx"
     },
     {
       "route": "POST /api/v1/training/submit",
       "reason": "The Training tab’s save bar (section 28; decision 0282).",
-      "screen": "web/app/growth/training/page.tsx"
+      "screen": "web/app/(app)/growth/training/page.tsx"
     },
     {
       "route": "GET /api/v1/health",

@@ -374,6 +374,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               width={28}
               height={28}
               unoptimized
+              priority
               className="size-7 shrink-0 rounded-md"
             />
             <span className="truncate">{APPLICATION_NAME}</span>
@@ -423,6 +424,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 width={48}
                 height={48}
                 unoptimized
+                priority
                 className="size-12 shrink-0 rounded-xl"
               />
               <span>
