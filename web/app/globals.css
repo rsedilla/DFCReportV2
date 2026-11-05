@@ -71,6 +71,11 @@
   --color-sidebar-ink: var(--sidebar-ink);
   --color-sidebar-current: var(--sidebar-current);
   --color-sidebar-current-ink: var(--sidebar-current-ink);
+  --color-tabbar: var(--tabbar);
+  --color-tabbar-edge: var(--tabbar-edge);
+  --color-tabbar-ink: var(--tabbar-ink);
+  --color-tabbar-current-ink: var(--tabbar-current-ink);
+  --color-tabbar-pill: var(--tabbar-pill);
   --color-tag-red: var(--tag-red);
   --color-tag-red-tint: var(--tag-red-tint);
   --color-field-invalid: var(--field-invalid);
@@ -136,6 +141,17 @@
   --sidebar-current: #00552a;
   --sidebar-current-ink: #ffffff;
   /*
+   * A phone's tab bar (owner, 2026-11-04, "design E"): a light bar with grey items, the
+   * current one a bold dark green word under a pale green pill, as both phone platforms mark
+   * it. The top bar and the sidebar keep the emerald above. `tabbar-edge` is the decorative
+   * line along the bar's top and carries no contrast requirement.
+   */
+  --tabbar: #ffffff;
+  --tabbar-edge: #e3e3e3;
+  --tabbar-ink: #4b5563;
+  --tabbar-current-ink: #00522a;
+  --tabbar-pill: #cfeedd;
+  /*
    * *Completed* on Recording Progress is a pale red label (SKILL.md section 19, decisions
    * 0325 and 0334), the one status shown by colour. It kept its red when the accent became
    * green, because the section names the colour; these are the red accent's old values.
@@ -178,6 +194,11 @@
     --chart-green: #1dce78;
     --chart-blue: #8db4d9;
     --chart-pink: #e39ab6;
+    --tabbar: #161a17;
+    --tabbar-edge: #2a2f2b;
+    --tabbar-ink: #b9c2bc;
+    --tabbar-current-ink: #7fe3ad;
+    --tabbar-pill: #0f4a2b;
   }
 }
 
@@ -232,4 +253,8 @@
 body {
   @apply bg-surface text-ink font-sans antialiased;
   font-variant-numeric: lining-nums tabular-nums;
+  /* Clear of a phone's rounded corners and camera when it is turned sideways (viewport-fit is
+     cover, app/layout.tsx); zero everywhere else. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }

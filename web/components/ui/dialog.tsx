@@ -66,8 +66,10 @@ export function Dialog({
       className={cn(
         'bg-surface text-ink border-edge backdrop:bg-black/50',
         // The sheet: the bottom margin removed so the top-layer box sits on the bottom edge,
-        // and the safe area kept clear below the last button.
+        // and the safe area kept clear below the last button, and at the sides of a phone
+        // turned sideways (the top layer is outside the body's padding).
         'mx-0 mt-auto mb-0 max-h-[85dvh] w-full max-w-none overflow-y-auto border-0 border-t-2 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
+        'pr-[calc(1.25rem+env(safe-area-inset-right))] pl-[calc(1.25rem+env(safe-area-inset-left))]',
         'lg:m-auto lg:max-h-[calc(100dvh-4rem)] lg:w-[min(32rem,calc(100%-2rem))] lg:border lg:p-6',
       )}
     >

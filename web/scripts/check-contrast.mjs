@@ -88,6 +88,11 @@ const TEXT_PAIRS = [
   ['sidebar-ink', 'sidebar-current'],
   ['sidebar-current-ink', 'sidebar-current'],
   ['sidebar-current-ink', 'sidebar'],
+  // A phone's tab bar (owner, 2026-11-04): grey items on the light bar, the current one a
+  // bold dark green word, its icon on the pale green pill.
+  ['tabbar-ink', 'tabbar'],
+  ['tabbar-current-ink', 'tabbar'],
+  ['tabbar-current-ink', 'tabbar-pill'],
   // *Completed* on Recording Progress, the pale red label SKILL.md section 19 names.
   ['tag-red', 'tag-red-tint'],
   // `field-invalid` is held to the body-text ratio although no message is set in
@@ -113,6 +118,10 @@ const NON_TEXT_PAIRS = [
   // `sidebar-current-ink`, because the accent all but vanishes on emerald (1.4.11).
   ['sidebar-current-ink', 'sidebar-current'],
   ['sidebar-current-ink', 'sidebar'],
+  // The tab bar's icons, and the focus ring on it, which is `tabbar-current-ink` below `lg`.
+  ['tabbar-ink', 'tabbar'],
+  ['tabbar-current-ink', 'tabbar'],
+  ['tabbar-current-ink', 'tabbar-pill'],
   // The Trends lines are graphical objects needed to read the graph (1.4.11).
   ['chart-green', 'surface'],
   ['chart-blue', 'surface'],

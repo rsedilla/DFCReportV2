@@ -196,7 +196,7 @@ export const PAGE_WIDTH = {
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
  * 2026-09-15). Below `lg` (1024px) — phones and tablets — the items are a tab bar
  * fixed to the bottom of the screen, within a thumb's reach, under a slim bar that
- * names the section and holds the account button. At `lg` and above they stand in
+ * carries the application's name and holds the account button (decision 0439). At `lg` and above they stand in
  * the sidebar. It is one `<nav>` restyled rather than two, so there is exactly one
  * landmark named Main at every width and nothing to keep in step.
  */
@@ -286,34 +286,54 @@ export function AppShell({ children }: { children: ReactNode }) {
         // information (1.4.1).
         aria-current={active ? 'page' : undefined}
         className={cn(
-          // White, as the current item is: the accent all but vanishes on emerald.
-          'focus-visible:outline-sidebar-current-ink focus-visible:outline-2 focus-visible:-outline-offset-2',
+          // On the light tab bar, the current item's dark green; on the emerald sidebar, white,
+          // as the current item is there: the accent all but vanishes on emerald.
+          'focus-visible:outline-tabbar-current-ink lg:focus-visible:outline-sidebar-current-ink',
+          'focus-visible:outline-2 focus-visible:-outline-offset-2',
           'lg:focus-visible:outline-offset-2',
           // **A tab below `lg`**: an equal share of the bar, the icon over the word,
           // and 56px tall against the 44px minimum a phone held standing up needs
           // (2.5.8). `min-w-0` so the tabs share 320px without pushing past it.
           // `flex-auto`: each tab starts from its own label's width and shares what is left,
           // so a long label (Reports) is not squeezed to the width of a short one (Cells).
-          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-1',
-          // Sentence case at 11px (owner's choice, 2026-09-24): capitals at 10px cut four
-          // labels off when there were six.
-          'text-[0.6875rem] leading-none font-bold',
+          // 2px each side, so the Admin's six words fit 320px whole wherever the font renders a
+          // pixel wider (the Linux browser the build runs did, at 12px).
+          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-0.5',
+          // Sentence case at 12px (owner, 2026-11-04, decision 0439; 11px from 2026-09-24): the
+          // Admin's six labels still fit 320px, which accessibility.spec.ts checks whole. Grey,
+          // and the current one extra bold.
+          'text-xs leading-none font-semibold',
           // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
           'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
           // Its words as written, on a rounded row (decision 0423).
           'lg:rounded-lg lg:text-[0.9375rem] lg:font-semibold',
-          // **The current item is white on a darker emerald, with a white bar, and the
-          // others mint on emerald** (owner, 2026-10-19, replacing red on pale red): the bar
-          // along the top of a tab, down the left of a sidebar row. The bar is a change of
-          // shape and not of hue alone (1.4.1), and each pair is listed in
-          // `check-contrast.mjs`.
+          // **In the sidebar the current item is white on a darker emerald, with a white bar
+          // down the left of its row, and the others mint on emerald** (owner, 2026-10-19,
+          // replacing red on pale red). The bar is a change of shape and not of hue alone
+          // (1.4.1), and each pair is listed in `check-contrast.mjs`.
+          // **On a phone (decision 0439)** the current tab is an extra bold dark green word with
+          // its icon on a pale green pill, the others grey. Its weight is what tells it apart
+          // without colour (1.4.1), with `aria-current`; the pill is too pale against the bar to
+          // count as a shape on its own. The sidebar keeps the emerald rows above.
           active
-            ? 'bg-sidebar-current text-sidebar-current-ink shadow-[inset_0_3px_0_var(--sidebar-current-ink)] lg:shadow-[inset_3px_0_0_var(--sidebar-current-ink)]'
-            : 'text-sidebar-ink hover:bg-sidebar-current',
+            ? 'text-tabbar-current-ink font-extrabold lg:bg-sidebar-current lg:text-sidebar-current-ink lg:font-semibold lg:shadow-[inset_3px_0_0_var(--sidebar-current-ink)]'
+            : 'text-tabbar-ink lg:text-sidebar-ink lg:hover:bg-sidebar-current',
         )}
       >
-        <Icon aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 lg:hidden" />
-        <span className="max-w-full truncate">{link.label}</span>
+        {/* 24px, the size both phone platforms give a tab icon, and the current one on its pill
+            (owner, 2026-11-04). */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            'flex h-8 w-full max-w-16 shrink-0 items-center justify-center rounded-full lg:hidden',
+            active && 'bg-tabbar-pill',
+          )}
+        >
+          <Icon strokeWidth={1.5} className="size-6" />
+        </span>
+        <span data-tab-label className="max-w-full truncate">
+          {link.label}
+        </span>
       </Link>
     );
   }
@@ -333,14 +353,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       <IdleGuard />
       <div className="bg-raised min-h-dvh lg:flex">
         {/*
-          **The bar across the top below `lg`.** It names where you are and holds the
-          account, which is not a navigation item (ruling of 2026-09-14). The section
-          name is a paragraph rather than a heading: every screen carries its own
-          `h1`, and a second heading above it would be announced as the page's title.
+          **The bar across the top below `lg`.** It carries the application's name and the
+          DfC globe, and holds the account, which is not a navigation item (ruling of
+          2026-09-14). It named the section until decision 0439, when the owner saw "People"
+          twice on one screen: the page's own `h1` says where you are and the tab bar's
+          pill which section, as the installed apps leaders know show their name here. The
+          name is a paragraph rather than a heading, so it is not announced as the page's
+          title.
         */}
         <header className="bg-sidebar border-sidebar text-sidebar-current-ink sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b pr-1.5 pl-5 lg:hidden">
-          <p className="truncate text-base font-bold tracking-tight">
-            {current?.label ?? APPLICATION_NAME}
+          <p className="flex min-w-0 items-center gap-2 text-base font-bold tracking-tight">
+            {/* Decorative: the name beside it says the same, so it is announced once. */}
+            <Image
+              src={LOGO_PATH}
+              alt=""
+              width={28}
+              height={28}
+              unoptimized
+              className="size-7 shrink-0 rounded-md"
+            />
+            <span className="truncate">{APPLICATION_NAME}</span>
           </p>
           {/* **On a phone the Admin area is a button here, beside the account** (decision 0419),
               not a seventh button of the bar along the bottom. */}
@@ -402,10 +434,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <nav
               aria-label="Main"
               className={cn(
-                'bg-sidebar border-sidebar fixed inset-x-0 bottom-0 z-30 flex border-t',
+                // A light bar under the emerald top bar (design E, owner, 2026-11-04); the
+                // sidebar it becomes at `lg` sits on the emerald column.
+                'bg-tabbar border-tabbar-edge fixed inset-x-0 bottom-0 z-30 flex border-t',
                 // The phone's home indicator sits over the bottom few pixels; the
-                // inset is zero wherever there is none.
-                'pb-[env(safe-area-inset-bottom)]',
+                // inset is zero wherever there is none, and is reported at all only
+                // because the viewport is `cover` (app/layout.tsx). Turned sideways, the
+                // phone's corners and camera take the sides too.
+                'pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]',
                 'lg:static lg:flex-col lg:gap-0.5 lg:border-t-0 lg:bg-transparent lg:pb-0',
               )}
             >

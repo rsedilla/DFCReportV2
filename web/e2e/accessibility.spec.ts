@@ -3150,7 +3150,8 @@ test(`at 320px the tab bar fits all ${items.length} items, none of them clipped,
   const tabs = await navigation.getByRole('link').evaluateAll((links) =>
     links.map((link) => {
       const box = link.getBoundingClientRect();
-      const label = link.querySelector('span') as HTMLElement;
+      // The word, not the icon's pill beside it (decision 0439).
+      const label = link.querySelector('[data-tab-label]') as HTMLElement;
       return {
         text: label.textContent,
         left: box.left,
