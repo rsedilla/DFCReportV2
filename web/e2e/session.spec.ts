@@ -865,7 +865,7 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
   // per mount, so a test that called `goto` between the two sessions would pass
   // with the fix removed. It did, before this was rewritten.
   await page.goto('/session');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Account and session');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('My Account');
 
   // The trigger and the confirmation share one name (decision 0416): the confirmation is
   // the second, below the trigger.

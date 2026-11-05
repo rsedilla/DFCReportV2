@@ -725,7 +725,7 @@ export function PendingFilters({
 }
 
 /**
- * Pending CG Records (decision 0368), laid out as Pending DCC Records is: one row per Cell,
+ * CG Records Due (decision 0368), laid out as DCC Records Due is: one row per Cell,
  * named by its leader, by first name, each meeting still open on a line of its own with
  * Update Records's label. Record opens the oldest, where the API says the reader may record
  * it; See meeting opens the Cell's meetings for that month.
@@ -790,7 +790,7 @@ export function PendingCgList({ rows, empty }: { rows: readonly PendingCgCell[];
 
   return (
     <>
-      <Table caption="Pending CG Records" className="mt-4 hidden lg:block">
+      <Table caption="CG Records Due" className="mt-4 hidden lg:block">
         <thead>
           <tr>
             <HeaderCell>Cell</HeaderCell>
@@ -842,7 +842,7 @@ export function PendingCgList({ rows, empty }: { rows: readonly PendingCgCell[];
 }
 
 /**
- * Pending DCC Records (decision 0336): one row per leader, by first name, each open Sunday on a
+ * DCC Records Due (decision 0336): one row per leader, by first name, each open Sunday on a
  * line of its own with Update Records's label. The recorder named, Record and See checklist
  * follow the oldest Sunday; Record is offered where the API says the reader may record there.
  */
@@ -947,7 +947,7 @@ export function PendingDccList({
 
   return (
     <>
-      <Table caption="Pending DCC Records" className="mt-4 hidden lg:block">
+      <Table caption="DCC Records Due" className="mt-4 hidden lg:block">
         <thead>
           <tr>
             <HeaderCell>Leader</HeaderCell>
@@ -1136,7 +1136,7 @@ interface PagedList {
   fetchNextPage: () => unknown;
 }
 
-/** Pending CG Records' pane (decision 0368): its filters, its list and Show more. */
+/** CG Records Due' pane (decision 0368): its filters, its list and Show more. */
 export function PendingCgPane({
   filter,
   onFilter,
@@ -1154,7 +1154,7 @@ export function PendingCgPane({
     <section className={LIST} aria-labelledby="attention-heading">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
-          Pending CG Records
+          CG Records Due
         </h2>
         <p className="text-muted text-sm">
           These Cell Groups in your branch have meetings not yet recorded. Record the ones
@@ -1191,7 +1191,7 @@ export function PendingCgPane({
   );
 }
 
-/** Pending DCC Records' pane (decision 0336), with the checklist of the leader chosen in it. */
+/** DCC Records Due' pane (decision 0336), with the checklist of the leader chosen in it. */
 export function PendingDccPane({
   filter,
   onFilter,
@@ -1213,7 +1213,7 @@ export function PendingDccPane({
     <section className={LIST} aria-labelledby="pending-dcc-heading">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h2 id="pending-dcc-heading" className="text-lg font-bold tracking-tight">
-          Pending DCC Records
+          DCC Records Due
         </h2>
         <p className="text-muted text-sm">
           These leaders have DCC Sundays not yet recorded. Record the ones that are yours,

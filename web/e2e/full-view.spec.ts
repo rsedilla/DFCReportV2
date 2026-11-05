@@ -208,7 +208,7 @@ test.describe('a Recording-only account (decision 0323)', () => {
     ).toBeVisible();
 
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'CG Records Due' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recording Progress' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
@@ -1258,7 +1258,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     expect(asked[0]?.get('leader_id')).toBe(SIGNED_IN_PERSON_ID);
   });
 
-  test('opens Pending CG Records for a row’s branch from its figure, and Show everyone clears it (decision 0370)', async ({
+  test('opens CG Records Due for a row’s branch from its figure, and Show everyone clears it (decision 0370)', async ({
     page,
   }) => {
     await mockFullRecord(page);
@@ -1314,9 +1314,9 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await page.goto('/dashboard?list=status');
     const table = page.getByRole('table', { name: 'My 12' });
     // Somebody in Ana's branch has not recorded their Cell group, and everybody has their DCC.
-    const cellFigure = table.getByRole('button', { name: /Ana Lim’s branch in Pending CG Records/ });
+    const cellFigure = table.getByRole('button', { name: /Ana Lim’s branch in CG Records Due/ });
     await expect(cellFigure).toHaveText('1 of 2 leaders');
-    await expect(table.getByRole('button', { name: /Pending DCC Records/ })).toHaveCount(0);
+    await expect(table.getByRole('button', { name: /DCC Records Due/ })).toHaveCount(0);
     // Ben was moved out of the branch since the week, so his figures are plain text.
     await expect(table.getByRole('button', { name: /Ben Uy/ })).toHaveCount(0);
     await expect(table.getByRole('row', { name: /Ben Uy/ })).toContainText('0 of 1 leader');

@@ -88,6 +88,8 @@ const TEXT_PAIRS = [
   ['sidebar-ink', 'sidebar-current'],
   ['sidebar-current-ink', 'sidebar-current'],
   ['sidebar-current-ink', 'sidebar'],
+  // The account row's initial: an emerald letter in a white circle (decision 0445).
+  ['sidebar', 'sidebar-current-ink'],
   // A phone's tab bar (owner, 2026-11-04): grey items on the light bar, the current one a
   // bold dark green word, its icon on the pale green pill.
   ['tabbar-ink', 'tabbar'],

@@ -76,7 +76,7 @@ test.describe('page widths (decision 0402)', () => {
 
   test('Account is as wide as a list (decision 0421, replacing 0410 for Account)', async ({ page }) => {
     await page.goto('/session');
-    await expect(page.getByRole('heading', { name: 'Account and session' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My Account' })).toBeVisible();
 
     await expect(main(page)).toHaveCSS('max-width', '1280px');
   });

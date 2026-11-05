@@ -129,7 +129,8 @@ const SUYNL: NavEntry = {
 const ADMIN: NavEntry = { href: '/admin', label: 'Admin', icon: ShieldCheck, matches: ['/admin'] };
 const ACCOUNT: NavEntry = {
   href: '/session',
-  label: 'Account and session',
+  // Short, and the page's own title (decision 0445, replacing *Account and session*).
+  label: 'My Account',
   icon: CircleUserRound,
   matches: ['/session'],
 };
@@ -474,21 +475,34 @@ export function AppShell({ children }: { children: ReactNode }) {
                 administers ? null : 'lg:mt-auto',
               )}
             >
-              {me.data?.first_name ? (
-                <p className="text-sidebar-current-ink px-3 text-sm">{me.data.first_name}</p>
-              ) : null}
+              {/* **One row, the whole of it the link** (decision 0445): the person's first
+                  initial in a white circle, their name, and *My Account* under it, marked as the
+                  current page as a sidebar item is. */}
               <Link
                 href={ACCOUNT.href}
                 aria-current={accountActive ? 'page' : undefined}
                 className={cn(
-                  'focus-visible:outline-sidebar-current-ink inline-flex min-h-11 items-center px-3 text-xs',
-                  'underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2',
+                  'focus-visible:outline-sidebar-current-ink flex min-h-13 items-center gap-3 rounded-lg px-3 py-1.5',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2',
                   accountActive
-                    ? 'text-sidebar-current-ink font-medium'
-                    : 'text-sidebar-ink hover:text-sidebar-current-ink',
+                    ? 'bg-sidebar-current text-sidebar-current-ink shadow-[inset_3px_0_0_var(--sidebar-current-ink)]'
+                    : 'text-sidebar-ink hover:bg-sidebar-current',
                 )}
               >
-                {ACCOUNT.label}
+                <span
+                  aria-hidden="true"
+                  className="bg-sidebar-current-ink text-sidebar flex size-9 shrink-0 items-center justify-center rounded-full text-[0.9375rem] font-bold"
+                >
+                  {(me.data?.first_name ?? '').trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="flex min-w-0 flex-col leading-tight">
+                  {me.data?.first_name ? (
+                    <span className="text-sidebar-current-ink truncate text-[0.9375rem] font-semibold">
+                      {me.data.first_name}
+                    </span>
+                  ) : null}
+                  <span className="text-[0.8125rem]">{ACCOUNT.label}</span>
+                </span>
               </Link>
             </div>
           </div>

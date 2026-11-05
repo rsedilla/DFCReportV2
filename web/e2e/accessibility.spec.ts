@@ -253,7 +253,7 @@ const SCANS = [
       await mockSignedIn(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Account and session', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'My Account', exact: true })).toBeVisible();
       // The greeting, asserted rather than assumed: settling on the heading alone would
       // scan and pass on a page where it never rendered, and the client's guard on it is a
       // truthiness check that fails silent. The three boxes are the page's body (decision 0421).
@@ -1062,7 +1062,7 @@ const SCANS = [
     },
   },
   {
-    // Record's second list (decision 0290), laid out as Pending DCC Records is (decision 0368):
+    // Record's second list (decision 0290), laid out as DCC Records Due is (decision 0368):
     // the filter bar with Late only, then a table from lg and a card per Cell below it.
     name: 'dashboard, cells behind',
     route: '/dashboard',
@@ -1071,8 +1071,8 @@ const SCANS = [
       await mockPendingCg(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await chooseRecordList(page, /^Pending CG Records/);
-      await expect(page.getByRole('heading', { name: 'Pending CG Records' })).toBeVisible();
+      await chooseRecordList(page, /^CG Records Due/);
+      await expect(page.getByRole('heading', { name: 'CG Records Due' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Carlo Reyes' }).filter({ visible: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Late only' })).toBeVisible();
     },
@@ -3033,6 +3033,29 @@ test('the sidebar shows each item’s icon before its words, and names it by its
   }
   // The accessible name is the words alone.
   await expect(navigation.getByRole('link', { name: 'People', exact: true })).toBeVisible();
+});
+
+/**
+ * The account at the foot of the sidebar is one row, the whole of it the link (decision 0445):
+ * the first initial in a circle, the first name, and *My Account*.
+ */
+test('the sidebar’s account row is one link with the initial, the name and My Account', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockSignedIn(page);
+  await mockPeople(page);
+
+  await page.goto('/people');
+  const row = page.getByRole('link', { name: /My Account$/ }).filter({ visible: true });
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute('href', '/session');
+  const name = (await row.locator('span > span').first().innerText()).trim();
+  await expect(row.locator('[aria-hidden="true"]')).toHaveText(name.charAt(0).toUpperCase());
+  await expect(row).toContainText(name);
+  await expect(row).toContainText('My Account');
+  // A full target: the whole row, at least 44px tall (2.5.8).
+  expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });
 
 /**
