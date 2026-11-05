@@ -593,6 +593,8 @@ export async function listCells(
     fewerThanThree?: boolean;
     /** Section 15's *No meeting in 3 months* (decision 0355). */
     noMeeting?: boolean;
+    /** The closed view's Cells closed as created in error, left out unless asked for (decision 0440). */
+    includeCreatedInError?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
@@ -608,6 +610,9 @@ export async function listCells(
   }
   if (params.noMeeting) {
     query.set('no_meeting', 'true');
+  }
+  if (params.includeCreatedInError) {
+    query.set('include_created_in_error', 'true');
   }
   if (params.cursor) {
     query.set('cursor', params.cursor);
@@ -984,6 +989,11 @@ export interface CellCounts {
   led_by_me: number;
   /** The church-wide setting *Inactive N+ Months* is named by (decision 0425). */
   attention_months: number;
+  /**
+   * How many closed Cells in the reader's scope were closed as created in error, which the
+   * closed view leaves out unless asked for (decision 0440).
+   */
+  created_in_error: number;
 }
 
 /**

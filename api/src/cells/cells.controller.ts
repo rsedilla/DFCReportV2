@@ -174,6 +174,7 @@ export class CellsController {
       state: query.state,
       fewerThanThree: query.fewer_than_three === 'true',
       noMeeting: query.no_meeting === 'true',
+      includeCreatedInError: query.include_created_in_error === 'true',
     });
   }
 

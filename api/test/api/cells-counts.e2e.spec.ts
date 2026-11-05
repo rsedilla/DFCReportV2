@@ -116,14 +116,24 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
     const response = await counts(raymondAccount);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ in_scope: 4, led_by_me: 2, attention_months: 3 });
+    expect(response.body).toEqual({
+      in_scope: 4,
+      led_by_me: 2,
+      attention_months: 3,
+      created_in_error: 0,
+    });
   });
 
   it('counts the whole church for a Whole Church reader, who leads none', async () => {
     const response = await counts(adminAccount);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ in_scope: 5, led_by_me: 0, attention_months: 3 });
+    expect(response.body).toEqual({
+      in_scope: 5,
+      led_by_me: 0,
+      attention_months: 3,
+      created_in_error: 0,
+    });
   });
 
   it.each([
@@ -138,6 +148,7 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
       in_scope: await listed(account(), false),
       led_by_me: await listed(account(), true),
       attention_months: 3,
+      created_in_error: 0,
     });
   });
 
@@ -173,10 +184,41 @@ describe('GET /api/v1/cells/counts (decision 0309)', () => {
       in_scope: await listed(raymondAccount, false),
       led_by_me: await listed(raymondAccount, true),
       attention_months: 3,
+      created_in_error: 0,
     });
-    expect(response.body).toEqual({ in_scope: 5, led_by_me: 3, attention_months: 3 });
+    expect(response.body).toEqual({
+      in_scope: 5,
+      led_by_me: 3,
+      attention_months: 3,
+      created_in_error: 0,
+    });
   });
 
+  it('counts the closed Cells created in error the closed view leaves out, in scope (decision 0440)', async () => {
+    // Manuel's and Rico's second Cells, closed as created in error: Raymond's scope holds
+    // Manuel's alone, the administrator's both, and the first closures above are not counted.
+    const errorOfManuel = await createCell(db, { leader: manuel });
+    const errorOfRico = await createCell(db, { leader: rico });
+    await closeCellDirectly(db, errorOfManuel.id, { reason: 'CREATED_IN_ERROR' });
+    await closeCellDirectly(db, errorOfRico.id, { reason: 'CREATED_IN_ERROR' });
+
+    expect((await counts(raymondAccount).expect(200)).body.created_in_error).toBe(1);
+    expect((await counts(manuelAccount).expect(200)).body.created_in_error).toBe(1);
+    expect((await counts(adminAccount).expect(200)).body.created_in_error).toBe(2);
+
+    // The number of rows the closed view gains when asked to include them.
+    const closedRows = async (include: boolean) => {
+      const query = new URLSearchParams({ month, state: 'CLOSED', limit: '50' });
+      if (include) query.set('include_created_in_error', 'true');
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells?${query.toString()}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .expect(200);
+      expect(response.body.created_in_error).toBeUndefined();
+      return (response.body as { data: unknown[] }).data.length;
+    };
+    expect((await closedRows(true)) - (await closedRows(false))).toBe(1);
+  });
   it('carries the attention threshold the church has set (decision 0425)', async () => {
     await db
       .updateTable('settings')

@@ -143,21 +143,36 @@ export class CellsIndexService {
    * **With them, the attention threshold** (decision 0425), so *Inactive N+ Months* is named
    * by the church-wide setting before its list is opened. One number the whole church shares,
    * which describes nobody; any reader of the counts is shown it.
+   *
+   * **And how many closed Cells the closed view leaves out** (decision 0440): those closed
+   * `CREATED_IN_ERROR` whose last leader is in the reader's scope, so its *Show N created in
+   * error* can say how many. Counted here rather than on the list, which returns no total
+   * (section 22).
    */
-  async counts(
-    actor: Actor,
-  ): Promise<{ in_scope: number; led_by_me: number; attention_months: number }> {
+  async counts(actor: Actor): Promise<{
+    in_scope: number;
+    led_by_me: number;
+    attention_months: number;
+    created_in_error: number;
+  }> {
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const now = await databaseNow(this.db);
+    const inScopeLeaders = leadersToList(membership, actor, false);
 
-    const [inScope, ledByMe] = await Promise.all([
-      this.cells.countCellsInScope(this.db, leadersToList(membership, actor, false), now),
+    const [inScope, ledByMe, createdInError] = await Promise.all([
+      this.cells.countCellsInScope(this.db, inScopeLeaders, now),
       this.cells.countCellsInScope(this.db, leadersToList(membership, actor, true), now),
+      this.cells.countCreatedInErrorInScope(this.db, inScopeLeaders),
     ]);
 
     const attentionMonths = await this.settings.cellAttentionMonthsWithin(this.db);
 
-    return { in_scope: inScope, led_by_me: ledByMe, attention_months: attentionMonths };
+    return {
+      in_scope: inScope,
+      led_by_me: ledByMe,
+      attention_months: attentionMonths,
+      created_in_error: createdInError,
+    };
   }
 
   async list(
@@ -173,6 +188,8 @@ export class CellsIndexService {
       fewerThanThree?: boolean;
       /** Section 15's *No meeting in 3 months* (decision 0355); running Cells only. */
       noMeeting?: boolean;
+      /** The closed view's Cells closed as created in error, left out unless asked for (decision 0440). */
+      includeCreatedInError?: boolean;
     },
   ): Promise<Record<string, unknown>> {
     // **Refused before any read starts.** Each helper below refuses too, but inside a
@@ -251,7 +268,23 @@ export class CellsIndexService {
           { field: 'no_meeting' },
         );
       }
-      return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
+      return this.listClosed(
+        actor,
+        leaderIds,
+        reportingMonth,
+        now,
+        limit,
+        after,
+        query.q,
+        query.includeCreatedInError ?? false,
+      );
+    }
+    if (query.includeCreatedInError) {
+      // Only a closed Cell can have been closed as created in error (decision 0440); accepted
+      // and ignored here it would answer as if it had been honoured (section 22).
+      throw new ValidationFailedError('include_created_in_error belongs to the closed view.', {
+        field: 'include_created_in_error',
+      });
     }
 
     // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355), so whether this
@@ -497,7 +530,12 @@ export class CellsIndexService {
     limit: number,
     after: ReturnType<typeof decodeCellIndexCursor>,
     q: string | undefined,
+    includeCreatedInError: boolean,
   ): Promise<Record<string, unknown>> {
+    // **A Cell closed as created in error is left out unless asked for** (decision 0440): it
+    // never ran and counts for nothing (decisions 0283, 0286 and 0330), and it crowded the
+    // list of Cells that did. It is kept; how many there are is read from `GET /cells/counts`,
+    // a collection returning no total (section 22).
     const rows =
       leaderIds !== null && leaderIds.length === 0
         ? []
@@ -505,6 +543,7 @@ export class CellsIndexService {
             limit: limit + 1,
             after: after?.cellId ?? null,
             search: q ?? null,
+            createdInError: includeCreatedInError ? 'include' : 'exclude',
           });
 
     const visible = rows.slice(0, limit);

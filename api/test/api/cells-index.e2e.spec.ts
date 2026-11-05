@@ -973,7 +973,10 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
         .where('id', '=', manuelCell.id)
         .execute();
 
-      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const response = await list(manuelAccount, {
+        state: 'CLOSED',
+        include_created_in_error: 'true',
+      });
       const byId = new Map(rowsOf(response).map((row) => [row.id, row]));
 
       expect(byId.get(markCell.id)?.may_restart).toBe(false);
@@ -984,6 +987,46 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
         restarted_as_category: null,
         restarted_as_day_of_week: null,
         may_restart: false,
+      });
+    });
+
+    describe('a Cell closed as created in error (decision 0440)', () => {
+      beforeEach(async () => {
+        await closeCellDirectly(db, markCell.id, { reason: 'CREATED_IN_ERROR' });
+        await closeCellDirectly(db, nathanCell.id, { reason: 'LEADER_STEPPED_DOWN' });
+      });
+
+      it('is left out of the closed view, which carries no count of it (section 22)', async () => {
+        const response = await list(manuelAccount, { state: 'CLOSED' });
+
+        expect(cellIdsOf(response)).toEqual([nathanCell.id]);
+        expect(response.body.created_in_error).toBeUndefined();
+      });
+
+      it('is listed when asked for, in Cell ID order', async () => {
+        const response = await list(manuelAccount, {
+          state: 'CLOSED',
+          include_created_in_error: 'true',
+        });
+
+        expect(cellIdsOf(response)).toEqual([markCell.id, nathanCell.id].sort());
+      });
+
+      it('is left out of a leader’s own closed view too, and listed when asked for', async () => {
+        expect(cellIdsOf(await list(markAccount, { state: 'CLOSED' }))).toEqual([]);
+        const asked = await list(markAccount, {
+          state: 'CLOSED',
+          include_created_in_error: 'true',
+        });
+        expect(cellIdsOf(asked)).toEqual([markCell.id]);
+      });
+
+      it('refuses the parameter on the running Cells', async () => {
+        const response = await list(manuelAccount, { include_created_in_error: 'true' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.details).toMatchObject({ field: 'include_created_in_error' });
       });
     });
 

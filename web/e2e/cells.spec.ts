@@ -733,8 +733,18 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await expect(restarted.getByText('CELL-000009')).toBeVisible();
     await expect(restarted.getByRole('button')).toHaveCount(0);
 
+    // A Cell closed as created in error is left out until asked for (decision 0440).
+    await expect(table.getByRole('row', { name: /Created in error/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show 1 created in error' }).click();
+    await expect(page).toHaveURL(/error=1/);
+    await expect(page.getByRole('button', { name: 'Showing 1 created in error' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     const inError = table.getByRole('row', { name: /Created in error/ });
     await expect(inError).toContainText('Created in error');
+    // Its note only repeats the reason, so the reason is said once.
+    await expect(inError.getByText(/created in error/i)).toHaveCount(1);
     await expect(inError.getByRole('button')).toHaveCount(0);
   });
 });

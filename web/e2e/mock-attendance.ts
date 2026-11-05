@@ -103,11 +103,17 @@ export function closedAsked(url: string): boolean {
  */
 export async function mockCellCounts(
   page: Page,
-  counts: { in_scope: number; led_by_me: number; attention_months?: number },
+  counts: {
+    in_scope: number;
+    led_by_me: number;
+    attention_months?: number;
+    created_in_error?: number;
+  },
 ): Promise<void> {
-  // Three, the setting's seeded value, unless a case sets another (decision 0425).
+  // Three, the setting's seeded value, unless a case sets another (decision 0425); no closed
+  // Cell created in error unless a case sets some (decision 0440).
   await page.route('**/api/v1/cells/counts', (route) =>
-    route.fulfill(json({ attention_months: 3, ...counts })),
+    route.fulfill(json({ attention_months: 3, created_in_error: 0, ...counts })),
   );
 }
 
@@ -1381,6 +1387,8 @@ const CLOSED_CELLS_WITHOUT_RESTART = [
     id: '4a2c8d90-0000-4000-8000-000000000603',
     cell_id: 'CELL-000004',
     closure_reason: 'CREATED_IN_ERROR',
+    // A note that only repeats its reason, which the screen does not show again (decision 0440).
+    closure_explanation: 'created in error',
     may_restart: false,
   },
 ];
@@ -1393,19 +1401,28 @@ export async function mockCellsWithClosed(
   page: Page,
   { open = false }: { open?: boolean } = {},
 ): Promise<void> {
-  await mockCellCounts(page, { in_scope: 2, led_by_me: 1 });
-  await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(
+  const closed = [CLOSED_CELL, ...CLOSED_CELLS_WITHOUT_RESTART];
+  // As the server does (decision 0440): the counts route says how many were closed as created
+  // in error, and the closed view leaves them out unless asked for.
+  await mockCellCounts(page, {
+    in_scope: 2,
+    led_by_me: 1,
+    created_in_error: closed.filter((c) => c.closure_reason === 'CREATED_IN_ERROR').length,
+  });
+  await page.route('**/api/v1/cells?*', (route) => {
+    const url = route.request().url();
+    const withErrors = new URL(url).searchParams.get('include_created_in_error') === 'true';
+    return route.fulfill(
       json({
         reporting_month: '2026-06-01',
         open,
-        data: closedAsked(route.request().url())
-          ? [CLOSED_CELL, ...CLOSED_CELLS_WITHOUT_RESTART]
+        data: closedAsked(url)
+          ? closed.filter((c) => withErrors || c.closure_reason !== 'CREATED_IN_ERROR')
           : [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE],
         next_cursor: null,
       }),
-    ),
-  );
+    );
+  });
 }
 
 const leaderOf = (id: string, member: string, name: string) => ({ id, member_id: member, full_name: name });
