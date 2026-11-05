@@ -98,7 +98,7 @@ function SessionDetail() {
   return (
     <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
       <SectionFrame section="account">
-      <h1 className="text-xl font-semibold tracking-tight">Account and session</h1>
+      <h1 className="text-xl font-semibold tracking-tight">My Account</h1>
 
       {/*
         The greeting comes from `/auth/me`, so it names the person the server

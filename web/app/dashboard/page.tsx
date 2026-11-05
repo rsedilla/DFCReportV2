@@ -143,7 +143,7 @@ function Dashboard() {
       ? 'awaiting'
       : tab;
   // **Leaders Under Me is hidden from a Full view leader** (decision 0382): their branch's work
-  // is on Pending CG Records and Pending DCC Records. Hidden rather than removed, the owner
+  // is on CG Records Due and DCC Records Due. Hidden rather than removed, the owner
   // planning it as a feature later. The Admin keeps it, and a Leader without Full view sees it
   // while a leader holding an account sits directly beneath them (decision 0323).
   const mayOversee = me.data?.people_i_oversee !== false && !isBranchReader(me.data);
@@ -155,7 +155,7 @@ function Dashboard() {
   // The leader whose DCC checklist is open under the branch view (decision 0301). Cleared
   // when the list or the view changes, so a list switched away from does not come back open.
   const [chosenLeader, setChosenLeader] = useState<ChosenLeader | null>(null);
-  // The leader whose checklist is open under Pending DCC Records (decision 0336).
+  // The leader whose checklist is open under DCC Records Due (decision 0336).
   const [pendingChosen, setPendingChosen] = useState<ChosenLeader | null>(null);
   const [chosenFor, setChosenFor] = useState(`${filter}|${whose}`);
   if (chosenFor !== `${filter}|${whose}`) {
@@ -242,12 +242,12 @@ function Dashboard() {
     },
     {
       key: 'behind',
-      label: 'Pending CG Records',
+      label: 'CG Records Due',
       count: pendingCg ? `${pendingCg.length}${pendingCgPages.hasNextPage ? '+' : ''}` : null,
     },
     {
       key: 'dcc',
-      label: 'Pending DCC Records',
+      label: 'DCC Records Due',
       // Leaders, not rows: a leader whose Sundays have two recorders is two rows (decision 0403).
       count: pendingDcc
         ? `${new Set(pendingDcc.map((row) => row.leader.person_id)).size}${pendingDccPages.hasNextPage ? '+' : ''}`

@@ -253,14 +253,14 @@ function Home() {
       <p className="text-muted text-sm">Whole Church, weeks still open.</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile
-          label="Pending CG Records"
+          label="CG Records Due"
           value={pageCount(pendingCg.data)}
           note="Cell Groups with a meeting not recorded"
           href="/dashboard?list=behind"
           action="Open the list"
         />
         <Tile
-          label="Pending DCC Records"
+          label="DCC Records Due"
           value={pageCount(pendingDcc.data)}
           note="Leaders who owe a Sunday"
           href="/dashboard?list=dcc"

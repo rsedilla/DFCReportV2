@@ -674,7 +674,7 @@ export async function mockLeaderDccRoster(
 }
 
 /**
- * Record's Pending DCC Records (decision 0336). Empty unless rows are given; every screen
+ * Record's DCC Records Due (decision 0336). Empty unless rows are given; every screen
  * test that opens Record registers it, because the tab's count is read on arrival.
  * Returns the query strings asked for.
  */
@@ -685,7 +685,7 @@ export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<
     asked.push(new URL(route.request().url()).search);
     return route.fulfill(json({ data: rows, next_cursor: null }));
   });
-  // Pending CG Records' count is read on arrival too (decision 0368), so every Record screen
+  // CG Records Due' count is read on arrival too (decision 0368), so every Record screen
   // gets an empty one here; `mockPendingCg`, installed after, overrides it.
   await page.route('**/api/v1/cells/meetings/pending*', (route) =>
     route.fulfill(json({ data: [], next_cursor: null })),
@@ -694,7 +694,7 @@ export async function mockPendingDcc(page: Page, rows: unknown[] = []): Promise<
   return asked;
 }
 
-/** Record's Pending CG Records (decision 0368). Returns the query strings asked for. */
+/** Record's CG Records Due (decision 0368). Returns the query strings asked for. */
 export async function mockPendingCg(page: Page, rows: unknown[] = PENDING_CG_ROWS): Promise<string[]> {
   const asked: string[] = [];
 
@@ -707,7 +707,7 @@ export async function mockPendingCg(page: Page, rows: unknown[] = PENDING_CG_ROW
 }
 
 /**
- * Two Cells for Pending CG Records in the API's first-name order (decision 0359): another
+ * Two Cells for CG Records Due in the API's first-name order (decision 0359): another
  * leader's, which the reader may record, and a closed one the reader may only see.
  */
 export const PENDING_CG_ROWS = [
@@ -775,7 +775,7 @@ export const PENDING_CG_ROWS = [
 ];
 
 /**
- * Two rows for Pending DCC Records in the API's first-name order (decision 0359): a leader
+ * Two rows for DCC Records Due in the API's first-name order (decision 0359): a leader
  * with no account, and the reader's own.
  */
 export const PENDING_DCC_ROWS = [

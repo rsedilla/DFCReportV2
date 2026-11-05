@@ -55,7 +55,7 @@ test.describe('the Admin item', () => {
     const admin = top.getByRole('link', { name: 'Admin' });
     await expect(admin).toBeVisible();
     await expect(admin).toHaveAttribute('aria-current', 'page');
-    await expect(top.getByRole('link', { name: 'Account and session' })).toBeVisible();
+    await expect(top.getByRole('link', { name: 'My Account' })).toBeVisible();
     await expect(
       page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }),
     ).toHaveCount(0);
@@ -119,8 +119,8 @@ test.describe('the Admin area’s Home', () => {
     ).toHaveAttribute('href', '/admin?tab=accounts&filter=PENDING_ACTIVATION');
     await expect(tile('Sign-ins paused')).toContainText('1');
     // A first page with more behind it reads with a plus, as Record's tabs do.
-    await expect(tile('Pending CG Records')).toContainText('3+');
-    await expect(tile('Pending DCC Records')).toContainText('2');
+    await expect(tile('CG Records Due')).toContainText('3+');
+    await expect(tile('DCC Records Due')).toContainText('2');
 
     const people = page.getByRole('region', { name: 'People and accounts' });
     await expect(people).toContainText('1,284');

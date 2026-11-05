@@ -61,7 +61,7 @@ test('a Record tab switches with the server unreachable, and the page is not loa
 }) => {
   await openRecord(page);
   await page.goto('/dashboard');
-  const pending = recordLists(page).getByRole('button', { name: /^Pending CG Records/ });
+  const pending = recordLists(page).getByRole('button', { name: /^CG Records Due/ });
   await expect(pending).toBeVisible();
 
   // From here the web server answers nothing: a page request of any kind fails, as it does

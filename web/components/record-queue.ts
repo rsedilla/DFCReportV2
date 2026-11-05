@@ -326,11 +326,11 @@ export function useUpdateRecordsQueue({
 }
 
 /**
- * Pending CG Records' and Pending DCC Records' reads (decisions 0336 and 0368), each with the
+ * CG Records Due' and DCC Records Due' reads (decisions 0336 and 0368), each with the
  * filter it is read under. On the Record screen, which shows their counts on its tabs.
  */
 export function usePendingRecords(enabled: boolean) {
-  // **Pending DCC Records** (decision 0336): the leaders in the reader's whole scope whose 12
+  // **DCC Records Due** (decision 0336): the leaders in the reader's whole scope whose 12
   // are unrecorded for a Sunday whose week is open, fifty at a time, searched and filtered on
   // the server. Undated: it asks about now.
   const [pendingFilter, setPendingFilter] = useState<PendingFilter>(NO_PENDING_FILTER);
@@ -359,7 +359,7 @@ export function usePendingRecords(enabled: boolean) {
   });
   const pendingDcc = pendingDccPages.data?.pages.flatMap((page) => page.data);
 
-  // **Pending CG Records** (decision 0368), laid out as Pending DCC Records is: one row per
+  // **CG Records Due** (decision 0368), laid out as DCC Records Due is: one row per
   // Cell, each meeting still open on a line of its own, fifty at a time, searched and
   // filtered on the server. It replaced four reads of every Cell in the reader's scope.
   const [cgFilter, setCgFilter] = useState<PendingFilter>(NO_PENDING_FILTER);

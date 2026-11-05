@@ -352,7 +352,7 @@
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
       "no_screen_owed": true,
-      "reason": "Its one screen, a Sunday's still-to-record page (decision 0228), is withdrawn (decision 0342): Record's Pending DCC Records names those leaders for every open Sunday. The route stays."
+      "reason": "Its one screen, a Sunday's still-to-record page (decision 0228), is withdrawn (decision 0342): Record's DCC Records Due names those leaders for every open Sunday. The route stays."
     },
     {
       "route": "GET /api/v1/cells/:id/members",
@@ -376,7 +376,7 @@
     },
     {
       "route": "GET /api/v1/cells/meetings/pending",
-      "reason": "Record's Pending CG Records, laid out as Pending DCC Records is (decision 0368).",
+      "reason": "Record's CG Records Due, laid out as DCC Records Due is (decision 0368).",
       "screen": "web/app/dashboard/page.tsx"
     },
     {

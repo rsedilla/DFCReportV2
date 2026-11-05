@@ -305,7 +305,7 @@ export interface AwaitingMeetings {
 }
 
 /**
- * One Cell on Record's Pending CG Records (decision 0368): its leader, and each meeting that
+ * One Cell on Record's CG Records Due (decision 0368): its leader, and each meeting that
  * has come, has no record, and whose week is still open, oldest first.
  */
 export interface PendingCgCell {

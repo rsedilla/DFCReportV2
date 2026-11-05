@@ -248,7 +248,7 @@ export async function getDccOwed(
   });
 }
 
-/** One leader on Record's Pending DCC Records, with each Sunday still open (decision 0336). */
+/** One leader on Record's DCC Records Due, with each Sunday still open (decision 0336). */
 export interface PendingDccLeader {
   leader: {
     person_id: string;

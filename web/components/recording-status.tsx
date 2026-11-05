@@ -534,7 +534,7 @@ function RowFigure({
     return <>{text}</>;
   }
   const name = row.leader.full_name ?? row.leader.member_id ?? 'A leader';
-  const where = list === 'cell' ? 'Pending CG Records' : 'Pending DCC Records';
+  const where = list === 'cell' ? 'CG Records Due' : 'DCC Records Due';
 
   return (
     <button

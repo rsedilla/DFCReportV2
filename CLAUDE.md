@@ -246,9 +246,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-05, the trigger being decision 0444: of 443 files, 442 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0444 each moved the first two and
+2026-11-05, the trigger being decision 0446: of 445 files, 444 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0446 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-05 and triggered by 0445, and was left stale by 0446 the same day. The one before that was dated
+2026-11-05 and triggered by 0444, and was left stale by 0445 the same day. The one before that was dated
 2026-11-05 and triggered by 0443, and was left stale by 0444 the same day. The one before that was dated
 2026-11-05 and triggered by 0442, and was left stale by 0443 the same day. The one before that was dated
 2026-11-05 and triggered by 0441, and was left stale by 0442 the same day. The one before that was dated
@@ -928,6 +930,8 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-05 — [Saving or moving a person answers with the basic details, and a save that changes nothing writes nothing](docs/decisions/0442-saving-a-person-answers-with-the-basic-details.md)
 - 2026-11-05 — [Attendance has Weekly, Monthly and Yearly, on one line, for every reader](docs/decisions/0443-attendance-has-weekly-monthly-and-yearly.md)
 - 2026-11-05 — [The sidebar shows each item's icon](docs/decisions/0444-the-sidebar-shows-each-items-icon.md)
+- 2026-11-05 — [The sidebar's account row: an initial, the name, and *My Account*](docs/decisions/0445-the-account-row-is-my-account.md)
+- 2026-11-05 — [*CG Records Due* and *DCC Records Due*](docs/decisions/0446-cg-and-dcc-records-due.md)
 
 ### Open — awaiting a ruling
 
