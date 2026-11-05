@@ -246,9 +246,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-04, the trigger being decision 0439: of 438 files, 437 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0439 each moved the first two and
+2026-11-05, the trigger being decision 0440: of 439 files, 438 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0440 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-04 and triggered by 0439, and was left stale by 0440 the next day. The one before that was dated
 2026-11-04 and triggered by 0438, and was left stale by 0439 the same day. The one before that was dated
 2026-11-04 and triggered by decisions 0436 and 0437, and was left stale by 0438 the same day. The one before that was dated
 2026-11-04 and triggered by 0435, and was left stale by 0436 and 0437 the same day. The one before that was dated
@@ -918,6 +919,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-04 — [My People reaches every level, and says who leads each Cell](docs/decisions/0437-my-people-reaches-every-level.md)
 - 2026-11-04 — [My Cell counts the Cell Groups in the leader's care](docs/decisions/0438-my-cell-counts-the-cell-groups-in-your-care.md)
 - 2026-11-04 — [The phone's two bars: room for the home line, a light tab bar, and the name on top](docs/decisions/0439-the-phones-bars.md)
+- 2026-11-05 — [Closed Cells leave out those created in error, until asked for](docs/decisions/0440-closed-cells-leave-out-those-created-in-error.md)
 
 ### Open — awaiting a ruling
 

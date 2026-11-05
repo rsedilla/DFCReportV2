@@ -1766,6 +1766,70 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
 
     return Number(row.cells);
   }
+
+  /**
+   * How many Cells closed `CREATED_IN_ERROR` {@link closedCellsInScope} would list for these
+   * leaders when asked to include them, unsearched and unpaged (decision 0440): the number the
+   * closed view's *Show N created in error* offers, read here because a collection returns no
+   * total (section 22), as decision 0309 put the Cells page's totals beside this one.
+   *
+   * **The same three inner joins as {@link closedCellsInScope}**, the last leader, the last
+   * category and the last schedule each held, because each decides whether a Cell is listed:
+   * a Cell whose rows were all left zero-length is in neither. Its `persons` join and the
+   * restart join are left out, as neither adds nor drops a Cell.
+   */
+  async countCreatedInErrorInScope(
+    executor: Db | Transaction<Database>,
+    leaderIds: readonly string[] | null,
+  ): Promise<number> {
+    if (leaderIds !== null && leaderIds.length === 0) {
+      return 0;
+    }
+
+    const row = await executor
+      .selectFrom('cells')
+      .innerJoin('cell_leaderships as last_leader', (join) =>
+        join.onRef('last_leader.cell_id', '=', 'cells.id').on(
+          'last_leader.id',
+          '=',
+          sql<string>`(SELECT l.id FROM cell_leaderships AS l
+                        WHERE l.cell_id = cells.id
+                        ORDER BY l.started_at DESC, l.ended_at DESC NULLS FIRST, l.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_categories as last_category', (join) =>
+        join.onRef('last_category.cell_id', '=', 'cells.id').on(
+          'last_category.id',
+          '=',
+          sql<string>`(SELECT c.id FROM cell_categories AS c
+                        WHERE c.cell_id = cells.id
+                          AND c.ended_at IS DISTINCT FROM c.started_at
+                        ORDER BY c.started_at DESC, c.ended_at DESC NULLS FIRST, c.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_schedules as last_schedule', (join) =>
+        join.onRef('last_schedule.cell_id', '=', 'cells.id').on(
+          'last_schedule.id',
+          '=',
+          sql<string>`(SELECT sc.id FROM cell_schedules AS sc
+                        WHERE sc.cell_id = cells.id
+                          AND sc.ended_at IS DISTINCT FROM sc.started_at
+                        ORDER BY sc.started_at DESC, sc.ended_at DESC NULLS FIRST, sc.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .select((eb) => eb.fn.countAll<string>().as('cells'))
+      .where('cells.state', '=', 'CLOSED')
+      .where('cells.closure_reason', '=', 'CREATED_IN_ERROR')
+      .$if(leaderIds !== null, (query) =>
+        query.where('last_leader.person_id', 'in', leaderIds as readonly string[]),
+      )
+      .executeTakeFirstOrThrow();
+
+    return Number(row.cells);
+  }
   /**
    * One page of the `CLOSED` Cells whose **last** leader is one of these people, in
    * `cell_id` order (decision 0266). `leaderIds` null means every closed Cell.
@@ -1790,7 +1854,16 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   async closedCellsInScope(
     executor: Db | Transaction<Database>,
     leaderIds: readonly string[] | null,
-    page: { limit: number; after?: string | null; search?: string | null },
+    page: {
+      limit: number;
+      after?: string | null;
+      search?: string | null;
+      /**
+       * Which Cells closed `CREATED_IN_ERROR` the page holds (decision 0440): left out by
+       * default, included, or the only ones.
+       */
+      createdInError?: 'exclude' | 'include' | 'only';
+    },
   ): Promise<
     {
       id: string;
@@ -1868,6 +1941,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         openedWithDay().as('restarted_as_day_of_week'),
       ])
       .where('cells.state', '=', 'CLOSED')
+      .$if((page.createdInError ?? 'exclude') === 'exclude', (query) =>
+        query.where('cells.closure_reason', 'is distinct from', 'CREATED_IN_ERROR'),
+      )
+      .$if(page.createdInError === 'only', (query) =>
+        query.where('cells.closure_reason', '=', 'CREATED_IN_ERROR'),
+      )
       .$if(leaderIds !== null, (query) =>
         query.where('last_leader.person_id', 'in', leaderIds as readonly string[]),
       )

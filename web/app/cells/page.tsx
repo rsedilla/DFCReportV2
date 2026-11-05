@@ -101,6 +101,8 @@ function CellsIndex() {
   const go = useScreenAddress();
   const month = search.get('month') ?? reportingMonthOf();
   const mineOnly = search.get('mine') === '1';
+  // The closed view's Cells closed as created in error, left out unless asked for (decision 0440).
+  const withErrors = search.get('error') === '1';
   const submitted = search.get('q') ?? '';
   const viewParam = search.get('view');
   const viewInAddress: CellsView = VIEWS.includes(viewParam as CellsView)
@@ -113,7 +115,7 @@ function CellsIndex() {
   const [view, setView] = useState(viewInAddress);
   const { term, setTerm, trimmed, tooShort, buttonLabel } = useSearchTerm(submitted);
   // Any narrowing — including one arrived at by pressing Back — starts the list again.
-  const asked = `${month}|${String(mineOnly)}|${submitted}|${viewInAddress}`;
+  const asked = `${month}|${String(mineOnly)}|${String(withErrors)}|${submitted}|${viewInAddress}`;
   const pages = useCursorPages(asked);
 
   // Adjusted while rendering rather than in an effect, which is React's own answer for state
@@ -162,6 +164,9 @@ function CellsIndex() {
     queryKey: ['cells-counts'],
     queryFn: ({ signal }) => getCellCounts(signal),
   });
+  // How many closed Cells the closed view leaves out (decision 0440), from the counts route,
+  // as a collection returns no total (section 22).
+  const createdInError = cellCounts.data?.created_in_error ?? 0;
   // *Only my Cells* belongs to Closed Cells alone. Active Cells lists the reader's own first
   // and marks them, under one total that filters nothing (decision 0400).
   const mineApplies = closed;
@@ -179,7 +184,16 @@ function CellsIndex() {
     queryFn: ({ signal }) => listApprovalRequests(signal),
     enabled: approver,
   });
-  const cellsKey = ['cells', month, mineOnly && mineApplies, submitted, pages.cursor, PAGE_SIZE, shown];
+  const cellsKey = [
+    'cells',
+    month,
+    mineOnly && mineApplies,
+    withErrors && closed,
+    submitted,
+    pages.cursor,
+    PAGE_SIZE,
+    shown,
+  ];
   const cells = useQuery({
     queryKey: cellsKey,
     // The page shown stays, faded, while the next one of the same list loads.
@@ -195,6 +209,7 @@ function CellsIndex() {
           state: closed ? 'CLOSED' : 'ACTIVE',
           fewerThanThree: fewOnly,
           noMeeting: quietOnly,
+          includeCreatedInError: closed && withErrors,
         },
         signal,
       ),
@@ -369,6 +384,21 @@ function CellsIndex() {
               {mineOnly ? 'Showing only Cells I led' : 'Show only Cells I led'}
             </Button>
           ) : null}
+          {/*
+            **Cells closed as created in error are left out until asked for** (decision 0440):
+            they never ran, count for nothing, and are kept. Offered while there are any.
+          */}
+          {closed && (withErrors || createdInError > 0) ? (
+            <Button
+              type="button"
+              variant="secondary"
+              aria-pressed={withErrors}
+              onClick={() => go({ error: withErrors ? null : '1' })}
+            >
+              {/* The number counts the whole scope, so a search or *only Cells I led* says "those". */}
+              {`${withErrors ? 'Showing' : 'Show'} ${submitted === '' && !(mineOnly && mineApplies) ? createdInError : 'those'} created in error`}
+            </Button>
+          ) : null}
         </div>
 
         {/* The total belongs to Active Cells, the list it counts (decisions 0366 and 0400). */}
@@ -386,9 +416,13 @@ function CellsIndex() {
             {submitted !== ''
               ? `No Cell you oversee matches “${submitted}”.`
               : closed
-                ? mineOnly && mineApplies
+                ? // Not "none has closed" while some are only left out (decision 0440). Under
+                  // *only Cells I led* the scope's count says nothing of the reader's own.
+                  mineOnly && mineApplies
                   ? 'No Cell you led has closed.'
-                  : 'No Cell you oversee has closed.'
+                  : `No Cell you oversee has closed.${
+                      !withErrors && createdInError > 0 ? ' Cells created in error are left out.' : ''
+                    }`
                 : quietOnly
                   ? `No Cell you oversee has gone the last ${quietLabel} without a meeting. A Cell newer than that, or whose leader still has time to record, is not listed.`
                   : fewOnly
@@ -426,7 +460,7 @@ function CellsIndex() {
                     </td>
                     <td className="px-3 py-3">
                       {cell.closure_reason ? closureReasonLabel(cell.closure_reason) : ''}
-                      {cell.closure_explanation ? (
+                      {cell.closure_explanation && !repeatsReason(cell) ? (
                         <span className="text-muted mt-1 block text-sm">
                           {cell.closure_explanation}
                         </span>
@@ -856,6 +890,19 @@ function RestartAction({
   return null;
 }
 
+
+/**
+ * Whether a closure's note only repeats its reason, "created in error" under *Created in
+ * error*, so the reason is said once (decision 0440). A note that adds anything is shown.
+ */
+function repeatsReason(cell: CellSummary): boolean {
+  if (!cell.closure_reason || !cell.closure_explanation) {
+    return false;
+  }
+  const words = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return words(cell.closure_explanation) === words(closureReasonLabel(cell.closure_reason));
+}
+
 /** One closed Cell, below `lg`. */
 function ClosedCellCard({
   cell,
@@ -889,7 +936,7 @@ function ClosedCellCard({
         </div>
       </dl>
       {/* What the Senior Pastors read (decision 0355); none on a Cell closed before it. */}
-      {cell.closure_explanation ? (
+      {cell.closure_explanation && !repeatsReason(cell) ? (
         <p className="text-muted mt-2 text-sm leading-relaxed">{cell.closure_explanation}</p>
       ) : null}
       <div className="mt-3">

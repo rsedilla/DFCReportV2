@@ -624,6 +624,16 @@ export class CellIndexDto {
   no_meeting?: 'true';
 
   /**
+   * `true` to include, in the closed view, the Cells closed as created in error, which it
+   * leaves out by default (decision 0440). How many there are is read from `GET /cells/counts`.
+   */
+  @IsOptional()
+  @IsIn(['true'], {
+    message: 'include_created_in_error accepts only the value "true" (SKILL.md section 22).',
+  })
+  include_created_in_error?: 'true';
+
+  /**
    * Narrows the page to Cells whose identifier contains the term, where the term carries a
    * digit, or whose leader's name contains it (decision 0261). Two characters minimum, for
    * the reason the Person search has one: a one-letter term pages the list rather than
