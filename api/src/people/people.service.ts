@@ -22,7 +22,12 @@ import { lockPersonNameWithin, lockPersonsWithin } from '../database/person-lock
 import { APPLICATION_RULES, lastNameKey, type Subject } from './duplicate-matching';
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { PeopleDuplicatesService } from './people.duplicates.service';
-import { fullProfile, normalizeMobile, type CreatePersonInput } from './people.shared';
+import {
+  fullProfile,
+  listedProfile,
+  normalizeMobile,
+  type CreatePersonInput,
+} from './people.shared';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CivilStatus, Database, Json, NetworkName, Sex } from '../database/schema';
@@ -467,6 +472,33 @@ export class PeopleService {
         );
       }
 
+      // **A save that changes nothing writes nothing and answers as a save does** (decision
+      // 0442): no row written and no audit entry, since an audited edit whose before and after
+      // are the same misleads whoever reads the log (Section 4). It answers the basic details,
+      // as a save that changes something does, so that sending a birthday, mobile number or
+      // civil status cannot be used to learn whether it is the one recorded: a refusal here
+      // confirmed a right guess and left no trace (owner, 2026-11-05).
+      const sameText = (sent: string | null | undefined, recorded: string | null) =>
+        sent === undefined || (sent?.trim() || null) === recorded;
+      const changesSomething =
+        titleChanges ||
+        !sameText(changes.firstName, before.first_name) ||
+        !sameText(changes.middleName, before.middle_name) ||
+        !sameText(changes.lastName, before.last_name) ||
+        (changes.birthDate !== undefined && changes.birthDate !== before.birth_date) ||
+        (changes.civilStatus !== undefined && changes.civilStatus !== before.civil_status) ||
+        !sameText(changes.mobileNumber, before.mobile_number);
+      if (!changesSomething) {
+        const unchanged = listedProfile(before);
+        // Last statement (CLAUDE.md, Write endpoints): a retry replays this answer.
+        await this.idempotency.completeWithin(trx, {
+          ...claim,
+          status: 200,
+          body: unchanged as Json,
+        });
+        return unchanged;
+      }
+
       const person = await trx
         .updateTable('persons')
         .set({
@@ -511,7 +543,9 @@ export class PeopleService {
         after: { ...person, acknowledged_duplicate_ids: passedOver },
       });
 
-      const response = fullProfile(person);
+      // **The basic details only** (decision 0442): the birthday, civil status and mobile number
+      // come with reading the one record, which decision 0414 keeps, and not with a save.
+      const response = listedProfile(person);
 
       await this.idempotency.completeWithin(trx, {
         ...claim,

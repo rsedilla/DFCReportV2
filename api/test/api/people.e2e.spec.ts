@@ -1543,11 +1543,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const saved = await edit(raymondAccount, id, { civil_status: 'MARRIED' });
       expect(saved.status).toBe(200);
 
-      // The same values sent back unchanged are not a change either.
+      // The same values sent back unchanged are not a change either, beside one that is.
       const resent = await edit(raymondAccount, id, {
         first_name: 'Manuel',
         last_name: 'Testfixture',
         birth_date: '1985-06-15',
+        civil_status: 'SINGLE',
       });
       expect(resent.status).toBe(200);
     });
@@ -2348,7 +2349,6 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .send({ civil_status: 'MARRIED' });
 
       expect(response.status).toBe(200);
-      expect(response.body.civil_status).toBe('MARRIED');
 
       const audit = await db
         .selectFrom('audit_log')
@@ -2414,6 +2414,82 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .where('id', '=', manuel.id)
         .executeTakeFirstOrThrow();
       expect(unchanged.sex).toBe('MALE');
+    });
+
+    it('answers with the basic details only (decision 0442)', async () => {
+      const response = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ civil_status: 'MARRIED', mobile_number: '09175550101', birth_date: '1990-04-12' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: manuel.id, full_name: expect.any(String) });
+      expect(response.body).not.toHaveProperty('birth_date');
+      expect(response.body).not.toHaveProperty('civil_status');
+      expect(response.body).not.toHaveProperty('mobile_number');
+    });
+
+    it('answers a save that changes nothing as a save, and writes nothing (decision 0442)', async () => {
+      const recorded = await db
+        .selectFrom('persons')
+        .select(['first_name', 'middle_name', 'last_name', 'civil_status', 'mobile_number'])
+        .where('id', '=', manuel.id)
+        .executeTakeFirstOrThrow();
+
+      const response = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          first_name: ` ${recorded.first_name} `,
+          middle_name: recorded.middle_name,
+          last_name: recorded.last_name,
+          civil_status: recorded.civil_status,
+          mobile_number: recorded.mobile_number,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: manuel.id, full_name: expect.any(String) });
+      expect(response.body).not.toHaveProperty('birth_date');
+      expect(response.body).not.toHaveProperty('civil_status');
+      expect(response.body).not.toHaveProperty('mobile_number');
+
+      const audited = await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('target_id', '=', manuel.id)
+        .where('action', '=', 'person.updated')
+        .execute();
+      expect(audited).toEqual([]);
+
+      // An empty body changes nothing either.
+      const empty = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+      expect(empty.status).toBe(200);
+    });
+
+    it('answers a right guess and a wrong guess alike, so a save cannot test a hidden detail (decision 0442)', async () => {
+      const recorded = await db
+        .selectFrom('persons')
+        .select('civil_status')
+        .where('id', '=', manuel.id)
+        .executeTakeFirstOrThrow();
+      const guess = (civil_status: string) =>
+        request(app.getHttpServer())
+          .patch(`/api/v1/people/${manuel.id}`)
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({ civil_status });
+
+      const right = await guess(recorded.civil_status);
+      const wrong = await guess(recorded.civil_status === 'SINGLE' ? 'MARRIED' : 'SINGLE');
+
+      expect(right.status).toBe(wrong.status);
+      expect(Object.keys(right.body).sort()).toEqual(Object.keys(wrong.body).sort());
     });
 
     it('refuses an edit outside the actor scope', async () => {

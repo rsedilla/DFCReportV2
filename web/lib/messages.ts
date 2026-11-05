@@ -111,8 +111,12 @@ export function describeFailure(
 
     case 'RATE_LIMITED':
       // A name paused after ten wrong passwords says so in its own words, which name the
-      // way in that still works (decision 0413). Every other limit is a minute's wait.
-      if (error.details.reason === 'SIGN_IN_PAUSED') {
+      // way in that still works (decision 0413), and so does an account whose second step is
+      // paused after ten wrong codes (decision 0441). Every other limit is a minute's wait.
+      if (
+        error.details.reason === 'SIGN_IN_PAUSED' ||
+        error.details.reason === 'SECOND_STEP_PAUSED'
+      ) {
         return { message: error.message, aboutInput: false };
       }
       return { message: 'Too many attempts. Wait a minute and try again.', aboutInput: false };

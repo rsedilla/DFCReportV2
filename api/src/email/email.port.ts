@@ -85,6 +85,19 @@ export interface SignInPausedEmail {
 }
 
 /**
+ * An account's second step was paused after ten wrong codes in fifteen minutes (decision
+ * 0441). Sent to each active Admin, at most once a day for one account. Only somebody past
+ * the password reaches the code, so it says the password is known.
+ */
+export interface SecondStepPausedEmail {
+  kind: 'SECOND_STEP_PAUSED';
+  to: EmailRecipient;
+  /** The full name of the person whose account it is. */
+  holder: string;
+  pausedUntil: Date;
+}
+
+/**
  * One person opened more than a hundred person pages in an hour (decision 0414). Sent to each
  * active Admin, at most once a day for one person and twenty times a day in all.
  */
@@ -125,6 +138,7 @@ export type OutboundEmail =
   | PasswordResetEmail
   | PasswordChangedEmail
   | SignInPausedEmail
+  | SecondStepPausedEmail
   | ManyPagesOpenedEmail
   | EmailChangeEmail
   | EmailChangedEmail;

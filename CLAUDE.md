@@ -246,9 +246,13 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-05, the trigger being decision 0440: of 439 files, 438 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0440 each moved the first two and
+2026-11-05, the trigger being decision 0444: of 443 files, 442 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0444 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-05 and triggered by 0443, and was left stale by 0444 the same day. The one before that was dated
+2026-11-05 and triggered by 0442, and was left stale by 0443 the same day. The one before that was dated
+2026-11-05 and triggered by 0441, and was left stale by 0442 the same day. The one before that was dated
+2026-11-05 and triggered by 0440, and was left stale by 0441 the same day. The one before that was dated
 2026-11-04 and triggered by 0439, and was left stale by 0440 the next day. The one before that was dated
 2026-11-04 and triggered by 0438, and was left stale by 0439 the same day. The one before that was dated
 2026-11-04 and triggered by decisions 0436 and 0437, and was left stale by 0438 the same day. The one before that was dated
@@ -789,7 +793,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-10-01 — [An administrator disables and re-enables an account from the person page](docs/decisions/0307-an-administrator-disables-and-re-enables-an-account.md)
 - 2026-10-02 — [A read of up to 50 named people needs no cursor, and leaves out who the reader may not see](docs/decisions/0308-a-read-of-named-people-needs-no-cursor.md)
 - 2026-10-03 — [The Cells totals are read from a counts route](docs/decisions/0309-the-cells-totals-are-read-from-a-counts-route.md)
-- 2026-10-04 — [A leader's Quarterly and Year show finished periods, the last four quarters and the last year](docs/decisions/0310-a-leaders-quarterly-and-year-show-finished-periods.md)
+- 2026-10-04 — [A leader's Quarterly and Year show finished periods, the last four quarters and the last year](docs/decisions/0310-a-leaders-quarterly-and-year-show-finished-periods.md), withdrawn from the screens by decision 0443 on 2026-11-05
 - 2026-10-04 — [The branch view is grouped by leader](docs/decisions/0311-the-branch-view-is-grouped-by-leader.md)
 - 2026-10-04 — [A DCC checklist shows your 12 first](docs/decisions/0312-a-dcc-checklist-shows-your-12-first.md)
 - 2026-10-05 — [Record DCC for a leader under you who has an account](docs/decisions/0313-record-dcc-for-a-leader-under-you.md)
@@ -920,6 +924,10 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-04 — [My Cell counts the Cell Groups in the leader's care](docs/decisions/0438-my-cell-counts-the-cell-groups-in-your-care.md)
 - 2026-11-04 — [The phone's two bars: room for the home line, a light tab bar, and the name on top](docs/decisions/0439-the-phones-bars.md)
 - 2026-11-05 — [Closed Cells leave out those created in error, until asked for](docs/decisions/0440-closed-cells-leave-out-those-created-in-error.md)
+- 2026-11-05 — [Ten wrong codes pause an account's second step](docs/decisions/0441-ten-wrong-codes-pause-the-second-step.md)
+- 2026-11-05 — [Saving or moving a person answers with the basic details, and a save that changes nothing writes nothing](docs/decisions/0442-saving-a-person-answers-with-the-basic-details.md)
+- 2026-11-05 — [Attendance has Weekly, Monthly and Yearly, on one line, for every reader](docs/decisions/0443-attendance-has-weekly-monthly-and-yearly.md)
+- 2026-11-05 — [The sidebar shows each item's icon](docs/decisions/0444-the-sidebar-shows-each-items-icon.md)
 
 ### Open — awaiting a ruling
 

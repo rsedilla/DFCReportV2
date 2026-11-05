@@ -515,6 +515,10 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.network).toBe('WOMENS');
+      // The basic details only, as a save answers (decision 0442).
+      expect(response.body).not.toHaveProperty('birth_date');
+      expect(response.body).not.toHaveProperty('civil_status');
+      expect(response.body).not.toHaveProperty('mobile_number');
     });
   });
 

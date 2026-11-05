@@ -164,7 +164,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     // No length but the month, and no second switch for it (decision 0398).
     await expect(page.getByRole('group', { name: 'Report period' }).getByRole('button')).toHaveText([
       'Monthly',
-      '12 Months',
+      'Yearly',
     ]);
 
     await page.getByRole('button', { name: 'The period before' }).click();
@@ -228,17 +228,20 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByRole('button', { name: /How these are counted/i })).toHaveCount(0);
   });
 
-  test('the period, the month and Figures for are one row, and an open month says so far', async ({
+  test('the lengths sit beside Cell Group and DCC, the month and Figures for are one row, and an open month says so far', async ({
     page,
   }) => {
     await attendance(page);
 
     await page.goto('/reports/cells');
 
-    const period = page.getByRole('group', { name: 'Report period' });
-    const bar = period.locator('xpath=..');
+    // On the line beside Cell Group and DCC (decision 0443).
+    const which = await page.getByRole('group', { name: 'Which attendance' }).boundingBox();
+    const period = await page.getByRole('group', { name: 'Report period' }).boundingBox();
+    expect(Math.abs(which!.y - period!.y)).toBeLessThanOrEqual(1);
+
+    const bar = page.getByLabel('Figures for').locator('xpath=../..');
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
-    await expect(bar.getByLabel('Figures for')).toBeVisible();
     await expect(bar.getByText('so far', { exact: true })).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
   });
@@ -253,14 +256,6 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByText(/Sundays? counted/)).toHaveCount(0);
   });
 
-  test('Year shows no month-by-month table', async ({ page }) => {
-    await attendance(page);
-
-    await page.goto('/reports/cells?period=year');
-
-    await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
-    await expect(page.getByText(/Month by month/)).toHaveCount(0);
-  });
 });
 
 test('Reports switches a figure between Monthly and its last 12 months on one switch, keeping the tab (decisions 0377 and 0398)', async ({
@@ -274,10 +269,10 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   // No second row: the lengths and the twelve months are one switch (decision 0398).
   await expect(page.getByRole('group', { name: 'Which view' })).toHaveCount(0);
   const view = page.getByRole('group', { name: 'Report period' });
-  await expect(view.getByRole('button')).toHaveText(['Monthly', '12 Months']);
+  await expect(view.getByRole('button')).toHaveText(['Monthly', 'Yearly']);
   await expect(view.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
 
-  await view.getByRole('button', { name: '12 Months' }).click();
+  await view.getByRole('button', { name: 'Yearly' }).click();
   await expect(page).toHaveURL(/\/trends\?figure=CELL_LEADERS$/);
   await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
   const tabs = page.getByRole('navigation', { name: 'Which report' });
@@ -288,14 +283,14 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
 
   const back = page.getByRole('group', { name: 'Report period' });
-  await expect(back.getByRole('button', { name: '12 Months' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(back.getByRole('button', { name: 'Yearly' })).toHaveAttribute('aria-pressed', 'true');
   // The twelve months have no month to step.
   await expect(page.getByRole('button', { name: 'The period before' })).toHaveCount(0);
   await back.getByRole('button', { name: 'Monthly' }).click();
   await expect(page).toHaveURL(/\/reports\/number-of-cell-leaders$/);
 });
 
-test('the Senior Pastors’ attendance switch keeps four lengths, and a length chosen on Last 12 months opens the tab by it (decision 0398)', async ({
+test('the Senior Pastors’ attendance switch is Weekly, Monthly and Yearly, and a length chosen on Yearly opens the tab by it (decisions 0398 and 0443)', async ({
   page,
 }) => {
   await seniorPastor(page);
@@ -306,14 +301,14 @@ test('the Senior Pastors’ attendance switch keeps four lengths, and a length c
 
   await page.goto('/reports/cells');
   const view = page.getByRole('group', { name: 'Report period' });
-  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Quarterly', 'Year', '12 Months']);
+  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
 
-  await view.getByRole('button', { name: '12 Months' }).click();
-  await expect(page).toHaveURL(/\/trends$/);
-  await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }).click();
-  await expect(page).toHaveURL(/\/reports\/cells\?period=quarter$/);
+  await view.getByRole('button', { name: 'Yearly' }).click();
+  await expect(page).toHaveURL(/\/trends(\?figure=CG)?$/);
+  await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }).click();
+  await expect(page).toHaveURL(/\/reports\/cells\?period=week$/);
   await expect(
-    page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
+    page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }),
   ).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -329,7 +324,7 @@ test.describe('one size for every report control (decision 0398)', () => {
 
       await page.goto('/reports/cells');
       const buttons = page.getByRole('group', { name: 'Report period' }).getByRole('button');
-      await expect(buttons).toHaveCount(5);
+      await expect(buttons).toHaveCount(3);
       const boxes = await buttons.evaluateAll((nodes) =>
         nodes.map((node) => {
           const box = node.getBoundingClientRect();

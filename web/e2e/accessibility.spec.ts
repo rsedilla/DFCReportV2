@@ -1342,24 +1342,6 @@ const SCANS = [
     },
   },
   {
-    // My 12 over a quarter (decision 0293), its period button pressed: a whole-church reader's,
-    // a Full view leader having no quarter (decision 0380).
-    name: 'cell attendance report, quarter',
-    route: '/reports/cells?period=quarter',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockWholeChurchReader(page);
-      await mockCellTwelve(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(
-        page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
-      ).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
-      await expect(page.getByText('Loading…')).toHaveCount(0);
-    },
-  },
-  {
     // A whole-church reader: the Network roots as rows, each named by the pastor with their
     // Network beside (decision 0294), and no row of their own.
     name: 'cell attendance report, whole church',
@@ -1550,43 +1532,6 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText(/^Training for the 4 people/)).toBeVisible();
       await expect(page.getByText('A count of graduations in a period counts only the dated ones.')).toBeVisible();
-    },
-  },
-  {
-    // A year of the DCC report: My 12 over the year (decision 0294), then one row per month
-    // that has begun, and a year row adding up Owed and Filed only (decision 0257).
-    name: 'dcc figures report, year',
-    route: '/reports/dcc?period=year&month=2026-06-01',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      // A whole-church reader's: a Full view leader has no year (decision 0380).
-      await mockWholeChurchReader(page);
-      await mockDccReport(page);
-      await mockDccTwelve(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
-      await expect(page.getByText('Year so far')).toBeVisible();
-      await expect(page.getByText('Loading…')).toHaveCount(0);
-    },
-  },
-  {
-    // The same for the Cell report.
-    name: 'cell attendance report, year',
-    route: '/reports/cells?period=year',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockWholeChurchReader(page);
-      await mockCellReport(page);
-      await mockCellTwelve(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      // My 12 over the year, and its month-by-month table beneath (decisions 0257, 0293).
-      await expect(page.getByRole('heading', { name: / · their journey$/ })).toBeVisible();
-      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
-      await expect(page.getByText('Year so far')).toBeVisible();
-      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -2547,26 +2492,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the two period buttons and the navigator -- with Weekly pressed rather than Monthly.',
   },
   {
-    name: 'cell attendance report, quarter',
-    why:
-      'A whole-church reader’s, a Full view leader having no quarter (decision 0380): the ' +
-      'controls of "cell attendance report, whole church" with Quarterly pressed. It needs a ' +
-      'second /auth/me mock.',
-  },
-  {
-    name: 'cell attendance report, year',
-    why:
-      'A whole-church reader’s, a Full view leader having no year (decision 0380): the controls ' +
-      'of "cell attendance report, whole church" with Year pressed, the month-by-month table ' +
-      'holding none. It needs a second /auth/me mock.',
-  },
-  {
-    name: 'dcc figures report, year',
-    why:
-      'A whole-church reader’s, as "cell attendance report, year", for DCC. It needs a second ' +
-      '/auth/me mock.',
-  },
-  {
     name: 'dcc figures report, one network',
     why:
       'The controls of the measured "dcc figures report" less its My 12 name links, since a ' +
@@ -3072,6 +2997,42 @@ test('one person’s pastoral path marks People as the current page', async ({ p
     1,
   );
   await expect(current).toHaveText('People');
+});
+
+/**
+ * The sidebar shows each item's icon before its words (decision 0444): the tab bar's icon,
+ * 20px, in the words' colour, hidden from a screen reader, which reads the words alone.
+ */
+test('the sidebar shows each item’s icon before its words, and names it by its words', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockSignedIn(page);
+  await mockPeople(page);
+
+  await page.goto('/people');
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+  const links = navigation.getByRole('link');
+  await expect(links.first()).toBeVisible();
+
+  for (const link of await links.all()) {
+    const name = (await link.getAttribute('aria-label')) ?? (await link.innerText()).trim();
+    const icon = link.locator('[aria-hidden="true"] svg');
+    await expect(icon, `${name} has its icon`).toBeVisible();
+    const [box, words] = await Promise.all([
+      icon.boundingBox(),
+      link.locator('[data-tab-label]').boundingBox(),
+    ]);
+    expect(Math.round(box!.width), `${name}'s icon is 20px`).toBe(20);
+    expect(box!.x + box!.width, `${name}'s icon is before its words`).toBeLessThanOrEqual(words!.x);
+    const colours = await link.evaluate((element) => ({
+      icon: getComputedStyle(element.querySelector('svg')!).color,
+      words: getComputedStyle(element.querySelector('[data-tab-label]')!).color,
+    }));
+    expect(colours.icon, `${name}'s icon is in its words' colour`).toBe(colours.words);
+  }
+  // The accessible name is the words alone.
+  await expect(navigation.getByRole('link', { name: 'People', exact: true })).toBeVisible();
 });
 
 /**

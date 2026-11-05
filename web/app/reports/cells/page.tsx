@@ -4,16 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { MovedNotice, NextOpens, NotYetOffered } from '@/components/finished-periods';
 import { LeaderDrill } from '@/components/leader-drill';
 import {
   BranchTwelve,
-  PeriodTabs,
   RangeNavigator,
   RootLeadersTwelve,
   TwelveTable,
 } from '@/components/my-twelve';
-import { YearTable } from '@/components/report-year';
 import {
   isBranchReader,
   ReportsHeading,
@@ -35,10 +32,10 @@ import { periodStillOpenNote } from '@/lib/weekly-deadline';
  * The Cell Groups report (SKILL.md sections 12, 13, 17, 19 and 20; decisions 0202, 0216,
  * 0257, 0292 and 0293).
  *
- * **Weekly, Monthly, Quarterly and Year are one rule on four lengths** (decision 0293): the
- * people who came to a Cell in the period, once each, at the stage they had reached by its
- * last day. A period still running says so and shows the stage so far; a period that has
- * not begun is not offered (decision 0216).
+ * **Weekly and Monthly are one rule on two lengths** (decision 0293): the people who came to
+ * a Cell in the period, once each, at the stage they had reached by its last day. A period
+ * still running says so and shows the stage so far; a period that has not begun is not
+ * offered (decision 0216). Yearly is the last 12 months, a screen of its own (decision 0443).
  *
  * **Coverage leads, as one line** (decision 0202): meetings recorded over meetings due,
  * above the table, because it is the one figure that recording less makes worse rather than
@@ -49,9 +46,6 @@ import { periodStillOpenNote } from '@/lib/weekly-deadline';
  * name shows that leader's 12, one generation down; Figures for offers the same names. A
  * whole-church reader's rows are the Network roots, where the Network screen starts them
  * (decision 0268), each named by the pastor with their Network beside (decision 0294).
- *
- * **Year keeps its month-by-month table** (decision 0257) beneath its 12, because a year's
- * stage and its months answer different questions and are never added together.
  */
 export default function CellReportPage() {
   return (
@@ -66,9 +60,9 @@ export function CellReport() {
   // Every control lives in the address, so Back steps back through the period, the leader
   // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
-  const period = useReportPeriod('cell-twelve', getCellTwelve);
-  const { kind, current, me, wholeChurch, seniorPastor, finishedKind, chosen, reach } = period;
-  const { periodReady, start, guardMonth, own, probe, periodParams } = period;
+  const period = useReportPeriod();
+  const { kind, current, me, wholeChurch, seniorPastor } = period;
+  const { start, guardMonth, own, periodParams } = period;
   const leader = search.get('leader');
   // A leader merged away opens the record kept's report (decision 0408, point 22).
   const mergedFrom = useKeptLeader(leader);
@@ -79,13 +73,13 @@ export function CellReport() {
   const twelve = useQuery({
     queryKey: ['cell-twelve', kind, start, subject],
     queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, subject!, signal),
-    enabled: subject !== null && periodReady,
+    enabled: subject !== null,
   });
   // The reader's own rows, which Figures for offers whichever leader is open.
   const ownTwelve = useQuery({
     queryKey: ['cell-twelve', kind, start, own],
     queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, own!, signal),
-    enabled: own !== null && periodReady,
+    enabled: own !== null,
   });
   const opened = useQuery({
     queryKey: ['branch', leader],
@@ -95,42 +89,28 @@ export function CellReport() {
 
   const options = (ownTwelve.data?.rows ?? []).filter((row) => row.leader !== null);
   const subjectName = leader ? (opened.data?.person.full_name ?? 'This leader') : null;
-  const what = { WEEK: 'in the week', MONTH: 'in the month', QUARTER: 'in the quarter', YEAR: 'in the year' }[kind];
+  const what = kind === 'WEEK' ? 'in the week' : 'in the month';
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
       <ReportsTabs current="cells" month={guardMonth}>
-        {seniorPastor || branchReader ? null : (
-          <PeriodTabs
-            value={kind}
-            onChange={period.choosePeriodKind}
-          />
-        )}
-
-        {finishedKind !== null && chosen?.ready && chosen.moved !== null ? (
-          <MovedNotice kind={finishedKind} asked={chosen.asked} moved={chosen.moved} />
-        ) : null}
+        {/* Weekly, Monthly and Yearly on the line beside Cell Group and DCC, for every reader
+            (decision 0443). */}
+        <ReportViewSwitch tab="cells" value={kind} onPeriod={period.choosePeriodKind} />
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
         <div className={`mt-6 ${CONTROL_BAR}`}>
-          {/* The Senior Pastors' and a Full view leader's one switch, its lengths and its last 12
-              months (decision 0398), then the month, then Figures for (owner, 2026-10-09). */}
-          {seniorPastor || branchReader ? (
-            <ReportViewSwitch tab="cells" value={kind} onPeriod={period.choosePeriodKind} />
-          ) : null}
-          {reach?.kind === 'none' ? null : (
-            <RangeNavigator
-              kind={kind}
-              start={start}
-              current={reach?.kind === 'open' ? reach.latest : current}
-              earliest={reach?.kind === 'open' ? reach.earliest : undefined}
-              open={twelve.data?.open}
-              quiet={seniorPastor}
-              labelled={branchReader || seniorPastor ? 'bare' : false}
-              onChange={period.choosePeriodStart}
-            />
-          )}
+          {/* The month, then Figures for (owner, 2026-10-09). */}
+          <RangeNavigator
+            kind={kind}
+            start={start}
+            current={current}
+            open={twelve.data?.open}
+            quiet={seniorPastor}
+            labelled={branchReader || seniorPastor ? 'bare' : false}
+            onChange={period.choosePeriodStart}
+          />
           {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
           {branchReader ? null : (
           <div>
@@ -165,10 +145,6 @@ export function CellReport() {
           ) : null}
         </div>
 
-        {finishedKind !== null && reach?.kind === 'open' && start === reach.latest ? (
-          <NextOpens kind={finishedKind} start={start} />
-        ) : null}
-
         {leader ? (
           <LeaderDrill
             personId={leader}
@@ -190,18 +166,14 @@ export function CellReport() {
             failure={
               twelve.isError
                 ? describeFailure(twelve.error)
-                : probe.isError
-                  ? describeFailure(probe.error)
-                  : me.isError
-                    ? describeFailure(me.error)
-                    : null
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null
             }
           />
         </div>
 
-        {finishedKind !== null && reach?.kind === 'none' ? (
-          <NotYetOffered kind={finishedKind} reach={reach} />
-        ) : twelve.isPending || subject === null ? (
+        {twelve.isPending || subject === null ? (
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
           <div className="mt-6 flex flex-col gap-4">
@@ -236,16 +208,6 @@ export function CellReport() {
                 openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
               />
             )}
-
-            {/* Not the month-by-month table for the Senior Pastors (owner, 2026-10-09). */}
-            {kind === 'YEAR' && !seniorPastor ? (
-              <YearTable
-                key={`${start}-${JSON.stringify(subject)}`}
-                report="cells"
-                year={Number(start.slice(0, 4))}
-                scope={subject.kind === 'ROOT_LEADERS' ? { kind: 'WHOLE_CHURCH' } : subject}
-              />
-            ) : null}
           </div>
         ) : null}
       </ReportsTabs>

@@ -165,6 +165,20 @@ export function compose(
     ]);
   }
 
+  if (message.kind === 'SECOND_STEP_PAUSED') {
+    return letter('DREAMS: sign-in paused after 10 wrong second-step codes', [
+      {
+        kind: 'p',
+        // Authenticator and recovery codes both count (decision 0441).
+        text: `Sign-in to ${message.holder}'s account was paused after 10 wrong codes in 15 minutes, from the authenticator app or recovery codes. It opens again at ${manila(message.pausedUntil)} (Manila time).`,
+      },
+      {
+        kind: 'p',
+        text: `The code is asked only after the right password, so whoever typed them knows the password. If it was not ${message.holder}, ask them to change their password straight away.`,
+      },
+    ]);
+  }
+
   if (message.kind === 'SIGN_IN_PAUSED') {
     const name =
       'email' in message.typed

@@ -303,8 +303,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           // Admin's six labels still fit 320px, which accessibility.spec.ts checks whole. Grey,
           // and the current one extra bold.
           'text-xs leading-none font-semibold',
-          // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
-          'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
+          // **An item at `lg`**: a full-width row of the sidebar, its icon before its words
+          // (owner, 2026-11-05, decision 0444).
+          'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:px-3',
           // Its words as written, on a rounded row (decision 0423).
           'lg:rounded-lg lg:text-[0.9375rem] lg:font-semibold',
           // **In the sidebar the current item is white on a darker emerald, with a white bar
@@ -321,15 +322,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         {/* 24px, the size both phone platforms give a tab icon, and the current one on its pill
-            (owner, 2026-11-04). */}
+            (owner, 2026-11-04). In the sidebar the same icon, 20px and in the words' colour, with
+            no pill: the current row is marked by its darker emerald and its bar (decision 0444). */}
         <span
           aria-hidden="true"
           className={cn(
-            'flex h-8 w-full max-w-16 shrink-0 items-center justify-center rounded-full lg:hidden',
-            active && 'bg-tabbar-pill',
+            'flex h-8 w-full max-w-16 shrink-0 items-center justify-center rounded-full',
+            'lg:size-5 lg:max-w-none lg:rounded-none',
+            active && 'bg-tabbar-pill lg:bg-transparent',
           )}
         >
-          <Icon strokeWidth={1.5} className="size-6" />
+          <Icon strokeWidth={1.5} className="size-6 lg:size-5" />
         </span>
         <span data-tab-label className="max-w-full truncate">
           {link.label}

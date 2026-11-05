@@ -628,6 +628,10 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       expect(response.status).toBe(200);
       expect(response.body.previous_pastoral_leader_id).toBe(raymond.id);
+      // The basic details only, as a save answers (decision 0442).
+      expect(response.body).not.toHaveProperty('birth_date');
+      expect(response.body).not.toHaveProperty('civil_status');
+      expect(response.body).not.toHaveProperty('mobile_number');
     });
 
     it('withholds the invariant 4 exemption from a SENIOR_PASTOR section 4 does not name', async () => {

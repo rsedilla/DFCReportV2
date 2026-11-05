@@ -1,9 +1,12 @@
 import { randomBytes } from 'node:crypto';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
 import {
+  ApiError,
+  ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
   UnauthenticatedError,
@@ -11,6 +14,8 @@ import {
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { DATABASE, type Db } from '../database/database.module';
+import { EMAIL_PORT, type EmailPort } from '../email/email.port';
+import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountsRepository, normalizeEmail, type AccountRecord } from './accounts.repository';
 import {
@@ -22,6 +27,7 @@ import {
   matchingStep,
   otpauthUri,
 } from './second-step.crypto';
+import { SignInPauseService } from './sign-in-pause.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokensService, hashToken } from './tokens.service';
 
 import type { SessionTokens } from './auth.service';
@@ -35,6 +41,16 @@ export const CHALLENGE_TTL_SECONDS = 5 * 60;
 
 /** Section 6: five wrong codes, then the sign-in starts again. */
 export const MAX_FAILED_ATTEMPTS = 5;
+
+/**
+ * Section 6: ten wrong codes for one account within fifteen minutes, in however many
+ * sign-ins, pause its second step for fifteen (decision 0441).
+ */
+export const SECOND_STEP_PAUSE_AFTER = 10;
+const PAUSE_WINDOW = sql`interval '15 minutes'`;
+const PAUSE_LENGTH = sql`interval '15 minutes'`;
+/** How long an untouched row is kept. */
+const PAUSE_KEEP = sql`interval '1 day'`;
 
 /** What sign-in answers an account that owes the step, in place of tokens. */
 export interface SecondStepChallenge {
@@ -52,7 +68,14 @@ export interface SecondStepSetup {
   otpauth_uri: string;
 }
 
-type Outcome<T> = { ok: true; value: T } | { ok: false; error: UnauthenticatedError };
+type Outcome<T> = { ok: true; value: T } | { ok: false; error: ApiError };
+
+/** A refused code, and the pause it started if it was the tenth (decision 0441). */
+type Refused = {
+  ok: false;
+  error: ApiError;
+  started?: { accountId: string; personId: string; pausedUntil: Date };
+};
 
 const SIGN_IN_AGAIN = 'This sign-in has expired. Sign in again.';
 
@@ -66,6 +89,8 @@ const SIGN_IN_AGAIN = 'This sign-in has expired. Sign in again.';
  */
 @Injectable()
 export class SecondStepService {
+  private readonly logger = new Logger(SecondStepService.name);
+
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -73,6 +98,9 @@ export class SecondStepService {
     private readonly tokens: TokensService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly pauses: SignInPauseService,
+    private readonly people: PeopleReadService,
+    @Inject(EMAIL_PORT) private readonly email: EmailPort,
   ) {}
 
   /** Called by sign-in once the password is right. */
@@ -216,10 +244,20 @@ export class SecondStepService {
     deviceLabel: string | null,
     browser = true,
   ): Promise<SessionTokens> {
+    // Rows nobody has touched for a day, in a statement of their own so the transaction
+    // below locks nothing it does not own (as `SignInPauseService.begin` does).
+    await this.db
+      .deleteFrom('second_step_pauses')
+      .where(sql<boolean>`updated_at < now() - ${PAUSE_KEEP}`)
+      .where(sql<boolean>`NOT coalesce(paused_until > now(), false)`)
+      .execute();
+
     const outcome = await this.db
       .transaction()
-      .execute(async (trx): Promise<Outcome<AccountRecord>> => {
+      .execute(async (trx): Promise<Outcome<AccountRecord> | Refused> => {
         const challenge = await this.openChallenge(trx, challengeToken);
+        // The step row's lock serializes every code check of one account, so the pause
+        // below is read and counted with no other check of that account in between.
         const step = challenge ? await this.liveStep(trx, challenge.account_id, true) : undefined;
         if (!challenge || !step) {
           return { ok: false, error: signInAgain() };
@@ -230,24 +268,44 @@ export class SecondStepService {
           return { ok: false, error: signInAgain() };
         }
 
+        // Paused: no code is checked, the right one included, and nothing is counted. The
+        // sign-in is closed, since it would expire before the pause ends.
+        const pausedUntil = await this.pausedUntil(trx, account.id);
+        if (pausedUntil !== null) {
+          await this.closeChallenge(trx, challenge.id);
+          return { ok: false, error: secondStepPaused(pausedUntil) };
+        }
+
         const accepted =
           answer.recoveryCode !== undefined
             ? await this.redeemRecoveryCode(trx, step.id, account.id, answer.recoveryCode)
             : await this.acceptCode(trx, step, answer.code ?? '');
 
         if (!accepted) {
+          const started = await this.countWrongCode(trx, account.id);
+          if (started !== null) {
+            await this.closeChallenge(trx, challenge.id);
+            return {
+              ok: false,
+              error: secondStepPaused(started),
+              started: { accountId: account.id, personId: account.person_id, pausedUntil: started },
+            };
+          }
           return { ok: false, error: await this.recordFailure(trx, challenge) };
         }
 
-        await trx
-          .updateTable('second_step_challenges')
-          .set({ used_at: new Date() })
-          .where('id', '=', challenge.id)
-          .execute();
+        // A right code starts the account's count again.
+        await trx.deleteFrom('second_step_pauses').where('account_id', '=', account.id).execute();
+        await this.closeChallenge(trx, challenge.id);
 
         return { ok: true, value: account };
       });
 
+    if (!outcome.ok && 'started' in outcome && outcome.started !== undefined) {
+      // After the transaction has committed, and not awaited: a slow or failing mail
+      // provider changes nothing the code check answers.
+      void this.notePause(outcome.started);
+    }
     return this.issue(unwrap(outcome), deviceLabel, browser);
   }
 
@@ -350,6 +408,9 @@ export class SecondStepService {
         },
       );
     }
+
+    // A reset ends any pause on the step's codes, and empties their count (decision 0441).
+    await trx.deleteFrom('second_step_pauses').where('account_id', '=', accountId).execute();
 
     await this.audit.writeWithin(trx, {
       actorId,
@@ -466,6 +527,94 @@ export class SecondStepService {
     return true;
   }
 
+  /** When the account's second step opens again, where it is paused now. */
+  private async pausedUntil(trx: Transaction<Database>, accountId: string): Promise<Date | null> {
+    const row = await trx
+      .selectFrom('second_step_pauses')
+      .select('paused_until')
+      .where('account_id', '=', accountId)
+      .where(sql<boolean>`paused_until > now()`)
+      .executeTakeFirst();
+    return row?.paused_until ?? null;
+  }
+
+  /**
+   * Counts a wrong code against the account, whatever sign-in it was typed in, and at the
+   * tenth within the window starts the pause, answering when it ends; null otherwise. The
+   * pause spends the window's codes, so the count starts empty after it.
+   */
+  private async countWrongCode(
+    trx: Transaction<Database>,
+    accountId: string,
+  ): Promise<Date | null> {
+    const counted = await trx
+      .insertInto('second_step_pauses')
+      .values({ account_id: accountId, failed_at: sql<Date[]>`ARRAY[now()]` })
+      .onConflict((oc) =>
+        oc.column('account_id').doUpdateSet({
+          failed_at: sql<
+            Date[]
+          >`array_append(ARRAY(SELECT t FROM unnest(second_step_pauses.failed_at) AS t WHERE t > now() - ${PAUSE_WINDOW}), now())`,
+          paused_until: null,
+          updated_at: sql`now()`,
+        }),
+      )
+      .returning(sql<number>`cardinality(failed_at)`.as('recent'))
+      .executeTakeFirstOrThrow();
+
+    if (counted.recent < SECOND_STEP_PAUSE_AFTER) {
+      return null;
+    }
+    const paused = await trx
+      .updateTable('second_step_pauses')
+      .set({ failed_at: [], paused_until: sql`now() + ${PAUSE_LENGTH}`, updated_at: sql`now()` })
+      .where('account_id', '=', accountId)
+      .returning('paused_until')
+      .executeTakeFirstOrThrow();
+    return paused.paused_until;
+  }
+
+  private async closeChallenge(trx: Transaction<Database>, challengeId: string): Promise<void> {
+    await trx
+      .updateTable('second_step_challenges')
+      .set({ used_at: new Date() })
+      .where('id', '=', challengeId)
+      .execute();
+  }
+
+  /**
+   * Writes the pause to the audit log and, within the daily caps, emails each active Admin
+   * (decision 0441), as `AuthService` does for a password pause.
+   */
+  private async notePause(started: {
+    accountId: string;
+    personId: string;
+    pausedUntil: Date;
+  }): Promise<void> {
+    try {
+      const email = await this.pauses.recordSecondStepPause(started.accountId, started.pausedUntil);
+      if (!email) {
+        return;
+      }
+      const holder =
+        (await this.people.forDecision(started.personId))?.fullName ?? 'an unnamed person';
+      for (const admin of await this.accounts.activeAdministrators()) {
+        const name = (await this.people.forDecision(admin.person_id))?.fullName ?? '';
+        await this.email.send({
+          kind: 'SECOND_STEP_PAUSED',
+          to: { email: admin.email, name },
+          holder,
+          pausedUntil: started.pausedUntil,
+        });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Could not record or report the second-step pause of account ${started.accountId}.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+  }
+
   /** Counts a wrong answer, and voids the sign-in at the fifth. */
   private async recordFailure(
     trx: Transaction<Database>,
@@ -506,6 +655,24 @@ export class SecondStepService {
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
     };
   }
+}
+
+/**
+ * The answer while an account's second step is paused (decision 0441): `RATE_LIMITED`, as
+ * the password pause is, with `reason` so a client shows these words and returns to the
+ * password, and when it opens, in Manila time, the reporting time zone (decision 0010).
+ */
+function secondStepPaused(pausedUntil: Date): ApiError {
+  const at = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(pausedUntil);
+  return new ApiError(
+    ApiErrorCode.RATE_LIMITED,
+    `Sign-in to this account is paused for 15 minutes after 10 wrong codes. Try again after ${at}.`,
+    { reason: 'SECOND_STEP_PAUSED', paused_until: pausedUntil.toISOString() },
+  );
 }
 
 function signInAgain(message = SIGN_IN_AGAIN): UnauthenticatedError {

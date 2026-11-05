@@ -24,7 +24,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
 import { assertLeaderIsAssignable } from './leader-assignability';
-import { fullProfile } from './people.shared';
+import { listedProfile } from './people.shared';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 
@@ -338,7 +338,9 @@ export class PeopleReassignmentService {
       }
 
       const response = {
-        ...fullProfile(person),
+        // The basic details only, as a save answers (decision 0442): the birthday, civil status
+        // and mobile number come with reading the one record, which decision 0414 keeps.
+        ...listedProfile(person),
         pastoral_leader_id: input.leaderId,
         previous_pastoral_leader_id: previousLeaderId,
         effective_at: effectiveAt.toISOString(),

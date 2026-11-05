@@ -385,13 +385,13 @@ test.describe('the browser Back button', () => {
 
     await page
       .getByRole('group', { name: 'Report period' })
-      .getByRole('button', { name: 'Year' })
+      .getByRole('button', { name: 'Weekly' })
       .click();
-    await expect(page).toHaveURL(/period=year/);
+    await expect(page).toHaveURL(/period=week/);
 
     // Back through each change, in the order they were made.
     await page.goBack();
-    await expect(page).not.toHaveURL(/period=year/);
+    await expect(page).not.toHaveURL(/period=week/);
     await expect(page).toHaveURL(/network=MENS/);
 
     await page.goBack();
@@ -772,8 +772,8 @@ test.describe('a Full view leader’s 12 at a phone and a computer', () => {
 
 /**
  * A Full view leader's controls (decision 0363, owner 2026-10-18; no Figures for since decision
- * 0380): Show and the period side by side from a laptop's width, the note under them; stacked on
- * a phone, where they cannot fit.
+ * 0380): Cell Group and DCC, then Weekly, Monthly and Yearly, side by side from a laptop's width
+ * (decision 0443); stacked on a phone, where they cannot fit.
  */
 test.describe('a Full view leader’s report controls', () => {
   const ROW = [
@@ -794,19 +794,20 @@ test.describe('a Full view leader’s report controls', () => {
         await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
 
-        // Show and the period; no Figures for (decision 0380).
+        // Weekly, Monthly and Yearly on the line beside Cell Group and DCC (decision 0443); no
+        // Figures for (decision 0380).
         await expect(page.getByRole('combobox', { name: 'Figures for' })).toHaveCount(0);
         const tops = await Promise.all(
           [
+            page.getByRole('group', { name: 'Which attendance' }),
             page.getByRole('group', { name: 'Report period' }),
-            page.getByRole('button', { name: 'The period before' }),
           ].map(async (control) => Math.round((await control.boundingBox())!.y)),
         );
-        // One row is one bottom edge: the switch's track stands taller than a button (decision 0416).
+        // One row is one bottom edge.
         const bottoms = await Promise.all(
           [
+            page.getByRole('group', { name: 'Which attendance' }),
             page.getByRole('group', { name: 'Report period' }),
-            page.getByRole('button', { name: 'The period before' }),
           ].map(async (control) => {
             const box = (await control.boundingBox())!;
             return Math.round(box.y + box.height);
@@ -896,84 +897,6 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
       });
     }
   }
-});
-
-test.describe('the year view (decision 0257)', () => {
-  /** Owed and Filed differ by month, so a wrong sum cannot pass by coincidence. */
-  const FIGURES: Record<string, { owed: number; met: number }> = {
-    '2026-01-01': { owed: 10, met: 9 },
-    '2026-02-01': { owed: 12, met: 8 },
-    '2026-04-01': { owed: 14, met: 14 },
-    '2026-05-01': { owed: 16, met: 11 },
-    '2026-06-01': { owed: 18, met: 5 },
-  };
-
-  test('one row per month begun, and a year row adding up Owed and Filed of the months read', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(NOW);
-    await mockSignedIn(page);
-    // The running year is a whole-church reader's to see (decision 0310).
-    await mockWholeChurchReader(page);
-    await page.route('**/api/v1/reports/dcc/monthly*', (route) => {
-      const period = new URL(route.request().url()).searchParams.get('period') ?? '';
-      const figures = FIGURES[period];
-
-      // March is refused, as a month outside the reader's reach would be.
-      return figures
-        ? route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              scope: { kind: 'WHOLE_CHURCH' },
-              period,
-              open: period === '2026-06-01',
-              n: 4,
-              removed_events: [],
-              unique_people: 5,
-              classification: { vip: 1, second_timer: 1, third_timer: 1, fourth_timer: 1, regular: 1 },
-              buckets: [],
-              coverage: figures,
-            }),
-          })
-        : route.fulfill({
-            status: 403,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
-            }),
-          });
-    });
-
-    // The year's My 12 renders above the month-by-month table (decision 0294).
-    await mockDccTwelve(page, { today: '2026-06-20' });
-    await page.goto('/reports/dcc?period=year');
-
-    await expect(page.getByRole('heading', { name: 'Month by month, January to June 2026' })).toBeVisible();
-
-    const table = page
-      .getByRole('table')
-      .filter({ has: page.getByRole('row', { name: /^Year so far/ }) });
-    const rows = table.getByRole('row');
-    // A header, six months and the year row: July has not begun and is not shown.
-    await expect(rows).toHaveCount(8);
-    await expect(table.getByRole('row', { name: /^July/ })).toHaveCount(0);
-
-    // March could not be read: no figures on its row, and it is left out of the year row.
-    const march = table.getByRole('row', { name: /^March/ });
-    await expect(march.getByRole('cell')).toHaveCount(2);
-    await expect(march).toContainText('Outside your scope.');
-    await expect(page.getByText('One month could not be read and is not in the year row.')).toBeVisible();
-
-    const year = table.getByRole('row', { name: /^Year so far/ });
-    const cells = year.getByRole('cell');
-    await expect(cells.nth(1)).toHaveText('70');
-    await expect(cells.nth(2)).toHaveText('47');
-    // No people count for the year: a person who came in two months is one person.
-    await expect(cells.nth(3)).toHaveText('');
-    // Section 17: the year row includes a month still open, and says which.
-    await expect(cells.nth(4)).toHaveText('Includes June, still open');
-  });
 });
 
 /**
