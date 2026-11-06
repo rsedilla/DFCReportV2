@@ -6,5 +6,9 @@
  */
 export const APPLICATION_NAME = 'DREAMS';
 export const APPLICATION_FULL_NAME = 'Doulos Reporting, Equipping, And Monitoring System';
-/** The DfC globe, cleaned from the church's poster: square, on its own dark ground. */
-export const LOGO_PATH = '/dreams-logo.png';
+/**
+ * The DfC globe, cleaned from the church's poster: square, on its own dark ground. A 168px copy
+ * of `public/dreams-logo.png` (512px, which the home-screen icon keeps): the largest place it is
+ * shown is 56px, and 168 covers that on a three-times screen at a fifth of the bytes.
+ */
+export const LOGO_PATH = '/dreams-logo-168.png';
