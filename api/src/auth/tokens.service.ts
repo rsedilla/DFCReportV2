@@ -8,11 +8,11 @@ import { DATABASE, type Db } from '../database/database.module';
 
 import type { Database } from '../database/schema';
 import { sql } from 'kysely';
-import type { Transaction } from 'kysely';
+import type { Kysely, Transaction } from 'kysely';
 
 /**
- * An access token lives 15 minutes and a refresh token 30 days (SKILL.md
- * section 6). Neither is configurable: the 15 minutes is what makes the
+ * An access token lives 15 minutes and a refresh token at most 30 days, ending with its
+ * session (SKILL.md section 6, decision 0450). Neither is configurable: the 15 minutes is what makes the
  * revocation check below cacheable without making "immediately" a lie, and an
  * operator raising it in an environment file would quietly lengthen the window in
  * which a revoked session keeps working.
@@ -31,6 +31,24 @@ export const BROWSER_IDLE_MINUTES = 35;
 
 function idleDeadline(from: Date): Date {
   return new Date(from.getTime() + BROWSER_IDLE_MINUTES * 60 * 1000);
+}
+
+/**
+ * How long a session lasts from its sign-in, however often it is used (decision 0450):
+ * thirty days, and seven for an account holding `ADMIN` or `SENIOR_PASTOR`, which reach
+ * the whole church. Renewing never moves it, so a lost phone signed in to the installed
+ * app, which has no idle limit, is signed out by it.
+ */
+export const SESSION_DAYS = 30;
+export const ELEVATED_SESSION_DAYS = 7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The earlier of a refresh token's own thirty days and its session's end. */
+function refreshExpiry(issuedAt: Date, sessionEndsAt: Date): Date {
+  return new Date(
+    Math.min(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * DAY_MS, sessionEndsAt.getTime()),
+  );
 }
 
 export interface AccessTokenClaims {
@@ -108,7 +126,11 @@ export class TokensService {
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(32).toString('base64url');
     const issuedAt = new Date();
-    const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    // A sign-in starts the session's clock (decision 0450).
+    const sessionEndsAt = new Date(
+      issuedAt.getTime() + (await this.sessionDaysFor(accountId)) * DAY_MS,
+    );
+    const expiresAt = refreshExpiry(issuedAt, sessionEndsAt);
 
     const row = await this.db
       .insertInto('refresh_tokens')
@@ -125,11 +147,43 @@ export class TokensService {
         issued_at: issuedAt,
         expires_at: expiresAt,
         idle_expires_at: browser ? idleDeadline(issuedAt) : null,
+        session_ends_at: sessionEndsAt,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
 
     return { id: row.id, token, expiresAt };
+  }
+
+  /**
+   * Thirty days, or seven where the account holds `ADMIN` or `SENIOR_PASTOR` (decision
+   * 0450). Read when a session is signed in, for a row the column's backfill did not reach,
+   * and to word a refusal; a role cannot change after provisioning, so the readings agree.
+   */
+  async sessionDaysFor(accountId: string, executor: Kysely<Database> = this.db): Promise<number> {
+    const elevated = await executor
+      .selectFrom('account_roles')
+      .select('id')
+      .where('account_id', '=', accountId)
+      .where('revoked_at', 'is', null)
+      .where('role', 'in', ['ADMIN', 'SENIOR_PASTOR'])
+      .executeTakeFirst();
+    return elevated === undefined ? SESSION_DAYS : ELEVATED_SESSION_DAYS;
+  }
+
+  /**
+   * The refusal of a session that has reached its end (decision 0450): no reuse signal, and
+   * worded with the days so the sign-in page can say why.
+   */
+  async sessionAgeError(
+    accountId: string,
+    executor: Kysely<Database> = this.db,
+  ): Promise<UnauthenticatedError> {
+    const days = await this.sessionDaysFor(accountId, executor);
+    return new UnauthenticatedError(
+      `It has been ${days} days since you signed in on this device. Sign in again.`,
+      { reason: 'SESSION_AGE', days },
+    );
   }
 
   async findRefreshToken(token: string): Promise<{
@@ -138,6 +192,7 @@ export class TokensService {
     issued_at: Date;
     expires_at: Date;
     idle_expires_at: Date | null;
+    session_ends_at: Date | null;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   } | null> {
@@ -149,6 +204,7 @@ export class TokensService {
         'issued_at',
         'expires_at',
         'idle_expires_at',
+        'session_ends_at',
         'revoked_at',
         'replaced_by_id',
       ])
@@ -173,6 +229,7 @@ export class TokensService {
     issued_at: Date;
     expires_at: Date;
     idle_expires_at: Date | null;
+    session_ends_at: Date | null;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   } | null> {
@@ -184,6 +241,7 @@ export class TokensService {
         'issued_at',
         'expires_at',
         'idle_expires_at',
+        'session_ends_at',
         'revoked_at',
         'replaced_by_id',
       ])
@@ -274,7 +332,7 @@ export class TokensService {
         .set({ revoked_at: now, last_used_at: now })
         .where('id', '=', id)
         .where('revoked_at', 'is', null)
-        .returning(['id', 'idle_expires_at'])
+        .returning(['id', 'idle_expires_at', 'session_ends_at'])
         .executeTakeFirst();
 
       if (!claimed) {
@@ -283,7 +341,18 @@ export class TokensService {
 
       const token = randomBytes(32).toString('base64url');
       const issuedAt = new Date();
-      const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+      // The session's end is carried, never moved by renewing (decision 0450). Migration
+      // 0044 gave every renewable row one, so the fallback is for a row nothing reached.
+      const sessionEndsAt =
+        claimed.session_ends_at ??
+        new Date(issuedAt.getTime() + (await this.sessionDaysFor(accountId, trx)) * DAY_MS);
+      // **Reached while this waited on the account lock** (decision 0450): refused, and the
+      // claim above rolled back with it, so the token is not spent and is answered the same
+      // way next time. Issuing would write a token expiring before its own issue.
+      if (sessionEndsAt.getTime() <= issuedAt.getTime()) {
+        throw await this.sessionAgeError(accountId, trx);
+      }
+      const expiresAt = refreshExpiry(issuedAt, sessionEndsAt);
 
       const issued = await trx
         .insertInto('refresh_tokens')
@@ -296,6 +365,7 @@ export class TokensService {
           // A browser session stays one: each replacement gets a fresh idle span from
           // now, and a session begun in the installed app keeps none (decision 0435).
           idle_expires_at: claimed.idle_expires_at === null ? null : idleDeadline(issuedAt),
+          session_ends_at: sessionEndsAt,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -414,6 +484,10 @@ export class TokensService {
           .where('id', '=', keep)
           .where('account_id', '=', accountId)
           .where('revoked_at', 'is', null)
+          // Not a session that ends in this instant (decision 0450): its end is fixed, and
+          // dating it past that end would write a token expiring before its issue. Left
+          // behind the marker, it ends with the others.
+          .where('expires_at', '>', keptFrom)
           .execute();
       }
     })();

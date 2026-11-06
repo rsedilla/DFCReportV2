@@ -65,6 +65,55 @@ export interface SessionTokens {
 const REFRESH_STORAGE_KEY = 'dfc.refresh_token';
 
 /**
+ * **Why the last session ended, where it ended by its age** (decision 0450): the days since
+ * signing in, so the sign-in page can say so. Kept for this tab only, and only the two
+ * lengths the server gives; anything else says nothing.
+ */
+const ENDED_BY_AGE_KEY = 'dfc.session_ended_by_age';
+const SESSION_LENGTHS = new Set([7, 30]);
+
+function noteEndedByAge(cause: ApiRequestError): void {
+  const days = cause.details.days;
+  if (
+    cause.details.reason !== 'SESSION_AGE' ||
+    typeof days !== 'number' ||
+    !SESSION_LENGTHS.has(days)
+  ) {
+    return;
+  }
+  try {
+    sessionStorage.setItem(ENDED_BY_AGE_KEY, String(days));
+  } catch {
+    // Storage refused: the sign-in page then says nothing, which is what it said before.
+  }
+}
+
+/**
+ * Where to send somebody whose session has gone: the sign-in page, saying how long ago they
+ * signed in where the session ended by its age (decision 0450).
+ */
+export function signedOutPath(): string {
+  try {
+    const days = Number(sessionStorage.getItem(ENDED_BY_AGE_KEY));
+    if (SESSION_LENGTHS.has(days)) {
+      return `/sign-in?reason=age&days=${days}`;
+    }
+  } catch {
+    // Storage refused: the plain sign-in page.
+  }
+  return '/sign-in';
+}
+
+/** Said once: cleared when the sign-in page has shown it. */
+export function forgetEndedByAge(): void {
+  try {
+    sessionStorage.removeItem(ENDED_BY_AGE_KEY);
+  } catch {
+    // Nothing stored, or storage refused.
+  }
+}
+
+/**
  * The halt, stored beside the token it guards.
  *
  * **It has to live where the credential lives.** A module variable is per
@@ -547,6 +596,7 @@ async function refreshWithinLock(): Promise<string> {
       // Anything else — a rate limit, a 5xx — refused this attempt without
       // spending the token, so it is kept.
       if (cause.status === 401 || cause.code === 'VALIDATION_FAILED') {
+        noteEndedByAge(cause);
         forgetSession();
       } else {
         // Answered and not spent, so nothing about this presentation is owed.
@@ -589,6 +639,7 @@ async function retry(stored: string, firstAttemptAt: number): Promise<string> {
       cause instanceof ApiRequestError &&
       (cause.status === 401 || cause.code === 'VALIDATION_FAILED')
     ) {
+      noteEndedByAge(cause);
       forgetSession();
       throw cause;
     }
