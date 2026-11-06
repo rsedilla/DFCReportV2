@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 
 import { MatchLink, MatchNote, OtherBranchMatches } from '@/components/archived-match';
+import { ApiRequestError } from '@/lib/api-client';
 
 import {
   MINIMUM_SEARCH_LENGTH,
@@ -11,6 +12,11 @@ import {
   shownOnly,
   type ShownCandidate,
 } from '@/lib/people';
+
+/** Whether the check was refused for its per-minute limit (decision 0449). */
+function pausedBy(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 429;
+}
 
 /**
  * The value after it has stopped changing for `delay` milliseconds.
@@ -40,10 +46,11 @@ function useDebounced<T>(value: T, delay: number): T {
  * would be computed and discarded". Section 9 makes this the first step of
  * registering a VIP, before a leader types a whole record.
  *
- * **It never blocks, and it asks nothing.** Section 3 forbids blocking creation
+ * **No match ever blocks, and it asks nothing.** Section 3 forbids blocking creation
  * and asks nothing of the encoder for a Tier 2 match — the acknowledgement
  * requirement is Tier 1's alone, and that arrives as a refusal. This is here to
- * be read.
+ * be read. The one wait is caused by volume, never by a match: after sixty checks in a
+ * minute the page holds its save while the check is paused (decision 0449).
  *
  * **A withheld candidate is one line naming nobody** (decision 0405): somebody with a
  * similar name is recorded in another branch, and the Admin is asked. Section 8 protects
@@ -61,6 +68,7 @@ export function PossibleMatches({
   birthDate,
   mobileNumber,
   excludeId,
+  onPausedChange,
 }: {
   firstName: string;
   lastName: string;
@@ -68,6 +76,12 @@ export function PossibleMatches({
   mobileNumber: string;
   /** The person being edited, who is never their own duplicate. */
   excludeId?: string;
+  /**
+   * Told whether the check is paused (decision 0449), so the page holds its save until it
+   * has run again: a match in another branch is shown only here, and saving asks about the
+   * reader's own branch alone.
+   */
+  onPausedChange?: (paused: boolean) => void;
 }) {
   const headingId = useId();
   const first = firstName.trim();
@@ -114,7 +128,40 @@ export function PossibleMatches({
         signal,
       ),
     enabled: ready,
+    // **Paused after sixty checks in a minute** (decision 0449): asked again by itself a
+    // minute later, so the box below clears without the leader doing anything.
+    refetchInterval: (query) => (pausedBy(query.state.error) ? 60_000 : false),
   });
+
+  // **Held until a lookup settles without being refused** (decision 0449), not merely while
+  // the current one is refused: changing a letter starts a new lookup, which is pending rather
+  // than refused, and releasing the save then would let it skip the check it is waiting for.
+  // Any other answer, a failure included, releases it.
+  // Adjusted while rendering rather than in an effect, so the page never sees one frame released.
+  const [paused, setPaused] = useState(false);
+  const refused = matches.isError && pausedBy(matches.error);
+  if (!paused && ready && refused) setPaused(true);
+  if (paused && (!ready || matches.isSuccess || (matches.isError && !refused))) setPaused(false);
+  useEffect(() => {
+    onPausedChange?.(paused);
+  }, [paused, onPausedChange]);
+  // Not paused once the box is gone, so a page never stays held by a check it no longer shows.
+  useEffect(() => () => onPausedChange?.(false), [onPausedChange]);
+
+  if (paused) {
+    return (
+      <section aria-labelledby={headingId} className="border-line rounded-md border p-4">
+        <h2 id={headingId} className="text-sm font-medium">
+          Checking for similar names is paused for a minute
+        </h2>
+        <p className="text-muted mt-1 text-sm leading-relaxed">
+          You checked 60 names in the last minute. It runs again by itself in a minute and shows
+          any match it finds, in your branch or another.{' '}
+          {excludeId ? 'Save' : 'Add Person'} waits until it has.
+        </p>
+      </section>
+    );
+  }
 
   const candidates = matches.data?.data ?? [];
   const shown = shownOnly(candidates).filter((candidate) => candidate.id !== excludeId);

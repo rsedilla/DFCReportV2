@@ -37,6 +37,7 @@ import {
   CHURCH_WIDE_SEARCH_MINIMUM,
   CHURCH_WIDE_SEARCHES_PER_MINUTE,
   CorrectSexDto,
+  DUPLICATE_CHECKS_PER_MINUTE,
   ReassignPastoralLeaderDto,
   CreatePersonDto,
   DuplicateCandidatesDto,
@@ -224,6 +225,21 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
     const limit = query.limit ?? 50;
+
+    // **Sixty a minute for one account** (decision 0449), counted once the query has passed
+    // validation, so a refused request spends nothing. Its own throttler name per account, for
+    // the reason the church-wide search gives below. A GET, so no idempotency key is claimed.
+    const key = `duplicate-check:${actor.accountId}`;
+    const spent = await this.throttle.increment(
+      key,
+      60_000,
+      DUPLICATE_CHECKS_PER_MINUTE,
+      60_000,
+      key,
+    );
+    if (spent.isBlocked) {
+      throw new ThrottlerException();
+    }
 
     // The scope is read once rather than per candidate (checklist row
     // perf-duplicate-check): the enumeration of the rule `covers` tests per target
