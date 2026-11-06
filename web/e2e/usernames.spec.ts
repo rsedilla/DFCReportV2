@@ -36,7 +36,7 @@ test('signs in with a username, sending it as a username', async ({ page }) => {
 
   await page.goto('/sign-in');
   await page.getByLabel('Email or username').fill('rbsantiago');
-  await page.getByLabel('Password').fill('a long enough passphrase');
+  await page.getByLabel('Password', { exact: true }).fill('a long enough passphrase');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect.poll(() => sent.length).toBe(1);
@@ -53,7 +53,7 @@ test('names a username in the refusal when a username was typed', async ({ page 
 
   await page.goto('/sign-in');
   await page.getByLabel('Email or username').fill('rbsantiago');
-  await page.getByLabel('Password').fill('not the right passphrase');
+  await page.getByLabel('Password', { exact: true }).fill('not the right passphrase');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page.getByText('That username and password do not match an account.')).toBeVisible();
@@ -138,7 +138,7 @@ test('shows the pause in its own words, and any other limit as a minute', async 
 
   await page.goto('/sign-in');
   await page.getByLabel('Email or username').fill('rbsantiago');
-  await page.getByLabel('Password').fill('not the right passphrase');
+  await page.getByLabel('Password', { exact: true }).fill('not the right passphrase');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('form').getByRole('alert')).toHaveText(paused);
 
@@ -172,7 +172,7 @@ test('keeps the proof a reset answers with, and sends it when signing in', async
 
   await page.goto('/sign-in');
   await page.getByLabel('Email or username').fill('rbsantiago');
-  await page.getByLabel('Password').fill('a long enough passphrase');
+  await page.getByLabel('Password', { exact: true }).fill('a long enough passphrase');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect.poll(() => sent.length).toBe(1);

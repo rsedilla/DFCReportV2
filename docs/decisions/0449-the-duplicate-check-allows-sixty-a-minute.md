@@ -64,4 +64,3 @@ Decision 0449, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.m
 Sections 3 and 24.
 
 Previous: [2026-11-06 — A wrong current password counts in the sign-in pause](0448-a-wrong-current-password-counts-in-the-sign-in-pause.md)
-(on its own pull request, #460, until both have merged)

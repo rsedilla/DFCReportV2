@@ -875,7 +875,7 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
 
   whoAmI = 'Oriel';
   await page.getByLabel('Email or username').fill('oriel@example.invalid');
-  await page.getByLabel('Password').fill('a-password-nobody-uses');
+  await page.getByLabel('Password', { exact: true }).fill('a-password-nobody-uses');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Oriel');
@@ -1035,6 +1035,36 @@ test('a wrong current password is said on its field', async ({ page }) => {
   await main.getByRole('button', { name: 'Save' }).click();
 
   await expect(main.getByText('That is not your current password.')).toBeVisible();
+  await expect(main.getByText('Your password is changed.')).toHaveCount(0);
+});
+
+// Ten wrong current passwords pause it, with sign-in, and the server's words are shown
+// (decision 0448), rather than the general words for a per-minute limit.
+test('the pause after ten wrong current passwords is said in its own words', async ({ page }) => {
+  const words =
+    'Paused for 15 minutes after 10 wrong passwords. Signing in with your email address is paused too; this device stays signed in.';
+  await mockSignedIn(page);
+  await page.route('**/api/v1/auth/password', (route) =>
+    route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'RATE_LIMITED',
+          message: words,
+          details: { reason: 'SIGN_IN_PAUSED', paused_until: '2030-01-01T00:15:00Z' },
+        },
+      }),
+    }),
+  );
+
+  await page.goto('/session');
+  const main = page.getByRole('region', { name: 'Your password' });
+  await main.getByLabel('Current password').fill('not the password');
+  await main.getByLabel('New password').fill('a second long passphrase');
+  await main.getByRole('button', { name: 'Save' }).click();
+
+  await expect(main.getByText(words)).toBeVisible();
   await expect(main.getByText('Your password is changed.')).toHaveCount(0);
 });
 

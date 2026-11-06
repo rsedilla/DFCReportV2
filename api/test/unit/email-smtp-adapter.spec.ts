@@ -164,6 +164,30 @@ describe('the SMTP email transport (section 6)', () => {
     expect(text).not.toContain('token=');
   });
 
+  it('tells the Admin a signed-in session typed the wrong current passwords (decision 0448)', () => {
+    const { subject, text } = compose(
+      {
+        kind: 'CURRENT_PASSWORD_PAUSED',
+        to: { email: 'admin@example.test', name: 'Invented Admin' },
+        email: 'invented@example.test',
+        holder: 'Invented Person',
+        pausedUntil: expiresAt,
+      },
+      smtp.linkOrigin,
+    );
+
+    expect(subject).toBe('DREAMS: 10 wrong current passwords on My Account');
+    expect(text).toContain(
+      "Someone signed in to Invented Person's account typed 10 wrong current passwords on My Account in 15 minutes.",
+    );
+    expect(text).toContain('Sign-in with invented@example.test is paused until');
+    expect(text).toContain(
+      'Ask Invented Person to reset the password with "I have forgotten my password", which signs out every device.',
+    );
+    expect(text).not.toContain('Nothing needs doing');
+    expect(text).not.toContain('token=');
+  });
+
   it('links an email change to the confirmation page, with the token encoded', () => {
     const { subject, text } = compose(
       {

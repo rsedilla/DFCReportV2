@@ -420,4 +420,29 @@ describe('sign-in pause after ten wrong passwords (decision 0413)', () => {
 
     expect(admitted.filter((attempt) => attempt.admitted)).toHaveLength(10);
   });
+
+  it('counts an attempt whose row a correct password deletes at that moment, rather than failing', async () => {
+    // The row exists, and another transaction holds it while it deletes it, as a correct
+    // password does (`succeeded`). The attempt waits, and must create the row again rather
+    // than find it gone and answer a server error, which six email changes sent at once
+    // reached in CI.
+    const pauses = app.get(SignInPauseService);
+    await pauses.begin('username:gone', null);
+
+    let pending: Promise<unknown> | undefined;
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .selectFrom('sign_in_pauses')
+        .select('identifier')
+        .where('identifier', '=', 'username:gone')
+        .forShare()
+        .execute();
+      pending = pauses.begin('username:gone', null);
+      pending.catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await trx.deleteFrom('sign_in_pauses').where('identifier', '=', 'username:gone').execute();
+    });
+
+    await expect(pending).resolves.toMatchObject({ admitted: true });
+  });
 });

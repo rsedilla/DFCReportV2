@@ -179,6 +179,20 @@ export function compose(
     ]);
   }
 
+  // Somebody signed in typed them, so the session itself may be in other hands (decision 0448).
+  if (message.kind === 'CURRENT_PASSWORD_PAUSED') {
+    return letter('DREAMS: 10 wrong current passwords on My Account', [
+      {
+        kind: 'p',
+        text: `Someone signed in to ${message.holder}'s account typed 10 wrong current passwords on My Account in 15 minutes. Sign-in with ${message.email} is paused until ${manila(message.pausedUntil)} (Manila time).`,
+      },
+      {
+        kind: 'p',
+        text: `If ${message.holder} was not changing the password or email address, someone else may be using a phone or computer still signed in to the account. Ask ${message.holder} to reset the password with "I have forgotten my password", which signs out every device.`,
+      },
+    ]);
+  }
+
   if (message.kind === 'SIGN_IN_PAUSED') {
     const name =
       'email' in message.typed

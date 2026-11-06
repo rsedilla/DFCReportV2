@@ -246,12 +246,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-06, the trigger being decision 0449: of 447 files, 446 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0449, 0448 aside, each moved the first two and
-neither of the others, none of them carrying a `Next:`. *0448 is on its own branch (PR #460), so
-this branch counts one file fewer than the sequence; whichever merges second recounts.* The
-recount before this one was dated 2026-11-05 and triggered by 0447, and was left stale by 0449
-the next day. The one before that was dated
+2026-11-06, the trigger being decision 0449: of 448 files, 447 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0449 each moved the first two and
+neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-06 and triggered by 0448, and was left stale by 0449 the same day. The one before that was dated
+2026-11-05 and triggered by 0447, and was left stale by 0448 the next day. The one before that was dated
 2026-11-05 and triggered by 0446, and was left stale by 0447 the same day. The one before that was dated
 2026-11-05 and triggered by 0445, and was left stale by 0446 the same day. The one before that was dated
 2026-11-05 and triggered by 0444, and was left stale by 0445 the same day. The one before that was dated
@@ -937,6 +936,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-05 — [The sidebar's account row: an initial, the name, and *My Account*](docs/decisions/0445-the-account-row-is-my-account.md)
 - 2026-11-05 — [*CG Records Due* and *DCC Records Due*](docs/decisions/0446-cg-and-dcc-records-due.md)
 - 2026-11-05 — [An emailed link's code leaves the address once the page has read it](docs/decisions/0447-an-emailed-links-code-leaves-the-address.md)
+- 2026-11-06 — [A wrong current password counts in the sign-in pause](docs/decisions/0448-a-wrong-current-password-counts-in-the-sign-in-pause.md)
 - 2026-11-06 — [The duplicate check allows sixty a minute, and reads indexes](docs/decisions/0449-the-duplicate-check-allows-sixty-a-minute.md)
 
 ### Open — awaiting a ruling
