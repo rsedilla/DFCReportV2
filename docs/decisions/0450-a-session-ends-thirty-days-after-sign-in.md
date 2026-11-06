@@ -57,4 +57,3 @@ Decision 0450, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.m
 Section 6.
 
 Previous: [2026-11-06 — The duplicate check allows sixty a minute, and reads indexes](0449-the-duplicate-check-allows-sixty-a-minute.md)
-(on its own pull request, #461, until it has merged)

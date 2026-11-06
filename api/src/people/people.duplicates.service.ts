@@ -192,9 +192,17 @@ export class PeopleDuplicatesService {
     // Compared against the normalized stored value, not the raw one. `unaccent`
     // is an extension this schema does not install, so the normalization is done
     // with `translate` over the characters that actually occur in these names.
-    const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
-    const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
-    const compactLastName = sql<string>`regexp_replace(lower(translate(last_name, ${ACCENTED}, ${UNACCENTED})), '[[:space:]''’-]', '', 'g')`;
+    //
+    // **These three are the expressions migration 0043 indexes, character for character**
+    // (decision 0449): an expression index is used only for the expression it was built on.
+    // The accent strings are literals rather than parameters, so the match holds for a plan
+    // reused across executions too, which cannot fold a parameter into the expression.
+    // `duplicate-check-indexes.spec.ts` fails if either side changes alone.
+    const accented = sql.lit(ACCENTED);
+    const unaccented = sql.lit(UNACCENTED);
+    const normalizedLastName = sql<string>`lower(translate(last_name, ${accented}, ${unaccented}))`;
+    const normalizedFirstName = sql<string>`lower(translate(first_name, ${accented}, ${unaccented}))`;
+    const compactLastName = sql<string>`regexp_replace(lower(translate(last_name, ${accented}, ${unaccented})), '[[:space:]''’-]', '', 'g')`;
     const surnameInitial = normalizedFirstLetter(subject.lastName);
 
     // The two branches the names reach, written once and used twice: in the narrowing

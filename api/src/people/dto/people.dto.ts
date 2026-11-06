@@ -418,6 +418,15 @@ export const CHURCH_WIDE_SEARCH_MINIMUM = 3;
 export const CHURCH_WIDE_PAGE_LIMIT = 20;
 export const CHURCH_WIDE_SEARCHES_PER_MINUTE = 30;
 
+/**
+ * The per-account rate of the duplicate check Add a Person and Edit details run as a leader
+ * types (decision 0449). It reads the whole church, so without one a leader's login could run
+ * it 120 times a minute. Sixty, not the search's thirty, because a check runs after each pause in
+ * typing a name and again when the birthday or mobile number changes, so one person entered
+ * takes several, and an encoder entering people quickly should not meet it.
+ */
+export const DUPLICATE_CHECKS_PER_MINUTE = 60;
+
 export class SearchPeopleDto {
   @IsString()
   // The upper bound is the name bound rather than a coincidence that matches it: this

@@ -108,6 +108,8 @@ const EMPTY = {
 function NewPersonForm() {
   const router = useRouter();
   const [values, setValues] = useState(EMPTY);
+  // Whether the duplicate check is paused, which holds the save (decision 0449).
+  const [checkPaused, setCheckPaused] = useState(false);
   const [leaderId, setLeaderId] = useState<string | null>(null);
   const [leaderName, setLeaderName] = useState<string | null>(null);
   const [leaderTouched, setLeaderTouched] = useState(false);
@@ -540,6 +542,7 @@ function NewPersonForm() {
             lastName={values.last_name}
             birthDate={notGiven.birth_date ? '' : values.birth_date}
             mobileNumber={notGiven.mobile_number ? '' : values.mobile_number}
+            onPausedChange={setCheckPaused}
           />
         </FormSection>
 
@@ -590,8 +593,14 @@ function NewPersonForm() {
         </FormSection>
 
         <FormActions>
-          <Button type="submit" disabled={create.isPending || !chosenLeaderId}>
-            {create.isPending ? 'Adding…' : 'Add Person'}
+          {/* Held while the duplicate check is paused (decision 0449): a match in another branch
+              is shown only by that check. */}
+          <Button type="submit" disabled={create.isPending || !chosenLeaderId || checkPaused}>
+            {create.isPending
+              ? 'Adding…'
+              : checkPaused
+                ? 'Add Person (after the check)'
+                : 'Add Person'}
           </Button>
         </FormActions>
       </form>
