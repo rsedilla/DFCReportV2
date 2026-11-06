@@ -49,6 +49,10 @@ export const viewport: Viewport = {
   // sideways has, by the body, the tab bar and a dialog. Zoom is left on (WCAG 1.4.4), unlike the many
   // apps that pair `cover` with turning it off.
   viewportFit: 'cover',
+  // **The phone's browser bar is the header's emerald** (owner, 2026-11-06), before the site is
+  // installed as well as after; the manifest's `theme_color` reaches only the installed app.
+  // One colour, because the top bar is emerald in both themes.
+  themeColor: '#006b35',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

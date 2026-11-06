@@ -79,6 +79,13 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), payment=(), usb=()' },
         ],
       },
+      // **The logo and icons are kept for a week** (owner, 2026-11-06) rather than checked with
+      // the server on every load, which is what files in `public/` get by default. A changed
+      // logo is given a new file name, so nobody is left a week on the old one.
+      {
+        source: '/dreams-:name.png',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=604800' }],
+      },
     ];
   },
 };
