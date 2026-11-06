@@ -101,10 +101,18 @@ export class SignInPauseService {
       .execute();
 
     return this.db.transaction().execute(async (trx) => {
+      // **Created and locked in one statement.** `DO NOTHING` takes no lock, so a correct
+      // password arriving at once (`succeeded`) could delete the row between this and the
+      // lock below, which then found nothing and answered a server error. `DO UPDATE` locks
+      // the row it finds, and where a concurrent delete removes it first, inserts instead.
       await trx
         .insertInto('sign_in_pauses')
         .values({ identifier })
-        .onConflict((oc) => oc.column('identifier').doNothing())
+        .onConflict((oc) =>
+          oc
+            .column('identifier')
+            .doUpdateSet({ identifier: (eb) => eb.ref('excluded.identifier') }),
+        )
         .execute();
 
       const row = await this.lockedRow(trx, identifier, proofHash);
