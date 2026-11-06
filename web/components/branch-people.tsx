@@ -61,6 +61,7 @@ type Row = {
     full_name: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    title?: string | null;
   } | null;
 } & Partial<ChurchCountFigures>;
 

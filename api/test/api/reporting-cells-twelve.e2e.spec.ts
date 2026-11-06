@@ -276,6 +276,7 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
       expect(rowOf(body, onofre).leader).toMatchObject({
         first_name: 'Onofre',
         last_name: 'Abella',
+        title: null,
       });
       expect(rowOf(body, pio).classification).toEqual(ZERO);
       expect(body.total.unique_people).toBe(3);

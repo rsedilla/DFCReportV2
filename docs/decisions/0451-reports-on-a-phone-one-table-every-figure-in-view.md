@@ -26,13 +26,17 @@ form.
   middle name left out: *John Andrew Peter E. Santos* is *John Andrew Peter S.* This is the
   owner's example, *Raymond S.*, and it sets aside on these tables Section 3's composed name
   (decisions 0271 and 0375).
+- A Pastor or Pastora is the one exception to leaving the title out: the title is written *Ps*
+  before the name, so *Pastora Lina Ocampo* is *Ps Lina O.* The owner asked for this on
+  2026-11-07, after seeing the names without it. Any other title, *Bishop* among them, is left
+  out.
 - Where two in one table would read the same, each takes more of the surname until they differ
   (*John Andrew Sa.*, *John Andrew So.*). A group in which one would need its whole surname takes
   every whole surname (*John Santo*, *John Santos*), and two alike to the whole surname keep their
   full names. The comparison never stops on the space in a two-word surname.
 - The name is built from the stored fields, never by splitting a full name: a surname may be two
   words (*Dela Cruz*) and a middle name a whole word. So each report row naming a leader now
-  carries `first_name` and `last_name` beside `full_name`.
+  carries `first_name`, `last_name` and `title` beside `full_name`.
 - The own row says *You*, *You · no Cell* or *You · 2 Cells*. Decision 0293's two lines read
   *Under 2+ leaders* and *Elsewhere in branch*.
 

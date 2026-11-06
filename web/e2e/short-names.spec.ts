@@ -65,3 +65,14 @@ test('gives both whole surnames where one surname begins the other', () => {
     'John Santos',
   ]);
 });
+
+test('writes a Pastor or Pastora as Ps before the name, and leaves out any other title', () => {
+  expect(
+    shortNames([
+      { ...person('Lina', '', 'Ocampo'), title: 'Pastora' },
+      { ...person('Ben', '', 'Abad'), title: 'pastor' },
+      { ...person('Rico', '', 'Dizon'), title: 'Bishop' },
+      { ...person('Ana', '', 'Lim'), title: null },
+    ]),
+  ).toEqual(['Ps Lina O.', 'Ps Ben A.', 'Rico D.', 'Ana L.']);
+});

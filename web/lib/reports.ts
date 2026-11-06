@@ -170,6 +170,7 @@ export interface CellTwelve {
       full_name: string;
       first_name?: string | null;
       last_name?: string | null;
+      title?: string | null;
     } | null;
     network?: 'MENS' | 'WOMENS' | null;
     /** On the Senior Pastors' tables, the root a row's leader sits under (decision 0326). */
@@ -282,6 +283,7 @@ export interface RecordingRow {
     full_name: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    title?: string | null;
   };
   cell: RecordingColumn;
   dcc: RecordingColumn;
@@ -322,6 +324,7 @@ export interface RecordingStatus {
           full_name: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          title?: string | null;
         };
         network: 'MENS' | 'WOMENS' | null;
         rows: RecordingRow[];
@@ -470,6 +473,7 @@ export interface ChurchCounts {
           full_name: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          title?: string | null;
         };
         network: 'MENS' | 'WOMENS' | null;
         rows: (ChurchCountFigures & {
@@ -479,6 +483,7 @@ export interface ChurchCounts {
             full_name: string | null;
             first_name?: string | null;
             last_name?: string | null;
+            title?: string | null;
           };
         })[];
       }[]
@@ -512,6 +517,7 @@ export interface BranchPeople {
           full_name: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          title?: string | null;
         } | null;
         people: number;
       }[]
@@ -549,6 +555,7 @@ export interface BranchCounts {
           full_name: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          title?: string | null;
         } | null;
       })[]
     | null;
@@ -585,6 +592,7 @@ export interface Trends {
       full_name: string | null;
       first_name?: string | null;
       last_name?: string | null;
+      title?: string | null;
     } | null;
     /**
      * A root's branch names its Network, and so does a Full view leader's own branch, by the

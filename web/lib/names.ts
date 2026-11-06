@@ -34,14 +34,19 @@ export interface NameParts {
   full_name: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  title?: string | null;
 }
+
+/** A pastor's title, which a phone's short name writes `Ps` (owner, 2026-11-07, decision 0451). */
+const PASTOR_TITLE = /^pastora?$/i;
 
 /**
  * The names a phone table shows where it has several figures (decision 0451): the whole
  * first-name field, the middle name left out, and the surname's first letter, so `John Andrew
  * Peter E. Santos` is `John Andrew Peter S.`. Where two in one table would read the same, each
  * takes more of the surname until they differ (`John Andrew Sa.`, `John Andrew So.`), and two
- * whose first names and surnames match in full keep their full names.
+ * whose first names and surnames match in full keep their full names. A Pastor or Pastora is
+ * written `Ps` before the name (`Ps Lina O.`); any other title is left out.
  *
  * **The parts are the stored fields, never a split of the full name**: a surname may be two
  * words (`Dela Cruz`) and a middle name a whole word, so a split would guess. A person sent
@@ -107,6 +112,9 @@ export function shortNames(people: readonly NameParts[]): (string | null)[] {
       return name;
     }
     const twins = final.filter((other) => other?.toLocaleLowerCase() === name.toLocaleLowerCase());
-    return twins.length > 1 ? people[index].full_name : name;
+    if (twins.length > 1) {
+      return people[index].full_name;
+    }
+    return PASTOR_TITLE.test(people[index].title?.trim() ?? '') ? `Ps ${name}` : name;
   });
 }

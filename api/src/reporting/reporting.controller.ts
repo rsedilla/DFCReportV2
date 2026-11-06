@@ -386,6 +386,7 @@ export class ReportingController {
         full_name: identity?.fullName ?? null,
         first_name: identity?.firstName ?? null,
         last_name: identity?.lastName ?? null,
+        title: identity?.title ?? null,
       };
     };
     const byName = (left: string, right: string) => {
@@ -582,6 +583,7 @@ export class ReportingController {
             full_name: identity.fullName,
             first_name: identity.firstName,
             last_name: identity.lastName,
+            title: identity.title,
           },
           ...figures(row.figures),
           opens_pending: opensPending(row.leaderId),
@@ -748,6 +750,7 @@ export class ReportingController {
                             full_name: identity.fullName,
                             first_name: identity.firstName,
                             last_name: identity.lastName,
+                            title: identity.title,
                           },
                     people: row.people,
                   },
@@ -848,6 +851,7 @@ export class ReportingController {
                             full_name: identity.fullName,
                             first_name: identity.firstName,
                             last_name: identity.lastName,
+                            title: identity.title,
                           },
                     ...countFigures(row.figures),
                   },
@@ -1163,6 +1167,7 @@ export class ReportingController {
       full_name: string | null;
       first_name: string | null;
       last_name: string | null;
+      title: string | null;
     };
     byName: (left: string, right: string) => number;
   }> {
@@ -1178,6 +1183,7 @@ export class ReportingController {
           full_name: identity?.fullName ?? null,
           first_name: identity?.firstName ?? null,
           last_name: identity?.lastName ?? null,
+          title: identity?.title ?? null,
         };
       },
       byName: (left: string, right: string) => {
@@ -1273,6 +1279,7 @@ export class ReportingController {
                       full_name: identity.fullName,
                       first_name: identity.firstName,
                       last_name: identity.lastName,
+                      title: identity.title,
                     },
               network: row.network,
               unique_people: row.unique_people,
@@ -1306,6 +1313,7 @@ export class ReportingController {
       full_name: string | null;
       first_name: string | null;
       last_name: string | null;
+      title: string | null;
       network: NetworkName | null;
     }[]
   > {
@@ -1326,6 +1334,7 @@ export class ReportingController {
           full_name: identity?.fullName ?? null,
           first_name: identity?.firstName ?? null,
           last_name: identity?.lastName ?? null,
+          title: identity?.title ?? null,
           network,
         };
       });
@@ -1419,6 +1428,7 @@ export class ReportingController {
                   full_name: identity.fullName,
                   first_name: identity.firstName,
                   last_name: identity.lastName,
+                  title: identity.title,
                 },
                 filed: line.filed,
                 owed: line.owed,
