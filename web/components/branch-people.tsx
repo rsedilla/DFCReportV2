@@ -6,12 +6,14 @@ import { asAt, COUNT_COLUMNS, type CountFigure } from '@/components/church-count
 import { RangeNavigator } from '@/components/my-twelve';
 import { ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
+import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { TextLink } from '@/components/ui/text-link';
 import { describeFailure } from '@/lib/messages';
 import { getPerson } from '@/lib/people';
-import { monthFromQuery } from '@/lib/reporting-month';
+import { keepPreviousPeriod } from '@/lib/keep-previous-page';
+import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getBranchCounts, getBranchPeople, type ChurchCountFigures } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
@@ -71,8 +73,11 @@ export function BranchCountsPanel({
   const columns = COUNT_COLUMNS[figure];
 
   // *# of People* keeps its own route (decision 0364); the two Cell counts have theirs (0380).
+  const countsKey = ['branch-counts', figure === 'PEOPLE' ? 'people' : 'cells', subject, month];
   const counts = useQuery({
-    queryKey: ['branch-counts', figure === 'PEOPLE' ? 'people' : 'cells', subject, month],
+    queryKey: countsKey,
+    // Another month keeps the counts shown, faded, until its own arrive (owner, 2026-11-06).
+    placeholderData: keepPreviousPeriod(countsKey, [3]),
     queryFn: async ({ signal }) => {
       if (figure === 'PEOPLE') {
         const people = await getBranchPeople(subject, month, signal);
@@ -129,6 +134,7 @@ export function BranchCountsPanel({
         <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
       </div>
 
+      <KeptFigures kept={counts.isPlaceholderData} loading={monthLabel(month)}>
       {counts.isPending ? (
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
@@ -220,6 +226,7 @@ export function BranchCountsPanel({
           </>
         )
       ) : null}
+      </KeptFigures>
     </section>
   );
 }

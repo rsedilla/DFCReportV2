@@ -13,6 +13,7 @@ import { NameFields } from '@/components/name-fields';
 import { PersonCells } from '@/components/person-cells';
 import { PossibleMatches } from '@/components/possible-matches';
 import { Button, buttonClasses } from '@/components/ui/button';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -91,7 +92,7 @@ function EditPersonForm() {
       <h1 className="mt-4 text-xl font-semibold tracking-tight">Edit details</h1>
 
       {person.isPending ? (
-        <p className="text-muted mt-6 text-sm">Loading…</p>
+        <LoadingBlocks shape="form" className="mt-6" />
       ) : person.isError ? (
         <div className="mt-6">
           <FailureNotice failure={describeFailure(person.error)} />
