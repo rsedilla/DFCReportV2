@@ -165,7 +165,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await mockSignInRefused(page);
       await page.getByLabel('Email or username').fill('nobody@example.invalid');
-      await page.getByLabel('Password').fill('not the right password');
+      await page.getByLabel('Password', { exact: true }).fill('not the right password');
       await page.getByRole('button', { name: 'Sign in' }).click();
       // Scoped to the form: Next renders its own route announcer as a
       // `role="alert"` live region on every page, so an unscoped lookup matches
@@ -180,7 +180,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'CODE');
       await page.getByLabel('Email or username').fill('admin@example.invalid');
-      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByLabel('Password', { exact: true }).fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.getByLabel('Code').fill('000000');
       await page.getByRole('button', { name: 'Continue' }).click();
@@ -193,7 +193,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'SETUP');
       await page.getByLabel('Email or username').fill('admin@example.invalid');
-      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByLabel('Password', { exact: true }).fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
     },
@@ -204,7 +204,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await mockSecondStep(page, 'SETUP');
       await page.getByLabel('Email or username').fill('admin@example.invalid');
-      await page.getByLabel('Password').fill('a-password-for-this-test');
+      await page.getByLabel('Password', { exact: true }).fill('a-password-for-this-test');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.getByRole('button', { name: 'Next' }).click();
       await page.getByLabel('Code').fill(SECOND_STEP_CODE);

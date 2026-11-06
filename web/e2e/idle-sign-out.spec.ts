@@ -146,7 +146,7 @@ test.describe('idle sign-out (decision 0435)', () => {
     await page.goto('/sign-in');
 
     await page.getByLabel('Email or username').fill('leader@example.test');
-    await page.getByLabel('Password').fill('an-invented-password');
+    await page.getByLabel('Password', { exact: true }).fill('an-invented-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect.poll(() => sent.length).toBe(1);
