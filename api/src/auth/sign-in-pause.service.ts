@@ -240,6 +240,27 @@ export class SignInPauseService {
   }
 
   /**
+   * The same for a pause started by wrong current passwords on My Account (decision 0448):
+   * its own entry, naming the signed-in account as the actor, and its own once a day for one
+   * account, so a sign-in pause emailed earlier cannot hide it. The twenty a day are shared.
+   */
+  async recordCurrentPasswordPause(
+    accountId: string,
+    identifier: string,
+    pausedUntil: Date,
+  ): Promise<boolean> {
+    return this.recordAlert(accountId, 'CURRENT_PASSWORD', (trx, email) =>
+      this.audit.writeWithin(trx, {
+        actorId: accountId,
+        action: 'current_password.paused',
+        targetType: 'account',
+        targetId: accountId,
+        after: { name: identifier, paused_until: pausedUntil.toISOString(), admin_emailed: email },
+      }),
+    );
+  }
+
+  /**
    * The same for a pause of an account's second step after ten wrong codes (decision 0441).
    * Its once a day for one account is counted apart from the password pause's, because a code
    * pause means the password is known, which is worse news than guessing at it; the twenty a
@@ -259,7 +280,7 @@ export class SignInPauseService {
 
   private async recordAlert(
     accountId: string,
-    kind: 'PASSWORD' | 'SECOND_STEP',
+    kind: 'PASSWORD' | 'SECOND_STEP' | 'CURRENT_PASSWORD',
     record: (trx: Transaction<Database>, email: boolean) => Promise<unknown>,
   ): Promise<boolean> {
     return this.db.transaction().execute(async (trx) => {
