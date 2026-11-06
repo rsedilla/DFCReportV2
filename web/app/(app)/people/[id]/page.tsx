@@ -16,6 +16,7 @@ import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
 import { PersonGrowth } from '@/components/person-growth';
 import { Button, buttonClasses } from '@/components/ui/button';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { TextLink } from '@/components/ui/text-link';
@@ -166,7 +167,7 @@ function PersonDetail() {
       ) : null}
 
       {person.isPending ? (
-        <p className="text-muted mt-6 text-sm">Loading…</p>
+        <LoadingBlocks shape="person" className="mt-6" />
       ) : person.isError ? (
         <div className="mt-6">
           <FailureNotice failure={refused ? REFUSED : describeFailure(person.error)} />

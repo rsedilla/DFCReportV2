@@ -17,6 +17,7 @@ import {
   ReportsTabs,
   ReportViewSwitch,
 } from '@/components/reports-tabs';
+import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { describeFailure } from '@/lib/messages';
@@ -24,7 +25,8 @@ import { getBranch } from '@/lib/network';
 import { useKeptLeader } from '@/lib/merged-leader';
 import { getCellTwelve } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
-import { rangeEndOf } from '@/lib/report-range';
+import { keepPreviousPeriod } from '@/lib/keep-previous-page';
+import { rangeEndOf, rangeLabel } from '@/lib/report-range';
 import { useScreenAddress } from '@/lib/screen-address';
 import { periodStillOpenNote } from '@/lib/weekly-deadline';
 
@@ -70,8 +72,12 @@ export function CellReport() {
   const branchReader = isBranchReader(me.data);
   const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
 
+  const twelveKey = ['cell-twelve', kind, start, subject] as const;
   const twelve = useQuery({
-    queryKey: ['cell-twelve', kind, start, subject],
+    queryKey: twelveKey,
+    // A change of period keeps the figures shown, faded, until the new ones arrive (owner,
+    // 2026-11-06); another leader still shows Loading.
+    placeholderData: keepPreviousPeriod(twelveKey, [1, 2]),
     queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, subject!, signal),
     enabled: subject !== null,
   });
@@ -106,7 +112,7 @@ export function CellReport() {
             kind={kind}
             start={start}
             current={current}
-            open={twelve.data?.open}
+            open={twelve.isPlaceholderData ? undefined : twelve.data?.open}
             quiet={seniorPastor}
             labelled={branchReader || seniorPastor ? 'bare' : false}
             onChange={period.choosePeriodStart}
@@ -138,7 +144,7 @@ export function CellReport() {
           </div>
           )}
           {/* A Full view leader's note under the controls (decision 0363): whether it is still open. */}
-          {branchReader && twelve.data ? (
+          {branchReader && twelve.data && !twelve.isPlaceholderData ? (
             <p className="text-muted basis-full text-sm">
               {twelve.data.open ? `${periodStillOpenNote(rangeEndOf(kind, start))}.` : 'Closed.'}
             </p>
@@ -173,6 +179,7 @@ export function CellReport() {
           />
         </div>
 
+        <KeptFigures kept={twelve.isPlaceholderData} loading={rangeLabel(kind, start)}>
         {twelve.isPending || subject === null ? (
           <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
         ) : twelve.data ? (
@@ -210,6 +217,7 @@ export function CellReport() {
             )}
           </div>
         ) : null}
+        </KeptFigures>
       </ReportsTabs>
     </main>
   );
