@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
@@ -144,7 +145,7 @@ export function CorrectSexDialog({
           Network root is decided for the Network.
         </p>
       ) : branch.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading…</p>
+        <LoadingBlocks shape="lines" className="mt-4" />
       ) : blocked ? (
         <div className="mt-4 text-sm leading-relaxed">
           <p>

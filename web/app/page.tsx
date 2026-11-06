@@ -1,9 +1,11 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { resolveLanding } from '@/lib/landing';
+import { getMe } from '@/lib/me';
 import { hasStoredSession } from '@/lib/session';
 
 /**
@@ -22,6 +24,7 @@ import { hasStoredSession } from '@/lib/session';
  */
 export default function HomePage() {
   const router = useRouter();
+  const client = useQueryClient();
 
   useEffect(() => {
     if (!hasStoredSession()) {
@@ -31,7 +34,12 @@ export default function HomePage() {
 
     let cancelled = false;
 
-    void resolveLanding().then((path) => {
+    // Asked through the shared cache under `['me']`, the key the shell reads, so the screen it
+    // lands on draws its sidebar from this answer rather than asking again (owner, 2026-11-06).
+    void resolveLanding(() =>
+      // No retries: an account that cannot be described lands on Record at once, as before.
+      client.fetchQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal), retry: false }),
+    ).then((path) => {
       if (!cancelled) {
         router.replace(path);
       }
@@ -40,7 +48,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, client]);
 
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5">

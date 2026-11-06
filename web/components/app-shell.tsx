@@ -201,6 +201,25 @@ export const PAGE_WIDTH = {
  * the sidebar. It is one `<nav>` restyled rather than two, so there is exactly one
  * landmark named Main at every width and nothing to keep in step.
  */
+/**
+ * Five grey places, shaped as the items are at each width: an icon over a word on a phone's tab
+ * bar, an icon before a word in the sidebar. Five is the most common set. Hidden from a screen
+ * reader, which is told nothing until the real items arrive.
+ */
+function NavPlaceholders() {
+  return Array.from({ length: 5 }, (_, index) => (
+    <span
+      key={index}
+      aria-hidden="true"
+      data-nav-placeholder=""
+      className="flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1.5 lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:px-3"
+    >
+      <span className="bg-tabbar-edge lg:bg-sidebar-ink/25 h-6 w-7 rounded-md lg:size-5" />
+      <span className="bg-tabbar-edge lg:bg-sidebar-ink/25 h-2.5 w-11 rounded-full lg:w-24" />
+    </span>
+  ));
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
@@ -451,7 +470,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 'lg:static lg:flex-col lg:gap-0.5 lg:border-t-0 lg:bg-transparent lg:pb-0',
               )}
             >
-              {links.map((link) => renderItem(link))}
+              {/* Grey places for the items while `/auth/me` has not answered (owner, 2026-11-06), so
+                  the bar or the sidebar does not stand empty and then fill. Which items an account
+                  has still waits for the answer (owner, 2026-10-11). */}
+              {me.isPending ? <NavPlaceholders /> : links.map((link) => renderItem(link))}
             </nav>
 
             {/*

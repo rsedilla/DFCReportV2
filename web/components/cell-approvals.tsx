@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -14,6 +14,7 @@ import {
   listApprovalRequests,
   type ApprovalRequest,
   type DeclineReason,
+  type QueuePerson,
 } from '@/lib/cell-approvals';
 import { categoryLabel, dayOfWeekLabel, timeLabel } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
@@ -26,6 +27,11 @@ import { todayInManila } from '@/lib/reporting-month';
  * Approves Cells sees those of its own branch; an Admin the whole church, each request naming
  * whose branch it is in. Approving creates the Cell at once, with its three members;
  * declining asks for one of section 10's fixed reasons.
+ *
+ * **Each request reads as plain text, and Approve asks once** (owner, 2026-11-06): the leader,
+ * the group, when it meets, who asked, and the members one per line, each with their Member ID,
+ * so the approver sees who is in the Cell; then "Create this Cell now?" with Yes and Back, so a
+ * stray tap creates nothing.
  */
 export function CellApprovals({ wholeChurch }: { wholeChurch: boolean }) {
   const requests = useQuery({
@@ -68,6 +74,12 @@ export function CellApprovals({ wholeChurch }: { wholeChurch: boolean }) {
 function ApprovalCard({ request, wholeChurch }: { request: ApprovalRequest; wholeChurch: boolean }) {
   const queryClient = useQueryClient();
   const [declining, setDeclining] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const question = useRef<HTMLParagraphElement>(null);
+  // The question takes focus when it appears, so a keyboard or screen reader lands on it.
+  useEffect(() => {
+    if (confirming) question.current?.focus();
+  }, [confirming]);
   const [reason, setReason] = useState<DeclineReason | ''>('');
   const [note, setNote] = useState('');
 
@@ -94,21 +106,26 @@ function ApprovalCard({ request, wholeChurch }: { request: ApprovalRequest; whol
 
   return (
     <li className="border-line border p-4">
-      <p className="font-medium">{title(request)}</p>
-      <p className="text-muted mt-1 text-sm">
-        {cellLine(request)}
-        {request.requested_by_person ? ` · asked by ${request.requested_by_person.full_name}` : ''}{' '}
-        · sent{' '}
-        {day(request.requested_at)}
-      </p>
-      {wholeChurch && request.branch_of ? (
-        <p className="text-muted mt-1 text-sm">In {request.branch_of.full_name}&rsquo;s branch</p>
-      ) : null}
+      <h3 className="text-[1.0625rem] font-bold">{title(request)}</h3>
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[0.9375rem]">
+        {details(request, wholeChurch).map(([term, value]) => (
+          <div key={term} className="contents">
+            <dt className="text-muted">{term}</dt>
+            <dd className="min-w-0">{value}</dd>
+          </div>
+        ))}
+      </dl>
       {request.members.length > 0 ? (
-        <p className="mt-2 text-sm">
-          <span className="font-bold">Members:</span>{' '}
-          {request.members.map((member) => member.full_name).join(', ')}
-        </p>
+        <>
+          <h4 className="mt-4 text-[0.9375rem] font-bold">Members ({request.members.length})</h4>
+          <ol className="mt-1.5 list-decimal pl-6 text-[0.9375rem] leading-relaxed">
+            {request.members.map((member) => (
+              <li key={member.person_id}>
+                <Named person={member} />
+              </li>
+            ))}
+          </ol>
+        </>
       ) : null}
 
       <div className="mt-3">
@@ -145,10 +162,25 @@ function ApprovalCard({ request, wholeChurch }: { request: ApprovalRequest; whol
             </Button>
           </div>
         </div>
+      ) : confirming ? (
+        <div className="border-line mt-4 flex flex-col gap-3 border-t pt-4">
+          <p ref={question} tabIndex={-1} className="font-bold focus:outline-none">
+            {confirmQuestion(request)}
+          </p>
+          <p className="text-muted text-sm leading-relaxed">{confirmLine(request)}</p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button disabled={busy} onClick={() => approve.mutate()}>
+              {approve.isPending ? 'Approving…' : 'Yes, approve'}
+            </Button>
+            <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>
+              Back
+            </Button>
+          </div>
+        </div>
       ) : (
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <Button disabled={busy} onClick={() => approve.mutate()}>
-            {approve.isPending ? 'Approving…' : 'Approve'}
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <Button disabled={busy} onClick={() => setConfirming(true)}>
+            Approve
           </Button>
           <Button variant="secondary" disabled={busy} onClick={() => setDeclining(true)}>
             Decline
@@ -160,27 +192,72 @@ function ApprovalCard({ request, wholeChurch }: { request: ApprovalRequest; whol
 }
 
 function title(request: ApprovalRequest): string {
-  const leader = request.prospective_leader.full_name;
-  const cell =
-    request.cell.category !== null && request.cell.day_of_week !== null
-      ? `${categoryLabel(request.cell.category)} · ${dayOfWeekLabel(request.cell.day_of_week).slice(0, 3)}`
-      : (request.cell.cell_id ?? 'the Cell');
-
+  const cell = request.cell.cell_id;
   if (request.kind === 'HANDOVER') {
-    return `Hand ${cell} to ${leader}`;
+    return cell === null ? 'Handover' : `Hand over ${cell}`;
   }
-  return request.restart ? `Restart ${cell} with ${leader}` : `New Cell led by ${leader}`;
+  if (request.restart) {
+    return cell === null ? 'Restart a closed Cell' : `Restart ${cell}`;
+  }
+  return 'New Cell';
 }
 
-function cellLine(request: ApprovalRequest): string {
+/** A person by name, their Member ID after it in grey and kept whole. */
+function Named({ person }: { person: QueuePerson }) {
+  return (
+    <>
+      {person.full_name}{' '}
+      <span className="text-muted whitespace-nowrap">&middot; {person.member_id}</span>
+    </>
+  );
+}
+
+/** The request's lines, in reading order, each a term and its value. */
+function details(request: ApprovalRequest, wholeChurch: boolean): [string, ReactNode][] {
   const { category, day_of_week: dayOfWeek, time_of_day: time } = request.cell;
-  const meets =
-    category !== null && dayOfWeek !== null
-      ? `${categoryLabel(category)}, ${dayOfWeekLabel(dayOfWeek)}s${time === null ? '' : ` at ${timeLabel(time)}`}`
-      : (request.cell.cell_id ?? '');
-  return request.kind === 'HANDOVER' && request.outgoing_leader
-    ? `${meets}, now led by ${request.outgoing_leader.full_name}`
-    : meets;
+  const rows: [string, ReactNode][] = [];
+
+  if (request.kind === 'HANDOVER') {
+    if (request.outgoing_leader) {
+      rows.push(['Led now by', <Named key="now" person={request.outgoing_leader} />]);
+    }
+    rows.push(['New leader', <Named key="new" person={request.prospective_leader} />]);
+  } else {
+    rows.push(['Leader', <Named key="leader" person={request.prospective_leader} />]);
+  }
+  if (category !== null) {
+    rows.push(['Group', categoryLabel(category)]);
+  }
+  if (dayOfWeek !== null) {
+    rows.push(['Meets', `${dayOfWeekLabel(dayOfWeek)}s${time === null ? '' : ` at ${timeLabel(time)}`}`]);
+  }
+  rows.push([
+    'Asked by',
+    request.requested_by_person
+      ? `${request.requested_by_person.full_name}, ${day(request.requested_at)}`
+      : day(request.requested_at),
+  ]);
+  if (wholeChurch && request.branch_of) {
+    rows.push(['Branch', `${request.branch_of.full_name}’s`]);
+  }
+  return rows;
+}
+
+function confirmQuestion(request: ApprovalRequest): string {
+  if (request.kind === 'HANDOVER') return 'Hand this Cell over now?';
+  return request.restart ? 'Restart this Cell now?' : 'Create this Cell now?';
+}
+
+function confirmLine(request: ApprovalRequest): string {
+  const leader = request.prospective_leader.full_name;
+  if (request.kind === 'HANDOVER') {
+    return request.outgoing_leader
+      ? `${leader} becomes its leader in place of ${request.outgoing_leader.full_name}.`
+      : `${leader} becomes its leader.`;
+  }
+  const count = request.members.length;
+  if (count === 0) return `${leader} becomes its leader.`;
+  return `${leader} becomes its leader, with the ${count === 1 ? 'member' : `${count} members`} above.`;
 }
 
 /** "14 Oct", the Manila day of an instant. */
