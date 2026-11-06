@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button, buttonClasses } from '@/components/ui/button';
@@ -10,6 +9,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
+import { useLinkToken } from '@/lib/link-token';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import { keepResetProof } from '@/lib/reset-proof';
 import { suggestActivationUsername, usernameHint } from '@/lib/username';
@@ -57,7 +57,8 @@ export function SetPasswordForm({
   successTitle: string;
   successBody: string;
 }) {
-  const token = useSearchParams().get('token');
+  // Taken out of the address once read, and kept in this tab (decision 0447).
+  const { token, ready, forget } = useLinkToken();
   const [password, setPassword] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -90,6 +91,10 @@ export function SetPasswordForm({
         </Link>
       </div>
     );
+  }
+
+  if (!token && !ready) {
+    return <p className="text-muted text-sm">Loading…</p>;
   }
 
   // A link arriving without its token is a broken link rather than a refusal,
@@ -147,6 +152,7 @@ export function SetPasswordForm({
       if (answer && typeof answer.sign_in_proof === 'string') {
         keepResetProof(answer.sign_in_proof);
       }
+      forget();
       setDone(true);
     } catch (cause) {
       const onUsername = fieldErrorFor(cause, 'username');
