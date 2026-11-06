@@ -175,9 +175,12 @@ export class IdempotencyInterceptor implements NestInterceptor {
                 // A 5xx carries no decision and rolls back, so the claim is
                 // released and the client may retry. A 4xx is this request's
                 // outcome and is stored, so a repeat of the same body is given the
-                // same answer rather than executing again.
+                // same answer rather than executing again. **A 429 is released as a
+                // 5xx is** (section 22, decision 0448): a limit is lifted by time, not
+                // by a different body, so storing it would refuse the same body for a
+                // day after the limit had ended.
                 const settle =
-                  status >= 500
+                  status >= 500 || status === 429
                     ? this.idempotency.release({ key, accountId, claimId })
                     : this.idempotency.complete({
                         key,

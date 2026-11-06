@@ -106,6 +106,7 @@ const WHAT: Record<string, string> = {
   'password.reset': 'Password reset',
   'password.changed': 'Password changed',
   'sign_in.paused': 'Sign-in paused after wrong passwords',
+  'current_password.paused': 'Paused after wrong current passwords on My Account',
   'role.granted': 'Role given',
   'cell.created': 'Cell created',
   'cell.closed': 'Cell closed',

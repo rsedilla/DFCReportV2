@@ -4,6 +4,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
 import {
+  ApiError,
+  ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
@@ -23,7 +25,8 @@ import {
   sessionPredatesSecondStep,
 } from './accounts.repository';
 import { PasswordService } from './password.service';
-import { SignInPauseService } from './sign-in-pause.service';
+import { noteCurrentPasswordPause, type PauseAlertDeps } from './sign-in-pause-alert';
+import { pauseIdentifier, SignInPauseService } from './sign-in-pause.service';
 import { TokensService, hashToken } from './tokens.service';
 import { UsernamesService, assertUsernameShape } from './usernames.service';
 
@@ -284,6 +287,58 @@ export class CredentialsService {
     return { sign_in_proof: proof };
   }
 
+  /** What the shared pause alert needs from this service (decision 0448). */
+  private alertDeps(): PauseAlertDeps {
+    return {
+      pauses: this.pauses,
+      people: this.people,
+      accounts: this.accounts,
+      email: this.email,
+      logger: this.logger,
+    };
+  }
+
+  /**
+   * The current password asked by My Account, **counted in the same pause as sign-in for the
+   * account's email address** (section 6, decision 0448): ten wrong ones within fifteen minutes,
+   * from sign-in and here together, pause both for fifteen. Counted before it is checked and in
+   * the same order sign-in takes, so ten sent at once cannot all pass a count none has joined.
+   * A right one starts the count again, as at sign-in. The username's count is its own, as at
+   * sign-in. A pause this starts has its own audit entry and its own alert to the Admin, saying
+   * a signed-in session may be in other hands (owner, 2026-11-06).
+   */
+  private async checkCurrentPassword(
+    account: { id: string; person_id: string; email: string; password_hash: string | null },
+    currentPassword: string,
+  ): Promise<void> {
+    const typed = { email: account.email };
+    const identifier = pauseIdentifier(typed);
+    // No reset proof: the browser that reset gets through a pause at sign-in only.
+    const attempt = await this.pauses.begin(identifier, null);
+    if (!attempt.admitted) {
+      throw currentPasswordPaused(attempt.pausedUntil);
+    }
+
+    if (await this.passwords.verify(account.password_hash, currentPassword)) {
+      await this.pauses.succeeded(identifier);
+      return;
+    }
+
+    const pausedUntil = await this.pauses.failed(identifier);
+    if (pausedUntil !== null) {
+      void noteCurrentPasswordPause(
+        this.alertDeps(),
+        account.email,
+        identifier,
+        account.id,
+        account.person_id,
+        pausedUntil,
+      );
+      throw currentPasswordPaused(pausedUntil);
+    }
+    throw wrongCurrentPassword();
+  }
+
   /**
    * The holder changes their own password while signed in (section 6, decision 0351).
    *
@@ -308,9 +363,7 @@ export class CredentialsService {
       .executeTakeFirstOrThrow();
 
     // Both hashes outside the transaction, for the reason `setPassword` gives.
-    if (!(await this.passwords.verify(account.password_hash, currentPassword))) {
-      throw wrongCurrentPassword();
-    }
+    await this.checkCurrentPassword(account, currentPassword);
     const passwordHash = await this.passwords.hash(newPassword);
     const changedAt = new Date();
 
@@ -401,14 +454,12 @@ export class CredentialsService {
   ): Promise<void> {
     const account = await this.db
       .selectFrom('accounts')
-      .select(['id', 'person_id', 'email_normalized', 'password_hash'])
+      .select(['id', 'person_id', 'email', 'email_normalized', 'password_hash'])
       .where('id', '=', actor.accountId)
       .executeTakeFirstOrThrow();
 
     // Outside the transaction, for the reason `setPassword` gives.
-    if (!(await this.passwords.verify(account.password_hash, currentPassword))) {
-      throw wrongCurrentPassword();
-    }
+    await this.checkCurrentPassword(account, currentPassword);
 
     const email = newEmail.trim();
     const normalized = normalizeEmail(email);
@@ -772,6 +823,21 @@ function addressTaken(): InvariantViolationError {
   return new InvariantViolationError(
     'That email address already has an account, so it cannot be used for yours.',
     { field: 'email' },
+  );
+}
+
+/**
+ * The answer while the account's address is paused (decision 0448), in the owner's words:
+ * `RATE_LIMITED` with section 6's `SIGN_IN_PAUSED`, as sign-in answers it, naming when it
+ * opens. Never stored against the idempotency key (section 22), since time lifts it.
+ */
+function currentPasswordPaused(pausedUntil: Date | null): ApiError {
+  return new ApiError(
+    ApiErrorCode.RATE_LIMITED,
+    'Paused for 15 minutes after 10 wrong passwords. Signing in with your email address is paused too; this device stays signed in.',
+    pausedUntil === null
+      ? { reason: 'SIGN_IN_PAUSED' }
+      : { reason: 'SIGN_IN_PAUSED', paused_until: pausedUntil.toISOString() },
   );
 }
 
