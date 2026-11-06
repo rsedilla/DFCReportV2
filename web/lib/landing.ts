@@ -40,9 +40,11 @@ export function landingPath(me: SessionDescription | undefined): string {
  * holding the person on a waiting screen: Record is where every account may go,
  * and whatever went wrong is reported there by the screen that asks again.
  */
-export async function resolveLanding(): Promise<string> {
+export async function resolveLanding(
+  describe: () => Promise<SessionDescription> = getMe,
+): Promise<string> {
   try {
-    return landingPath(await getMe());
+    return landingPath(await describe());
   } catch {
     return RECORD_PATH;
   }
