@@ -112,15 +112,24 @@ test.describe('Cells to Approve (decision 0352)', () => {
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
     await expect(page).toHaveURL(/view=APPROVE/);
 
-    const card = page.getByRole('listitem').filter({ hasText: 'New Cell led by' });
-    await expect(card).toContainText(`New Cell led by ${PERSON_IN_SCOPE.full_name}`);
-    await expect(card).toContainText('Couple, Wednesdays');
-    await expect(card).toContainText('asked by Corazon Batac');
-    await expect(card).toContainText('In Elena Cruz’s branch');
-    await expect(card).toContainText('Members: Ana Dela Cruz, Bea Mendoza, Carla Navarro');
+    // Plain text, one line each, and the members one per line with their Member IDs (owner,
+    // 2026-11-06).
+    const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'New Cell' }) });
+    const line = (term: string) => card.locator('dt', { hasText: term }).locator('xpath=following-sibling::dd[1]');
+    await expect(line('Leader')).toHaveText(`${PERSON_IN_SCOPE.full_name} · ${PERSON_IN_SCOPE.member_id}`);
+    await expect(line('Group')).toHaveText('Couple');
+    await expect(line('Meets')).toHaveText(/^Wednesdays at 7:30/);
+    await expect(line('Asked by')).toHaveText('Corazon Batac, 20 Jun');
+    await expect(line('Branch')).toHaveText('Elena Cruz’s');
+    await expect(card.getByRole('heading', { name: 'Members (3)' })).toBeVisible();
+    await expect(card.getByRole('list').getByRole('listitem')).toHaveText([
+      'Ana Dela Cruz · M-000701',
+      'Bea Mendoza · M-000702',
+      'Carla Navarro · M-000703',
+    ]);
   });
 
-  test('approves a request, and the queue is read again', async ({ page }) => {
+  test('approves a request only once Yes is pressed, and the queue is read again', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
     await mockCellApprover(page);
@@ -129,10 +138,52 @@ test.describe('Cells to Approve (decision 0352)', () => {
     await page.goto('/cells?view=APPROVE');
     await page.getByRole('button', { name: 'Approve', exact: true }).click();
 
+    // A tap asks first, and sends nothing (owner, 2026-11-06).
+    await expect(page.getByText('Create this Cell now?')).toBeFocused();
+    await expect(
+      page.getByText(`${PERSON_IN_SCOPE.full_name} becomes its leader, with the 3 members above.`),
+    ).toBeVisible();
+    expect(posted).toEqual([]);
+
+    // Back returns to the request, still sending nothing.
+    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByText('Create this Cell now?')).toHaveCount(0);
+    expect(posted).toEqual([]);
+
+    await page.getByRole('button', { name: 'Approve', exact: true }).click();
+    await page.getByRole('button', { name: 'Yes, approve' }).click();
+
     await expect(page.getByText('Nothing waiting for you to approve.')).toBeVisible();
     expect(posted).toEqual([
       { path: `/api/v1/cells/leadership-requests/${REQUEST_ID}/approve`, body: {} },
     ]);
+  });
+
+  test('a handover names the leader now and the new one, and asks before handing over', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellApprover(page);
+    const handover = {
+      ...PENDING,
+      kind: 'HANDOVER',
+      cell: { cell_id: 'CELL-000009', category: 'YOUNG_PRO', day_of_week: 5, time_of_day: '19:00:00' },
+      outgoing_leader: { person_id: '22222222-3333-4444-8555-000000000009', full_name: 'Lorna Cruz', member_id: 'M-000009' },
+      members: [],
+    };
+    await page.route('**/api/v1/cells/leadership-requests?*', (route) =>
+      route.fulfill(json({ data: [handover], next_cursor: null })),
+    );
+
+    await page.goto('/cells?view=APPROVE');
+    const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Hand over CELL-000009' }) });
+    const line = (term: string) => card.locator('dt', { hasText: term }).locator('xpath=following-sibling::dd[1]');
+    await expect(line('Led now by')).toHaveText('Lorna Cruz · M-000009');
+    await expect(line('New leader')).toHaveText(`${PERSON_IN_SCOPE.full_name} · ${PERSON_IN_SCOPE.member_id}`);
+    await expect(card.getByRole('heading', { name: /^Members/ })).toHaveCount(0);
+
+    await card.getByRole('button', { name: 'Approve', exact: true }).click();
+    await expect(card.getByText('Hand this Cell over now?')).toBeVisible();
+    await expect(card.getByText(`${PERSON_IN_SCOPE.full_name} becomes its leader in place of Lorna Cruz.`)).toBeVisible();
   });
 
   test('declines with one of section 10’s reasons', async ({ page }) => {
@@ -189,7 +240,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
     ]);
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
     await expect(page).toHaveURL(/view=APPROVE/);
-    await expect(page.getByRole('listitem').filter({ hasText: 'New Cell led by' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'New Cell' })).toBeVisible();
   });
 
   test('an address naming an administrator’s list opens a Primary’s Active Cells', async ({

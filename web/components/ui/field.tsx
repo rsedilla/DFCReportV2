@@ -1,9 +1,9 @@
 'use client';
 
 import * as LabelPrimitive from '@radix-ui/react-label';
-import { CircleAlert, Search } from 'lucide-react';
+import { CircleAlert, Eye, EyeOff, Search } from 'lucide-react';
 import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -32,6 +32,11 @@ import { cn } from '@/lib/utils';
  * beside a `field-invalid` icon. The padding shrinks by the border's extra pixel so
  * the text does not shift when the state changes.
  *
+ * **A password box carries an eye that shows what was typed** (owner, 2026-11-06), because a
+ * leader activating an account on a phone could not see the password being set. It is a
+ * button named "Show password" or "Hide password", 44px square, and the box opens hidden
+ * every time.
+ *
  * The border uses `edge` rather than `line`. `line` is decorative and exempt
  * from 1.4.11; the boundary of a control is not, and reaching for the wrong one
  * on a form field is the mistake that pair of tokens exists to prevent.
@@ -57,6 +62,15 @@ export type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'cla
   ref?: Ref<HTMLInputElement>;
 };
 
+const INPUT = cn(
+  'border-edge bg-surface text-ink min-h-11 rounded-md border px-3 text-base',
+  'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
+  'aria-[invalid=true]:border-field-invalid aria-[invalid=true]:border-2',
+  'aria-[invalid=true]:px-[11px]',
+  // Disabled looks disabled, as a button and a radio tile do.
+  'disabled:bg-raised disabled:cursor-not-allowed disabled:opacity-60',
+);
+
 export function Field({
   label,
   description,
@@ -67,6 +81,8 @@ export function Field({
   ...props
 }: FieldProps & { className?: string }) {
   const id = useId();
+  const [shown, setShown] = useState(false);
+  const password = props.type === 'password';
   const descriptionId = `${id}-description`;
   const errorId = `${id}-error`;
 
@@ -89,20 +105,44 @@ export function Field({
         </p>
       ) : null}
 
-      <input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        className={cn(
-          'border-edge bg-surface text-ink min-h-11 rounded-md border px-3 text-base',
-          'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
-          'aria-[invalid=true]:border-field-invalid aria-[invalid=true]:border-2',
-          'aria-[invalid=true]:px-[11px]',
-          // Disabled looks disabled, as a button and a radio tile do.
-          'disabled:bg-raised disabled:cursor-not-allowed disabled:opacity-60',
-        )}
-        {...props}
-      />
+      {password ? (
+        <div className="relative">
+          <input
+            id={id}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            className={cn(INPUT, 'w-full pr-12 aria-[invalid=true]:pr-[47px]')}
+            {...props}
+            type={shown ? 'text' : 'password'}
+          />
+          <button
+            type="button"
+            aria-controls={id}
+            aria-label={shown ? 'Hide password' : 'Show password'}
+            disabled={props.disabled}
+            onClick={() => setShown((now) => !now)}
+            className={cn(
+              'text-muted hover:text-ink absolute top-1/2 right-0.5 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-md',
+              'focus-visible:outline-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          >
+            {shown ? (
+              <EyeOff aria-hidden="true" strokeWidth={1.75} className="size-[1.375rem]" />
+            ) : (
+              <Eye aria-hidden="true" strokeWidth={1.75} className="size-[1.375rem]" />
+            )}
+          </button>
+        </div>
+      ) : (
+        <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={INPUT}
+          {...props}
+        />
+      )}
 
       {description && descriptionBelow ? (
         <p id={descriptionId} className="text-muted text-sm leading-relaxed">
