@@ -1461,6 +1461,7 @@ person's this way.
 - Return the same forgot-password response whether or not the email exists
 - Invalidate token after use
 - Do not let admins know or choose another user's password
+- Take the code out of the address once the page has read it (decision 0447). The activation, reset and email-confirmation pages each remove `?token=…` from the address bar and from that page's history entry, and keep the code in that browser tab alone so a reload still works, forgetting it once the link is used or the tab closes
 
 **An administrator may send the holder of an account in use a reset link** (decision 0393). On
 the person page of an `ACTIVE` account, under `accounts.manage` against the Account, *Send a

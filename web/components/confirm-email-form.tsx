@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { confirmEmailChange } from '@/lib/email-change';
+import { useLinkToken } from '@/lib/link-token';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 
@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
  * scanner opening the link changes nothing.
  */
 export function ConfirmEmailForm() {
-  const token = useSearchParams().get('token');
+  // Taken out of the address once read, and kept in this tab (decision 0447).
+  const { token, ready, forget } = useLinkToken();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -33,6 +34,10 @@ export function ConfirmEmailForm() {
         </Link>
       </div>
     );
+  }
+
+  if (!token && !ready) {
+    return <p className="text-muted text-sm">Loading…</p>;
   }
 
   // Not `field-invalid`, as on the password pages: a link without its token is a fact
@@ -53,7 +58,9 @@ export function ConfirmEmailForm() {
     setFailure(null);
     setSubmitting(true);
     try {
-      setEmail((await confirmEmailChange(token ?? '')).email);
+      const changed = await confirmEmailChange(token ?? '');
+      forget();
+      setEmail(changed.email);
     } catch (cause) {
       setFailure(describeFailure(cause));
       setSubmitting(false);
