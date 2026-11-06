@@ -131,6 +131,8 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     mobile_number: person.mobile_number ?? '',
   });
   const [failure, setFailure] = useState<Failure | null>(null);
+  // Whether the duplicate check is paused, which holds the save (decision 0449).
+  const [checkPaused, setCheckPaused] = useState(false);
 
   // "Add" on the person page lands here with the field named in the hash
   // (decision 0272). Focus only: nothing is copied into state.
@@ -432,6 +434,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
                 birthDate={values.birth_date}
                 mobileNumber={values.mobile_number}
                 excludeId={id}
+                onPausedChange={setCheckPaused}
               />
             ) : null}
           </FormSection>
@@ -484,8 +487,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
           </FormSection>
 
           <FormActions>
-            <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save'}
+            {/* Held while the duplicate check is paused (decision 0449). */}
+            <Button type="submit" disabled={save.isPending || checkPaused}>
+              {save.isPending ? 'Saving…' : checkPaused ? 'Save (after the check)' : 'Save'}
             </Button>
             {/*
               A link styled as a secondary button, which is the pattern already

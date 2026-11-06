@@ -20,7 +20,8 @@ entry does (decision 0303).
 scope is the whole church never writes one.
 
 **4. No new limit.** The check runs as a name is typed, and a limit reached while
-encoding would silence the warning the check exists to give.
+encoding would silence the warning the check exists to give. *Replaced on 2026-11-06 by
+decision 0449: sixty a minute, with the save held while the check is paused.*
 
 ## Why
 
