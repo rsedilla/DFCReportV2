@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { RangeNavigator } from '@/components/my-twelve';
 import { CountsSwitch, ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
+import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { describeFailure } from '@/lib/messages';
-import { monthFromQuery } from '@/lib/reporting-month';
+import { keepPreviousPeriod } from '@/lib/keep-previous-page';
+import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
@@ -68,8 +70,11 @@ export function ChurchCountsPanel({
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
 
+  const countsKey = ['church-counts', month];
   const counts = useQuery({
-    queryKey: ['church-counts', month],
+    queryKey: countsKey,
+    // Another month keeps the counts shown, faded, until its own arrive (owner, 2026-11-06).
+    placeholderData: keepPreviousPeriod(countsKey, [1]),
     queryFn: ({ signal }) => getChurchCounts(month, signal),
   });
   const data = counts.data;
@@ -101,6 +106,7 @@ export function ChurchCountsPanel({
         <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
       </div>
 
+      <KeptFigures kept={counts.isPlaceholderData} loading={monthLabel(month)}>
       {counts.isPending ? (
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
@@ -147,6 +153,7 @@ export function ChurchCountsPanel({
           )}
         </>
       ) : null}
+      </KeptFigures>
     </section>
   );
 }

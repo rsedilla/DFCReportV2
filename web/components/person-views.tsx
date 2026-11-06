@@ -5,6 +5,7 @@ import { useId } from 'react';
 
 import { ShowMore } from '@/components/awaiting-lists';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 import { FRAME } from '@/components/ui/frame';
 import { describeFailure } from '@/lib/messages';
 import { getPersonViews, openedWhen } from '@/lib/person-views';
@@ -38,7 +39,7 @@ export function PersonViews({ personId }: { personId: string }) {
       </div>
 
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading…</p>
+        <LoadingBlocks shape="lines" className="mt-3" />
       ) : rows.length === 0 && !pages.isError ? (
         <p className="text-muted mt-3 text-sm">Nobody has opened it yet.</p>
       ) : (
