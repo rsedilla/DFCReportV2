@@ -242,7 +242,11 @@ export interface SignInPauseAlertsTable {
   account_id: string;
   sent_at: ColumnType<Date, Date | undefined, never>;
   /** A pause of a name after wrong passwords, or of an account's second step after wrong codes. */
-  kind: ColumnType<'PASSWORD' | 'SECOND_STEP', 'PASSWORD' | 'SECOND_STEP' | undefined, never>;
+  kind: ColumnType<
+    'PASSWORD' | 'SECOND_STEP' | 'CURRENT_PASSWORD',
+    'PASSWORD' | 'SECOND_STEP' | 'CURRENT_PASSWORD' | undefined,
+    never
+  >;
 }
 
 /**
@@ -349,6 +353,7 @@ export type AuditAction =
   // Sign-in for an account's address or username paused after ten wrong passwords
   // (decision 0413). A system action: nobody signed in caused it. Targets the account.
   | 'sign_in.paused'
+  | 'current_password.paused'
   | 'second_step.paused'
   // The holder changing it while signed in (decision 0351).
   | 'password.changed'

@@ -253,6 +253,163 @@ describe('changing one’s own password (decision 0351)', () => {
     expect((await refresh(early.token)).status).toBe(401);
   });
 
+  describe('a wrong current password counts in the sign-in pause (decision 0448)', () => {
+    const WRONG = 'not the password at all';
+
+    const login = (password: string) =>
+      server().post('/api/v1/auth/login').send({ email: account.email, password });
+
+    const changeEmail = (device: { access: string }, currentPassword: string) =>
+      server()
+        .post('/api/v1/auth/email')
+        .set('Authorization', `Bearer ${device.access}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ new_email: 'teodora.new@example.invalid', current_password: currentPassword });
+
+    const pauses = () =>
+      db
+        .selectFrom('audit_log')
+        .select(['action', 'actor_id', 'target_id', 'after'])
+        .where('action', 'in', ['sign_in.paused', 'current_password.paused'])
+        .execute();
+
+    /** An active Admin, who is told about a pause. */
+    async function anAdmin() {
+      const person = await createPerson(db, {
+        firstName: 'Leonora',
+        lastName: 'Bacolod',
+        network: 'WOMENS',
+      });
+      return createAccount(app, db, { person, roles: ['ADMIN'] });
+    }
+
+    async function tenWrong(device: { access: string; refresh: string }) {
+      for (let attempt = 1; attempt <= 10; attempt += 1) {
+        await change(device, { current_password: WRONG });
+      }
+    }
+
+    /** The alert is sent without being awaited, so it is waited for. */
+    async function alertsSent(kind: 'CURRENT_PASSWORD_PAUSED' | 'SIGN_IN_PAUSED') {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return outbox(app).sent.filter((sent) => sent.kind === kind);
+    }
+
+    it('pauses at the tenth, refuses the right one while it lasts, and pauses sign-in too', async () => {
+      const device = await signIn();
+
+      for (let attempt = 1; attempt <= 9; attempt += 1) {
+        const wrong = await change(device, { current_password: WRONG });
+        expect(wrong.status).toBe(422);
+      }
+      const tenth = await change(device, { current_password: WRONG });
+      expect(tenth.status).toBe(429);
+      expect(tenth.body.error.code).toBe('RATE_LIMITED');
+      expect(tenth.body.error.details.reason).toBe('SIGN_IN_PAUSED');
+      expect(Date.parse(tenth.body.error.details.paused_until)).toBeGreaterThan(Date.now());
+      expect(tenth.body.error.message).toBe(
+        'Paused for 15 minutes after 10 wrong passwords. Signing in with your email address is paused too; this device stays signed in.',
+      );
+
+      // Clear of the route's own per-minute limit, so what answers is the pause.
+      resetRateLimits(app);
+      const right = await change(device, { current_password: OLD });
+      expect(right.status).toBe(429);
+      expect(right.body.error.details.reason).toBe('SIGN_IN_PAUSED');
+
+      const signedIn = await login(OLD);
+      expect(signedIn.status).toBe(429);
+      expect(signedIn.body.error.details.reason).toBe('SIGN_IN_PAUSED');
+
+      // This device stays signed in, and the pause has its own entry naming the signed-in
+      // account (owner, 2026-11-06).
+      expect((await me(device.access)).status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const recorded = await pauses();
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]).toMatchObject({
+        action: 'current_password.paused',
+        actor_id: account.id,
+        target_id: account.id,
+      });
+      expect(recorded[0].after).toMatchObject({ name: `email:${account.email.toLowerCase()}` });
+      expect(await audited()).toHaveLength(0);
+    });
+
+    it('tells each Admin in its own words that a signed-in session was guessing', async () => {
+      const admin = await anAdmin();
+      const device = await signIn();
+
+      await tenWrong(device);
+
+      const sent = await alertsSent('CURRENT_PASSWORD_PAUSED');
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ to: { email: admin.email }, email: account.email });
+      expect(await alertsSent('SIGN_IN_PAUSED')).toHaveLength(0);
+    });
+
+    it('is not hidden by a sign-in alert already sent that day', async () => {
+      await anAdmin();
+      // Strangers paused the address at sign-in this morning, and the Admin was told.
+      await db
+        .insertInto('sign_in_pause_alerts')
+        .values({ account_id: account.id, kind: 'PASSWORD' })
+        .execute();
+      const device = await signIn();
+
+      await tenWrong(device);
+
+      expect(await alertsSent('CURRENT_PASSWORD_PAUSED')).toHaveLength(1);
+    });
+
+    it('shares one count with sign-in and with the email form', async () => {
+      const device = await signIn();
+
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        expect((await login(WRONG)).status).toBe(401);
+      }
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        expect((await change(device, { current_password: WRONG })).status).toBe(422);
+      }
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        expect((await changeEmail(device, WRONG)).status).toBe(422);
+      }
+
+      const tenth = await changeEmail(device, WRONG);
+      expect(tenth.status).toBe(429);
+      expect(tenth.body.error.details.reason).toBe('SIGN_IN_PAUSED');
+    });
+
+    it('starts the count again on a right one, as sign-in does', async () => {
+      const device = await signIn();
+
+      for (let attempt = 1; attempt <= 9; attempt += 1) {
+        expect((await changeEmail(device, WRONG)).status).toBe(422);
+      }
+      expect((await changeEmail(device, OLD)).status).toBe(204);
+      // Clear of the route's own per-minute limit, so what answers is the count.
+      resetRateLimits(app);
+      expect((await changeEmail(device, WRONG)).status).toBe(422);
+    });
+
+    it('does not keep the pause against the key, so the same body works once it ends', async () => {
+      const device = await signIn();
+      for (let attempt = 1; attempt <= 10; attempt += 1) {
+        await change(device, { current_password: WRONG });
+      }
+      resetRateLimits(app);
+      const key = randomUUID();
+      expect((await change(device, {}, key)).status).toBe(429);
+
+      // The pause ends.
+      await db.deleteFrom('sign_in_pauses').execute();
+      resetRateLimits(app);
+
+      expect((await change(device, {}, key)).status).toBe(204);
+      expect(await audited()).toHaveLength(1);
+    });
+  });
+
   it('does not keep another account’s session', async () => {
     const here = await signIn();
     const otherPerson = await createPerson(db, {

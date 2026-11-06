@@ -63,6 +63,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'password.reset': 'ACCOUNTS',
   'password.changed': 'ACCOUNTS',
   'sign_in.paused': 'ACCOUNTS',
+  'current_password.paused': 'ACCOUNTS',
   'role.granted': 'ACCOUNTS',
   'cell.created': 'CELLS',
   'cell.closed': 'CELLS',

@@ -9,6 +9,7 @@ import { AuthorizationService, type Actor } from './authorization/authorization.
 import { grantCoversNothing } from './authorization/single-scope';
 import { PasswordService } from './password.service';
 import { SecondStepService, type SecondStepChallenge } from './second-step.service';
+import { notePasswordPause, type PauseAlertDeps } from './sign-in-pause-alert';
 import { pauseIdentifier, SignInPauseService, type SignInName } from './sign-in-pause.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokensService, hashToken } from './tokens.service';
 
@@ -93,7 +94,14 @@ export class AuthService {
           // Recorded, and the Admin told within the daily caps. Not awaited, so the answer
           // takes no longer for a held name than for one nobody holds, and a slow or
           // failing mail provider changes nothing sign-in answers.
-          void this.notePause(who, identifier, account.id, account.person_id, pausedUntil);
+          void notePasswordPause(
+            this.alertDeps(),
+            who,
+            identifier,
+            account.id,
+            account.person_id,
+            pausedUntil,
+          );
         }
         throw signInPaused(who, pausedUntil);
       }
@@ -113,40 +121,15 @@ export class AuthService {
     return this.issue(account.id, account.person_id, deviceLabel, browser);
   }
 
-  /**
-   * Writes the pause of an account's name to the audit log and, within the daily caps,
-   * emails each active Admin (decision 0413).
-   */
-  private async notePause(
-    typed: SignInName,
-    identifier: string,
-    accountId: string,
-    holderPersonId: string,
-    pausedUntil: Date,
-  ): Promise<void> {
-    try {
-      const email = await this.pauses.recordPause(accountId, identifier, pausedUntil);
-      if (!email) {
-        return;
-      }
-      const holder =
-        (await this.people.forDecision(holderPersonId))?.fullName ?? 'an unnamed person';
-      for (const admin of await this.accounts.activeAdministrators()) {
-        const name = (await this.people.forDecision(admin.person_id))?.fullName ?? '';
-        await this.email.send({
-          kind: 'SIGN_IN_PAUSED',
-          to: { email: admin.email, name },
-          typed,
-          holder,
-          pausedUntil,
-        });
-      }
-    } catch (error) {
-      this.logger.error(
-        `Could not record or report the sign-in pause of account ${accountId}.`,
-        error instanceof Error ? error.stack : undefined,
-      );
-    }
+  /** What the shared pause alert needs from this service (decision 0448). */
+  private alertDeps(): PauseAlertDeps {
+    return {
+      pauses: this.pauses,
+      people: this.people,
+      accounts: this.accounts,
+      email: this.email,
+      logger: this.logger,
+    };
   }
 
   /**
