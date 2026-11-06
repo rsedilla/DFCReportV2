@@ -1425,7 +1425,17 @@ export async function mockCellsWithClosed(
   });
 }
 
-const leaderOf = (id: string, member: string, name: string) => ({ id, member_id: member, full_name: name });
+/** The name's parts, as the API sends a report's leaders (decision 0451). */
+const parts = (name: string) => ({
+  first_name: name.split(' ').slice(0, -1).join(' '),
+  last_name: name.split(' ').slice(-1)[0],
+});
+const leaderOf = (id: string, member: string, name: string) => ({
+  id,
+  member_id: member,
+  full_name: name,
+  ...parts(name),
+});
 
 /**
  * The leaders My 12 names (decision 0293). First-name order (decision 0359) is Consuelo,

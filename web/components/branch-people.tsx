@@ -2,8 +2,22 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { asAt, COUNT_COLUMNS, type CountFigure } from '@/components/church-counts';
-import { RangeNavigator } from '@/components/my-twelve';
+import {
+  asAt,
+  COUNT_COLUMNS,
+  CountHead,
+  CountsKey,
+  CountTiles,
+  type CountFigure,
+} from '@/components/church-counts';
+import {
+  FIGURE_CELL,
+  FIGURE_HEAD,
+  NAME_CELL,
+  NAME_HEAD,
+  RangeNavigator,
+} from '@/components/my-twelve';
+import { ShortText } from '@/components/ui/short-text';
 import { ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { KeptFigures } from '@/components/kept-figures';
@@ -11,12 +25,13 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { TextLink } from '@/components/ui/text-link';
 import { describeFailure } from '@/lib/messages';
+import { shortNames } from '@/lib/names';
+import { usePhone } from '@/lib/phone';
 import { getPerson } from '@/lib/people';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getBranchCounts, getBranchPeople, type ChurchCountFigures } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
-import { cn } from '@/lib/utils';
 
 /** The three # tabs' labels, as the Senior Pastors' (decision 0326). */
 const LABEL: Record<CountFigure, string> = {
@@ -39,7 +54,15 @@ const TAB: Record<CountFigure, ReportTab> = {
   PEOPLE: 'number-of-people',
 };
 
-type Row = { leader: { id: string; member_id: string | null; full_name: string | null } | null } & Partial<ChurchCountFigures>;
+type Row = {
+  leader: {
+    id: string;
+    member_id: string | null;
+    full_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
+} & Partial<ChurchCountFigures>;
 
 /**
  * A Full view leader's *# of Cell Groups*, *# of Cell Leaders* and *# of People*, under Reports
@@ -47,7 +70,7 @@ type Row = { leader: { id: string; member_id: string | null; full_name: string |
  * own branch.
  *
  * **A month at a time**, counted as theirs is: a month that has ended on its last day, the
- * current one as of now, *so far*. The box is the branch, then one row per direct disciple
+ * current one as of now, *As of today* (decision 0451). The box is the branch, then one row per direct disciple
  * counting them and everyone beneath them, then the leader's own row, adding up to the box. Rows
  * are in first-name order, never sorted by a figure, never numbered or coloured (sections 13
  * and 17). **A name is plain text and opens nothing** (decision 0380).
@@ -66,6 +89,7 @@ export function BranchCountsPanel({
   month: string | null;
 }) {
   const go = useScreenAddress();
+  const phone = usePhone();
   const current = monthFromQuery(null);
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
@@ -99,6 +123,11 @@ export function BranchCountsPanel({
   const name = leader === null ? null : (opened.data?.full_name ?? 'This leader');
   const heading = name === null ? 'Your Disciples' : `${name}’s Disciples`;
   const data = counts.data;
+  // Short names only where there are several figures to fit beside them (decision 0451).
+  const short =
+    phone && columns.length > 1 && data?.rows
+      ? shortNames(data.rows.map((row) => row.leader ?? { full_name: null }))
+      : null;
   const value = (figures: Partial<ChurchCountFigures> | null, key: keyof ChurchCountFigures) =>
     figures?.[key] ?? 0;
 
@@ -107,7 +136,7 @@ export function BranchCountsPanel({
       <div className={`mt-4 ${CONTROL_BAR}`}>
         {/* Monthly or the last 12 months, beside the month (decision 0398). */}
         <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 lg:w-auto">
           <RangeNavigator
             kind="MONTH"
             start={month}
@@ -116,9 +145,6 @@ export function BranchCountsPanel({
             labelled="bare"
             onChange={(next) => go({ month: next })}
           />
-          <span className="text-muted text-sm" aria-live="polite">
-            {asAt(month, month === current)}
-          </span>
         </div>
       </div>
 
@@ -146,42 +172,34 @@ export function BranchCountsPanel({
         ) : (
           <>
             <h2 className="field-label mt-4">{heading}</h2>
-            <dl
-              className={
-                figure === 'CELLS'
-                  ? // Five on one line; on a phone the total across the top, the four two by
-                    // two (decision 0431).
-                    'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
-                  : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
-              }
-            >
-              {columns.map(([key, label]) => (
-                <div
-                  key={key}
-                  className={cn(
-                    'border-line border p-3',
-                    figure === 'CELLS' && key === 'cell_groups' && 'col-span-2 sm:col-span-1',
-                  )}
-                >
-                  <dt className="text-ink text-sm font-bold">{label}</dt>
-                  <dd className="mt-1 text-xl font-bold tabular-nums">
-                    {value(data.total, key).toLocaleString()}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <CountTiles
+              figure={figure}
+              value={(key) => value(data.total, key)}
+              asOf={asAt(month, month === current)}
+            />
 
-            <Table caption={name === null ? 'Your 12' : `${name}’s 12`} className="mt-6">
+            {/* The figures in equal columns, short headings and names on a phone where there are
+                several figures (decision 0451). */}
+            <Table
+              caption={name === null ? 'Your 12' : `${name}’s 12`}
+              className="mt-6"
+              tableClassName="table-fixed"
+            >
               <thead>
                 <tr>
-                  <HeaderCell style={{ width: columns.length > 1 ? '36%' : '70%' }}>Leader</HeaderCell>
+                  <HeaderCell
+                    className={NAME_HEAD}
+                    style={{ width: columns.length > 1 ? '36%' : '70%' }}
+                  >
+                    Leader
+                  </HeaderCell>
                   {columns.map(([key, label]) => (
                     <HeaderCell
                       key={key}
-                      className="text-right"
+                      className={FIGURE_HEAD}
                       style={{ width: `${(columns.length > 1 ? 64 : 30) / columns.length}%` }}
                     >
-                      {label}
+                      <CountHead label={label} column={key} phone={phone} />
                     </HeaderCell>
                   ))}
                 </tr>
@@ -190,39 +208,44 @@ export function BranchCountsPanel({
                 {data.rows.map((row, index) => (
                   // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
                   <tr key={row.leader?.id ?? `unnamed-${index}`} className={rowClasses}>
-                    <td className="px-3 py-3">
+                    <td className={NAME_CELL}>
                       {row.leader === null ? (
                         <span className="text-muted">A leader not named here</span>
                       ) : (
-                        // A name, not a link (decision 0380).
-                        (row.leader.full_name ?? row.leader.member_id ?? 'A leader')
+                        // A name, not a link (decision 0380), short on a phone where there are
+                        // several figures beside it (decision 0451).
+                        <ShortText
+                          full={row.leader.full_name ?? row.leader.member_id ?? 'A leader'}
+                          short={short?.[index] ?? null}
+                        />
                       )}
                     </td>
                     {columns.map(([key]) => (
-                      <td key={key} className="px-3 py-3 text-right tabular-nums">
+                      <td key={key} className={FIGURE_CELL}>
                         {value(row, key)}
                       </td>
                     ))}
                   </tr>
                 ))}
                 <tr className={rowClasses}>
-                  <td className="px-3 py-3">{name === null ? 'You' : name}</td>
+                  <td className={NAME_CELL}>{name === null ? 'You' : name}</td>
                   {columns.map(([key]) => (
-                    <td key={key} className="px-3 py-3 text-right tabular-nums">
+                    <td key={key} className={FIGURE_CELL}>
                       {value(data.own, key)}
                     </td>
                   ))}
                 </tr>
                 <tr className="border-ink border-t-2">
-                  <td className="px-3 py-3 font-bold">Total</td>
+                  <td className={`${NAME_CELL} font-bold`}>Total</td>
                   {columns.map(([key]) => (
-                    <td key={key} className="px-3 py-3 text-right font-bold tabular-nums">
+                    <td key={key} className={`${FIGURE_CELL} font-bold`}>
                       {value(data.total, key)}
                     </td>
                   ))}
                 </tr>
               </tbody>
             </Table>
+            <CountsKey figure={figure} />
           </>
         )
       ) : null}

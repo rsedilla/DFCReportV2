@@ -53,7 +53,8 @@ export interface PersonForDecision {
    */
   firstName: string;
   /**
-   * The family name on its own, for **ordering** rather than for addressing.
+   * The family name on its own, for **ordering** rather than for addressing, and since
+   * decision 0451 for the initial a phone's Reports table shows after the first name.
    *
    * The church-wide directory pages by `(first_name, last_name, id)` (section 22, decision 0359), and
    * two collections page by `(first_name, last_name, member_id)` — so a caller

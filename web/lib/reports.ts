@@ -164,7 +164,13 @@ export interface CellTwelve {
    * on a whole-church reader's rows, the Network roots, which are labelled by it.
    */
   rows: (TwelveFigure & {
-    leader: { id: string; member_id: string; full_name: string } | null;
+    leader: {
+      id: string;
+      member_id: string;
+      full_name: string;
+      first_name?: string | null;
+      last_name?: string | null;
+    } | null;
     network?: 'MENS' | 'WOMENS' | null;
     /** On the Senior Pastors' tables, the root a row's leader sits under (decision 0326). */
     root_id?: string | null;
@@ -270,7 +276,13 @@ export type RecordingRowStatus =
   | { kind: 'NOTHING_OWED' };
 
 export interface RecordingRow {
-  leader: { id: string; member_id: string | null; full_name: string | null };
+  leader: {
+    id: string;
+    member_id: string | null;
+    full_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  };
   cell: RecordingColumn;
   dcc: RecordingColumn;
   status: RecordingRowStatus;
@@ -304,7 +316,13 @@ export interface RecordingStatus {
   /** Null where the placement graph is refused (section 20); the boxes stand. */
   tables:
     | {
-        root: { id: string; member_id: string | null; full_name: string | null };
+        root: {
+          id: string;
+          member_id: string | null;
+          full_name: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+        };
         network: 'MENS' | 'WOMENS' | null;
         rows: RecordingRow[];
       }[]
@@ -437,7 +455,7 @@ export interface ChurchCountFigures {
   people: number;
 }
 
-/** `GET /reports/church-counts`: a month's counts, the current one *so far* (decision 0326). */
+/** `GET /reports/church-counts`: a month's counts, the current one as of now (decision 0326). */
 export interface ChurchCounts {
   period: string;
   current: boolean;
@@ -446,10 +464,22 @@ export interface ChurchCounts {
   /** Null where the placement graph is refused (section 20); the whole church stands. */
   tables:
     | {
-        root: { id: string; member_id: string | null; full_name: string | null };
+        root: {
+          id: string;
+          member_id: string | null;
+          full_name: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+        };
         network: 'MENS' | 'WOMENS' | null;
         rows: (ChurchCountFigures & {
-          leader: { id: string; member_id: string | null; full_name: string | null };
+          leader: {
+            id: string;
+            member_id: string | null;
+            full_name: string | null;
+            first_name?: string | null;
+            last_name?: string | null;
+          };
         })[];
       }[]
     | null;
@@ -476,7 +506,13 @@ export interface BranchPeople {
   rows:
     | {
         /** Null for a leader the reader may not open; the row still counts. */
-        leader: { id: string; member_id: string | null; full_name: string | null } | null;
+        leader: {
+          id: string;
+          member_id: string | null;
+          full_name: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+        } | null;
         people: number;
       }[]
     | null;
@@ -507,7 +543,13 @@ export interface BranchCounts {
   rows:
     | (ChurchCountFigures & {
         /** Null for a leader the reader may not read; the row still counts. */
-        leader: { id: string; member_id: string | null; full_name: string | null } | null;
+        leader: {
+          id: string;
+          member_id: string | null;
+          full_name: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+        } | null;
       })[]
     | null;
 }
@@ -537,7 +579,13 @@ export interface Trends {
   open: boolean[];
   /** Whole Church first (`leader` null), then each root's branch; or one leader's branch. */
   lines: {
-    leader: { id: string; member_id: string | null; full_name: string | null } | null;
+    leader: {
+      id: string;
+      member_id: string | null;
+      full_name: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+    } | null;
     /**
      * A root's branch names its Network, and so does a Full view leader's own branch, by the
      * leader's Network now (decision 0388); the church and a leader chosen on the Senior

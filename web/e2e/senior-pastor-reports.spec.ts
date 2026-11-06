@@ -74,7 +74,8 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
 
     const counts = page.getByRole('region', { name: 'Number of Cell Groups' });
     await expect(counts.getByRole('term')).toHaveText(['Total', 'J12 Kids', 'Youth', 'Young Pro', 'Couple']);
-    await expect(counts.getByRole('definition')).toHaveText(['5', '0', '1', '3', '1']);
+    // The first tile also says when it is as of (decision 0451).
+    await expect(counts.getByRole('definition')).toHaveText(['5', 'As of today', '0', '1', '3', '1']);
 
     const mens = page.getByRole('table', { name: MENS_TABLE });
     await expect(mens.getByRole('columnheader')).toHaveText([
@@ -137,7 +138,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-cell-leaders');
     const leaders = page.getByRole('region', { name: 'Number of Cell Leaders' });
     await expect(leaders.getByRole('term')).toHaveText(['Cell Leaders']);
-    await expect(leaders.getByRole('definition')).toHaveText(['5']);
+    await expect(leaders.getByRole('definition')).toHaveText(['5', 'As of today']);
     await expect(page.getByRole('table', { name: MENS_TABLE }).getByRole('columnheader')).toHaveText([
       'Primaries',
       'Cell Leaders',
@@ -146,7 +147,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-people');
     const people = page.getByRole('region', { name: 'Number of people' });
     await expect(people.getByRole('term')).toHaveText(['People']);
-    await expect(people.getByRole('definition')).toHaveText(['36']);
+    await expect(people.getByRole('definition')).toHaveText(['36', 'As of today']);
   });
 
   test('step a month at a time with the same ‹ › control as the attendance tabs', async ({
@@ -158,7 +159,8 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-cell-leaders');
 
     await expect(page.getByText('October 2026', { exact: true })).toBeVisible();
-    await expect(page.getByText('as at today, so far')).toBeVisible();
+    // In the first tile, not beside the month (decision 0451).
+    await expect(page.getByText('As of today', { exact: true })).toBeVisible();
     // A month that has not begun is not reported (decision 0216).
     await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
     // No length but the month, and no second switch for it (decision 0398).
@@ -170,7 +172,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.getByRole('button', { name: 'The period before' }).click();
 
     await expect(page.getByText('September 2026', { exact: true })).toBeVisible();
-    await expect(page.getByText('as at 30 September 2026')).toBeVisible();
+    await expect(page.getByText('As of 30 September 2026', { exact: true })).toBeVisible();
     await expect.poll(() => asked.at(-1)).toBe('2026-09-01');
     // The month travels to the other tabs.
     await expect(page.getByRole('link', { name: 'Number of people', exact: true })).toHaveAttribute(
@@ -228,7 +230,7 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByRole('button', { name: /How these are counted/i })).toHaveCount(0);
   });
 
-  test('the lengths sit beside Cell Group and DCC, the month and Figures for are one row, and an open month says so far', async ({
+  test('the lengths sit beside Cell Group and DCC, the month and Figures for are one row, and an open month says As of today', async ({
     page,
   }) => {
     await attendance(page);
@@ -242,8 +244,29 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
 
     const bar = page.getByLabel('Figures for').locator('xpath=../..');
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
-    await expect(bar.getByText('so far', { exact: true })).toBeVisible();
+    // Two words, once "so far" (decision 0451).
+    // Beside the month from `lg`; a phone says it under the bar instead.
+    await expect(bar.getByText('As of today', { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
+  });
+
+  test('on a phone a Primary’s name is short, and the link is named short then full (decision 0451)', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await attendance(page);
+
+    await page.goto('/reports/cells');
+
+    const mens = page.getByRole('table', { name: MENS_TABLE });
+    const link = mens.getByRole('link', { name: 'Bernardo A., Bernardo Abad' });
+    await expect(link).toHaveText('Bernardo A.');
+    // Every figure in view: the table does not scroll sideways.
+    const overflow = await mens.evaluate((table) => {
+      const frame = table.parentElement!;
+      return frame.scrollWidth - frame.clientWidth;
+    });
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test('DCC attendance shows no records filed and no Sundays counted', async ({ page }) => {

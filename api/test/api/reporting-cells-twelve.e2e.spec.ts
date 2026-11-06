@@ -130,7 +130,13 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
     open: boolean;
     coverage: { recorded: number; scheduled: number; through: string };
     rows: (Figure & {
-      leader: { id: string; member_id: string; full_name: string } | null;
+      leader: {
+        id: string;
+        member_id: string;
+        full_name: string;
+        first_name: string;
+        last_name: string;
+      } | null;
       network: 'MENS' | 'WOMENS' | null;
     })[];
     own: (Figure & { cells: number }) | null;
@@ -266,6 +272,11 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
       expect(body.rows.map((row) => row.unique_people)).toEqual([1, 2, 0]);
       expect(rowOf(body, onofre).leader?.full_name).toContain('Abella');
       expect(rowOf(body, onofre).leader?.member_id).toMatch(/^M-/);
+      // The stored parts, for a phone's short name (decision 0451).
+      expect(rowOf(body, onofre).leader).toMatchObject({
+        first_name: 'Onofre',
+        last_name: 'Abella',
+      });
       expect(rowOf(body, pio).classification).toEqual(ZERO);
       expect(body.total.unique_people).toBe(3);
       // Section 13: no row number, no rank, no proportion.
