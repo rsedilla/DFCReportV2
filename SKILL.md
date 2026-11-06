@@ -1461,6 +1461,7 @@ person's this way.
 - Return the same forgot-password response whether or not the email exists
 - Invalidate token after use
 - Do not let admins know or choose another user's password
+- Take the code out of the address once the page has read it (decision 0447). The activation, reset and email-confirmation pages each remove `?token=…` from the address bar and from that page's history entry, and keep the code in that browser tab alone so a reload still works, forgetting it once the link is used or the tab closes
 
 **An administrator may send the holder of an account in use a reset link** (decision 0393). On
 the person page of an `ACTIVE` account, under `accounts.manage` against the Account, *Send a
@@ -5789,7 +5790,7 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 
 `Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the **Encounter** and the four schools they have graduated from, and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with two tabs, `SUYNL` and `Training`, and behind it are two modules, `suynl` and `training`, each owning its own table; `Conquest` is an item of its own beside it (decision 0407), behind which is the `conquest` module.
 
-**The tables, the capabilities, the routes and the two tabs exist.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the six `suynl.*` and `training.*` capabilities and created `suynl_lessons` and `training_graduations`, `/api/v1/suynl` and `/api/v1/training` each carry a list, its counts and a save, and `web/app/growth` carries the `SUYNL` and `Training` tabs. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
+**The tables, the capabilities, the routes and the two tabs exist.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the six `suynl.*` and `training.*` capabilities and created `suynl_lessons` and `training_graduations`, `/api/v1/suynl` and `/api/v1/training` each carry a list, its counts and a save, and `web/app/(app)/growth` carries the `SUYNL` and `Training` tabs. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
 
 **`Growth` is the label on a sidebar item and never a module.** Section 2 names a module for what it owns, and these are three domains with different records, different correction rules and different capabilities; they are grouped because a leader asks about them in one sitting, not because they are one thing. A `growth` module owning all three tables would be a module named after a screen.
 
