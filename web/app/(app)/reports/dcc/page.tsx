@@ -28,10 +28,9 @@ import { useKeptLeader } from '@/lib/merged-leader';
 import { getDccTwelve, type ReportNetwork } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
-import { rangeEndOf, rangeLabel } from '@/lib/report-range';
+import { rangeLabel } from '@/lib/report-range';
 import { dayLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
-import { periodStillOpenNote } from '@/lib/weekly-deadline';
 
 /**
  * The DCC report (SKILL.md sections 9, 13, 17, 19 and 20; decisions 0216, 0224, 0257, 0292
@@ -130,6 +129,7 @@ export function DccReport() {
             open={twelve.isPlaceholderData ? undefined : twelve.data?.open}
             quiet={seniorPastor}
             labelled={branchReader || seniorPastor ? 'bare' : false}
+            asOfToday
             onChange={period.choosePeriodStart}
           />
           {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
@@ -171,16 +171,22 @@ export function DccReport() {
             </select>
           </div>
           )}
-          {/* A Full view leader's note under the controls (decision 0363): the Sundays the period
-              counts, any with no service (section 9), and whether it is still open. */}
+          {/* A Full view leader's note under the controls (decision 0363): whether the period's
+              records are still open, in two words, and any Sunday with no service (section 9).
+              Once its records have closed, a period with every Sunday held says nothing (decision
+              0451, which took out the count of Sundays, the closing time and "Closed."). */}
           {branchReader && twelve.data && !twelve.isPlaceholderData ? (
-            <p className="text-muted basis-full text-sm">
-              {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'}
-              {twelve.data.removed_events.length > 0
-                ? `, no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
-                : ''}
-              .{twelve.data.open ? ` ${periodStillOpenNote(rangeEndOf(kind, start))}.` : ' Closed.'}
-            </p>
+            (() => {
+              const note = [
+                twelve.data.open ? 'As of today' : null,
+                twelve.data.removed_events.length > 0
+                  ? `No service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                  : null,
+              ].filter((part) => part !== null);
+              return note.length === 0 ? null : (
+                <p className="text-muted basis-full text-sm">{note.join(' · ')}</p>
+              );
+            })()
           ) : null}
         </div>
 

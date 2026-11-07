@@ -26,9 +26,8 @@ import { useKeptLeader } from '@/lib/merged-leader';
 import { getCellTwelve } from '@/lib/reports';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
-import { rangeEndOf, rangeLabel } from '@/lib/report-range';
+import { rangeLabel } from '@/lib/report-range';
 import { useScreenAddress } from '@/lib/screen-address';
-import { periodStillOpenNote } from '@/lib/weekly-deadline';
 
 /**
  * The Cell Groups report (SKILL.md sections 12, 13, 17, 19 and 20; decisions 0202, 0216,
@@ -115,6 +114,7 @@ export function CellReport() {
             open={twelve.isPlaceholderData ? undefined : twelve.data?.open}
             quiet={seniorPastor}
             labelled={branchReader || seniorPastor ? 'bare' : false}
+            asOfToday
             onChange={period.choosePeriodStart}
           />
           {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
@@ -143,11 +143,11 @@ export function CellReport() {
             </select>
           </div>
           )}
-          {/* A Full view leader's note under the controls (decision 0363): whether it is still open. */}
-          {branchReader && twelve.data && !twelve.isPlaceholderData ? (
-            <p className="text-muted basis-full text-sm">
-              {twelve.data.open ? `${periodStillOpenNote(rangeEndOf(kind, start))}.` : 'Closed.'}
-            </p>
+          {/* A Full view leader's note under the controls (decision 0363): a period whose records
+              are still open says so in two words, and one whose records have closed says
+              nothing (decision 0451, replacing its closing time and "Closed."). */}
+          {branchReader && twelve.data && !twelve.isPlaceholderData && twelve.data.open ? (
+            <p className="text-muted basis-full text-sm">As of today</p>
           ) : null}
         </div>
 

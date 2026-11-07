@@ -375,17 +375,8 @@ export function ReportViewSwitch({
     />
   );
 
-  return attendance ? (
-    <>
-      {switcher}
-      {/* Said whichever is chosen, so nobody has to open Yearly to learn what it is. */}
-      <p className="text-muted mt-2 text-sm">
-        Yearly is a graph of the last 12 months, one point a month.
-      </p>
-    </>
-  ) : (
-    switcher
-  );
+  // No note about Yearly (decision 0451): its button carries a graph, and opening it shows one.
+  return switcher;
 }
 
 /**
@@ -402,12 +393,15 @@ export function isBranchReader(me: Parameters<typeof holdsWholeChurch>[0]): bool
   );
 }
 
-/** The heading every report shares, with its one line beside it. */
+/**
+ * The heading every report shares, with its one line beside it. The line is not shown on a
+ * phone (decision 0451): the tabs under it say what each report is, and the rows start higher.
+ */
 export function ReportsHeading({ line }: { line: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
       <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-      <p className="text-muted text-sm">{line}</p>
+      <p className="text-muted hidden text-sm lg:block">{line}</p>
     </div>
   );
 }
