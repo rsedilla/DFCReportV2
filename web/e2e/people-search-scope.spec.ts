@@ -93,7 +93,9 @@ test.describe('which search each surface asks for', () => {
 
       await page.goto('/people');
 
-      await expect(page.getByText('Search by name or Member ID to find someone.')).toBeVisible();
+      // The label says what to type, so nothing is repeated under the box (decision 0455).
+      await expect(page.getByLabel('Search by name or Member ID')).toBeVisible();
+      await expect(page.getByText('Search by name or Member ID to find someone.')).toHaveCount(0);
       await expect(page.getByRole('table', { name: 'People you oversee' })).toHaveCount(0);
       expect(searches).toEqual([]);
 
@@ -111,6 +113,30 @@ test.describe('which search each surface asks for', () => {
   }
 
   // Decision 0350: Add a person is offered only to an account holding `people.create`, so a
+  test('an ⓘ beside the search label says whose people it finds, and where else to look (decision 0455)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await page.goto('/people');
+
+    const note = page.getByText('Add searches every branch as you type', { exact: false });
+    const info = page.getByRole('button', { name: 'How to find someone' });
+    // Not part of the box's name.
+    await expect(page.getByRole('searchbox', { name: 'Search by name or Member ID', exact: true })).toBeVisible();
+    await expect(note).toBeHidden();
+    await info.click();
+    await expect(page.getByText('Finds the people you oversee')).toBeVisible();
+    await expect(note).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(note).toBeHidden();
+    await expect(info).toBeFocused();
+
+    // A phone has the label and no ⓘ.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(info).toBeHidden();
+  });
+
   // Senior Pastor, who holds none (decision 0326), is not offered it.
   test('Add a person is offered to a holder of people.create and not to a Senior Pastor', async ({
     page,

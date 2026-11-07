@@ -34,6 +34,7 @@ import {
 import { isBranchReader } from '@/components/reports-tabs';
 import { SentRequests } from '@/components/sent-requests';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { ViewSwitch } from '@/components/ui/view-switch';
@@ -260,22 +261,32 @@ function Dashboard() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">
-        Record · {monthLabel(month)}
-      </p>
+      {/* A leader's Record carries no line above or below its welcome (decision 0454): on a
+          phone that space is the list's, and from `sm` up an ⓘ beside the welcome holds the
+          month and, for a Recording-only account, when each week is due. Each row says its
+          own deadline either way. The Senior Pastors' heading is unchanged. */}
+      {seniorPastor ? (
+        <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">
+          Record · {monthLabel(month)}
+        </p>
+      ) : null}
       <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold tracking-tight">
           {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
         </h1>
-        {/* A Full view leader's tabs already say what is recorded here and who is behind,
-            so their heading carries no line (decision 0402). */}
-        {me.data === undefined || !(recordingOnly || seniorPastor) ? null : (
-          <p className="text-muted text-sm">
+        {me.data === undefined || seniorPastor ? null : (
+          <InfoToggle label="About this page" className="hidden self-center sm:inline-flex">
+            <span className="block font-bold">Record · {monthLabel(month)}</span>
             {recordingOnly
               ? 'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.'
-              : 'Whether the church has recorded, and your own work.'}
-          </p>
+              : null}
+          </InfoToggle>
         )}
+        {/* A Full view leader's tabs already say what is recorded here and who is behind,
+            so their heading carries no line (decision 0402). */}
+        {seniorPastor ? (
+          <p className="text-muted text-sm">Whether the church has recorded, and your own work.</p>
+        ) : null}
       </div>
 
       <RecordVerseCard />
@@ -374,16 +385,19 @@ function Dashboard() {
             <div className={`mt-4 ${CONTROL_BAR}`}>
               <RadioGroup
                 legend="Whose"
+                legendHidden
+                fill
                 name="queue-whose"
                 value={shownWhose}
                 onChange={(next) => {
                   setWhose(next);
                   go({ whose: next === 'branch' ? 'branch' : null });
                 }}
-                // Named by decision 0333; the second choice names what each half holds.
+                // Named by decision 0333. The reader's own work first, being their first
+                // responsibility (decision 0454).
                 options={[
-                  { value: 'branch', label: 'Leaders Under Me' },
                   { value: 'mine', label: filter === 'DCC' ? 'Own 12' : 'Own Cell' },
+                  { value: 'branch', label: 'Leaders Under Me' },
                 ]}
               />
             </div>
@@ -527,8 +541,10 @@ function RecordVerseCard() {
   }
 
   return (
-    <figure className="bg-accent-tint mt-4 max-w-3xl rounded-xl px-4 py-3 sm:px-5">
-      <blockquote className="text-ink text-[0.9375rem] leading-relaxed italic">
+    // The page's width, lined up with the frame below it, and justified on a phone with no
+    // word broken across a line (decision 0454).
+    <figure className="bg-accent-tint mt-4 rounded-xl px-4 py-3 sm:px-5">
+      <blockquote className="text-ink text-justify text-[0.9375rem] leading-relaxed italic sm:text-left">
         “{verse.data.text}”
       </blockquote>
       {verse.data.reference ? (
