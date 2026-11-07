@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -78,8 +78,10 @@ export function PersonPicker({
    * different answer, and it read as a bug to anybody using it.
    */
   legend: string;
-  description: string;
-  searchLabel: string;
+  /** A hint under the legend, left out where the group above already says it (decision 0457). */
+  description?: string;
+  /** May carry an `sr-only` part, so three boxes all reading "Search by name" are told apart. */
+  searchLabel: ReactNode;
   selectedId: string | null;
   selectedName: string | null;
   onSelect: (person: { id: string; full_name: string } | null) => void;
@@ -143,7 +145,7 @@ export function PersonPicker({
     return (
       <div className="border-line rounded-md border p-4">
         <p className="field-label">{legend}</p>
-        {describeWhenChosen ? (
+        {describeWhenChosen && description ? (
           <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
         ) : null}
         <p className="mt-1 text-sm">{selectedName}</p>
@@ -163,9 +165,9 @@ export function PersonPicker({
   return (
     <div className="border-line rounded-md border p-4">
       <p className="field-label">{legend}</p>
-      <p className="text-muted mt-1 text-sm leading-relaxed">
-        {description}
-      </p>
+      {description ? (
+        <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>
+      ) : null}
       {network !== null && networkReason !== null ? (
         <p className="mt-2 text-sm">
           Showing the {network === 'MENS' ? 'Men’s' : 'Women’s'} Network only, because{' '}

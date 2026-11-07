@@ -246,11 +246,12 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-08, the trigger being decision 0456: of 454 files, 453 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0456, 0453 aside, each moved the first two
+2026-11-08, the trigger being decision 0457: of 455 files, 454 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0457, 0453 aside, each moved the first two
 and neither of the others, none of them carrying a `Next:`. *0453 is on its own branch (PR #467),
 so this branch counts one file fewer than the sequence; whichever merges second recounts.* The
-recount before this one was dated 2026-11-07 and triggered by 0455, and was left stale by 0456
+recount before this one was dated 2026-11-08 and triggered by 0456, and was left stale by 0457
+the same day. The one before that was dated 2026-11-07 and triggered by 0455, and was left stale by 0456
 the next day. The one before that was dated 2026-11-07 and triggered by 0454, and was left stale by 0455
 the same day. The one before that was dated 2026-11-07 and triggered by 0452, and was left stale by 0454
 the same day. The one before that was dated
@@ -952,6 +953,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-07 — [Record carries no line above or below its welcome](docs/decisions/0454-a-leaders-record-carries-no-line-above-or-below-its-welcome.md)
 - 2026-11-07 — [Nothing is written under the People search before it is used](docs/decisions/0455-nothing-is-written-under-the-people-search-before-it-is-used.md)
 - 2026-11-08 — [A recording screen's heading names what is recorded](docs/decisions/0456-a-recording-screens-heading-names-what-is-recorded.md)
+- 2026-11-08 — [Asking for a new Cell is a tab beside My Cell](docs/decisions/0457-asking-for-a-new-cell-is-a-tab-beside-my-cell.md)
 
 ### Open — awaiting a ruling
 

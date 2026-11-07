@@ -578,12 +578,12 @@ export async function mockMemberSearch(page: Page): Promise<string[]> {
 }
 
 /**
- * Chooses the three members in an open new-Cell or restart dialog, a different person in each
+ * Chooses the three members in a new-Cell form or restart dialog, a different person in each
  * picker: only one picker shows results at a time, so its nth Choose is the nth person.
  */
 export async function chooseThreeMembers(dialog: Locator): Promise<void> {
   for (const slot of [0, 1, 2]) {
-    await dialog.getByLabel(`Search for member ${slot + 1} by name`).fill(MEMBER_SEARCH_TERM);
+    await dialog.getByLabel(`Search by name for member ${slot + 1}`).fill(MEMBER_SEARCH_TERM);
     // Earlier pickers have collapsed to their choice, so the first Search left is this one's.
     await dialog.getByRole('button', { name: 'Search people' }).first().click();
     await dialog.getByRole('button', { name: 'Choose', exact: true }).nth(slot).click();

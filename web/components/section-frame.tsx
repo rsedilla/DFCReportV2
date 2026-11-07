@@ -34,7 +34,7 @@ export function SectionFrame({ section, children }: { section: Section; children
   const recording = me.data?.screens === 'RECORDING';
   const frame: Record<Exclude<Section, 'people'>, { name: string; tab: string; href: string }> = {
     cells: recording
-      ? { name: 'My Cell', tab: 'My Cell', href: '/my-cell' }
+      ? { name: 'Cells', tab: 'My Cell', href: '/my-cell' }
       : { name: 'Cells', tab: 'Active Cells', href: '/cells' },
     record: { name: 'Record', tab: 'Update Records', href: '/dashboard?list=awaiting' },
     account: { name: 'Account', tab: 'My Account', href: '/session' },

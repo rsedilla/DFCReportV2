@@ -764,21 +764,19 @@ const SCANS = [
     },
   },
   {
-    // Asking for a new Cell (section 10), the dialog over My Cell: the person picker, two
-    // radio groups and a time field.
+    // Asking for a new Cell (section 10), the tab beside My Cell (decision 0457): the person
+    // picker, the three members and their ⓘ, two radio groups and a time field.
     name: 'my cell, asking for a new cell',
-    route: '/my-cell',
+    route: '/my-cell/new',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockScreens(page, 'RECORDING');
       await mockCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { level: 2, name: 'Couple · Wed' })).toBeVisible();
-      await page.getByRole('button', { name: 'Request New Cell' }).click();
-      await expect(
-        page.getByRole('dialog', { name: 'Ask for a new Cell' }).getByLabel('What time'),
-      ).toBeVisible();
+      await expect(page.getByLabel('Time', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'About the members' }).click();
+      await expect(page.getByText('Someone new is added first, under Add People.')).toBeVisible();
     },
   },
   {
@@ -2153,12 +2151,24 @@ const TARGET_SWEEP = [
   { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10, creator: true },
   // My Cell is the recording screens' (decision 0323), so it is measured as one, last.
   {
-    // Ask for a new Cell, and Members and This month's meetings for each of the two Cells:
-    // **five**. Your requests renders nothing here, the sweep answering no sent requests.
+    // The two tabs, My Cell and Request New Cell (decision 0457), and Members and This month's
+    // meetings for each of the two Cells: **six**. Your requests renders nothing here, the
+    // sweep answering no sent requests.
     name: 'my cell',
     route: '/my-cell',
+    settleRole: 'link' as const,
     settle: 'Request New Cell',
-    minimum: 5,
+    minimum: 6,
+    recording: true,
+  },
+  {
+    // Asking for a new Cell (decision 0457): the two tabs, the leader's box and Search, the
+    // Members ⓘ, three member boxes and their Search, four categories, seven days, the time
+    // and Send for approval: **twenty-four**.
+    name: 'request new cell',
+    route: '/my-cell/new',
+    settle: 'Send for approval',
+    minimum: 24,
     recording: true,
   },
   {

@@ -185,7 +185,9 @@ export function SearchField({
   labelAside,
   className,
   ...props
-}: Omit<FieldProps, 'error' | 'quietLabel' | 'descriptionBelow' | 'type'> & {
+}: Omit<FieldProps, 'label' | 'error' | 'quietLabel' | 'descriptionBelow' | 'type'> & {
+  /** May carry an `sr-only` part, as the person picker's member boxes do (decision 0457). */
+  label: ReactNode;
   hideLabel?: boolean;
   /**
    * Beside the label and outside it, such as People's ⓘ (decision 0455), so it is not read
