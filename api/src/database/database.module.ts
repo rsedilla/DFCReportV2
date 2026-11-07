@@ -9,8 +9,10 @@ import {
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool, types } from 'pg';
 
+import { AppConfigModule } from '../config/config.module';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 
+import { assertRestrictedLogin } from './database-login';
 import { assertDateStyle, DATE_STYLE_OPTION } from './date-style';
 
 import type { Database } from './schema';
@@ -67,6 +69,7 @@ export type Db = Kysely<Database>;
 
 @Global()
 @Module({
+  imports: [AppConfigModule],
   providers: [
     {
       provide: DATABASE,
@@ -101,7 +104,10 @@ export type Db = Kysely<Database>;
   exports: [DATABASE],
 })
 export class DatabaseModule implements OnApplicationBootstrap, OnApplicationShutdown {
-  constructor(@Inject(DATABASE) private readonly db: Db) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Db,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   /**
    * Read the pin back and refuse to start unless it took effect.
@@ -113,6 +119,11 @@ export class DatabaseModule implements OnApplicationBootstrap, OnApplicationShut
    */
   async onApplicationBootstrap(): Promise<void> {
     await assertDateStyle(this.db);
+    // Production only (decision 0453): a development machine and the test suite connect
+    // as the tables' owner, which is what lets the suite empty them between cases.
+    if (this.config.nodeEnv === 'production') {
+      await assertRestrictedLogin(this.db);
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {
