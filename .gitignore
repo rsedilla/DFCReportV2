@@ -60,3 +60,20 @@ outbox/
 # real leadership spine's names, and this repository is public (CLAUDE.md, Secrets).
 # They are a working artefact for design review, not repository content.
 screenshots/
+
+# The same, saved straight into the top of the folder rather than into screenshots/.
+# By 7 November 233 of them and 21 folders of them sat there untracked, a single
+# `git add -A` from being published. Only the top level is covered: the images the
+# application serves live under web/public/ and are unaffected.
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+/*.webm
+/*.mp4
+/*.mov
+/*-shots/
+/*-shots2/
+/*-built/
+/*-look/
