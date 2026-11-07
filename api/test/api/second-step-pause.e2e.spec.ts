@@ -160,9 +160,17 @@ describe('second-step pause after ten wrong codes (decision 0441)', () => {
       /^Sign-in to this account is paused for 15 minutes after 10 wrong codes\. Try again after \d{1,2}:\d{2} [AP]M\.$/,
     );
 
-    const opensIn = new Date(tenth.body.error.details.paused_until).getTime() - Date.now();
-    expect(opensIn).toBeGreaterThan(14 * 60_000);
-    expect(opensIn).toBeLessThanOrEqual(15 * 60_000);
+    // Measured on the database's clock, which set the pause. Measured on Node's clock
+    // instead, a 15-minute pause once read as 900,001 milliseconds.
+    const { rows } = await sql<{ paused_until: Date; opens_in: number }>`
+      SELECT paused_until,
+             (extract(epoch FROM paused_until - clock_timestamp()) * 1000)::float8 AS opens_in
+        FROM second_step_pauses
+       WHERE account_id = ${admin.id}`.execute(db);
+    expect(rows).toHaveLength(1);
+    expect(new Date(tenth.body.error.details.paused_until)).toEqual(rows[0].paused_until);
+    expect(rows[0].opens_in).toBeGreaterThan(14 * 60_000);
+    expect(rows[0].opens_in).toBeLessThanOrEqual(15 * 60_000);
 
     // That sign-in is closed: even the right code on it is refused.
     const after = await answer(challenge, { code: codeNow() });
