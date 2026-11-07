@@ -53,4 +53,3 @@ Decision 0453, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.m
 Sections 5 and 24. It retires the Open item on the application's database role.
 
 Previous: [2026-11-07 — A person is archived, never removed](0452-a-person-is-archived-never-removed.md)
-(on its own pull request, #464, until it has merged)

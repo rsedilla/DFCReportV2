@@ -515,7 +515,7 @@ Thresholds and edit distances must be calibrated against real data rather than f
 
 ### Person Lifecycle (Current / Archived)
 
-A Person must not normally be hard-deleted merely to reduce a leader's current People count. Every Person has a lifecycle state:
+**A Person's record is never deleted or blanked, including at the person's own request** (ruling of 2026-11-07, decision 0452, the owner's: "in the church we always redeem people"). Somebody who leaves is archived, and Restore brings the same record back, with its Member ID and its history. The application offers no removal; a formal request under the Data Privacy Act is the church's to decide outside it. Every Person has a lifecycle state:
 
 - `CURRENT`
 - `ARCHIVED`
