@@ -1039,7 +1039,7 @@ CREATE TRIGGER pastoral_assignments_no_delete
 
 `TRUNCATE` fires no row trigger, so it bypasses this rule exactly as a `DELETE` would. It is left available because it is how a test suite resets between cases, and **the protection is meant to be the privilege, not the trigger**: Section 24 requires least-privilege database credentials, and an application role without `TRUNCATE` on these tables is what makes the exemption safe.
 
-That role does not exist yet. Until it does, nothing prevents the application from truncating a history table, and saying otherwise would be asserting an enforcement that is not there — which is the failure this rule exists to prevent. It is recorded as open in `CLAUDE.md`.
+**In production the API refuses to start on a login that can `TRUNCATE` a table** (Section 24, decision 0453), and `api/scripts/restricted-login.sql` sets up the login it starts on. A development machine and the test suite are not held to it: they connect as the tables' owner, which is what lets the suite empty them between cases.
 
 One active assignment — a partial unique index over the person, where the assignment is open:
 
@@ -5451,7 +5451,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Point-in-time recovery wherever the database host supports it
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
-- Least-privilege database/application credentials
+- **Least-privilege database credentials, checked when the API starts** (decision 0453). In production the API connects as a login that holds `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the tables and the use of their sequences, and **refuses to start** on a superuser; on a login that owns the database, the `public` schema or a table, or can `TRUNCATE` a table, any of which removes rows past Section 5's no-delete rule; on one that can create in `public`; or on one missing access to a table or sequence, which is a grant forgotten after a migration. The server commands that start the application, all but the migrations, are checked the same way. `api/scripts/restricted-login.sql` sets the login up, run once per database, and also gives it every table and sequence a later migration creates, so no grant is made by hand, provided the migrations run as the owner it names. A development machine and the test suite are not checked: they connect as the tables' owner, which is how the suite empties them between cases.
 - **A Privacy Notice under the Data Privacy Act of 2012 (RA 10173)** (decision 0412). The sign-in page says DREAMS holds the personal information of the church's members, children among them, and links to `/privacy`, a page open to anyone that says what is kept and not kept, why, who can see it, how it is protected and by which service providers, how long it is kept, the rights the Act gives, and that questions go to Doulos For Christ through doulosforchrist.org. A change to what is kept about a person, who can see it, or who helps run DREAMS updates that page in the same change.
 - **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance. See The instance count, below
 
