@@ -3,13 +3,22 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
-import { RangeNavigator } from '@/components/my-twelve';
+import {
+  FIGURE_CELL,
+  FIGURE_HEAD,
+  NAME_CELL,
+  NAME_HEAD,
+  RangeNavigator,
+} from '@/components/my-twelve';
 import { CountsSwitch, ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { ShortText } from '@/components/ui/short-text';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { describeFailure } from '@/lib/messages';
+import { shortNames } from '@/lib/names';
+import { usePhone } from '@/lib/phone';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
@@ -41,6 +50,86 @@ export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, s
   PEOPLE: [['people', 'People']],
 };
 
+/** Each # tab's headings on a phone (decision 0451), its key said under the table. */
+const COLUMN_SHORT: Partial<Record<keyof ChurchCountFigures, string>> = {
+  j12_kids: 'J12',
+  youth: 'Y',
+  young_pro: 'YP',
+  couple: 'C',
+};
+
+/** What the short headings stand for, under a table that uses them (decision 0451). */
+export function CountsKey({ figure }: { figure: Figure }) {
+  return figure === 'CELLS' ? (
+    <p className="text-muted mt-2 text-xs lg:hidden">Y = Youth · YP = Young Pro · C = Couple</p>
+  ) : null;
+}
+
+/** A # tab's heading cell, short on a phone and said in full (decision 0451). */
+export function CountHead({
+  label,
+  column,
+  phone,
+}: {
+  label: string;
+  column: keyof ChurchCountFigures;
+  phone: boolean;
+}) {
+  return phone ? <ShortText full={label} short={COLUMN_SHORT[column] ?? null} /> : <>{label}</>;
+}
+
+/**
+ * A # tab's figures as tiles (decision 0451): the label above a large figure, the first tile
+ * saying when it is as of — *As of today* while the month runs, *As of 31 October 2026* once it
+ * has ended. A tab with one figure gives it the whole row; *# of Cell Groups* keeps its total
+ * across the top and the four two by two on a phone, five on a line wider (decision 0431).
+ */
+export function CountTiles({
+  figure,
+  value,
+  asOf,
+}: {
+  figure: Figure;
+  value: (key: keyof ChurchCountFigures) => number;
+  asOf: string;
+}) {
+  const columns = COUNT_COLUMNS[figure];
+  return (
+    <dl
+      className={
+        figure === 'CELLS'
+          ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
+          : 'mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3'
+      }
+    >
+      {columns.map(([key, label], index) => (
+        <div
+          key={key}
+          className={cn(
+            'border-line border p-3',
+            figure === 'CELLS' && key === 'cell_groups' && 'col-span-2 sm:col-span-1',
+          )}
+        >
+          <dt className="text-ink text-sm font-bold">{label}</dt>
+          <dd
+            className={cn(
+              'mt-1 font-bold tabular-nums',
+              columns.length === 1 ? 'text-4xl leading-tight' : 'text-xl',
+            )}
+          >
+            {value(key).toLocaleString()}
+          </dd>
+          {index === 0 ? (
+            <dd className="text-muted mt-1 text-xs" aria-live="polite">
+              {asOf}
+            </dd>
+          ) : null}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 const LABEL: Record<Figure, string> = {
   CELLS: 'Number of Cell Groups',
   CELL_LEADERS: 'Number of Cell Leaders',
@@ -52,7 +141,7 @@ const LABEL: Record<Figure, string> = {
  * (decision 0326, point 3).
  *
  * **A month at a time, with previous and next**: a month that has ended is counted on its last
- * day, and the current month as of now, *so far*. The whole church first, then one table for
+ * day, and the current month as of now, *As of today* (decision 0451). The whole church first, then one table for
  * each root's direct leaders, the Men's root first, then *Others*, so the rows and *Others*
  * add up to the whole church. Rows are in first-name order, never sorted by a figure, never
  * numbered or coloured (sections 13 and 17); each name opens that leader's page (decision 0364).
@@ -87,7 +176,7 @@ export function ChurchCountsPanel({
         <CountsSwitch tab={TAB[figure]} month={month} />
         {/* Monthly or the last 12 months, beside the month (decision 0398). */}
         <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 lg:w-auto">
           <RangeNavigator
             kind="MONTH"
             start={month}
@@ -96,9 +185,6 @@ export function ChurchCountsPanel({
             labelled="bare"
             onChange={(value) => go({ month: value })}
           />
-          <span className="text-muted text-sm" aria-live="polite">
-            {asAt(month, month === current)}
-          </span>
         </div>
       </div>
 
@@ -112,30 +198,11 @@ export function ChurchCountsPanel({
       ) : data ? (
         <>
           <h2 className="field-label mt-4">Whole Church</h2>
-          <dl
-            className={
-              figure === 'CELLS'
-                ? // Five on one line; on a phone the total across the top, the four two by two
-                  // (decision 0431).
-                  'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
-                : 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'
-            }
-          >
-            {COUNT_COLUMNS[figure].map(([key, label]) => (
-              <div
-                key={key}
-                className={cn(
-                  'border-line border p-3',
-                  figure === 'CELLS' && key === 'cell_groups' && 'col-span-2 sm:col-span-1',
-                )}
-              >
-                <dt className="text-ink text-sm font-bold">{label}</dt>
-                <dd className="mt-1 text-xl font-bold tabular-nums">
-                  {data.whole_church[key].toLocaleString()}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <CountTiles
+            figure={figure}
+            value={(key) => data.whole_church[key]}
+            asOf={asAt(month, month === current)}
+          />
 
           {data.tables === null ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
@@ -158,15 +225,18 @@ export function ChurchCountsPanel({
   );
 }
 
-/** The month's instant, in words: *as at today, so far* or *as at 31 October 2026*. */
+/**
+ * The month's instant, in words: *As of today* or *As of 31 October 2026* (decision 0451, which
+ * dropped *so far* and moved it into the first tile).
+ */
 export function asAt(month: string, current: boolean): string {
   if (current) {
-    return 'as at today, so far';
+    return 'As of today';
   }
   const [year, number] = month.split('-').map(Number);
   const last = new Date(Date.UTC(year, number, 0));
 
-  return `as at ${last.toLocaleDateString('en-GB', {
+  return `As of ${last.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -181,38 +251,47 @@ function CountTable({
   figure: Figure;
   table: NonNullable<ChurchCounts['tables']>[number];
 }) {
+  const phone = usePhone();
   // No count in the heading (owner, 2026-10-09).
   const heading = `${table.root.full_name ?? 'A Network root'}’s leaders`;
+  const columns = COUNT_COLUMNS[figure];
+  // Short names only where there are several figures to fit beside them (decision 0451).
+  const short =
+    phone && columns.length > 1 ? shortNames(table.rows.map((row) => row.leader)) : null;
 
   return (
     <div className="mt-6">
       <h3 className="text-base font-bold tracking-tight">{heading}</h3>
 
-      <Table caption={heading} className="mt-2 hidden lg:block">
+      {/* One table at every width (decision 0451, replacing the owner's two lines a leader on a
+          phone of 2026-10-08): the figures in equal columns beside each name. */}
+      <Table caption={heading} className="mt-2" tableClassName="table-fixed">
         <thead>
           <tr>
-            <HeaderCell style={{ width: '36%' }}>Primaries</HeaderCell>
+            <HeaderCell className={NAME_HEAD} style={{ width: columns.length > 1 ? '36%' : '70%' }}>
+              Primaries
+            </HeaderCell>
             {/* The figures share the rest of the row equally (owner, 2026-10-09). */}
-            {COUNT_COLUMNS[figure].map(([key, label]) => (
+            {columns.map(([key, label]) => (
               <HeaderCell
                 key={key}
-                className="text-right"
-                style={{ width: `${64 / COUNT_COLUMNS[figure].length}%` }}
+                className={FIGURE_HEAD}
+                style={{ width: `${(columns.length > 1 ? 64 : 30) / columns.length}%` }}
               >
-                {label}
+                <CountHead label={label} column={key} phone={phone} />
               </HeaderCell>
             ))}
           </tr>
         </thead>
         <tbody>
-          {table.rows.map((row) => (
+          {table.rows.map((row, index) => (
             // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
             <tr key={row.leader.id} className={rowClasses}>
-              <td className="px-3 py-3">
-                <BranchLink leader={row.leader} />
+              <td className={NAME_CELL}>
+                <BranchLink leader={row.leader} short={short?.[index] ?? null} />
               </td>
-              {COUNT_COLUMNS[figure].map(([key]) => (
-                <td key={key} className="px-3 py-3 text-right tabular-nums">
+              {columns.map(([key]) => (
+                <td key={key} className={FIGURE_CELL}>
                   {row[key]}
                 </td>
               ))}
@@ -220,18 +299,7 @@ function CountTable({
           ))}
         </tbody>
       </Table>
-
-      {/* On a phone each leader is two short lines (owner, 2026-10-08). */}
-      <ul className="mt-2 flex flex-col lg:hidden">
-        {table.rows.map((row) => (
-          <li key={row.leader.id} className="border-line even:bg-raised border-b px-2 py-2">
-            <BranchLink leader={row.leader} />
-            <p className="text-muted text-sm tabular-nums">
-              {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${row[key]}`).join(' · ')}
-            </p>
-          </li>
-        ))}
-      </ul>
+      <CountsKey figure={figure} />
     </div>
   );
 }
@@ -252,17 +320,25 @@ function OthersLine({ figure, others }: { figure: Figure; others: ChurchCountFig
 
 function BranchLink({
   leader,
+  short,
 }: {
   leader: { id: string; member_id: string | null; full_name: string | null };
+  /** The name a phone shows where the table has several figures (decision 0451). */
+  short: string | null;
 }) {
+  const full = leader.full_name ?? leader.member_id ?? 'A leader';
+  const shortened = short !== null && short !== full;
   return (
     <Link
+      // A short name keeps the words it shows first in its name, so speaking them selects it
+      // (decision 0451; WCAG 2.5.3).
+      aria-label={shortened ? `${short}, ${full}` : undefined}
       // The person's page, Branch having left People (decision 0364).
       href={`/people/${leader.id}`}
       // The accent, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
-      {leader.full_name ?? leader.member_id ?? 'A leader'}
+      {shortened ? short : full}
     </Link>
   );
 }

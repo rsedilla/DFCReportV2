@@ -736,37 +736,56 @@ test.describe('the Growth reports: counts only, as of now (decision 0292)', () =
 });
 
 /**
- * A Full view leader's 12 on a phone (decision 0365): no cards above it, and below `lg` each line
- * is its name and then every figure, so nothing is out of sight to one side; the table from `lg`.
+ * A Full view leader's 12 on a phone (decision 0451, replacing decision 0365's two lines a
+ * leader): one table at every width, every figure in view. Below `lg` the headings and names are
+ * short, said in full to a screen reader; from `lg` they are as they were.
  */
 test.describe('a Full view leader’s 12 at a phone and a computer', () => {
   for (const path of ['/reports/cells', '/reports/dcc']) {
-    test(`${path} is two short lines a leader on a phone, and the table on a computer`, async ({
-      page,
-    }) => {
-      await page.clock.setFixedTime(NOW);
-      await mockSignedIn(page);
-      await mockCellTwelve(page, { today: '2026-06-20' });
-      await mockDccTwelve(page, { today: '2026-06-20' });
+    for (const width of [390, 320]) {
+      test(`${path} at ${width}px is one table with short headings and names, every figure in view`, async ({
+        page,
+      }) => {
+        await page.clock.setFixedTime(NOW);
+        await mockSignedIn(page);
+        await mockCellTwelve(page, { today: '2026-06-20' });
+        await mockDccTwelve(page, { today: '2026-06-20' });
 
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto(path);
-      const list = page.getByRole('list', { name: 'Your 12' });
-      await expect(list).toBeVisible();
-      await expect(page.getByRole('table', { name: 'Your 12' })).toBeHidden();
-      await expect(list.getByRole('listitem').last()).toHaveText(
-        /^Total\s*Total \d+ · VIP \d+ · 2nd Timer \d+ · 3rd Timer \d+ · 4th Timer \d+ · Regular \d+$/,
-      );
-      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }));
-      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto(path);
+        const table = page.getByRole('table', { name: 'Your 12' });
+        await expect(table).toBeVisible();
+        await expect(page.getByRole('list', { name: 'Your 12' })).toHaveCount(0);
 
-      await page.setViewportSize({ width: 1280, height: 800 });
-      await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
-      await expect(list).toBeHidden();
-    });
+        // Short on screen, in full for a screen reader.
+        const heads = table.getByRole('columnheader');
+        for (const [index, short, full] of [
+          [3, '2nd', '2nd Timer'],
+          [6, 'Reg', 'Regular'],
+        ] as const) {
+          await expect(heads.nth(index).locator('[aria-hidden="true"]')).toHaveText(short);
+          await expect(heads.nth(index).locator('.sr-only')).toHaveText(full);
+        }
+        await expect(table.locator('[aria-hidden="true"]', { hasText: 'Consuelo B.' })).toBeVisible();
+        await expect(table.locator('.sr-only', { hasText: 'Consuelo Bautista' })).toHaveCount(1);
+
+        // Every figure in view: neither the page nor the table scrolls sideways.
+        const widths = await page.evaluate(() => {
+          const frame = document.querySelector('table')!.parentElement!;
+          return {
+            page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            table: frame.scrollWidth - frame.clientWidth,
+          };
+        });
+        expect(widths.page).toBeLessThanOrEqual(0);
+        expect(widths.table).toBeLessThanOrEqual(0);
+
+        // From `lg`, the full headings and names.
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await expect(heads.nth(3)).toHaveText('2nd Timer');
+        await expect(table.getByRole('cell', { name: 'Consuelo Bautista', exact: true })).toBeVisible();
+      });
+    }
   }
 });
 
