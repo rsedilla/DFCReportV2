@@ -197,7 +197,9 @@ test.describe('a Recording-only account (decision 0323)', () => {
       /^Update Records/,
     ]);
     await expect(page.getByRole('heading', { level: 2, name: 'Update Records' })).toHaveCount(0);
-    // What the page is for and when each week is due, said once (owner, 2026-10-26).
+    // What the page is for and when each week is due, said once (owner, 2026-10-26), behind
+    // the ⓘ beside the welcome (decision 0454).
+    await page.getByRole('button', { name: 'About this page' }).click();
     await expect(
       page.getByText(
         'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.',
@@ -268,6 +270,46 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await expect(page.getByRole('radio', { name: 'Own Cell', exact: true })).toBeChecked();
     await page.getByRole('button', { name: /^DCC/ }).click();
     await expect(page.getByRole('radio', { name: 'Own 12', exact: true })).toBeChecked();
+  });
+
+  test('Record’s heading carries no line, the ⓘ holds the month and the due rule, and Own Cell comes first (decision 0454)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockRecord(page);
+    await mockScreens(page, 'RECORDING', { peopleIOversee: true });
+    await page.goto('/dashboard');
+
+    const due =
+      'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.';
+    await expect(page.getByRole('heading', { level: 1, name: 'Welcome, Marilou' })).toBeVisible();
+    await expect(page.getByText('Record · June 2026')).toBeHidden();
+    await expect(page.getByText(due)).toBeHidden();
+
+    // The switch is still named Whose for a screen reader, its own work first.
+    const whose = page.getByRole('group', { name: 'Whose' });
+    await expect(whose.getByRole('radio')).toHaveCount(2);
+    await expect(whose.locator('label')).toHaveText(['Own Cell', 'Leaders Under Me']);
+    await expect(whose.locator('legend')).toHaveClass(/sr-only/);
+
+    // A tap opens the note, and Escape closes it and returns to the button.
+    const info = page.getByRole('button', { name: 'About this page' });
+    await expect(info).toHaveAttribute('aria-expanded', 'false');
+    await info.click();
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText('Record · June 2026')).toBeVisible();
+    await expect(page.getByText(due)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByText(due)).toBeHidden();
+    await expect(info).toBeFocused();
+
+    // On a phone there is no ⓘ, and the two choices span the row.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(info).toBeHidden();
+    const own = whose.locator('label').first();
+    const row = await whose.boundingBox();
+    const box = await own.boundingBox();
+    expect(Math.round(box!.width)).toBe(Math.round(row!.width));
   });
 
   test('People has no Branch tab', async ({ page }) => {

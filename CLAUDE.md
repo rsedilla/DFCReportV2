@@ -246,9 +246,12 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-07, the trigger being decision 0452: of 451 files, 450 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0452 each moved the first two and
-neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-07, the trigger being decision 0454: of 452 files, 451 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0454, 0453 aside, each moved the first two
+and neither of the others, none of them carrying a `Next:`. *0453 is on its own branch (PR #467),
+so this branch counts one file fewer than the sequence; whichever merges second recounts.* The
+recount before this one was dated 2026-11-07 and triggered by 0452, and was left stale by 0454
+the same day. The one before that was dated
 2026-11-07 and triggered by 0451, and was left stale by 0452 the same day. The one before that was dated
 2026-11-07 and triggered by 0450, and was left stale by 0451 the same day. The one before that was dated
 2026-11-06 and triggered by 0449, and was left stale by 0450 the next day. The one before that was dated
@@ -944,6 +947,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-06 — [A session ends thirty days after its sign-in, seven for an Admin or Senior Pastor](docs/decisions/0450-a-session-ends-thirty-days-after-sign-in.md)
 - 2026-11-06 — [Reports on a phone: one table, every figure in view](docs/decisions/0451-reports-on-a-phone-one-table-every-figure-in-view.md)
 - 2026-11-07 — [A person is archived, never removed](docs/decisions/0452-a-person-is-archived-never-removed.md)
+- 2026-11-07 — [Record carries no line above or below its welcome](docs/decisions/0454-a-leaders-record-carries-no-line-above-or-below-its-welcome.md)
 
 ### Open — awaiting a ruling
 
