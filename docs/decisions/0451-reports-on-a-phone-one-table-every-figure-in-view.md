@@ -91,4 +91,3 @@ Decision 0451, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.m
 Sections 3, 17 and 19.
 
 Previous: [2026-11-06 — A session ends thirty days after its sign-in, seven for an Admin or Senior Pastor](0450-a-session-ends-thirty-days-after-sign-in.md)
-(on its own pull request, #462, until it has merged)

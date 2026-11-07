@@ -187,6 +187,14 @@ export interface RefreshTokensTable {
    * session begun in the installed app (decision 0435).
    */
   idle_expires_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /**
+   * When the session stops being renewable however often it is used: thirty days after
+   * its sign-in, seven for an `ADMIN` or `SENIOR_PASTOR` account (decision 0450). Carried
+   * unchanged to every replacement; `expires_at` never passes it. Null on a row that was
+   * no longer renewable when the column was added, or one an API process older than the
+   * column wrote after it; a rotation gives such a row one.
+   */
+  session_ends_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
 }
 
 /**
