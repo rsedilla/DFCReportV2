@@ -182,10 +182,16 @@ export function SearchField({
   description,
   hideLabel = false,
   action,
+  labelAside,
   className,
   ...props
 }: Omit<FieldProps, 'error' | 'quietLabel' | 'descriptionBelow' | 'type'> & {
   hideLabel?: boolean;
+  /**
+   * Beside the label and outside it, such as People's ⓘ (decision 0455), so it is not read
+   * as part of the box's name.
+   */
+  labelAside?: ReactNode;
   /** The Search button, joined to the right of the box from `sm`, under it on a phone. */
   action: ReactNode;
   className?: string;
@@ -202,9 +208,18 @@ export function SearchField({
         className,
       )}
     >
-      <LabelPrimitive.Root htmlFor={id} className={hideLabel ? 'sr-only' : 'field-label'}>
-        {label}
-      </LabelPrimitive.Root>
+      {labelAside ? (
+        <div className="flex items-center gap-2">
+          <LabelPrimitive.Root htmlFor={id} className={hideLabel ? 'sr-only' : 'field-label'}>
+            {label}
+          </LabelPrimitive.Root>
+          {labelAside}
+        </div>
+      ) : (
+        <LabelPrimitive.Root htmlFor={id} className={hideLabel ? 'sr-only' : 'field-label'}>
+          {label}
+        </LabelPrimitive.Root>
+      )}
 
       {description ? (
         <p id={descriptionId} className="text-muted text-sm leading-relaxed">

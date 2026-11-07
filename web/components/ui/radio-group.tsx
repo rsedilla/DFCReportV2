@@ -43,6 +43,8 @@ export function RadioGroup<T extends string>({
   layout = 'stacked',
   descriptionBelow = false,
   columns,
+  legendHidden = false,
+  fill = false,
 }: {
   legend: string;
   description?: string;
@@ -78,6 +80,16 @@ export function RadioGroup<T extends string>({
    * a phone either way. Stacked only.
    */
   columns?: 2 | 4;
+  /**
+   * The legend is read by a screen reader and not drawn, for a switch whose choices say
+   * what it is, such as Record's Own Cell and Leaders Under Me (decision 0454).
+   */
+  legendHidden?: boolean;
+  /**
+   * The whole width of its row on a phone, so stacked choices span it rather than shrinking
+   * to their words inside a control bar (decision 0454). Its own width from `sm` up.
+   */
+  fill?: boolean;
 }) {
   const id = useId();
   const row = layout === 'row';
@@ -230,11 +242,11 @@ export function RadioGroup<T extends string>({
     // `min-w-0` because a fieldset is otherwise as wide as its widest line of choices, so
     // they ran past a narrow dialog rather than wrapping (decision 0431's fourth category).
     <fieldset
-      className="flex min-w-0 flex-col gap-1.5"
+      className={cn('flex min-w-0 flex-col gap-1.5', fill && 'w-full sm:w-auto')}
       aria-describedby={describedBy}
       disabled={disabled}
     >
-      <legend className="field-label">{legend}</legend>
+      <legend className={cn('field-label', legendHidden && 'sr-only')}>{legend}</legend>
       {body}
     </fieldset>
   );

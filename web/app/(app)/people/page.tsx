@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { SearchField } from '@/components/ui/field';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { cellShortName, getPeopleCells, type PersonCells } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
@@ -140,6 +141,14 @@ function PeopleList() {
         >
           <SearchField
             label="Search by name or Member ID"
+            // What the label does not say, from `sm` up (decision 0455).
+            labelAside={
+              <InfoToggle label="How to find someone" small className="hidden sm:inline-flex">
+                <span className="block font-bold">Finds the people you oversee</span>
+                Type a name or a Member ID, then Search. Not there? Add searches every branch as you
+                type, so look there before adding someone new.
+              </InfoToggle>
+            }
             name="q"
             autoComplete="off"
             value={term}
@@ -181,9 +190,8 @@ function PeopleList() {
         </div>
 
         <div className="mt-4">
-          {me.isError && me.data === undefined ? null : awaitingSearch ? (
-            <p className="text-muted text-sm">Search by name or Member ID to find someone.</p>
-          ) : results.isPending ? (
+          {/* Nothing before a search: the label says what to type (decision 0455). */}
+          {me.isError && me.data === undefined ? null : awaitingSearch ? null : results.isPending ? (
             <p className="text-muted text-sm">Loading&hellip;</p>
           ) : results.isError ? null : rows.length === 0 ? (
             <div>
