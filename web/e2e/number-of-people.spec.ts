@@ -84,7 +84,7 @@ test.describe('a Full view leader’s # of People', () => {
 
     await page.getByRole('button', { name: 'The period before' }).click();
     await expect.poll(() => asked.some((each) => each.period === '2026-09-01')).toBe(true);
-    await expect(page.getByText('as at 30 September 2026')).toBeVisible();
+    await expect(page.getByText('As of 30 September 2026', { exact: true })).toBeVisible();
   });
 });
 

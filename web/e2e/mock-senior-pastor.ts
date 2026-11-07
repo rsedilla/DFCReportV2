@@ -24,9 +24,9 @@ export const SP_WOMENS_ROOT = {
   full_name: 'Pastora Amparo Lacson',
 };
 export const SP_PRIMARIES = {
-  abad: { id: '3f1b7c6e-0000-4000-8000-000000000d01', member_id: 'M-000921', full_name: 'Bernardo Abad' },
-  ocampo: { id: '3f1b7c6e-0000-4000-8000-000000000d02', member_id: 'M-000922', full_name: 'Celestino Ocampo' },
-  bautista: { id: '3f1b7c6e-0000-4000-8000-000000000d03', member_id: 'M-000923', full_name: 'Felicidad Bautista' },
+  abad: { id: '3f1b7c6e-0000-4000-8000-000000000d01', member_id: 'M-000921', full_name: 'Bernardo Abad', first_name: 'Bernardo', last_name: 'Abad' },
+  ocampo: { id: '3f1b7c6e-0000-4000-8000-000000000d02', member_id: 'M-000922', full_name: 'Celestino Ocampo', first_name: 'Celestino', last_name: 'Ocampo' },
+  bautista: { id: '3f1b7c6e-0000-4000-8000-000000000d03', member_id: 'M-000923', full_name: 'Felicidad Bautista', first_name: 'Felicidad', last_name: 'Bautista' },
 };
 
 function figures(cells: [number, number, number], leaders: number, people: number) {
@@ -94,6 +94,9 @@ export async function mockBranchPeople(page: Page): Promise<{ leader: string; pe
     id,
     member_id: memberId,
     full_name: fullName,
+    // The name's parts, as the API sends a report's leaders (decision 0451).
+    first_name: fullName.split(' ').slice(0, -1).join(' '),
+    last_name: fullName.split(' ').slice(-1)[0],
   });
   await page.route('**/api/v1/reports/people/branch?*', (route) => {
     const params = new URL(route.request().url()).searchParams;
@@ -161,11 +164,11 @@ export async function mockBranchCounts(page: Page): Promise<{ leader: string; pe
         own: figures(1, 0, 0, 1, 1),
         rows: [
           {
-            leader: { id: '3f1b7c6e-0000-4000-8000-000000000701', member_id: 'M-000801', full_name: 'Consuelo Bautista' },
+            leader: { id: '3f1b7c6e-0000-4000-8000-000000000701', member_id: 'M-000801', full_name: 'Consuelo Bautista', first_name: 'Consuelo', last_name: 'Bautista' },
             ...figures(2, 1, 1, 3, 14),
           },
           {
-            leader: { id: '3f1b7c6e-0000-4000-8000-000000000702', member_id: 'M-000802', full_name: 'Efren Dimaculangan' },
+            leader: { id: '3f1b7c6e-0000-4000-8000-000000000702', member_id: 'M-000802', full_name: 'Efren Dimaculangan', first_name: 'Efren', last_name: 'Dimaculangan' },
             ...figures(1, 1, 0, 2, 10),
           },
           { leader: null, ...figures(1, 1, 1, 1, 17) },

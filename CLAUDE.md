@@ -246,12 +246,12 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-07, the trigger being decision 0452: of 449 files, 448 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0452, 0450 and 0451 aside, each moved the
-first two and neither of the others, none of them carrying a `Next:`. *0450 and 0451 are on their
-own branches (PRs #462 and #463), so this branch counts two files fewer than the sequence; whichever
-merges last recounts.* The recount before this one was dated 2026-11-06 and triggered by 0449, and
-was left stale by 0452 the next day. The one before that was dated
+2026-11-07, the trigger being decision 0452: of 451 files, 450 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0452 each moved the first two and
+neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-07 and triggered by 0451, and was left stale by 0452 the same day. The one before that was dated
+2026-11-07 and triggered by 0450, and was left stale by 0451 the same day. The one before that was dated
+2026-11-06 and triggered by 0449, and was left stale by 0450 the next day. The one before that was dated
 2026-11-06 and triggered by 0448, and was left stale by 0449 the same day. The one before that was dated
 2026-11-05 and triggered by 0447, and was left stale by 0448 the next day. The one before that was dated
 2026-11-05 and triggered by 0446, and was left stale by 0447 the same day. The one before that was dated
@@ -941,6 +941,8 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-05 — [An emailed link's code leaves the address once the page has read it](docs/decisions/0447-an-emailed-links-code-leaves-the-address.md)
 - 2026-11-06 — [A wrong current password counts in the sign-in pause](docs/decisions/0448-a-wrong-current-password-counts-in-the-sign-in-pause.md)
 - 2026-11-06 — [The duplicate check allows sixty a minute, and reads indexes](docs/decisions/0449-the-duplicate-check-allows-sixty-a-minute.md)
+- 2026-11-06 — [A session ends thirty days after its sign-in, seven for an Admin or Senior Pastor](docs/decisions/0450-a-session-ends-thirty-days-after-sign-in.md)
+- 2026-11-06 — [Reports on a phone: one table, every figure in view](docs/decisions/0451-reports-on-a-phone-one-table-every-figure-in-view.md)
 - 2026-11-07 — [A person is archived, never removed](docs/decisions/0452-a-person-is-archived-never-removed.md)
 
 ### Open — awaiting a ruling

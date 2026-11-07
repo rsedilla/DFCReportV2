@@ -1311,14 +1311,13 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      // One control panel with its note and no coverage line (decision 0363), then the
-      // disciples' cards, and the three tabs.
-      await expect(page.getByText(/^(Still open, until .+|Closed)\.$/)).toBeVisible();
+      // One control panel with its note and no coverage line (decision 0363), the note
+      // saying As of today (decision 0451), then the disciples' table, and the tabs.
+      await expect(page.getByText('As of today', { exact: true }).first()).toBeVisible();
       await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
-      // In the table from `lg` and in the phone's two-line list below it (decision 0365).
-      await expect(
-        page.getByText(/^Counted under more than one leader/).filter({ visible: true }).first(),
-      ).toBeVisible();
+      // One table at every width (decision 0451): the line in full, or short on a phone with
+      // its full words for a screen reader.
+      await expect(page.getByText(/^Counted under more than one leader/).first()).toBeAttached();
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
@@ -1370,7 +1369,8 @@ const SCANS = [
       await mockEncounterSeasons(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^Who is getting ready for the next Encounter/)).toBeVisible();
+      // The heading line, not shown on a phone (decision 0451).
+      await expect(page.getByText(/^Who is getting ready for the next Encounter/)).toBeAttached();
       await expect(page.getByRole('heading', { name: 'Next Encounter · December 2026' })).toBeVisible();
       await expect(page.getByText('11 Dec – 13 Dec 2026')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Every Encounter season' })).toBeVisible();
@@ -1530,7 +1530,8 @@ const SCANS = [
       await mockTraining(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByText(/^Training for the 4 people/)).toBeVisible();
+      // The heading line, not shown on a phone (decision 0451).
+      await expect(page.getByText(/^Training for the 4 people/)).toBeAttached();
       await expect(page.getByText('A count of graduations in a period counts only the dated ones.')).toBeVisible();
     },
   },
@@ -1547,8 +1548,8 @@ const SCANS = [
       // That leader's 12, with no Cell of their own: the row carries no numbers.
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
       await expect(page.getByRole('region', { name: /’s Disciples$/ })).toBeVisible();
-      // In the table or the phone's list, whichever the width shows (decision 0365).
-      await expect(page.getByText(/no Cell of (your|their) own/).filter({ visible: true }).first()).toBeVisible();
+      // In full, or on a phone short with its full words for a screen reader (decision 0451).
+      await expect(page.getByText(/no Cell of (your|their) own/).first()).toBeAttached();
     },
   },
   {
@@ -1563,7 +1564,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-      await expect(page.getByText(/^3 Sundays, no service on Sunday 14 June\./)).toBeVisible();
+      // The note: As of today and the Sunday with no service (decision 0451).
+      await expect(page.getByText('As of today · No service on Sunday 14 June', { exact: true })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
     },

@@ -46,7 +46,8 @@ export class LoginDto {
   reset_proof?: string;
   /**
    * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
-   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   * `INSTALLED`, the home-screen app, has no idle limit (decision 0435) and ends with its
+   * session (decision 0450).
    */
   @IsOptional()
   @IsIn(['BROWSER', 'INSTALLED'])
@@ -87,7 +88,8 @@ export class SecondStepConfirmDto extends SecondStepSetupDto {
   device_label?: string;
   /**
    * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
-   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   * `INSTALLED`, the home-screen app, has no idle limit (decision 0435) and ends with its
+   * session (decision 0450).
    */
   @IsOptional()
   @IsIn(['BROWSER', 'INSTALLED'])
@@ -115,7 +117,8 @@ export class SecondStepDto extends SecondStepSetupDto {
   device_label?: string;
   /**
    * Where the session begins: `BROWSER`, the default, ends after a spell without activity;
-   * `INSTALLED`, the home-screen app, keeps the thirty days (decision 0435).
+   * `INSTALLED`, the home-screen app, has no idle limit (decision 0435) and ends with its
+   * session (decision 0450).
    */
   @IsOptional()
   @IsIn(['BROWSER', 'INSTALLED'])

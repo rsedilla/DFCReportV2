@@ -36,7 +36,8 @@ function countdown(ms: number): string {
 /**
  * Signs a browser session out after thirty minutes without activity, with a warning at
  * twenty-eight (SKILL.md section 6, decision 0435). Renders nothing in the app installed on
- * a phone or tablet's home screen, whose session keeps the thirty days.
+ * a phone or tablet's home screen, which has no idle limit and ends with its session
+ * (decision 0450).
  *
  * **It renews the session while somebody is active**, on any activity two minutes or more
  * after the last renewal, because the server's deadline only moves on a renewal and somebody

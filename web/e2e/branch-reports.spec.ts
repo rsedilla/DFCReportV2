@@ -27,7 +27,8 @@ test.describe('a Full view leader’s # of Cell Groups and # of Cell Leaders', (
     const region = page.getByRole('region', { name: 'Number of Cell Groups' });
     await expect(region.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expect(region.locator('dl')).toHaveText(
-      /Total\s*10\s*J12 Kids\s*0\s*Youth\s*5\s*Young Pro\s*3\s*Couple\s*2/,
+      // The first tile says when it is as of (decision 0451).
+      /Total\s*10\s*As of today\s*J12 Kids\s*0\s*Youth\s*5\s*Young Pro\s*3\s*Couple\s*2/,
     );
     const table = page.getByRole('table', { name: 'Your 12' });
     await expect(table.getByRole('columnheader')).toHaveText([

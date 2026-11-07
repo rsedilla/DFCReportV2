@@ -43,4 +43,3 @@ Decision 0452, indexed in [CLAUDE.md](../../CLAUDE.md) and amended into [SKILL.m
 Section 3.
 
 Previous: [2026-11-06 — Reports on a phone: one table, every figure in view](0451-reports-on-a-phone-one-table-every-figure-in-view.md)
-(on its own pull request, #463, until it has merged)

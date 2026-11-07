@@ -79,7 +79,7 @@ const sundaysLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ Sundays? counted/ });
 /** A Full view leader's note under the controls (decision 0363). */
 const noteLine = (page: Page) =>
-  page.locator('main p').filter({ hasText: /^\d+ Sundays?[.,]/ });
+  page.locator('main p').filter({ hasText: /^(As of today|No service on )/ });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -175,7 +175,7 @@ test.describe('the coverage line and the Sundays under it', () => {
     });
   }
 
-  test('a Full view leader has no coverage line, and the note under the controls names the Sundays (decision 0363)', async ({
+  test('a Full view leader has no coverage line, and the note under the controls says As of today and any Sunday with no service (decisions 0363 and 0451)', async ({
     page,
   }) => {
     await arrange(page);
@@ -183,16 +183,17 @@ test.describe('the coverage line and the Sundays under it', () => {
     await page.goto('/reports/dcc');
     await expect(coverageLine(page)).toHaveCount(0);
     await expect(sundaysLine(page)).toHaveCount(0);
-    await expect(noteLine(page)).toHaveText(
-      '3 Sundays, no service on Sunday 14 June. Still open, until 7 July.',
-    );
+    // No count of Sundays, no closing time (decision 0451).
+    await expect(noteLine(page)).toHaveText('As of today · No service on Sunday 14 June');
+    await expect(page.getByText(/Sundays?[.,]/)).toHaveCount(0);
+    await expect(page.getByText(/Still open, until/)).toHaveCount(0);
 
     await page.goto('/reports/dcc?period=week');
-    await expect(noteLine(page)).toHaveText(/^1 Sunday\. (Still open, until .+|Closed)\.?$/);
+    await expect(noteLine(page)).toHaveText('As of today');
 
-    // The week whose only Sunday was removed counts none, and says why.
+    // The week whose only Sunday was removed says why.
     await page.goto('/reports/dcc?period=week&start=2026-06-08');
-    await expect(noteLine(page)).toHaveText(/^0 Sundays, no service on Sunday 14 June\. /);
+    await expect(noteLine(page)).toHaveText(/No service on Sunday 14 June$/);
   });
 
   test('names the Sundays counted, and any Sunday that had no service', async ({ page }) => {

@@ -53,7 +53,8 @@ export interface PersonForDecision {
    */
   firstName: string;
   /**
-   * The family name on its own, for **ordering** rather than for addressing.
+   * The family name on its own, for **ordering** rather than for addressing, and since
+   * decision 0451 for the initial a phone's Reports table shows after the first name.
    *
    * The church-wide directory pages by `(first_name, last_name, id)` (section 22, decision 0359), and
    * two collections page by `(first_name, last_name, member_id)` — so a caller
@@ -64,6 +65,8 @@ export interface PersonForDecision {
   lastName: string;
   /** For a suggested username's middle initial (decision 0337); null where there is none. */
   middleName: string | null;
+  /** The title alone (decision 0271), for a phone's Reports table to shorten (decision 0451); null where there is none. */
+  title: string | null;
   mergedIntoId: string | null;
   isArchived: boolean;
 }
@@ -154,6 +157,7 @@ export class PeopleReadService {
       firstName: person.first_name,
       lastName: person.last_name,
       middleName: person.middle_name,
+      title: person.title,
       mergedIntoId: person.merged_into_id,
       isArchived: person.state === 'ARCHIVED',
     };
@@ -210,6 +214,7 @@ export class PeopleReadService {
           firstName: row.first_name,
           lastName: row.last_name,
           middleName: row.middle_name,
+          title: row.title,
           mergedIntoId: row.merged_into_id,
           isArchived: row.state === 'ARCHIVED',
         },

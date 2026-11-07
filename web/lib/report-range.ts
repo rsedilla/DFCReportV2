@@ -90,6 +90,17 @@ function day(date: string, withYear: boolean): string {
   });
 }
 
+/**
+ * The period's label on a phone (decision 0451): a week inside one month names the month once,
+ * `8–14 Jun 2026`, so the bar stays on one line at 320px; anything else as {@link rangeLabel}.
+ */
+export function shortRangeLabel(kind: RangeKind, start: string): string {
+  const full = rangeLabel(kind, start);
+  return kind === 'WEEK'
+    ? full.replace(/^(\d+) (\S+) – (\d+) \2 (\d{4})$/, '$1–$3 $2 $4')
+    : full;
+}
+
 /** How the period is named on the screen. */
 export function rangeLabel(kind: RangeKind, start: string): string {
   const [year, month] = parts(start);
