@@ -116,8 +116,9 @@ export default function PrivacyNoticePage() {
         <p>
           For as long as you are part of the church&rsquo;s records. If you leave, your record is
           archived rather than deleted, so that past attendance totals stay true, and it is no
-          longer counted among the church&rsquo;s current members. You may ask us to remove it
-          altogether, and we will tell you what can be removed.
+          longer counted among the church&rsquo;s current members. If you come back, it can be
+          restored, with your Member ID and your history. A request to remove it altogether is
+          decided by the church under the Data Privacy Act.
         </p>
       </Part>
 
@@ -152,7 +153,7 @@ export default function PrivacyNoticePage() {
         </p>
       </Part>
 
-      <p className="text-muted mt-10 text-xs">Last updated: November 1, 2026</p>
+      <p className="text-muted mt-10 text-xs">Last updated: November 7, 2026</p>
       <p className="border-line mt-6 border-t pt-6 text-sm">
         <TextLink href="/sign-in">Back to sign in</TextLink>
       </p>
