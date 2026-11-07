@@ -17,7 +17,8 @@
 --
 -- It cannot make the API's login stop owning a table, the database or the schema, or stop
 -- being a superuser. The API's startup check reports each, and the remedy is to connect as
--- a different login.
+-- a different login. Nor does it remove CREATE on public from PUBLIC, which a database
+-- upgraded from PostgreSQL 14 or earlier may keep: REVOKE CREATE ON SCHEMA public FROM PUBLIC.
 
 \set ON_ERROR_STOP on
 

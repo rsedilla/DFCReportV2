@@ -9,8 +9,8 @@ import type { Db } from './database.module';
  * **Too much.** A superuser, or a login that owns a table or can `TRUNCATE` one, can empty
  * a table past the rules that records are never deleted and the audit log is append-only:
  * `TRUNCATE` fires no row trigger, and section 5 rests that exemption on the application's
- * login not holding it. A login that owns the database or the `public` schema, or can create
- * in it, can drop a table outright, which no trigger sees either.
+ * login not holding it. A login that owns the database or the `public` schema can drop a table
+ * outright, which no trigger sees either. One that can create in it is refused as well.
  *
  * **Too little.** A table it cannot read and write, or a sequence it cannot use, is a grant
  * somebody forgot after a migration added it. Found here, it stops the deploy at its
