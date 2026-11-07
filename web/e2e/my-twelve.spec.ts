@@ -96,9 +96,8 @@ test.describe('Weekly, Monthly and Yearly (decisions 0293 and 0443)', () => {
 
     const group = periodGroup(page);
     await expect(group.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
-    await expect(
-      page.getByText('Yearly is a graph of the last 12 months, one point a month.'),
-    ).toBeVisible();
+    // No note about Yearly (decision 0451): its button carries the graph.
+    await expect(page.getByText(/^Yearly is a graph/)).toHaveCount(0);
     await expect(group.getByRole('button', { name: 'Monthly' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -214,19 +213,16 @@ test.describe('the navigator', () => {
       await expect(periodLabel(page, each.label)).toBeVisible();
       await expect(after).toBeDisabled();
       await expect(before).toBeEnabled();
-      // A Full view leader reads it in the note under the controls (decision 0363).
-      await expect(page.getByText(/(Open until|Still open, until) (7 [A-Z][a-z]+|Mon \d+ [A-Z][a-z]{2}, (12NN|12 noon))\.?$/).first()).toBeVisible();
+      // A Full view leader reads it in the note under the controls (decisions 0363, 0451).
+      await expect(page.getByText('As of today', { exact: true }).first()).toBeVisible();
 
       await before.click();
       const previous = BEFORE[each.kind];
       await expect(periodLabel(page, previous.label)).toBeVisible();
       await expectAsked(asked, { kind: each.kind, start: previous.start, period: previous.period });
       await expect(after).toBeEnabled();
-      await expect(
-        page
-          .getByText(previous.open ? /(Open until|Still open, until) 7 [A-Z][a-z]+\.?$/ : /^Closed\.?$/)
-          .first(),
-      ).toBeVisible();
+      // A finished period says nothing (decision 0451).
+      await expect(page.getByText('As of today', { exact: true })).toHaveCount(previous.open ? 1 : 0);
 
       await after.click();
       await expect(periodLabel(page, each.label)).toBeVisible();
@@ -347,7 +343,7 @@ test.describe('My 12', () => {
     page,
   }) => {
     await arrange(page);
-    const note = page.getByText(/^Periods are never added together/);
+    const note = page.getByText(/^Weeks don’t add up to the month/);
 
     await page.goto('/reports/cells');
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
@@ -355,9 +351,8 @@ test.describe('My 12', () => {
 
     await page.goto('/reports/cells?period=week');
     await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
-    await expect(note).toHaveText(
-      'Periods are never added together: somebody who came in three weeks counts once in the month.',
-    );
+    // In one short line (decision 0451).
+    await expect(note).toHaveText('Weeks don’t add up to the month: a person counts once.');
   });
 
   test('a name opens nothing on Weekly either (decision 0380)', async ({ page }) => {
@@ -461,18 +456,21 @@ test.describe('the coverage line', () => {
     });
   }
 
-  test('a Full view leader has none, and the note under the controls says whether it is open (decision 0363)', async ({
+  test('a Full view leader has none, and the note under the controls says As of today while the period runs (decisions 0363 and 0451)', async ({
     page,
   }) => {
     await arrange(page);
-    const note = page.locator('main p').filter({ hasText: /^(Still open, until .+|Closed)\.$/ });
+    const note = page.locator('main p').filter({ hasText: /^As of today$/ });
 
     await page.goto('/reports/cells');
     await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveCount(0);
-    await expect(note).toHaveText('Still open, until 7 July.');
+    await expect(note).toHaveCount(1);
+    await expect(page.getByText(/Still open, until|^Closed\.$/)).toHaveCount(0);
 
+    // A finished month says nothing.
     await page.goto('/reports/cells?month=2026-05-01');
-    await expect(note).toHaveText('Closed.');
+    await expect(page.getByRole('table', { name: 'Your 12' })).toBeVisible();
+    await expect(note).toHaveCount(0);
   });
 
   test('a past month reads that month', async ({ page }) => {
