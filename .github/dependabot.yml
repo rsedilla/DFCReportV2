@@ -1,0 +1,51 @@
+# Weekly update pull requests (security audit of 2026-11-02).
+#
+# Security alerts arrive separately and at once, from the repository's settings; this file
+# is for keeping up to date between them. Minor and patch updates come as one pull request
+# per application per week, so each week is a few reviews rather than many. A major version
+# comes as a pull request of its own, because it can change how the code must be written.
+# It is not ignored here: an ignore rule applies to security updates too, and would hold
+# back a fix that only a new major version carries. Closing one of these pull requests
+# stops Dependabot proposing that version again.
+#
+# Each pull request runs CI and needs an approval like any other, and nothing merges itself.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /api
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Manila
+    open-pull-requests-limit: 3
+    groups:
+      api-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Manila
+    open-pull-requests-limit: 3
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Keeps the commit each action is pinned to in .github/workflows current, with the
+  # version beside it.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Manila
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ['*']
