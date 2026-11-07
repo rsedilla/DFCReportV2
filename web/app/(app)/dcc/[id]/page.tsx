@@ -9,6 +9,7 @@ import { SectionFrame } from '@/components/section-frame';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   getDccRoster,
@@ -311,8 +312,6 @@ function DccChecklist() {
   });
 
   const unmarkedCount = lines.filter((line) => markFor(line) === undefined).length;
-  // What is saved, not what is tapped, so this screen and Your month say the same thing.
-  const awaitingCount = lines.filter((line) => line.record === null).length;
   const newlyMarked = lines.some(
     (line) => line.record === null && edits[line.person_id] !== undefined,
   );
@@ -470,9 +469,10 @@ function DccChecklist() {
         <TextLink href="/dashboard?list=awaiting&kind=dcc">Back to Update Records</TextLink>
       </p>
 
-      {/* The accent, for the reason the Cell meeting screen gives. */}
+      {/* The accent, for the reason the Cell meeting screen gives. The heading names DCC, so a
+          leader never takes it for a Cell Group meeting on the same day (decision 0456). */}
       <h1 className="text-accent text-xl font-bold tracking-tight">
-        {event ? dayLabel(event.event_date) : 'DCC attendance'}
+        {event ? `DCC · ${dayLabel(event.event_date)}` : 'DCC attendance'}
       </h1>
       {/*
         **Recording for somebody else is said before anything else on the screen**
@@ -492,16 +492,8 @@ function DccChecklist() {
           </p>
         </div>
       ) : null}
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        {forLeader
-          ? lines.length === 1
-            ? `The 1 person on ${forLeader.full_name}’s checklist.`
-            : `The ${lines.length} people on ${forLeader.full_name}’s checklist.`
-          : lines.length === 1
-            ? 'The 1 person you are responsible for.'
-            : `The ${lines.length} people you are responsible for.`}
-        {recordable && awaitingCount > 0 ? ` Not recorded · ${awaitingCount} to mark.` : ''}
-      </p>
+      {/* No line under the heading (decision 0456): how many are listed, recorded and left to
+          mark is said by the box, the section headings and the bar at the foot. */}
 
       <div className="mt-8">
         <FailureNotice
@@ -599,23 +591,23 @@ function DccChecklist() {
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-bold">
-                    {recordedCount} of {lines.length} recorded
-                  </p>
-                  <p className="text-muted mt-1 text-sm leading-relaxed">
-                    Recorded marks are locked so a stray tap cannot change them.
-                  </p>
-                  {me.data ? (
-                    canCorrect ? (
-                      <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
-                        Edit
-                      </Button>
-                    ) : (
-                      <p className="text-muted mt-1 text-sm leading-relaxed">
-                        Changing a recorded mark needs permission to correct records, which this
-                        account does not hold.
-                      </p>
-                    )
+                  {/* One line, the reason behind the ⓘ, on a phone too (decision 0456). */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-sm font-bold">
+                      {recordedCount} of {lines.length} recorded
+                    </p>
+                    <span className="text-muted text-sm">· Locked</span>
+                    <InfoToggle label="Why the marks are locked" small inline>
+                      Recorded marks are locked so a stray tap cannot change them.{' '}
+                      {me.data && !canCorrect
+                        ? 'Changing one needs permission to correct records, which this account does not hold.'
+                        : 'Edit to change them.'}
+                    </InfoToggle>
+                  </div>
+                  {me.data && canCorrect ? (
+                    <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
+                      Edit
+                    </Button>
                   ) : null}
                 </>
               )}

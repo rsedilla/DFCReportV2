@@ -55,7 +55,13 @@ test.describe('a recorded Cell meeting', () => {
     await page.goto(MEETING);
 
     await expect(page.getByText('Already recorded')).toBeVisible();
+    // The heading names the Cell Group, and why it is locked is behind the ⓘ (decision 0456).
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Cell Group · /);
+    await expect(page.getByText('needs permission to correct records')).toBeHidden();
+    await page.getByRole('button', { name: 'Why the meeting is locked' }).click();
     await expect(page.getByText('needs permission to correct records')).toBeVisible();
+    await expect(page.getByText('Record what happened')).toHaveCount(0);
+    await expect(page.getByText('Every member is listed')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 
     const present = page.getByRole('radio', { name: 'Present' }).first();
@@ -1006,9 +1012,16 @@ test.describe('a Sunday with a mark already recorded', () => {
     await page.goto(SUNDAY);
 
     await expect(page.getByText(/^1 of \d+ recorded$/)).toBeVisible();
-    await expect(
-      page.getByText('Changing a recorded mark needs permission to correct records'),
-    ).toBeVisible();
+    // The heading names DCC, nothing is written under it, and why the marks are locked is
+    // behind the ⓘ, on a phone too (decision 0456).
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^DCC · /);
+    await expect(page.getByText('you are responsible for')).toHaveCount(0);
+    const why = page.getByText('Changing one needs permission to correct records');
+    await expect(why).toBeHidden();
+    await page.getByRole('button', { name: 'Why the marks are locked' }).click();
+    await expect(why).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(why).toBeHidden();
     await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 
     const recorded = page.getByRole('group', { name: RECORDED.name }).getByRole('radio', {
@@ -1313,7 +1326,8 @@ test.describe('a Sunday with a mark already recorded', () => {
     );
 
     await page.goto(SUNDAY);
-    await expect(page.getByText(/Not recorded · 1 to mark\./)).toBeVisible();
+    // Said by the bar at the foot rather than a line under the heading (decision 0456).
+    await expect(page.getByText('1 person still to mark.')).toBeVisible();
 
     await page
       .getByRole('group', { name: UNRECORDED.name })
@@ -2605,7 +2619,9 @@ test.describe('recording a Sunday for another leader (decision 0313)', () => {
       '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
     );
     await expect(page.getByRole('heading', { name: /^Carlo Reyes’s 12/ })).toBeVisible();
-    await expect(page.getByText('The 2 people on Carlo Reyes’s checklist.', { exact: false })).toBeVisible();
+    // The box above and the section heading say whose checklist it is; no line repeats it
+    // under the date (decision 0456).
+    await expect(page.getByText('The 2 people on Carlo Reyes’s checklist.', { exact: false })).toHaveCount(0);
 
     await page
       .getByRole('group', { name: 'Danilo Suarez' })
