@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
 import { SecondStep } from '@/components/second-step';
@@ -11,7 +11,7 @@ import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
 import { resolveLanding } from '@/lib/landing';
 import { describeFailure, type Failure } from '@/lib/messages';
-import { signIn, type SecondStepChallenge } from '@/lib/session';
+import { forgetEndedByAge, signIn, type SecondStepChallenge } from '@/lib/session';
 
 /**
  * Sign-in, and the accessibility criterion this screen exists to satisfy.
@@ -44,6 +44,10 @@ export default function SignInPage() {
   // Signed out for a spell without activity (decision 0435): said once, above the form.
   // Read from the address in the browser, which the prerendered page does not know.
   const idle = useSyncExternalStore(never, signedOutIdle, () => false);
+  // Signed out by the session's age (decision 0450): 7 or 30, from the address, or 0.
+  const ageDays = useSyncExternalStore(never, signedOutByAge, () => 0);
+  // The note is cleared once read, so this tab is not sent back here saying it again.
+  useEffect(() => forgetEndedByAge(), []);
 
   async function arrive() {
     router.replace(await resolveLanding());
@@ -124,6 +128,15 @@ export default function SignInPage() {
             details safe. Sign in again to continue.
           </p>
         ) : null}
+        {ageDays > 0 && failure === null ? (
+          <p
+            role="status"
+            className="border-accent bg-accent-tint text-ink rounded-lg border p-3 text-sm leading-relaxed"
+          >
+            It has been {ageDays} days since you signed in on this device. Sign in again to
+            continue, to keep members&rsquo; details safe.
+          </p>
+        ) : null}
         <FailureNotice failure={failure} />
 
         {/* Either one signs in (decision 0337); `username` so a password manager fills it. */}
@@ -164,4 +177,11 @@ function never(): () => void {
 
 function signedOutIdle(): boolean {
   return new URLSearchParams(window.location.search).get('reason') === 'idle';
+}
+
+/** The days since signing in, where the session ended by its age; 0 otherwise. */
+function signedOutByAge(): number {
+  const query = new URLSearchParams(window.location.search);
+  const days = Number(query.get('days'));
+  return query.get('reason') === 'age' && (days === 7 || days === 30) ? days : 0;
 }

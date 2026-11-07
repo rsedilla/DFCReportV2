@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 
 import { resolveLanding } from '@/lib/landing';
 import { getMe } from '@/lib/me';
-import { hasStoredSession } from '@/lib/session';
+import { hasStoredSession, signedOutPath } from '@/lib/session';
 
 /**
  * The entry point, which decides where a visitor belongs and goes there.
@@ -28,7 +28,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!hasStoredSession()) {
-      router.replace('/sign-in');
+      router.replace(signedOutPath());
       return;
     }
 

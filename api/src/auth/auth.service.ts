@@ -176,7 +176,9 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
-    if (row.expires_at.getTime() <= Date.now() || idleExpired(row)) {
+    // A session at its end goes on to `rotateFrom`, which refuses it after the account checks
+    // and says why (decision 0450); its `expires_at` is that end, so it is let past here.
+    if (!endedByAge(row) && (row.expires_at.getTime() <= Date.now() || idleExpired(row))) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
@@ -220,7 +222,13 @@ export class AuthService {
     issued_at: Date;
     revoked_at: Date | null;
     replaced_by_id: string | null;
-  }): Promise<{ id: string; account_id: string; issued_at: Date; expires_at: Date } | null> {
+  }): Promise<{
+    id: string;
+    account_id: string;
+    issued_at: Date;
+    expires_at: Date;
+    session_ends_at: Date | null;
+  } | null> {
     if (row.revoked_at === null || row.replaced_by_id === null) {
       return null;
     }
@@ -246,8 +254,14 @@ export class AuthService {
       return null;
     }
 
-    // An idle browser session is not renewable through a retry either (decision 0435).
-    if (replacement.expires_at.getTime() <= Date.now() || idleExpired(replacement)) {
+    // An idle browser session is not renewable through a retry either (decision 0435). One
+    // whose session reached its end since the rotation is still a retry, which `rotateFrom`
+    // refuses saying why (decision 0450): its end may fall seconds after the rotation, and
+    // reading the retry as reuse would end every session on the account.
+    if (
+      !endedByAge(replacement) &&
+      (replacement.expires_at.getTime() <= Date.now() || idleExpired(replacement))
+    ) {
       return null;
     }
 
@@ -259,7 +273,7 @@ export class AuthService {
    * by the retry path above so that neither can drift from the other.
    */
   private async rotateFrom(
-    row: { id: string; account_id: string; issued_at: Date },
+    row: { id: string; account_id: string; issued_at: Date; session_ends_at: Date | null },
     deviceLabel: string | null,
   ): Promise<SessionTokens> {
     const account = await this.accounts.findById(row.account_id);
@@ -286,6 +300,12 @@ export class AuthService {
     // renewed (decision 0302). A refresh itself never asks for a code.
     if (sessionPredatesSecondStep(account, row.issued_at)) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
+    // **Ended by its age, and said so** (decision 0450), after the checks above so that a
+    // session ended for another reason is answered as that. No reuse signal.
+    if (endedByAge(row)) {
+      throw await this.tokens.sessionAgeError(row.account_id);
     }
 
     // The check above is the cheap early refusal and reads committed state only.
@@ -461,6 +481,11 @@ function signInPaused(who: SignInName, pausedUntil: Date | null): ApiError {
       ? { reason: 'SIGN_IN_PAUSED' }
       : { reason: 'SIGN_IN_PAUSED', paused_until: pausedUntil.toISOString() },
   );
+}
+
+/** The session has reached its fixed end (decision 0450). */
+function endedByAge(row: { session_ends_at: Date | null }): boolean {
+  return row.session_ends_at !== null && row.session_ends_at.getTime() <= Date.now();
 }
 
 /**

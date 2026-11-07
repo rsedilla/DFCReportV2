@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useSyncExternalStore } from 'react';
 
-import { hasStoredSession, subscribe } from '@/lib/session';
+import { hasStoredSession, signedOutPath, subscribe } from '@/lib/session';
 
 /**
  * Send anyone without a stored session to sign in.
@@ -41,7 +41,8 @@ export function RequireSession({ children }: { children: ReactNode }) {
   // sign out somebody who is signed in.
   useEffect(() => {
     if (!hasStoredSession()) {
-      router.replace('/sign-in');
+      // Saying why where the session ended by its age (decision 0450).
+      router.replace(signedOutPath());
     }
   }, [present, router]);
 
