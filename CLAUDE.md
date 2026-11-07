@@ -247,12 +247,13 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-07, the trigger being decision 0453: of 450 files, 449 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0453, 0451 and 0452 aside, each moved the
-first two and neither of the others, none of them carrying a `Next:`. *0451 and 0452 are on their
-own branches (PRs #463 and #464), so this branch counts two files fewer than the sequence; whichever
-merges last recounts.* The recount before this one was dated 2026-11-07 and triggered by 0450, and
-was left stale by 0453 the same day. The one before that was dated
+2026-11-07, the trigger being decision 0453: of 451 files, 450 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0453, 0452 aside, each moved the first two
+and neither of the others, none of them carrying a `Next:`. *0452 is on its own branch (PR #464),
+so this branch counts one file fewer than the sequence; whichever merges second recounts.* The
+recount before this one was dated 2026-11-07 and triggered by 0451, and was left stale by 0453
+the same day. The one before that was dated
+2026-11-07 and triggered by 0450, and was left stale by 0451 the same day. The one before that was dated
 2026-11-06 and triggered by 0449, and was left stale by 0450 the next day. The one before that was dated
 2026-11-06 and triggered by 0448, and was left stale by 0449 the same day. The one before that was dated
 2026-11-05 and triggered by 0447, and was left stale by 0448 the next day. The one before that was dated
@@ -944,6 +945,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-06 — [A wrong current password counts in the sign-in pause](docs/decisions/0448-a-wrong-current-password-counts-in-the-sign-in-pause.md)
 - 2026-11-06 — [The duplicate check allows sixty a minute, and reads indexes](docs/decisions/0449-the-duplicate-check-allows-sixty-a-minute.md)
 - 2026-11-06 — [A session ends thirty days after its sign-in, seven for an Admin or Senior Pastor](docs/decisions/0450-a-session-ends-thirty-days-after-sign-in.md)
+- 2026-11-06 — [Reports on a phone: one table, every figure in view](docs/decisions/0451-reports-on-a-phone-one-table-every-figure-in-view.md)
 - 2026-11-07 — [The API starts only on the restricted database login](docs/decisions/0453-the-api-starts-only-on-the-restricted-database-login.md)
 
 ### Open — awaiting a ruling

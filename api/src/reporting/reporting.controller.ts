@@ -384,6 +384,9 @@ export class ReportingController {
         id,
         member_id: identity?.memberId ?? null,
         full_name: identity?.fullName ?? null,
+        first_name: identity?.firstName ?? null,
+        last_name: identity?.lastName ?? null,
+        title: identity?.title ?? null,
       };
     };
     const byName = (left: string, right: string) => {
@@ -574,7 +577,14 @@ export class ReportingController {
         })
         .sort((left, right) => compareRosterKeys(left.identity, right.identity))
         .map(({ identity, row }) => ({
-          leader: { id: row.leaderId, member_id: identity.memberId, full_name: identity.fullName },
+          leader: {
+            id: row.leaderId,
+            member_id: identity.memberId,
+            full_name: identity.fullName,
+            first_name: identity.firstName,
+            last_name: identity.lastName,
+            title: identity.title,
+          },
           ...figures(row.figures),
           opens_pending: opensPending(row.leaderId),
         }));
@@ -738,6 +748,9 @@ export class ReportingController {
                             id: row.leaderId,
                             member_id: identity.memberId,
                             full_name: identity.fullName,
+                            first_name: identity.firstName,
+                            last_name: identity.lastName,
+                            title: identity.title,
                           },
                     people: row.people,
                   },
@@ -836,6 +849,9 @@ export class ReportingController {
                             id: row.leaderId,
                             member_id: identity.memberId,
                             full_name: identity.fullName,
+                            first_name: identity.firstName,
+                            last_name: identity.lastName,
+                            title: identity.title,
                           },
                     ...countFigures(row.figures),
                   },
@@ -1145,7 +1161,14 @@ export class ReportingController {
 
   /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
   private async namer(ids: readonly string[]): Promise<{
-    person: (id: string) => { id: string; member_id: string | null; full_name: string | null };
+    person: (id: string) => {
+      id: string;
+      member_id: string | null;
+      full_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      title: string | null;
+    };
     byName: (left: string, right: string) => number;
   }> {
     const identities = await this.people.forDecisions([...ids]);
@@ -1154,7 +1177,14 @@ export class ReportingController {
       person: (id: string) => {
         const identity = identities.get(id);
 
-        return { id, member_id: identity?.memberId ?? null, full_name: identity?.fullName ?? null };
+        return {
+          id,
+          member_id: identity?.memberId ?? null,
+          full_name: identity?.fullName ?? null,
+          first_name: identity?.firstName ?? null,
+          last_name: identity?.lastName ?? null,
+          title: identity?.title ?? null,
+        };
       },
       byName: (left: string, right: string) => {
         const a = identities.get(left);
@@ -1247,6 +1277,9 @@ export class ReportingController {
                       id: row.leader_id,
                       member_id: identity.memberId,
                       full_name: identity.fullName,
+                      first_name: identity.firstName,
+                      last_name: identity.lastName,
+                      title: identity.title,
                     },
               network: row.network,
               unique_people: row.unique_people,
@@ -1274,7 +1307,16 @@ export class ReportingController {
   /** The two roots a `ROOT_LEADERS` table's rows sit under, the Men's first, named with titles. */
   private async rootsOf(
     rows: readonly { root_id: string | null; root_network: NetworkName | null }[],
-  ): Promise<{ id: string; full_name: string | null; network: NetworkName | null }[]> {
+  ): Promise<
+    {
+      id: string;
+      full_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      title: string | null;
+      network: NetworkName | null;
+    }[]
+  > {
     const seen = new Map<string, NetworkName | null>();
     for (const row of rows) {
       if (row.root_id !== null && !seen.has(row.root_id)) {
@@ -1285,7 +1327,17 @@ export class ReportingController {
 
     return [...seen]
       .sort(([, left], [, right]) => networkOrder(left) - networkOrder(right))
-      .map(([id, network]) => ({ id, full_name: identities.get(id)?.fullName ?? null, network }));
+      .map(([id, network]) => {
+        const identity = identities.get(id);
+        return {
+          id,
+          full_name: identity?.fullName ?? null,
+          first_name: identity?.firstName ?? null,
+          last_name: identity?.lastName ?? null,
+          title: identity?.title ?? null,
+          network,
+        };
+      });
   }
 
   /**
@@ -1374,6 +1426,9 @@ export class ReportingController {
                   id: line.leaderId,
                   member_id: identity.memberId,
                   full_name: identity.fullName,
+                  first_name: identity.firstName,
+                  last_name: identity.lastName,
+                  title: identity.title,
                 },
                 filed: line.filed,
                 owed: line.owed,
