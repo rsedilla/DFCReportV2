@@ -22,11 +22,17 @@ export function InfoToggle({
   children,
   className,
   small = false,
+  inline = false,
 }: {
   /** What the button opens, for a screen reader: "About this page". */
   label: string;
   /** 24px rather than 32px, beside a field's label; still WCAG 2.5.8's minimum target. */
   small?: boolean;
+  /**
+   * The note opens on a line of its own under the button's row rather than floating beside
+   * it, for a row near the edge of a phone (decision 0456). The row must wrap (`flex-wrap`).
+   */
+  inline?: boolean;
   children: ReactNode;
   className?: string;
 }) {
@@ -59,7 +65,10 @@ export function InfoToggle({
   }, [open]);
 
   return (
-    <span ref={wrapper} className={cn('relative inline-flex align-middle', className)}>
+    <span
+      ref={wrapper}
+      className={cn(inline ? 'contents' : 'relative inline-flex align-middle', className)}
+    >
       <button
         ref={button}
         type="button"
@@ -80,7 +89,12 @@ export function InfoToggle({
       <span
         id={noteId}
         hidden={!open}
-        className="border-line bg-surface text-ink absolute top-[calc(100%+0.5rem)] left-0 z-20 w-[min(22rem,calc(100vw-3rem))] rounded-xl border p-4 text-left text-sm leading-relaxed font-normal tracking-normal shadow-lg"
+        className={cn(
+          'border-line bg-surface text-ink rounded-xl border p-4 text-left text-sm leading-relaxed font-normal tracking-normal',
+          inline
+            ? 'mt-1 block basis-full'
+            : 'absolute top-[calc(100%+0.5rem)] left-0 z-20 w-[min(22rem,calc(100vw-3rem))] shadow-lg',
+        )}
       >
         {children}
       </span>

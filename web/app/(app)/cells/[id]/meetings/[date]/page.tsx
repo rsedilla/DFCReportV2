@@ -10,6 +10,7 @@ import { SectionFrame } from '@/components/section-frame';
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { RadioGroup, type RadioOption } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
 import {
@@ -577,7 +578,11 @@ function RecordMeeting() {
         is not a meeting status, a coverage figure or a leader, which is all sections
         13, 17 and 19 forbid encoding in colour.
       */}
-      <h1 className="text-accent text-xl font-bold tracking-tight">{dayLabel(params.date)}</h1>
+      {/* The heading names the Cell Group, so a leader never takes it for a DCC Sunday
+          (decision 0456). */}
+      <h1 className="text-accent text-xl font-bold tracking-tight">
+        Cell Group · {dayLabel(params.date)}
+      </h1>
       {roster.data ? (
         <p className="text-muted mt-1 text-sm">
           {cell.data?.category
@@ -595,19 +600,21 @@ function RecordMeeting() {
           <Tag appearance="outline">{meetingStateLabel(recorded)}</Tag>
         </p>
       ) : null}
-      {notYet ? null : (
-        <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">
-          {introFor({
-            date: params.date,
-            noMembers,
-            followOnly,
-            recorded: recorded !== null,
-            weekClosed,
-            recordedNotHeld,
-            correcting,
-          })}
-        </p>
-      )}
+      {(() => {
+        const intro = notYet
+          ? null
+          : introFor({
+              date: params.date,
+              noMembers,
+              followOnly,
+              recorded: recorded !== null,
+              weekClosed,
+              recordedNotHeld,
+            });
+        return intro === null ? null : (
+          <p className="text-muted mt-3 max-w-2xl text-sm leading-relaxed">{intro}</p>
+        );
+      })()}
 
       <div className="mt-8">
         <FailureNotice
@@ -700,7 +707,19 @@ function RecordMeeting() {
                     </>
                   ) : (
                     <>
-                      <p className="text-sm font-bold">Already recorded</p>
+                      {/* One line, the reason behind the ⓘ, on a phone too (decision 0456). */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-bold">Already recorded</p>
+                        <span className="text-muted text-sm">· Locked</span>
+                        <InfoToggle label="Why the meeting is locked" small inline>
+                          A recorded meeting is locked so a stray tap cannot change it.{' '}
+                          {weekClosed || followOnly || !me.data
+                            ? null
+                            : canCorrect
+                              ? 'Edit to correct it. A correction sends the whole roster again.'
+                              : 'A correction sends the whole roster again, and needs permission to correct records, which this account does not hold.'}
+                        </InfoToggle>
+                      </div>
                       <p className="text-muted mt-1 text-sm">
                         {recordedSummary(recorded, members)}
                       </p>
@@ -730,12 +749,7 @@ function RecordMeeting() {
                       >
                         Edit
                       </Button>
-                    ) : (
-                      <p className="text-muted mt-1 text-sm leading-relaxed">
-                        Changing a recorded meeting needs permission to correct records, which
-                        this account does not hold.
-                      </p>
-                    )
+                    ) : null
                   ) : null}
                 </>
               )}
@@ -980,7 +994,6 @@ function introFor({
   recorded,
   weekClosed,
   recordedNotHeld,
-  correcting,
 }: {
   date: string;
   noMembers: boolean;
@@ -988,8 +1001,7 @@ function introFor({
   recorded: boolean;
   weekClosed: boolean;
   recordedNotHeld: boolean;
-  correcting: boolean;
-}): string {
+}): string | null {
   return (
     noMembers
     ? `No member was in this Cell on ${dayLabel(date)}, so there is nothing to record and this meeting is not counted as owed.`
@@ -1007,9 +1019,9 @@ function introFor({
         : 'This meeting has been recorded. The marks below are what is stored.'
     : recordedNotHeld
     ? 'This meeting is recorded: the Cell did not meet.'
-    : correcting
-      ? 'This meeting has already been recorded. A correction replaces the whole roster, so every member is sent again — the marks below are what is stored now.'
-      : 'Record what happened. A Cell that met needs every member marked, present or not.'
+    : // Nothing where the line only explained the screen, recording or correcting (decision
+      // 0456): the locked box's ⓘ says what a correction does, and the bar what is left.
+      null
   );
 }
 
@@ -1084,9 +1096,6 @@ function RosterSection({
           </p>
         ) : null}
       </div>
-      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-        Every member is listed and every one needs a mark. Nobody is assumed absent.
-      </p>
 
       {members.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
