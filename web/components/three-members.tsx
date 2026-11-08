@@ -1,8 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useId } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { getMe } from '@/lib/me';
 import { getPerson, networkLabel, networkOfPerson } from '@/lib/people';
 
@@ -43,21 +45,37 @@ export function ThreeMembers({
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const searcher = me.data?.person_id ?? null;
   const chosen = members.flatMap((member) => (member === null ? [] : [member.id]));
+  const titleId = useId();
 
+  // Short words, and what happens to somebody already in a Cell behind an ⓘ (decision 0457).
+  // The group is named by its title rather than a `legend`, so the ⓘ beside it is not read as
+  // part of the group's name. The ⓘ shows on a phone too: without it a leader cannot tell why
+  // somebody new is not found.
   return (
-    <fieldset className="flex flex-col gap-4">
-      <legend className="field-label">Three members</legend>
-      <p className="text-muted text-sm leading-relaxed">
-        Three people you oversee who will be in the Cell, besides its leader. Each must be in
-        the leader&rsquo;s Network. Somebody already in a Cell stays there until this is
-        approved, then moves into the new Cell. Somebody new is added first, under Add People.
-      </p>
+    <fieldset aria-labelledby={titleId} className="flex flex-col gap-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span id={titleId} className="field-label">
+            Members
+          </span>
+          <InfoToggle label="About the members" small inline>
+            Someone already in a Cell moves to the new one once it is approved. Someone new is
+            added first, under Add People.
+          </InfoToggle>
+        </div>
+        <p className="text-muted mt-1 text-sm leading-relaxed">
+          3 people from the leader&rsquo;s Network.
+        </p>
+      </div>
       {[0, 1, 2].map((slot) => (
         <PersonPicker
           key={slot}
           legend={`Member ${slot + 1}`}
-          description="Somebody you oversee, in the leader’s Network."
-          searchLabel={`Search for member ${slot + 1} by name`}
+          searchLabel={
+            <>
+              Search by name<span className="sr-only"> for member {slot + 1}</span>
+            </>
+          }
           selectedId={members[slot]?.id ?? null}
           selectedName={members[slot]?.full_name ?? null}
           excludeIds={searcher === null ? [] : [searcher]}

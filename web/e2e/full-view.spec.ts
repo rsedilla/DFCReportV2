@@ -371,13 +371,14 @@ test.describe('My Cell (decision 0323)', () => {
 
     await page.goto('/my-cell');
 
-    // The page keeps its title while its sidebar item reads Cells (decision 0371).
-    await expect(page.getByRole('heading', { level: 1, name: 'My Cell' })).toBeVisible();
-    // One tab and its pane, as every account's screens have (owner, 2026-10-19).
-    await expect(page.getByRole('navigation', { name: 'Cells' }).getByRole('link')).toHaveText([
-      'My Cell',
-    ]);
-    await expect(page.getByText('The Cells you lead, in June 2026.')).toBeVisible();
+    // Titled Cells, as its sidebar item reads, with My Cell and asking for a new one as its
+    // two tabs (decision 0457). The line that repeated the counts below is gone.
+    await expect(page.getByRole('heading', { level: 1, name: 'Cells' })).toBeVisible();
+    const tabs = page.getByRole('navigation', { name: 'Cells' }).getByRole('link');
+    await expect(tabs).toHaveText(['My Cell', 'Request New Cell']);
+    await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
+    await expect(tabs.nth(1)).toHaveAttribute('href', '/my-cell/new');
+    await expect(page.getByText('The Cells you lead')).toHaveCount(0);
     // The Cells' own cards, below the count of those in the reader's care (decision 0438).
     await expect(page.getByRole('listitem').getByRole('heading', { level: 2 })).toHaveText([
       'Youth · Sat',
@@ -451,7 +452,7 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(page.getByText('0 you lead')).toHaveCount(0);
   });
 
-  test('says so when the account leads no Cell, and still offers to ask for one', async ({
+  test('says so when the account leads no Cell, and links to asking for one', async ({
     page,
   }) => {
     await mockSignedIn(page);
@@ -460,12 +461,71 @@ test.describe('My Cell (decision 0323)', () => {
 
     await page.goto('/my-cell');
 
-    await expect(
-      page.getByText(
-        'You don’t lead a Cell Group yet. Request one and it will be sent for approval.',
-      ),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Request New Cell' })).toBeVisible();
+    await expect(page.getByText('You don’t lead a Cell Group yet.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Request one' })).toHaveAttribute(
+      'href',
+      '/my-cell/new',
+    );
+    await expect(page.getByRole('link', { name: 'Request New Cell' })).toBeVisible();
+  });
+
+  test('asks before a started request is left by the My Cell tab, and not before (decision 0457)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+    await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>
+      route.fulfill(json({ data: [], next_cursor: null })),
+    );
+    const myCell = page.getByRole('navigation', { name: 'Cells' }).getByRole('link', {
+      name: 'My Cell',
+    });
+
+    // Nothing filled in: the tab simply goes.
+    await page.goto('/my-cell/new');
+    await expect(page.getByRole('heading', { level: 1, name: 'Cells' })).toBeVisible();
+    await myCell.click();
+    await expect(page).toHaveURL(/\/my-cell$/);
+
+    // Something filled in: it asks, and Keep editing keeps it.
+    await page.goto('/my-cell/new');
+    await page.getByRole('radio', { name: 'Couple' }).check();
+    await myCell.click();
+    const ask = page.getByRole('dialog', { name: 'Discard this request?' });
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(ask).toBeHidden();
+    await expect(page).toHaveURL(/\/my-cell\/new$/);
+    await expect(page.getByRole('radio', { name: 'Couple' })).toBeChecked();
+
+    // Discard goes.
+    await myCell.click();
+    await ask.getByRole('button', { name: 'Discard' }).click();
+    await expect(page).toHaveURL(/\/my-cell$/);
+  });
+
+  test('says what happens to somebody already in a Cell behind an ⓘ (decision 0457)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+
+    await page.goto('/my-cell/new');
+    const members = page.getByRole('group', { name: 'Members' });
+    await expect(members.getByText('3 people from the leader’s Network.')).toBeVisible();
+    const note = page.getByText('Someone already in a Cell moves to the new one once it is approved.', {
+      exact: false,
+    });
+    await expect(note).toBeHidden();
+    await page.getByRole('button', { name: 'About the members' }).click();
+    await expect(note).toBeVisible();
+    // The three boxes read alike and are told apart by their names.
+    for (const slot of [1, 2, 3]) {
+      await expect(page.getByLabel(`Search by name for member ${slot}`)).toBeVisible();
+    }
+    await expect(page.getByText('This asks for a new Cell')).toHaveCount(0);
   });
 
   test('asks for a new Cell led by somebody the account oversees, and lists the request sent', async ({
@@ -516,19 +576,24 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Youth · Sat' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Request New Cell' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Ask for a new Cell' });
+    // A tab of its own address, not a dialog over the list (decision 0457).
+    await page.getByRole('link', { name: 'Request New Cell' }).click();
+    await expect(page).toHaveURL(/\/my-cell\/new$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const dialog = page.locator('main');
     const send = dialog.getByRole('button', { name: 'Send for approval' });
     await expect(send).toBeDisabled();
+    // The way out is the My Cell tab: no Cancel.
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
 
-    await dialog.getByLabel('Search for the leader by name').fill('Marilou');
+    await dialog.getByLabel('Search by name for the leader').fill('Marilou');
     // The leader's picker comes first; the three member pickers follow it (decision 0353).
     await dialog.getByRole('button', { name: 'Search people' }).first().click();
     await dialog.getByRole('button', { name: 'Choose' }).first().click();
     await dialog.getByRole('radio', { name: 'Couple' }).check();
     await dialog.getByRole('radio', { name: 'Wednesday' }).check();
     await expect(send).toBeDisabled();
-    await dialog.getByLabel('What time').fill('19:30');
+    await dialog.getByLabel('Time', { exact: true }).fill('19:30');
     // Three members besides the leader are needed before it can be sent (decision 0353).
     await expect(send).toBeDisabled();
     await chooseThreeMembers(dialog);
@@ -540,7 +605,8 @@ test.describe('My Cell (decision 0323)', () => {
     }
     await send.click();
 
-    await expect(dialog).toBeHidden();
+    // Sent, it returns to My Cell.
+    await expect(page).toHaveURL(/\/my-cell$/);
     expect(posted.map((entry) => entry.body)).toEqual([
       {
         kind: 'NEW_CELL',
@@ -1416,18 +1482,18 @@ test.describe('a request made again sends a new key', () => {
     const keys = writeKeys(page, 'POST', /\/leadership-requests$/);
     await page.goto('/my-cell');
 
-    const dialog = page.getByRole('dialog', { name: 'Ask for a new Cell' });
+    const dialog = page.locator('main');
     for (let time = 0; time < 2; time += 1) {
-      await page.getByRole('button', { name: 'Request New Cell' }).click();
-      await dialog.getByLabel('Search for the leader by name').fill('Marilou');
+      await page.getByRole('link', { name: 'Request New Cell' }).click();
+      await dialog.getByLabel('Search by name for the leader').fill('Marilou');
       await dialog.getByRole('button', { name: 'Search people' }).first().click();
       await dialog.getByRole('button', { name: 'Choose' }).first().click();
       await dialog.getByRole('radio', { name: 'Couple' }).check();
       await dialog.getByRole('radio', { name: 'Wednesday' }).check();
-      await dialog.getByLabel('What time').fill('19:30');
+      await dialog.getByLabel('Time', { exact: true }).fill('19:30');
       await chooseThreeMembers(dialog);
       await dialog.getByRole('button', { name: 'Send for approval' }).click();
-      await expect(dialog).toBeHidden();
+      await expect(page).toHaveURL(/\/my-cell$/);
     }
     await expectTwoKeys(keys);
   });

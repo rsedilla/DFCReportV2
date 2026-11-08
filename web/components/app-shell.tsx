@@ -106,8 +106,8 @@ const CONQUEST: NavEntry = {
 /**
  * A Recording-only account's own Cells (decision 0323): its members, this month's meetings
  * and asking for a new Cell. A Cell's own pages are under `/cells/`, so they are this item's
- * on the recording screens, where there is no other Cells item. Labelled `Cells` and the page
- * still titled *My Cell* (decision 0371).
+ * on the recording screens, where there is no other Cells item. Labelled `Cells`, and since
+ * decision 0457 the page is titled *Cells* too, with *My Cell* its first tab.
  */
 const MY_CELL: NavEntry = {
   href: '/my-cell',
