@@ -23,6 +23,13 @@ updates:
     groups:
       api-minor-and-patch:
         update-types: [minor, patch]
+    # Kysely 0.29 ships only as an ES module and this API is built as CommonJS, so moving to
+    # it is a planned change to the build, not a routine update. It is the one exception to
+    # the note above, and it holds back any fix that only 0.29 carries: remove it with that
+    # change.
+    ignore:
+      - dependency-name: kysely
+        versions: ['>=0.29.0']
 
   - package-ecosystem: npm
     directory: /web
