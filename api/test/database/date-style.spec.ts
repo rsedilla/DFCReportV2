@@ -41,9 +41,10 @@ import type { Database } from '../../src/database/schema';
  * follow that role to `dfc_dev`; both are equally recoverable, which an earlier
  * version gave as the reason and is not a distinguishing one.
  *
- * **This needs ownership of the database**, which `dfc_ci` has today. The open item on
- * least-privilege credentials would take that away, and these cases would fail in a
- * way that reads as a defect in the pin rather than in the harness.
+ * **This needs ownership of the database**, which `dfc_ci` has. The restricted login
+ * production requires (decision 0453) would take that away, so the suite does not
+ * connect as it; if it ever did, these cases would fail in a way that reads as a defect
+ * in the pin rather than in the harness.
  *
  * Fixture data is invented (CLAUDE.md, Secrets).
  */
