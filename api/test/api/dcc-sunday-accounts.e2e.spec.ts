@@ -211,16 +211,28 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
   });
 
   it('lists a leader given an account between two open Sundays as two rows', async () => {
-    const earlier = new Date(Date.parse(`${sunday}T00:00:00Z`) - 7 * 86400000)
-      .toISOString()
-      .slice(0, 10);
-    const earlierId = (
-      await db
-        .insertInto('dcc_events')
-        .values({ event_date: earlier })
-        .returning('id')
-        .executeTakeFirstOrThrow()
-    ).id;
+    // Two open Sundays a week apart. On a Sunday the later is today's own, which has begun: a
+    // week further back may have been shut by an earlier rule, as 25 October's was at the end
+    // of 7 November 2026 (SKILL.md section 9, weeks before 26 October 2026).
+    const today = (
+      await sql<{ today: string }>`
+        SELECT to_char((now() AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD') AS today
+      `.execute(db)
+    ).rows[0].today;
+    const todayIsSunday = new Date(`${today}T00:00:00Z`).getUTCDay() === 0;
+    const insertSunday = async (day: string) =>
+      (
+        await db
+          .insertInto('dcc_events')
+          .values({ event_date: day })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const earlier = todayIsSunday
+      ? sunday
+      : new Date(Date.parse(`${sunday}T00:00:00Z`) - 7 * 86400000).toISOString().slice(0, 10);
+    const earlierId = todayIsSunday ? eventId : await insertSunday(earlier);
+    const laterId = todayIsSunday ? await insertSunday(today) : eventId;
     // Made the day after the earlier Sunday, so that one stays with Raymond.
     await createAccount(app, db, {
       person: mark,
@@ -240,7 +252,7 @@ describe('a past Sunday stays with whoever held an account that Sunday (decision
       }[]
     ).filter((row) => row.leader.person_id === mark.id);
 
-    expect(rows.map((row) => row.sundays.map((s) => s.event_id))).toEqual([[earlierId], [eventId]]);
+    expect(rows.map((row) => row.sundays.map((s) => s.event_id))).toEqual([[earlierId], [laterId]]);
     expect(rows.map((row) => [row.leader.has_account, row.recorded_by_you])).toEqual([
       [false, true],
       [true, false],

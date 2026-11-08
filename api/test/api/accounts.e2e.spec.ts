@@ -1305,8 +1305,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
      * approximation of it.** Section 7 puts the check on the request path because
      * `pg_restore --disable-triggers` skips a constraint trigger entirely, so the
      * only honest way to reach the state is to disable the trigger and write it.
-     * The API's role can do that today, which is itself the open item on
-     * least-privilege credentials.
+     * The suite's login can do that because it owns the tables. In production the
+     * API refuses to start on such a login (decision 0453).
      */
     async function loadPastTheTriggers(
       account: TestAccount,

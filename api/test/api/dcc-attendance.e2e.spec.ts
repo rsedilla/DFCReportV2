@@ -155,6 +155,20 @@ describe('DCC recording (sections 9 and 14)', () => {
   };
 
   /**
+   * The latest Sunday whose day has begun: today on a Sunday, `recentSunday` on any other day.
+   *
+   * For a case needing two open Sundays a week apart, this one and the Sunday before it. The
+   * pair `recentSunday` and the Sunday before that reaches two weeks back on a Sunday, and on
+   * 8 November 2026 that was 25 October, whose week the earlier rule had shut at the end of
+   * the 7th (SKILL.md section 9, weeks before 26 October 2026).
+   */
+  const latestBegunSunday = async (): Promise<string> => {
+    const now = await today();
+
+    return isoDayOf(now) === 0 ? now : recentSunday();
+  };
+
+  /**
    * The next Sunday **strictly after** today, which is the mirror of `recentSunday` above
    * and has to be derived the same way rather than by adding a week to it.
    *
@@ -454,8 +468,10 @@ describe('DCC recording (sections 9 and 14)', () => {
 
     it('lets the leader on the Sunday record somebody moved out of their branch since (decision 0397)', async () => {
       // Two Sundays: Quentin moves to Otto, under Raymond and outside Manuel's branch, the day
-      // after the first, so the first is Manuel's to owe and the second is Otto's.
-      const sunday = shift(await recentSunday(), -7);
+      // after the first, so the first is Manuel's to owe and the second is Otto's. Both in
+      // open weeks on any day, and the move always in the past (`latestBegunSunday`).
+      const later = await latestBegunSunday();
+      const sunday = shift(later, -7);
       const eventId = await createEvent(sunday);
       const otto = await createPerson(db, { firstName: 'Otto', network: 'MENS' });
       await assignTo(db, otto.id, raymond.id);
@@ -481,8 +497,8 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(corrected.status).toBeLessThan(300);
 
       // A Sunday after the move is Otto's to owe, not Manuel's: refused at scope.
-      const later = await createEvent(await recentSunday());
-      const refused = await submit(manuelAccount, later, [
+      const laterId = await createEvent(later);
+      const refused = await submit(manuelAccount, laterId, [
         { person_id: quentin.id, present: true, version: null },
       ]);
       expect(refused.status).toBe(403);
