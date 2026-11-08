@@ -90,7 +90,7 @@ export type ReportTab =
   | (typeof TABS)[number]['key']
   | (typeof SENIOR_PASTOR_TABS)[number]['key'];
 
-/** A Senior Pastor's tab as a figure of the twelve-month view (decision 0377). */
+/** A tab as a figure of the twelve-month view (decisions 0377 and 0459). */
 const TREND_FIGURE: Record<(typeof SENIOR_PASTOR_TABS)[number]['key'], TrendFigure> = {
   cells: 'CG',
   dcc: 'DCC',
@@ -137,7 +137,7 @@ export function ReportsTabs({
   current: ReportTab;
   month?: string;
   /**
-   * The Senior Pastors' two views of one figure (decision 0377): by period, or its last twelve
+   * The two views of one figure (decisions 0377 and 0459): by period, or its last twelve
    * months, the screen that was `Trends`, so each tab's link keeps the view. The switch between
    * them is the report's own (decision 0398), beside its month.
    */
@@ -170,10 +170,9 @@ export function ReportsTabs({
         ? [{ ...tab, label: 'Attendance', name: undefined }]
         : [tab],
   );
-  // Every reader's Attendance has Yearly (decision 0443), so its two reports keep it; the counts
-  // keep it for the Senior Pastors and a Full view leader, whose counts have it too.
-  const keepsTrend = (key: ReportTab) =>
-    view === 'trend' && (seniorPastor || branch || key === 'cells' || key === 'dcc');
+  // All five figures have Yearly for every reader of them (decisions 0443 and 0459), so a tab
+  // that has one keeps the graph; the Admin's Encounter Readiness and Training have none.
+  const keepsTrend = (key: ReportTab) => view === 'trend' && key in TREND_FIGURE;
   const hrefOf = (tab: { key: ReportTab; path: string }) => {
     const dated =
       tab.key === 'cells' ||
@@ -279,10 +278,22 @@ const GRAPH_ICON = (
 /**
  * The Admin's *Counts* switch, *Cell Groups*, *Cell Leaders* and *People* (decision 0433): each
  * figure keeps its own address and the month travels, as Attendance's *Cell Group* and *DCC* do.
- * It sits in the figure's control bar beside the month, so the two take one row. Renders nothing
+ * It sits in the figure's control bar, and on the graph stays on the graph (decision 0459). Renders nothing
  * for the Senior Pastors and a Full view leader, whose three # figures are tabs of their own.
  */
-export function CountsSwitch({ tab, month }: { tab: ReportTab; month: string }) {
+export function CountsSwitch({
+  tab,
+  month,
+  trend = false,
+  leader,
+}: {
+  tab: ReportTab;
+  month: string;
+  /** On the twelve months, so choosing another count keeps the graph (decision 0459). */
+  trend?: boolean;
+  /** The leader the graph draws, kept from count to count. */
+  leader?: string | null;
+}) {
   const router = useRouter();
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   if (me.data === undefined || me.data.screens === 'SENIOR_PASTOR' || isBranchReader(me.data)) {
@@ -304,7 +315,9 @@ export function CountsSwitch({ tab, month }: { tab: ReportTab; month: string }) 
       value={tab as CountKey}
       onChange={(next) => {
         if (next !== tab) {
-          router.push(`${COUNT_PATHS[next]}?month=${month}`);
+          router.push(
+            trend ? trendHref(TREND_FIGURE[next], leader) : `${COUNT_PATHS[next]}?month=${month}`,
+          );
         }
       }}
     />
@@ -312,11 +325,11 @@ export function CountsSwitch({ tab, month }: { tab: ReportTab; month: string }) 
 }
 
 /**
- * The Senior Pastors' and a Full view leader's one switch (decision 0398, amending 0377): the
+ * One switch for the length (decision 0398, amending 0377; the Admin's by decision 0459): the
  * report's lengths and its last twelve months side by side, in place of a *By period* or *Last
  * 12 months* row above the lengths. Choosing a length opens that tab by period; *Last 12
  * months* opens the twelve months, where the period's month stepper has nothing to step.
- * Renders nothing for any other reader, whose tabs have no twelve months.
+ * Renders nothing for a reader whose tabs have no twelve months.
  */
 export function ReportViewSwitch({
   tab,
@@ -336,12 +349,18 @@ export function ReportViewSwitch({
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const attendance = tab === 'cells' || tab === 'dcc';
-  // Attendance's switch is every reader's (decision 0443); a count's, the Senior Pastors' and a
-  // Full view leader's alone, whose counts have twelve months.
+  // Attendance's switch is every reader's (decision 0443); a count's, the Senior Pastors', a
+  // Full view leader's and a whole-church reader's (decision 0459), whose counts have twelve
+  // months.
   if (
     me.data === undefined ||
     !(tab in TREND_FIGURE) ||
-    !(attendance || seniorPastor || isBranchReader(me.data))
+    !(
+      attendance ||
+      seniorPastor ||
+      isBranchReader(me.data) ||
+      holdsWholeChurch(me.data, 'reports.view_subtree')
+    )
   ) {
     return null;
   }

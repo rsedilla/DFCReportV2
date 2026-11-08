@@ -174,7 +174,7 @@ export function ChurchCountsPanel({
       <div className={`mt-4 ${CONTROL_BAR}`}>
         {/* The Admin's Counts switch, on the month's row (decision 0433). */}
         <CountsSwitch tab={TAB[figure]} month={month} />
-        {/* Monthly or the last 12 months, beside the month (decision 0398). */}
+        {/* Monthly or the last 12 months, beside the month (decisions 0398 and 0459). */}
         <ReportViewSwitch tab={TAB[figure]} value="MONTH" />
         <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 lg:w-auto">
           <RangeNavigator
