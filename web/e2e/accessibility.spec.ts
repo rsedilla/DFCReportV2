@@ -760,7 +760,7 @@ const SCANS = [
       await mockCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { level: 2, name: 'Couple · Wed' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 3, name: 'Couple · Wed' })).toBeVisible();
     },
   },
   {
@@ -2151,8 +2151,8 @@ const TARGET_SWEEP = [
   { name: 'new cell', route: '/cells/new', settle: 'Search people', minimum: 10, creator: true },
   // My Cell is the recording screens' (decision 0323), so it is measured as one, last.
   {
-    // The two tabs, My Cell and Request New Cell (decision 0457), and Members and This month's
-    // meetings for each of the two Cells: **six**. Your requests renders nothing here, the
+    // The two tabs, My Cell and Request New Cell (decision 0457), and Meetings and Members for
+    // each of the two Cells: **six**. Your requests renders nothing here, the
     // sweep answering no sent requests.
     name: 'my cell',
     route: '/my-cell',

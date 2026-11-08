@@ -29,6 +29,11 @@ import type { TestAccount } from '../setup/fixtures';
  *
  * Fixture names are invented (CLAUDE.md, Secrets).
  */
+/** The throttler names counted so far, from the storage's public record of each key. */
+function throttlerNames(storage: ThrottlerStorageService): string[] {
+  return [...storage.storage.values()].flatMap((record) => [...record.totalHits.keys()]);
+}
+
 describe('church-wide search is bounded and recorded (decision 0303)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
@@ -190,17 +195,13 @@ describe('church-wide search is bounded and recorded (decision 0303)', () => {
     });
 
     it('keeps each account on expiry timers of its own', async () => {
-      // The stock storage cancels every expiry timer under a throttler name when any key
-      // under it leaves its block. Under one shared name, one account waiting out its
-      // block froze every other account's count, which a minute-long block keeps a test
-      // from reaching, so the names are asserted instead.
+      // Each account counts under a throttler name of its own. A minute-long block keeps a
+      // test from reaching what one shared name would do, so the names are asserted.
       await search(pastor, { q: 'Testfixture', church_wide: true }).expect(200);
       await search(admin, { q: 'Testfixture', church_wide: true }).expect(200);
 
       const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
-      const names = [
-        ...(storage as unknown as { timeoutIds: Map<string, unknown> }).timeoutIds.keys(),
-      ];
+      const names = throttlerNames(storage);
       expect(names).toEqual(
         expect.arrayContaining([
           `church-wide-search:${pastor.id}`,
@@ -227,9 +228,7 @@ describe('church-wide search is bounded and recorded (decision 0303)', () => {
       }
 
       const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
-      const names = [
-        ...(storage as unknown as { timeoutIds: Map<string, unknown> }).timeoutIds.keys(),
-      ];
+      const names = throttlerNames(storage);
       expect(names).not.toContain(`church-wide-search:${mark.id}`);
       expect(await entries()).toEqual([]);
 

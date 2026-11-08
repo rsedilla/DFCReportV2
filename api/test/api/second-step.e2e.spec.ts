@@ -372,10 +372,13 @@ describe('the second sign-in step (SKILL.md section 6, decision 0302)', () => {
     expect(browser.status).toBe(200);
     expect((await newest()).idle_expires_at).not.toBeNull();
 
+    // Read before `http()`: supertest closes its server when a request ends, and this login
+    // would end while the outer request was still being built.
+    const { challenge } = (await login(admin)).body;
     const installed = await http()
       .post('/api/v1/auth/second-step')
       .send({
-        challenge: (await login(admin)).body.challenge,
+        challenge,
         code: codeNow(1),
         session_kind: 'INSTALLED',
       });
