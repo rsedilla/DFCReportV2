@@ -70,7 +70,7 @@ const TABLE: readonly [Account, string, boolean][] = [
   ['RECORDING', '/dcc', false],
   ['ADMIN', '/growth/training/encounters', true],
   ['ADMIN', '/reports/suynl', true],
-  ['ADMIN', '/trends', false],
+  ['ADMIN', '/trends', true],
   ['ADMIN', '/network', false],
   // Conquest follows `conquest.view_subtree` at Whole Church, and so do its two old addresses,
   // which forward to it (decision 0407).

@@ -380,11 +380,20 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(tabs.nth(1)).toHaveAttribute('href', '/my-cell/new');
     await expect(page.getByText('The Cells you lead')).toHaveCount(0);
     // The Cells' own cards, below the count of those in the reader's care (decision 0438).
-    await expect(page.getByRole('listitem').getByRole('heading', { level: 2 })).toHaveText([
+    await expect(page.getByRole('heading', { level: 2, name: 'You lead' })).toBeVisible();
+    await expect(page.getByRole('listitem').getByRole('heading', { level: 3 })).toHaveText([
       'Youth · Sat',
       'Couple · Wed',
     ]);
-    await expect(page.getByText('CELL-000007 · Saturdays at 19:00 · 6 members')).toBeVisible();
+    const first = page.getByRole('listitem').filter({ hasText: 'CELL-000007' });
+    await expect(first).toContainText('6 members');
+    await expect(first).toContainText('Saturdays 19:00 · CELL-000007');
+    // The server's two figures and its own count of what is behind (sections 12, decision 0267).
+    await expect(first).toContainText('3 of 4 recorded this month · 1 to record');
+    // Nothing behind says nothing about it, and 0 of 0 is still shown (decision 0225).
+    const second = page.getByRole('listitem').filter({ hasText: 'CELL-000011' });
+    await expect(second).toContainText('0 of 0 recorded this month');
+    await expect(second).not.toContainText('to record');
 
     const members = page.getByRole('link', { name: 'Members' });
     await expect(members).toHaveCount(2);
@@ -396,10 +405,14 @@ test.describe('My Cell (decision 0323)', () => {
       'href',
       `/cells/${CELL_WITH_NO_SCHEDULE.id}/members`,
     );
-    await expect(page.getByRole('link', { name: 'This month’s meetings' }).first()).toHaveAttribute(
+    const meetings = page.getByRole('link', { name: 'Meetings', exact: true });
+    await expect(meetings.first()).toHaveAttribute(
       'href',
       `/cells/${CELL_WITH_MEETINGS.id}/meetings?month=2026-06-01`,
     );
+    // Filled on every Cell alike, so a Cell behind is not marked by colour (section 13).
+    await expect(meetings.first()).toHaveClass(/bg-accent/);
+    await expect(meetings.nth(1)).toHaveClass(/bg-accent/);
 
     await expect(mainNavigation(page).locator('a[aria-current="page"]')).toHaveText('Cells');
 
@@ -409,6 +422,33 @@ test.describe('My Cell (decision 0323)', () => {
     for (const request of index) {
       expect(request).toContain('led_by=me');
     }
+  });
+
+  test('says the month is still running beside its coverage lines (section 17)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page, { open: true });
+
+    await page.goto('/my-cell');
+
+    await expect(page.getByText('3 of 4')).toBeVisible();
+    const heading = page.getByRole('heading', { level: 2, name: 'You lead' });
+    await expect(heading.locator('..').getByText('Open until 7 July', { exact: true })).toBeVisible();
+  });
+
+  test('says nothing of a month that has shut', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+
+    await page.goto('/my-cell');
+
+    await expect(page.getByText('3 of 4')).toBeVisible();
+    await expect(page.locator('main').getByText(/^Open until /)).toHaveCount(0);
   });
 
   test('counts the Cell Groups in the account’s care as of today (decision 0438)', async ({
@@ -573,7 +613,7 @@ test.describe('My Cell (decision 0323)', () => {
     });
 
     await page.goto('/my-cell');
-    await expect(page.getByRole('heading', { level: 2, name: 'Youth · Sat' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Youth · Sat' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
 
     // A tab of its own address, not a dialog over the list (decision 0457).
@@ -622,7 +662,12 @@ test.describe('My Cell (decision 0323)', () => {
     // The sent list is asked again, so the request shows at once.
     const sent = page.getByRole('region', { name: 'Your requests' });
     await expect(sent.getByRole('listitem')).toHaveCount(1);
-    await expect(sent).toContainText(`New Cell led by ${PERSON_IN_SCOPE.full_name}`);
+    await expect(sent).toContainText(PERSON_IN_SCOPE.full_name);
+    await expect(sent).toContainText('New Cell · sent');
+    // The sentence about the list is behind an ⓘ here (decision 0458).
+    await expect(page.getByText('Shown until a month after')).toBeHidden();
+    await page.getByRole('button', { name: 'About your requests' }).click();
+    await expect(page.getByText('Shown until a month after')).toBeVisible();
     await expect(sent).toContainText('Waiting for approval');
   });
 });
