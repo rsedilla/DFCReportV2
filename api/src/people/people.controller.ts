@@ -713,9 +713,8 @@ export class PeopleController {
     const cursor = decodeCursor(query.cursor);
     if (query.church_wide) {
       // Counted after the checks above and the cursor, so a refused request spends nothing.
-      // **The throttler name is per account, not shared.** The stock storage keeps its
-      // expiry timers per name and cancels every one under a name when any key's block
-      // ends, so a shared name let one account's block freeze everybody else's count.
+      // **The throttler name is per account, not shared**, so each account's count and its
+      // block stay its own.
       const key = `church-wide-search:${actor.accountId}`;
       const spent = await this.throttle.increment(
         key,
