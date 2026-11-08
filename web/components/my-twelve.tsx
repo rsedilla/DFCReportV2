@@ -24,7 +24,7 @@ const STAGES: readonly [keyof Classification, string][] = [
   ['regular', 'Regular'],
 ];
 
-/** Each stage's heading on a phone (decision 0451). */
+/** Each stage's column heading, at every width (decisions 0451 and 0460), said in full. */
 const STAGE_SHORT: Record<keyof Classification, string> = {
   vip: 'VIP',
   second_timer: '2nd',
@@ -243,8 +243,9 @@ export function TwelveTable({
           <tr>
             <HeaderCell>Leader</HeaderCell>
             {STAGES.map(([key, label]) => (
-              <HeaderCell key={key} className="text-right">
-                {label}
+              // `relative` keeps the screen-reader words inside the table's own scroll on a phone.
+              <HeaderCell key={key} className="relative text-right">
+                <ShortText full={label} short={STAGE_SHORT[key]} />
               </HeaderCell>
             ))}
             <HeaderCell className="text-right">People</HeaderCell>
@@ -428,7 +429,7 @@ export function BranchTwelve({
             </HeaderCell>
             {STAGES.map(([key, label]) => (
               <HeaderCell key={key} className={FIGURE_HEAD} style={{ width: '11%' }}>
-                {said(label, STAGE_SHORT[key])}
+                <ShortText full={label} short={STAGE_SHORT[key]} />
               </HeaderCell>
             ))}
           </tr>
@@ -573,7 +574,7 @@ export function RootLeadersTwelve({
                   </HeaderCell>
                   {STAGES.map(([key, label]) => (
                     <HeaderCell key={key} className={FIGURE_HEAD} style={{ width: '11%' }}>
-                      {phone ? <ShortText full={label} short={STAGE_SHORT[key]} /> : label}
+                      <ShortText full={label} short={STAGE_SHORT[key]} />
                     </HeaderCell>
                   ))}
                 </tr>

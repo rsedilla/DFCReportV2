@@ -780,9 +780,10 @@ test.describe('a Full view leader’s 12 at a phone and a computer', () => {
         expect(widths.page).toBeLessThanOrEqual(0);
         expect(widths.table).toBeLessThanOrEqual(0);
 
-        // From `lg`, the full headings and names.
+        // From `lg`, the full names, and the same short headings (decision 0460).
         await page.setViewportSize({ width: 1280, height: 800 });
-        await expect(heads.nth(3)).toHaveText('2nd Timer');
+        await expect(heads.nth(3).locator('[aria-hidden="true"]')).toHaveText('2nd');
+        await expect(heads.nth(3).locator('.sr-only')).toHaveText('2nd Timer');
         await expect(table.getByRole('cell', { name: 'Consuelo Bautista', exact: true })).toBeVisible();
       });
     }
