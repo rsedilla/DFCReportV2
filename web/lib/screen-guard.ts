@@ -114,6 +114,6 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     }
     return !at(/^\/growth\/training$/);
   }
-  // The Admin's six reports have no twelve-month view (decision 0377).
-  return !at(/^\/trends(\/|$)/);
+  // The twelve months are a whole-church reader's, the Admin's (decisions 0443 and 0459).
+  return !at(/^\/trends(\/|$)/) || holdsWholeChurch(me, 'reports.view_subtree');
 }
