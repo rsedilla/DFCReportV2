@@ -207,10 +207,11 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
       'Primaries',
       'Total',
       'VIP',
-      '2nd Timer',
-      '3rd Timer',
-      '4th Timer',
-      'Regular',
+      // Short on screen, in full for a screen reader (decision 0460).
+      '2nd2nd Timer',
+      '3rd3rd Timer',
+      '4th4th Timer',
+      'RegRegular',
     ]);
     // A row's Total is its unique people, VIP through Regular added.
     await expect(mens.getByRole('row').nth(1).getByRole('cell')).toHaveText([
