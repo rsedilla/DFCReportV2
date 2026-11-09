@@ -252,10 +252,11 @@ test.describe('My 12', () => {
       'Leader',
       'Total',
       'VIP',
-      '2nd Timer',
-      '3rd Timer',
-      '4th Timer',
-      'Regular',
+      // Short on screen, in full for a screen reader (decision 0460).
+      '2nd2nd Timer',
+      '3rd3rd Timer',
+      '4th4th Timer',
+      'RegRegular',
     ]);
     await expect(table.getByRole('columnheader', { name: 'People' })).toHaveCount(0);
 
