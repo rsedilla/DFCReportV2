@@ -82,7 +82,7 @@ async function call(
   post?: { body: unknown },
 ): Promise<{ ms: number; status: number; body: Body }> {
   const started = performance.now();
-  let status = 0;
+  let status: number;
   let body: Body = {};
   try {
     const response = await fetch(`${API}${path}`, {

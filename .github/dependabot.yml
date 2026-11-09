@@ -23,6 +23,15 @@ updates:
     groups:
       api-minor-and-patch:
         update-types: [minor, patch]
+    # Kysely 0.29 and @nestjs/jwt 12 ship only as ES modules and this API is built as
+    # CommonJS, and NestJS 12 has to move as a whole, so each is a planned change rather than
+    # a routine update. These are exceptions to the note above, and they hold back any fix
+    # that only those versions carry: remove them with that change.
+    ignore:
+      - dependency-name: kysely
+        versions: ['>=0.29.0']
+      - dependency-name: '@nestjs/*'
+        versions: ['>=12.0.0']
 
   - package-ecosystem: npm
     directory: /web
@@ -35,6 +44,11 @@ updates:
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
+    # typescript-eslint does not support TypeScript 7 yet. An exception to the note above, to
+    # be removed when it does.
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=7.0.0']
 
   # Keeps the commit each action is pinned to in .github/workflows current, with the
   # version beside it.

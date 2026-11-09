@@ -202,8 +202,8 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('region', { name: 'Number of Cell Groups' })).toBeVisible();
 
-    // The switch and the month share one row of the control bar.
-    const month = page.getByRole('button', { name: 'The period before' }).first();
+    // The switch and Monthly / Yearly share one row of the control bar (decision 0459).
+    const month = page.getByRole('group', { name: 'Report period' });
     const [switchBox, monthBox] = [await which.boundingBox(), await month.boundingBox()];
     expect(switchBox && monthBox && Math.abs(switchBox.y + switchBox.height - (monthBox.y + monthBox.height))).toBeLessThan(8);
 

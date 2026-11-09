@@ -8,9 +8,11 @@ import { MyCellTabs } from '@/components/my-cell-tabs';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { Tag } from '@/components/ui/tag';
 import { cellShortName, dayOfWeekLabel, getCellCounts, listCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
-import { reportingMonthOf } from '@/lib/reporting-month';
+import { openUntilLabel, reportingMonthOf } from '@/lib/reporting-month';
+import { cn } from '@/lib/utils';
 
 export default function MyCellPage() {
   return (
@@ -51,7 +53,7 @@ function MyCell() {
         <FailureNotice failure={counts.isError ? describeFailure(counts.error) : null} />
         {inCare > 0 ? (
           <div className="mt-5">
-            <h2 className="text-2xl font-semibold">
+            <h2 className="text-xl font-semibold">
               <span className="text-accent tabular-nums">{inCare}</span>{' '}
               {inCare === 1 ? 'Cell Group' : 'Cell Groups'} in your care
             </h2>
@@ -74,35 +76,64 @@ function MyCell() {
             </Link>{' '}
             and it will be sent for approval.
           </p>
-        ) : (
-          <ul className="mt-6 grid gap-4 sm:grid-cols-2">
-            {(cells.data?.data ?? []).map((cell) => (
-              <li key={cell.id} className="border-line rounded-md border p-4">
-                <h2 className="text-lg font-bold tracking-tight">
-                  {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
-                </h2>
-                <p className="text-muted mt-1 text-sm">
-                  {cell.cell_id} · {dayOfWeekLabel(cell.schedule.day_of_week)}s at{' '}
-                  {cell.schedule.time_of_day} · {cell.member_count}{' '}
-                  {cell.member_count === 1 ? 'member' : 'members'}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Link href={`/cells/${cell.id}/members`} className={buttonClasses('secondary')}>
-                    Members
-                  </Link>
-                  <Link
-                    href={`/cells/${cell.id}/meetings?month=${month}`}
-                    className={buttonClasses('secondary')}
-                  >
-                    This month&rsquo;s meetings
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        ) : cells.data ? (
+          <>
+            <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="field-label">You lead</h2>
+              {/* Section 17: a month's coverage line says the month is still running. */}
+              {cells.data.open ? <Tag>{openUntilLabel(month)}</Tag> : null}
+            </div>
+            <ul className="mt-2 grid gap-4 sm:grid-cols-2">
+              {cells.data.data.map((cell) => (
+                <li key={cell.id} className="border-line rounded-md border p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="text-lg font-bold tracking-tight">
+                      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}
+                    </h3>
+                    <span className="text-muted text-sm whitespace-nowrap">
+                      {cell.member_count} {cell.member_count === 1 ? 'member' : 'members'}
+                    </span>
+                  </div>
+                  <p className="text-muted mt-1 text-sm">
+                    {dayOfWeekLabel(cell.schedule.day_of_week)}s {cell.schedule.time_of_day} ·{' '}
+                    {cell.cell_id}
+                  </p>
+                  {/* The server's own figures, two and never divided (section 12); `behind` is
+                      never worked out here (decision 0267). In words alone, and Meetings is
+                      filled on every Cell, so a Cell behind is not marked by colour. */}
+                  <p className="mt-2 text-sm">
+                    <span className="font-bold tabular-nums">
+                      {cell.coverage.recorded} of {cell.coverage.scheduled}
+                    </span>{' '}
+                    recorded this month
+                    {cell.coverage.behind > 0 ? (
+                      <>
+                        {' · '}
+                        <span className="font-bold">{cell.coverage.behind} to record</span>
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="mt-3 flex gap-3">
+                    <Link
+                      href={`/cells/${cell.id}/meetings?month=${month}`}
+                      className={cn(buttonClasses(), 'min-w-0 flex-1 sm:min-w-0')}
+                    >
+                      Meetings
+                    </Link>
+                    <Link
+                      href={`/cells/${cell.id}/members`}
+                      className={cn(buttonClasses('secondary'), 'min-w-0 flex-1 sm:min-w-0')}
+                    >
+                      Members
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
 
-        <SentRequests />
+        <SentRequests plain />
       </MyCellTabs>
     </main>
   );
