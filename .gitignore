@@ -35,6 +35,8 @@ Thumbs.db
 # claude local overrides
 .claude/settings.local.json
 .claude/launch.json
+.claude/worktrees/
+.claude/tmp/
 
 # leadership tree data (SKILL.md section 2, Initial data load)
 # The real file carries names and birthdays for several thousand people, minors
