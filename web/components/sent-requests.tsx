@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
+import { InfoToggle } from '@/components/ui/info-toggle';
 import {
   cellShortName,
   listSentRequests,
@@ -35,8 +36,11 @@ const STATE: Record<SentRequest['state'], string> = {
  * The state is an outlined word and never a colour (section 19). Nothing renders when
  * the reader has sent none, or while the list is loading or could not be read: the
  * block is the reader's own record, and an empty heading would claim there is one.
+ *
+ * `plain` is My Cell's shape (decision 0458): the leader's name and what was asked, as ruled
+ * rows rather than boxes, the sentence about the list behind an ⓘ.
  */
-export function SentRequests() {
+export function SentRequests({ plain = false }: { plain?: boolean }) {
   const sent = useQuery({
     queryKey: ['sent-requests'],
     queryFn: ({ signal }) => listSentRequests(signal),
@@ -44,6 +48,35 @@ export function SentRequests() {
 
   if (!sent.data || sent.data.length === 0) {
     return null;
+  }
+
+  if (plain) {
+    return (
+      <section className="mt-7" aria-labelledby="sent-requests-heading">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h2 id="sent-requests-heading" className="field-label">
+            Your requests
+          </h2>
+          <InfoToggle label="About your requests" small inline>
+            Cell leadership requests you sent. Shown until a month after they&rsquo;re decided.
+          </InfoToggle>
+        </div>
+        <ul className="mt-2">
+          {sent.data.map((request) => (
+            <li
+              key={request.id}
+              className="border-line flex flex-col items-start gap-2 border-t py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="font-semibold">{request.prospective_leader.full_name}</p>
+                <p className="text-muted mt-0.5 text-sm">{plainLine(request)}</p>
+              </div>
+              <State request={request} />
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
   }
 
   return (
@@ -64,22 +97,52 @@ export function SentRequests() {
               <p className="font-medium">{title(request)}</p>
               <p className="text-muted mt-1 text-sm">{subline(request)}</p>
             </div>
-            <span className="bg-accent-tint text-ink rounded-full px-3 py-1 text-sm font-semibold">
-              {STATE[request.state]}
-              {request.state === 'APPROVED' && request.cell?.cell_id ? (
-                <>
-                  {' · '}
-                  <Link href={`/cells/${request.cell.id}/meetings`} className={LINK}>
-                    {nameOf(request.cell)}
-                  </Link>
-                </>
-              ) : null}
-            </span>
+            <State request={request} />
           </li>
         ))}
       </ul>
     </section>
   );
+}
+
+/** Where a request stands, an outlined word (section 19), and the Cell an approval opened. */
+function State({ request }: { request: SentRequest }) {
+  return (
+    <span className="bg-accent-tint text-ink rounded-full px-3 py-1 text-sm font-semibold">
+      {STATE[request.state]}
+      {request.state === 'APPROVED' && request.cell?.cell_id ? (
+        <>
+          {' · '}
+          <Link href={`/cells/${request.cell.id}/meetings`} className={LINK}>
+            {nameOf(request.cell)}
+          </Link>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/** What was asked and where it stands, under the leader's name: "New Cell · approved 19 Oct". */
+function plainLine(request: SentRequest): string {
+  const asked =
+    request.kind === 'HANDOVER'
+      ? `Hand over ${request.cell ? nameOf(request.cell) : 'a Cell'}`
+      : request.restart_of
+        ? `Restart ${nameOf(request.restart_of)}`
+        : 'New Cell';
+
+  if (request.decided_at === null) {
+    return `${asked} · sent ${day(request.requested_at)}`;
+  }
+
+  if (request.state === 'APPROVED') {
+    return `${asked} · approved ${day(request.decided_at)}`;
+  }
+
+  const reason = request.decline_reason ? DECLINE_REASON[request.decline_reason] : null;
+  const why = [reason, request.note].filter((part) => part).join(': ');
+
+  return `${asked} · declined ${day(request.decided_at)}${why ? ` · ${why}` : ''}`;
 }
 
 function title(request: SentRequest): string {
