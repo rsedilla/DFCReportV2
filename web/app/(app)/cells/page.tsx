@@ -305,8 +305,9 @@ function CellsIndex() {
         {attentionShown ? (
           <ViewSwitch<CellsView>
             label="Which list"
-            // Two by two on a phone, rather than three and a lone fourth.
-            className="grid-cols-2"
+            // Two by two on a phone, rather than three and a lone fourth. From `md`, one
+            // row with every label on one line (decision 0461).
+            className="mt-5 mb-1 grid-cols-2 md:max-w-[46rem] md:grid-cols-4 md:rounded-full md:[&>button]:px-3 md:[&>button]:whitespace-nowrap lg:grid lg:w-full lg:grid-flow-row lg:grid-cols-4"
             options={attention.map(([key, label, count]) => ({
               key,
               label,

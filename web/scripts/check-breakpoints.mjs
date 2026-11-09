@@ -55,7 +55,7 @@ const WIDER = ['md', 'lg', 'xl', '2xl', '@md', '@lg'];
  * scanning fails exactly as an unlisted prefix does, which is what stops this being
  * a list somebody appends to in order to turn a red check green.
  */
-const SCANNED = { lg: 1024, '2xl': 1536 };
+const SCANNED = { md: 768, lg: 1024, '2xl': 1536 };
 
 /** The widths the accessibility suite actually scans, read from the suite itself. */
 async function scannedWidths() {
