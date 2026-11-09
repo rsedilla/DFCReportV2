@@ -202,8 +202,8 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect(which.getByRole('button', { name: 'Cell Groups' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('region', { name: 'Number of Cell Groups' })).toBeVisible();
 
-    // The switch and the month share one row of the control bar.
-    const month = page.getByRole('button', { name: 'The period before' }).first();
+    // The switch and Monthly / Yearly share one row of the control bar (decision 0459).
+    const month = page.getByRole('group', { name: 'Report period' });
     const [switchBox, monthBox] = [await which.boundingBox(), await month.boundingBox()];
     expect(switchBox && monthBox && Math.abs(switchBox.y + switchBox.height - (monthBox.y + monthBox.height))).toBeLessThan(8);
 
@@ -780,9 +780,10 @@ test.describe('a Full view leader’s 12 at a phone and a computer', () => {
         expect(widths.page).toBeLessThanOrEqual(0);
         expect(widths.table).toBeLessThanOrEqual(0);
 
-        // From `lg`, the full headings and names.
+        // From `lg`, the full names, and the same short headings (decision 0460).
         await page.setViewportSize({ width: 1280, height: 800 });
-        await expect(heads.nth(3)).toHaveText('2nd Timer');
+        await expect(heads.nth(3).locator('[aria-hidden="true"]')).toHaveText('2nd');
+        await expect(heads.nth(3).locator('.sr-only')).toHaveText('2nd Timer');
         await expect(table.getByRole('cell', { name: 'Consuelo Bautista', exact: true })).toBeVisible();
       });
     }

@@ -578,7 +578,7 @@ async function call(
   });
   const text = await response.text();
   const ms = performance.now() - started;
-  let body: Body = {};
+  let body: Body;
   try {
     body = JSON.parse(text) as Body;
   } catch {

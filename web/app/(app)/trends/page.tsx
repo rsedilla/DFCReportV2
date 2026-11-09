@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
 import {
+  CountsSwitch,
   isBranchReader,
   ReportsHeading,
   ReportsTabs,
@@ -53,7 +54,7 @@ const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: 
 ];
 
 /**
- * The Senior Pastors' *Trends* (SKILL.md sections 17 and 19, decision 0326, point 4): one
+ * *Trends*, the Senior Pastors' and the Admin's (SKILL.md sections 17 and 19, decisions 0326 and 0459): one
  * figure over the last twelve months, one point a month, a month still open marked *so far*.
  *
  * **Three lines, or one.** The whole church and each root's branch, named by the pastor with
@@ -117,7 +118,7 @@ function TrendsScreen() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading line="The last 12 months, one point a month." />
 
-      {/* The Senior Pastors' twelve months are a view of Reports (decision 0377): the same tabs,
+      {/* The twelve months are a view of Reports (decision 0377): the same tabs,
           and the one switch back to a length first in the bar (decision 0398). */}
       <ReportsTabs current={TAB_OF[figure]} view="trend" leader={leader}>
         {/* Attendance's Weekly, Monthly and Yearly sit on the line beside Cell Group and DCC
@@ -126,6 +127,10 @@ function TrendsScreen() {
         {/* A Full view leader draws their own branch alone, with no Show list (decision 0380). */}
         {branch && attendance ? null : (
         <div className={`mt-4 ${CONTROL_BAR}`}>
+          {/* The Admin's Counts switch keeps the graph from count to count (decision 0459). */}
+          {attendance ? null : (
+            <CountsSwitch tab={TAB_OF[figure]} month={current} trend leader={leader} />
+          )}
           {attendance ? null : (
             <ReportViewSwitch tab={TAB_OF[figure]} value="TREND" leader={leader} />
           )}
