@@ -27,6 +27,7 @@ import { dayLabel, monthLabel } from '@/lib/reporting-month';
 import { useSearchTerm } from '@/lib/search-term';
 import { deadlineLabel } from '@/lib/weekly-deadline';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * Record's lists (SKILL.md section 19): the rows, tables and checklists the Record screen
@@ -1169,7 +1170,7 @@ export function PendingCgPane({
       />
       <BranchNote filter={filter} onClear={() => onFilter({ ...filter, leader: null })} />
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : rows ? (
         <>
           <PendingCgList
@@ -1228,7 +1229,7 @@ export function PendingDccPane({
       />
       <BranchNote filter={filter} onClear={() => onFilter({ ...filter, leader: null })} />
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : rows ? (
         <>
           <PendingDccList

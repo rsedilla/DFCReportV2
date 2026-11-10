@@ -21,6 +21,7 @@ import {
   type RecordingRowStatus,
 } from '@/lib/reports';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 type Kind = 'WEEK' | 'MONTH';
 
@@ -97,7 +98,7 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
       </div>
 
       {status.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : data ? (
         <>
           <h3 className="field-label mt-4">Whole Church</h3>
@@ -229,7 +230,7 @@ export function LeaderRecordingStatusPanel({
       </div>
 
       {status.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : data ? (
         data.branch === null || data.rows === null ? (
           <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
