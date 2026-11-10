@@ -41,6 +41,7 @@ import { reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
@@ -305,8 +306,9 @@ function CellsIndex() {
         {attentionShown ? (
           <ViewSwitch<CellsView>
             label="Which list"
-            // Two by two on a phone, rather than three and a lone fourth.
-            className="grid-cols-2"
+            // Two by two on a phone, rather than three and a lone fourth. From `md`, one
+            // row with every label on one line (decision 0461).
+            className="mt-5 mb-1 grid-cols-2 md:max-w-[46rem] md:grid-cols-4 md:rounded-full md:[&>button]:px-3 md:[&>button]:whitespace-nowrap lg:grid lg:w-full lg:grid-flow-row lg:grid-cols-4"
             options={attention.map(([key, label, count]) => ({
               key,
               label,
@@ -410,7 +412,7 @@ function CellsIndex() {
 
         <div {...pageTurnProps(cells.isPlaceholderData)}>
         {cells.isPending ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-6" />
         ) : cells.data && cells.data.data.length === 0 ? (
           <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
             {submitted !== ''

@@ -35,6 +35,7 @@ import {
 import { MINIMUM_SEARCH_LENGTH, searchPeople } from '@/lib/people';
 import { monthLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -245,7 +246,7 @@ function NetworkScreen() {
         </div>
 
         {branch.isPending && failure === null ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-6" />
         ) : roots.length > 0 ? (
           <RootsView roots={roots} readsDcc={readsDcc} readsCells={readsCells} />
         ) : person === undefined ? null : (

@@ -32,6 +32,7 @@ import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getBranchCounts, getBranchPeople, type ChurchCountFigures } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** The three # tabs' labels, as the Senior Pastors' (decision 0326). */
 const LABEL: Record<CountFigure, string> = {
@@ -163,7 +164,7 @@ export function BranchCountsPanel({
 
       <KeptFigures kept={counts.isPlaceholderData} loading={monthLabel(month)}>
       {counts.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : data ? (
         data.total === null || data.rows === null ? (
           <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">

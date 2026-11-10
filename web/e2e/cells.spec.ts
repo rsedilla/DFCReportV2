@@ -287,6 +287,32 @@ test.describe('the Cells total (decision 0400)', () => {
     await expect(headline(page)).toBeVisible();
   });
 
+  // Decision 0461: one row of four equal buttons, no label on two lines.
+  for (const [width, height] of [[1366, 768], [1024, 768], [768, 1024]] as const) {
+    test(`Needs Attention's lists stand in one row at ${width}px`, async ({ page }) => {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellAdministrator(page);
+      await page.setViewportSize({ width, height });
+      await page.goto('/cells?view=FEW');
+
+      const buttons = page.getByRole('group', { name: 'Which list' }).getByRole('button');
+      await expect(buttons).toHaveCount(4);
+      const boxes = await buttons.evaluateAll((all) =>
+        all.map((button) => {
+          const box = button.getBoundingClientRect();
+          return { top: box.top, width: box.width, height: box.height, fits: button.scrollWidth <= button.clientWidth };
+        }),
+      );
+      expect(new Set(boxes.map((box) => box.top)).size).toBe(1);
+      expect(new Set(boxes.map((box) => Math.round(box.width))).size).toBe(1);
+      for (const box of boxes) {
+        expect(box.height).toBe(44);
+        expect(box.fits).toBe(true);
+      }
+    });
+  }
+
   // The button that brings the whole list back reads Clear search on every list (owner,
   // 2026-10-13).
   test('an emptied box offers Clear search, which brings the whole list back', async ({ page }) => {
