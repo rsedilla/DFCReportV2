@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
+import { ACTION_ROW, ActionRow } from '@/components/ui/action-row';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { FRAME } from '@/components/ui/frame';
@@ -53,6 +54,7 @@ export function PersonAccount({
   mayTickFullView?: boolean;
 }) {
   const headingId = useId();
+  const accessHeadingId = useId();
   const queryClient = useQueryClient();
   const [giving, setGiving] = useState(false);
   const [email, setEmail] = useState('');
@@ -101,7 +103,9 @@ export function PersonAccount({
 
   const current = account.data?.account ?? null;
 
+  // Side by side only where the page itself widens (decision 0462).
   return (
+    <div className="grid items-start gap-4 2xl:grid-cols-2">
     <section aria-labelledby={headingId} className={FRAME}>
       <h2 id={headingId} className="field-label flex flex-wrap items-center gap-2">
         Account
@@ -278,28 +282,6 @@ export function PersonAccount({
               ) : null}
             </>
           ) : null}
-          {current.status === 'ACTIVE' ? (
-            <PasswordResetRow accountId={current.id} firstName={firstName} email={current.email} />
-          ) : null}
-          {current.status === 'ACTIVE' && !own ? (
-            <ChangeEmailRow
-              accountId={current.id}
-              personId={personId}
-              firstName={firstName}
-              email={current.email}
-              onRestarted={(to) => {
-                setCorrected(null);
-                setRestarted({ from: current.email, to });
-              }}
-            />
-          ) : null}
-          <AccessRow
-            accountId={current.id}
-            personId={personId}
-            firstName={firstName}
-            disabled={current.status === 'DISABLED'}
-            own={own}
-          />
         </div>
       ) : giving ? (
         <form
@@ -364,6 +346,38 @@ export function PersonAccount({
         </div>
       )}
     </section>
+    {current ? (
+      <section aria-labelledby={accessHeadingId} className={FRAME}>
+        <h2 id={accessHeadingId} className="field-label">
+          Sign-in and access
+        </h2>
+        <div className="mt-1.5">
+          {current.status === 'ACTIVE' ? (
+            <PasswordResetRow accountId={current.id} firstName={firstName} email={current.email} />
+          ) : null}
+          {current.status === 'ACTIVE' && !own ? (
+            <ChangeEmailRow
+              accountId={current.id}
+              personId={personId}
+              firstName={firstName}
+              email={current.email}
+              onRestarted={(to) => {
+                setCorrected(null);
+                setRestarted({ from: current.email, to });
+              }}
+            />
+          ) : null}
+          <AccessRow
+            accountId={current.id}
+            personId={personId}
+            firstName={firstName}
+            disabled={current.status === 'DISABLED'}
+            own={own}
+          />
+        </div>
+      </section>
+    ) : null}
+    </div>
   );
 }
 
@@ -389,26 +403,24 @@ function PasswordResetRow({
   });
 
   return (
-    <div className="mt-3">
-      <FailureNotice failure={send.isError ? describeFailure(send.error) : null} />
-      <Button
-        className="mt-1"
-        variant="secondary"
-        disabled={send.isPending}
-        onClick={() => send.mutate()}
-      >
+    <ActionRow
+      title="Cannot sign in"
+      description={`Emails ${firstName} a link to choose a new password. It lasts 30 minutes.`}
+      below={
+        <>
+          <FailureNotice failure={send.isError ? describeFailure(send.error) : null} />
+          {send.isSuccess ? (
+            <p aria-live="polite" className="mt-2 text-sm font-medium">
+              Sent to {email}. The link lasts 30 minutes.
+            </p>
+          ) : null}
+        </>
+      }
+    >
+      <Button variant="secondary" disabled={send.isPending} onClick={() => send.mutate()}>
         {send.isPending ? 'Sending…' : 'Send Reset Link'}
       </Button>
-      {send.isSuccess ? (
-        <p aria-live="polite" className="mt-2 text-sm font-medium">
-          Sent to {email}. The link lasts 30 minutes.
-        </p>
-      ) : null}
-      <p className="text-muted mt-2 text-sm leading-relaxed">
-        For someone who cannot sign in. It emails {firstName} a link to choose a new password, at{' '}
-        {email}. You never see or choose the password, and the link lasts 30 minutes.
-      </p>
-    </div>
+    </ActionRow>
   );
 }
 
@@ -446,10 +458,31 @@ function ChangeEmailRow({
 
   const fieldError = fieldErrorFor(change.error, 'email');
 
+  if (!open) {
+    return (
+      <ActionRow
+        title="Lost this mailbox"
+        description="Moves the account to a new address and signs them out everywhere. The old address is told."
+      >
+        <Button
+          variant="secondary"
+          onClick={() => {
+            // A new key each time the form opens, so a stored refusal is not replayed.
+            setKey(crypto.randomUUID());
+            setNext('');
+            change.reset();
+            setOpen(true);
+          }}
+        >
+          Change Email
+        </Button>
+      </ActionRow>
+    );
+  }
+
   return (
-    <div className="mt-3">
+    <div className={ACTION_ROW}>
       <FailureNotice failure={change.isError && !fieldError ? describeFailure(change.error) : null} />
-      {open ? (
         <form
           className="mt-1 flex max-w-md flex-col gap-4"
           onSubmit={(event) => {
@@ -484,29 +517,6 @@ function ChangeEmailRow({
             </Button>
           </div>
         </form>
-      ) : (
-        <>
-          <Button
-            className="mt-1"
-            variant="secondary"
-            onClick={() => {
-              // A new key each time the form opens, so a stored refusal is not replayed.
-              setKey(crypto.randomUUID());
-              setNext('');
-              change.reset();
-              setOpen(true);
-            }}
-          >
-            Change Email
-          </Button>
-          <p className="text-muted mt-2 text-sm leading-relaxed">
-            For someone who has lost this mailbox. Their account starts over at the new address:
-            they are signed out everywhere, their password stops working, and a link to choose a
-            new one goes to the new address. The old address is told, and the change is kept in
-            the audit log.
-          </p>
-        </>
-      )}
     </div>
   );
 }
@@ -543,17 +553,42 @@ function AccessRow({
 
   if (own && !disabled) {
     return (
-      <p className="text-muted mt-3 text-sm">
+      <p className={`text-muted text-sm ${ACTION_ROW}`}>
         This is your own account. Another administrator can disable it.
       </p>
     );
   }
 
+  if (!confirming) {
+    return (
+      <ActionRow
+        title={disabled ? 'Let them sign in again' : 'Stop signing in'}
+        description={
+          disabled
+            ? 'Their own password works again, or you resend the activation email.'
+            : 'They can no longer sign in. You can turn it back on.'
+        }
+        below={<FailureNotice failure={change.isError ? describeFailure(change.error) : null} />}
+      >
+        <Button
+          variant="secondary"
+          onClick={() => {
+            // A new key each time, so a refused disable is not replayed as a re-enable.
+            setKey(crypto.randomUUID());
+            change.reset();
+            setConfirming(true);
+          }}
+        >
+          {disabled ? 'Re-enable the account' : 'Disable the account'}
+        </Button>
+      </ActionRow>
+    );
+  }
+
   return (
-    <div className="mt-3">
+    <div className={ACTION_ROW}>
       <FailureNotice failure={change.isError ? describeFailure(change.error) : null} />
-      {confirming ? (
-        <div className="mt-3">
+        <div>
           <p className="text-sm">
             {disabled
               ? `Re-enable ${firstName}’s account? They sign in with their own password, or, if they never set one, you resend the activation email. No old session comes back.`
@@ -574,19 +609,6 @@ function AccessRow({
             </Button>
           </div>
         </div>
-      ) : (
-        <Button
-          variant="secondary"
-          onClick={() => {
-            // A new key each time, so a refused disable is not replayed as a re-enable.
-            setKey(crypto.randomUUID());
-            change.reset();
-            setConfirming(true);
-          }}
-        >
-          {disabled ? 'Re-enable the account' : 'Disable the account'}
-        </Button>
-      )}
     </div>
   );
 }

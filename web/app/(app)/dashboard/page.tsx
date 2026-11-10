@@ -51,6 +51,7 @@ import { useScreenAddress } from '@/lib/screen-address';
 import { mayStillBeOpen, monthOpenUntilLabel } from '@/lib/weekly-deadline';
 import { getRecordVerse } from '@/lib/settings';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * Where a signed-in leader lands (SKILL.md section 19).
@@ -425,7 +426,7 @@ function Dashboard() {
 
             {filter === 'DCC' && branchView ? (
               owedFailure ? null : owedPending ? (
-                <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+                <LoadingBlocks shape="rows" className="mt-4" />
               ) : (
                 <DccBranchQueue
                   rows={owedRows}
@@ -435,7 +436,7 @@ function Dashboard() {
                 />
               )
             ) : queueFailed ? null : queuePending ? (
-              <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+              <LoadingBlocks shape="rows" className="mt-4" />
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
                 All recorded. Thank you for your faithfulness!

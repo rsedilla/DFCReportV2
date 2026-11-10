@@ -27,6 +27,7 @@ import {
 import { useScreenAddress } from '@/lib/screen-address';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * People search, over the searcher's own pastoral scope (SKILL.md section 8).
@@ -192,7 +193,7 @@ function PeopleList() {
         <div className="mt-4">
           {/* Nothing before a search: the label says what to type (decision 0455). */}
           {me.isError && me.data === undefined ? null : awaitingSearch ? null : results.isPending ? (
-            <p className="text-muted text-sm">Loading&hellip;</p>
+            <LoadingBlocks shape="rows" />
           ) : results.isError ? null : rows.length === 0 ? (
             <div>
               <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>

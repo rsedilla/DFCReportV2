@@ -31,6 +31,7 @@ import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 import { TextLink } from '@/components/ui/text-link';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -182,7 +183,7 @@ function CellMeetings() {
       </div>
 
       {meetings.isPending ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-6" />
       ) : meetings.data ? (
         <section aria-labelledby="this-month-heading" className={FRAME}>
           <h2 id="this-month-heading" className="field-label">
