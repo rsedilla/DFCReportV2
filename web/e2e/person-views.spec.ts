@@ -83,7 +83,7 @@ test('the Admin sees who opened the record, newest first, and can show more', as
     );
   });
 
-  await page.goto(PROFILE);
+  await page.goto(`${PROFILE}?view=opened`);
   const section = page.getByRole('region', { name: 'Who opened this record' });
   await expect(section).toBeVisible();
   await expect(section.getByRole('listitem')).toHaveText([
@@ -111,4 +111,50 @@ test('a leader is not offered the section, and never asks for it', async ({ page
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Who opened this record' })).toHaveCount(0);
   expect(asked).toBe(false);
+});
+
+// Decision 0462: three views for the Admin, each keeping its address.
+test('the Admin chooses Overview, Account or Who opened, and each keeps its address', async ({ page }) => {
+  await asAdmin(page);
+  let opened = 0;
+  await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}/views*`, (route) => {
+    opened += 1;
+    return route.fulfill(json({ data: [], next_cursor: null }));
+  });
+
+  await page.goto(PROFILE);
+  const views = page.getByRole('group', { name: 'Which part of this record' });
+  await expect(views.getByRole('button')).toHaveText(['Overview', 'Account', 'Who opened']);
+  await expect(views.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Account/ })).toHaveCount(0);
+  // The log is read only when it is opened.
+  expect(opened).toBe(0);
+
+  await views.getByRole('button', { name: 'Account' }).click();
+  await expect(page).toHaveURL(/\?view=account$/);
+  await expect(page.getByRole('heading', { name: /^Account/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Details' })).toHaveCount(0);
+
+  await views.getByRole('button', { name: 'Who opened' }).click();
+  await expect(page).toHaveURL(/\?view=opened$/);
+  await expect(page.getByRole('region', { name: 'Who opened this record' })).toBeVisible();
+  expect(opened).toBeGreaterThan(0);
+
+  await views.getByRole('button', { name: 'Overview' }).click();
+  await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+  await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+});
+
+test('a reader offered only Overview sees no switch, and a view named in the address opens Overview', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await mockPastoralPath(page);
+  await page.goto(`${PROFILE}?view=account`);
+
+  await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Which part of this record' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^Account/ })).toHaveCount(0);
 });
