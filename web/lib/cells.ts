@@ -834,6 +834,8 @@ export interface CellMember {
   full_name: string;
   /** When this membership began, which a report reads figures against. */
   started_at: string;
+  /** Who put them in this Cell, where it was not its current leader (decision 0464); else null. */
+  added_by: { person_id: string; full_name: string } | null;
 }
 
 export interface CellMemberPage {

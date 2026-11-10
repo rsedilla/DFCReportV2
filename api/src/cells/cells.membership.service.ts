@@ -368,6 +368,10 @@ export class CellsMembershipService {
 
     const visible = members.slice(0, limit);
     const last = visible.at(-1);
+    const addedBy = await this.whoAdded(
+      cellId,
+      visible.map((member) => member.person_id),
+    );
 
     return {
       data: visible.map((member) => ({
@@ -375,6 +379,10 @@ export class CellsMembershipService {
         member_id: member.member_id,
         full_name: member.full_name,
         started_at: member.started_at.toISOString(),
+        // Who put them in this Cell, from the membership's audit entry (decision 0464); null
+        // where it was the Cell's current leader, or where no entry names anybody, such as a
+        // membership encoded at setup.
+        added_by: addedBy.get(canonicalId(member.person_id)) ?? null,
       })),
       // The whole ordering key of the last row shown, opaquely encoded. All three,
       // because a lexicographic keyset needs every key it orders by and because a
@@ -389,6 +397,61 @@ export class CellsMembershipService {
             })
           : null,
     };
+  }
+
+  /**
+   * Who added each member, as a Person, where it was not the Cell's current leader (decision
+   * 0464): the account behind each membership's audit entry, then the Person that account
+   * belongs to, then the name section 8 publishes church-wide. A few lookups per page at most,
+   * because the accounts adding to one Cell are few; an account with no Person behind it names
+   * nobody.
+   *
+   * **The leader is left out here rather than by the client**, because the roster's reader holds
+   * `cell.view_subtree` and need not hold what the client would otherwise read the leader from
+   * (the meetings list, under `cell.take_attendance`), so a Senior Pastor would be told the
+   * leader added what the leader added.
+   */
+  private async whoAdded(
+    cellId: string,
+    personIds: readonly string[],
+  ): Promise<Map<string, { person_id: string; full_name: string }>> {
+    const [logged, requesters, leaderId] = await Promise.all([
+      this.audit.whoAddedWithin(this.db, cellId, personIds),
+      this.cells.requestersOfStartingMembersWithin(this.db, cellId),
+      this.cells.leaderForScopeWithin(this.db, cellId),
+    ]);
+    // A new Cell's starting members were chosen by whoever asked for it, and the log names the
+    // approver who agreed (owner, 2026-11-10): the request's sender stands in for them.
+    const accountOf = new Map(logged);
+    for (const personId of personIds) {
+      const requester = requesters.get(canonicalId(personId));
+      if (requester !== undefined) {
+        accountOf.set(canonicalId(personId), requester);
+      }
+    }
+    const accounts = [...new Set(accountOf.values())];
+    const personOfAccount = new Map<string, string>();
+    for (const accountId of accounts) {
+      const actor = await this.authorization.actorFor(accountId);
+      if (actor !== null) {
+        personOfAccount.set(accountId, actor.personId);
+      }
+    }
+    const names = await this.people.namesOf([...new Set(personOfAccount.values())]);
+
+    const out = new Map<string, { person_id: string; full_name: string }>();
+    for (const [personId, accountId] of accountOf) {
+      const adder = personOfAccount.get(accountId);
+      const name = adder === undefined ? undefined : names.get(adder);
+      if (
+        adder !== undefined &&
+        name !== undefined &&
+        !(leaderId !== null && sameId(adder, leaderId))
+      ) {
+        out.set(personId, { person_id: adder, full_name: name.fullName });
+      }
+    }
+    return out;
   }
 
   /**
