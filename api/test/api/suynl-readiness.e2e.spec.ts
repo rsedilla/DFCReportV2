@@ -694,6 +694,28 @@ describe('SUYNL readiness (decision 0297)', () => {
       expect(body.elsewhere).toBeNull();
       expect(body.total).toEqual(fig(0, 0, 0));
     });
+
+    it('keeps the own row of a reader whose wider grant also reaches them (decision 0466)', async () => {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: manuelAccount.id,
+          capability: 'suynl.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'A Network reader is counted in a total of everybody.',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const body = (await readiness(manuelAccount)).body as Readiness;
+
+      // Manuel is counted again, so his own row is sent: six lessons, one to six.
+      expect(body.own).not.toBeNull();
+      expect(figuresOf(body.own!)).toEqual(fig(0, 0, 1));
+      expect(body.total).toEqual(fig(1, 1, 2));
+    });
   });
 
   // ---------------------------------------------------------------------------

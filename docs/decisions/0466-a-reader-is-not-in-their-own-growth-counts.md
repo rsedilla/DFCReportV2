@@ -10,11 +10,12 @@ files their own Growth records (decision 0280), so the reader always sat in thei
 ## The ruling
 
 1. **Where every grant of a Growth tab's viewing capability the reader holds is over their own
-   subtree**, with or without themself (`OWN_SUBTREE` or `SUBTREE_EXCL_SELF`), the SUYNL,
-   Training and Conquest counts, and the list each tab opens on, leave the reader out. *Only my
+   subtree** (`OWN_SUBTREE` or `SUBTREE_EXCL_SELF`), and one of them includes the reader, the
+   SUYNL, Training and Conquest counts, and every list not asked with a search (the opening list,
+   a card, Training's *Show everyone*), leave the reader out. *Only my
    disciples*'s figure of people beyond the reader's direct disciples is counted over the same
    population.
-2. **A search by name or Member ID still finds the reader.** A person's page finds its Growth
+2. **A search by name or Member ID still finds the reader**, where their grant reaches them. A person's page finds its Growth
    row by searching their Member ID, so the reader's own page keeps its SUYNL box (and its
    Training box where one is shown). *Only my disciples* never lists the reader, and a card chosen
    beside a search narrows the same set the search runs over. The reader still cannot file or
@@ -31,8 +32,8 @@ files their own Growth records (decision 0280), so the reader always sat in thei
 It is computed where the population already is (`growthPopulation`), from the same grants that
 decide who the reader may see, read once: where every grant that contributes is over the
 reader's own subtree, the reader is taken out of the counted set, and a list asked with a search
-puts them back. It changes no figure but those three tabs' own-branch counts and opening lists
-and the readiness table, and no figure that reconciles under Section 20, those being
+puts them back. It changes no figure but those three tabs' own-branch counts, their lists not
+asked with a search, and the readiness table, and no figure that reconciles under Section 20, those being
 current-state counts never reported by period.
 
 ## Why

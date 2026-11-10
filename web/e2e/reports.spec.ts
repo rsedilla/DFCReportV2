@@ -1004,8 +1004,8 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
   test('a leader who sees only their own branch has no You row, and the rows still add up', async ({
     page,
   }) => {
-    // The reader is not one of the people in their own care, so their row counts nobody
-    // (decision 0466) and is left out rather than shown as a row of noughts.
+    // The reader is not one of the people in their own care, so the API sends no own row
+    // (decision 0466).
     await mockSuynlReadiness(page, { readerCounted: false });
     await page.goto('/reports/suynl');
 
