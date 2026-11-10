@@ -52,8 +52,11 @@ without its SUYNL box and chose to keep it findable.
 
 Not part of it: whether a person is offered a surface for their own goals, lessons and
 graduations, which stays open in `CLAUDE.md`; a leader keeps reading their own record as
-before. The readiness table's own row being left off was not shown to the owner before this was
-written and is pointed out in the pull request.
+before.
+
+The readiness table's own row was decided separately: the owner was shown a leader's own table
+with its *You* row and without it, the total falling by one, and chose to remove it, so that the
+table agrees with the SUYNL counts.
 
 ---
 
