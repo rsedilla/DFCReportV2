@@ -247,9 +247,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-09, the trigger being decision 0460: of 459 files, 458 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0460 each moved the first two and
+2026-11-09, the trigger being decision 0461: of 460 files, 459 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0461 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-09 and triggered by 0460, and was left stale by 0461 the same day. The one before that was dated
 2026-11-08 and triggered by 0459, and was left stale by 0460 the next day. The one before that was dated
 2026-11-08 and triggered by 0458, and was left stale by 0459 the same day. The one before that was dated
 2026-11-08 and triggered by 0457 meeting 0453 on `main`, and was left stale by 0458 the same day. The one before that was dated
@@ -963,6 +964,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-08 — [My Cell says what each Cell still has to record](docs/decisions/0458-my-cell-says-what-each-cell-still-owes.md)
 - 2026-11-08 — [The Admin has all five Yearly graphs](docs/decisions/0459-the-admin-has-all-five-yearly-graphs.md)
 - 2026-11-08 — [A journey table heads its stages short at every width](docs/decisions/0460-a-journey-table-heads-its-stages-short-at-every-width.md)
+- 2026-11-09 — [Needs Attention's labels stay on one line](docs/decisions/0461-needs-attention-labels-stay-on-one-line.md)
 
 ### Open — awaiting a ruling
 
