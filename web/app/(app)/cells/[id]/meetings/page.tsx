@@ -208,15 +208,17 @@ function CellMeetings() {
               <Table caption="Meetings this month" className="mt-6 hidden lg:block">
                 <thead>
                   <tr>
-                    <HeaderCell>Meeting</HeaderCell>
-                    <HeaderCell>Time</HeaderCell>
+                    {/* The date and the time each on one line, at a sideways iPad too: left to
+                        the browser, the notes column took the width and broke both in two. */}
+                    <HeaderCell className="w-[30%]">Meeting</HeaderCell>
+                    <HeaderCell className="w-[18%]">Time</HeaderCell>
                     <HeaderCell>What was recorded</HeaderCell>
                   </tr>
                 </thead>
                 <tbody>
                   {meetings.data.meetings.map((entry) => (
                     <tr key={entry.scheduled_date} className={rowClasses}>
-                      <td className="px-3 py-3 align-top">
+                      <td className="px-3 py-3 align-top whitespace-nowrap">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
                           className={`${LINK} text-accent font-medium`}
@@ -224,7 +226,9 @@ function CellMeetings() {
                           {dayLabel(entry.scheduled_date)}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 align-top">{timeLabel(entry.scheduled_time)}</td>
+                      <td className="px-3 py-3 align-top whitespace-nowrap">
+                        {timeLabel(entry.scheduled_time)}
+                      </td>
                       <td className="px-3 py-3 align-top">
                         <MeetingState entry={entry} today={today} />
                         <MeetingDetail entry={entry} />

@@ -58,9 +58,10 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
     <th
       scope="col"
       className={cn(
-        // A light header (decision 0423): small muted capitals on the raised grey, so the
-        // figures below it, not the header, are what the eye lands on.
-        'border-line text-muted bg-raised border-b px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
+        // A light header (decision 0423) in normal letters (decision 0465): muted bold on the
+        // raised grey, so the figures below it, not the header, are what the eye lands on.
+        // Spaced capitals were wider than the words, and cut a heading off on a sideways iPad.
+        'border-line text-muted bg-raised border-b px-3 py-2 text-sm font-bold',
         'lg:sticky lg:top-0 lg:z-10 lg:border-b-0 lg:shadow-[inset_0_-1px_0_var(--color-line)]',
         'first:rounded-tl-xl last:rounded-tr-xl',
         className,
