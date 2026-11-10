@@ -436,6 +436,37 @@ test.describe('New Cell', () => {
 });
 
 test.describe('a Cell’s meetings', () => {
+  test('keeps each date and time on one line on a sideways iPad', async ({ page }) => {
+    // Left to the browser, the notes column took the width and broke "Saturday 6 June" and
+    // "7:00 pm" in two at 1024px.
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
+    await mockSignedIn(page);
+    await mockCellMeetings(page);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto(MEETINGS);
+
+    const table = page.getByRole('table', { name: 'Meetings this month' });
+    await expect(table.getByRole('row').nth(1)).toBeVisible();
+    const lines = await table.locator('tbody tr').evaluateAll((rows) =>
+      rows.flatMap((row) =>
+        Array.from(row.querySelectorAll('td'))
+          .slice(0, 2)
+          .map((cell) => {
+            // One rectangle per line the text itself occupies.
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+            let node = walker.nextNode();
+            while (node && !node.textContent?.trim()) node = walker.nextNode();
+            const range = document.createRange();
+            range.selectNodeContents(node ?? cell);
+            return { text: cell.textContent?.trim() ?? '', lines: range.getClientRects().length };
+          }),
+      ),
+    );
+    for (const cell of lines) {
+      expect(cell.lines, `"${cell.text}" breaks onto more than one line`).toBe(1);
+    }
+  });
+
   test('a meeting whose day has not come reads Not yet rather than Not recorded', async ({
     page,
   }) => {
