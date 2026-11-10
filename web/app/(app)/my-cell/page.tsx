@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
 import { ShowMore } from '@/components/awaiting-lists';
+import { LeaderCellRow } from '@/components/leader-cell-row';
 import { MyCellTabs } from '@/components/my-cell-tabs';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
@@ -43,6 +44,7 @@ function MyCell() {
   const cells = useQuery({
     queryKey: ['cells', month, true],
     queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
+    staleTime: KEPT_FOR,
   });
 
   // The Cell Groups in the reader's care as of today, every level of their branch, as My People
@@ -51,6 +53,7 @@ function MyCell() {
   const counts = useQuery({
     queryKey: ['cell-counts'],
     queryFn: ({ signal }) => getCellCounts(signal),
+    staleTime: KEPT_FOR,
   });
   const inCare = counts.data?.in_scope ?? 0;
   const mine = counts.data?.led_by_me ?? 0;
@@ -70,6 +73,7 @@ function MyCell() {
       ),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: counts.isSuccess && inCare > mine && me.data !== undefined,
+    staleTime: KEPT_FOR,
   });
   const ledByOthers = (theirs.data?.pages ?? [])
     .flatMap((page) => page.data)
@@ -121,14 +125,14 @@ function MyCell() {
           </>
         ) : null}
 
-        {/* Read to follow up: each Cell is recorded by its own leader (decision 0322), so both
-            buttons are plain and the reader's own Meetings stays the one filled. */}
+        {/* Read to follow up: each Cell is recorded by its own leader (decision 0322), so a row
+            opens to its members rather than carrying the reader's buttons (decision 0468). */}
         {ledByOthers.length > 0 ? (
           <>
             <h2 className="field-label mt-6">Led by your leaders</h2>
-            <ul className="mt-2 grid gap-4 sm:grid-cols-2">
+            <ul className="border-line mt-2 rounded-md border">
               {ledByOthers.map((cell) => (
-                <CellCard key={cell.id} cell={cell} month={month} ledBy={cell.leader.full_name} />
+                <LeaderCellRow key={cell.id} cell={cell} month={month} />
               ))}
             </ul>
             <ShowMore pages={theirs} />
@@ -144,10 +148,14 @@ function MyCell() {
 const LEADERS_PAGE = 10;
 
 /**
- * One Cell: its name and size, schedule and Cell ID, and this month's coverage line. `ledBy`
- * names the leader of a Cell the reader does not lead, whose two buttons are both plain.
+ * How long this page keeps what it read before asking again (decision 0468). Every save the
+ * server accepts still marks it stale at once, so a leader always sees their own save; what
+ * waits is a save made by somebody else.
  */
-function CellCard({ cell, month, ledBy }: { cell: CellSummary; month: string; ledBy?: string }) {
+const KEPT_FOR = 5 * 60_000;
+
+/** One Cell the reader leads: its name and size, schedule and Cell ID, and this month's coverage. */
+function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
   return (
     <li className="border-line rounded-md border p-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -162,11 +170,6 @@ function CellCard({ cell, month, ledBy }: { cell: CellSummary; month: string; le
         {dayOfWeekLabel(cell.schedule.day_of_week)}s {cell.schedule.time_of_day} ·{' '}
         {cell.cell_id}
       </p>
-      {ledBy ? (
-        <p className="mt-1 text-sm">
-          Led by <span className="font-semibold">{ledBy}</span>
-        </p>
-      ) : null}
       {/* The server's own figures, two and never divided (section 12); `behind` is
           never worked out here (decision 0267). In words alone, and Meetings is
           filled on every Cell the reader leads, so a Cell behind is not marked by colour. */}
@@ -185,7 +188,7 @@ function CellCard({ cell, month, ledBy }: { cell: CellSummary; month: string; le
       <div className="mt-3 flex gap-3">
         <Link
           href={`/cells/${cell.id}/meetings?month=${month}`}
-          className={cn(buttonClasses(ledBy ? 'secondary' : undefined), 'min-w-0 flex-1 sm:min-w-0')}
+          className={cn(buttonClasses(), 'min-w-0 flex-1 sm:min-w-0')}
         >
           Meetings
         </Link>

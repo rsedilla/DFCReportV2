@@ -247,9 +247,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-10, the trigger being decision 0465: of 464 files, 463 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0465 each moved the first two and
+2026-11-11, the trigger being decision 0468: of 465 files, 464 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0468 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-10 and triggered by 0465, and was left stale by 0468 the next day. The one before that was dated
 2026-11-10 and triggered by 0464, and was left stale by 0465 the same day. The one before that was dated
 2026-11-10 and triggered by 0463, and was left stale by 0464 the same day. The one before that was dated
 2026-11-09 and triggered by 0462, and was left stale by 0463 the next day. The one before that was dated
@@ -973,6 +974,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-10 — [My Cell lists the Cells your leaders lead](docs/decisions/0463-my-cell-lists-the-cells-your-leaders-lead.md)
 - 2026-11-10 — [A Cell's Members page says who added a member](docs/decisions/0464-a-cells-members-page-says-who-added-a-member.md)
 - 2026-11-10 — [Table headings in normal letters, and the Cells table's shorter](docs/decisions/0465-table-headings-in-normal-letters.md)
+- 2026-11-11 — [A leader's Cell opens in place to its members](docs/decisions/0468-a-leaders-cell-opens-in-place-to-its-members.md)
 
 ### Open — awaiting a ruling
 
