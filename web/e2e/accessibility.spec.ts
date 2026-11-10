@@ -2956,6 +2956,16 @@ for (const viewport of VIEWPORT_WIDTHS) {
           scrollWidth,
           `${scan.name} overflows ${scrollWidth - clientWidth}px past ${viewport.width}px; widest element is ${widest}`,
         ).toBeLessThanOrEqual(clientWidth);
+
+        // **No table heading is cut off** (decision 0465): a heading wider than its column is
+        // clipped at its edge without the page scrolling, so the check above cannot see it.
+        // Spaced capitals cut "Members" off on a sideways iPad, which is what this caught.
+        const clipped = await page.evaluate(() =>
+          Array.from(document.querySelectorAll<HTMLElement>('main thead th'))
+            .filter((th) => th.offsetParent !== null && th.scrollWidth > th.clientWidth + 1)
+            .map((th) => `"${th.textContent?.trim() ?? ''}" (${th.scrollWidth}px in ${th.clientWidth}px)`),
+        );
+        expect(clipped, `${scan.name} cuts off a table heading at ${viewport.width}px`).toEqual([]);
       });
     }
   });

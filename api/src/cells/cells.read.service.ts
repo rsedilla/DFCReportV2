@@ -639,6 +639,47 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * For a Cell opened by an approved new-Cell request, the account that sent the request, for
+   * each starting member who still holds the membership the approval opened (decision 0464).
+   *
+   * **The sender, not the approver, is who added them**: the request names the three members
+   * (decision 0353) and the approver only agrees, so the Members page names the person the new
+   * leader would ask about them. A starting membership is recognised by its start, which the
+   * approval sets to the Cell's own `created_at` (`addMembersWithin`), and by the request naming
+   * that person; a member who left and was added again holds a later membership and is named
+   * by whoever added them then.
+   */
+  async requestersOfStartingMembersWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<Map<string, string>> {
+    const rows = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('cells', 'cells.id', 'cell_memberships.cell_id')
+      .innerJoin('cell_leadership_requests', (join) =>
+        join
+          .onRef('cell_leadership_requests.cell_id', '=', 'cells.id')
+          .on('cell_leadership_requests.kind', '=', 'NEW_CELL')
+          .on('cell_leadership_requests.state', '=', 'APPROVED'),
+      )
+      .innerJoin('cell_leadership_request_members', (join) =>
+        join
+          .onRef('cell_leadership_request_members.request_id', '=', 'cell_leadership_requests.id')
+          .onRef('cell_leadership_request_members.person_id', '=', 'cell_memberships.person_id'),
+      )
+      .select([
+        'cell_memberships.person_id as person_id',
+        'cell_leadership_requests.requested_by as requested_by',
+      ])
+      .where('cell_memberships.cell_id', '=', cellId)
+      .where('cell_memberships.ended_at', 'is', null)
+      .whereRef('cell_memberships.started_at', '=', 'cells.created_at')
+      .execute();
+
+    return new Map(rows.map((row) => [canonicalId(row.person_id), row.requested_by]));
+  }
+
+  /**
    * A Cell's current members, which is the list a closure has to be decided against
    * (SKILL.md section 10, *What closing does*).
    *
