@@ -760,7 +760,10 @@ const SCANS = [
       await mockCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { level: 3, name: 'Couple · Wed' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 3, name: 'Couple · Wed' }).first()).toBeVisible();
+      // The Cells its leaders lead are scanned too (decision 0463): the mock's counts leave one
+      // Cell in its care that it does not lead.
+      await expect(page.getByRole('heading', { level: 2, name: 'Led by your leaders' })).toBeVisible();
     },
   },
   {
