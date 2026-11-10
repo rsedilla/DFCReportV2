@@ -162,6 +162,27 @@ describe('closing a Cell (section 10)', () => {
   };
 
   describe('what closing does', () => {
+    it('names the closing Admin as who added a member it moved (decision 0464)', async () => {
+      await addMember(juan.id, markCell.id);
+
+      await close(admin, markCell.id, {
+        reason: 'MEMBERS_STOPPED_ATTENDING',
+        members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
+      }).expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${benCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data).toEqual([
+        expect.objectContaining({
+          person_id: juan.id,
+          added_by: { person_id: expect.any(String), full_name: expect.stringContaining('Admina') },
+        }),
+      ]);
+    });
+
     it('ends all five things at one instant', async () => {
       await addMember(juan.id, markCell.id);
 

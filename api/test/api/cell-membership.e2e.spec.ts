@@ -714,6 +714,88 @@ describe('cell membership (section 10)', () => {
       expect(response.body.data[0]).not.toHaveProperty('mobile_number');
     });
 
+    it('names who added each member, from the membership’s own audit entry (decision 0464)', async () => {
+      // Mark adds one member himself and his leader Oriel adds another: the roster names Oriel,
+      // and names nobody for the member the Cell's own leader added, so a reader who cannot
+      // read who leads the Cell is never told the leader added what the leader added.
+      const markAccount = await createAccount(app, db, {
+        person: mark,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+      const oriel = await createAccount(app, db, {
+        person: root,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+      const ana = await createPerson(db, { firstName: 'Ana', network: 'MENS' });
+      await assignTo(db, ana.id, mark.id);
+
+      await addMember(markAccount, markCell.id, juan.id).expect(201);
+      await addMember(oriel, markCell.id, ana.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .expect(200);
+
+      const byPerson = new Map(
+        (
+          response.body.data as {
+            person_id: string;
+            added_by: { person_id: string; full_name: string } | null;
+          }[]
+        ).map((row) => [row.person_id, row.added_by]),
+      );
+      expect(byPerson.get(juan.id)).toBeNull();
+      expect(byPerson.get(ana.id)).toEqual({
+        person_id: root.id,
+        full_name: expect.stringContaining('Oriel'),
+      });
+    });
+
+    it('names whoever opened the membership the member holds now, after a removal and a return', async () => {
+      const oriel = await createAccount(app, db, {
+        person: root,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+      const markAccount = await createAccount(app, db, {
+        person: mark,
+        roles: ['LEADER'],
+        grantedBy: admin.id,
+      });
+
+      await addMember(markAccount, markCell.id, juan.id).expect(201);
+      await removeMember(admin, markCell.id, juan.id).expect(200);
+      await addMember(oriel, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      // Oriel opened the membership Juan holds now; Mark's earlier one is not what he holds.
+      expect(response.body.data[0].added_by).toEqual({
+        person_id: root.id,
+        full_name: expect.stringContaining('Oriel'),
+      });
+    });
+
+    it('names nobody for a membership no audit entry opened, such as one encoded at setup', async () => {
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: juan.id, cell_id: markCell.id, started_at: new Date() })
+        .execute();
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data[0].added_by).toBeNull();
+    });
+
     it('is refused to a leader whose scope does not reach the Cell', async () => {
       // The same target rule as the write routes: the Cell, resolved through its
       // leader (section 7). Ben holds `cell.view_subtree` at OWN_SUBTREE from his

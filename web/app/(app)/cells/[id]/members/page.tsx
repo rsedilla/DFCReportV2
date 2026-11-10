@@ -256,6 +256,7 @@ function CellMembers() {
                   </td>
                   <td className="text-muted px-3 py-3 align-top">
                     {dayLabel(todayInManila(new Date(member.started_at)))}
+                    <AddedBy member={member} />
                   </td>
                   <td className="px-3 py-3 text-right align-top">
                     {mayRemove ? (
@@ -282,6 +283,7 @@ function CellMembers() {
                     <p className="text-muted mt-1 text-sm">
                       A member since {dayLabel(todayInManila(new Date(member.started_at)))}
                     </p>
+                    <AddedBy member={member} />
                   </div>
                   {mayRemove ? (
                     <RemoveControl
@@ -380,4 +382,16 @@ function RemoveControl({
       </p>
     </div>
   );
+}
+
+/**
+ * Who added a member, where it was not the Cell's current leader (decision 0464): a leader above
+ * may add to a Cell in their branch (section 10), and the Cell's leader sees who did. The server
+ * leaves out the leader, so nothing shows where the leader added them or where nothing records
+ * who did.
+ */
+function AddedBy({ member }: { member: CellMember }) {
+  return member.added_by ? (
+    <span className="text-muted block text-sm">Added by {member.added_by.full_name}</span>
+  ) : null;
 }
