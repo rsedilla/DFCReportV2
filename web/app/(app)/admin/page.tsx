@@ -58,6 +58,7 @@ import {
   type RecordVerse,
 } from '@/lib/settings';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * The Admin area (SKILL.md section 19, ruling of 2026-11-02, decision 0419): what needs the
@@ -491,7 +492,7 @@ function Accounts() {
 
       <div {...pageTurnProps(accounts.isPlaceholderData)}>
         {accounts.isPending ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-6" />
         ) : accounts.data && accounts.data.data.length === 0 ? (
           <p className="text-muted mt-6 text-sm">
             {submitted !== ''
@@ -642,7 +643,7 @@ function AuditLog() {
 
       <div {...pageTurnProps(log.isPlaceholderData)}>
         {log.isPending ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-6" />
         ) : log.data && log.data.data.length === 0 ? (
           <p className="text-muted mt-6 text-sm">
             {submitted !== '' ? `Nothing in the log matches “${submitted}”.` : 'Nothing is in this list.'}
@@ -795,7 +796,7 @@ function Settings() {
 
       {!data ? (
         settings.isPending ? (
-          <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-3" />
         ) : null
       ) : (
         <div className={cn(FRAME, 'mt-3 py-0')}>

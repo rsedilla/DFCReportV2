@@ -17,6 +17,7 @@ import { describeFailure } from '@/lib/messages';
 import { useCursorPages } from '@/lib/cursor-pages';
 import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * The list and draft the SUYNL and Training tabs share (SKILL.md section 28): the address
@@ -242,7 +243,7 @@ export function GrowthRows<Counts, Row extends PersonRow>({
   return (
     <div className="mt-4">
       {people.isPending ? (
-        <p className="text-muted text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" />
       ) : people.isError ? null : rows.length === 0 ? (
         <p className="text-sm">Nobody here matches.</p>
       ) : (

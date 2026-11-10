@@ -1,7 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { PERSON_IN_SCOPE, mockPeople, mockSignedIn } from './mock-api';
-import { mockDccEvents, mockDccReport, mockDccTwelve } from './mock-attendance';
+import {
+  mockCellMeetings,
+  mockCellReport,
+  mockCells,
+  mockDccEvents,
+  mockDccOwed,
+  mockDccReport,
+  mockDccRoster,
+  mockDccTwelve,
+  mockMeetingsAwaiting,
+  mockPendingDcc,
+} from './mock-attendance';
 
 /**
  * What a screen shows while it waits (owner, 2026-11-06): a report keeps its figures, faded,
@@ -107,4 +118,47 @@ test("a person's page shows grey blocks in its shape while it loads, and says Lo
   release();
   await expect(page.getByText('DCC stage', { exact: true })).toBeVisible();
   await expect(page.locator('[data-loading-blocks]')).toHaveCount(0);
+});
+
+test('a list that has not answered shows grey rows, and says Loading to a screen reader', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(NOW);
+  await mockSignedIn(page);
+  await mockCells(page);
+  await mockCellMeetings(page);
+  await mockDccEvents(page);
+  await mockCellReport(page);
+  await mockDccReport(page);
+  await mockDccRoster(page);
+  await mockDccOwed(page);
+  await mockPendingDcc(page);
+  await mockMeetingsAwaiting(page);
+  const release = await gate(page, '**/api/v1/cells/meetings/awaiting?*');
+
+  await page.goto('/dashboard');
+
+  const rows = page.locator('main [data-loading-row]');
+  await expect(rows).toHaveCount(6);
+  await expect(page.locator('main').getByRole('status').filter({ hasText: 'Loading\u2026' })).toHaveCount(1);
+
+  release();
+  await expect(rows).toHaveCount(0);
+});
+
+test('a People search that has not answered shows grey rows', async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await page.goto('/people');
+  const release = await gate(page, '**/api/v1/people?*');
+
+  await page.getByLabel(/search by name/i).fill('Rosa');
+  await page.keyboard.press('Enter');
+
+  const rows = page.locator('main [data-loading-row]');
+  await expect(rows).toHaveCount(6);
+
+  release();
+  await expect(rows).toHaveCount(0);
 });

@@ -12,6 +12,7 @@ import { careWords, getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * Section 15's two attention lists, *No CG Yet* and *No Leader Yet*
@@ -72,7 +73,7 @@ export function AwaitingCgList() {
         <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : data ? (
         <>
           <ListTable
@@ -124,7 +125,7 @@ export function AwaitingLeaderList() {
         <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : data ? (
         <>
           {/* The action that resolves an entry is the reassignment (section 19). */}
