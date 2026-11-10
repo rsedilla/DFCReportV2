@@ -91,6 +91,20 @@ test.describe('idle sign-out (decision 0435)', () => {
     page,
   }) => {
     await arrange(page);
+    // A renewal notes the time twice: as it is sent, and as it ends. Counted here so each can
+    // be waited for, since one ending after the clock has jumped would be noted twenty
+    // minutes late, and the next move would then seem too soon to renew.
+    await page.addInitScript(() => {
+      const write = Storage.prototype.setItem;
+      const counted = window as unknown as { renewalNotes: number };
+      counted.renewalNotes = 0;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key === 'dfc.renewed_at') {
+          counted.renewalNotes += 1;
+        }
+        write.call(this, key, value);
+      };
+    });
     let refreshes = 0;
     page.on('request', (request) => {
       if (request.url().includes('/api/v1/auth/refresh')) {
@@ -103,7 +117,13 @@ test.describe('idle sign-out (decision 0435)', () => {
 
     for (let step = 0; step < 4; step += 1) {
       await idleFor(page, 20 * MINUTE);
+      await page.evaluate(() => {
+        (window as unknown as { renewalNotes: number }).renewalNotes = 0;
+      });
       await page.mouse.move(100 + step * 10, 200);
+      await expect
+        .poll(() => page.evaluate(() => (window as unknown as { renewalNotes: number }).renewalNotes))
+        .toBe(2);
     }
 
     // Each move came twenty minutes after the last renewal, so each renewed the session and

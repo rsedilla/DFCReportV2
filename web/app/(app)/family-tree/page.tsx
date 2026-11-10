@@ -16,6 +16,7 @@ import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
 import { useScreenAddress } from '@/lib/screen-address';
 import { getBranch, getMyBranch, type Branch, type BranchNode } from '@/lib/network';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -79,7 +80,7 @@ function FamilyTree() {
             />
           ) : null}
           {mine.isPending ? (
-            <p className="text-muted text-sm">Loading&hellip;</p>
+            <LoadingBlocks shape="rows" />
           ) : list ? (
             <MyPeopleList />
           ) : mine.data === undefined ? null : (

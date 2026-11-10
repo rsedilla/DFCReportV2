@@ -20,6 +20,7 @@ import { categoryLabel, dayOfWeekLabel, timeLabel } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { todayInManila } from '@/lib/reporting-month';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * Cells to Approve, the third tab of the Cells page (SKILL.md section 10, decisions 0352 and
@@ -57,7 +58,7 @@ export function CellApprovals({ wholeChurch }: { wholeChurch: boolean }) {
       </div>
 
       {requests.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : requests.data && requests.data.length === 0 ? (
         <p className="text-muted mt-4 text-sm">Nothing waiting for you to approve.</p>
       ) : (
