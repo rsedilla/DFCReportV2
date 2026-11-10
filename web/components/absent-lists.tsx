@@ -22,6 +22,7 @@ import {
 } from '@/lib/lifecycle';
 import { careWords, getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** A Cell as the lists name it, "Young Pro · Sat" (decision 0259). */
 function cellName(cell: { cell_id: string; category: string | null; day_of_week: number | null }) {
@@ -105,7 +106,7 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
         <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : data ? (
         <>
           <ListTable
@@ -207,7 +208,7 @@ function ArchivedList() {
         />
       </div>
       {pages.isPending ? (
-        <p className="text-muted mt-3 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-3" />
       ) : data ? (
         <>
           <ListTable

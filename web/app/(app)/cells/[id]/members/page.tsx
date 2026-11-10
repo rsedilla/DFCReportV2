@@ -26,6 +26,7 @@ import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -226,7 +227,7 @@ function CellMembers() {
       </div>
 
       {members.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : members.data && members.data.data.length === 0 ? (
         <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
           {closedOn === undefined

@@ -41,6 +41,7 @@ import { reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
@@ -410,7 +411,7 @@ function CellsIndex() {
 
         <div {...pageTurnProps(cells.isPlaceholderData)}>
         {cells.isPending ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-6" />
         ) : cells.data && cells.data.data.length === 0 ? (
           <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
             {submitted !== ''
