@@ -966,6 +966,8 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-08 — [My Cell says what each Cell still has to record](docs/decisions/0458-my-cell-says-what-each-cell-still-owes.md)
 - 2026-11-08 — [The Admin has all five Yearly graphs](docs/decisions/0459-the-admin-has-all-five-yearly-graphs.md)
 - 2026-11-08 — [A journey table heads its stages short at every width](docs/decisions/0460-a-journey-table-heads-its-stages-short-at-every-width.md)
+- 2026-11-09 — [Needs Attention's labels stay on one line](docs/decisions/0461-needs-attention-labels-stay-on-one-line.md)
+- 2026-11-09 — [The Admin's page for one person is three views](docs/decisions/0462-the-admins-person-page-is-three-views.md)
 - 2026-11-10 — [My Cell lists the Cells your leaders lead](docs/decisions/0463-my-cell-lists-the-cells-your-leaders-lead.md)
 
 ### Open — awaiting a ruling

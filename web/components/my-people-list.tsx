@@ -11,6 +11,7 @@ import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getMyPeople, getMyPeopleCounts, type MyPeopleRow } from '@/lib/my-people';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * A leader's people as one plain list (SKILL.md section 19, decisions 0422 and 0437): every level
@@ -88,7 +89,7 @@ export function MyPeopleList() {
 
       <div {...pageTurnProps(people.isPlaceholderData)}>
         {people.isPending ? (
-          <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+          <LoadingBlocks shape="rows" className="mt-4" />
         ) : people.data && people.data.data.length === 0 ? (
           <p className="text-muted mt-4 text-sm">
             No one in your care yet. Pray for the people God will bring.

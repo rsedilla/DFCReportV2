@@ -898,7 +898,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, full_view: body.full_view }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Full view/ });
     await expect(box).not.toBeChecked();
@@ -966,7 +966,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, approves_cells: body.approves_cells }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Approves Cells/ });
     await expect(box).not.toBeChecked();
@@ -1017,7 +1017,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, moves_people: body.moves_people }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Moves people/ });
     await expect(box).not.toBeChecked();
@@ -1042,7 +1042,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'LEADER', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     await expect(page.getByRole('checkbox', { name: /^Full view/ })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /^Moves people/ })).toHaveCount(0);
@@ -1055,7 +1055,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'LEADER', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     // The account block has loaded: its status is shown.
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
@@ -1071,7 +1071,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'SENIOR_PASTOR', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /^Full view/ })).toHaveCount(0);

@@ -7,6 +7,7 @@ import { NAME_LINK } from '@/components/awaiting-lists';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { categoryLabel, dayOfWeekLabel, type ScheduleClash } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** "30 minutes" or "1 hour 45 minutes". */
 function apartLabel(minutes: number): string {
@@ -42,7 +43,7 @@ export function ScheduleClashes({ query }: { query: UseQueryResult<ScheduleClash
       </div>
 
       {query.isPending ? (
-        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-4" />
       ) : query.data && query.data.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
           No leader&rsquo;s Cell Groups start less than 2 hours apart.

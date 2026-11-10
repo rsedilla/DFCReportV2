@@ -20,6 +20,7 @@ import { getWholeDccRoster, listDccEvents } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /**
  * The reader's month: every date they owe a record, their own Cells' meetings and their own
@@ -225,7 +226,7 @@ function YourMonth() {
       </div>
 
       {pending ? (
-        <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        <LoadingBlocks shape="rows" className="mt-6" />
       ) : shown.length === 0 ? (
         <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
           You owe no record this month.

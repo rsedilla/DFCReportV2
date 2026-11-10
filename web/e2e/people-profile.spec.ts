@@ -1233,7 +1233,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
   test('is not shown to a reader without accounts.manage', async ({ page }) => {
     await signedInWithPeople(page);
     await mockPastoralPath(page);
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
     await expect(page.getByRole('heading', { name: /^Account/ })).toHaveCount(0);
@@ -1252,7 +1252,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       await route.fulfill({ status: 201, contentType: 'application/json', body: '{}' });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(page.getByText('No account. Marilou cannot sign in.')).toBeVisible();
     await page.getByRole('button', { name: 'Give Marilou an account' }).click();
     await page.getByLabel('Email address').fill('marilou@example.test');
@@ -1294,7 +1294,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       await route.fulfill({ status: 204 });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(page.getByText('Waiting for activation')).toBeVisible();
     await page.getByRole('button', { name: 'Resend the activation email' }).click();
 
@@ -1332,10 +1332,10 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       await route.fulfill({ status: 204 });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(
       page.getByText(
-        /^For someone who cannot sign in\. It emails \w+ a link to choose a new password, at marilou@example\.test\. You never see or choose the password, and the link lasts 30 minutes\.$/,
+        /^Emails \w+ a link to choose a new password\. It lasts 30 minutes\.$/,
       ),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Send Reset Link' }).click();
@@ -1385,7 +1385,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await page.getByRole('button', { name: 'Correct the email' }).click();
     await page.getByLabel('Correct email address').fill('right@example.test');
     await page.getByRole('button', { name: 'Save and Send' }).click();
@@ -1420,7 +1420,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       }),
     );
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Correct the email' })).toHaveCount(0);
   });
@@ -1462,8 +1462,8 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       });
     });
 
-    await page.goto(PROFILE);
-    await expect(page.getByText(/^For someone who has lost this mailbox\./)).toBeVisible();
+    await page.goto(`${PROFILE}?view=account`);
+    await expect(page.getByText(/^Moves the account to a new address and signs them out everywhere\./)).toBeVisible();
     await page.getByRole('button', { name: 'Change Email', exact: true }).click();
     expect(sent).toEqual([]);
     await page.getByLabel('New email address').fill('marilou.new@example.test');
@@ -1507,7 +1507,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       await route.fulfill({ status: 204 });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(page.getByText(/^Second step set up (28 Sep|Sep 28)\./)).toBeVisible();
     await page.getByRole('button', { name: 'Reset Second Step' }).click();
     await expect(page.getByText(/signed out on every device/)).toBeVisible();
@@ -1526,7 +1526,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     await mockPastoralPath(page);
     await accountWithSecondStep(page, 'ADMIN');
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await expect(page.getByText('An administrator’s second step is reset on the server.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reset Second Step' })).toHaveCount(0);
   });
@@ -1574,7 +1574,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await page.getByRole('button', { name: 'Disable the account' }).click();
     await expect(page.getByText(/^Disable Marilou’s account\? They’re signed out on every device/)).toBeVisible();
     expect(sent).toEqual([]);
@@ -1603,7 +1603,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
       });
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
     await page.getByRole('button', { name: 'Re-enable the account' }).click();
     await expect(page.getByText(/No old session comes back\./)).toBeVisible();
     await page.getByRole('button', { name: 'Re-enable', exact: true }).click();
@@ -1626,7 +1626,7 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
     );
     await accountWithStatus(page, SIGNED_IN_PERSON_ID, { status: 'ACTIVE' });
 
-    await page.goto(`/people/${SIGNED_IN_PERSON_ID}`);
+    await page.goto(`/people/${SIGNED_IN_PERSON_ID}?view=account`);
     await expect(
       page.getByText('This is your own account. Another administrator can disable it.'),
     ).toBeVisible();

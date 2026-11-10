@@ -362,9 +362,64 @@ const SCANS = [
     },
   },
   {
-    // The Admin's section at the page's foot (decision 0414), with a second page to show.
+    // The Admin's Account view (decision 0462): the ticks, then a row per action.
+    name: 'person profile, account',
+    route: `/people/${PERSON_IN_SCOPE.id}?view=account`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+      await page.route('**/api/v1/auth/me', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+            person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+            email: 'admin@example.invalid',
+            first_name: 'Marilou',
+            roles: ['ADMIN'],
+            screens: 'FULL',
+            people_i_oversee: true,
+            capabilities: ['people.view_subtree', 'accounts.manage', 'roles.manage', 'people.merge'].map((capability) => ({
+              capability,
+              scope_type: 'WHOLE_CHURCH',
+              scope_network: null,
+              read_only: false,
+              source: 'ROLE',
+            })),
+          }),
+        }),
+      );
+      await page.route('**/api/v1/accounts/for-person/**', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            account: {
+              id: '5f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+              email: 'marilou@example.test',
+              status: 'ACTIVE',
+              roles: ['LEADER'],
+              created_at: '2026-09-22T02:00:00.000Z',
+              second_step: { required: false, set_up_at: null },
+              full_view: true,
+              approves_cells: false,
+              moves_people: false,
+            },
+          }),
+        }),
+      );
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Send Reset Link' })).toBeVisible();
+    },
+  },
+  {
+    // The Admin's Who opened view (decisions 0414 and 0462), with a second page to show.
     name: 'person profile, who opened this record',
-    route: `/people/${PERSON_IN_SCOPE.id}`,
+    route: `/people/${PERSON_IN_SCOPE.id}?view=opened`,
     pattern: '/people/[id]',
     async before(page: import('@playwright/test').Page) {
       await page.clock.setFixedTime(new Date('2026-11-01T04:00:00Z'));
@@ -2365,6 +2420,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Reached by pressing Cells behind, which this sweep cannot do. Beyond the measured ' +
       '"dashboard" buttons and month cards its only controls are a Cell link per row, carrying ' +
       'min-h-6 as the name links measured on "cells" do.',
+  },
+  {
+    name: 'person profile, account',
+    why:
+      'The Admin\u2019s Account view of the measured "person profile": the Button classes measured ' +
+      'on every screen, in rows, and the ticks measured under "full view" on the same page.',
   },
   {
     name: 'person profile, who opened this record',
