@@ -690,6 +690,26 @@ test.describe('a Cell’s members, by the screens the account has', () => {
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
   });
 
+  test('names who added a member where it was not the Cell’s own leader (decision 0464)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(MEMBERS);
+
+      const added = page.getByText('Added by Liza Mendoza').filter({ visible: true });
+      await expect(added).toHaveCount(1);
+      // Bienvenido's row carries it, and Rosalinda's, added by her Cell's leader, carries none.
+      await expect(page.getByText(/^Added by /).filter({ visible: true })).toHaveCount(1);
+      await expect(page.getByText('Added by Teofilo Ramos')).toHaveCount(0);
+    }
+  });
+
   test('a Full view account that moves no members is offered no Remove (decision 0357)', async ({
     page,
   }) => {

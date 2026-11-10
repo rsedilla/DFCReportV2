@@ -480,6 +480,30 @@ describe('Approves Cells and a new Cell’s three members (decisions 0352, 0353)
       expect(row.decided_by).toBe(raymondAccount.id);
     });
 
+    it('names whoever asked for the new Cell as who added its three members (decision 0464)', async () => {
+      const { id } = await pendingNewCell(manuelAccount, mark.id);
+      await approve(raymondAccount, id).expect(200);
+      const { cell_id: cellUuid } = await db
+        .selectFrom('cell_leadership_requests')
+        .select('cell_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+
+      const response = await http()
+        .get(`/api/v1/cells/${cellUuid}/members`)
+        .set('Authorization', `Bearer ${adminA.accessToken}`)
+        .expect(200);
+
+      // Manuel chose them and Raymond only approved, so each names Manuel.
+      expect(response.body.data).toHaveLength(3);
+      for (const member of response.body.data as { added_by: unknown }[]) {
+        expect(member.added_by).toEqual({
+          person_id: manuel.id,
+          full_name: expect.stringContaining('Manuel'),
+        });
+      }
+    });
+
     it('declines a request in its branch', async () => {
       const { id } = await pendingNewCell(manuelAccount, mark.id);
 

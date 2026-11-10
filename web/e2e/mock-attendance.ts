@@ -1102,6 +1102,8 @@ export async function mockCellMembers(page: Page): Promise<void> {
             member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             started_at: '2026-03-01T00:00:00.000Z',
+            // Added by the Cell's own leader, which the server reports as nobody (decision 0464).
+            added_by: null,
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
@@ -1109,6 +1111,8 @@ export async function mockCellMembers(page: Page): Promise<void> {
             full_name: 'Bienvenido Trinidad',
             // 1 am on 12 May in Manila, which is still 11 May in UTC.
             started_at: '2026-05-11T17:00:00.000Z',
+            // Added by a leader above the Cell's, which the Members page names (decision 0464).
+            added_by: { person_id: '3f1b7c6e-0000-4000-8000-000000000299', full_name: 'Liza Mendoza' },
           },
         ],
         next_cursor: null,

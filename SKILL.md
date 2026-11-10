@@ -3182,7 +3182,7 @@ Archiving a Person ends their active Cell membership from the archive effective 
 
 Whether the first two should additionally be database constraints is open, and the asymmetry an earlier version of this sentence claimed does not exist: `pastoral_assignments` carries no constraint for the archived-or-merged rule either. Both are application-layer checks today — `assertLeaderIsAssignable` for a pastoral edge, `CellsMembershipService` for a membership — and the open question is whether either should become a constraint, not why one is and one is not.
 
-Every membership change is audit logged with actor, person, Cell, and effective date (Section 21).
+Every membership change is audit logged with actor, person, Cell, and effective date (Section 21). **A Cell's Members page says who added a member, where it was not the Cell's own leader** (ruling of 2026-11-10, decision 0464, the owner's choice from screenshots, who kept every holder able to add rather than the Cell's leader alone): `GET /api/v1/cells/{id}/members` gives each member `added_by`, the Person behind the latest *added* or *moved* entry naming that Cell, read from that entry rather than stored on the row; null where that Person is the Cell's current leader or no entry names anybody. A new Cell's starting members are named by whoever sent its request, who chose them, rather than by its approver. It discloses who made the membership the reader is already looking at and nothing else of the log, so it is not the audit log read `audit.view` guards.
 
 Cell membership, like Cell Leadership and Cell category, must preserve history so that current and past membership can both be determined.
 
