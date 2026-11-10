@@ -290,6 +290,22 @@ const SCREENS: Screen[] = [
       ],
     ],
   },
+  {
+    // A leader without Full view's Cells page (decisions 0438, 0458 and 0463): its own Cells,
+    // the count, its requests, and the first ten Cells its leaders lead, the list putting its
+    // own first so the page asks for as many more as it leads (one here, the usual case).
+    name: 'My Cell (leaders)',
+    who: ['Upline leader', 'Cell leader'],
+    stages: [
+      () => [
+        '/api/v1/auth/me',
+        `/api/v1/cells?month=${M}&led_by=me`,
+        '/api/v1/cells/counts',
+        paged('/api/v1/cells/leadership-requests/sent'),
+      ],
+      () => [`/api/v1/cells?month=${M}&limit=11`],
+    ],
+  },
   { name: 'People without a Cell', stages: [() => ['/api/v1/cells/people-without-a-cell']] },
   {
     name: 'A Cell’s meetings',
