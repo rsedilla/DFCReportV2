@@ -61,7 +61,7 @@ export function RadioGroup<T extends string>({
    */
   disabled?: boolean;
   /**
-   * `row` puts the choices beside the legend, one line per group, for a roster that
+   * `row` puts the choices beside the legend where the name has room and under it where not, for a roster that
    * asks the same question of many people (the DCC checklist and a Cell meeting). The
    * native radio covers the whole button invisibly, so a drawn dot shows the state, as
    * the stacked layout's own dot does (owner's choice, 2026-10-27): a border and a
@@ -105,12 +105,7 @@ export function RadioGroup<T extends string>({
   const descriptionElement = description ? (
     <p
       id={descriptionId}
-      // On a phone the line runs under the choices too, rather than wrapping into
-      // a column a word wide beside them.
-      className={cn(
-        'text-muted text-sm leading-relaxed',
-        row && 'col-span-2 sm:col-span-1 sm:col-start-1',
-      )}
+      className="text-muted text-sm leading-relaxed"
     >
       {description}
     </p>
@@ -118,12 +113,12 @@ export function RadioGroup<T extends string>({
 
   const body = (
     <>
-      {below ? null : descriptionElement}
+      {below || row ? null : descriptionElement}
 
       <div
         className={
           row
-            ? 'col-start-2 row-start-1 flex gap-1.5 sm:row-span-2 sm:gap-2'
+            ? 'flex w-full flex-wrap gap-2 sm:w-auto'
             : columns === 4
               ? 'mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4'
               : columns === 2
@@ -145,7 +140,7 @@ export function RadioGroup<T extends string>({
               className={cn(
                 'flex min-h-11 cursor-pointer items-center rounded-md border text-sm transition-colors',
                 row
-                  ? 'relative w-[5.25rem] justify-center gap-1 px-1 sm:w-28 sm:gap-1.5'
+                  ? 'relative flex-1 justify-center gap-1 px-1 sm:w-28 sm:flex-none sm:gap-1.5'
                   : cn('w-full min-w-0 gap-2.5 px-3', columns === undefined && 'sm:w-44'),
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
@@ -200,7 +195,7 @@ export function RadioGroup<T extends string>({
       {below ? descriptionElement : null}
 
       {error ? (
-        <div className={cn(row && 'col-span-2')}>
+        <div className={cn(row && 'w-full')}>
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       ) : null}
@@ -216,17 +211,21 @@ export function RadioGroup<T extends string>({
         role="group"
         aria-labelledby={legendId}
         aria-describedby={describedBy}
-        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 sm:gap-x-3"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2"
       >
-        {/* A name one word too long for the column breaks rather than running under
-            the choices, which at 320px inside the DCC card it otherwise does. */}
-        <div
-          id={legendId}
+        {/* The name holds at least 9rem and the choices wrap under it when they would take that:
+            beside it, nested frames left a name 28px at 360 wide and 24px at 1024, broken
+            every two or three letters. */}
+        <div className="min-w-0 flex-[1_1_9rem]">
+          <div
+            id={legendId}
           // A person's name, so written as it is spelled rather than in the field
           // label's capitals (owner, 2026-09-30).
-          className="text-accent col-start-1 text-sm font-bold [overflow-wrap:anywhere]"
-        >
-          {legend}
+            className="text-accent text-sm font-bold [overflow-wrap:anywhere]"
+          >
+            {legend}
+          </div>
+          {descriptionElement}
         </div>
         {body}
       </div>
