@@ -3,6 +3,7 @@ import {
   type AuthorizationService,
 } from '../../auth/authorization/authorization.service';
 import { type Capability } from '../../auth/authorization/capabilities';
+import { ScopeType } from '../../auth/authorization/scopes';
 import { unresolvableCursor } from '../cursor';
 import { ValidationFailedError } from '../errors/api-error';
 import { canonicalId, isUuid } from '../identifiers';
@@ -28,6 +29,13 @@ export interface GrowthListQuery {
  * Who a Growth tab lists: every current Person the actor's viewing grant reaches, as
  * things stand now (decisions 0278 and 0279), in name order. `null` is the whole
  * church, which is never enumerated.
+ *
+ * **A reader who sees only their own branch is not one of the people in their care**
+ * (decision 0466): as My People counts them, the people beneath the reader, not the reader.
+ * Nobody files their own Growth records (decision 0280), so counting the reader put them in
+ * their own *Not started*. They are still counted by the leader above them, and a Whole
+ * Church or Network total, which is a total of everybody and must not change with who reads
+ * it, keeps them.
  */
 export async function growthPopulation(
   deps: { authorization: AuthorizationService },
@@ -35,7 +43,23 @@ export async function growthPopulation(
   viewCapability: Capability,
 ): Promise<ReadonlySet<string> | null> {
   const membership = await deps.authorization.scopeMembership(actor, viewCapability);
-  return membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+  if (membership.kind === 'WHOLE_CHURCH') {
+    return null;
+  }
+  const grants = (await deps.authorization.grantsFor(actor.accountId)).filter(
+    (grant) => grant.capability === viewCapability,
+  );
+  const ownBranchOnly =
+    grants.length > 0 &&
+    grants.every(
+      (grant) =>
+        grant.scope.type === ScopeType.OwnSubtree || grant.scope.type === ScopeType.SubtreeExclSelf,
+    );
+  if (!ownBranchOnly) {
+    return membership.personIds;
+  }
+  const me = canonicalId(actor.personId);
+  return new Set([...membership.personIds].filter((id) => canonicalId(id) !== me));
 }
 
 /**
