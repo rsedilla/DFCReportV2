@@ -875,6 +875,44 @@ describe('SUYNL (section 28)', () => {
   // ---------------------------------------------------------------------------
 
   describe('the list', () => {
+    it('a search still finds the reader, whom the counts and the opening list leave out (decision 0466)', async () => {
+      const { member_id } = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', '=', manuel.id)
+        .executeTakeFirstOrThrow();
+
+      // As a person's page asks for its row: by Member ID.
+      const byMemberId = await allPages(manuelAccount, `q=${member_id}`);
+      expect(idsOf(byMemberId)).toEqual([manuel.id]);
+      expect(byMemberId[0].may_file).toBe(false);
+
+      expect(idsOf(await allPages(manuelAccount, 'q=Manuel'))).toContain(manuel.id);
+      // Only my disciples never lists the reader.
+      expect(idsOf(await allPages(manuelAccount, 'q=Manuel&mine=true'))).not.toContain(manuel.id);
+    });
+
+    it('counts and lists the reader where a wider grant also reaches them (decision 0466)', async () => {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: manuelAccount.id,
+          capability: 'suynl.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'A Network reader is counted in a total of everybody.',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const counts = (await get(manuelAccount, 'counts')).body;
+      const listed = await allPages(manuelAccount, 'limit=200');
+
+      expect(idsOf(listed)).toContain(manuel.id);
+      expect(listed).toHaveLength(counts.people);
+    });
+
     it('lists only direct disciples with mine=true', async () => {
       const rows = await allPages(manuelAccount, 'mine=true');
 

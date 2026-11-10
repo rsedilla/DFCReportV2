@@ -23,6 +23,7 @@ import {
   beyondDirectDisciplesCount,
   growthPage,
   growthPopulation,
+  listPopulation,
 } from '../common/growth/growth-list';
 import { resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
@@ -118,7 +119,11 @@ export class TrainingService {
    */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.TrainingViewSubtree);
+    const { people: population } = await growthPopulation(
+      this.deps,
+      actor,
+      Capability.TrainingViewSubtree,
+    );
     const held = await this.currentPrograms(population);
     const people = await this.people.countCurrent(population);
 
@@ -149,7 +154,10 @@ export class TrainingService {
   /** `GET /api/v1/training/people`: the tab's list, one page (section 28). */
   async list(actor: Actor, query: TrainingListDto): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.TrainingViewSubtree);
+    const population = listPopulation(
+      await growthPopulation(this.deps, actor, Capability.TrainingViewSubtree),
+      query,
+    );
     // Only a step filter reads the scope's graduations, so a list asked for no step, as a
     // person's page asks, skips it (checklist row perf-person-page).
     const held =

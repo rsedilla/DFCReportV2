@@ -11,21 +11,27 @@ files their own Growth records (decision 0280), so the reader always sat in thei
 
 1. **Where every grant of a Growth tab's viewing capability the reader holds is over their own
    subtree**, with or without themself (`OWN_SUBTREE` or `SUBTREE_EXCL_SELF`), the SUYNL,
-   Training and Conquest lists and counts leave the reader out. *Only my disciples*'s figure of
-   people beyond the reader's direct disciples is counted over the same population.
-2. **A Whole Church or Network total keeps everybody**, the reader included. It is a total of
-   everyone in that scope, and must not change with who reads it. A reader holding any wider
-   grant of the capability is counted as before.
-3. **The reader is still listed and counted by every leader above them.** Nothing about who may
+   Training and Conquest counts, and the list each tab opens on, leave the reader out. *Only my
+   disciples*'s figure of people beyond the reader's direct disciples is counted over the same
+   population.
+2. **A search by name or Member ID still finds the reader.** A person's page finds its Growth
+   row by searching their Member ID, so the reader's own page keeps its SUYNL box (and its
+   Training box where one is shown). *Only my disciples* never lists the reader, and a card chosen
+   beside a search narrows the same set the search runs over. The reader still cannot file or
+   correct their own records (decision 0280).
+3. **A reader holding any wider grant of the capability is counted as before.** A Whole Church
+   or Network total is a total of everyone in that scope, and must not change with who reads it.
+4. **The reader is still listed and counted by every leader above them.** Nothing about who may
    file or correct a record changes.
-4. **The readiness table on the SUYNL tab under `Reports` (decision 0297) follows the same
-   population.** On the reader's own table, the reader's own row counts nobody, so the screen
-   leaves it out, and the rows and the total still add up. A leader the reader opens keeps their
+5. **The readiness table on the SUYNL tab under `Reports` (decision 0297) follows the same
+   population.** On the reader's own table the server does not send the reader's own row, and
+   the rows and the total still add up. A leader the reader opens keeps their
    own row, because that leader is in the reader's care.
 
-It is computed where the population already is (`growthPopulation`): the reader's grants of the
-tab's capability are read and, where all are over their own subtree, the reader's identifier
-is removed from the set. It changes no figure but those three tabs' own-branch lists and counts
+It is computed where the population already is (`growthPopulation`), from the same grants that
+decide who the reader may see, read once: where every grant that contributes is over the
+reader's own subtree, the reader is taken out of the counted set, and a list asked with a search
+puts them back. It changes no figure but those three tabs' own-branch counts and opening lists
 and the readiness table, and no figure that reconciles under Section 20, those being
 current-state counts never reported by period.
 
@@ -37,13 +43,16 @@ is a figure about everybody in that scope, and dropping whoever reads it would g
 of one total two numbers.
 
 Considered and rejected: leaving the reader out for every reader, which would make a Whole
-Church total depend on who asked; and showing the reader in a row of their own beside the count,
-which keeps the mismatch with My People and adds a row they can do nothing with.
+Church total depend on who asked; showing the reader in a row of their own beside the count,
+which keeps the mismatch with My People and adds a row they can do nothing with; and leaving the
+reader out of searches too, which `architecture-guardian` found would take away the only place
+a leader reads their own lessons, their own person page. The owner was shown that page with and
+without its SUYNL box and chose to keep it findable.
 
 Not part of it: whether a person is offered a surface for their own goals, lessons and
-graduations, which stays open in `CLAUDE.md`. The readiness table's own row being left off the
-screen was not shown to the owner before this was written and is pointed out in the pull
-request.
+graduations, which stays open in `CLAUDE.md`; a leader keeps reading their own record as
+before. The readiness table's own row being left off was not shown to the owner before this was
+written and is pointed out in the pull request.
 
 ---
 

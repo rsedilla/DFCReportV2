@@ -435,7 +435,7 @@ export async function mockSuynlReadiness(
     view?: 'leader' | 'church';
     elsewhere?: boolean;
     crossBranch?: boolean;
-    /** `false`: the reader sees only their own branch, so is not in their own care (decision 0466). */
+    /** `false`: the reader sees only their own branch, so their own row is not sent (decision 0466). */
     readerCounted?: boolean;
   } = {},
 ): Promise<{ asked: string[] }> {
@@ -459,7 +459,7 @@ export async function mockSuynlReadiness(
     : options.readerCounted === false
       ? {
           ...READINESS_LEADER,
-          own: figures([]),
+          own: null,
           total: total([CARMELITA, ARTURO, DIOSDADO, EPIFANIA, FLORANTE]),
         }
       : READINESS_LEADER;

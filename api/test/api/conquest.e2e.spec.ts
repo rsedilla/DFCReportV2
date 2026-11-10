@@ -769,6 +769,11 @@ describe('Conquest (section 27)', () => {
       ['raise_12_leaders', 'RAISE_12_LEADERS'],
     ] as const;
 
+    it('a search still finds the reader, whom the counts leave out (decision 0466)', async () => {
+      expect(idsOf(await allPages(manuelAccount))).not.toContain(manuel.id);
+      expect(idsOf(await allPages(manuelAccount, 'q=Manuel'))).toContain(manuel.id);
+    });
+
     it('counts what the tab lists, for a leader', async () => {
       const response = await get(manuelAccount, 'counts');
 

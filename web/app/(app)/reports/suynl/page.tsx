@@ -201,7 +201,9 @@ const COLUMNS = [
 function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; opened: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   const cell = 'px-3 py-3 text-right tabular-nums';
-  const byRoot = readiness.own === null;
+  // A whole-church table names no subject; a leader's own table may carry no own row
+  // (decision 0466), so the subject, not that row, says which this is.
+  const byRoot = readiness.subject === null;
   const subjectName = opened ? (readiness.subject?.full_name ?? 'This leader') : null;
   const title = subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'Whole Church' : 'My 12';
 
@@ -285,10 +287,8 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
             );
           })}
 
-          {/* The reader's own row counts nobody when they see only their own branch, because
-              they are not one of the people in their care (decision 0466); a row of noughts
-              would read as their progress, so it is left out, and the total still adds up. */}
-          {readiness.own === null || (subjectName === null && readiness.own.people === 0) ? null : (
+          {/* Not sent for a reader left out of their own care (decision 0466). */}
+          {readiness.own === null ? null : (
             <tr className={rowClasses}>
               <td className="px-3 py-3">{subjectName ?? 'You'}</td>
               {figureCells(readiness.own)}

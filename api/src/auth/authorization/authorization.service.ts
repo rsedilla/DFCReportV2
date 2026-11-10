@@ -70,7 +70,17 @@ interface ActiveRoles {
  * {@link AuthorizationService.scopeMembership}.
  */
 export type ScopeMembership =
-  { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> };
+  | { kind: 'WHOLE_CHURCH' }
+  | {
+      kind: 'PERSONS';
+      personIds: ReadonlySet<string>;
+      /**
+       * Every grant that contributed is over the actor's own subtree, with or without
+       * themself, so the set is the actor's own branch and nothing wider (decision 0466).
+       * Decided over the same honoured grants as `personIds`, so the two cannot disagree.
+       */
+      ownBranchOnly: boolean;
+    };
 
 export interface EffectiveGrant {
   capability: Capability;
@@ -725,6 +735,8 @@ export class AuthorizationService {
   async scopeMembership(actor: Actor, capability: Capability): Promise<ScopeMembership> {
     const authority = await this.authorityFor(actor.accountId);
     const personIds = new Set<string>();
+    let ownBranch = false;
+    let wider = false;
 
     for (const grant of authority.grants.filter((held) => held.capability === capability)) {
       if (grantCoversNothing(capability, grant.scope.type, grant.source)) {
@@ -735,11 +747,13 @@ export class AuthorizationService {
         case ScopeType.WholeChurch:
           return { kind: 'WHOLE_CHURCH' };
         case ScopeType.OwnSubtree:
+          ownBranch = true;
           for (const personId of await this.hierarchy.subtreeOf(this.db, actor.personId)) {
             personIds.add(canonicalId(personId));
           }
           break;
         case ScopeType.SubtreeExclSelf:
+          ownBranch = true;
           for (const personId of await this.hierarchy.subtreeOf(this.db, actor.personId)) {
             if (!sameId(personId, actor.personId)) {
               personIds.add(canonicalId(personId));
@@ -753,6 +767,7 @@ export class AuthorizationService {
           if (grant.scope.network === null) {
             break;
           }
+          wider = true;
 
           // **`peopleWhoseNetworkIs`, not `peopleInNetworkAsOf`, and the difference is an
           // authorization one.** `scopeCovers` below compares `currentNetwork`, which
@@ -774,7 +789,7 @@ export class AuthorizationService {
       }
     }
 
-    return { kind: 'PERSONS', personIds };
+    return { kind: 'PERSONS', personIds, ownBranchOnly: ownBranch && !wider };
   }
 
   private async scopeCovers(
