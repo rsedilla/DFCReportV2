@@ -247,9 +247,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-10, the trigger being decision 0463: of 462 files, 461 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0463 each moved the first two and
+2026-11-10, the trigger being decision 0466: of 463 files, 462 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0466 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-10 and triggered by 0463, and was left stale by 0466 the same day. The one before that was dated
 2026-11-09 and triggered by 0462, and was left stale by 0463 the next day. The one before that was dated
 2026-11-09 and triggered by 0461, and was left stale by 0462 the same day. The one before that was dated
 2026-11-09 and triggered by 0460, and was left stale by 0461 the same day. The one before that was dated
@@ -969,6 +970,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-09 — [Needs Attention's labels stay on one line](docs/decisions/0461-needs-attention-labels-stay-on-one-line.md)
 - 2026-11-09 — [The Admin's page for one person is three views](docs/decisions/0462-the-admins-person-page-is-three-views.md)
 - 2026-11-10 — [My Cell lists the Cells your leaders lead](docs/decisions/0463-my-cell-lists-the-cells-your-leaders-lead.md)
+- 2026-11-10 — [A reader is not in their own Growth counts](docs/decisions/0466-a-reader-is-not-in-their-own-growth-counts.md)
 
 ### Open — awaiting a ruling
 

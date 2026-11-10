@@ -431,7 +431,13 @@ function withoutNames(table: Readiness) {
 
 export async function mockSuynlReadiness(
   page: Page,
-  options: { view?: 'leader' | 'church'; elsewhere?: boolean; crossBranch?: boolean } = {},
+  options: {
+    view?: 'leader' | 'church';
+    elsewhere?: boolean;
+    crossBranch?: boolean;
+    /** `false`: the reader sees only their own branch, so is not in their own care (decision 0466). */
+    readerCounted?: boolean;
+  } = {},
 ): Promise<{ asked: string[] }> {
   const traffic = { asked: [] as string[] };
 
@@ -450,7 +456,13 @@ export async function mockSuynlReadiness(
         ),
         total: total([CARMELITA, ARTURO, DIOSDADO, EPIFANIA, AMPARO, FLORANTE, READER]),
       }
-    : READINESS_LEADER;
+    : options.readerCounted === false
+      ? {
+          ...READINESS_LEADER,
+          own: figures([]),
+          total: total([CARMELITA, ARTURO, DIOSDADO, EPIFANIA, FLORANTE]),
+        }
+      : READINESS_LEADER;
 
   await page.route('**/api/v1/suynl/readiness**', (route) => {
     const url = new URL(route.request().url());
