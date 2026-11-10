@@ -73,7 +73,7 @@ const RECORD: NavEntry = {
 /**
  * The Senior Pastors' Record, which also holds a Cell's meeting screens: they reach them from
  * Update Records and have no Cells item. Every other account reaches them from Cells, and they
- * are Cells' (decision 0466, replacing the ruling of 2026-09-14 for those accounts).
+ * are Cells' (decision 0467, replacing the ruling of 2026-09-14 for those accounts).
  */
 const RECORD_WITH_MEETINGS: NavEntry = { ...RECORD, matches: [...RECORD.matches, CELL_MEETINGS] };
 const REPORTS: NavEntry = {

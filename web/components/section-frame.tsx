@@ -34,7 +34,7 @@ export function SectionFrame({
   section: Section;
   children: ReactNode;
   /**
-   * The pane alone, with no section name or tab above it (decision 0466): a page that opens on
+   * The pane alone, with no section name or tab above it (decision 0467): a page that opens on
    * its own way back, where the sidebar already says which section it is in.
    */
   bare?: boolean;

@@ -589,7 +589,7 @@ test.describe('a Cell’s meetings', () => {
     await page.goto(MEETINGS);
 
     await expect(
-      page.getByText('CELL-000007 · led by Teofilo Ramos · closed on Saturday 20 June'),
+      page.getByText('CELL-000007 · Teofilo Ramos · closed on Saturday 20 June'),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Members' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);

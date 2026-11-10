@@ -566,7 +566,7 @@ function RecordMeeting() {
   return (
     <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
       {/* Cells' for every account that has a Cells item; Record's for the Senior Pastors, who
-          reach a meeting from Update Records (decision 0466). */}
+          reach a meeting from Update Records (decision 0467). */}
       <SectionFrame section={me.data?.screens === 'SENIOR_PASTOR' ? 'record' : 'cells'}>
       <p className="mb-4">
         <TextLink href={`/cells/${params.id}/meetings`}>

@@ -103,7 +103,7 @@ function CellMeetings() {
   // Back to where the account's own screens reached this from: Record's Update Records for the
   // Senior Pastors, who have no Cells item, My Cell on the recording screens, and the Cells list
   // for everyone else (decision 0379). A small arrow naming it, as an app's detail page opens
-  // (decision 0466).
+  // (decision 0467).
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const back = seniorPastor
     ? { href: '/dashboard?list=awaiting', label: 'Update Records' }
@@ -115,7 +115,7 @@ function CellMeetings() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       {/* Cells' for every account with a Cells item, Record's for the Senior Pastors, with no
-          section name or tab above it: the way back and the sidebar say where it is (0466). */}
+          section name or tab above it: the way back and the sidebar say where it is (0467). */}
       <SectionFrame section={seniorPastor ? 'record' : 'cells'} bare>
       <p className="mb-3">
         <Link
@@ -131,7 +131,7 @@ function CellMeetings() {
         <h1 className="text-xl font-semibold tracking-tight">
           {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
         </h1>
-        {/* From a tablet up, behind an ⓘ; on a phone, gone (decisions 0454 and 0466). */}
+        {/* From a tablet up, behind an ⓘ; on a phone, gone (decisions 0454 and 0467). */}
         <InfoToggle label="About this page" className="hidden sm:inline-flex">
           Every meeting this Cell was scheduled to hold this month, and what was recorded for it.
           A meeting with no record yet is work outstanding rather than a meeting that did not
@@ -151,7 +151,7 @@ function CellMeetings() {
               .filter((part): part is string => part !== null)
               .join(' · ')}
           </p>
-          {/* The way to the members, as a pill rather than a button in a bar (decision 0466). */}
+          {/* The way to the members, as a pill rather than a button in a bar (decision 0467). */}
           <Link
             href={`/cells/${params.id}/members`}
             className="bg-accent-tint text-accent focus-visible:outline-accent mt-3 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -166,7 +166,7 @@ function CellMeetings() {
       ) : null}
 
       {/* Changing the schedule or category, for an account that may (owner's choice,
-          2026-09-22, one bar); the month now heads the meetings (decision 0466). */}
+          2026-09-22, one bar); the month now heads the meetings (decision 0467). */}
       {configurable ? (
         <div className={`mt-6 ${CONTROL_BAR}`}>
           <div className="flex flex-wrap gap-3">
@@ -220,7 +220,7 @@ function CellMeetings() {
             Meetings in {monthLabel(month)}
           </h2>
           {/*
-            The month heads the meetings it changes (decision 0466). No `open` flag here: this
+            The month heads the meetings it changes (decision 0467). No `open` flag here: this
             route does not return one. It is shown on the Cells index and on the reports, and
             claiming it from a clock this screen does not own would be a second answer to a
             question the API settles.
@@ -283,7 +283,7 @@ function CellMeetings() {
                           {monthDayLabel(entry.scheduled_date)}
                         </Link>
                         {/* The weekday and time are the Cell's, said once in its title, so a
-                            row names only the date, and its time where it differs (0466). */}
+                            row names only the date, and its time where it differs (0467). */}
                         {entry.scheduled_time !== meetings.data.scheduled_time ? (
                           <span className="text-muted font-normal">
                             {' '}

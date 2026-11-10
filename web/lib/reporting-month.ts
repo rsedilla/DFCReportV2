@@ -115,7 +115,7 @@ export function dayLabel(date: string): string {
 }
 
 /**
- * "June 13": the month first, as Filipinos write a date day to day (decision 0466), for a list
+ * "June 13": the month first, as Filipinos write a date day to day (decision 0467), for a list
  * whose title already names the weekday every row falls on.
  */
 export function monthDayLabel(date: string): string {
