@@ -58,9 +58,9 @@ test.describe('the Cells list', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
-      'Meets',
+      'When',
       'Members',
-      'Meetings Recorded',
+      'Recorded',
     ]);
     // The Cell is named rather than coded (decisions 0261 and 0306).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
@@ -257,7 +257,7 @@ test.describe('the Cells total (decision 0400)', () => {
 
     const table = page.getByRole('table', { name: 'Cells you oversee' });
     await expect(table.getByRole('columnheader', { name: 'Members' })).toHaveCSS('text-align', 'right');
-    await expect(table.getByRole('columnheader', { name: 'Meetings Recorded' })).toHaveCSS(
+    await expect(table.getByRole('columnheader', { name: 'Recorded' })).toHaveCSS(
       'text-align',
       'right',
     );

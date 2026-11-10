@@ -527,9 +527,9 @@ function CellsIndex() {
                       table's number columns are (decision 0425). */}
                   <HeaderCell className="w-[26%]">Cell</HeaderCell>
                   <HeaderCell className="w-[26%]">Leader</HeaderCell>
-                  <HeaderCell className="w-[20%]">Meets</HeaderCell>
+                  <HeaderCell className="w-[20%]">When</HeaderCell>
                   <HeaderCell className="w-[12%] text-right">Members</HeaderCell>
-                  <HeaderCell className="w-[16%] text-right">Meetings Recorded</HeaderCell>
+                  <HeaderCell className="w-[16%] text-right">Recorded</HeaderCell>
                 </tr>
               </thead>
               <tbody>
@@ -983,7 +983,7 @@ function CellCard({ cell, month, mine }: { cell: CellSummary; month: string; min
           <dd className="text-ink tabular-nums">{cell.member_count}</dd>
         </div>
         <div className="flex gap-2">
-          <dt>Meets</dt>
+          <dt>When</dt>
           <dd className="text-ink">
             {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
           </dd>
