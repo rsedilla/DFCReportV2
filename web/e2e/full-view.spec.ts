@@ -367,6 +367,10 @@ test.describe('My Cell (decision 0323)', () => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
+    // Both Cells in its care are its own, so nothing is led by its leaders (decision 0463).
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
     const asked = trackApi(page);
 
     await page.goto('/my-cell');
@@ -424,6 +428,95 @@ test.describe('My Cell (decision 0323)', () => {
     }
   });
 
+  test('lists the Cells the account’s leaders lead under its own, ten at a time (decision 0463)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page, { open: true });
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 13, led_by_me: 1, attention_months: 3 })),
+    );
+    const own = { ...CELL_WITH_MEETINGS, leader: { ...CELL_WITH_MEETINGS.leader, person_id: SIGNED_IN_PERSON_ID } };
+    const theirs = Array.from({ length: 12 }, (_, index) => ({
+      ...CELL_WITH_NO_SCHEDULE,
+      id: `3f1b7c6e-0000-4000-8000-0000000007${String(index).padStart(2, '0')}`,
+      cell_id: `CELL-0001${String(index).padStart(2, '0')}`,
+      leader: { ...CELL_WITH_NO_SCHEDULE.leader, full_name: `Leader ${index + 1}` },
+      coverage: { recorded: 1, scheduled: 4, behind: index === 0 ? 2 : 0 },
+    }));
+    // The whole list puts the reader's own first (decision 0400), and pages by cursor.
+    const asked: string[] = [];
+    await page.route('**/api/v1/cells?*', (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url.search);
+      if (url.searchParams.get('led_by') === 'me') {
+        return route.fulfill(json({ reporting_month: '2026-06-01', open: true, data: [own], next_cursor: null }));
+      }
+      const all = [own, ...theirs];
+      const start = url.searchParams.get('cursor') === 'next' ? 11 : 0;
+      const limit = Number(url.searchParams.get('limit'));
+      return route.fulfill(
+        json({
+          reporting_month: '2026-06-01',
+          open: true,
+          data: all.slice(start, start + limit),
+          next_cursor: start + limit < all.length ? 'next' : null,
+        }),
+      );
+    });
+
+    await page.goto('/my-cell');
+
+    const heading = page.getByRole('heading', { level: 2, name: 'Led by your leaders' });
+    await expect(heading).toBeVisible();
+    const section = page.getByRole('list').nth(1);
+    // The reader's own Cell is under You lead alone, and the first page holds ten others.
+    await expect(section.getByRole('listitem')).toHaveCount(10);
+    await expect(section).not.toContainText('CELL-000007');
+    expect(asked.find((search) => !search.includes('led_by'))).toContain('limit=11');
+
+    const first = section.getByRole('listitem').first();
+    await expect(first).toContainText('Led by Leader 1');
+    await expect(first).toContainText('1 of 4 recorded this month · 2 to record');
+    // Both plain: each Cell is recorded by its own leader (decision 0322).
+    await expect(first.getByRole('link', { name: 'Meetings' })).not.toHaveClass(/bg-accent/);
+    await expect(first.getByRole('link', { name: 'Meetings' })).toHaveAttribute(
+      'href',
+      `/cells/${theirs[0].id}/meetings?month=2026-06-01`,
+    );
+    await expect(first.getByRole('link', { name: 'Members' })).toHaveAttribute(
+      'href',
+      `/cells/${theirs[0].id}/members`,
+    );
+    // The reader's own Meetings stays filled.
+    await expect(page.getByRole('list').first().getByRole('link', { name: 'Meetings' })).toHaveClass(/bg-accent/);
+
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await expect(section.getByRole('listitem')).toHaveCount(12);
+    await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+  });
+
+  test('shows no such section where the account leads every Cell in its care (decision 0463)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page);
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
+    const asked = trackApi(page);
+
+    await page.goto('/my-cell');
+
+    await expect(page.getByText('3 of 4')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Led by your leaders' })).toHaveCount(0);
+    expect(asked.filter((request) => request.startsWith('GET /api/v1/cells?') && !request.includes('led_by'))).toEqual([]);
+  });
+
   test('says the month is still running beside its coverage lines (section 17)', async ({
     page,
   }) => {
@@ -431,6 +524,10 @@ test.describe('My Cell (decision 0323)', () => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockCells(page, { open: true });
+    // Every Cell in its care is its own, so nothing is led by its leaders (decision 0463).
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
 
     await page.goto('/my-cell');
 
@@ -444,6 +541,10 @@ test.describe('My Cell (decision 0323)', () => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
+    // Every Cell in its care is its own, so nothing is led by its leaders (decision 0463).
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
 
     await page.goto('/my-cell');
 
@@ -574,6 +675,10 @@ test.describe('My Cell (decision 0323)', () => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
+    // Every Cell in its care is its own, so nothing is led by its leaders (decision 0463).
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
     await mockPeople(page);
     const memberSearches = await mockMemberSearch(page);
 
@@ -793,7 +898,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, full_view: body.full_view }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Full view/ });
     await expect(box).not.toBeChecked();
@@ -861,7 +966,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, approves_cells: body.approves_cells }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Approves Cells/ });
     await expect(box).not.toBeChecked();
@@ -912,7 +1017,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       return route.fulfill(json({ id: ACCOUNT_ID, moves_people: body.moves_people }));
     });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     const box = page.getByRole('checkbox', { name: /^Moves people/ });
     await expect(box).not.toBeChecked();
@@ -937,7 +1042,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'LEADER', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     await expect(page.getByRole('checkbox', { name: /^Full view/ })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /^Moves people/ })).toHaveCount(0);
@@ -950,7 +1055,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'LEADER', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     // The account block has loaded: its status is shown.
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
@@ -966,7 +1071,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await mockPastoralPath(page);
     await accountHolding(page, 'SENIOR_PASTOR', { fullView: false });
 
-    await page.goto(PROFILE);
+    await page.goto(`${PROFILE}?view=account`);
 
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /^Full view/ })).toHaveCount(0);
@@ -1514,6 +1619,10 @@ test.describe('a request made again sends a new key', () => {
     await mockSignedIn(page);
     await mockScreens(page, 'RECORDING');
     await mockCells(page);
+    // Every Cell in its care is its own, so nothing is led by its leaders (decision 0463).
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 2, attention_months: 3 })),
+    );
     await mockPeople(page);
     await mockMemberSearch(page);
     await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
@@ -15,11 +15,13 @@ import { PersonViews } from '@/components/person-views';
 import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
 import { PersonGrowth } from '@/components/person-growth';
+import { ActionRow } from '@/components/ui/action-row';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { TextLink } from '@/components/ui/text-link';
+import { ViewSwitch } from '@/components/ui/view-switch';
 import { ApiRequestError } from '@/lib/api-client';
 import { cellShortName, getPersonCells, type PersonCells as PersonCellsData } from '@/lib/cells';
 import {
@@ -74,6 +76,14 @@ import { cn } from '@/lib/utils';
  * matcher refuse a real person. Somebody may also simply have declined to give
  * it, which is a decision rather than a gap, so nothing here nags.
  */
+type PersonView = 'OVERVIEW' | 'ACCOUNT' | 'OPENED';
+
+const VIEW_LABEL: Record<PersonView, string> = {
+  OVERVIEW: 'Overview',
+  ACCOUNT: 'Account',
+  OPENED: 'Who opened',
+};
+
 export default function PersonPage() {
   return (
     <>
@@ -85,6 +95,8 @@ export default function PersonPage() {
 function PersonDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const router = useRouter();
+  const asked = useSearchParams().get('view');
 
   const person = useQuery({
     queryKey: ['person', id],
@@ -145,6 +157,35 @@ function PersonDetail() {
   const mayMerge = holdsWholeChurch(me.data, 'people.merge');
   const isRoot = pathEntries.length === 1 && pathEntries[0].network_root === true;
   const leads = cells.data?.leads ?? [];
+
+  // **The Admin's page is three views** (decision 0462): what the person is, what can be done
+  // to the record, and who opened it. Somebody offered only the first sees no switch.
+  const views: readonly PersonView[] = [
+    'OVERVIEW',
+    ...(mayManageAccounts || mayMerge || mayArchive ? (['ACCOUNT'] as const) : []),
+    ...(mayReadViews ? (['OPENED'] as const) : []),
+  ];
+  const view: PersonView =
+    asked === 'account' && views.includes('ACCOUNT')
+      ? 'ACCOUNT'
+      : asked === 'opened' && views.includes('OPENED')
+        ? 'OPENED'
+        : 'OVERVIEW';
+  // An address naming a view waits for the account, so Overview does not flash first.
+  const settling = asked !== null && me.data === undefined;
+  const archived = person.data?.archived ?? null;
+  const pastors = person.data?.pastors ?? 0;
+  const mayArchiveNow =
+    mayArchive && !archived && !isRoot && cells.isSuccess && leads.length === 0 && pastors === 0;
+  // What stands in the way, said beside the button rather than under the page's actions.
+  const archiveBlocked =
+    !mayArchive || archived
+      ? null
+      : leads.length > 0
+        ? `Leads ${leads.map((cell) => cell.cell_id).join(', ')}: hand ${leads.length === 1 ? 'it' : 'them'} over or close ${leads.length === 1 ? 'it' : 'them'} before archiving.`
+        : pastors > 0
+          ? `Pastors ${pastors} ${pastors === 1 ? 'person' : 'people'}: move them to another leader first.`
+          : null;
 
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
@@ -261,29 +302,7 @@ function PersonDetail() {
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
               Where they sit
             </Link>
-            {mayArchive &&
-            !person.data.archived &&
-            !isRoot &&
-            cells.isSuccess &&
-            leads.length === 0 &&
-            (person.data.pastors ?? 0) === 0 ? (
-              <Button variant="secondary" onClick={() => setArchiving(true)}>
-                Archive
-              </Button>
-            ) : null}
           </div>
-          {mayArchive && !person.data.archived && leads.length > 0 ? (
-            <p className="text-muted mt-3 text-sm">
-              Leads {leads.map((cell) => cell.cell_id).join(', ')}: hand{' '}
-              {leads.length === 1 ? 'it' : 'them'} over or close {leads.length === 1 ? 'it' : 'them'}{' '}
-              before archiving.
-            </p>
-          ) : mayArchive && !person.data.archived && (person.data.pastors ?? 0) > 0 ? (
-            <p className="text-muted mt-3 text-sm">
-              Pastors {person.data.pastors} {person.data.pastors === 1 ? 'person' : 'people'}: move
-              them to another leader first.
-            </p>
-          ) : null}
           {mayArchive ? (
             <ArchivePersonDialog
               open={archiving}
@@ -296,6 +315,20 @@ function PersonDetail() {
             <p className="text-muted mt-3 text-sm">Moves to another leader are made by your Primary.</p>
           ) : null}
 
+          {me.data && views.length > 1 ? (
+            <ViewSwitch<PersonView>
+              label="Which part of this record"
+              options={views.map((key) => ({ key, label: VIEW_LABEL[key] }))}
+              value={view}
+              onChange={(next) =>
+                router.replace(
+                  next === 'OVERVIEW' ? `/people/${id}` : `/people/${id}?view=${next.toLowerCase()}`,
+                  { scroll: false },
+                )
+              }
+            />
+          ) : null}
+
 
           {/*
             Their attendance on the left, the facts about them on the right, from `lg`;
@@ -305,6 +338,7 @@ function PersonDetail() {
             row is `1fr` so the two tall columns spanning both rows size it, and the first
             row stays as tall as Growth, which keeps the Cell box right beneath it.
           */}
+          {view === 'OVERVIEW' && !settling ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] 2xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(0,4fr)] 2xl:grid-rows-[auto_1fr]">
           <div className="flex min-w-0 flex-col gap-4 2xl:contents">
           <div className="min-w-0 2xl:col-start-1 2xl:row-span-2 2xl:row-start-1 2xl:self-start">
@@ -366,19 +400,67 @@ function PersonDetail() {
             />
           </dl>
           </section>
-          {mayManageAccounts ? (
-            <PersonAccount
-              personId={id}
-              firstName={person.data.first_name}
-              own={own}
-              mayTickFullView={mayTickFullView}
-            />
+          </div>
+          </div>
+          </div>
           ) : null}
+
+          {view === 'ACCOUNT' ? (
+            <div className="mt-6 flex flex-col gap-4">
+              {mayManageAccounts ? (
+                <PersonAccount
+                  personId={id}
+                  firstName={person.data.first_name}
+                  own={own}
+                  mayTickFullView={mayTickFullView}
+                />
+              ) : null}
+              {mayMerge || mayArchiveNow || archiveBlocked ? (
+                <section aria-labelledby="record-heading" className={FRAME}>
+                  <h2 id="record-heading" className="field-label">
+                    This record
+                  </h2>
+                  <div className="mt-1.5">
+                    {/* The Admin's way to a merge, on any page but their own (decision 0408). */}
+                    {mayMerge ? (
+                      <ActionRow
+                        title="Is this person recorded twice?"
+                        description="Only the Admin can merge two records of one person. It cannot be undone."
+                      >
+                        <Link href={`/people/${id}/merge`} className={cn(buttonClasses('secondary'))}>
+                          Merge a duplicate
+                        </Link>
+                      </ActionRow>
+                    ) : null}
+                    {mayArchiveNow || archiveBlocked ? (
+                      <ActionRow
+                        title="Archive"
+                        description={
+                          archiveBlocked ??
+                          'Takes this person out of the current lists. Restoring brings back the person, not their Cell or leader.'
+                        }
+                      >
+                        <Button
+                          variant="secondary"
+                          disabled={!mayArchiveNow}
+                          onClick={() => setArchiving(true)}
+                        >
+                          Archive
+                        </Button>
+                      </ActionRow>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Who opened this record, for the Admin alone (decision 0414). */}
-          {mayReadViews ? <PersonViews personId={id} /> : null}
-          </div>
-          </div>
-          </div>
+          {view === 'OPENED' ? (
+            <div className="mt-6">
+              <PersonViews personId={id} />
+            </div>
+          ) : null}
 
           {mayCorrectSex && path.data ? (
             <CorrectSexDialog
@@ -392,21 +474,6 @@ function PersonDetail() {
               cells={cells.data}
               mayBackdate={mayBackdate}
             />
-          ) : null}
-
-          {/* The Admin's way to a merge, on any page but their own (decision 0408). */}
-          {mayMerge ? (
-            <section aria-labelledby="merge-heading" className={`mt-4 ${FRAME}`}>
-              <h2 id="merge-heading" className="font-medium">
-                Is this person recorded twice?
-              </h2>
-              <p className="text-muted mt-1 text-sm leading-relaxed">
-                Only the Admin can merge two records of one person. It cannot be undone.
-              </p>
-              <Link href={`/people/${id}/merge`} className={cn('mt-3', buttonClasses('secondary'))}>
-                Merge a duplicate
-              </Link>
-            </section>
           ) : null}
 
           </>
