@@ -68,8 +68,14 @@ const RECORD: NavEntry = {
   href: RECORD_PATH,
   label: 'Record',
   icon: ClipboardCheck,
-  matches: [RECORD_PATH, '/dcc', CELL_MEETINGS],
+  matches: [RECORD_PATH, '/dcc'],
 };
+/**
+ * The Senior Pastors' Record, which also holds a Cell's meeting screens: they reach them from
+ * Update Records and have no Cells item. Every other account reaches them from Cells, and they
+ * are Cells' (decision 0466, replacing the ruling of 2026-09-14 for those accounts).
+ */
+const RECORD_WITH_MEETINGS: NavEntry = { ...RECORD, matches: [...RECORD.matches, CELL_MEETINGS] };
 const REPORTS: NavEntry = {
   href: REPORTS_PATH,
   label: 'Reports',
@@ -248,7 +254,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ...(me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL]
           : me.data?.screens === 'SENIOR_PASTOR'
-            ? [RECORD, REPORTS]
+            ? [RECORD_WITH_MEETINGS, REPORTS]
             : isBranchReader(me.data)
               ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
