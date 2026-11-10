@@ -311,17 +311,18 @@ describe('Conquest (section 27)', () => {
       await createCell(db, { leader: nathan, createdAt: onDay(3) });
       await createCell(db, { leader: hannah, createdAt: onDay(4) });
 
-      // Mark's subtree is Mark alone.
+      // Mark's subtree is Mark alone, and he is not one of the people in his own care
+      // (decision 0466), so his tab lists nobody.
       const byMark = await get(markAccount, 'counts');
       expect(byMark.status).toBe(200);
       expect(byMark.body).toEqual({
-        people: 1,
+        people: 0,
         win_3: 0,
         open_a_cell: 0,
         completion_of_12: 0,
         raise_12_leaders: 0,
       });
-      expect(idsOf(await allPages(markAccount))).toEqual(new Set([mark.id]));
+      expect(await allPages(markAccount)).toEqual([]);
       expect(await allPages(markAccount, 'goal=OPEN_A_CELL')).toEqual([]);
 
       // Manuel oversees Nathan and not Hannah.
@@ -772,9 +773,10 @@ describe('Conquest (section 27)', () => {
       const response = await get(manuelAccount, 'counts');
 
       expect(response.status).toBe(200);
-      // Manuel, Mark, Nathan, Mark's twelve and Nathan's three. Silas is archived.
+      // Mark, Nathan, Mark's twelve and Nathan's three; Manuel is left out of his own count
+      // (decision 0466), and Silas is archived.
       expect(response.body).toEqual({
-        people: 18,
+        people: 17,
         win_3: 1,
         open_a_cell: 2,
         completion_of_12: 1,

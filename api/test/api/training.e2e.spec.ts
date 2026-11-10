@@ -609,9 +609,10 @@ describe('Training (section 28)', () => {
       const response = await get(manuelAccount, 'counts');
 
       expect(response.status).toBe(200);
+      // Mark, Nathan and Timothy; Manuel is left out of his own count (decision 0466).
       expect(response.body).toEqual({
-        people: 4,
-        not_started: 2,
+        people: 3,
+        not_started: 1,
         encounter: 2,
         life_class: 1,
         sol_1: 0,
@@ -637,7 +638,7 @@ describe('Training (section 28)', () => {
 
       expect(new Set(idsOf(encounter))).toEqual(new Set([timothy.id, nathan.id]));
       expect(idsOf(lifeClass)).toEqual([timothy.id]);
-      expect(new Set(idsOf(notStarted))).toEqual(new Set([manuel.id, mark.id]));
+      expect(idsOf(notStarted)).toEqual([mark.id]);
       expect(sol3).toHaveLength(0);
 
       expect(encounter).toHaveLength(counts.encounter);
@@ -649,9 +650,10 @@ describe('Training (section 28)', () => {
       const rows = await allPages(manuelAccount, 'limit=1');
       const byId = new Map(rows.map((row) => [row.person_id, row]));
 
-      expect(rows).toHaveLength(4);
-      expect(byId.size).toBe(4);
-      expect(byId.get(manuel.id)?.may_file).toBe(false);
+      expect(rows).toHaveLength(3);
+      expect(byId.size).toBe(3);
+      // Nobody files their own (decision 0280), and Manuel is not in his own list (decision 0466).
+      expect(byId.has(manuel.id)).toBe(false);
       expect(byId.get(mark.id)?.may_file).toBe(true);
       expect(byId.get(timothy.id)?.may_file).toBe(true);
       expect(
@@ -690,15 +692,16 @@ describe('Training (section 28)', () => {
     it('leaves out a person holding all five and keeps everyone short of them', async () => {
       const rows = await allPages(manuelAccount, 'step=STILL_TO_FINISH&limit=1');
 
-      expect(idsOf(rows)).toHaveLength(3);
-      expect(new Set(idsOf(rows))).toEqual(new Set([manuel.id, mark.id, nathan.id]));
+      // Mark and Nathan; Manuel is not in his own list (decision 0466).
+      expect(idsOf(rows)).toHaveLength(2);
+      expect(new Set(idsOf(rows))).toEqual(new Set([mark.id, nathan.id]));
     });
 
     it('counts all_five over current people only, and leaves out exactly that many', async () => {
       const counts = (await get(manuelAccount, 'counts')).body;
 
       expect(counts.all_five).toBe(1);
-      expect(counts.people).toBe(4);
+      expect(counts.people).toBe(3);
 
       const still = await allPages(manuelAccount, 'step=STILL_TO_FINISH');
       expect(still).toHaveLength(counts.people - counts.all_five);

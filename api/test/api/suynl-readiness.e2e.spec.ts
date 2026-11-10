@@ -382,13 +382,13 @@ describe('SUYNL readiness (decision 0297)', () => {
         { person_id: paulo.id, full_name: 'Paulo Castillo', lessons: 2 },
       ]);
 
-      // Manuel alone: six current lessons, the seventh withdrawn, so one to six.
-      expect(figuresOf(body.own!)).toEqual(fig(0, 0, 1));
-      expect(body.own!.members).toEqual([
-        { person_id: manuel.id, full_name: 'Manuel Bautista', lessons: 6 },
-      ]);
+      // Manuel has six current lessons, but he reads his own table and sees only his own
+      // branch, so he is not one of the people in his care (decision 0466): his row counts
+      // nobody and the total leaves him out.
+      expect(figuresOf(body.own!)).toEqual(fig(0, 0, 0));
+      expect(body.own!.members).toEqual([]);
 
-      expect(body.total).toEqual(fig(1, 1, 2));
+      expect(body.total).toEqual(fig(1, 1, 1));
     });
 
     it('buckets at the boundaries: ten completed, seven to nine, one to six', async () => {
@@ -442,8 +442,17 @@ describe('SUYNL readiness (decision 0297)', () => {
       expect(body.elsewhere).toBeNull();
       expect(figuresOf(rowOf(body, timothy))).toEqual(fig(1, 0, 0));
       expect(rowOf(body, timothy).leads_anyone).toBe(false);
+      // Mark is left out of his own table (decision 0466).
+      expect(figuresOf(body.own!)).toEqual(fig(0, 0, 0));
+      expect(body.total).toEqual(fig(1, 0, 0));
+    });
+
+    it("counts the subject on their own row when a leader opens a disciple's table", async () => {
+      const body = (await readiness(manuelAccount, mark.id)).body as Readiness;
+
+      // Mark is in Manuel's care, so opened from above his own row counts him (decision 0466).
+      expect(body.subject).toEqual({ id: mark.id, full_name: 'Mark Castillo' });
       expect(figuresOf(body.own!)).toEqual(fig(0, 1, 0));
-      expect(body.total).toEqual(fig(1, 1, 0));
     });
   });
 

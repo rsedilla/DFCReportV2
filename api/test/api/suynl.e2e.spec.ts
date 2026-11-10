@@ -697,11 +697,12 @@ describe('SUYNL (section 28)', () => {
       const response = await get(manuelAccount, 'counts');
 
       expect(response.status).toBe(200);
-      // Manuel's subtree: Manuel, Mark, Nathan, Timothy. Silas is archived. Timothy, Mark's
-      // disciple, is the one deeper than Manuel's direct disciples (decision 0384).
+      // Manuel's care: Mark, Nathan, Timothy, Manuel himself left out (decision 0466). Silas
+      // is archived. Timothy, Mark's disciple, is the one deeper than Manuel's direct
+      // disciples (decision 0384).
       expect(response.body).toEqual({
-        people: 4,
-        not_started: 2,
+        people: 3,
+        not_started: 1,
         in_progress: 1,
         graduated: 1,
         beyond_direct_disciples: 1,
@@ -714,8 +715,8 @@ describe('SUYNL (section 28)', () => {
     // Decision 0384: what "Only my disciples" would leave out besides the reader.
     it('counts nobody beyond the direct disciples of a leader who has only disciples', async () => {
       const counts = (await get(markAccount, 'counts')).body;
-      // Mark's list is Mark and Timothy, Silas being archived: nobody deeper.
-      expect(counts.people).toBe(2);
+      // Mark's list is Timothy, Mark left out (decision 0466) and Silas archived: nobody deeper.
+      expect(counts.people).toBe(1);
       expect(counts.beyond_direct_disciples).toBe(0);
 
       const mine = await allPages(markAccount, 'mine=true&limit=200');
@@ -770,7 +771,7 @@ describe('SUYNL (section 28)', () => {
 
       expect(idsOf(graduated)).toEqual([timothy.id]);
       expect(idsOf(inProgress)).toEqual([nathan.id]);
-      expect(new Set(idsOf(notStarted))).toEqual(new Set([manuel.id, mark.id]));
+      expect(idsOf(notStarted)).toEqual([mark.id]);
 
       expect(graduated).toHaveLength(counts.graduated);
       expect(inProgress).toHaveLength(counts.in_progress);
@@ -797,8 +798,8 @@ describe('SUYNL (section 28)', () => {
 
       const counts = (await get(manuelAccount, 'counts')).body;
       expect(counts).toEqual({
-        people: 4,
-        not_started: 2,
+        people: 3,
+        not_started: 1,
         in_progress: 2,
         graduated: 0,
         beyond_direct_disciples: 1,
@@ -819,9 +820,10 @@ describe('SUYNL (section 28)', () => {
     it('leaves out a person with ten current lessons and keeps everyone with nought to nine', async () => {
       const rows = await allPages(manuelAccount, 'step=STILL_TO_FINISH&limit=1');
 
-      // Manuel and Mark hold none, Nathan nine; Timothy's ten take him off.
-      expect(idsOf(rows)).toHaveLength(3);
-      expect(new Set(idsOf(rows))).toEqual(new Set([manuel.id, mark.id, nathan.id]));
+      // Mark holds none, Nathan nine; Timothy's ten take him off, and Manuel is not in his own
+      // list (decision 0466).
+      expect(idsOf(rows)).toHaveLength(2);
+      expect(new Set(idsOf(rows))).toEqual(new Set([mark.id, nathan.id]));
     });
 
     it('leaves out exactly as many as the Graduated card counts', async () => {
@@ -879,11 +881,13 @@ describe('SUYNL (section 28)', () => {
       expect(new Set(idsOf(rows))).toEqual(new Set([mark.id, nathan.id]));
     });
 
-    it("shows the actor's own row with may_file false and disciples' rows with may_file true", async () => {
+    it("leaves the actor out of their own list and shows disciples' rows with may_file true", async () => {
       const rows = await allPages(manuelAccount, 'limit=200');
       const byId = new Map(rows.map((row) => [row.person_id, row]));
 
-      expect(byId.get(manuel.id)?.may_file).toBe(false);
+      // Nobody files their own (decision 0280), and an own-branch reader is not one of the
+      // people in their care (decision 0466).
+      expect(byId.has(manuel.id)).toBe(false);
       expect(byId.get(mark.id)?.may_file).toBe(true);
       expect(byId.get(nathan.id)?.may_file).toBe(true);
       // Mark records Timothy's DCC, so his lessons are Mark's to file (decision 0322).
@@ -902,8 +906,8 @@ describe('SUYNL (section 28)', () => {
       const paged = await allPages(manuelAccount, 'limit=1');
       const ids = idsOf(paged);
 
-      expect(ids).toHaveLength(4);
-      expect(new Set(ids)).toEqual(new Set([manuel.id, mark.id, nathan.id, timothy.id]));
+      expect(ids).toHaveLength(3);
+      expect(new Set(ids)).toEqual(new Set([mark.id, nathan.id, timothy.id]));
     });
 
     it('refuses an unresolvable cursor', async () => {

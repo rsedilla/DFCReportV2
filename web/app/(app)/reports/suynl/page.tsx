@@ -285,7 +285,10 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
             );
           })}
 
-          {readiness.own === null ? null : (
+          {/* The reader's own row counts nobody when they see only their own branch, because
+              they are not one of the people in their care (decision 0466); a row of noughts
+              would read as their progress, so it is left out, and the total still adds up. */}
+          {readiness.own === null || (subjectName === null && readiness.own.people === 0) ? null : (
             <tr className={rowClasses}>
               <td className="px-3 py-3">{subjectName ?? 'You'}</td>
               {figureCells(readiness.own)}
