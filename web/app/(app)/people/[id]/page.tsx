@@ -33,7 +33,7 @@ import {
 } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { archiveReasonLabel, restorePerson, shortDate } from '@/lib/lifecycle';
-import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { formatMobile } from '@/lib/mobile';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
@@ -130,8 +130,12 @@ function PersonDetail() {
   });
 
   const own = me.data?.person_id === id;
+  // A root's, a Senior Pastor's or an administrator's record, read by a Network Admin
+  // (section 7, decision 0469): the Admin changes it, so no edit, move or archive is offered.
+  const readOnly = person.data?.read_only === true;
   const mayMove =
     !own &&
+    !readOnly &&
     (me.data?.capabilities ?? []).some(
       (grant) => grant.capability === 'people.manage_pastoral_assignment',
     );
@@ -150,9 +154,10 @@ function PersonDetail() {
   const mayCorrectSex = holdsWholeChurch(me.data, 'people.correct_sex');
   const mayBackdate = holdsWholeChurch(me.data, 'records.backdate_effective_date');
   const pathEntries = path.data?.data ?? [];
-  // Archive and Restore, the Admin's alone (decision 0397); never on your own page, never for
+  // Archive and Restore, the Admin's, and a Network Admin's in their Network (decisions 0397
+  // and 0469); never on your own page, never for
   // a Network root, and for somebody leading a Cell the page says what to resolve first.
-  const mayArchive = !own && holdsWholeChurch(me.data, 'people.manage_lifecycle');
+  const mayArchive = !own && !readOnly && holdsWide(me.data, 'people.manage_lifecycle');
   // Merge, the Admin's alone (section 3, decision 0408); the API decides what it refuses.
   const mayMerge = holdsWholeChurch(me.data, 'people.merge');
   const isRoot = pathEntries.length === 1 && pathEntries[0].network_root === true;
@@ -189,9 +194,9 @@ function PersonDetail() {
 
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
-  const mayEdit = (me.data?.capabilities ?? []).some(
-    (grant) => grant.capability === 'people.edit_basic',
-  );
+  const mayEdit =
+    !readOnly &&
+    (me.data?.capabilities ?? []).some((grant) => grant.capability === 'people.edit_basic');
 
   const refused =
     person.error instanceof ApiRequestError &&
@@ -314,6 +319,9 @@ function PersonDetail() {
           {/* A Network Admin has no Primary; their moves arrive with the capability (decision 0469). */}
           {me.data && !own && !mayMove && holdsNetwork(me.data, 'people.view_subtree') === null ? (
             <p className="text-muted mt-3 text-sm">Moves to another leader are made by your Primary.</p>
+          ) : null}
+          {readOnly ? (
+            <p className="text-muted mt-3 text-sm">Changes to this record are made by the Admin.</p>
           ) : null}
 
           {me.data && views.length > 1 ? (

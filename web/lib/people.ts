@@ -58,6 +58,8 @@ export interface PersonFull {
   pastors?: number;
   /** On one person's record only: where it was merged, null unless merged (decision 0408). */
   merged?: MergedLine | null;
+  /** On one person's record only: true where only the Admin changes it (decision 0469). */
+  read_only?: boolean;
 }
 
 export type Person = PersonIdentity | PersonFull;

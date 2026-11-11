@@ -20,7 +20,7 @@ import {
   shortDate,
   type AbsentPerson,
 } from '@/lib/lifecycle';
-import { careWords, getMe, holdsWholeChurch } from '@/lib/me';
+import { careWords, getMe, holdsWide } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
@@ -44,13 +44,13 @@ function threeMonths(months: readonly string[]): string {
 
 /**
  * People's *Absent 3+ Months* tab (SKILL.md section 19, decision 0397). A Full view leader reads
- * their branch; the Admin reads the church, with Archive on each row, and has an *Absent 3+
- * Months | Archived* switch. No count on the tab (owner, 2026-10-16).
+ * their branch; the Admin reads the church and a Network Admin their Network (decision 0469),
+ * with Archive on each row and an *Absent 3+ Months | Archived* switch. No count on the tab (owner, 2026-10-16).
  */
 export function AbsentPanel() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  // The Admin's alone; the API checks it again on every archive and restore.
-  const mayArchive = holdsWholeChurch(me.data, 'people.manage_lifecycle');
+  // The Admin's, and a Network Admin's in their Network; the API checks it again each time.
+  const mayArchive = holdsWide(me.data, 'people.manage_lifecycle');
   const [view, setView] = useState<'ABSENT' | 'ARCHIVED'>('ABSENT');
 
   return (
@@ -129,7 +129,11 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
                 person.last_at_dcc ? shortDate(person.last_at_dcc) : 'Never',
                 ...(mayArchive
                   ? [
-                      person.leads.length > 0 ? (
+                      person.read_only === true ? (
+                        <span key="action" className="text-sm">
+                          Changed by the Admin
+                        </span>
+                      ) : person.leads.length > 0 ? (
                         // Section 3 refuses it; the row says what to resolve first (choice 5).
                         <span key="action" className="text-sm">
                           Leads{' '}

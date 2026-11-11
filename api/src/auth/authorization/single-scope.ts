@@ -85,12 +85,15 @@ export function grantCoversNothing(
     return false;
   }
 
-  // The Network Admin role carries the two account capabilities across one Network (decision
-  // 0469). A role default and not a grant, and no other role holds either at `NETWORK`.
+  // The Network Admin role carries the two account capabilities and archiving across one
+  // Network (decision 0469). A role default and not a grant, and no other role holds any of
+  // the three at `NETWORK`.
   if (
     source === 'role' &&
     scopeType === ScopeType.Network &&
-    (capability === Capability.AccountsManage || capability === Capability.RolesManage)
+    (capability === Capability.AccountsManage ||
+      capability === Capability.RolesManage ||
+      capability === Capability.PeopleManageLifecycle)
   ) {
     return false;
   }

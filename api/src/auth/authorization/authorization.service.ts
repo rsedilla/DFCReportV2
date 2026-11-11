@@ -11,7 +11,7 @@ import { DATABASE, type Db } from '../../database/database.module';
 import { HierarchyService } from '../../hierarchy/hierarchy.service';
 import { NetworksService } from '../../networks/networks.service';
 
-import { isCapability, isReadCapability, type Capability } from './capabilities';
+import { Capability, isCapability, isReadCapability } from './capabilities';
 import { isGrantMaking } from './grant-making';
 import { MERGED_PERSONS_PORT, type MergedPersonsPort } from './merged-persons.port';
 import {
@@ -320,6 +320,139 @@ export class AuthorizationService {
   /** The Persons holding a Network root's seat now (section 5). */
   async rootSeatHolders(): Promise<string[]> {
     return this.hierarchy.rootsAsOf(this.db, new Date());
+  }
+
+  /**
+   * Refuses, to an actor holding `capability` across a Network and not the whole church, a
+   * Person they read and never change (section 7, *The Network Admin*, decision 0469): one
+   * holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`, and a Network root with or without
+   * an account. `SCOPE_DENIED`, because it concerns the actor's authority over the target.
+   *
+   * `own` admits the actor's own Person, for their own basic details and nothing else.
+   *
+   * Every account left after this holds `LEADER` alone, so an account decision made with
+   * the change (archiving, section 6) reaches only a Leader account.
+   */
+  async assertMayChange(
+    actor: Actor,
+    capability: Capability,
+    personId: string,
+    options: { own?: boolean } = {},
+  ): Promise<void> {
+    const refusal = await this.changeRefusal(actor, capability, personId, options);
+
+    if (refusal !== null) {
+      throw new ScopeDeniedError(refusal, { person_id: personId });
+    }
+  }
+
+  /**
+   * Whether a Person's page is read-only to this reader for the reason above, so the page
+   * offers no control the routes would refuse (section 19). False for their own Person,
+   * whose basic details they edit.
+   */
+  async readsOnly(actor: Actor, personId: string): Promise<boolean> {
+    return (
+      (await this.changeRefusal(actor, Capability.PeopleViewSubtree, personId, { own: true })) !==
+      null
+    );
+  }
+
+  /**
+   * The Persons `assertMayChange` refuses this actor, for a list that marks or leaves out
+   * their rows: none for a holder at Whole Church or over a subtree.
+   */
+  async personsOnlyTheAdminChanges(actor: Actor, capability: Capability): Promise<string[]> {
+    const reach = await this.wideReachOf(actor, capability);
+
+    if (reach === null || reach === undefined) {
+      return [];
+    }
+
+    const holders = await this.db
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.person_id')
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.revoked_at', 'is', null)
+      .execute();
+
+    return [
+      ...new Set([...(await this.rootSeatHolders()), ...holders.map((row) => row.person_id)]),
+    ];
+  }
+
+  /**
+   * Refuses, to an actor holding `capability` across a Network and not the whole church, a
+   * pastoral leader who is an administrator holding no assignment. Whether a Person outside
+   * the pastoral structure may be given disciples is open (`CLAUDE.md`), and until it is
+   * settled only a Whole Church holder reaches it, as before decision 0469.
+   *
+   * **Only for a leader the actor's scope covers.** One it does not cover is left to the
+   * caller's own scope refusal, so this says nothing about somebody outside it (section 8).
+   */
+  async assertLeaderInTree(actor: Actor, capability: Capability, leaderId: string): Promise<void> {
+    const reach = await this.wideReachOf(actor, capability);
+
+    if (reach === null || reach === undefined) {
+      return;
+    }
+
+    if (!(await this.covers(actor, capability, { kind: 'person', personId: leaderId }))) {
+      return;
+    }
+
+    const administrator = await this.db
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.id')
+      .where('accounts.person_id', '=', leaderId)
+      .where('account_roles.role', '=', 'ADMIN')
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    if (administrator && (await this.hierarchy.openAssignmentOf(this.db, leaderId)) === null) {
+      throw new ScopeDeniedError(
+        'That person is outside the pastoral tree. Only the Admin places somebody under them.',
+        { field: 'pastoral_leader_id' },
+      );
+    }
+  }
+
+  /** Why `assertMayChange` refuses, or null where it does not. */
+  private async changeRefusal(
+    actor: Actor,
+    capability: Capability,
+    personId: string,
+    options: { own?: boolean },
+  ): Promise<string | null> {
+    const reach = await this.wideReachOf(actor, capability);
+
+    // Whole Church passes; a subtree holder is bounded by their own rules (section 5).
+    if (reach === null || reach === undefined) {
+      return null;
+    }
+
+    if (options.own === true && sameId(actor.personId, personId)) {
+      return null;
+    }
+
+    if (await this.holdsRootSeat(personId)) {
+      return 'A Network root’s record is the Admin’s to change.';
+    }
+
+    const holder = await this.db
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.id')
+      .where('accounts.person_id', '=', personId)
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    return holder
+      ? 'A Senior Pastor’s or an administrator’s record is the Admin’s to change.'
+      : null;
   }
 
   /**

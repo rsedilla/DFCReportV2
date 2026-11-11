@@ -24,7 +24,7 @@ import {
 import { composeName } from './people.shared';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { ArchiveReason } from '../database/schema';
+import type { ArchiveReason, NetworkName, Sex } from '../database/schema';
 
 /** The reasons an archive may give now (SKILL.md section 3, decision 0397). */
 export const ARCHIVE_REASONS = [
@@ -382,10 +382,18 @@ export class PeopleLifecycleService {
   async archivedPage(
     limit: number,
     cursor: { archivedAt: string; id: string } | null,
+    /** Null for the whole church, or the one Network a Network Admin reads. */
+    network: NetworkName | null = null,
+    /** Persons left out: those a Network Admin may not restore. */
+    without: readonly string[] = [],
   ): Promise<{
     rows: Record<string, unknown>[];
     nextCursor: { archivedAt: string; id: string } | null;
   }> {
+    // A Network is its sex (section 4), and a correction of sex moves both in one
+    // transaction, so the Person's own column names their Network as it stands now.
+    const sex: Sex | null = network === null ? null : network === 'MENS' ? 'MALE' : 'FEMALE';
+
     const result = await sql<{
       id: string;
       member_id: string;
@@ -404,6 +412,8 @@ export class PeopleLifecycleService {
       WHERE life.ended_at IS NULL
         AND life.state = 'ARCHIVED'
         AND p.merged_into_id IS NULL
+        AND (${sex}::text IS NULL OR p.sex::text = ${sex})
+        AND p.id <> ALL(${[...without]}::uuid[])
         ${
           cursor === null
             ? sql``
