@@ -1538,7 +1538,7 @@ Single-use: `used_at` is set on redemption and a token with it set is refused. I
 
 ### The first Admin account
 
-Every account is provisioned by somebody holding `accounts.manage`, which only Admin holds at Whole Church, and a Network Admin over the Leader accounts of their own Network (Section 7). The first Admin account therefore cannot be provisioned by anybody, and something has to break the circle.
+Every account is provisioned by somebody holding `accounts.manage`, which only Admin holds at Whole Church, and a Network Admin over the Leader accounts of their own Network, a root's excepted (Section 7, decision 0470). The first Admin account therefore cannot be provisioned by anybody, and something has to break the circle.
 
 **A one-time operator-run command breaks it, and nothing else may.** It is not an endpoint. Section 7 keeps a closed list of routes reachable without authentication, and an unauthenticated route that mints the most powerful account in the system is the wrong thing to add to it: if its "no accounts exist yet" check is ever wrong, or two requests race it, whoever reaches the server first holds the church's records.
 
@@ -1891,7 +1891,7 @@ A role is a starting set, never a ceiling or a substitute for the checks themsel
 
 **What the column gives is narrowed by domain checks**, each refused `SCOPE_DENIED` because each concerns the actor's authority over the target:
 
-- **`accounts.manage` reaches only an account holding `LEADER` and no other role, whose Person is in their Network.** They give such an account, resend its activation, send it a reset, change its email, end its sessions, and disable or re-enable it. Any other account is neither listed for them nor touched, their own included; their own password, email and sessions are their own to change, as anyone's are (Section 6).
+- **`accounts.manage` reaches only an account holding `LEADER` and no other role, whose Person is in their Network and is not a Network root** (decision 0470). They give such an account, resend its activation, send it a reset, change its email, end its sessions, and disable or re-enable it. Any other account is neither listed for them nor touched, their own included; their own password, email and sessions are their own to change, as anyone's are (Section 6).
 - **`roles.manage` reaches only *Full view* on such an account.** *Approves Cells* and *Moves people* need it at Whole Church, and clearing Full view while either is on is refused, so that a tick only the Admin gives is only the Admin's to remove; the Admin clears those first.
 - **A Person holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`, and a Network root with or without an account, is read and never changed.** No edit, archive, restore or move reaches them. Their own basic details are the one exception, and only for their own Person.
 - **A Network root's own DCC line and their own SUYNL, Training and Conquest stay with the root and a Whole Church holder.** What a root or an administrator in the tree owes for other people is another matter: a root's 12 on a Sunday, whether or not the root holds an account, and the meetings of a Cell they lead, are recorded and corrected by a Network Admin on their behalf while the week is open, as by the Admin (Sections 9 and 14).
