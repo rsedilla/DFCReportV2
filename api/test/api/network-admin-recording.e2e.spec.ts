@@ -354,6 +354,24 @@ describe('the Network Admin records on a leader’s behalf (decision 0469)', () 
         expect(own.body.data[0]).toMatchObject({ event_id: eventId, checklist_of: null });
         expect(all.body.data[0]).toMatchObject({ event_id: eventId, checklist_of: wanda.id });
       });
+
+      it('is recorded for that Sunday by the Network Admin of the Network they are in now (decision 0474)', async () => {
+        const moved = await createPerson(db, { firstName: 'Willa', network: 'WOMENS' });
+        await assignTo(db, moved.id, wanda.id);
+        await request(app.getHttpServer())
+          .put(`/api/v1/people/${moved.id}/sex`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({ sex: 'MALE', reason: 'Entered in error.', pastoral_leader_id: manny.id })
+          .expect(200);
+        const mensAdmin = await createAccount(app, db, {
+          person: await createPerson(db, { firstName: 'Noel', network: 'MENS' }),
+          roles: ['NETWORK_ADMIN'],
+        });
+
+        expect(refused(await mark(networkAdmin, moved))).toEqual([403, 'SCOPE_DENIED']);
+        await mark(mensAdmin, moved).expect(201);
+      });
     });
 
     it('still refuses a Leader anybody off their own checklist', async () => {

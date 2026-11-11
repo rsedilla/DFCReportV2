@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-11, the trigger being decision 0473: of 472 files, 471 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0473 each moved the first two and
+2026-11-12, the trigger being decision 0474: of 473 files, 472 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0474 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-11 and triggered by 0473, and was left stale by 0474 the next day. The one before that was dated
 2026-11-11 and triggered by 0472, and was left stale by 0473 the same day. The one before that was dated
 2026-11-11 and triggered by 0471, and was left stale by 0472 the same day. The one before that was dated
 2026-11-11 and triggered by 0470, and was left stale by 0471 the same day. The one before that was dated
@@ -990,6 +991,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-11 — [A Network Admin places nobody under an administrator outside the tree](docs/decisions/0471-a-network-admin-places-nobody-under-an-administrator-outside-the-tree.md)
 - 2026-11-11 — [A Network Admin moves people into and out of a root's 12](docs/decisions/0472-a-network-admin-moves-people-into-and-out-of-a-roots-12.md)
 - 2026-11-11 — [A Network Admin's Cell powers reach every Cell of their Network](docs/decisions/0473-a-network-admins-cell-powers-reach-every-cell-of-their-network.md)
+- 2026-11-12 — [A Network Admin's reach over a Sunday follows the person's Network now](docs/decisions/0474-a-network-admins-reach-over-a-sunday-follows-the-persons-network-now.md)
 
 ### Open — awaiting a ruling
 
