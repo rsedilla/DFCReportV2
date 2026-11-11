@@ -17,7 +17,7 @@ import type { AccountRole } from '../../src/database/schema';
  * absences have their own cases below, because each of them looks like an
  * oversight, each would be convenient to widen, and each is load-bearing.
  */
-const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
+const TABLE: Record<Capability, Record<Exclude<AccountRole, 'NETWORK_ADMIN'>, string | null>> = {
   'people.view_subtree': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
@@ -162,7 +162,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   },
 };
 
-const ROLES: AccountRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
+const ROLES: Exclude<AccountRole, 'NETWORK_ADMIN'>[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
 
 describe('the role catalog (SKILL.md section 7)', () => {
   it.each(ROLES)('%s carries exactly the defaults the specification gives it', (role) => {
@@ -266,6 +266,18 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(ROLE_DEFAULTS.ADMIN['cell.move_members']).toBe('WHOLE_CHURCH');
     expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
     expect(ROLE_DEFAULTS.ADMIN['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
+  });
+
+  it('gives a Network Admin reads only, each across their Network, in this stage (decision 0469)', () => {
+    expect(ROLE_DEFAULTS.NETWORK_ADMIN).toEqual({
+      'people.view_subtree': 'NETWORK',
+      'dcc.view_subtree': 'NETWORK',
+      'cell.view_subtree': 'NETWORK',
+      'reports.view_subtree': 'NETWORK',
+      'conquest.view_subtree': 'NETWORK',
+      'suynl.view_subtree': 'NETWORK',
+      'training.view_subtree': 'NETWORK',
+    });
   });
 
   it('holds cell.request_leadership at subtree scope for every role', () => {

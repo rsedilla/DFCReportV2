@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
@@ -28,6 +28,7 @@ import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
   CIVIL_STATUS_OPTIONS,
   SEX_OPTIONS,
+  createNetworkAdmin,
   createPerson,
   getPerson,
   networkLabel,
@@ -122,6 +123,12 @@ function NewPersonForm() {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   // **Only the Admin is shown the title and sends it** (decision 0374): `people.set_title`.
   const mayTitle = holdsWholeChurch(me.data, 'people.set_title');
+  // **The one form that gives a Network Admin account** (section 7, decision 0469): this form
+  // with no leader, no Cell, and an email. The server refuses anybody else.
+  const search = useSearchParams();
+  const forNetworkAdmin =
+    search.get('as') === 'network-admin' && holdsWholeChurch(me.data, 'accounts.manage');
+  const [email, setEmail] = useState('');
   const myPath = useQuery({
     queryKey: ['pastoral-path', me.data?.person_id],
     queryFn: ({ signal }) => getPastoralPath(me.data?.person_id ?? '', signal),
@@ -245,25 +252,31 @@ function NewPersonForm() {
     // `setWriteKey` does not apply until the next render, so a mutation started
     // in the same handler that reset the key would still send the old one —
     // which is exactly the permanent refusal this is here to avoid.
-    mutationFn: ({ acknowledgedIds, key }: { acknowledgedIds: string[]; key: string }) =>
-      createPerson(
-        {
-          ...(mayTitle ? { title: values.title.trim() || null } : {}),
-          first_name: values.first_name.trim(),
-          middle_name: values.middle_name.trim() || null,
-          last_name: values.last_name.trim(),
-          sex: sex as Sex,
-          civil_status: values.civil_status as CivilStatus,
-          birth_date: notGiven.birth_date ? null : values.birth_date || null,
-          birth_date_not_given: notGiven.birth_date || undefined,
-          mobile_number: notGiven.mobile_number ? null : values.mobile_number.trim() || null,
-          mobile_number_not_given: notGiven.mobile_number || undefined,
-          pastoral_leader_id: chosenLeaderId as string,
-          acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
-        },
-        key,
-      ),
+    mutationFn: async ({ acknowledgedIds, key }: { acknowledgedIds: string[]; key: string }) => {
+      const fields = {
+        ...(mayTitle ? { title: values.title.trim() || null } : {}),
+        first_name: values.first_name.trim(),
+        middle_name: values.middle_name.trim() || null,
+        last_name: values.last_name.trim(),
+        sex: sex as Sex,
+        civil_status: values.civil_status as CivilStatus,
+        birth_date: notGiven.birth_date ? null : values.birth_date || null,
+        birth_date_not_given: notGiven.birth_date || undefined,
+        mobile_number: notGiven.mobile_number ? null : values.mobile_number.trim() || null,
+        mobile_number_not_given: notGiven.mobile_number || undefined,
+        acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
+      };
+      if (forNetworkAdmin) {
+        const made = await createNetworkAdmin({ ...fields, email: email.trim() }, key);
+        router.push(`/people/${made.person_id}?view=account`);
+        return null;
+      }
+      return createPerson({ ...fields, pastoral_leader_id: chosenLeaderId as string }, key);
+    },
     onSuccess: async (person) => {
+      if (person === null) {
+        return;
+      }
       if (cell) {
         try {
           await addCellMember(cell.id, person.id, idempotencyKeyFor('add', cell.id, person.id));
@@ -298,6 +311,7 @@ function NewPersonForm() {
         'birth_date_not_given',
         'mobile_number',
         'mobile_number_not_given',
+        'email',
       ]) {
         next[field] = fieldErrorFor(error, field);
       }
@@ -406,11 +420,19 @@ function NewPersonForm() {
     <main id="main" className={PAGE_WIDTH.READING}>
       <SectionFrame section="people">
       <p className="text-sm">
-        <TextLink href="/people">Back to people</TextLink>
+        {forNetworkAdmin ? (
+          <TextLink href="/admin?tab=accounts">Back to Accounts</TextLink>
+        ) : (
+          <TextLink href="/people">Back to people</TextLink>
+        )}
       </p>
-      <h1 className="mt-4 text-xl font-semibold tracking-tight">Add a person</h1>
+      <h1 className="mt-4 text-xl font-semibold tracking-tight">
+        {forNetworkAdmin ? 'Add a Network Admin' : 'Add a person'}
+      </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Search first — most &ldquo;new&rdquo; people already have a record somewhere in the church.
+        {forNetworkAdmin
+          ? 'Their Network is set from their sex. They have no leader and no Cell, and are in no count of people.'
+          : 'Search first — most “new” people already have a record somewhere in the church.'}
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 flex flex-col" data-form-layout noValidate>
@@ -537,6 +559,21 @@ function NewPersonForm() {
             creation, and a weaker match is something for the encoder to look at
             rather than something to answer.
           */}
+          {forNetworkAdmin ? (
+            <Field
+              label="Email address (required)"
+              type="email"
+              name="email"
+              autoComplete="off"
+              value={email}
+              error={fieldErrors.email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                beginNewWrite();
+              }}
+            />
+          ) : null}
+
           <PossibleMatches
             firstName={values.first_name}
             lastName={values.last_name}
@@ -546,6 +583,7 @@ function NewPersonForm() {
           />
         </FormSection>
 
+        {forNetworkAdmin ? null : (
         <FormSection
           title="Where they belong"
           description="Choose the leader first: their Cell Groups are listed first."
@@ -583,24 +621,36 @@ function NewPersonForm() {
             />
           </FieldPair>
         </FormSection>
+        )}
 
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
+        {forNetworkAdmin ? null : (
         <FormSection title="DCC stage">
             <p className="text-muted text-sm leading-relaxed">
               None yet. VIP, 2nd Timer, up to Regular: set automatically from the Sundays they
               attend, so there is nothing to choose.
             </p>
         </FormSection>
+        )}
 
         <FormActions>
           {/* Held while the duplicate check is paused (decision 0449): a match in another branch
               is shown only by that check. */}
-          <Button type="submit" disabled={create.isPending || !chosenLeaderId || checkPaused}>
+          <Button
+            type="submit"
+            disabled={
+              create.isPending ||
+              checkPaused ||
+              (forNetworkAdmin ? email.trim() === '' : !chosenLeaderId)
+            }
+          >
             {create.isPending
               ? 'Adding…'
               : checkPaused
                 ? 'Add Person (after the check)'
-                : 'Add Person'}
+                : forNetworkAdmin
+                  ? 'Add and send activation email'
+                  : 'Add Person'}
           </Button>
         </FormActions>
       </form>

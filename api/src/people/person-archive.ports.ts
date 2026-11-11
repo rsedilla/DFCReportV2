@@ -81,6 +81,12 @@ export interface ArchiveAccountsPort {
   ): Promise<void>;
 
   /**
+   * Ends the sessions of the Person's account where it holds `NETWORK_ADMIN`: a correction
+   * of their sex moves the Network they administer (section 7, decision 0469).
+   */
+  endNetworkAdminSessionsWithin(executor: Transaction<Database>, personId: string): Promise<void>;
+
+  /**
    * The Person an account belongs to, or null where it names none. For a merged record's
    * page, which says who merged it (decision 0408, point 14).
    */

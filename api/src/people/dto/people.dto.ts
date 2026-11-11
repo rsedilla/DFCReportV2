@@ -83,7 +83,7 @@ function IsBlankWhenTicked(field: string) {
  * "letters only" rule: it rejects real names and teaches encoders to invent
  * spellings, which is how duplicates get made.
  */
-export class CreatePersonDto {
+export class PersonFieldsDto {
   /**
    * Bishop, Pastora and the like (section 3, decision 0271). Shown before the name
    * and never compared as part of it. Blank is stored as null.
@@ -117,7 +117,7 @@ export class CreatePersonDto {
    * tick exists so that a birthday nobody gave is left blank rather than guessed: a
    * guessed one makes false Tier 1 matches that block real people being recorded.
    */
-  @ValidateIf((body: CreatePersonDto) => body.birth_date_not_given !== true)
+  @ValidateIf((body: PersonFieldsDto) => body.birth_date_not_given !== true)
   @IsManilaCalendarDate()
   birth_date?: string;
 
@@ -138,7 +138,7 @@ export class CreatePersonDto {
    * loosely validated: family abroad, visitors and landlines all produce numbers no
    * local mobile pattern accepts.
    */
-  @ValidateIf((body: CreatePersonDto) => body.mobile_number_not_given !== true)
+  @ValidateIf((body: PersonFieldsDto) => body.mobile_number_not_given !== true)
   @IsString()
   @Length(1, 40)
   @Matches(/\S/, { message: 'mobile_number must not be blank' })
@@ -151,6 +151,15 @@ export class CreatePersonDto {
   @IsBlankWhenTicked('mobile_number')
   mobile_number_not_given?: boolean;
 
+  /** Tier 1 candidates the actor has seen and passed over (section 3). */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(50)
+  acknowledged_duplicate_ids?: string[];
+}
+
+export class CreatePersonDto extends PersonFieldsDto {
   /**
    * Required here, though the service permits null. Section 9 captures the leader
    * at registration, and the guard resolves this endpoint's scope against them —
@@ -163,13 +172,6 @@ export class CreatePersonDto {
    */
   @IsUUID()
   pastoral_leader_id!: string;
-
-  /** Tier 1 candidates the actor has seen and passed over (section 3). */
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  @ArrayMaxSize(50)
-  acknowledged_duplicate_ids?: string[];
 }
 
 /**

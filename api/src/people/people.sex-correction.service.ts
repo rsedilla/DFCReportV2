@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
@@ -20,6 +20,7 @@ import { lockPersonsWithin } from '../database/person-lock';
 
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { listedProfile } from './people.shared';
+import { ARCHIVE_ACCOUNTS_PORT, type ArchiveAccountsPort } from './person-archive.ports';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Sex } from '../database/schema';
@@ -43,6 +44,7 @@ export class PeopleSexCorrectionService {
     private readonly networks: NetworksService,
     private readonly idempotency: IdempotencyService,
     private readonly authorization: AuthorizationService,
+    @Optional() @Inject(ARCHIVE_ACCOUNTS_PORT) private readonly accounts?: ArchiveAccountsPort,
   ) {}
 
   /**
@@ -324,6 +326,11 @@ export class PeopleSexCorrectionService {
           effectiveAt,
           this.networks,
         );
+        await this.authorization.assertNoNetworkAdminWithin(
+          trx,
+          [input.pastoralLeaderId],
+          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+        );
 
         ({ previousLeaderId } = await this.hierarchy.reassignWithin(trx, {
           personId,
@@ -418,6 +425,13 @@ export class PeopleSexCorrectionService {
         effective_at: effectiveAt.toISOString(),
         effective_date: manilaDayOf(effectiveAt),
       };
+
+      // Their Network moved, so a Network Admin's sessions end (decision 0469). Absent, a
+      // wiring fault closes the route rather than leaving them on the old Network's screens.
+      if (!this.accounts) {
+        throw new Error('ARCHIVE_ACCOUNTS_PORT is not bound.');
+      }
+      await this.accounts.endNetworkAdminSessionsWithin(trx, personId);
 
       // Last, and recording exactly what the endpoint returns (section 22).
       await this.idempotency.completeWithin(trx, {

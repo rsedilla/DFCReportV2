@@ -8,6 +8,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { PersonFieldsDto } from '../../people/dto/people.dto';
+
 import type { AccountRole } from '../../database/schema';
 import { IsEmailAddress } from '../../common/text/is-email-address';
 import { IsStorableText } from '../../common/text/is-storable-text';
@@ -43,6 +45,13 @@ export class ProvisionAccountDto {
   /** The role that qualifies the account. Provisioned together, never after. */
   @IsIn(ROLES)
   role!: AccountRole;
+}
+
+/** The one form giving a Network Admin account (section 7, decision 0469). */
+export class CreateNetworkAdminDto extends PersonFieldsDto {
+  @IsEmailAddress()
+  @MaxLength(320)
+  email!: string;
 }
 
 /**

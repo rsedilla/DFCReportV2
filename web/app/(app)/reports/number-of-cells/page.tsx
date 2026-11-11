@@ -7,7 +7,7 @@ import { PAGE_WIDTH } from '@/components/app-shell';
 import { BranchCountsPanel } from '@/components/branch-people';
 import { ChurchCountsPanel } from '@/components/church-counts';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
@@ -34,7 +34,8 @@ function NumberOfCells() {
       <ReportsTabs current="number-of-cells" month={monthFromQuery(month)}>
         {me.data === undefined ? (
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
-        ) : holdsWholeChurch(me.data, 'reports.view_subtree') ? (
+        ) : holdsWholeChurch(me.data, 'reports.view_subtree') ||
+          holdsNetwork(me.data, 'reports.view_subtree') !== null ? (
           <ChurchCountsPanel figure="CELLS" month={month} />
         ) : (
           <BranchCountsPanel

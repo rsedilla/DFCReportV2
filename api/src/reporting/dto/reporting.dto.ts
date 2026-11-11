@@ -36,14 +36,9 @@ export const REPORT_SCOPES = ['WHOLE_CHURCH', 'NETWORK', 'LEADER'] as const;
 /**
  * The scope selectors the **Cell** monthly report is asked for (sections 12 and 20).
  *
- * `NETWORK` is the one it excludes, and unlike the DCC list above that is a **deferral**
- * rather than a rule: section 20 says a Network narrows "which people the *person* key runs
- * over", and the Cell domain attributes by the meeting's responsible leader instead — so
- * what a `NETWORK`-scoped Cell figure narrows is unstated, and it is recorded as open in
- * `CLAUDE.md`. The DCC route shipped without `NETWORK` on the same terms and gained it when
- * a ruling settled it.
+ * `NETWORK` counts by the Cell's Network (section 20, decision 0469).
  */
-export const CELL_REPORT_SCOPES = ['WHOLE_CHURCH', 'LEADER', 'CELL'] as const;
+export const CELL_REPORT_SCOPES = ['WHOLE_CHURCH', 'NETWORK', 'LEADER', 'CELL'] as const;
 
 /** The two Networks (SKILL.md section 4). Closed, as the column is. */
 export const REPORT_NETWORKS = ['MENS', 'WOMENS'] as const;
@@ -129,6 +124,11 @@ export class CellMonthlyReportDto {
   @ValidateIf((dto: CellMonthlyReportDto) => dto.scope === 'LEADER')
   @IsUUID()
   leader_id?: string;
+
+  /** The Network the report is scoped to. Required where `scope` is `NETWORK`. */
+  @ValidateIf((dto: CellMonthlyReportDto) => dto.scope === 'NETWORK')
+  @IsIn(REPORT_NETWORKS)
+  network?: (typeof REPORT_NETWORKS)[number];
 
   /**
    * The Cell the report is scoped to. Required where `scope` is `CELL`.

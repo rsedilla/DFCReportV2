@@ -7,7 +7,7 @@ import { PAGE_WIDTH } from '@/components/app-shell';
 import { BranchCountsPanel } from '@/components/branch-people';
 import { ChurchCountsPanel } from '@/components/church-counts';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
@@ -30,7 +30,9 @@ function NumberOfPeople() {
   const month = params.get('month');
   const leader = params.get('leader');
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
+  const wholeChurch =
+    holdsWholeChurch(me.data, 'reports.view_subtree') ||
+    holdsNetwork(me.data, 'reports.view_subtree') !== null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>

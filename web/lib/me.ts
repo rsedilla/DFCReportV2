@@ -49,13 +49,15 @@ export interface SessionDescription {
 
 export type Screens = 'FULL' | 'SENIOR_PASTOR' | 'RECORDING';
 
-export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
+export type AccountRole = 'ADMIN' | 'NETWORK_ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
 
 /** Section 7's roles, in the words a leader would use for them. */
 export function roleLabel(role: AccountRole): string {
   switch (role) {
     case 'ADMIN':
       return 'Admin';
+    case 'NETWORK_ADMIN':
+      return 'Network Admin';
     case 'SENIOR_PASTOR':
       return 'Senior Pastor';
     case 'LEADER':
@@ -81,6 +83,24 @@ export function holdsWholeChurch(me: SessionDescription | undefined, capability:
   return (me?.capabilities ?? []).some(
     (grant) => grant.capability === capability && grant.scope_type === 'WHOLE_CHURCH',
   );
+}
+
+/**
+ * The one Network a capability reaches, for a holder short of Whole Church (decision 0469);
+ * null otherwise. Read off the grant list, as `holdsWholeChurch` is.
+ */
+export function holdsNetwork(
+  me: SessionDescription | undefined,
+  capability: string,
+): 'MENS' | 'WOMENS' | null {
+  if (holdsWholeChurch(me, capability)) {
+    return null;
+  }
+  const grant = (me?.capabilities ?? []).find(
+    (each) =>
+      each.capability === capability && each.scope_type === 'NETWORK' && each.scope_network !== null,
+  );
+  return (grant?.scope_network as 'MENS' | 'WOMENS' | undefined) ?? null;
 }
 
 /**

@@ -1090,6 +1090,12 @@ export class CellsLeadershipRequestService {
       );
     }
 
+    await this.authorization.assertNoNetworkAdminWithin(
+      trx,
+      [request.prospective_leader_id],
+      'That person is a Network Admin, who leads no Cell (SKILL.md section 7).',
+    );
+
     if (person.isArchived) {
       throw new InvariantViolationError(
         'That person has been archived since this request was submitted, so they cannot be ' +
@@ -1905,6 +1911,12 @@ export class CellsLeadershipRequestService {
           where,
         );
       }
+
+      await this.authorization.assertNoNetworkAdminWithin(
+        trx,
+        [personId],
+        `One of the members is a Network Admin, who belongs to no Cell${when}.${remedy}`,
+      );
 
       if ((await this.networks.currentNetwork(trx, personId)) !== leaderNetwork) {
         throw new InvariantViolationError(

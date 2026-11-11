@@ -16,6 +16,7 @@ import { CurrentActor } from './current-actor.decorator';
 import { SecondStepService } from './second-step.service';
 import {
   CorrectAccountEmailDto,
+  CreateNetworkAdminDto,
   ProvisionAccountDto,
   SetApprovesCellsDto,
   SetFullViewDto,
@@ -62,6 +63,35 @@ export class AccountsController {
   ): Promise<Record<string, unknown>> {
     return this.provisioning.provision(
       { personId: body.person_id, email: body.email, role: body.role },
+      actor,
+      claim,
+    );
+  }
+
+  /**
+   * Creates a Person and a `NETWORK_ADMIN` account together (section 7, decision 0469). A
+   * church target, so only a Whole Church holder of `accounts.manage` reaches it.
+   */
+  @Post('network-admin')
+  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
+  async provisionNetworkAdmin(
+    @Body() body: CreateNetworkAdminDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.provisioning.provisionNetworkAdmin(
+      {
+        title: body.title ?? null,
+        firstName: body.first_name,
+        middleName: body.middle_name ?? null,
+        lastName: body.last_name,
+        birthDate: body.birth_date_not_given === true ? null : (body.birth_date ?? null),
+        sex: body.sex,
+        civilStatus: body.civil_status,
+        mobileNumber: body.mobile_number_not_given === true ? null : (body.mobile_number ?? null),
+        acknowledgedDuplicateIds: body.acknowledged_duplicate_ids ?? [],
+        email: body.email,
+      },
       actor,
       claim,
     );

@@ -197,7 +197,13 @@ export function ChurchCountsPanel({
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : data ? (
         <>
-          <h2 className="field-label mt-4">Whole Church</h2>
+          <h2 className="field-label mt-4">
+            {data.network === 'WOMENS'
+              ? 'Women’s Network'
+              : data.network === 'MENS'
+                ? 'Men’s Network'
+                : 'Whole Church'}
+          </h2>
           <CountTiles
             figure={figure}
             value={(key) => data.whole_church[key]}

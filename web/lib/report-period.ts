@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import { rangeGuardMonth, rangeStartOf, type RangeKind } from '@/lib/report-range';
 import { monthFromQuery, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
@@ -15,6 +15,7 @@ export type ReportKind = Extract<RangeKind, 'WEEK' | 'MONTH'>;
 export type OwnScope =
   | { kind: 'ROOT_LEADERS' }
   | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'NETWORK'; network: 'MENS' | 'WOMENS' }
   | { kind: 'LEADER'; person_id: string };
 
 /**
@@ -36,6 +37,8 @@ export function useReportPeriod() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
+  // A Network Admin's reports are the Admin's for their own Network (decision 0469).
+  const ownNetwork = holdsNetwork(me.data, 'reports.view_subtree');
   // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
   // server's screens and never by a role.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
@@ -46,7 +49,9 @@ export function useReportPeriod() {
     ? { kind: 'ROOT_LEADERS' }
     : wholeChurch
       ? { kind: 'WHOLE_CHURCH' }
-      : me.data
+      : ownNetwork !== null
+        ? { kind: 'NETWORK', network: ownNetwork }
+        : me.data
         ? { kind: 'LEADER', person_id: me.data.person_id }
         : null;
 
@@ -61,6 +66,7 @@ export function useReportPeriod() {
     current,
     me,
     wholeChurch,
+    ownNetwork,
     seniorPastor,
     start,
     guardMonth: rangeGuardMonth(kind, start, today),

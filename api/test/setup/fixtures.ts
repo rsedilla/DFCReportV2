@@ -275,7 +275,9 @@ export async function createAccount(
       .execute();
   }
 
-  const owesSecondStep = options.roles.some((role) => role === 'ADMIN' || role === 'SENIOR_PASTOR');
+  const owesSecondStep = options.roles.some(
+    (role) => role === 'ADMIN' || role === 'SENIOR_PASTOR' || role === 'NETWORK_ADMIN',
+  );
   if (owesSecondStep && options.secondStep !== false) {
     await db
       .insertInto('second_steps')

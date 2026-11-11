@@ -236,7 +236,11 @@ export async function getCellTwelve(
   kind: RangeKind,
   start: string,
   guardMonth: string,
-  subject: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' } | { kind: 'ROOT_LEADERS' },
+  subject:
+    | { kind: 'LEADER'; person_id: string }
+    | { kind: 'WHOLE_CHURCH' }
+    | { kind: 'NETWORK'; network: ReportNetwork }
+    | { kind: 'ROOT_LEADERS' },
   signal?: AbortSignal,
 ): Promise<CellTwelve> {
   const params = twelveParams(kind, start, guardMonth, subject);
@@ -463,6 +467,8 @@ export interface ChurchCounts {
   period: string;
   current: boolean;
   at: string;
+  /** Set where these are one Network's counts rather than the church's (decision 0469). */
+  network?: 'MENS' | 'WOMENS' | null;
   whole_church: ChurchCountFigures;
   /** Null where the placement graph is refused (section 20); the whole church stands. */
   tables:

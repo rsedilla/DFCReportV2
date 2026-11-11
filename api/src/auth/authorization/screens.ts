@@ -5,7 +5,8 @@ import type { AccountRole } from '../../database/schema';
  * API so that a client never works it out from a role or from the capabilities (decision
  * 0323, point 5).
  *
- * - `FULL`: today's screens. An `ADMIN`, and a `LEADER` with Full view.
+ * - `FULL`: today's screens. An `ADMIN`, a `NETWORK_ADMIN` (decision 0469), and a `LEADER`
+ *   with Full view.
  * - `SENIOR_PASTOR`: an honoured `SENIOR_PASTOR` without `ADMIN` (decision 0325).
  * - `RECORDING`: a `LEADER` without Full view, and an account holding no honoured role.
  *
@@ -15,7 +16,7 @@ import type { AccountRole } from '../../database/schema';
 export type Screens = 'FULL' | 'SENIOR_PASTOR' | 'RECORDING';
 
 export function screensFor(roles: readonly AccountRole[], fullView: boolean): Screens {
-  if (roles.includes('ADMIN')) {
+  if (roles.includes('ADMIN') || roles.includes('NETWORK_ADMIN')) {
     return 'FULL';
   }
 
