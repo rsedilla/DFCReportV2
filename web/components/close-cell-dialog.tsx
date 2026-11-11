@@ -20,6 +20,7 @@ import {
   type CellSummary,
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
 
@@ -52,6 +53,9 @@ export function CloseCellDialog({
   cell: { id: string; name: string; leaderName: string | null };
 }) {
   const queryClient = useQueryClient();
+  // *Created in error* is the whole-church Admin's reason (decisions 0330 and 0469).
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayGiveCreatedInError = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
   const name = cell.name;
   const [reason, setReason] = useState<CellClosureReason | ''>('');
   const [explanation, setExplanation] = useState('');
@@ -164,7 +168,9 @@ export function CloseCellDialog({
             send.reset();
             setReason(next as CellClosureReason);
           }}
-          options={CLOSURE_REASONS.map((value) => ({ value, label: closureReasonLabel(value) }))}
+          options={CLOSURE_REASONS.filter(
+            (value) => value !== 'CREATED_IN_ERROR' || mayGiveCreatedInError,
+          ).map((value) => ({ value, label: closureReasonLabel(value) }))}
         />
 
         <div>

@@ -101,9 +101,19 @@ export class CellsIndexService {
    * `GET /api/v1/cells/schedule-clashes`: leaders whose running Cells start less than two
    * hours apart (section 10, decision 0392), each with those Cells. Ordered as every list of
    * people is, first name, surname and Member ID, and never by how close (decision 0359).
+   *
+   * The church's for a Whole Church holder, and for a Network Admin the leaders of their own
+   * Network (decision 0469).
    */
-  async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
-    const clashes = await scheduleClashesWithin(this.db);
+  async scheduleClashes(actor: Actor): Promise<{ data: Record<string, unknown>[] }> {
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.CellManageLifecycle,
+    );
+    const clashes = (await scheduleClashesWithin(this.db)).filter(
+      (clash) =>
+        membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(clash.leaderId)),
+    );
     const names = await this.people.namesOf(clashes.map((clash) => clash.leaderId));
     const key = (leaderId: string) => {
       const name = names.get(leaderId);
@@ -287,11 +297,13 @@ export class CellsIndexService {
       });
     }
 
-    // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355), so whether this
-    // reader may close is one answer for every row, given by the server.
+    // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355) or as the Network
+    // Admin role carries it (decision 0469), so whether this reader may close is one answer
+    // for every row they are shown, given by the server.
     const mayClose =
-      (await this.authorization.scopeMembership(actor, Capability.CellManageLifecycle)).kind ===
-      'WHOLE_CHURCH';
+      (await this.authorization.wideReachOf(actor, Capability.CellManageLifecycle, {
+        roleDefaultOnly: true,
+      })) !== undefined;
 
     let rows: Awaited<ReturnType<CellsReadService['cellsInScope']>>;
     let window: { months: string[]; quiet: Map<string, QuietMonth[]> } | null = null;

@@ -12,6 +12,7 @@ import {
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
 
+import { ScopeDeniedError } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 import { TreePagingQueryDto } from '../people/dto/network.dto';
@@ -198,15 +199,20 @@ export class CellsController {
    * decision 0392), for Admin to fix: the rule refuses every new clash, and these were
    * entered before it.
    *
-   * **`cell.manage_lifecycle` at Whole Church**, the capability decision 0355 keeps for
-   * Admin, because the fixes this list leads to, a schedule change or a handover, are
-   * Admin's to make across the church. The whole list, never paged: one row per leader
-   * with a clash, which the rule keeps from growing.
+   * **For whoever closes Cells**: `cell.manage_lifecycle` at Whole Church, and a Network
+   * Admin for the leaders of their own Network (decision 0469). The whole list, never paged:
+   * one row per leader with a clash, which the rule keeps from growing.
    */
   @Get('schedule-clashes')
-  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'church' })
-  async scheduleClashes(): Promise<{ data: Record<string, unknown>[] }> {
-    return this.index.scheduleClashes();
+  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'held' })
+  async scheduleClashes(
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[] }> {
+    // Whoever closes Cells reads this list: the Admin, and a Network Admin for their own
+    // Network (decision 0469). A Leader's subtree default reads nothing.
+    await this.assertAdministersCells(actor);
+
+    return this.index.scheduleClashes(actor);
   }
 
   /**
@@ -398,6 +404,8 @@ export class CellsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.assertMayChangeMember(actor, Capability.CellManageMembership, body.person_id);
+
     return this.membership.add(cellId, body.person_id, actor, claim);
   }
 
@@ -443,6 +451,8 @@ export class CellsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.assertMayChangeMember(actor, Capability.CellMoveMembers, personId);
+
     return this.membership.remove(cellId, personId, actor, claim);
   }
 
@@ -664,16 +674,16 @@ export class CellsController {
    * is that decision rather than a convenience: a member the request does not name
    * refuses the closure, and one it names who is no longer a member refuses it too.
    *
-   * The capability is `cell.manage_lifecycle` **checked against the church** (decision
-   * 0355): only a Whole Church holder closes, Admin by default, as direct creation is
-   * checked (decision 0352). A Leader's subtree default of the same capability is the
+   * The capability is `cell.manage_lifecycle` **held across the church or a whole Network**
+   * (decisions 0355 and 0469): Admin by default, and a Network Admin over the Cells of their
+   * own Network. A Leader's subtree default of the same capability is the
    * second-object check a handover or a restart makes, and closes nothing. Each
    * dispersal **destination** is a second object and is checked in the domain layer
    * under `cell.manage_membership`, which is the shape section 7 settles for a rule
    * about anything the guard did not resolve.
    */
   @Post(':id/closure')
-  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'church' })
+  @RequiresCapability(Capability.CellManageLifecycle, { kind: 'cell', from: 'params.id' })
   @HttpCode(200)
   async close(
     @Param('id') cellId: string,
@@ -681,6 +691,9 @@ export class CellsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // The guard placed the Cell in the actor's scope.
+    await this.assertAdministersCells(actor);
+
     return this.closure.close(
       cellId,
       {
@@ -695,5 +708,40 @@ export class CellsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * A root's, a Senior Pastor's and an administrator's place in a Cell is the Admin's to
+   * change directly (section 7, decisions 0469 and 0473).
+   *
+   * **Only for a Person the actor's scope covers.** Anybody else is left to the service's
+   * own refusal, which says the same of everyone outside that scope (sections 7 and 8).
+   */
+  private async assertMayChangeMember(
+    actor: Actor,
+    capability: Capability,
+    personId: string,
+  ): Promise<void> {
+    if (await this.authorization.covers(actor, capability, { kind: 'person', personId })) {
+      await this.authorization.assertMayChange(actor, capability, personId);
+    }
+  }
+
+  /**
+   * Refuses whoever holds `cell.manage_lifecycle` over a subtree alone, who closes nothing
+   * (decision 0355), in the words the guard uses. An explicit Network grant closes nothing
+   * either: below Whole Church only the Network Admin role's default does (decision 0469).
+   */
+  private async assertAdministersCells(actor: Actor): Promise<void> {
+    if (
+      (await this.authorization.wideReachOf(actor, Capability.CellManageLifecycle, {
+        roleDefaultOnly: true,
+      })) === undefined
+    ) {
+      throw new ScopeDeniedError(
+        `You hold ${Capability.CellManageLifecycle}, but not over this record.`,
+        { capability: Capability.CellManageLifecycle, target_kind: 'person' },
+      );
+    }
   }
 }

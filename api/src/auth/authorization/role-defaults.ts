@@ -196,6 +196,15 @@ const NETWORK_ADMIN: RoleDefaults = {
   [Capability.PeopleManagePastoralAssignment]: ScopeType.Network,
   [Capability.DccViewSubtree]: ScopeType.Network,
   [Capability.CellViewSubtree]: ScopeType.Network,
+  // The Cell powers (decision 0469, point 4). No `cell.request_leadership`: a new Cell or a
+  // new leader reaches them only as a request to decide. Direct creation and the reason
+  // `CREATED_IN_ERROR` ask for Whole Church or the `ADMIN` role and stay the Admin's.
+  [Capability.CellManageMembership]: ScopeType.Network,
+  [Capability.CellMoveMembers]: ScopeType.Network,
+  [Capability.CellManageLeadership]: ScopeType.Network,
+  [Capability.CellManageConfiguration]: ScopeType.Network,
+  [Capability.CellApproveLeadership]: ScopeType.Network,
+  [Capability.CellManageLifecycle]: ScopeType.Network,
   [Capability.ReportsViewSubtree]: ScopeType.Network,
   [Capability.ConquestViewSubtree]: ScopeType.Network,
   [Capability.SuynlViewSubtree]: ScopeType.Network,

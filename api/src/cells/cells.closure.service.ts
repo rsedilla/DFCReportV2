@@ -150,9 +150,8 @@ export class CellsClosureService {
       }
 
       // Section 10: scope over the Cell is re-decided inside the transaction, after
-      // the locks. **Since decision 0355 it cannot fail**: closing needs the capability at
-      // Whole Church, which covers every Cell. It is kept so that a narrower closer, if a
-      // later ruling allows one, is re-checked after the lock as it was before.
+      // the locks. A Whole Church holder always passes; a Network Admin (decision 0469) is
+      // re-checked here against the Cell as it stands under the lock.
       await this.assertStillInScopeWithin(
         trx,
         actor,

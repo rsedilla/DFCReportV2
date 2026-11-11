@@ -22,7 +22,7 @@ import {
 } from '@/lib/cells';
 import { useCursorPages } from '@/lib/cursor-pages';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsWide } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 import { TextLink } from '@/components/ui/text-link';
@@ -89,9 +89,10 @@ function CellMembers() {
   const mayRemove = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.move_members',
   );
-  // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355); offered only where
+  // Closing needs `cell.manage_lifecycle` at Whole Church (decision 0355) or as a Network
+  // Admin holds it (decision 0469); offered only where
   // the route would answer, and the route still decides (section 1, principle 4).
-  const mayClose = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
+  const mayClose = holdsWide(me.data, 'cell.manage_lifecycle');
   const [closing, setClosing] = useState(false);
 
   const month = reportingMonthOf();

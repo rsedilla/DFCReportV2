@@ -35,7 +35,7 @@ import {
 import { listApprovalRequests } from '@/lib/cell-approvals';
 import { useCursorPages } from '@/lib/cursor-pages';
 import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsWholeChurch, holdsWide } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
@@ -135,10 +135,10 @@ function CellsIndex() {
   const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
   // **The administrator's lists** (decision 0366): *Under 3 Members*, *Inactive 3+
   // Months* and *Closed Cells* are offered to an account holding `cell.manage_lifecycle`
-  // at Whole Church, which is who closes a Cell (decision 0355) and the same answer the server
+  // at Whole Church or as a Network Admin (decisions 0355 and 0469), which is who closes a Cell and the same answer the server
   // gives as `may_close`. A Full view leader holds it over their own branch and sees Active
   // Cells alone. Keyed on a capability's reach, never on a role (decision 0323, point 5).
-  const administers = holdsWholeChurch(me.data, 'cell.manage_lifecycle');
+  const administers = holdsWide(me.data, 'cell.manage_lifecycle');
   // Cells to Approve (decision 0352): for an account that may decide Cell leadership requests,
   // at Whole Church or, ticked Approves Cells, over its own branch.
   const approver = (me.data?.capabilities ?? []).some(
