@@ -268,8 +268,10 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(ROLE_DEFAULTS.ADMIN['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
   });
 
-  it('gives a Network Admin reads only, each across their Network, in this stage (decision 0469)', () => {
+  it('gives a Network Admin reads and the two account capabilities, each across their Network (decision 0469)', () => {
     expect(ROLE_DEFAULTS.NETWORK_ADMIN).toEqual({
+      'accounts.manage': 'NETWORK',
+      'roles.manage': 'NETWORK',
       'people.view_subtree': 'NETWORK',
       'dcc.view_subtree': 'NETWORK',
       'cell.view_subtree': 'NETWORK',

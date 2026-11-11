@@ -140,6 +140,20 @@
       "table": "persons",
       "kind": "join",
       "reason": "The Admin area lists every account (decision 0419) in first-name order, searched by name as well as by username and email. Rooted in accounts and joined to persons for that name, as cellsInScope is for a leader’s name."
+    },
+    {
+      "file": "src/auth/accounts-list.service.ts",
+      "method": "list",
+      "table": "network_assignments",
+      "kind": "join",
+      "reason": "A Network Admin reads the Leader accounts of their own Network (decision 0469). Rooted in accounts, and joined to the Person’s open Network row; returning a Network’s people for the caller to filter would bind half the church as parameters on every page."
+    },
+    {
+      "file": "src/auth/accounts-list.service.ts",
+      "method": "counts",
+      "table": "network_assignments",
+      "kind": "join",
+      "reason": "A Network Admin reads the Leader accounts of their own Network (decision 0469). Rooted in accounts, and joined to the Person’s open Network row; returning a Network’s people for the caller to filter would bind half the church as parameters on every page. The counts range over the accounts the list does."
     }
   ]
 }

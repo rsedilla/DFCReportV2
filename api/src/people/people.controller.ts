@@ -66,6 +66,7 @@ import {
   type SearchCursor,
 } from './people.shared';
 import { isStorableText } from '../common/text/storable-text';
+import { UuidParamPipe } from '../common/uuid-param.pipe';
 
 /**
  * `/api/v1/people` (SKILL.md section 22).
@@ -619,11 +620,15 @@ export class PeopleController {
    * **The Admin's alone, under `accounts.manage`**, which by default only the Admin holds at
    * Whole Church and section 7 now says covers this read: the owner chose that the log is shown
    * to the Admin only.
+   *
+   * **A church target, so the capability is needed at Whole Church**: a Network Admin holds it
+   * across one Network and is refused here (section 7, decision 0469).
    */
   @Get(':id/views')
-  @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'params.id' })
+  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
   async openings(
-    @Param('id') id: string,
+    // The guard no longer reads the id, so the path is checked here (section 22).
+    @Param('id', new UuidParamPipe('id')) id: string,
     @Query() query: TreePagingQueryDto,
   ): Promise<{ data: PersonView[]; next_cursor: string | null }> {
     const after = query.cursor === undefined ? null : decodeViewsCursor(query.cursor);

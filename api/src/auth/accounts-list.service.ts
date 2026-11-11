@@ -6,7 +6,7 @@ import { DATABASE, type Db } from '../database/database.module';
 import { normalizeName } from '../people/duplicate-matching';
 import { composeName, escapeLike } from '../people/people.shared';
 
-import type { AccountRole, AccountStatus, Database } from '../database/schema';
+import type { AccountRole, AccountStatus, Database, NetworkName } from '../database/schema';
 
 /** The filters of the Admin area's Accounts list (decision 0419). */
 export const ACCOUNT_FILTERS = [
@@ -44,22 +44,36 @@ type Eb = ExpressionBuilder<Database, 'accounts'>;
  *
  * Rooted in `accounts`, which this module owns, and joined to `persons` for the name it is
  * ordered and searched by: section 2's exempt shape, named in `module-boundaries.json`.
+ *
+ * **For a Network Admin, the Leader accounts of their own Network** (section 7, decision
+ * 0469): an account holding `LEADER` and no other role, whose Person is in that Network now
+ * and is not its root. `network` is null for the whole church.
  */
 @Injectable()
 export class AccountsListService {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
 
   async list(options: {
+    network: NetworkName | null;
+    /** Persons whose accounts are left out: the Network roots, for a Network Admin. */
+    without: readonly string[];
     q: string | null;
     filter: AccountFilter;
     limit: number;
     cursor: RosterCursor | null;
   }): Promise<{ rows: AccountListRow[]; nextCursor: RosterCursor | null }> {
-    const { q, filter, limit, cursor } = options;
+    const { network, without, q, filter, limit, cursor } = options;
 
     let query = this.db
       .selectFrom('accounts')
       .innerJoin('persons', 'persons.id', 'accounts.person_id')
+      // The Person's open Network row, one at most (`network_assignments_one_open`), for a
+      // Network Admin's list (decision 0469); named in `module-boundaries.json`.
+      .leftJoin('network_assignments', (join) =>
+        join
+          .onRef('network_assignments.person_id', '=', 'accounts.person_id')
+          .on('network_assignments.ended_at', 'is', null),
+      )
       .select((eb) => [
         'accounts.id as account_id',
         'accounts.person_id as person_id',
@@ -96,6 +110,15 @@ export class AccountsListService {
           .as('second_step_set_up_at'),
       ])
       .where((eb) => filterWhere(eb, filter))
+      .where((eb) => leaderAccountsOnly(eb, network !== null))
+      .where((eb) =>
+        network === null ? sql<boolean>`true` : eb('network_assignments.network', '=', network),
+      )
+      .where((eb) =>
+        without.length === 0
+          ? sql<boolean>`true`
+          : eb('accounts.person_id', 'not in', [...without]),
+      )
       .orderBy('persons.first_name')
       .orderBy('persons.last_name')
       .orderBy('persons.member_id')
@@ -172,9 +195,28 @@ export class AccountsListService {
   }
 
   /** How many accounts each filter holds, one statement so the counts agree. */
-  async counts(): Promise<Record<Lowercase<AccountFilter>, number>> {
+  async counts(
+    network: NetworkName | null,
+    without: readonly string[],
+  ): Promise<Record<Lowercase<AccountFilter>, number>> {
     const row = await this.db
       .selectFrom('accounts')
+      // The Person's open Network row, one at most (`network_assignments_one_open`), for a
+      // Network Admin's list (decision 0469); named in `module-boundaries.json`.
+      .leftJoin('network_assignments', (join) =>
+        join
+          .onRef('network_assignments.person_id', '=', 'accounts.person_id')
+          .on('network_assignments.ended_at', 'is', null),
+      )
+      .where((eb) => leaderAccountsOnly(eb, network !== null))
+      .where((eb) =>
+        network === null ? sql<boolean>`true` : eb('network_assignments.network', '=', network),
+      )
+      .where((eb) =>
+        without.length === 0
+          ? sql<boolean>`true`
+          : eb('accounts.person_id', 'not in', [...without]),
+      )
       .select((eb) =>
         ACCOUNT_FILTERS.map((filter) =>
           eb.fn
@@ -224,6 +266,37 @@ function owesSecondStep(eb: Eb) {
         .where('account_roles.revoked_at', 'is', null),
     )
     .$castTo<boolean>();
+}
+
+/**
+ * Where asked, only the accounts holding `LEADER` and no other role: what a Network Admin
+ * reaches (decision 0469).
+ */
+function leaderAccountsOnly(eb: Eb, only: boolean) {
+  if (!only) {
+    return sql<boolean>`true`;
+  }
+
+  return eb.and([
+    eb.exists(
+      eb
+        .selectFrom('account_roles')
+        .select('account_roles.id')
+        .whereRef('account_roles.account_id', '=', 'accounts.id')
+        .where('account_roles.role', '=', 'LEADER')
+        .where('account_roles.revoked_at', 'is', null),
+    ),
+    eb.not(
+      eb.exists(
+        eb
+          .selectFrom('account_roles')
+          .select('account_roles.id')
+          .whereRef('account_roles.account_id', '=', 'accounts.id')
+          .where('account_roles.role', '!=', 'LEADER')
+          .where('account_roles.revoked_at', 'is', null),
+      ),
+    ),
+  ]);
 }
 
 function filterWhere(eb: Eb, filter: AccountFilter) {

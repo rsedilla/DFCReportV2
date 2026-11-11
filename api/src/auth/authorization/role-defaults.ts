@@ -179,11 +179,14 @@ export const LEADER_MOVES_PEOPLE: RoleDefaults = {
 /**
  * A Network Admin (section 7, decision 0469), each scope naming their own Network.
  *
- * **Reads only, in this stage.** Section 7's column gives more, and each write capability
- * arrives with the domain checks that narrow it, so that no write is ever held without its
- * limits.
+ * **Reads, and the two account capabilities.** Section 7's column gives more, and each write
+ * capability arrives with the domain checks that narrow it, so that no write is ever held
+ * without its limits. `accounts.manage` and `roles.manage` are narrowed by
+ * `AccountReachService`: Leader accounts only, and Full view only.
  */
 const NETWORK_ADMIN: RoleDefaults = {
+  [Capability.AccountsManage]: ScopeType.Network,
+  [Capability.RolesManage]: ScopeType.Network,
   [Capability.PeopleViewSubtree]: ScopeType.Network,
   [Capability.DccViewSubtree]: ScopeType.Network,
   [Capability.CellViewSubtree]: ScopeType.Network,

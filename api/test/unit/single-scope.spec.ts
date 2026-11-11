@@ -77,6 +77,17 @@ describe('capabilities held only at Whole Church (section 7)', () => {
     expect(grantCoversNothing(Capability.AccountsManage, ScopeType.OwnSubtree, 'role')).toBe(true);
   });
 
+  it('keeps the Network Admin role default of the two account capabilities, and voids a grant of either (decision 0469)', () => {
+    for (const capability of [Capability.AccountsManage, Capability.RolesManage]) {
+      expect(grantCoversNothing(capability, ScopeType.Network, 'role')).toBe(false);
+      expect(grantCoversNothing(capability, ScopeType.Network, 'grant')).toBe(true);
+      expect(grantCoversNothing(capability, ScopeType.Network)).toBe(true);
+      // The role carries them at NETWORK and at no other narrower scope.
+      expect(grantCoversNothing(capability, ScopeType.OwnSubtree, 'role')).toBe(true);
+      expect(grantCoversNothing(capability, ScopeType.SubtreeExclSelf, 'role')).toBe(true);
+    }
+  });
+
   it('touches nothing outside the set', () => {
     // A wider grant is untouched too: section 7 contemplates Admin issuing
     // authority beyond a role's defaults, and this rule is about a grant that

@@ -85,5 +85,15 @@ export function grantCoversNothing(
     return false;
   }
 
+  // The Network Admin role carries the two account capabilities across one Network (decision
+  // 0469). A role default and not a grant, and no other role holds either at `NETWORK`.
+  if (
+    source === 'role' &&
+    scopeType === ScopeType.Network &&
+    (capability === Capability.AccountsManage || capability === Capability.RolesManage)
+  ) {
+    return false;
+  }
+
   return WHOLE_CHURCH_ONLY.has(capability) && scopeType !== ScopeType.WholeChurch;
 }

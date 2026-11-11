@@ -26,6 +26,7 @@ import {
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
 } from '@/lib/accounts';
+import { ApiRequestError } from '@/lib/api-client';
 import { roleLabel } from '@/lib/me';
 import { describeFailure, fieldErrorFor } from '@/lib/messages';
 
@@ -46,12 +47,18 @@ export function PersonAccount({
   firstName,
   own,
   mayTickFullView = false,
+  leaderAccountsOnly = false,
 }: {
   personId: string;
   firstName: string;
   own: boolean;
   /** The reader holds `roles.manage`, which ticks Full view (decision 0323). */
   mayTickFullView?: boolean;
+  /**
+   * The reader holds `accounts.manage` short of Whole Church, a Network Admin (decision 0469):
+   * Leader accounts only, Full view only, and any other account is the Admin's.
+   */
+  leaderAccountsOnly?: boolean;
 }) {
   const headingId = useId();
   const accessHeadingId = useId();
@@ -102,6 +109,18 @@ export function PersonAccount({
   });
 
   const current = account.data?.account ?? null;
+  // Not a Leader account of the reader's Network, so not theirs to see or change.
+  const outsideReach =
+    leaderAccountsOnly &&
+    account.error instanceof ApiRequestError &&
+    account.error.code === 'SCOPE_DENIED';
+  // A tick only the Admin gives is only the Admin's to remove (decision 0469).
+  const otherTicks = current
+    ? [
+        current.approves_cells ? 'Approves Cells' : null,
+        current.moves_people ? 'Moves people' : null,
+      ].filter((tick): tick is string => tick !== null)
+    : [];
 
   // Side by side only where the page itself widens (decision 0462).
   return (
@@ -115,7 +134,9 @@ export function PersonAccount({
       <div className="mt-3">
         <FailureNotice
           failure={
-            account.isError
+            outsideReach
+              ? null
+              : account.isError
               ? describeFailure(account.error)
               : resend.isError
                 ? describeFailure(resend.error)
@@ -130,6 +151,10 @@ export function PersonAccount({
 
       {account.isPending ? (
         <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+      ) : outsideReach ? (
+        <p className="text-muted mt-2 text-sm">
+          {firstName}&rsquo;s account is managed by the Admin.
+        </p>
       ) : account.isError ? null : current ? (
         <div className="mt-2">
           <p className="text-muted text-sm">
@@ -244,14 +269,27 @@ export function PersonAccount({
                 label="Full view"
                 value={current.full_view}
                 save={(next) => setFullView(current.id, next, crypto.randomUUID())}
+                locked={
+                  leaderAccountsOnly && current.full_view && otherTicks.length > 0
+                    ? `Only the Admin clears this while ${otherTicks.join(' and ')} is on.`
+                    : undefined
+                }
                 describe={(shown) =>
                   shown
                     ? `${firstName} sees Record, Reports, People, Cells and SUYNL over their branch.`
                     : `${firstName} sees the recording screens: Record, People, Cells and SUYNL.`
                 }
               />
-              {/* Offered only with Full view (decision 0352). */}
-              {current.full_view ? (
+              {/* Offered only with Full view (decision 0352). A Network Admin is shown the two
+                  that are on, and changes neither (decision 0469). */}
+              {current.full_view && leaderAccountsOnly ? (
+                otherTicks.length > 0 ? (
+                  <p className="text-muted mt-3 text-sm">
+                    {otherTicks.join(' and ')} {otherTicks.length > 1 ? 'are' : 'is'} on. Only the
+                    Admin changes {otherTicks.length > 1 ? 'these' : 'this'}.
+                  </p>
+                ) : null
+              ) : current.full_view ? (
                 <>
                   <LeaderTickRow
                     personId={personId}
@@ -304,6 +342,11 @@ export function PersonAccount({
               setKey(crypto.randomUUID());
             }}
           />
+          {leaderAccountsOnly ? (
+            <p className="text-muted text-sm">
+              A Leader account. {firstName} needs to lead a Cell first, or the account is refused.
+            </p>
+          ) : (
           <RadioGroup
             legend="Role"
             description="A Leader needs to lead a Cell first, or the account is refused. A Senior Pastor must be one of the two people the configuration names."
@@ -319,6 +362,7 @@ export function PersonAccount({
               { value: 'ADMIN', label: 'Admin' },
             ]}
           />
+          )}
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={email.trim() === '' || give.isPending}>
               {give.isPending ? 'Creating…' : 'Create Account'}
@@ -627,6 +671,7 @@ function LeaderTickRow({
   value,
   save,
   describe,
+  locked,
 }: {
   personId: string;
   field: 'full_view' | 'approves_cells' | 'moves_people';
@@ -634,6 +679,8 @@ function LeaderTickRow({
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;
   describe: (shown: boolean) => string;
+  /** Why the reader may not change it, where they may not; the box is then disabled. */
+  locked?: string;
 }) {
   const queryClient = useQueryClient();
   const inputId = useId();
@@ -664,12 +711,13 @@ function LeaderTickRow({
           type="checkbox"
           className="accent-accent mt-0.5 size-6 shrink-0"
           checked={shown}
-          disabled={change.isPending}
+          disabled={change.isPending || locked !== undefined}
           onChange={(event) => change.mutate(event.target.checked)}
         />
         <label htmlFor={inputId} className="text-sm leading-relaxed">
           <span className="font-bold">{label}</span>
           <span className="text-muted block">{describe(shown)}</span>
+          {locked ? <span className="text-muted block">{locked}</span> : null}
         </label>
       </div>
     </div>

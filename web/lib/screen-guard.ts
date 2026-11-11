@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getMe, holdsWholeChurch, type SessionDescription } from './me';
+import { getMe, holdsWholeChurch, holdsWide, type SessionDescription } from './me';
 
 /**
  * Whether a link may be drawn: a page that does not open for this account is not offered as a
@@ -44,9 +44,9 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     return holdsWholeChurch(me, 'conquest.view_subtree');
   }
   // The Admin area opens for whoever its item is drawn for: a holder of `accounts.manage` at
-  // Whole Church (decision 0419).
+  // Whole Church (decision 0419), or across one Network (decision 0469).
   if (at(/^\/admin(\/|$)/)) {
-    return holdsWholeChurch(me, 'accounts.manage');
+    return holdsWide(me, 'accounts.manage');
   }
   // My People is the recording screens' (decision 0422); a Full view leader reads the same list
   // inside Family Tree.

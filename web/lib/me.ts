@@ -88,6 +88,9 @@ export function holdsWholeChurch(me: SessionDescription | undefined, capability:
 /**
  * The one Network a capability reaches, for a holder short of Whole Church (decision 0469);
  * null otherwise. Read off the grant list, as `holdsWholeChurch` is.
+ *
+ * **A role default only**, which the Network Admin role alone carries at `NETWORK`. An explicit
+ * Network grant on a Leader's account leaves that leader's own screens as they were.
  */
 export function holdsNetwork(
   me: SessionDescription | undefined,
@@ -98,9 +101,20 @@ export function holdsNetwork(
   }
   const grant = (me?.capabilities ?? []).find(
     (each) =>
-      each.capability === capability && each.scope_type === 'NETWORK' && each.scope_network !== null,
+      each.capability === capability &&
+      each.scope_type === 'NETWORK' &&
+      each.scope_network !== null &&
+      each.source.toLowerCase() === 'role',
   );
   return (grant?.scope_network as 'MENS' | 'WOMENS' | undefined) ?? null;
+}
+
+/**
+ * Whether a capability is held across the whole church or one whole Network: what a route
+ * about the church or a Network as a whole asks (decision 0469).
+ */
+export function holdsWide(me: SessionDescription | undefined, capability: string): boolean {
+  return holdsWholeChurch(me, capability) || holdsNetwork(me, capability) !== null;
 }
 
 /**
