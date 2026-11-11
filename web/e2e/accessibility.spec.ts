@@ -3145,14 +3145,11 @@ test('the sidebar’s account row is one link with the initial, the name and My 
 });
 
 /**
- * A Cell's meeting screens mark Record, not Cells.
- *
- * **The address says Cells and the ruling says Record** (decision 0245): a meeting
- * screen is recording, whichever entry a leader reached it from. A prefix test alone
- * marks Cells, because `/cells/{id}/meetings` begins with `/cells`, so this is the
- * case that fails if the pattern owning these screens is ever lost.
+ * A Cell's meeting screens mark Cells, and only Cells (decision 0467, replacing decision
+ * 0245's Record for every account but the Senior Pastors, whose case is in
+ * screen-guard.spec.ts). Exactly one entry may claim the page.
  */
-test('a Cell meeting screen marks Record as the current page, not Cells', async ({ page }) => {
+test('a Cell meeting screen marks Cells as the current page, and nothing else', async ({ page }) => {
   await mockSignedIn(page);
   await mockCellMeetings(page);
 
@@ -3165,7 +3162,7 @@ test('a Cell meeting screen marks Record as the current page, not Cells', async 
   await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
     1,
   );
-  await expect(current).toHaveText('Record');
+  await expect(current).toHaveText('Cells');
 });
 
 /** A reader without a whole-church reporting grant sees Record first (decision 0277). */

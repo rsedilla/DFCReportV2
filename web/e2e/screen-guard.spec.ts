@@ -131,10 +131,14 @@ test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and 
   await page.goto(MEETINGS);
   // A meeting row first, so the buttons' absence is read after the meetings arrived.
   await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Back to Update Records' })).toHaveAttribute(
-    'href',
-    '/dashboard?list=awaiting',
-  );
+  // The way back is a small arrow naming Update Records (decision 0467), and the page is
+  // Record's, the Senior Pastors having no Cells item.
+  await expect(
+    page.getByRole('main').getByRole('link', { name: 'Update Records', exact: true }),
+  ).toHaveAttribute('href', '/dashboard?list=awaiting');
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
+  ).toHaveText('Record');
   await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change category' })).toHaveCount(0);
 
@@ -149,7 +153,9 @@ test('the change buttons are offered only with cell.manage_configuration', async
   await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
   await page.goto(MEETINGS);
   await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Back to Cells' })).toHaveAttribute('href', '/cells');
+  await expect(
+    page.getByRole('main').getByRole('link', { name: 'Cells', exact: true }),
+  ).toHaveAttribute('href', '/cells');
   await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
 
   await mockGrants(page, ['cell.manage_configuration']);
@@ -161,7 +167,9 @@ test('the change buttons are offered only with cell.manage_configuration', async
 test('on the recording screens a Cell’s page goes back to My Cell', async ({ page }) => {
   await as(page, 'RECORDING');
   await page.goto(MEETINGS);
-  await expect(page.getByRole('link', { name: 'Back to Cells' })).toHaveAttribute('href', '/my-cell');
+  await expect(
+    page.getByRole('main').getByRole('link', { name: 'My Cell', exact: true }),
+  ).toHaveAttribute('href', '/my-cell');
 });
 
 test('the note names the account’s screens, marks no item current, and leads to its start', async ({

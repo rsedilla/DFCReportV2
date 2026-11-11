@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -11,15 +12,15 @@ import { CellCategoryDialog } from '@/components/cell-category-dialog';
 import { CellScheduleDialog } from '@/components/cell-schedule-dialog';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
-import { Button, buttonClasses } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { InfoToggle } from '@/components/ui/info-toggle';
 import { CONTROL_BAR, FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
 import {
   categoryLabel,
   cellName,
-  cellSubtitle,
   listCellMeetings,
   meetingStateLabel,
   timeLabel,
@@ -28,9 +29,14 @@ import {
 } from '@/lib/cells';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
+import {
+  dayLabel,
+  monthDayLabel,
+  monthLabel,
+  reportingMonthOf,
+  todayInManila,
+} from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
-import { TextLink } from '@/components/ui/text-link';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 const LINK =
@@ -95,60 +101,84 @@ function CellMeetings() {
     (grant) => grant.capability === 'cell.manage_configuration',
   );
   // Back to where the account's own screens reached this from: Record's Update Records for the
-  // Senior Pastors, who have no Cells item, and My Cell on the recording screens (decision 0379).
-  const back =
-    me.data?.screens === 'SENIOR_PASTOR'
-      ? { href: '/dashboard?list=awaiting', label: 'Back to Update Records' }
-      : me.data?.screens === 'RECORDING'
-        ? { href: '/my-cell', label: 'Back to Cells' }
-        : { href: '/cells', label: 'Back to Cells' };
+  // Senior Pastors, who have no Cells item, My Cell on the recording screens, and the Cells list
+  // for everyone else (decision 0379). A small arrow naming it, as an app's detail page opens
+  // (decision 0467).
+  const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
+  const back = seniorPastor
+    ? { href: '/dashboard?list=awaiting', label: 'Update Records' }
+    : me.data?.screens === 'RECORDING'
+      ? { href: '/my-cell', label: 'My Cell' }
+      : { href: '/cells', label: 'Cells' };
+  const configurable = mayConfigure && meetings.data && meetings.data.cell_closed_on == null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <SectionFrame section="record">
-      <p className="mb-4">
-        <TextLink href={back.href}>{back.label}</TextLink>
+      {/* Cells' for every account with a Cells item, Record's for the Senior Pastors, with no
+          section name or tab above it: the way back and the sidebar say where it is (0467). */}
+      <SectionFrame section={seniorPastor ? 'record' : 'cells'} bare>
+      <p className="mb-3">
+        <Link
+          href={back.href}
+          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center gap-1 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          <ChevronLeft aria-hidden="true" className="size-5" />
+          {back.label}
+        </Link>
       </p>
 
-      <h1 className="text-xl font-semibold tracking-tight">
-        {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
-      </h1>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h1 className="text-xl font-semibold tracking-tight">
+          {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
+        </h1>
+        {/* From a tablet up, behind an ⓘ; on a phone, gone (decisions 0454 and 0467). */}
+        <InfoToggle label="About this page" className="hidden sm:inline-flex">
+          Every meeting this Cell was scheduled to hold this month, and what was recorded for it.
+          A meeting with no record yet is work outstanding rather than a meeting that did not
+          happen.
+        </InfoToggle>
+      </div>
       {meetings.data ? (
-        <p className="text-muted mt-1 text-sm">{cellSubtitle(meetings.data)}</p>
-      ) : null}
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Every meeting this Cell was scheduled to hold this month, and what was recorded for
-        it. A meeting with no record yet is work outstanding rather than a meeting that did
-        not happen.
-      </p>
-
-      {/* Every control in one bar, above the meetings (owner's choice, 2026-09-22). */}
-      <div className={`mt-6 ${CONTROL_BAR}`}>
-        <div className="flex flex-wrap gap-3">
-          <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
-            Members
+        <>
+          <p className="text-muted mt-1 text-sm">
+            {[
+              meetings.data.cell_id,
+              meetings.data.leader?.full_name ?? null,
+              meetings.data.cell_closed_on != null
+                ? `closed on ${dayLabel(meetings.data.cell_closed_on)}`
+                : null,
+            ]
+              .filter((part): part is string => part !== null)
+              .join(' · ')}
+          </p>
+          {/* The way to the members, as a pill rather than a button in a bar (decision 0467). */}
+          <Link
+            href={`/cells/${params.id}/members`}
+            className="bg-accent-tint text-accent focus-visible:outline-accent mt-3 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <Users aria-hidden="true" className="size-5" />
+            {meetings.data.cell_closed_on != null
+              ? 'Members'
+              : `${meetings.data.member_count} ${meetings.data.member_count === 1 ? 'member' : 'members'}`}
+            <ChevronRight aria-hidden="true" className="size-5" />
           </Link>
-          {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
-          {mayConfigure && meetings.data && meetings.data.cell_closed_on == null ? (
+        </>
+      ) : null}
+
+      {/* Changing the schedule or category, for an account that may (owner's choice,
+          2026-09-22, one bar); the month now heads the meetings (decision 0467). */}
+      {configurable ? (
+        <div className={`mt-6 ${CONTROL_BAR}`}>
+          <div className="flex flex-wrap gap-3">
             <Button variant="secondary" onClick={() => setChanging(true)}>
               Change Schedule
             </Button>
-          ) : null}
-          {/* Beside it, under the same capability, and refused for a closed Cell the same way
-              (decision 0367). */}
-          {mayConfigure && meetings.data && meetings.data.cell_closed_on == null ? (
             <Button variant="secondary" onClick={() => setChangingCategory(true)}>
               Change category
             </Button>
-          ) : null}
+          </div>
         </div>
-        {/*
-          No `open` flag here: this route does not return one. It is shown on the
-          Cells index and on the reports, and claiming it from a clock this screen
-          does not own would be a second answer to a question the API settles.
-        */}
-        <MonthPicker month={month} onChange={(next) => go({ month: next })} />
-      </div>
+      ) : null}
 
       {savedFrom ? (
         <p aria-live="polite" className="mt-4 text-sm font-medium">
@@ -186,9 +216,16 @@ function CellMeetings() {
         <LoadingBlocks shape="rows" className="mt-6" />
       ) : meetings.data ? (
         <section aria-labelledby="this-month-heading" className={FRAME}>
-          <h2 id="this-month-heading" className="field-label">
-            This month
+          <h2 id="this-month-heading" className="sr-only">
+            Meetings in {monthLabel(month)}
           </h2>
+          {/*
+            The month heads the meetings it changes (decision 0467). No `open` flag here: this
+            route does not return one. It is shown on the Cells index and on the reports, and
+            claiming it from a clock this screen does not own would be a second answer to a
+            question the API settles.
+          */}
+          <MonthPicker month={month} onChange={(next) => go({ month: next })} />
           <p className="mt-2">
             <CoverageFigure
               headline
@@ -247,12 +284,16 @@ function CellMeetings() {
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
                           className={`${LINK} text-accent`}
                         >
-                          {dayLabel(entry.scheduled_date)}
+                          {monthDayLabel(entry.scheduled_date)}
                         </Link>
-                        <span className="text-muted font-normal">
-                          {' '}
-                          at {timeLabel(entry.scheduled_time)}
-                        </span>
+                        {/* The weekday and time are the Cell's, said once in its title, so a
+                            row names only the date, and its time where it differs (0467). */}
+                        {entry.scheduled_time !== meetings.data.scheduled_time ? (
+                          <span className="text-muted font-normal">
+                            {' '}
+                            at {timeLabel(entry.scheduled_time)}
+                          </span>
+                        ) : null}
                       </h3>
                       <MeetingState entry={entry} today={today} />
                     </div>

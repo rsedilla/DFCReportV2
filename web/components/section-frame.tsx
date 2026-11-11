@@ -26,7 +26,19 @@ export type Section = 'people' | 'cells' | 'record' | 'account';
  * **The chosen tab is not this page.** It links back to the list the page was reached from
  * and carries no `aria-current`, which stays with the sidebar entry alone.
  */
-export function SectionFrame({ section, children }: { section: Section; children: ReactNode }) {
+export function SectionFrame({
+  section,
+  children,
+  bare = false,
+}: {
+  section: Section;
+  children: ReactNode;
+  /**
+   * The pane alone, with no section name or tab above it (decision 0467): a page that opens on
+   * its own way back, where the sidebar already says which section it is in.
+   */
+  bare?: boolean;
+}) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // The recording screens reach a Cell's pages from My Cell (decision 0323), and the others
@@ -46,6 +58,10 @@ export function SectionFrame({ section, children }: { section: Section; children
   // **Account draws no tab row** (owner, 2026-11-02): one tab that names the page itself offers
   // no choice, as decision 0420 says of Growth. Cells and Record keep theirs, which lead back.
   const tabShown = chosen !== null && section !== 'account' && offered(chosen.href);
+
+  if (bare) {
+    return <div className={cn(TAB_PANE, 'rounded-xl border-t pt-4')}>{children}</div>;
+  }
 
   return (
     <>
