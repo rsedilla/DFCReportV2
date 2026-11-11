@@ -85,8 +85,8 @@ Spec only; nothing is built by this ruling. The stage giving the role
 `people.manage_pastoral_assignment` adds a thirteenth case to `CLAUDE.md`'s authorization test
 suite with its test: a Network Admin moves a person between branches of their Network, and
 cannot move anybody into, out of or inside the other Network. It is not listed there yet
-because that list says each case is pinned by a test. The people named must not already be
-recorded with a place in the pastoral tree.
+because that list says each case is pinned by a test. The people the owner names as Network
+Admins must not already be recorded, since the form creates the Person.
 
 ---
 
