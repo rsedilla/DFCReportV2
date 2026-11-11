@@ -114,6 +114,20 @@ export function dayLabel(date: string): string {
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+/**
+ * "June 13": the month first, as Filipinos write a date day to day (decision 0467), for a list
+ * whose title already names the weekday every row falls on.
+ */
+export function monthDayLabel(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 /** Whether this month is later than the current Manila one, which no report covers. */
 export function hasNotBegun(reportingMonth: string): boolean {
   return reportingMonth > reportingMonthOf();
