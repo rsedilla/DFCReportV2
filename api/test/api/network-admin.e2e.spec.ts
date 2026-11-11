@@ -191,22 +191,20 @@ describe('the Network Admin (decision 0469)', () => {
       expect((await get(networkAdmin, `/people/${man.id}`)).status).toBe(403);
     });
 
-    it('holds no write in this stage', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/people')
-        .set('Authorization', `Bearer ${networkAdmin.accessToken}`)
-        .set('Idempotency-Key', randomUUID())
-        .send({
-          first_name: 'Added',
-          last_name: 'Byher',
-          birth_date_not_given: true,
-          sex: 'FEMALE',
-          civil_status: 'SINGLE',
-          mobile_number_not_given: true,
-          pastoral_leader_id: womensRoot.id,
-        });
+    it('holds no Cell, attendance or Growth write yet', async () => {
+      const me = await get(networkAdmin, '/auth/me');
+      const held = (me.body.capabilities as { capability: string }[]).map(
+        (grant) => grant.capability,
+      );
 
-      expect(response.status).toBe(403);
+      expect(
+        held.filter(
+          (capability) =>
+            !capability.endsWith('.view_subtree') &&
+            !capability.startsWith('people.') &&
+            !['accounts.manage', 'roles.manage'].includes(capability),
+        ),
+      ).toEqual([]);
     });
 
     it('is refused the church-wide directory', async () => {

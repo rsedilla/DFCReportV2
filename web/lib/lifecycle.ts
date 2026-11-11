@@ -64,6 +64,8 @@ export interface AbsentPerson {
   pastors: number;
   last_at_cell: string | null;
   last_at_dcc: string | null;
+  /** True where only the Admin changes the record, so the row carries no Archive (decision 0469). */
+  read_only?: boolean;
 }
 
 /** One row of the Admin's *Archived* view. */

@@ -77,8 +77,12 @@ describe('capabilities held only at Whole Church (section 7)', () => {
     expect(grantCoversNothing(Capability.AccountsManage, ScopeType.OwnSubtree, 'role')).toBe(true);
   });
 
-  it('keeps the Network Admin role default of the two account capabilities, and voids a grant of either (decision 0469)', () => {
-    for (const capability of [Capability.AccountsManage, Capability.RolesManage]) {
+  it('keeps the Network Admin role default of the account capabilities and archiving, and voids a grant of any (decision 0469)', () => {
+    for (const capability of [
+      Capability.AccountsManage,
+      Capability.RolesManage,
+      Capability.PeopleManageLifecycle,
+    ]) {
       expect(grantCoversNothing(capability, ScopeType.Network, 'role')).toBe(false);
       expect(grantCoversNothing(capability, ScopeType.Network, 'grant')).toBe(true);
       expect(grantCoversNothing(capability, ScopeType.Network)).toBe(true);

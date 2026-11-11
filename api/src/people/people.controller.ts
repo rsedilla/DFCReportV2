@@ -147,6 +147,12 @@ export class PeopleController {
     // So the scope is read once here, as the pre-flight read does, and the gate tests
     // a set. As there, an actor whose own subtree holds a cycle is refused, here on every
     // add rather than only on a duplicate; section 5 refuses a cycle when it is written.
+    await this.authorization.assertLeaderInTree(
+      actor,
+      Capability.PeopleCreate,
+      body.pastoral_leader_id,
+    );
+
     const membership = await this.authorization.scopeMembership(
       actor,
       Capability.PeopleViewSubtree,
@@ -393,9 +399,17 @@ export class PeopleController {
       decodeRosterLikeCursor(query.cursor),
     );
 
+    // A row a Network Admin may not archive says so, and carries no Archive (section 7).
+    const kept = new Set(
+      await this.authorization.personsOnlyTheAdminChanges(actor, Capability.PeopleManageLifecycle),
+    );
+
     return {
       months: page.months,
-      data: page.rows as unknown as Record<string, unknown>[],
+      data: (page.rows as unknown as Record<string, unknown>[]).map((row) => ({
+        ...row,
+        read_only: kept.has(row.id as string),
+      })),
       next_cursor: encodeJsonCursor(page.nextCursor),
     };
   }
@@ -405,13 +419,24 @@ export class PeopleController {
    * Guarded by the capability that restores them, because the view exists to restore from.
    */
   @Get('archived')
-  @RequiresCapability(Capability.PeopleManageLifecycle, { kind: 'actor' })
+  @RequiresCapability(Capability.PeopleManageLifecycle, { kind: 'held' })
   async archivedList(
     @Query() query: LifecycleListDto,
+    @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    // The whole church for the Admin, one Network for a Network Admin (decision 0469).
+    const reach = await this.authorization.wideReachOf(actor, Capability.PeopleManageLifecycle);
+
+    if (reach === undefined) {
+      throw new ScopeDeniedError('Archived people are outside your scope.', {});
+    }
+
+    // Nobody they could not restore is listed for them (section 7).
     const page = await this.lifecycle.archivedPage(
       query.limit ?? 50,
       decodeArchivedCursor(query.cursor),
+      reach,
+      await this.authorization.personsOnlyTheAdminChanges(actor, Capability.PeopleManageLifecycle),
     );
 
     return { data: page.rows, next_cursor: encodeJsonCursor(page.nextCursor) };
@@ -431,6 +456,8 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.authorization.assertMayChange(actor, Capability.PeopleManageLifecycle, id);
+
     // Returned unchanged: the service composed this body and recorded it inside the write's
     // transaction (section 22).
     return this.lifecycle.archive(
@@ -483,6 +510,8 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.authorization.assertMayChange(actor, Capability.PeopleManageLifecycle, id);
+
     return this.lifecycle.restore(id, actor, claim);
   }
 
@@ -610,6 +639,9 @@ export class PeopleController {
       archived: await this.lifecycle.archivedLineOf(person.id),
       // How many people they pastor now, so the page can say why Archive is not offered.
       pastors: await this.lifecycle.pastorsOf(person.id),
+      // True where a Network Admin reads a record only the Admin changes (section 7,
+      // decision 0469), so the page offers no edit, move or archive.
+      read_only: await this.authorization.readsOnly(actor, person.id),
     };
   }
 
@@ -816,6 +848,9 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // A Network Admin edits their own basic details and no other administrator's (section 7).
+    await this.authorization.assertMayChange(actor, Capability.PeopleEditBasic, id, { own: true });
+
     // Returned unchanged. The service composed this body and recorded it inside
     // the write's transaction, and reshaping it here would make the sent response
     // differ from the stored one (section 22).
@@ -899,6 +934,14 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // The person moved is the one a move reaches (section 7); either leader may be a root.
+    await this.authorization.assertMayChange(actor, Capability.PeopleManagePastoralAssignment, id);
+    await this.authorization.assertLeaderInTree(
+      actor,
+      Capability.PeopleManagePastoralAssignment,
+      body.pastoral_leader_id,
+    );
+
     // Returned unchanged: the service composed this body and recorded it inside
     // the write's transaction (section 22).
     return this.reassignment.reassignPastoralLeader(

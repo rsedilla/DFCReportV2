@@ -179,15 +179,21 @@ export const LEADER_MOVES_PEOPLE: RoleDefaults = {
 /**
  * A Network Admin (section 7, decision 0469), each scope naming their own Network.
  *
- * **Reads, and the two account capabilities.** Section 7's column gives more, and each write
- * capability arrives with the domain checks that narrow it, so that no write is ever held
- * without its limits. `accounts.manage` and `roles.manage` are narrowed by
- * `AccountReachService`: Leader accounts only, and Full view only.
+ * **Reads, the two account capabilities and the people capabilities.** Section 7's column
+ * gives more, and each write capability arrives with the domain checks that narrow it, so
+ * that no write is ever held without its limits. `accounts.manage` and `roles.manage` are
+ * narrowed by `AccountReachService`: Leader accounts only, and Full view only. Editing,
+ * archiving and moving are narrowed by `AuthorizationService.assertMayChange`: an
+ * administrator's, a Senior Pastor's and a Network root's record is read and never changed.
  */
 const NETWORK_ADMIN: RoleDefaults = {
   [Capability.AccountsManage]: ScopeType.Network,
   [Capability.RolesManage]: ScopeType.Network,
   [Capability.PeopleViewSubtree]: ScopeType.Network,
+  [Capability.PeopleCreate]: ScopeType.Network,
+  [Capability.PeopleEditBasic]: ScopeType.Network,
+  [Capability.PeopleManageLifecycle]: ScopeType.Network,
+  [Capability.PeopleManagePastoralAssignment]: ScopeType.Network,
   [Capability.DccViewSubtree]: ScopeType.Network,
   [Capability.CellViewSubtree]: ScopeType.Network,
   [Capability.ReportsViewSubtree]: ScopeType.Network,
