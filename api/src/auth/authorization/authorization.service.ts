@@ -293,7 +293,12 @@ export class AuthorizationService {
    * grant or a Network Admin's default, undefined where it is held over a subtree or not at
    * all. For a route about the church or a Network as a whole (decision 0469).
    */
-  async wideReachOf(actor: Actor, capability: Capability): Promise<NetworkName | null | undefined> {
+  async wideReachOf(
+    actor: Actor,
+    capability: Capability,
+    /** Count a Network only where the role carries it, never an explicit grant. */
+    options: { roleDefaultOnly?: boolean } = {},
+  ): Promise<NetworkName | null | undefined> {
     const authority = await this.authorityFor(actor.accountId);
     let network: NetworkName | undefined;
 
@@ -303,6 +308,9 @@ export class AuthorizationService {
       }
       if (grant.scope.type === ScopeType.WholeChurch) {
         return null;
+      }
+      if (options.roleDefaultOnly === true && grant.source !== 'role') {
+        continue;
       }
       if (grant.scope.type === ScopeType.Network && grant.scope.network !== null) {
         network = grant.scope.network;

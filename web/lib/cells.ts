@@ -100,8 +100,9 @@ export type CellClosureReason =
 /**
  * The reasons a new closure may give, in the order the owner chose (decision 0355).
  * `MEMBERS_DISPERSED` is shown on Cells closed with it and is never offered.
- * `CREATED_IN_ERROR` is offered to every closer, Admin by default; the server refuses it to
- * anyone without the `ADMIN` role (decision 0330).
+ * `CREATED_IN_ERROR` is the Admin's reason: the server refuses it to anyone without the
+ * `ADMIN` role (decision 0330), and the dialog leaves it out for a Network Admin (decision
+ * 0469).
  */
 export const CLOSURE_REASONS: readonly CellClosureReason[] = [
   'MERGED_INTO_ANOTHER_CELL',

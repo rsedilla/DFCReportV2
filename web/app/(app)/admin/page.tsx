@@ -208,9 +208,9 @@ function Home({
   const wholeChurch = network === null;
   const holds = (capability: string) => wholeChurch || holdsNetwork(me, capability) !== null;
   const mayApprove = holds('cell.approve_leadership');
+  const mayManageCells = holds('cell.manage_lifecycle');
   const mayAssign = holds('people.manage_pastoral_assignment');
   const mayAdd = holds('people.create');
-  const mayManageCells = holds('cell.manage_lifecycle');
   const scopeTitle = network === null ? 'Whole Church' : NETWORK_TITLES[network];
 
   const approvals = useQuery({

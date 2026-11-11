@@ -278,3 +278,73 @@ test.describe('No meeting in 3 months (decision 0355)', () => {
     );
   });
 });
+
+/** A Network Admin: `cell.manage_lifecycle` across the Men's Network, as the role carries it. */
+async function mockNetworkCloser(page: Page) {
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({
+        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0e',
+        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8da',
+        email: 'network.admin@example.invalid',
+        first_name: 'Nestor',
+        roles: ['NETWORK_ADMIN'],
+        screens: 'FULL',
+        people_i_oversee: true,
+        capabilities: ['cell.view_subtree', 'cell.manage_lifecycle', 'cell.approve_leadership'].map(
+          (capability) => ({
+            capability,
+            scope_type: 'NETWORK',
+            scope_network: 'MENS',
+            read_only: false,
+            source: 'ROLE',
+          }),
+        ),
+      }),
+    ),
+  );
+}
+
+test.describe('the Cells page for a Network Admin (decision 0469)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-16T02:00:00Z'));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await mockSignedIn(page);
+    await mockNetworkCloser(page);
+    await mockCellRoutes(page, { mayClose: true });
+    await page.route('**/api/v1/cells/leadership-requests*', (route) =>
+      route.fulfill(json({ data: [], next_cursor: null })),
+    );
+  });
+
+  test('has the Admin’s tabs, Time Clashes among them, and no New Cell', async ({ page }) => {
+    await page.route('**/api/v1/cells/schedule-clashes', (route) =>
+      route.fulfill(json({ data: [] })),
+    );
+    await page.goto('/cells?view=CLASH');
+
+    const tabs = page.getByRole('group', { name: 'Which Cells' }).getByRole('button');
+    await expect(tabs).toHaveText([
+      'Active Cells',
+      'Needs Attention',
+      'Closed Cells',
+      'Cells to Approve',
+    ]);
+    await expect(page.getByRole('button', { name: /^Time Clashes/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'New Cell' })).toHaveCount(0);
+  });
+
+  test('closes with every reason but Created in error', async ({ page }) => {
+    await page.goto('/cells?view=QUIET');
+    await page
+      .getByRole('button', { name: 'Close Cell, Youth · Tue, led by Dario Velasco' })
+      .filter({ visible: true })
+      .first()
+      .click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('radio', { name: 'Leader moved away' })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Other', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: /Created in error/i })).toHaveCount(0);
+  });
+});
