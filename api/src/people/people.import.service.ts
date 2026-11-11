@@ -180,6 +180,11 @@ export class PeopleImportService {
         input.encodedAt,
         this.networks,
       );
+      await this.authorization.assertNoNetworkAdminWithin(
+        transaction,
+        [input.placement.pastoralLeaderId],
+        'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+      );
     }
 
     const person = await transaction
@@ -475,6 +480,14 @@ export class PeopleImportService {
         this.networks,
       );
     }
+
+    await this.authorization.assertNoNetworkAdminWithin(
+      transaction,
+      input.placement.kind === 'UNDER'
+        ? [input.personId, input.placement.pastoralLeaderId]
+        : [input.personId],
+      'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+    );
 
     await this.hierarchy.openAssignmentWithin(
       transaction,

@@ -320,6 +320,8 @@ export class AuthorizationService {
     executor: Db,
     personIds: readonly string[],
     message: string,
+    /** What the refusal names, where a caller's refusals name a line (decision 0275). */
+    details?: Record<string, unknown>,
   ): Promise<void> {
     if (personIds.length === 0) {
       return;
@@ -335,14 +337,15 @@ export class AuthorizationService {
       .executeTakeFirst();
 
     if (holder) {
-      throw new InvariantViolationError(message, { person_id: holder.person_id });
+      throw new InvariantViolationError(message, details ?? { person_id: holder.person_id });
     }
   }
 
   /**
    * How many levels below the reader *People I oversee* lists (section 19, decision 0324):
    * two for a Leader account with Full view, one without, and no limit (null) for an
-   * account holding `SENIOR_PASTOR` or `ADMIN`. Read from the honoured roles, as `screens`.
+   * account holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`. Read from the honoured
+   * roles, as `screens`.
    */
   async overseeDepthFor(accountId: string): Promise<number | null> {
     const roles = await this.activeRoles(this.db, accountId);

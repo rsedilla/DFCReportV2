@@ -10,8 +10,10 @@ import {
   createAccount,
   createCell,
   createPerson,
+  createRequestMembers,
   createTestApp,
 } from '../setup/fixtures';
+import { TokensService } from '../../src/auth/tokens.service';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -128,7 +130,7 @@ describe('the Network Admin (decision 0469)', () => {
   }
 
   describe('the one form', () => {
-    it('creates a Person with no assignment and an account owing the second step', async () => {
+    it('creates a Person with no assignment and an account', async () => {
       const response = await create(admin, form());
 
       expect(response.status).toBe(201);
@@ -166,14 +168,14 @@ describe('the Network Admin (decision 0469)', () => {
 
   describe('held alone', () => {
     it('is refused beside any other role, by the database', async () => {
-      for (const role of ['LEADER', 'ADMIN'] as const) {
+      for (const role of ['LEADER', 'ADMIN', 'SENIOR_PASTOR'] as const) {
         await expect(
           db
             .insertInto('account_roles')
             .values({
               account_id: networkAdmin.id,
               role,
-              senior_pastor_slot: null,
+              senior_pastor_slot: role === 'SENIOR_PASTOR' ? 1 : null,
               granted_by: admin.id,
             })
             .execute(),
@@ -321,7 +323,7 @@ describe('the Network Admin (decision 0469)', () => {
       expect(sum(church.body.classification)).toBe(church.body.unique_people);
     });
 
-    it('lets Men’s and Women’s exceed Whole Church when somebody’s Network changed that month', async () => {
+    it('lets Men’s and Women’s exceed Whole Church for somebody counted in both', async () => {
       const longAgo = new Date('2024-01-03T12:00:00+08:00');
       const womensCell = await createCell(db, { leader: womensRoot, createdAt: longAgo });
       const mensCell = await createCell(db, { leader: mensRoot, createdAt: longAgo });
@@ -355,6 +357,271 @@ describe('the Network Admin (decision 0469)', () => {
         .where('id', '=', networkAdmin.id)
         .executeTakeFirstOrThrow();
       expect(account.sessions_revoked_at).not.toBeNull();
+    });
+  });
+
+  const put = (account: TestAccount, path: string, body: Record<string, unknown>) =>
+    request(app.getHttpServer())
+      .put(`/api/v1${path}`)
+      .set('Authorization', `Bearer ${account.accessToken}`)
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
+
+  const post = (account: TestAccount, path: string, body: Record<string, unknown>) =>
+    request(app.getHttpServer())
+      .post(`/api/v1${path}`)
+      .set('Authorization', `Bearer ${account.accessToken}`)
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
+
+  describe('the form, further', () => {
+    it('owes the second step and the seven-day session', async () => {
+      const made = await create(admin, form());
+      const account = await get(admin, `/accounts/for-person/${made.body.person_id as string}`);
+
+      expect(account.body.account.second_step.required).toBe(true);
+      expect(await app.get(TokensService).sessionDaysFor(made.body.id as string)).toBe(7);
+    });
+
+    it('audits the person with what the form wrote, the account and the role', async () => {
+      const made = await create(
+        admin,
+        form({ mobile_number_not_given: undefined, mobile_number: '0917-000-0001', title: 'Dr' }),
+      );
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'after'])
+        .where('target_id', 'in', [made.body.person_id as string, made.body.id as string])
+        .execute();
+      const actions = entries.map((entry) => entry.action);
+
+      expect(actions).toEqual(
+        expect.arrayContaining(['person.created', 'account.created', 'role.granted']),
+      );
+      const person = entries.find((entry) => entry.action === 'person.created');
+      expect(person?.after).toMatchObject({ title: 'Dr', mobile_number: '0917-000-0001' });
+    });
+
+    it('asks about a Tier 1 duplicate, and adds once it is acknowledged', async () => {
+      const details = {
+        first_name: 'Twin',
+        last_name: 'Sameperson',
+        birth_date_not_given: undefined,
+        birth_date: '1990-01-02',
+      };
+      expect((await create(admin, form(details))).status).toBe(201);
+
+      const again = await create(admin, form({ ...details, email: 'twin@example.test' }));
+      expect(again.status).toBe(409);
+      expect(again.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+
+      const ids = (again.body.error.details.candidates as { id: string }[]).map((each) => each.id);
+      const acknowledged = await create(
+        admin,
+        form({ ...details, email: 'twin@example.test', acknowledged_duplicate_ids: ids }),
+      );
+      expect(acknowledged.status).toBe(201);
+    });
+
+    it('replays a retry rather than creating a second account', async () => {
+      const key = randomUUID();
+      const send = () =>
+        request(app.getHttpServer())
+          .post('/api/v1/accounts/network-admin')
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send(form());
+
+      const first = await send();
+      const second = await send();
+
+      expect(second.status).toBe(201);
+      expect(second.body).toEqual(first.body);
+      const rows = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('email_normalized', '=', 'naomi@example.test')
+        .execute();
+      expect(rows).toHaveLength(1);
+    });
+  });
+
+  describe('outside the tree, further', () => {
+    it('refuses to move them as the subject', async () => {
+      const response = await put(admin, `/people/${networkAdminPerson.id}/pastoral-leader`, {
+        pastoral_leader_id: womensRoot.id,
+      });
+
+      expect(response.status).toBe(409);
+    });
+
+    it('refuses them as the leader of somebody added', async () => {
+      const response = await post(admin, '/people', {
+        first_name: 'Added',
+        last_name: 'Undernora',
+        birth_date_not_given: true,
+        sex: 'FEMALE',
+        civil_status: 'SINGLE',
+        mobile_number_not_given: true,
+        pastoral_leader_id: networkAdminPerson.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(JSON.stringify(response.body)).toContain('Network Admin');
+    });
+
+    it('refuses them as the new leader named in a sex correction', async () => {
+      const response = await put(admin, `/people/${man.id}/sex`, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: networkAdminPerson.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(JSON.stringify(response.body)).toContain('Network Admin');
+    });
+
+    it('refuses them as a member named on a new-Cell request, saying nothing of the role', async () => {
+      const prospective = await createPerson(db, { firstName: 'Prospect', network: 'WOMENS' });
+      await assignTo(db, prospective.id, womensRoot.id);
+      const requester = await createAccount(app, db, { person: womensRoot, roles: ['LEADER'] });
+      const members = await createRequestMembers(db, 'WOMENS', { under: womensRoot.id });
+
+      const response = await post(requester, '/cells/leadership-requests', {
+        kind: 'NEW_CELL',
+        prospective_leader_id: prospective.id,
+        category: 'YOUTH',
+        day_of_week: 6,
+        time_of_day: '19:00',
+        members: [networkAdminPerson.id, members.ids[0], members.ids[1]],
+      });
+
+      // Nobody's subtree holds them, so the requester's own scope refuses first.
+      expect(response.status).toBe(403);
+      expect(JSON.stringify(response.body)).not.toContain('Network Admin');
+    });
+  });
+
+  describe('reports for one Network, further', () => {
+    async function twoNetworks(): Promise<void> {
+      const longAgo = new Date('2024-01-03T12:00:00+08:00');
+      const womensCell = await createCell(db, { leader: womensRoot, createdAt: longAgo });
+      const mensCell = await createCell(db, { leader: mensRoot, createdAt: longAgo });
+      const womensMember = await addCellMember(db, womensCell, { from: longAgo });
+      const mensMember = await addCellMember(db, mensCell, { from: longAgo });
+      await heldMeeting(womensCell, womensMember.id, admin.id);
+      await heldMeeting(mensCell, mensMember.id, admin.id);
+    }
+
+    it('narrows cells/twelve to their Network', async () => {
+      await twoNetworks();
+      const response = await get(
+        networkAdmin,
+        `/reports/cells/twelve?kind=MONTH&start=${JUNE}&period=${JUNE}&scope=NETWORK&network=WOMENS`,
+      );
+      const church = await get(
+        admin,
+        `/reports/cells/twelve?kind=MONTH&start=${JUNE}&period=${JUNE}&scope=WHOLE_CHURCH`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.total.unique_people).toBe(1);
+      expect(church.body.total.unique_people).toBe(2);
+      expect(response.body.coverage.scheduled).toBeLessThan(church.body.coverage.scheduled);
+    });
+
+    it('splits coverage by the Cell’s Network, the two adding up to the church', async () => {
+      await twoNetworks();
+      const coverage = async (query: string) =>
+        (await get(admin, `/reports/cells/monthly?period=${JUNE}&${query}`)).body.coverage as {
+          scheduled: number;
+          recorded: number;
+        };
+
+      const womens = await coverage('scope=NETWORK&network=WOMENS');
+      const mens = await coverage('scope=NETWORK&network=MENS');
+      const church = await coverage('scope=WHOLE_CHURCH');
+
+      expect(womens.scheduled).toBeGreaterThan(0);
+      expect(womens.scheduled + mens.scheduled).toBe(church.scheduled);
+      expect(womens.recorded + mens.recorded).toBe(church.recorded);
+    });
+
+    it('counts a meeting by its leader’s Network on its date, not now', async () => {
+      const longAgo = new Date('2024-01-03T12:00:00+08:00');
+      const womensCell = await createCell(db, { leader: womensRoot, createdAt: longAgo });
+      const attendee = await addCellMember(db, womensCell, { from: longAgo });
+      // A responsible leader in the Women's Network on 6 June and the Men's from the 15th.
+      const moved = await createPerson(db, { firstName: 'Moved', network: 'WOMENS' });
+      const changedAt = new Date('2026-06-15T12:00:00+08:00');
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: changedAt })
+        .where('person_id', '=', moved.id)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({ person_id: moved.id, network: 'MENS', started_at: changedAt } as never)
+        .execute();
+      await heldMeeting({ ...womensCell, leaderId: moved.id }, attendee.id, admin.id);
+
+      const count = async (network: string) =>
+        (await get(admin, `/reports/cells/monthly?period=${JUNE}&scope=NETWORK&network=${network}`))
+          .body.unique_people as number;
+
+      expect(await count('WOMENS')).toBe(1);
+      expect(await count('MENS')).toBe(0);
+    });
+
+    it('trends a leader of their Network and refuses one of the other', async () => {
+      expect(
+        (await get(networkAdmin, `/reports/trends?figure=CELLS&leader_id=${woman.id}`)).status,
+      ).toBe(200);
+      expect(
+        (await get(networkAdmin, `/reports/trends?figure=CELLS&leader_id=${man.id}`)).status,
+      ).toBe(403);
+    });
+
+    it('trends their Network, named', async () => {
+      const response = await get(networkAdmin, '/reports/trends?figure=PEOPLE');
+
+      expect(response.status).toBe(200);
+      expect(response.body.lines[0].network).toBe('WOMENS');
+    });
+
+    it('keeps the DCC refusal of rows under a Network scope', async () => {
+      const response = await get(
+        admin,
+        `/reports/dcc/twelve?kind=MONTH&start=${JUNE}&period=${JUNE}&scope=NETWORK&network=WOMENS&rows=ROOT_LEADERS`,
+      );
+
+      expect(response.status).toBe(422);
+    });
+  });
+
+  describe('a correction of their sex, further', () => {
+    it('moves their Network, refuses the old token, and leaves a Leader’s sessions alone', async () => {
+      const leader = await createAccount(app, db, { person: woman, roles: ['LEADER'] });
+      await put(admin, `/people/${networkAdminPerson.id}/sex`, {
+        sex: 'MALE',
+        reason: 'Sex entered in error at encoding.',
+      }).expect(200);
+
+      const network = await db
+        .selectFrom('network_assignments')
+        .select('network')
+        .where('person_id', '=', networkAdminPerson.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(network.network).toBe('MENS');
+      expect((await get(networkAdmin, '/auth/me')).status).toBe(401);
+
+      await put(admin, `/people/${man.id}/sex`, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: womensRoot.id,
+      }).expect(200);
+      expect((await get(leader, '/auth/me')).status).toBe(200);
     });
   });
 });

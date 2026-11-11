@@ -185,7 +185,10 @@ export class AccountsRepository {
       .execute();
   }
 
-  /** `AdminAccountsPort`. Every Person holding an `ADMIN` role at `at` (decision 0339). */
+  /**
+   * `AdminAccountsPort`. Every Person holding an `ADMIN` or `NETWORK_ADMIN` role at `at`
+   * (decisions 0339 and 0469).
+   */
   async personsHoldingAdminAtWithin(
     executor: Db | Transaction<Database>,
     at: Date,

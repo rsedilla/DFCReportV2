@@ -118,6 +118,12 @@ export class CellsService {
         );
       }
 
+      await this.authorization.assertNoNetworkAdminWithin(
+        trx,
+        [input.cellLeaderId],
+        'That person is a Network Admin, who leads no Cell (SKILL.md section 7).',
+      );
+
       // One leader's Cells start at least two hours apart, Admin included (section 10,
       // decision 0392).
       await assertNoScheduleClashWithin(trx, {

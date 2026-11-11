@@ -264,7 +264,8 @@ export class ReportingController {
       );
     }
     await this.assertNamesSomebody(scope);
-    const rootLeaders = rootLeadersAsked(query.rows, scope.kind);
+    // A Network's rows are its Primaries already (decision 0469), so `rows` asks nothing more.
+    const rootLeaders = scope.kind === 'NETWORK' ? false : rootLeadersAsked(query.rows, scope.kind);
 
     const twelve = await this.reporting.cellTwelve(
       scope.kind === 'LEADER'
@@ -1194,7 +1195,6 @@ export class ReportingController {
     });
   }
 
-  /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
   /**
    * Whose counts a reader may have: null for the whole church, or their own Network (section
    * 20, decision 0469). A reader holding the capability over a subtree alone is refused, as
@@ -1208,6 +1208,7 @@ export class ReportingController {
     return reach;
   }
 
+  /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
   private async namer(ids: readonly string[]): Promise<{
     person: (id: string) => {
       id: string;
@@ -1662,9 +1663,6 @@ function countFigures(figures: ChurchCountFigures): Record<string, number> {
  */
 function rootLeadersAsked(rows: 'ROOT_LEADERS' | undefined, scope: string): boolean {
   if (rows === undefined) {
-    return false;
-  }
-  if (scope === 'NETWORK') {
     return false;
   }
   if (scope !== 'WHOLE_CHURCH') {

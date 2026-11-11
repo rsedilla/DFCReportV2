@@ -1915,7 +1915,10 @@ export class CellsLeadershipRequestService {
       await this.authorization.assertNoNetworkAdminWithin(
         trx,
         [personId],
-        `One of the members is a Network Admin, who belongs to no Cell${when}.${remedy}`,
+        // A backstop: a requester's scope refuses such a member first, as nobody's subtree
+        // holds them. It names no role in case a wider grant ever reaches it.
+        `One of the members cannot belong to a Cell${when}.${remedy}`,
+        where,
       );
 
       if ((await this.networks.currentNetwork(trx, personId)) !== leaderNetwork) {

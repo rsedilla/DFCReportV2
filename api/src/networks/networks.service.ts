@@ -103,6 +103,30 @@ export class NetworksService {
     return result.rows[0]?.differed === true;
   }
 
+  /**
+   * Each person's Network at their own instant, in one statement, aligned with `asks`. For a
+   * figure placing many people on many dates (section 20, decision 0469).
+   */
+  async networksEachAsOf(
+    executor: Db,
+    asks: readonly { personId: string; at: Date }[],
+  ): Promise<(NetworkName | null)[]> {
+    if (asks.length === 0) {
+      return [];
+    }
+
+    const ids = asks.map((ask) => ask.personId);
+    const instants = asks.map((ask) => ask.at.toISOString());
+    const rows = await sql<{ network: NetworkName | null }>`
+      SELECT network_as_of(ask.person_id, ask.at) AS network
+        FROM unnest(${ids}::uuid[], ${instants}::timestamptz[])
+             WITH ORDINALITY AS ask(person_id, at, position)
+       ORDER BY ask.position
+    `.execute(executor);
+
+    return rows.rows.map((row) => row.network);
+  }
+
   async networkAsOf(executor: Db, personId: string, at: Date): Promise<NetworkName | null> {
     const row = await executor
       .selectFrom('network_assignments')

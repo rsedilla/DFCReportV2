@@ -102,6 +102,15 @@ export class PeopleSexCorrectionService {
     // would be a rule nobody could reason about.
     const authority = await this.authorization.authorityFor(actor.accountId);
 
+    // Refused before anything is written where a Network Admin's sessions could not be ended.
+    if (this.accounts === undefined) {
+      throw new InvariantViolationError(
+        'This deployment cannot correct a sex: a port it needs is not bound.',
+        {},
+      );
+    }
+    const accounts = this.accounts;
+
     const backdated = input.effectiveDate !== undefined;
 
     if (input.effectiveDate !== undefined) {
@@ -426,12 +435,8 @@ export class PeopleSexCorrectionService {
         effective_date: manilaDayOf(effectiveAt),
       };
 
-      // Their Network moved, so a Network Admin's sessions end (decision 0469). Absent, a
-      // wiring fault closes the route rather than leaving them on the old Network's screens.
-      if (!this.accounts) {
-        throw new Error('ARCHIVE_ACCOUNTS_PORT is not bound.');
-      }
-      await this.accounts.endNetworkAdminSessionsWithin(trx, personId);
+      // Their Network moved, so a Network Admin's sessions end (decision 0469).
+      await accounts.endNetworkAdminSessionsWithin(trx, personId);
 
       // Last, and recording exactly what the endpoint returns (section 22).
       await this.idempotency.completeWithin(trx, {

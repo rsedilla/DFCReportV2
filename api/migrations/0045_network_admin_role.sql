@@ -7,7 +7,7 @@
 -- a value added to an enum inside the transaction that added it, and the runner
 -- gives each migration its own transaction.
 --
--- `IF NOT EXISTS` so that reverting the next migration and re-applying it works.
+-- `IF NOT EXISTS` so that reverting this migration and re-applying it works.
 -- ---------------------------------------------------------------------------
 
 ALTER TYPE account_role ADD VALUE IF NOT EXISTS 'NETWORK_ADMIN';

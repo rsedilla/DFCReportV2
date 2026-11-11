@@ -1224,29 +1224,19 @@ export class ReportingService {
 
     // The Cell's Network: its leader's on the scheduled date (section 20, decision 0469).
     if (scope.kind === 'NETWORK') {
-      const days = [...new Set(pairs.map((pair) => pair.scheduledDate))];
-      const members = new Map(
-        await Promise.all(
-          days.map(
-            async (day) =>
-              [
-                day,
-                new Set(
-                  (
-                    await this.networks.peopleInNetworkAsOf(trx, scope.network, endOfManilaDay(day))
-                  ).map((id) => canonicalId(id)),
-                ),
-              ] as const,
-          ),
-        ),
+      const placed = pairs.flatMap((pair) => {
+        const place = pair.placeId ?? pair.leaderId;
+        return place === null ? [] : [{ pair, place }];
+      });
+      const networks = await this.networks.networksEachAsOf(
+        trx,
+        placed.map(({ pair, place }) => ({
+          personId: place,
+          at: endOfManilaDay(pair.scheduledDate),
+        })),
       );
 
-      return pairs.filter((pair) => {
-        const place = pair.placeId ?? pair.leaderId;
-        return (
-          place !== null && (members.get(pair.scheduledDate)?.has(canonicalId(place)) ?? false)
-        );
-      });
+      return placed.filter((_, index) => networks[index] === scope.network).map(({ pair }) => pair);
     }
 
     const dates = [...new Set(pairs.map((pair) => pair.scheduledDate))];
