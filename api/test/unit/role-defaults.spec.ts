@@ -268,7 +268,7 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(ROLE_DEFAULTS.ADMIN['people.manage_pastoral_assignment']).toBe('WHOLE_CHURCH');
   });
 
-  it('gives a Network Admin reads and the account, people, Cell and recording capabilities, each across their Network (decision 0469)', () => {
+  it('gives a Network Admin reads and the account, people, Cell, recording and Growth capabilities, each across their Network (decision 0469)', () => {
     expect(ROLE_DEFAULTS.NETWORK_ADMIN).toEqual({
       'accounts.manage': 'NETWORK',
       'roles.manage': 'NETWORK',
@@ -293,8 +293,14 @@ describe('the role catalog (SKILL.md section 7)', () => {
       'cell.manage_lifecycle': 'NETWORK',
       'reports.view_subtree': 'NETWORK',
       'conquest.view_subtree': 'NETWORK',
+      'conquest.confirm': 'NETWORK',
+      'conquest.confirm_on_behalf': 'NETWORK',
       'suynl.view_subtree': 'NETWORK',
+      'suynl.confirm': 'NETWORK',
+      'suynl.confirm_on_behalf': 'NETWORK',
       'training.view_subtree': 'NETWORK',
+      'training.confirm': 'NETWORK',
+      'training.confirm_on_behalf': 'NETWORK',
     });
   });
 

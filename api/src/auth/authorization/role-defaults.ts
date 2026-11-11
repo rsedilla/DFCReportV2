@@ -220,6 +220,16 @@ const NETWORK_ADMIN: RoleDefaults = {
   [Capability.ConquestViewSubtree]: ScopeType.Network,
   [Capability.SuynlViewSubtree]: ScopeType.Network,
   [Capability.TrainingViewSubtree]: ScopeType.Network,
+  // Filing Growth records for a leader (decision 0469, point 5). They are in nobody's tree,
+  // so every row they file is somebody else's statement, recorded as on behalf; a Network
+  // root's own records ask for the confirming capability at Whole Church and stay the
+  // Admin's (`growth-filing.ts`).
+  [Capability.ConquestConfirm]: ScopeType.Network,
+  [Capability.ConquestConfirmOnBehalf]: ScopeType.Network,
+  [Capability.SuynlConfirm]: ScopeType.Network,
+  [Capability.SuynlConfirmOnBehalf]: ScopeType.Network,
+  [Capability.TrainingConfirm]: ScopeType.Network,
+  [Capability.TrainingConfirmOnBehalf]: ScopeType.Network,
 };
 
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
