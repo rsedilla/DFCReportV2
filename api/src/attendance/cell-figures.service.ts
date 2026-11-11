@@ -6,7 +6,7 @@ import { monthClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
 import { mergedCte, type MergedPairs } from '../common/merged-identity';
 
-import type { Database } from '../database/schema';
+import type { Database, NetworkName } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
@@ -46,7 +46,12 @@ export type CellFiguresPopulation =
   /** Every meeting whose frozen responsible leader is one of these people (section 20). */
   | { kind: 'RESPONSIBLE_LEADERS'; personIds: readonly string[] }
   /** Whole Church: every recorded meeting in the month. */
-  | { kind: 'EVERY_CELL' };
+  | { kind: 'EVERY_CELL' }
+  /**
+   * One Network: the meetings whose responsible leader was in it on the meeting's date
+   * (section 20, decision 0469).
+   */
+  | { kind: 'NETWORK'; network: NetworkName };
 
 /**
  * The figures themselves, shaped so that a bucket cannot be computed where section 12
@@ -269,6 +274,8 @@ export class CellFiguresService {
     to: string,
     leaders: readonly string[] | null,
     merges: MergedPairs,
+    /** Narrows to one Network's meetings (section 20, decision 0469). */
+    network: NetworkName | null = null,
   ): Promise<(CellClassificationFigure & { leaderIds: string[] })[]> {
     const list = leaders === null ? null : [...leaders];
 
@@ -285,6 +292,13 @@ export class CellFiguresService {
            AND (
              ${list}::uuid[] IS NULL
              OR coalesce(ml.kept_id, cm.responsible_leader_id) = ANY (${list}::uuid[])
+           )
+           AND (
+             ${network}::network IS NULL
+             OR network_as_of(
+               cm.responsible_leader_id,
+               (cm.scheduled_date + 1)::timestamp AT TIME ZONE 'Asia/Manila' - interval '1 millisecond'
+             ) = ${network}::network
            )
       ),
       attended AS (
@@ -398,6 +412,7 @@ export class CellFiguresService {
     // it answers that one correctly without a branch.
     const cellId = population.kind === 'CELL' ? population.cellId : null;
     const leaders = population.kind === 'RESPONSIBLE_LEADERS' ? [...population.personIds] : null;
+    const network = population.kind === 'NETWORK' ? population.network : null;
 
     const rows = await sql<{
       n: string;
@@ -417,6 +432,13 @@ export class CellFiguresService {
            AND (
              ${leaders}::uuid[] IS NULL
              OR coalesce(ml.kept_id, cm.responsible_leader_id) = ANY (${leaders}::uuid[])
+           )
+           AND (
+             ${network}::network IS NULL
+             OR network_as_of(
+               cm.responsible_leader_id,
+               (cm.scheduled_date + 1)::timestamp AT TIME ZONE 'Asia/Manila' - interval '1 millisecond'
+             ) = ${network}::network
            )
       ),
       -- The month's attendees first, then each one's history (DccFiguresService says why).

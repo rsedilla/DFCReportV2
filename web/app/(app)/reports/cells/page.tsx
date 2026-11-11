@@ -24,6 +24,7 @@ import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { useKeptLeader } from '@/lib/merged-leader';
 import { getCellTwelve } from '@/lib/reports';
+import { networkLabel } from '@/lib/people';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
@@ -62,7 +63,7 @@ export function CellReport() {
   // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
   const period = useReportPeriod();
-  const { kind, current, me, wholeChurch, seniorPastor } = period;
+  const { kind, current, me, wholeChurch, ownNetwork, seniorPastor } = period;
   const { start, guardMonth, own, periodParams } = period;
   const leader = search.get('leader');
   // A leader merged away opens the record kept's report (decision 0408, point 22).
@@ -129,8 +130,14 @@ export function CellReport() {
               onChange={(event) => go({ leader: event.target.value === '' ? null : event.target.value })}
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              <option value="">{wholeChurch ? 'Whole Church' : 'People you oversee'}</option>
-              <optgroup label={wholeChurch ? 'The pastors’ 12' : 'My 12'}>
+              <option value="">
+                {wholeChurch
+                  ? 'Whole Church'
+                  : ownNetwork !== null
+                    ? networkLabel(ownNetwork)
+                    : 'People you oversee'}
+              </option>
+              <optgroup label={wholeChurch || ownNetwork !== null ? 'The pastors’ 12' : 'My 12'}>
                 {options.map((row) => (
                   <option key={row.leader!.id} value={row.leader!.id}>
                     {row.leader!.full_name}
@@ -212,6 +219,7 @@ export function CellReport() {
                 twelve={twelve.data}
                 kind={kind}
                 subjectName={subjectName}
+                title={subject?.kind === 'NETWORK' ? networkLabel(subject.network) : undefined}
                 openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
               />
             )}

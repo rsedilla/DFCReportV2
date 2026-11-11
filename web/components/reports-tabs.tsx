@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 
 import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import type { RangeKind } from '@/lib/report-range';
 import type { TrendFigure } from '@/lib/reports';
 import { cn } from '@/lib/utils';
@@ -359,7 +359,8 @@ export function ReportViewSwitch({
       attendance ||
       seniorPastor ||
       isBranchReader(me.data) ||
-      holdsWholeChurch(me.data, 'reports.view_subtree')
+      holdsWholeChurch(me.data, 'reports.view_subtree') ||
+      holdsNetwork(me.data, 'reports.view_subtree') !== null
     )
   ) {
     return null;
@@ -408,7 +409,8 @@ export function isBranchReader(me: Parameters<typeof holdsWholeChurch>[0]): bool
     me !== undefined &&
     me.screens !== 'SENIOR_PASTOR' &&
     me.capabilities.some((grant) => grant.capability === 'reports.view_subtree') &&
-    !holdsWholeChurch(me, 'reports.view_subtree')
+    !holdsWholeChurch(me, 'reports.view_subtree') &&
+    holdsNetwork(me, 'reports.view_subtree') === null
   );
 }
 

@@ -156,6 +156,7 @@ export class ReportingController {
     kind: 'report_scope',
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
     cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })
@@ -204,6 +205,7 @@ export class ReportingController {
     kind: 'report_scope',
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
     cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })
@@ -242,6 +244,7 @@ export class ReportingController {
     kind: 'report_scope',
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
     cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })
@@ -266,9 +269,11 @@ export class ReportingController {
     const twelve = await this.reporting.cellTwelve(
       scope.kind === 'LEADER'
         ? { kind: 'LEADER', person_id: scope.person_id }
-        : rootLeaders
-          ? { kind: 'ROOT_LEADERS' }
-          : { kind: 'WHOLE_CHURCH' },
+        : scope.kind === 'NETWORK'
+          ? { kind: 'NETWORK_LEADERS', network: scope.network }
+          : rootLeaders
+            ? { kind: 'ROOT_LEADERS' }
+            : { kind: 'WHOLE_CHURCH' },
       query.kind,
       query.start,
       query.period,
@@ -278,7 +283,9 @@ export class ReportingController {
       actor,
       scope.kind === 'LEADER'
         ? { kind: 'LEADER', person_id: scope.person_id }
-        : { kind: 'WHOLE_CHURCH' },
+        : scope.kind === 'NETWORK'
+          ? { kind: 'NETWORK', network: scope.network }
+          : { kind: 'WHOLE_CHURCH' },
       twelve.at,
       twelve.rows,
     );
@@ -295,7 +302,9 @@ export class ReportingController {
       elsewhere: twelve.elsewhere,
       total: twelve.total,
       calendar_start: twelve.calendar_start,
-      ...(rootLeaders ? { roots: await this.rootsOf(twelve.rows) } : {}),
+      ...(rootLeaders || scope.kind === 'NETWORK'
+        ? { roots: await this.rootsOf(twelve.rows) }
+        : {}),
     };
   }
 
@@ -980,9 +989,13 @@ export class ReportingController {
    * church, so a reader holding it over a subtree is refused.
    */
   @Get('church-counts')
-  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
-  async churchCounts(@Query() query: ChurchCountsDto): Promise<Record<string, unknown>> {
-    const counts = await this.reporting.churchCounts(query.period);
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'held' })
+  async churchCounts(
+    @Query() query: ChurchCountsDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const network = await this.churchOrNetworkOf(actor);
+    const counts = await this.reporting.churchCounts(query.period, [], network);
     const { person, byName } = await this.namer(
       (counts.tables ?? []).flatMap((table) => [
         table.rootId,
@@ -994,6 +1007,7 @@ export class ReportingController {
       period: counts.period,
       current: counts.current,
       at: counts.at.toISOString(),
+      network,
       whole_church: countFigures(counts.wholeChurch),
       tables:
         counts.tables === null
@@ -1029,22 +1043,33 @@ export class ReportingController {
    * branch line names its Network rather than leaving the client to infer it from position.
    */
   @Get('trends')
-  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'church' })
-  async trends(@Query() query: TrendsDto): Promise<Record<string, unknown>> {
+  @RequiresCapability(Capability.ReportsViewSubtree, { kind: 'held' })
+  async trends(
+    @Query() query: TrendsDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const network = await this.churchOrNetworkOf(actor);
     const current = reportingMonthOf(manilaDayOf(await this.clock.now()));
     const months = Array.from({ length: 12 }, (_, index) => shiftMonth(current, index - 11));
 
     let lines: { leaderId: string | null; network: NetworkName | null }[];
     if (query.leader_id !== undefined) {
       await this.readAsKept(query);
+      // A Network Admin names only a leader of their own Network; the guard held no target.
+      if (network !== null) {
+        await this.authorization.authorize(actor, Capability.ReportsViewSubtree, {
+          kind: 'person',
+          personId: query.leader_id,
+        });
+      }
       if (!(await this.people.findById(query.leader_id))) {
         throw new NotFoundError('No such person.');
       }
       lines = [{ leaderId: canonicalId(query.leader_id), network: null }];
     } else {
-      const now = await this.reporting.churchCounts(current);
+      const now = await this.reporting.churchCounts(current, [], network);
       lines = [
-        { leaderId: null, network: null },
+        { leaderId: null, network },
         ...[...(now.tables ?? [])]
           .sort((left, right) => networkOrder(left.network) - networkOrder(right.network))
           .map((table) => ({ leaderId: table.rootId, network: table.network })),
@@ -1058,7 +1083,7 @@ export class ReportingController {
 
     // Each month's open flag comes from that month's own report, inside the seam that owns
     // the period rules; a month that could not be read has no figure to flag.
-    const read = await this.trendPoints(query.figure, months, branches);
+    const read = await this.trendPoints(query.figure, months, branches, network);
     const open: boolean[] = [];
     for (const point of read) {
       open.push(point?.open ?? false);
@@ -1096,6 +1121,7 @@ export class ReportingController {
     figure: TrendFigure,
     months: readonly string[],
     branches: readonly string[],
+    network: NetworkName | null,
   ): Promise<({ values: Map<string, number | null>; open: boolean } | null)[]> {
     if (figure === 'CELLS' || figure === 'CELL_LEADERS' || figure === 'PEOPLE') {
       const pick = (figures: ChurchCountFigures | null | undefined) =>
@@ -1108,7 +1134,9 @@ export class ReportingController {
               : figures.people;
 
       return mapInTurns(months, TREND_REPORTS_AT_ONCE, async (month) => {
-        const counts = await this.reporting.churchCounts(month, branches).catch(refusalAsNull);
+        const counts = await this.reporting
+          .churchCounts(month, branches, network)
+          .catch(refusalAsNull);
         if (counts === null) {
           return null;
         }
@@ -1122,7 +1150,10 @@ export class ReportingController {
       });
     }
 
-    type Scope = { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; person_id: string };
+    type Scope =
+      | { kind: 'WHOLE_CHURCH' }
+      | { kind: 'NETWORK'; network: NetworkName }
+      | { kind: 'LEADER'; person_id: string };
     const report = async (
       scope: Scope,
       month: string,
@@ -1137,7 +1168,11 @@ export class ReportingController {
     // Every month's church report and each branch's, as one list of independent reads.
     type Ask = { month: string; key: string; scope: Scope };
     const asks = months.flatMap((month): Ask[] => [
-      { month, key: 'church', scope: { kind: 'WHOLE_CHURCH' } },
+      {
+        month,
+        key: 'church',
+        scope: network === null ? { kind: 'WHOLE_CHURCH' } : { kind: 'NETWORK', network },
+      },
       ...branches.map((id): Ask => ({ month, key: id, scope: { kind: 'LEADER', person_id: id } })),
     ]);
     const answers = await mapInTurns(asks, TREND_REPORTS_AT_ONCE, (ask) =>
@@ -1157,6 +1192,19 @@ export class ReportingController {
       }
       return { values, open: church.open };
     });
+  }
+
+  /**
+   * Whose counts a reader may have: null for the whole church, or their own Network (section
+   * 20, decision 0469). A reader holding the capability over a subtree alone is refused, as
+   * these routes always refused them.
+   */
+  private async churchOrNetworkOf(actor: Actor): Promise<NetworkName | null> {
+    const reach = await this.authorization.wideReachOf(actor, Capability.ReportsViewSubtree);
+    if (reach === undefined) {
+      throw new ScopeDeniedError('This report is outside your scope.', {});
+    }
+    return reach;
   }
 
   /** Names identities and orders them by first name, surname and Member ID, never by a figure. */
@@ -1554,6 +1602,22 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
     throw new ValidationFailedError('cell_id is only meaningful where scope is CELL.', {
       field: 'cell_id',
     });
+  }
+
+  if (query.scope !== 'NETWORK' && query.network !== undefined) {
+    throw new ValidationFailedError('network is only meaningful where scope is NETWORK.', {
+      field: 'network',
+    });
+  }
+
+  if (query.scope === 'NETWORK') {
+    if (query.network === undefined) {
+      throw new ValidationFailedError('network is required where scope is NETWORK.', {
+        field: 'network',
+      });
+    }
+
+    return { kind: 'NETWORK', network: query.network };
   }
 
   if (query.scope === 'LEADER') {

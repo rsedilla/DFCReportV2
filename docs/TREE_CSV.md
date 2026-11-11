@@ -188,7 +188,8 @@ correct the file and run it again.
   — **including a re-sort**, which changes nothing about the decisions and does
   change the line numbers the adjudicator was reading.
 - A row with a Tier 1 candidate carries no decision, or is absent from the file.
-- A `USE_EXISTING` Person is archived, was absorbed by a merge, is recorded with a
+- A `USE_EXISTING` Person is archived, was absorbed by a merge, holds a Network Admin
+  account (as does any leader the file names for a row), is recorded with a
   different sex from the file, or **already holds an active pastoral assignment**.
   That last one is not an obstacle to route around: placing them means closing the
   assignment they have, which is a reassignment carrying its own authorization and

@@ -479,7 +479,7 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       ['network', ['MENS', 'WOMENS']],
       ['lifecycle_state', ['CURRENT', 'ARCHIVED']],
       ['account_status', ['PENDING_ACTIVATION', 'ACTIVE', 'DISABLED']],
-      ['account_role', ['SENIOR_PASTOR', 'ADMIN', 'LEADER']],
+      ['account_role', ['SENIOR_PASTOR', 'ADMIN', 'LEADER', 'NETWORK_ADMIN']],
       ['cell_state', ['ACTIVE', 'CLOSED']],
       // Youngest to oldest, J12 Kids first (decision 0431).
       ['cell_category', ['J12_KIDS', 'YOUTH', 'YOUNG_PRO', 'COUPLE']],

@@ -193,6 +193,17 @@ export async function createPerson(
   });
 }
 
+/** The one form giving a Network Admin account (section 7, decision 0469). */
+export async function createNetworkAdmin(
+  input: Omit<PersonInput, 'pastoral_leader_id'> & { email: string },
+  idempotencyKey: string,
+): Promise<{ id: string; person_id: string }> {
+  return authenticatedRequest<{ id: string; person_id: string }>(
+    '/api/v1/accounts/network-admin',
+    { method: 'POST', body: input, idempotencyKey },
+  );
+}
+
 export type PersonEdit = Partial<
   Pick<PersonInput, 'title' | 'first_name' | 'middle_name' | 'last_name' | 'birth_date' | 'mobile_number'>
 > & {

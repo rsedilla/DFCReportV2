@@ -23,7 +23,7 @@ export type ArchiveReason =
   | 'ATTENDS_ANOTHER_CHURCH'
   | 'PASSED_AWAY';
 export type AccountStatus = 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
-export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'LEADER';
+export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'NETWORK_ADMIN' | 'LEADER';
 export type AccountTokenPurpose = 'PASSWORD_RESET' | 'ACTIVATION' | 'EMAIL_CHANGE';
 export type ScopeTypeValue = 'OWN_SUBTREE' | 'SUBTREE_EXCL_SELF' | 'NETWORK' | 'WHOLE_CHURCH';
 

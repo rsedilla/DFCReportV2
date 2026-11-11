@@ -1,6 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
-import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
+import {
+  CapabilityDeniedError,
+  InvariantViolationError,
+  ScopeDeniedError,
+} from '../../common/errors/api-error';
 import { canonicalId, sameId } from '../../common/identifiers';
 import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 import { DATABASE, type Db } from '../../database/database.module';
@@ -21,7 +25,7 @@ import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
-import type { AccountRole } from '../../database/schema';
+import type { AccountRole, NetworkName } from '../../database/schema';
 
 export interface Actor {
   accountId: string;
@@ -48,6 +52,8 @@ export function holdsWholeChurch(authority: ActorAuthority, capability: Capabili
 }
 
 interface ActiveRoles {
+  /** The account's Person, null where the account holds no role row to read it from. */
+  personId: string | null;
   /** Roles whose row this system honours; the source of role defaults. */
   honoured: AccountRole[];
   /** Every active role row, honoured or not. See `activeRoles` for why both. */
@@ -173,6 +179,7 @@ export class AuthorizationService {
       .execute();
 
     return {
+      personId: rows[0]?.person_id ?? null,
       fullView: rows.some((row) => row.full_view),
       approvesCells: rows.some((row) => row.approves_cells),
       movesPeople: rows.some((row) => row.moves_people),
@@ -282,14 +289,72 @@ export class AuthorizationService {
     return holder !== undefined;
   }
   /**
+   * How wide a capability reaches: null for the whole church, one Network for a Network
+   * grant or a Network Admin's default, undefined where it is held over a subtree or not at
+   * all. For a route about the church or a Network as a whole (decision 0469).
+   */
+  async wideReachOf(actor: Actor, capability: Capability): Promise<NetworkName | null | undefined> {
+    const authority = await this.authorityFor(actor.accountId);
+    let network: NetworkName | undefined;
+
+    for (const grant of authority.grants.filter((held) => held.capability === capability)) {
+      if (grantCoversNothing(capability, grant.scope.type, grant.source)) {
+        continue;
+      }
+      if (grant.scope.type === ScopeType.WholeChurch) {
+        return null;
+      }
+      if (grant.scope.type === ScopeType.Network && grant.scope.network !== null) {
+        network = grant.scope.network;
+      }
+    }
+
+    return network;
+  }
+
+  /**
+   * Refuses a Person holding `NETWORK_ADMIN` a place in the tree or a Cell (section 7,
+   * decision 0469). `message` says what was being done, since the callers differ.
+   */
+  async assertNoNetworkAdminWithin(
+    executor: Db,
+    personIds: readonly string[],
+    message: string,
+    /** What the refusal names, where a caller's refusals name a line (decision 0275). */
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (personIds.length === 0) {
+      return;
+    }
+
+    const holder = await executor
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.person_id')
+      .where('accounts.person_id', 'in', [...personIds])
+      .where('account_roles.role', '=', 'NETWORK_ADMIN')
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    if (holder) {
+      throw new InvariantViolationError(message, details ?? { person_id: holder.person_id });
+    }
+  }
+
+  /**
    * How many levels below the reader *People I oversee* lists (section 19, decision 0324):
    * two for a Leader account with Full view, one without, and no limit (null) for an
-   * account holding `SENIOR_PASTOR` or `ADMIN`. Read from the honoured roles, as `screens`.
+   * account holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`. Read from the honoured
+   * roles, as `screens`.
    */
   async overseeDepthFor(accountId: string): Promise<number | null> {
     const roles = await this.activeRoles(this.db, accountId);
 
-    if (roles.honoured.includes('ADMIN') || roles.honoured.includes('SENIOR_PASTOR')) {
+    if (
+      roles.honoured.includes('ADMIN') ||
+      roles.honoured.includes('SENIOR_PASTOR') ||
+      roles.honoured.includes('NETWORK_ADMIN')
+    ) {
       return null;
     }
 
@@ -339,6 +404,14 @@ export class AuthorizationService {
 
     const effective: EffectiveGrant[] = [];
 
+    // A Network Admin's scope names their own Network, read now and stored on no role row, so
+    // a correction of their sex moves it (section 7, decision 0469). A holder with no Network
+    // names none, and a NETWORK scope naming none covers nothing.
+    const ownNetwork =
+      roles.honoured.includes('NETWORK_ADMIN') && roles.personId !== null
+        ? await this.networks.currentNetwork(this.db, roles.personId)
+        : null;
+
     for (const role of roles.honoured) {
       // Each tick adds to what the Leader role gives, only with Full view (decisions 0352 and
       // 0356); the tick writes keep each with Full view, and a row restored past them still
@@ -364,7 +437,7 @@ export class AuthorizationService {
 
         effective.push({
           capability: capability as Capability,
-          scope: { type: scopeType, network: null },
+          scope: { type: scopeType, network: scopeType === ScopeType.Network ? ownNetwork : null },
           source: 'role',
           readOnly: null,
         });

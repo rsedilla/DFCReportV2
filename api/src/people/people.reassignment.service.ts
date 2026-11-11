@@ -283,6 +283,11 @@ export class PeopleReassignmentService {
         effectiveAt,
         this.networks,
       );
+      await this.authorization.assertNoNetworkAdminWithin(
+        trx,
+        [personId, input.leaderId],
+        'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+      );
 
       // **The same method as the Network correction, and deliberately not the same
       // term.** Term (a) is the current assignment's `started_at`: at that instant

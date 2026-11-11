@@ -7,7 +7,7 @@ import { Suspense, useState } from 'react';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
 import { EncounterSeasonsFrame } from '@/components/encounter-seasons-frame';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -425,6 +425,12 @@ function Accounts() {
 
   return (
     <>
+      {/* The one form that gives this account (section 7, decision 0469). */}
+      <p className="mt-4 flex justify-end">
+        <Link href="/people/new?as=network-admin" className={buttonClasses('primary')}>
+          Add a Network Admin
+        </Link>
+      </p>
       <div className={`mt-4 ${CONTROL_BAR}`}>
         <form
           onSubmit={(event) => {

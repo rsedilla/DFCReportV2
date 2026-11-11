@@ -190,6 +190,12 @@ export class CellsMembershipService {
         );
       }
 
+      await this.authorization.assertNoNetworkAdminWithin(
+        trx,
+        [personId],
+        'That person is a Network Admin, who belongs to no Cell (SKILL.md section 7).',
+      );
+
       if (person.isArchived) {
         // Section 10: archiving ends a membership, and "restoring them does not
         // automatically restore the membership". An archived Person does not

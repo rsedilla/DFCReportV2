@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
-import { AuthorizationService } from '../auth/authorization/authorization.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
@@ -251,6 +251,11 @@ export class PeopleService {
         // Section 4 gives a new Person's Network its effect on the date they are
         // encoded, so there is no earlier instant for this edge to be checked at.
         await assertLeaderIsAssignable(trx, pastoralLeaderId, network, new Date(), this.networks);
+        await this.authorization.assertNoNetworkAdminWithin(
+          trx,
+          [pastoralLeaderId],
+          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+        );
       }
 
       const person = await trx
@@ -643,6 +648,116 @@ export class PeopleService {
     }
 
     return passedOver;
+  }
+
+  /**
+   * The Person a Network Admin account is created with (section 7, decision 0469): a current
+   * Person in the Network their sex sets, with no pastoral leader and no assignment row, under
+   * section 3's duplicate rules. The caller creates the account in the same transaction. Its
+   * route needs `accounts.manage` at Whole Church, and every candidate is shown to it.
+   */
+  async createOutsideTreeWithin(
+    trx: Transaction<Database>,
+    input: Omit<CreatePersonInput, 'placement'>,
+    actor: Actor,
+  ): Promise<{ id: string; memberId: string; network: NetworkName; fullName: string }> {
+    const network = this.networks.networkForSex(input.sex);
+    const subject: Subject = {
+      firstName: input.firstName,
+      middleName: input.middleName ?? null,
+      lastName: input.lastName,
+      birthDate: input.birthDate,
+      sex: input.sex,
+      mobileNumberNormalized: normalizeMobile(input.mobileNumber),
+    };
+    const acknowledged = new Set(
+      (input.acknowledgedDuplicateIds ?? []).map((candidateId) => canonicalId(candidateId)),
+    );
+
+    await lockPersonNameWithin(trx, lastNameKey(subject.lastName));
+    const matches = await this.duplicates.findDuplicates(subject, APPLICATION_RULES, trx);
+    if (
+      matches.some(
+        (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidate.id)),
+      )
+    ) {
+      throw new DuplicateAcknowledgementRequiredError(
+        (
+          await this.duplicates.visibleDuplicatesFor(
+            subject,
+            () => Promise.resolve(true),
+            (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
+            APPLICATION_RULES,
+            trx,
+          )
+        ).map((row) => row.body),
+      );
+    }
+
+    const person = await trx
+      .insertInto('persons')
+      .values({
+        title: input.title?.trim() || null,
+        first_name: input.firstName.trim(),
+        middle_name: input.middleName?.trim() || null,
+        last_name: input.lastName.trim(),
+        birth_date: input.birthDate,
+        sex: input.sex,
+        civil_status: input.civilStatus,
+        mobile_number: input.mobileNumber?.trim() || null,
+        mobile_number_normalized: normalizeMobile(input.mobileNumber),
+      })
+      .returning([
+        'id',
+        'member_id',
+        'title',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'birth_date',
+        'sex',
+        'civil_status',
+        'mobile_number',
+      ])
+      .executeTakeFirstOrThrow();
+
+    const encodedAt = new Date();
+    await this.networks.assignWithin(trx, {
+      personId: person.id,
+      network,
+      actorId: actor.accountId,
+      startedAt: encodedAt,
+    });
+    await trx
+      .insertInto('person_lifecycle')
+      .values({
+        person_id: person.id,
+        state: 'CURRENT',
+        actor_id: actor.accountId,
+        started_at: encodedAt,
+      })
+      .execute();
+
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'person.created',
+      targetType: 'person',
+      targetId: person.id,
+      after: {
+        ...(person as unknown as Record<string, Json>),
+        network,
+        pastoral_leader_id: null,
+        network_root: false,
+        acknowledged_duplicate_ids: [...(input.acknowledgedDuplicateIds ?? [])],
+      },
+    });
+
+    return {
+      id: person.id,
+      memberId: person.member_id,
+      network,
+      fullName: `${person.first_name} ${person.last_name}`,
+    };
   }
 
   /**

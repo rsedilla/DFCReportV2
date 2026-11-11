@@ -11,6 +11,7 @@ import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.sco
 import { PeopleController } from '../../src/people/people.controller';
 import { PeopleLifecycleService } from '../../src/people/people.lifecycle.service';
 import { PeopleReadService } from '../../src/people/people.read.service';
+import { PeopleSexCorrectionService } from '../../src/people/people.sex-correction.service';
 import { PersonViewsService } from '../../src/people/person-views.service';
 import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
@@ -112,6 +113,12 @@ describe('the application module graph (section 2)', () => {
       [
         'ARCHIVE_ACCOUNTS_PORT',
         moduleRef.get(PeopleLifecycleService, { strict: false }),
+        'accounts',
+      ],
+      // Ending a Network Admin's sessions when their sex is corrected (decision 0469).
+      [
+        'ARCHIVE_ACCOUNTS_PORT',
+        moduleRef.get(PeopleSexCorrectionService, { strict: false }),
         'accounts',
       ],
       ['ABSENT_PEOPLE_PORT', moduleRef.get(PeopleController, { strict: false }), 'absent'],

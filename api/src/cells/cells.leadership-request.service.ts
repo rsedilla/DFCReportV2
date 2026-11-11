@@ -1090,6 +1090,12 @@ export class CellsLeadershipRequestService {
       );
     }
 
+    await this.authorization.assertNoNetworkAdminWithin(
+      trx,
+      [request.prospective_leader_id],
+      'That person is a Network Admin, who leads no Cell (SKILL.md section 7).',
+    );
+
     if (person.isArchived) {
       throw new InvariantViolationError(
         'That person has been archived since this request was submitted, so they cannot be ' +
@@ -1905,6 +1911,15 @@ export class CellsLeadershipRequestService {
           where,
         );
       }
+
+      await this.authorization.assertNoNetworkAdminWithin(
+        trx,
+        [personId],
+        // A backstop: a requester's scope refuses such a member first, as nobody's subtree
+        // holds them. It names no role in case a wider grant ever reaches it.
+        `One of the members cannot belong to a Cell${when}.${remedy}`,
+        where,
+      );
 
       if ((await this.networks.currentNetwork(trx, personId)) !== leaderNetwork) {
         throw new InvariantViolationError(

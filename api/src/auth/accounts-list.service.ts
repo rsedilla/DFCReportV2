@@ -212,7 +212,7 @@ function pausedUntil(eb: Eb) {
     .where(sql<boolean>`sign_in_pauses.paused_until > now()`);
 }
 
-/** Holds `ADMIN` or `SENIOR_PASTOR`, so signs in with a second step (decision 0302). */
+/** Holds `ADMIN`, `NETWORK_ADMIN` or `SENIOR_PASTOR`, so signs in with a second step (decision 0302). */
 function owesSecondStep(eb: Eb) {
   return eb
     .exists(
@@ -220,7 +220,7 @@ function owesSecondStep(eb: Eb) {
         .selectFrom('account_roles')
         .select('account_roles.id')
         .whereRef('account_roles.account_id', '=', 'accounts.id')
-        .where('account_roles.role', 'in', ['ADMIN', 'SENIOR_PASTOR'])
+        .where('account_roles.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'SENIOR_PASTOR'])
         .where('account_roles.revoked_at', 'is', null),
     )
     .$castTo<boolean>();

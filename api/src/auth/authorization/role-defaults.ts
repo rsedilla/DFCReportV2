@@ -176,8 +176,26 @@ export const LEADER_MOVES_PEOPLE: RoleDefaults = {
   [Capability.CellMoveMembers]: ScopeType.OwnSubtree,
 };
 
+/**
+ * A Network Admin (section 7, decision 0469), each scope naming their own Network.
+ *
+ * **Reads only, in this stage.** Section 7's column gives more, and each write capability
+ * arrives with the domain checks that narrow it, so that no write is ever held without its
+ * limits.
+ */
+const NETWORK_ADMIN: RoleDefaults = {
+  [Capability.PeopleViewSubtree]: ScopeType.Network,
+  [Capability.DccViewSubtree]: ScopeType.Network,
+  [Capability.CellViewSubtree]: ScopeType.Network,
+  [Capability.ReportsViewSubtree]: ScopeType.Network,
+  [Capability.ConquestViewSubtree]: ScopeType.Network,
+  [Capability.SuynlViewSubtree]: ScopeType.Network,
+  [Capability.TrainingViewSubtree]: ScopeType.Network,
+};
+
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
   SENIOR_PASTOR: SENIOR_PASTOR,
   ADMIN: ADMIN,
+  NETWORK_ADMIN: NETWORK_ADMIN,
   LEADER: LEADER,
 };

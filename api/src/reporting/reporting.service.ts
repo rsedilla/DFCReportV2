@@ -81,15 +81,11 @@ export type ReportScope =
  * Cell is not a population that key runs over — `report_snapshots.scope_type` enumerates
  * `CELL` for the Cell domain, and section 12 puts the bucket views it exists for there.
  *
- * **Cells exclude `NETWORK`**, and that is a deferral rather than a rule. Section 20 says
- * a Network narrows "which people the *person* key runs over"; the Cell domain does not
- * use that key, attributing instead by the meeting's responsible leader — so what a
- * `NETWORK`-scoped *Cell* figure narrows is genuinely unstated, and it is recorded as open
- * in `CLAUDE.md` rather than decided here. The DCC route shipped without `NETWORK` for the
- * same reason and gained it with decision 0219.
+ * **A Cell figure's `NETWORK` counts by the Cell's Network**, the Network of the meeting's
+ * responsible leader at the meeting's date (section 20, decision 0469).
  */
 export type DccReportScope = Exclude<ReportScope, { kind: 'CELL' }>;
-export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
+export type CellReportScope = ReportScope;
 
 /** One column of *Recording status*: X of Y leaders (decision 0325). */
 export interface RecordingColumn {
@@ -408,14 +404,20 @@ export interface CellTwelve {
  * figures, with each root's direct leaders as the rows rather than the roots themselves.
  */
 export type CellTwelveSubject =
-  { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' } | { kind: 'ROOT_LEADERS' };
+  | { kind: 'LEADER'; person_id: string }
+  | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'ROOT_LEADERS' }
+  /** One Network's Primaries, its figures by the Cell's Network (decision 0469). */
+  | { kind: 'NETWORK_LEADERS'; network: NetworkName };
 
 /**
  * Who a DCC My 12 table is about: a leader, Whole Church, or a Network (decision 0294). A
  * Network has no rows: its population is its membership (decision 0219), and it is the
  * leaders' own 12s, not the Network's, that break a figure down by row.
  */
-export type DccTwelveSubject = CellTwelveSubject | { kind: 'NETWORK'; network: NetworkName };
+export type DccTwelveSubject =
+  | Exclude<CellTwelveSubject, { kind: 'NETWORK_LEADERS' }>
+  | { kind: 'NETWORK'; network: NetworkName };
 
 /**
  * A DCC My 12 table over one period (decision 0294): the Cell table's shape, attributed by
@@ -742,7 +744,9 @@ export class ReportingService {
                 kind: 'RESPONSIBLE_LEADERS',
                 personIds: (await this.placementGraph(trx, start, end)).subtree(scope.person_id),
               }
-            : { kind: 'EVERY_CELL' };
+            : scope.kind === 'NETWORK'
+              ? { kind: 'NETWORK', network: scope.network }
+              : { kind: 'EVERY_CELL' };
 
         const figures = await this.cellFigures.monthFigures(period, population, {
           executor: trx,
@@ -819,7 +823,11 @@ export class ReportingService {
             )
           : subject.kind === 'ROOT_LEADERS'
             ? await this.rootLeadersAsOf(trx, end, graph)
-            : await this.hierarchy.rootSeatsAsOf(trx, end);
+            : subject.kind === 'NETWORK_LEADERS'
+              ? (await this.rootLeadersAsOf(trx, end, graph)).filter(
+                  (row) => row.root.root_network === subject.network,
+                )
+              : await this.hierarchy.rootSeatsAsOf(trx, end);
 
       // One read of the total's people, each with the leaders whose meetings they attended,
       // serves every row and the own row as well (it was one per row): a row is the people
@@ -830,6 +838,7 @@ export class ReportingService {
         to,
         subject.kind === 'LEADER' ? graph.subtree(subject.person_id) : null,
         await this.people.mergedPairsWithin(trx),
+        subject.kind === 'NETWORK_LEADERS' ? subject.network : null,
       );
       const peopleOf = (leaders: readonly string[]) => {
         const within = new Set(leaders.map((id) => canonicalId(id)));
@@ -872,7 +881,9 @@ export class ReportingService {
       const scope: CellReportScope =
         subject.kind === 'LEADER'
           ? { kind: 'LEADER', person_id: subject.person_id }
-          : { kind: 'WHOLE_CHURCH' };
+          : subject.kind === 'NETWORK_LEADERS'
+            ? { kind: 'NETWORK', network: subject.network }
+            : { kind: 'WHOLE_CHURCH' };
       const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
 
       const union = new Set<string>();
@@ -1211,6 +1222,23 @@ export class ReportingService {
       return pairs;
     }
 
+    // The Cell's Network: its leader's on the scheduled date (section 20, decision 0469).
+    if (scope.kind === 'NETWORK') {
+      const placed = pairs.flatMap((pair) => {
+        const place = pair.placeId ?? pair.leaderId;
+        return place === null ? [] : [{ pair, place }];
+      });
+      const networks = await this.networks.networksEachAsOf(
+        trx,
+        placed.map(({ pair, place }) => ({
+          personId: place,
+          at: endOfManilaDay(pair.scheduledDate),
+        })),
+      );
+
+      return placed.filter((_, index) => networks[index] === scope.network).map(({ pair }) => pair);
+    }
+
     const dates = [...new Set(pairs.map((pair) => pair.scheduledDate))];
     const walked = await this.hierarchy.subtreesAsOf(
       trx,
@@ -1416,7 +1444,12 @@ export class ReportingService {
    * and *Others* add up to the whole church. Where section 20 refuses the graph, the tables,
    * *Others* and the branches are null and the whole-church figures stand.
    */
-  async churchCounts(period: string, branches: readonly string[] = []): Promise<ChurchCounts> {
+  async churchCounts(
+    period: string,
+    branches: readonly string[] = [],
+    /** One Network's figures in place of the church's (section 20, decision 0469). */
+    network: NetworkName | null = null,
+  ): Promise<ChurchCounts> {
     return this.overPeriod(period, async (trx, bounds) => {
       const now = await databaseNow(trx);
       const current = now.getTime() < bounds.end.getTime();
@@ -1426,6 +1459,8 @@ export class ReportingService {
       // Nobody outside the pastoral tree at the month's instant is counted (decision 0339).
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
+      const networkMembers =
+        network === null ? null : new Set(await this.networkPeople(trx, network, at));
 
       const figuresOf = (members: ReadonlySet<string> | null): ChurchCountFigures => {
         const counted = cells.filter((cell) => members === null || members.has(cell.leaderId));
@@ -1456,20 +1491,24 @@ export class ReportingService {
             seat.network,
           ]),
         );
-        tables = graph.roots().map((rootId) => ({
-          rootId,
-          network: seats.get(canonicalId(rootId)) ?? null,
-          rows: graph.children(rootId).map((leaderId) => {
-            const beneath = new Set(graph.subtree(leaderId));
-            beneath.forEach((id) => placed.add(id));
+        tables = graph
+          .roots()
+          .filter((rootId) => network === null || seats.get(canonicalId(rootId)) === network)
+          .map((rootId) => ({
+            rootId,
+            network: seats.get(canonicalId(rootId)) ?? null,
+            rows: graph.children(rootId).map((leaderId) => {
+              const beneath = new Set(graph.subtree(leaderId));
+              beneath.forEach((id) => placed.add(id));
 
-            return { leaderId, figures: figuresOf(beneath) };
-          }),
-        }));
+              return { leaderId, figures: figuresOf(beneath) };
+            }),
+          }));
 
+        const inNetwork = (id: string) => networkMembers === null || networkMembers.has(id);
         const unplaced = new Set([
-          ...cells.map((cell) => cell.leaderId).filter((id) => !placed.has(id)),
-          ...people.filter((id) => !placed.has(id)),
+          ...cells.map((cell) => cell.leaderId).filter((id) => !placed.has(id) && inNetwork(id)),
+          ...people.filter((id) => !placed.has(id) && inNetwork(id)),
         ]);
         others = figuresOf(unplaced);
 
@@ -1482,7 +1521,7 @@ export class ReportingService {
         period,
         at,
         current,
-        wholeChurch: figuresOf(null),
+        wholeChurch: figuresOf(networkMembers),
         tables,
         others,
         branches: asked,

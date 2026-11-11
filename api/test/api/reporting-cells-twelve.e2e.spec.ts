@@ -919,14 +919,13 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
       expect(response.body.error.details.field).toBe('scope');
     });
 
-    it('refuses a NETWORK scope at the guard', async () => {
+    it('serves a NETWORK scope (decision 0469)', async () => {
       const response = await twelve(
         `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=NETWORK&network=MENS`,
         adminAccount,
       );
 
-      expect(response.status).toBe(422);
-      expect(response.body.error.details.field).toBe('query.scope');
+      expect(response.status).toBe(200);
     });
 
     it('answers a Whole Church holder NOT_FOUND for a leader who does not exist', async () => {

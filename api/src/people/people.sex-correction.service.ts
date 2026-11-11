@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
@@ -20,6 +20,7 @@ import { lockPersonsWithin } from '../database/person-lock';
 
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { listedProfile } from './people.shared';
+import { ARCHIVE_ACCOUNTS_PORT, type ArchiveAccountsPort } from './person-archive.ports';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Sex } from '../database/schema';
@@ -43,6 +44,7 @@ export class PeopleSexCorrectionService {
     private readonly networks: NetworksService,
     private readonly idempotency: IdempotencyService,
     private readonly authorization: AuthorizationService,
+    @Optional() @Inject(ARCHIVE_ACCOUNTS_PORT) private readonly accounts?: ArchiveAccountsPort,
   ) {}
 
   /**
@@ -99,6 +101,15 @@ export class PeopleSexCorrectionService {
     // switched itself off depending on whether the target currently holds an edge
     // would be a rule nobody could reason about.
     const authority = await this.authorization.authorityFor(actor.accountId);
+
+    // Refused before anything is written where a Network Admin's sessions could not be ended.
+    if (this.accounts === undefined) {
+      throw new InvariantViolationError(
+        'This deployment cannot correct a sex: a port it needs is not bound.',
+        {},
+      );
+    }
+    const accounts = this.accounts;
 
     const backdated = input.effectiveDate !== undefined;
 
@@ -324,6 +335,11 @@ export class PeopleSexCorrectionService {
           effectiveAt,
           this.networks,
         );
+        await this.authorization.assertNoNetworkAdminWithin(
+          trx,
+          [input.pastoralLeaderId],
+          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+        );
 
         ({ previousLeaderId } = await this.hierarchy.reassignWithin(trx, {
           personId,
@@ -418,6 +434,9 @@ export class PeopleSexCorrectionService {
         effective_at: effectiveAt.toISOString(),
         effective_date: manilaDayOf(effectiveAt),
       };
+
+      // Their Network moved, so a Network Admin's sessions end (decision 0469).
+      await accounts.endNetworkAdminSessionsWithin(trx, personId);
 
       // Last, and recording exactly what the endpoint returns (section 22).
       await this.idempotency.completeWithin(trx, {

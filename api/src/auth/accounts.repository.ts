@@ -95,7 +95,7 @@ export class AccountsRepository {
             .selectFrom('account_roles')
             .select('account_roles.id')
             .whereRef('account_roles.account_id', '=', 'accounts.id')
-            .where('account_roles.role', 'in', ['ADMIN', 'SENIOR_PASTOR'])
+            .where('account_roles.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'SENIOR_PASTOR'])
             .where('account_roles.revoked_at', 'is', null),
         )
         .$castTo<boolean>()
@@ -162,7 +162,7 @@ export class AccountsRepository {
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
       .where('account.person_id', 'in', [...personIds])
-      .where('role.role', '=', 'ADMIN')
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN'])
       .where('role.revoked_at', 'is', null)
       .execute();
 
@@ -185,7 +185,10 @@ export class AccountsRepository {
       .execute();
   }
 
-  /** `AdminAccountsPort`. Every Person holding an `ADMIN` role at `at` (decision 0339). */
+  /**
+   * `AdminAccountsPort`. Every Person holding an `ADMIN` or `NETWORK_ADMIN` role at `at`
+   * (decisions 0339 and 0469).
+   */
   async personsHoldingAdminAtWithin(
     executor: Db | Transaction<Database>,
     at: Date,
@@ -194,7 +197,7 @@ export class AccountsRepository {
       .selectFrom('accounts as account')
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
-      .where('role.role', '=', 'ADMIN')
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN'])
       .where('role.granted_at', '<=', at)
       .where((eb) => eb.or([eb('role.revoked_at', 'is', null), eb('role.revoked_at', '>', at)]))
       .execute();

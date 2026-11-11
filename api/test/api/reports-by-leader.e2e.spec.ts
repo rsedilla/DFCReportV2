@@ -772,15 +772,14 @@ describe('Reports coverage by leader (section 17, decision 0254)', () => {
       expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
 
-    it('cells: refuses a NETWORK scope, which the Cell report does not compute', async () => {
+    it('cells: serves a NETWORK scope (decision 0469)', async () => {
       const response = await byLeader(
         'cells',
         `period=${JUNE}&scope=NETWORK&network=MENS`,
         adminAccount,
       );
 
-      expect(response.status).toBe(422);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.status).toBe(200);
     });
 
     it.each(['dcc', 'cells'] as const)('%s: a closed month is not open', async (route) => {

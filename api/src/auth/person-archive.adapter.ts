@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { AccountAccessService } from './account-access.service';
+import { TokensService } from './tokens.service';
 
 import type { Db } from '../database/database.module';
 import type { Database } from '../database/schema';
@@ -14,7 +15,10 @@ import type { Transaction } from 'kysely';
  */
 @Injectable()
 export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
-  constructor(private readonly access: AccountAccessService) {}
+  constructor(
+    private readonly access: AccountAccessService,
+    private readonly sessions: TokensService,
+  ) {}
 
   async accountOfWithin(
     executor: Transaction<Database>,
@@ -39,6 +43,24 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
     actorAccountId: string,
   ): Promise<void> {
     await this.access.disableWithin(executor, accountId, actorAccountId);
+  }
+
+  async endNetworkAdminSessionsWithin(
+    executor: Transaction<Database>,
+    personId: string,
+  ): Promise<void> {
+    const holder = await executor
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.id')
+      .where('accounts.person_id', '=', personId)
+      .where('account_roles.role', '=', 'NETWORK_ADMIN')
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    if (holder) {
+      await this.sessions.revokeAllSessionsWithin(executor, holder.id);
+    }
   }
 
   async personOfAccountWithin(

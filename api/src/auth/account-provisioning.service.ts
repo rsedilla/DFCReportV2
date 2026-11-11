@@ -14,6 +14,8 @@ import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.p
 
 import { CellsReadService } from '../cells/cells.read.service';
 import { PeopleReadService } from '../people/people.read.service';
+import { PeopleService } from '../people/people.service';
+import type { CreatePersonInput } from '../people/people.shared';
 
 import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
 
@@ -87,6 +89,7 @@ export class AccountProvisioningService {
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
     private readonly tokens: AccountTokensService,
     private readonly people: PeopleReadService,
+    private readonly peopleWrites: PeopleService,
     private readonly cells: CellsReadService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
@@ -385,6 +388,104 @@ export class AccountProvisioningService {
     // **After the commit, and never fatal.** See the class docblock: a token
     // mailed for a rolled-back account invites somebody to activate nothing, and
     // raising here would contradict a completion the store already holds.
+    await this.sendOrLog(outcome.message, outcome.body.id);
+
+    return outcome.body;
+  }
+
+  /**
+   * Creates a Person and their `NETWORK_ADMIN` account together (section 7, decision 0469):
+   * the one form that gives this role, by the whole-church Admin, so nobody who has held a
+   * place in the tree comes to hold it. One transaction, the completion last.
+   */
+  async provisionNetworkAdmin(
+    input: Omit<CreatePersonInput, 'placement'> & { email: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const outcome = await this.db.transaction().execute(async (trx) => {
+      const takenEmail = await trx
+        .selectFrom('accounts')
+        .select('id')
+        .where('email_normalized', '=', normalizeEmail(input.email))
+        .executeTakeFirst();
+
+      if (takenEmail) {
+        throw new InvariantViolationError('That email address already has an account.', {
+          field: 'email',
+        });
+      }
+
+      const person = await this.peopleWrites.createOutsideTreeWithin(trx, input, actor);
+
+      const account = await trx
+        .insertInto('accounts')
+        .values({
+          person_id: person.id,
+          email: input.email.trim(),
+          email_normalized: normalizeEmail(input.email),
+          password_hash: null,
+          status: 'PENDING_ACTIVATION',
+        })
+        .returning(['id', 'email', 'status'])
+        .executeTakeFirstOrThrow();
+
+      await trx
+        .insertInto('account_roles')
+        .values({
+          account_id: account.id,
+          role: 'NETWORK_ADMIN',
+          senior_pastor_slot: null,
+          granted_by: actor.accountId,
+        })
+        .execute();
+
+      const token = await this.tokens.mintWithin(
+        trx,
+        account.id,
+        'ACTIVATION',
+        ACTIVATION_LIFETIME_MS,
+      );
+
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'account.created',
+        targetType: 'account',
+        targetId: account.id,
+        after: { person_id: person.id, status: 'PENDING_ACTIVATION' },
+      });
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'role.granted',
+        targetType: 'account',
+        targetId: account.id,
+        after: { role: 'NETWORK_ADMIN', network: person.network },
+      });
+
+      const body = {
+        id: account.id,
+        person_id: person.id,
+        member_id: person.memberId,
+        email: account.email,
+        status: account.status,
+        role: 'NETWORK_ADMIN',
+        network: person.network,
+      };
+
+      // Last statement in the transaction (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body });
+
+      return {
+        body,
+        message: {
+          kind: 'ACTIVATION' as const,
+          to: { email: account.email, name: person.fullName },
+          token: token.token,
+          expiresAt: token.expiresAt,
+        },
+      };
+    });
+
     await this.sendOrLog(outcome.message, outcome.body.id);
 
     return outcome.body;

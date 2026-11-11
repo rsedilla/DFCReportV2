@@ -145,7 +145,11 @@ function TrendsScreen() {
               onChange={(event) => go({ leader: event.target.value === '' ? null : event.target.value })}
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 w-full max-w-sm rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              <option value="">Whole Church and each Network root&rsquo;s branch</option>
+              <option value="">
+                {roster.data?.network
+                  ? 'The Network and its root’s branch'
+                  : 'Whole Church and each Network root’s branch'}
+              </option>
               {(roster.data?.tables ?? []).map((table) => (
                 <optgroup
                   key={table.root.id}
@@ -187,7 +191,11 @@ function TrendsScreen() {
 /** How a line is named: the church, a root's branch by its pastor, or one leader's branch. */
 function lineName(line: Trends['lines'][number], single: boolean): string {
   if (line.leader === null) {
-    return 'Whole Church';
+    return line.network === 'WOMENS'
+      ? 'Women’s Network'
+      : line.network === 'MENS'
+        ? 'Men’s Network'
+        : 'Whole Church';
   }
   const name = line.leader.full_name ?? line.leader.member_id ?? 'A leader';
   if (single) {
