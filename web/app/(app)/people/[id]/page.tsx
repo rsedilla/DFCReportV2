@@ -33,7 +33,7 @@ import {
 } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { archiveReasonLabel, restorePerson, shortDate } from '@/lib/lifecycle';
-import { getMe, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { formatMobile } from '@/lib/mobile';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
@@ -311,7 +311,8 @@ function PersonDetail() {
             />
           ) : null}
           {/* No button and no request: the Primary decides (owner, 2026-10-16, decision 0356). */}
-          {me.data && !own && !mayMove ? (
+          {/* A Network Admin has no Primary; their moves arrive with the capability (decision 0469). */}
+          {me.data && !own && !mayMove && holdsNetwork(me.data, 'people.view_subtree') === null ? (
             <p className="text-muted mt-3 text-sm">Moves to another leader are made by your Primary.</p>
           ) : null}
 
@@ -413,6 +414,7 @@ function PersonDetail() {
                   firstName={person.data.first_name}
                   own={own}
                   mayTickFullView={mayTickFullView}
+                  leaderAccountsOnly={holdsNetwork(me.data, 'accounts.manage') !== null}
                 />
               ) : null}
               {mayMerge || mayArchiveNow || archiveBlocked ? (

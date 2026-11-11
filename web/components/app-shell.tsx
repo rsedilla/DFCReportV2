@@ -24,7 +24,7 @@ import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
-import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
+import { getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
 import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
@@ -250,8 +250,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? [CONQUEST]
       : [];
   // **The Admin area follows `accounts.manage` at Whole Church** (decision 0419), by default the
-  // Admin alone. Its Accounts reads carry that capability; its other reads keep their own guards.
-  const administers = me.data !== undefined && holdsWholeChurch(me.data, 'accounts.manage');
+  // Admin alone, or across one Network, a Network Admin's (decision 0469). Its Accounts reads
+  // carry that capability; its other reads keep their own guards.
+  const administers = me.data !== undefined && holdsWide(me.data, 'accounts.manage');
   const links = me.isPending
     ? []
     : [

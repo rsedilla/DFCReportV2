@@ -312,6 +312,16 @@ export class AuthorizationService {
     return network;
   }
 
+  /** Whether the Person holds a Network root's seat now (section 5). */
+  async holdsRootSeat(personId: string): Promise<boolean> {
+    return (await this.rootSeatHolders()).includes(personId);
+  }
+
+  /** The Persons holding a Network root's seat now (section 5). */
+  async rootSeatHolders(): Promise<string[]> {
+    return this.hierarchy.rootsAsOf(this.db, new Date());
+  }
+
   /**
    * Refuses a Person holding `NETWORK_ADMIN` a place in the tree or a Cell (section 7,
    * decision 0469). `message` says what was being done, since the callers differ.

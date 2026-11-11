@@ -110,6 +110,14 @@ export function holdsNetwork(
 }
 
 /**
+ * Whether a capability is held across the whole church or one whole Network: what a route
+ * about the church or a Network as a whole asks (decision 0469).
+ */
+export function holdsWide(me: SessionDescription | undefined, capability: string): boolean {
+  return holdsWholeChurch(me, capability) || holdsNetwork(me, capability) !== null;
+}
+
+/**
  * How a sentence names the people a list ranges over (decision 0436): "in your care" for a
  * leader's own, "in the church" for a reader holding the list's capability church-wide, whose
  * sentences are not about people in their care.

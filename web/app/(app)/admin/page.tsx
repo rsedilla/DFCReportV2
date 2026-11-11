@@ -43,7 +43,13 @@ import { getPendingDccLeaders } from '@/lib/dcc';
 import { dayLabel } from '@/lib/encounters';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
-import { getMe, holdsWholeChurch, roleLabel } from '@/lib/me';
+import {
+  getMe,
+  holdsNetwork,
+  holdsWholeChurch,
+  roleLabel,
+  type SessionDescription,
+} from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
 import { getChurchCounts } from '@/lib/reports';
@@ -68,6 +74,10 @@ import { LoadingBlocks } from '@/components/ui/loading-blocks';
  * For a holder of `accounts.manage` at Whole Church, which the screen guard checks and the API
  * enforces on every read below; the Audit Log is read under `audit.view` at Whole Church,
  * which the Admin role holds beside it.
+ *
+ * **A Network Admin has Home and Accounts, for their own Network** (decision 0469): the same
+ * screens with the API returning one Network, no Settings and no Audit Log, and no tile or
+ * link for what they do not hold.
  */
 const TABS = [
   ['home', 'Home'],
@@ -77,6 +87,10 @@ const TABS = [
 ] as const;
 
 type AdminTab = (typeof TABS)[number][0];
+
+/** How a sentence, and a heading, names a Network Admin's Network (decision 0469). */
+const NETWORK_WORDS = { MENS: 'the Men’s Network', WOMENS: 'the Women’s Network' } as const;
+const NETWORK_TITLES = { MENS: 'Men’s Network', WOMENS: 'Women’s Network' } as const;
 
 export default function AdminPage() {
   return (
@@ -94,20 +108,29 @@ function AdminScreen() {
     queryFn: ({ signal }) => getMe(signal),
   });
   const asked = search.get('tab');
+  const wholeChurch = holdsWholeChurch(me.data, 'accounts.manage');
+  const network = holdsNetwork(me.data, 'accounts.manage');
+  const administers = wholeChurch || network !== null;
+  // Settings and the Audit Log are the whole-church Admin's (decision 0469).
+  const tabs = TABS.filter(([key]) => wholeChurch || key === 'home' || key === 'accounts');
   const tab: AdminTab =
-    asked === 'accounts' || asked === 'settings' || asked === 'audit' ? asked : 'home';
-  const administers = me.data !== undefined && holdsWholeChurch(me.data, 'accounts.manage');
+    asked === 'accounts' || (wholeChurch && (asked === 'settings' || asked === 'audit'))
+      ? asked
+      : 'home';
+  const scope = network === null ? 'the whole church' : NETWORK_WORDS[network];
 
   return (
     <>
       <main id="main" className={PAGE_WIDTH.READING}>
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-          <p className="text-muted text-sm">Running DREAMS for the whole church.</p>
+          {administers ? (
+            <p className="text-muted text-sm">Running DREAMS for {scope}.</p>
+          ) : null}
         </div>
 
         <div role="group" aria-label="Admin" className={cn('mt-6 min-h-11', TAB_GRID, TAB_ROW)}>
-          {TABS.map(([key, label]) => (
+          {tabs.map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -124,13 +147,13 @@ function AdminScreen() {
 
         <div className={TAB_PANE}>
           {!administers ? null : tab === 'accounts' ? (
-            <Accounts />
+            <Accounts wholeChurch={wholeChurch} />
           ) : tab === 'settings' ? (
             <Settings />
           ) : tab === 'audit' ? (
             <AuditLog />
           ) : (
-            <Home />
+            <Home me={me.data} network={network} />
           )}
         </div>
       </main>
@@ -172,10 +195,28 @@ function pageCount(page: { data: unknown[]; next_cursor: string | null } | undef
   return page === undefined ? null : `${page.data.length}${page.next_cursor ? '+' : ''}`;
 }
 
-function Home() {
+function Home({
+  me,
+  network,
+}: {
+  me: SessionDescription | undefined;
+  /** The one Network a Network Admin's Home is for; null for the whole church. */
+  network: 'MENS' | 'WOMENS' | null;
+}) {
+  // The whole-church Admin's Home is as it was. A Network Admin is offered no tile or link
+  // needing what they do not hold across their Network (decision 0469).
+  const wholeChurch = network === null;
+  const holds = (capability: string) => wholeChurch || holdsNetwork(me, capability) !== null;
+  const mayApprove = holds('cell.approve_leadership');
+  const mayAssign = holds('people.manage_pastoral_assignment');
+  const mayAdd = holds('people.create');
+  const mayManageCells = holds('cell.manage_lifecycle');
+  const scopeTitle = network === null ? 'Whole Church' : NETWORK_TITLES[network];
+
   const approvals = useQuery({
     queryKey: ['cell-approvals'],
     queryFn: ({ signal }) => listApprovalRequests(signal),
+    enabled: mayApprove,
   });
   const noLeader = useQuery({
     queryKey: ['awaiting-reassignment', 'admin-home'],
@@ -205,6 +246,8 @@ function Home() {
   const settings = useQuery({
     queryKey: ['settings'],
     queryFn: ({ signal }) => getSettings(signal),
+    // Church-wide settings are the whole-church Admin's.
+    enabled: wholeChurch,
   });
 
   const failed = [approvals, noLeader, accounts, pendingCg, pendingDcc, cells, church].find(
@@ -218,21 +261,23 @@ function Home() {
       <FailureNotice failure={failed ? describeFailure(failed.error) : null} />
 
       <h2 className="mt-5 text-lg font-semibold">Needs you now</h2>
-      <p className="text-muted text-sm">Whole Church, as of now. Each one opens its list.</p>
+      <p className="text-muted text-sm">{scopeTitle}, as of now. Each one opens its list.</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile
-          label="Cells to approve"
-          value={approvals.data === undefined ? null : String(approvals.data.length)}
-          note="New Cells and handovers waiting for a decision"
-          href="/cells?view=APPROVE"
-          action="Review"
-        />
+        {mayApprove ? (
+          <Tile
+            label="Cells to approve"
+            value={approvals.data === undefined ? null : String(approvals.data.length)}
+            note="New Cells and handovers waiting for a decision"
+            href="/cells?view=APPROVE"
+            action="Review"
+          />
+        ) : null}
         <Tile
           label="No Leader Yet"
           value={pageCount(noLeader.data)}
           note="People whose leader has no assignment"
           href="/people/awaiting-leader"
-          action="Assign leaders"
+          action={mayAssign ? 'Assign leaders' : 'See who'}
         />
         <Tile
           label="Accounts not activated"
@@ -251,7 +296,7 @@ function Home() {
       </div>
 
       <h2 className="mt-8 text-lg font-semibold">Still to record</h2>
-      <p className="text-muted text-sm">Whole Church, weeks still open.</p>
+      <p className="text-muted text-sm">{scopeTitle}, weeks still open.</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile
           label="CG Records Due"
@@ -269,7 +314,9 @@ function Home() {
         />
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold">The church</h2>
+      <h2 className="mt-8 text-lg font-semibold">
+        {network === null ? 'The church' : `The ${NETWORK_TITLES[network]}`}
+      </h2>
       {/* How far the DCC calendar reaches (section 9), read beside the settings that keep it. */}
       {settings.data ? (
         <p
@@ -305,7 +352,7 @@ function Home() {
             ['Disabled', number(accounts.data?.disabled)],
           ]}
           links={[
-            ['Add a person', '/people/new'],
+            ...(mayAdd ? ([['Add a person', '/people/new']] as [string, string][]) : []),
             ['Find a person', '/people'],
             ['All accounts', '/admin?tab=accounts'],
           ]}
@@ -317,10 +364,13 @@ function Home() {
             ['Cell Leaders this month', number(church.data?.whole_church.cell_leaders)],
           ]}
           links={[
-            ['New Cell', '/cells/new'],
+            // Direct creation of a Cell is the whole-church Admin's (decision 0469).
+            ...(wholeChurch ? ([['New Cell', '/cells/new']] as [string, string][]) : []),
             ['Under 3 Members', '/cells?view=FEW'],
             [`Inactive ${cells.data?.attention_months ?? 3}+ Months`, '/cells?view=QUIET'],
-            ['Time Clashes', '/cells?view=CLASH'],
+            ...(mayManageCells
+              ? ([['Time Clashes', '/cells?view=CLASH']] as [string, string][])
+              : []),
             ['Closed Cells', '/cells?view=CLOSED'],
           ]}
         />
@@ -401,7 +451,9 @@ function detailsOf(row: AccountListRow): string {
   return ticks.length > 0 ? ticks.join(', ') : 'Recording only';
 }
 
-function Accounts() {
+function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
+  // A Leader account owes no second step, so that filter is the whole-church Admin's.
+  const filters = ACCOUNT_FILTERS.filter((each) => wholeChurch || each !== 'NO_SECOND_STEP');
   const search = useSearchParams();
   const go = useScreenAddress();
   const submitted = search.get('q') ?? '';
@@ -425,12 +477,14 @@ function Accounts() {
 
   return (
     <>
-      {/* The one form that gives this account (section 7, decision 0469). */}
-      <p className="mt-4 flex justify-end">
-        <Link href="/people/new?as=network-admin" className={buttonClasses('primary')}>
-          Add a Network Admin
-        </Link>
-      </p>
+      {/* The one form that gives this account (section 7, decision 0469), the Admin's alone. */}
+      {wholeChurch ? (
+        <p className="mt-4 flex justify-end">
+          <Link href="/people/new?as=network-admin" className={buttonClasses('primary')}>
+            Add a Network Admin
+          </Link>
+        </p>
+      ) : null}
       <div className={`mt-4 ${CONTROL_BAR}`}>
         <form
           onSubmit={(event) => {
@@ -457,7 +511,7 @@ function Accounts() {
         </form>
         {counts.data ? (
           <p id="account-counts" className="sr-only">
-            {ACCOUNT_FILTERS.map(
+            {filters.map(
               (each) =>
                 `${FILTER_LABELS[each]} ${counts.data[each.toLowerCase() as Lowercase<AccountFilter>]}`,
             ).join(', ')}
@@ -469,7 +523,7 @@ function Accounts() {
           aria-describedby={counts.data ? 'account-counts' : undefined}
           className="flex flex-wrap gap-3"
         >
-          {ACCOUNT_FILTERS.map((each) => {
+          {filters.map((each) => {
             const count = counts.data?.[each.toLowerCase() as Lowercase<AccountFilter>];
             return (
               <FilterChip

@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import {
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
   UnauthenticatedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -306,6 +307,12 @@ export class AccountAccessService {
     fullView: boolean,
     actor: Actor,
     claim: CurrentClaim,
+    /**
+     * Whether the actor may clear *Approves Cells* and *Moves people* with it. An actor short
+     * of Whole Church may not (section 7, decision 0469), so clearing Full view while either
+     * is on is refused them.
+     */
+    options: { mayClearOtherTicks: boolean } = { mayClearOtherTicks: true },
   ): Promise<FullViewBody> {
     return (await this.setLeaderTick(
       'full_view',
@@ -313,6 +320,7 @@ export class AccountAccessService {
       fullView,
       actor,
       claim,
+      options.mayClearOtherTicks,
     )) as unknown as FullViewBody;
   }
 
@@ -363,6 +371,7 @@ export class AccountAccessService {
     value: boolean,
     actor: Actor,
     claim: CurrentClaim,
+    mayClearOtherTicks = true,
   ): Promise<Record<string, string | boolean>> {
     const { label } = TICKS[column];
 
@@ -407,6 +416,17 @@ export class AccountAccessService {
       // Clearing Full view clears both with it, in the same transaction and each audited as
       // its own change, so no account holds either without Full view.
       if (column === 'full_view' && !value) {
+        const ticked = NEEDS_FULL_VIEW.filter((name) => account[name]);
+
+        // Read under the account's lock, so a tick the Admin gives first is seen.
+        if (ticked.length > 0 && !mayClearOtherTicks) {
+          throw new ScopeDeniedError(
+            `This account has ${ticked.map((name) => TICKS[name].label).join(' and ')} on, which ` +
+              'only the Admin removes. Ask the Admin to clear it first.',
+            { account_id: accountId, ticks: ticked },
+          );
+        }
+
         for (const tick of NEEDS_FULL_VIEW.filter((name) => account[name])) {
           await trx
             .updateTable('accounts')

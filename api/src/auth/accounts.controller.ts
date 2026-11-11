@@ -7,7 +7,9 @@ import {
   CurrentIdempotency,
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
+import { ScopeDeniedError } from '../common/errors/api-error';
 import { AccountAccessService } from './account-access.service';
+import { AccountReachService } from './account-reach.service';
 import { AccountProvisioningService } from './account-provisioning.service';
 import { AccountsListService } from './accounts-list.service';
 import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
@@ -43,6 +45,7 @@ export class AccountsController {
     private readonly access: AccountAccessService,
     private readonly credentials: CredentialsService,
     private readonly accountsList: AccountsListService,
+    private readonly reach: AccountReachService,
   ) {}
 
   /**
@@ -51,8 +54,10 @@ export class AccountsController {
    *
    * Scope resolves through the Person, which is what section 7 says an Account
    * target does — but the Account does not exist yet, so the target is the Person
-   * named in the body. `accounts.manage` is Whole Church and Admin-only, so the
-   * scope check is not what carries this endpoint; the capability is.
+   * named in the body.
+   *
+   * **A Network Admin gives a Leader account and no other** (section 7, decision 0469), to a
+   * Person of their Network who is not its root.
    */
   @Post()
   @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'body.person_id' })
@@ -61,6 +66,13 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    if ((await this.reach.reachOf(actor, Capability.AccountsManage)) !== null) {
+      if (body.role !== 'LEADER') {
+        throw new ScopeDeniedError('You give Leader accounts only.', { role: body.role });
+      }
+      await this.reach.assertReachesPerson(actor, body.person_id);
+    }
+
     return this.provisioning.provision(
       { personId: body.person_id, email: body.email, role: body.role },
       actor,
@@ -100,13 +112,19 @@ export class AccountsController {
   /**
    * Every account, for the Admin area's Accounts tab (sections 19 and 22, decision 0419).
    *
-   * A church target, so only a Whole Church holder of `accounts.manage` reads it: the list
-   * names every account in the church, and the Admin area is for that holder alone.
+   * Every account for a Whole Church holder of `accounts.manage`. A Network Admin reads the
+   * Leader accounts of their own Network (decision 0469), and a holder over neither is refused.
    */
   @Get()
-  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
-  async list(@Query() query: AccountsListDto): Promise<Record<string, unknown>> {
+  @RequiresCapability(Capability.AccountsManage, { kind: 'held' })
+  async list(
+    @Query() query: AccountsListDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const network = await this.reach.reachOf(actor, Capability.AccountsManage);
     const { rows, nextCursor } = await this.accountsList.list({
+      network,
+      without: await this.reach.personsOutsideReach(network),
       q: query.q ?? null,
       filter: query.filter ?? 'ALL',
       limit: query.limit ?? 50,
@@ -117,9 +135,10 @@ export class AccountsController {
 
   /** How many accounts each filter of the list holds (decision 0419), guarded as the list is. */
   @Get('counts')
-  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
-  async counts(): Promise<Record<string, unknown>> {
-    return this.accountsList.counts();
+  @RequiresCapability(Capability.AccountsManage, { kind: 'held' })
+  async counts(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    const network = await this.reach.reachOf(actor, Capability.AccountsManage);
+    return this.accountsList.counts(network, await this.reach.personsOutsideReach(network));
   }
 
   /**
@@ -129,7 +148,11 @@ export class AccountsController {
    */
   @Get('for-person/:person_id')
   @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'params.person_id' })
-  async forPerson(@Param('person_id') personId: string): Promise<Record<string, unknown>> {
+  async forPerson(
+    @Param('person_id') personId: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    await this.reach.assertReachesPerson(actor, personId);
     return this.provisioning.accountForPerson(personId);
   }
 
@@ -149,6 +172,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
+    await this.reach.assertReachesAccount(actor, id);
     await this.provisioning.resendActivation(id, actor, claim);
   }
 
@@ -166,6 +190,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
+    await this.reach.assertReachesAccount(actor, id);
     await this.credentials.sendResetByAdministrator(id, actor, claim);
   }
 
@@ -183,6 +208,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.reach.assertReachesAccount(actor, id);
     return this.provisioning.correctEmail(id, body.email, actor, claim, body.restart === true);
   }
 
@@ -199,6 +225,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<void> {
+    await this.reach.assertReachesAccount(actor, id);
     await this.secondSteps.resetByAdministrator(id, actor, claim);
   }
 
@@ -215,6 +242,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.reach.assertReachesAccount(actor, id);
     return { ...(await this.access.disable(id, actor, claim)) };
   }
 
@@ -230,6 +258,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.reach.assertReachesAccount(actor, id);
     return { ...(await this.access.reactivate(id, actor, claim)) };
   }
 
@@ -246,7 +275,14 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return { ...(await this.access.setFullView(id, body.full_view, actor, claim)) };
+    const wholeChurch = (await this.reach.reachOf(actor, Capability.RolesManage)) === null;
+    await this.reach.assertReachesAccount(actor, id, Capability.RolesManage);
+    return {
+      ...(await this.access.setFullView(id, body.full_view, actor, claim, {
+        // A tick only the Admin gives is only the Admin's to remove (decision 0469).
+        mayClearOtherTicks: wholeChurch,
+      })),
+    };
   }
 
   /**
@@ -262,7 +298,15 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.assertTicksAtWholeChurch(actor);
     return { ...(await this.access.setApprovesCells(id, body.approves_cells, actor, claim)) };
+  }
+
+  /** *Approves Cells* and *Moves people* need `roles.manage` at Whole Church (decision 0469). */
+  private async assertTicksAtWholeChurch(actor: Actor): Promise<void> {
+    if ((await this.reach.reachOf(actor, Capability.RolesManage)) !== null) {
+      throw new ScopeDeniedError('Only the Admin gives or removes this tick.', {});
+    }
   }
 
   /**
@@ -278,6 +322,7 @@ export class AccountsController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.assertTicksAtWholeChurch(actor);
     return { ...(await this.access.setMovesPeople(id, body.moves_people, actor, claim)) };
   }
 }
