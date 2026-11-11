@@ -477,25 +477,72 @@ test.describe('My Cell (decision 0323)', () => {
     await expect(section).not.toContainText('CELL-000007');
     expect(asked.find((search) => !search.includes('led_by'))).toContain('limit=11');
 
+    // A row, not a card: the leader, the Cell and its figures, and no link until it is opened
+    // (decision 0468).
     const first = section.getByRole('listitem').first();
-    await expect(first).toContainText('Led by Leader 1');
-    await expect(first).toContainText('1 of 4 recorded this month · 2 to record');
-    // Both plain: each Cell is recorded by its own leader (decision 0322).
-    await expect(first.getByRole('link', { name: 'Meetings' })).not.toHaveClass(/bg-accent/);
-    await expect(first.getByRole('link', { name: 'Meetings' })).toHaveAttribute(
-      'href',
-      `/cells/${theirs[0].id}/meetings?month=2026-06-01`,
-    );
-    await expect(first.getByRole('link', { name: 'Members' })).toHaveAttribute(
-      'href',
-      `/cells/${theirs[0].id}/members`,
-    );
+    await expect(first).toContainText('Leader 1');
+    await expect(first).toContainText('1 of 4 recorded · 2 to record');
+    await expect(first.getByRole('link')).toHaveCount(0);
     // The reader's own Meetings stays filled.
     await expect(page.getByRole('list').first().getByRole('link', { name: 'Meetings' })).toHaveClass(/bg-accent/);
 
     await page.getByRole('button', { name: 'Show more' }).click();
     await expect(section.getByRole('listitem')).toHaveCount(12);
     await expect(page.getByRole('button', { name: 'Show more' })).toHaveCount(0);
+  });
+
+  test('a leader\u2019s Cell opens in place to its members, read once and only when opened (decision 0468)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockSignedIn(page);
+    await mockScreens(page, 'RECORDING');
+    await mockCells(page, { open: true });
+    await mockCellMembers(page);
+    await page.route('**/api/v1/cells/counts', (route) =>
+      route.fulfill(json({ in_scope: 2, led_by_me: 1, attention_months: 3 })),
+    );
+    const own = { ...CELL_WITH_MEETINGS, leader: { ...CELL_WITH_MEETINGS.leader, person_id: SIGNED_IN_PERSON_ID } };
+    const theirs = {
+      ...CELL_WITH_NO_SCHEDULE,
+      leader: { ...CELL_WITH_NO_SCHEDULE.leader, full_name: 'Leader One' },
+    };
+    await page.route('**/api/v1/cells?*', (route) =>
+      route.fulfill(
+        json({
+          reporting_month: '2026-06-01',
+          open: true,
+          data: new URL(route.request().url()).searchParams.get('led_by') === 'me' ? [own] : [own, theirs],
+          next_cursor: null,
+        }),
+      ),
+    );
+    const asked = trackApi(page);
+    const membersAsked = () => asked.filter((request) => /\/cells\/[^/]+\/members/.test(request));
+
+    await page.goto('/my-cell');
+
+    const row = page.getByRole('button', { name: /Leader One/ });
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await page.waitForLoadState('networkidle');
+    // Nothing is asked for a row nobody has opened.
+    expect(membersAsked()).toEqual([]);
+
+    await row.click();
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText('Rosalinda Ocampo')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'See this Cell\u2019s meetings' })).toHaveAttribute(
+      'href',
+      `/cells/${theirs.id}/meetings?month=2026-06-01`,
+    );
+    expect(membersAsked()).toHaveLength(1);
+
+    // Closed and opened again, it is what was already read.
+    await row.click();
+    await expect(page.getByText('Rosalinda Ocampo')).toHaveCount(0);
+    await row.click();
+    await expect(page.getByText('Rosalinda Ocampo')).toBeVisible();
+    expect(membersAsked()).toHaveLength(1);
   });
 
   test('shows no such section where the account leads every Cell in its care (decision 0463)', async ({

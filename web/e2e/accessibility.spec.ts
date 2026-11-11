@@ -813,12 +813,16 @@ const SCANS = [
       await mockSignedIn(page);
       await mockScreens(page, 'RECORDING');
       await mockCells(page);
+      await mockCellMembers(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { level: 3, name: 'Couple · Wed' }).first()).toBeVisible();
       // The Cells its leaders lead are scanned too (decision 0463): the mock's counts leave one
-      // Cell in its care that it does not lead.
+      // Cell in its care that it does not lead. One is opened, so its members are scanned as
+      // well (decision 0468).
       await expect(page.getByRole('heading', { level: 2, name: 'Led by your leaders' })).toBeVisible();
+      await page.locator('button[aria-expanded="false"]').first().click();
+      await expect(page.getByText('Rosalinda Ocampo')).toBeVisible();
     },
   },
   {
