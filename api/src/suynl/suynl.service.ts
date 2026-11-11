@@ -23,6 +23,7 @@ import {
   beyondDirectDisciplesCount,
   growthPage,
   growthPopulation,
+  listPopulation,
 } from '../common/growth/growth-list';
 import { mergedCte, resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
@@ -110,7 +111,11 @@ export class SuynlService {
    */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
+    const { people: population } = await growthPopulation(
+      this.deps,
+      actor,
+      Capability.SuynlViewSubtree,
+    );
     const progress = await this.currentProgress(population);
     const people = await this.people.countCurrent(population);
 
@@ -136,7 +141,10 @@ export class SuynlService {
   /** `GET /api/v1/suynl/people`: the tab's list, one page (section 28). */
   async list(actor: Actor, query: SuynlListDto): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
+    const population = listPopulation(
+      await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree),
+      query,
+    );
     // Only a step filter reads the scope's progress, so a list asked for no step, as a
     // person's page asks, skips it (checklist row perf-person-page).
     const progress =
@@ -201,7 +209,8 @@ export class SuynlService {
    * **A person is counted** when they are current, hold at least one current lesson, and
    * hold no current Encounter or Life Class graduation; then by lessons, ten, seven to
    * nine, or one to six. **Rows are the subject's direct disciples**, each counting their
-   * branch now, themselves included; the subject's own row is the subject alone. A
+   * branch now, themselves included; the subject's own row is the subject alone, and is not
+   * sent where the subject is a reader left out of their own care (decision 0466). A
    * whole-church reader asking for nobody gets the two roots' branches instead, and a
    * line for anybody counted in neither. The rows, that row and that line are disjoint, so
    * they add up to the total, which is everyone the reader's grant reaches in them.
@@ -217,7 +226,11 @@ export class SuynlService {
     options: { names: boolean; totalNames?: boolean } = { names: true },
   ): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.SuynlViewSubtree);
+    const { people: population, readerLeftOut } = await growthPopulation(
+      this.deps,
+      actor,
+      Capability.SuynlViewSubtree,
+    );
     const churchWide = subjectId === null && population === null;
 
     const rows: { leaderId: string; network: NetworkName | null; members: string[] }[] = [];
@@ -320,7 +333,13 @@ export class SuynlService {
           leads_anyone: leading.has(canonicalId(row.leaderId)),
           ...figures(row.members),
         })),
-      own: own === null ? null : figures(own),
+      // The reader's own row on a table of their own, where they are not one of the people in
+      // their care (decision 0466): it would count nobody, so it is not sent, and the rows and
+      // the total still add up. A leader the reader opens keeps theirs.
+      own:
+        own === null || (readerLeftOut !== null && canonicalId(own[0]) === readerLeftOut)
+          ? null
+          : figures(own),
       elsewhere: elsewhere === null ? null : figures(elsewhere),
       total: {
         completed: all.completed,

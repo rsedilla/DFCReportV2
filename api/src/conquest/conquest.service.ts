@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
-import { growthPage, growthPopulation } from '../common/growth/growth-list';
+import { growthPage, growthPopulation, listPopulation } from '../common/growth/growth-list';
 import { uniqueIds } from '../common/growth/growth-submit';
 import { resolverOf } from '../common/merged-identity';
 import { canonicalId } from '../common/identifiers';
@@ -55,7 +55,11 @@ export class ConquestService {
 
   /** `GET /api/v1/conquest/counts`: the four cards, as things stand now. */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
-    const population = await growthPopulation(this.deps, actor, Capability.ConquestViewSubtree);
+    const { people: population } = await growthPopulation(
+      this.deps,
+      actor,
+      Capability.ConquestViewSubtree,
+    );
     const now = await databaseNow(this.db);
     const reached = await this.reachedBy(population, now);
 
@@ -71,7 +75,10 @@ export class ConquestService {
   /** `GET /api/v1/conquest/people`: the tab's list, one page. */
   async list(actor: Actor, query: ConquestListDto): Promise<Record<string, unknown>> {
     const now = await databaseNow(this.db);
-    const population = await growthPopulation(this.deps, actor, Capability.ConquestViewSubtree);
+    const population = listPopulation(
+      await growthPopulation(this.deps, actor, Capability.ConquestViewSubtree),
+      query,
+    );
     const include =
       query.goal === undefined ? undefined : (await this.reachedBy(population, now))[query.goal];
 

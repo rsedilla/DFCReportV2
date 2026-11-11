@@ -24,18 +24,62 @@ export interface GrowthListQuery {
   limit?: number;
 }
 
+/** Who a Growth tab counts, and who a search on it may also find (decision 0466). */
+export interface GrowthPopulation {
+  /**
+   * Every current Person the actor's viewing grant reaches, as things stand now (decisions
+   * 0278 and 0279), but the reader in the case below. `null` is the whole church, which is
+   * never enumerated. The cards, the opening list and the readiness table use this.
+   */
+  people: ReadonlySet<string> | null;
+  /** The reader, where they are left out of `people` and a search still finds them. */
+  readerLeftOut: string | null;
+}
+
 /**
- * Who a Growth tab lists: every current Person the actor's viewing grant reaches, as
- * things stand now (decisions 0278 and 0279), in name order. `null` is the whole
- * church, which is never enumerated.
+ * Who a Growth tab counts.
+ *
+ * **A reader who sees only their own branch is not one of the people in their care**
+ * (decision 0466): as My People counts them, the people beneath the reader, not the reader.
+ * Nobody files their own Growth records (decision 0280), so counting the reader put them in
+ * their own *Not started*. They are still counted by the leader above them, and a Whole
+ * Church or Network total, which is a total of everybody and must not change with who reads
+ * it, keeps them. **A search by name or Member ID still finds them** ({@link listPopulation}),
+ * so their own page keeps its Growth box.
  */
 export async function growthPopulation(
   deps: { authorization: AuthorizationService },
   actor: Actor,
   viewCapability: Capability,
-): Promise<ReadonlySet<string> | null> {
+): Promise<GrowthPopulation> {
   const membership = await deps.authorization.scopeMembership(actor, viewCapability);
-  return membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+  if (membership.kind === 'WHOLE_CHURCH') {
+    return { people: null, readerLeftOut: null };
+  }
+  const me = canonicalId(actor.personId);
+  if (!membership.ownBranchOnly || !membership.personIds.has(me)) {
+    return { people: membership.personIds, readerLeftOut: null };
+  }
+  return {
+    people: new Set([...membership.personIds].filter((id) => id !== me)),
+    readerLeftOut: me,
+  };
+}
+
+/**
+ * Who a Growth tab's list runs over: the counted people, and the reader too where a search
+ * names somebody (decision 0466), so a person's page, which finds its row by Member ID, and
+ * a search for one's own name both still find the reader. "Only my disciples" never lists the
+ * reader, so it adds nobody there. A card chosen beside a search narrows this same set.
+ */
+export function listPopulation(
+  population: GrowthPopulation,
+  query: GrowthListQuery,
+): ReadonlySet<string> | null {
+  if (population.readerLeftOut === null || query.q === undefined || query.mine === true) {
+    return population.people;
+  }
+  return new Set([...(population.people ?? []), population.readerLeftOut]);
 }
 
 /**
@@ -88,8 +132,9 @@ export async function growthPage(
 }
 
 /**
- * How many of a Growth tab's `people` are other than the actor, whom their own grant lists,
- * and the actor's direct disciples (decision 0384). Zero is exactly when "Only my disciples"
+ * How many of a Growth tab's `people` are other than the actor and the actor's direct
+ * disciples (decision 0384); the actor is counted only where a wider grant reaches them
+ * (decision 0466). Zero is exactly when "Only my disciples"
  * would leave nobody out but the actor, and the screen then leaves it out. Counted as `people`
  * is, so it never exceeds it.
  */

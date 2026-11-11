@@ -1001,6 +1001,24 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness?names=false']);
   });
 
+  test('a leader who sees only their own branch has no You row, and the rows still add up', async ({
+    page,
+  }) => {
+    // The reader is not one of the people in their own care, so the API sends no own row
+    // (decision 0466).
+    await mockSuynlReadiness(page, { readerCounted: false });
+    await page.goto('/reports/suynl');
+
+    await expectRows(page, 'My 12', [
+      ['Arturo Buenaventura their 12', '1', '1', '2', '4'],
+      ['Benita Navarro their 12', '0', '0', '0', '0'],
+      ['Florante Mendoza', '0', '0', '1', '1'],
+      ['Total', '1', '1', '3', '5'],
+    ]);
+    await expectTotalAddsUp(page, 'My 12');
+    await expect(page.getByRole('cell', { name: 'You', exact: true })).toHaveCount(0);
+  });
+
   test('a name opens the people behind the row, grouped by column with their lessons', async ({
     page,
   }) => {
