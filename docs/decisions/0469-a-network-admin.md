@@ -42,7 +42,8 @@ or Pastora Geraldine's 12, on one account with their leader role. It amends Sect
    another Network Admin's. They edit their own basic details. A Network root's own DCC line
    and own SUYNL, Training and Conquest stay with the root and the whole-church Admin.
 8. **Their screens are the Admin's, showing their Network**, every tab of Reports and Cells
-   included. The `Admin` item has *Home* and *Accounts*, and no *Settings* or *Audit Log*.
+   included. The `Admin` item has *Home* and *Accounts*, and no *Settings* or *Audit Log*, and
+   is where they land when they sign in.
    Search and pickers stay in their Network. The duplicate check keeps the nameless line a
    leader gets for a match elsewhere. A Network's # of Cell Groups and # of Cell Leaders count
    Cells whose leader is in it, and its # of People the people in it.
