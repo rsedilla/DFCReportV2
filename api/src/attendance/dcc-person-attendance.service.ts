@@ -1,14 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import {
-  AuthorizationService,
-  holdsWholeChurch,
-  type Actor,
-} from '../auth/authorization/authorization.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { NotFoundError } from '../common/errors/api-error';
-import { NIL_UUID, sameId } from '../common/identifiers';
+import { NIL_UUID, canonicalId, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
 import { DccCoverageService } from './dcc-coverage.service';
@@ -152,16 +148,15 @@ export class DccPersonAttendanceService {
     const window = rows.slice(0, limit);
     const last = window[window.length - 1];
 
-    // **Whose checklist each Sunday is on, for the Admin alone** (decision 0411): an account
-    // that may record on anybody's behalf church-wide is told, so a person's Sunday opens the
-    // checklist it belongs to, where a closed week can be amended. Nobody else is told, so the
-    // field discloses nothing a reader could not already reach.
+    // **Whose checklist each Sunday is on, for the Admin and a Network Admin** (decisions
+    // 0411 and 0469): an account that may record on anybody's behalf across the church or a
+    // Network is told, so a person's Sunday opens the checklist it belongs to. An owner the
+    // reader's scope does not cover now is not named (section 8).
     let owners: Map<string, string | null> | null = null;
     if (actor !== undefined) {
-      const authority = await this.authorization.authorityFor(actor.accountId);
       if (
-        holdsWholeChurch(authority, Capability.DccSubmitOnBehalf) &&
-        holdsWholeChurch(authority, Capability.DccTakeAttendance)
+        (await this.authorization.wideReachOf(actor, Capability.DccSubmitOnBehalf)) !== undefined &&
+        (await this.authorization.wideReachOf(actor, Capability.DccTakeAttendance)) !== undefined
       ) {
         owners = await this.coverage.checklistOwners(
           window.map((row) => ({
@@ -170,6 +165,17 @@ export class DccPersonAttendanceService {
             leaderId: row.responsible_leader_id,
           })),
         );
+        const membership = await this.authorization.scopeMembership(
+          actor,
+          Capability.DccTakeAttendance,
+        );
+        if (membership.kind !== 'WHOLE_CHURCH') {
+          for (const [eventId, owner] of owners) {
+            if (owner !== null && !membership.personIds.has(canonicalId(owner))) {
+              owners.set(eventId, null);
+            }
+          }
+        }
       }
     }
 

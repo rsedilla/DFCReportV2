@@ -464,7 +464,7 @@ describe('the Network Admin’s Cells (decision 0469)', () => {
     });
   });
 
-  it('holds the six Cell powers across its Network, and no request', async () => {
+  it('holds the Cell powers and Cell recording across its Network, and no request', async () => {
     const me = await get(networkAdmin, '/auth/me').expect(200);
     const held = (me.body.capabilities as { capability: string; scope_type: string }[])
       .filter((grant) => grant.capability.startsWith('cell.'))
@@ -473,11 +473,14 @@ describe('the Network Admin’s Cells (decision 0469)', () => {
 
     expect(held).toEqual([
       'cell.approve_leadership@NETWORK',
+      'cell.correct_subtree@NETWORK',
       'cell.manage_configuration@NETWORK',
       'cell.manage_leadership@NETWORK',
       'cell.manage_lifecycle@NETWORK',
       'cell.manage_membership@NETWORK',
       'cell.move_members@NETWORK',
+      'cell.submit_on_behalf@NETWORK',
+      'cell.take_attendance@NETWORK',
       'cell.view_subtree@NETWORK',
     ]);
   });

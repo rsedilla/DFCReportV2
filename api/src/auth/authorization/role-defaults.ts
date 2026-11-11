@@ -185,6 +185,8 @@ export const LEADER_MOVES_PEOPLE: RoleDefaults = {
  * narrowed by `AccountReachService`: Leader accounts only, and Full view only. Editing,
  * archiving and moving are narrowed by `AuthorizationService.assertMayChange`: an
  * administrator's, a Senior Pastor's and a Network root's record is read and never changed.
+ * Recording DCC is narrowed by `DccAttendanceService`: a Network root's own line stays with
+ * the root and a Whole Church holder.
  */
 const NETWORK_ADMIN: RoleDefaults = {
   [Capability.AccountsManage]: ScopeType.Network,
@@ -195,6 +197,15 @@ const NETWORK_ADMIN: RoleDefaults = {
   [Capability.PeopleManageLifecycle]: ScopeType.Network,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.Network,
   [Capability.DccViewSubtree]: ScopeType.Network,
+  // Recording on a leader's behalf (decision 0469, point 5). No
+  // `records.backdate_effective_date`, so a closed week stays the Admin's, and a Network
+  // root's own DCC line is refused where it is written.
+  [Capability.DccTakeAttendance]: ScopeType.Network,
+  [Capability.DccSubmitOnBehalf]: ScopeType.Network,
+  [Capability.DccCorrectSubtree]: ScopeType.Network,
+  [Capability.CellTakeAttendance]: ScopeType.Network,
+  [Capability.CellSubmitOnBehalf]: ScopeType.Network,
+  [Capability.CellCorrectSubtree]: ScopeType.Network,
   [Capability.CellViewSubtree]: ScopeType.Network,
   // The Cell powers (decision 0469, point 4). No `cell.request_leadership`: a new Cell or a
   // new leader reaches them only as a request to decide. Direct creation and the reason
