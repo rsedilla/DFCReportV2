@@ -264,8 +264,7 @@ export class ReportingController {
       );
     }
     await this.assertNamesSomebody(scope);
-    // A Network's rows are its Primaries already (decision 0469), so `rows` asks nothing more.
-    const rootLeaders = scope.kind === 'NETWORK' ? false : rootLeadersAsked(query.rows, scope.kind);
+    const rootLeaders = rootLeadersAsked(query.rows, scope.kind);
 
     const twelve = await this.reporting.cellTwelve(
       scope.kind === 'LEADER'

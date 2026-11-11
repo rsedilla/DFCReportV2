@@ -14,6 +14,7 @@ import {
   createTestApp,
 } from '../setup/fixtures';
 import { TokensService } from '../../src/auth/tokens.service';
+import { PeopleImportService } from '../../src/people/people.import.service';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -622,6 +623,165 @@ describe('the Network Admin (decision 0469)', () => {
         pastoral_leader_id: womensRoot.id,
       }).expect(200);
       expect((await get(leader, '/auth/me')).status).toBe(200);
+    });
+  });
+
+  describe('every other path into the tree or a Cell', () => {
+    const REFUSED = /Network Admin|cannot belong to a Cell/;
+
+    it('refuses them as the leader of a Cell created directly', async () => {
+      const response = await post(admin, '/cells', {
+        cell_leader_id: networkAdminPerson.id,
+        category: 'YOUTH',
+        day_of_week: 6,
+        time_of_day: '19:00',
+      });
+
+      expect(response.status).toBe(409);
+      expect(JSON.stringify(response.body)).toMatch(REFUSED);
+    });
+
+    it('refuses them as a leader named by the tree import', async () => {
+      await expect(
+        db.transaction().execute((trx) =>
+          app.get(PeopleImportService).createForImportWithin(
+            trx,
+            {
+              firstName: 'Imported',
+              middleName: null,
+              lastName: 'Undernora',
+              birthDate: null,
+              sex: 'FEMALE',
+              civilStatus: 'SINGLE',
+              placement: { kind: 'UNDER', pastoralLeaderId: networkAdminPerson.id },
+              encodedAt: new Date(),
+            },
+            { accountId: admin.id },
+            randomUUID(),
+          ),
+        ),
+      ).rejects.toThrow(REFUSED);
+    });
+
+    it('refuses to place them through the tree import', async () => {
+      const row = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', '=', networkAdminPerson.id)
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        db.transaction().execute((trx) =>
+          app.get(PeopleImportService).attachExistingWithin(
+            trx,
+            {
+              personId: networkAdminPerson.id,
+              memberId: row.member_id,
+              placement: { kind: 'UNDER', pastoralLeaderId: womensRoot.id },
+              encodedAt: new Date(),
+            },
+            { accountId: admin.id },
+            randomUUID(),
+          ),
+        ),
+      ).rejects.toThrow(REFUSED);
+    });
+
+    async function pendingRequest(prospective: string, members: string[]): Promise<string> {
+      const requester = await createAccount(app, db, { person: womensRoot, roles: ['LEADER'] });
+      return db.transaction().execute(async (trx) => {
+        const row = await trx
+          .insertInto('cell_leadership_requests')
+          .values({
+            kind: 'NEW_CELL',
+            prospective_leader_id: prospective,
+            requested_by: requester.id,
+            category: 'YOUTH',
+            day_of_week: 6,
+            time_of_day: '19:00',
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        if (members.length > 0) {
+          await trx
+            .insertInto('cell_leadership_request_members')
+            .values(members.map((person_id) => ({ request_id: row.id, person_id })))
+            .execute();
+        }
+        return row.id;
+      });
+    }
+
+    it('refuses to approve a request naming them as the new leader', async () => {
+      const id = await pendingRequest(networkAdminPerson.id, []);
+      const response = await post(admin, `/cells/leadership-requests/${id}/approve`, {});
+
+      expect(response.status).toBe(409);
+      expect(JSON.stringify(response.body)).toMatch(REFUSED);
+    });
+
+    it('refuses to approve a request naming them as a member, naming the line and no role', async () => {
+      const prospective = await createPerson(db, { firstName: 'Prospect', network: 'WOMENS' });
+      await assignTo(db, prospective.id, womensRoot.id);
+      const members = await createRequestMembers(db, 'WOMENS', { under: womensRoot.id });
+      const id = await pendingRequest(prospective.id, [
+        networkAdminPerson.id,
+        members.ids[0],
+        members.ids[1],
+      ]);
+      // Reached only by a requester whose scope holds them, which a Whole Church grant does.
+      const { requested_by: requester } = await db
+        .selectFrom('cell_leadership_requests')
+        .select('requested_by')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: requester,
+          capability: 'cell.request_leadership',
+          scope_type: 'WHOLE_CHURCH',
+          scope_network: null,
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const response = await post(admin, `/cells/leadership-requests/${id}/approve`, {});
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toContain('cannot belong to a Cell');
+      expect(response.body.error.details.field).toBe('members');
+      expect(JSON.stringify(response.body)).not.toContain('Network Admin');
+    });
+  });
+
+  describe('coverage on a leader’s own date', () => {
+    it('places each scheduled meeting by its leader’s Network on that date', async () => {
+      const longAgo = new Date('2024-01-03T12:00:00+08:00');
+      const leader = await createPerson(db, { firstName: 'Shifted', network: 'WOMENS' });
+      // Saturdays: 6 and 13 June in the Women's Network, 20 and 27 in the Men's. A member makes
+      // each one due.
+      const cell = await createCell(db, { leader, createdAt: longAgo, dayOfWeek: 6 });
+      await addCellMember(db, cell, { from: longAgo });
+      const changedAt = new Date('2026-06-15T12:00:00+08:00');
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: changedAt })
+        .where('person_id', '=', leader.id)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({ person_id: leader.id, network: 'MENS', started_at: changedAt } as never)
+        .execute();
+
+      const scheduled = async (network: string) =>
+        (await get(admin, `/reports/cells/monthly?period=${JUNE}&scope=NETWORK&network=${network}`))
+          .body.coverage.scheduled as number;
+
+      expect(await scheduled('WOMENS')).toBe(2);
+      expect(await scheduled('MENS')).toBe(2);
     });
   });
 });
