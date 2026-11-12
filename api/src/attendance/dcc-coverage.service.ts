@@ -923,7 +923,7 @@ export class DccCoverageService {
     // administrator records the line** (decision 0418), on that root's checklist, as of the
     // row's oldest Sunday. Every reader is told so; only an administrator gets Record. A
     // chain that ends anywhere else names nobody, as before.
-    const administrator = await this.isAdministrator(actor);
+    const administers = await this.administers(actor);
     const topOf = new Map<(typeof groups)[number], string>();
     for (const group of groups) {
       if (group.recorder === null && group.sundays.length > 0) {
@@ -954,7 +954,7 @@ export class DccCoverageService {
         const byActor = recorder !== null && recorder === me;
         const top = topOf.get(group) ?? null;
         const mayRecord =
-          (administrator && top !== null) ||
+          (top !== null && administers(top)) ||
           (recorder !== null && (byActor || recordable.has(recorder)));
         // Named only where the reader's scope covers them (owner, 2026-10-13).
         const named =
@@ -1071,16 +1071,25 @@ export class DccCoverageService {
   }
 
   /**
-   * Whether the reader is an administrator in decision 0418's sense: holding both
-   * `dcc.take_attendance` and `dcc.submit_on_behalf` at Whole Church, which by default is
-   * the `ADMIN` role alone (decision 0322).
+   * Which Network roots the reader is an administrator for in decision 0418's sense: holding
+   * both `dcc.take_attendance` and `dcc.submit_on_behalf` at Whole Church, which by default is
+   * the `ADMIN` role alone (decision 0322), or across the root's Network, which is a Network
+   * Admin (decision 0469). A subtree holder is one for nobody.
    */
-  private async isAdministrator(actor: Actor): Promise<boolean> {
-    const [take, onBehalf] = await Promise.all([
+  private async administers(actor: Actor): Promise<(rootId: string) => boolean> {
+    const [take, onBehalf, takeReach, onBehalfReach] = await Promise.all([
       this.authorization.scopeMembership(actor, Capability.DccTakeAttendance),
       this.authorization.scopeMembership(actor, Capability.DccSubmitOnBehalf),
+      this.authorization.wideReachOf(actor, Capability.DccTakeAttendance),
+      this.authorization.wideReachOf(actor, Capability.DccSubmitOnBehalf),
     ]);
-    return take.kind === 'WHOLE_CHURCH' && onBehalf.kind === 'WHOLE_CHURCH';
+    if (takeReach === undefined || onBehalfReach === undefined) {
+      return () => false;
+    }
+    const holds = (membership: typeof take, id: string) =>
+      membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(id));
+
+    return (rootId) => holds(take, rootId) && holds(onBehalf, rootId);
   }
 
   /**

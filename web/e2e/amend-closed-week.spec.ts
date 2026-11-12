@@ -268,3 +268,72 @@ test.describe('a DCC Sunday in a closed week', () => {
     expect((sent[0] as { records: { present: boolean }[] }).records[0].present).toBe(false);
   });
 });
+
+/**
+ * A Network Admin's session (decision 0469): both recording capabilities and both correction
+ * ones across their Network, and no backdating, which is what offers *Amend Closed Week*.
+ */
+async function mockNetworkRecorder(page: Page): Promise<void> {
+  const capabilities = [
+    'dcc.view_subtree',
+    'dcc.take_attendance',
+    'dcc.submit_on_behalf',
+    'dcc.correct_subtree',
+    'cell.view_subtree',
+    'cell.take_attendance',
+    'cell.submit_on_behalf',
+    'cell.correct_subtree',
+  ].map((capability) => ({
+    capability,
+    scope_type: 'NETWORK',
+    scope_network: 'WOMENS',
+    read_only: false,
+    source: 'ROLE',
+  }));
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        account_id: '3f1b7c6e-0000-4000-8000-000000000e01',
+        person_id: '3f1b7c6e-0000-4000-8000-000000000e02',
+        email: 'nora@example.test',
+        username: null,
+        first_name: 'Nora',
+        roles: ['NETWORK_ADMIN'],
+        screens: 'FULL',
+        people_i_oversee: true,
+        capabilities,
+      }),
+    }),
+  );
+}
+
+test.describe('a Network Admin in a closed week (decision 0469)', () => {
+  test('is offered no amendment of a Cell meeting, only the closed page', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockNetworkRecorder(page);
+    await mockRecordedMeetingRoster(page, 'HELD', { weekOpen: false });
+
+    await page.goto(MEETING);
+
+    await expect(
+      page.getByText('This week is closed, so this meeting can no longer be changed.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Amend Closed Week' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+  });
+
+  test('is offered no amendment of a DCC Sunday', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockNetworkRecorder(page);
+    await mockClosedDccRoster(page);
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Amend Closed Week' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+  });
+});

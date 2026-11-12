@@ -191,7 +191,7 @@ describe('the Network Admin (decision 0469)', () => {
       expect((await get(networkAdmin, `/people/${man.id}`)).status).toBe(403);
     });
 
-    it('holds no attendance or Growth write yet', async () => {
+    it('holds no Growth write yet, and no backdating', async () => {
       const me = await get(networkAdmin, '/auth/me');
       const held = (me.body.capabilities as { capability: string }[]).map(
         (grant) => grant.capability,
@@ -203,6 +203,7 @@ describe('the Network Admin (decision 0469)', () => {
             !capability.endsWith('.view_subtree') &&
             !capability.startsWith('people.') &&
             !capability.startsWith('cell.') &&
+            !capability.startsWith('dcc.') &&
             !['accounts.manage', 'roles.manage'].includes(capability),
         ),
       ).toEqual([]);

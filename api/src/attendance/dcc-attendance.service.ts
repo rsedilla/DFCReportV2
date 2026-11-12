@@ -270,10 +270,12 @@ export class DccAttendanceService {
     if (account === null) {
       // **An administrator records a leader whom nobody above covers, then or now**
       // (decision 0418): the checklist is the one this leader would have with an account.
-      // For anyone else, and for a leader somebody above does cover, it stays empty.
+      // For anyone else, and for a leader somebody above does cover, it stays empty. A
+      // Network Admin is one for the leaders of their own Network (decision 0469); the guard
+      // and the check above placed this leader in the reach of both capabilities.
       if (
-        holdsWholeChurch(authority, Capability.DccTakeAttendance) &&
-        holdsWholeChurch(authority, Capability.DccSubmitOnBehalf)
+        (await this.authorization.wideReachOf(actor, Capability.DccTakeAttendance)) !== undefined &&
+        (await this.authorization.wideReachOf(actor, Capability.DccSubmitOnBehalf)) !== undefined
       ) {
         lines = await this.rosterLines(this.db, event, leaderId, false, true);
       }
@@ -285,14 +287,20 @@ export class DccAttendanceService {
         leaderId,
         holdsWholeChurch(leaderAuthority, Capability.DccTakeAttendance),
       );
+    }
 
-      const membership = await this.authorization.scopeMembership(
-        actor,
-        Capability.DccTakeAttendance,
+    // Either checklist is narrowed to the people the reader holds now (section 8).
+    const membership = await this.authorization.scopeMembership(
+      actor,
+      Capability.DccTakeAttendance,
+    );
+    if (membership.kind !== 'WHOLE_CHURCH') {
+      // A Network root's own line stays with the root and a Whole Church holder (section
+      // 7, decision 0469), so nobody else is shown it to record.
+      lines = lines.filter(
+        (line) =>
+          membership.personIds.has(canonical(line.personId)) && line.responsibleLeaderId !== null,
       );
-      if (membership.kind !== 'WHOLE_CHURCH') {
-        lines = lines.filter((line) => membership.personIds.has(canonical(line.personId)));
-      }
     }
 
     return {
@@ -481,6 +489,21 @@ export class DccAttendanceService {
           throw new ScopeDeniedError(
             'Nobody records their own DCC attendance; their leader does (decision 0322).',
             { person_id: personId },
+          );
+        }
+
+        // A Network root's own line stays with the root and a Whole Church holder (section
+        // 7, decision 0469). Decided on who the Person was on the Sunday and who is asking,
+        // for a Person already in the actor's scope, and never on what is stored.
+        if (
+          assignments.get(personId)?.leaderId === null &&
+          !sameId(personId, actor.personId) &&
+          !holdsWholeChurch(authority, Capability.DccTakeAttendance)
+        ) {
+          throw new ScopeDeniedError(
+            'A Network root’s own DCC attendance is recorded by the root or the Admin ' +
+              '(SKILL.md section 7).',
+            { capability: Capability.DccTakeAttendance, person_id: personId },
           );
         }
 
