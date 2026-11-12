@@ -334,7 +334,8 @@ function Dashboard() {
         {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
-            <p className="text-sm leading-relaxed">
+            {/* Not on a phone, where the tab names it (decision 0476, as 0454 and 0455). */}
+            <p className="hidden text-sm leading-relaxed sm:block">
               {churchStatus
                 ? 'How many leaders in the church recorded on time, week by week or month by month.'
                 : 'How your leaders are doing with their records, week by week or month by month.'}
