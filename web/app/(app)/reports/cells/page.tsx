@@ -29,6 +29,7 @@ import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useAsOfToday } from '@/lib/use-as-of-today';
 
 /**
  * The Cell Groups report (SKILL.md sections 12, 13, 17, 19 and 20; decisions 0202, 0216,
@@ -62,6 +63,8 @@ export function CellReport() {
   // Every control lives in the address, so Back steps back through the period, the leader
   // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
+  // "As of today, 12 Nov" (decision 0478).
+  const asOfToday = useAsOfToday();
   const period = useReportPeriod();
   const { kind, current, me, wholeChurch, ownNetwork, seniorPastor } = period;
   const { start, guardMonth, own, periodParams } = period;
@@ -152,9 +155,10 @@ export function CellReport() {
           )}
           {/* A Full view leader's note under the controls (decision 0363): a period whose records
               are still open says so in two words, and one whose records have closed says
-              nothing (decision 0451, replacing its closing time and "Closed."). */}
+              nothing (decision 0451, replacing its closing time and "Closed."), dated by
+              decision 0478. */}
           {branchReader && twelve.data && !twelve.isPlaceholderData && twelve.data.open ? (
-            <p className="text-muted basis-full text-sm">As of today</p>
+            <p className="text-muted basis-full text-sm">{asOfToday}</p>
           ) : null}
         </div>
 

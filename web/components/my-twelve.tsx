@@ -14,6 +14,7 @@ import {
   shortRangeLabel,
   type RangeKind,
 } from '@/lib/report-range';
+import { useAsOfToday } from '@/lib/use-as-of-today';
 import { periodClosesLabel } from '@/lib/weekly-deadline';
 
 const STAGES: readonly [keyof Classification, string][] = [
@@ -87,7 +88,7 @@ export function RangeNavigator({
    * Labelled above, with the period between the arrows and no tag (a Full view leader, decision
    * 0363): whether it is open is said in the note under the controls. `bare` is the same
    * without the label, beside the one switch, for every reader who has it (decision 0398); with
-   * `quiet`, an open period says *As of today* (decision 0451).
+   * `quiet`, an open period says *As of today, 12 Nov* (decisions 0451 and 0478).
    */
   labelled?: boolean | 'bare';
   /** The earliest period this reader is offered, where there is one (decision 0310). */
@@ -95,19 +96,22 @@ export function RangeNavigator({
   open: boolean | undefined;
   onChange: (start: string) => void;
   /**
-   * An open period says *As of today* in plain words, and a closed one says nothing (the Senior
-   * Pastors, owner 2026-10-09; the words decision 0451's, which were *so far*). Still the open
+   * An open period says *As of today, 12 Nov* in plain words, and a closed one says nothing (the
+   * Senior Pastors, owner 2026-10-09; the words decision 0451's, which were *so far*, dated by
+   * decision 0478). Still the open
    * flag sections 17 and 19 ask for; they do not record, so the window's last day is not theirs.
    */
   quiet?: boolean;
   /**
-   * Under Reports (decision 0451): an open period says *As of today* and a finished one nothing,
-   * and a phone names a week shortly. Record's *Recording Progress* leaves it off and keeps its
+   * Under Reports (decision 0451): an open period says *As of today, 12 Nov* (decision 0478) and
+   * a finished one nothing, and a phone names a week shortly. Record's *Recording Progress* leaves it off and keeps its
    * closing time and *Closed* tag, because recording is what that time is for.
    */
   asOfToday?: boolean;
 }) {
   const phone = usePhone();
+  // Dated, and read again when the app comes back to the front (decision 0478).
+  const asOfTodayText = useAsOfToday();
   const button =
     'border-line focus-visible:outline-accent inline-flex min-h-11 min-w-12 shrink-0 items-center justify-center border text-lg focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 lg:min-w-11';
   const label =
@@ -157,12 +161,12 @@ export function RangeNavigator({
           {after}
           {quiet && open ? (
             <span className="text-muted ml-3 hidden text-sm whitespace-nowrap lg:inline">
-              As of today
+              {asOfTodayText}
             </span>
           ) : null}
         </div>
         {/* A phone says it under the bar, where it has the room (decision 0451). */}
-        {quiet && open ? <p className="text-muted mt-2 text-sm lg:hidden">As of today</p> : null}
+        {quiet && open ? <p className="text-muted mt-2 text-sm lg:hidden">{asOfTodayText}</p> : null}
       </div>
     );
   }
@@ -176,7 +180,7 @@ export function RangeNavigator({
         // Under Reports a period still open says so in two words, and a finished one says
         // nothing (decision 0451, replacing its closing time and a "Closed" tag).
         open ? (
-          <span className="text-muted text-sm">· As of today</span>
+          <span className="text-muted text-sm">· {asOfTodayText}</span>
         ) : null
       ) : open === undefined ? null : open ? (
         // Record's Recording Progress: when the period is due and closes, in one plain line,

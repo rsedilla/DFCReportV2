@@ -20,7 +20,8 @@ import { describeFailure } from '@/lib/messages';
 import { shortNames } from '@/lib/names';
 import { usePhone } from '@/lib/phone';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
-import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
+import { asOfTodayLabel, monthFromQuery, monthLabel } from '@/lib/reporting-month';
+import { useAsOfToday } from '@/lib/use-as-of-today';
 import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
@@ -155,6 +156,7 @@ export function ChurchCountsPanel({
   month: string | null;
 }) {
   const go = useScreenAddress();
+  const today = useAsOfToday();
   const current = monthFromQuery(null);
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
@@ -207,7 +209,7 @@ export function ChurchCountsPanel({
           <CountTiles
             figure={figure}
             value={(key) => data.whole_church[key]}
-            asOf={asAt(month, month === current)}
+            asOf={asAt(month, month === current, today)}
           />
 
           {data.tables === null ? (
@@ -232,12 +234,13 @@ export function ChurchCountsPanel({
 }
 
 /**
- * The month's instant, in words: *As of today* or *As of 31 October 2026* (decision 0451, which
- * dropped *so far* and moved it into the first tile).
+ * The month's instant, in words: *As of today, 12 Nov* or *As of 31 October 2026* (decision 0451,
+ * which dropped *so far* and moved it into the first tile; dated by decision 0478). `today` is
+ * `useAsOfToday()`'s label, so it moves on when the app comes back after midnight.
  */
-export function asAt(month: string, current: boolean): string {
+export function asAt(month: string, current: boolean, today: string = asOfTodayLabel()): string {
   if (current) {
-    return 'As of today';
+    return today;
   }
   const [year, number] = month.split('-').map(Number);
   const last = new Date(Date.UTC(year, number, 0));

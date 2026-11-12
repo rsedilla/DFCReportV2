@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-12, the trigger being decision 0477: of 476 files, 475 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0477 each moved the first two and
+2026-11-12, the trigger being decision 0478: of 477 files, 476 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0478 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-12 and triggered by 0477, and was left stale by 0478 the same day. The one before that was dated
 2026-11-12 and triggered by 0476, and was left stale by 0477 the same day. The one before that was dated
 2026-11-12 and triggered by 0475, and was left stale by 0476 the same day. The one before that was dated
 2026-11-12 and triggered by 0474, and was left stale by 0475 the same day. The one before that was dated
@@ -998,6 +999,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-12 — [A Network Admin records for a Person in the tree who holds an Admin account](docs/decisions/0475-a-network-admin-records-for-a-person-in-the-tree-who-holds-an-admin-account.md)
 - 2026-11-12 — [Recording Progress says plainly when nobody beneath owed a record](docs/decisions/0476-recording-progress-says-plainly-when-nobody-beneath-owed-a-record.md)
 - 2026-11-12 — [Record's tabs say what to do without working it out](docs/decisions/0477-record-tabs-say-what-to-do-without-working-it-out.md)
+- 2026-11-12 — [*As of today* names the day](docs/decisions/0478-as-of-today-names-the-day.md)
 
 ### Open — awaiting a ruling
 
