@@ -41,6 +41,9 @@ or Pastora Geraldine's 12, on one account with their leader role. It amends Sect
 7. **Records they read and do not change:** a Senior Pastor's, the whole-church Admin's and
    another Network Admin's. They edit their own basic details. A Network root's own DCC line
    and own SUYNL, Training and Conquest stay with the root and the whole-church Admin.
+   *Corrected 2026-11-12: the root files none of their own SUYNL, Training or Conquest
+   (decision 0280); only another actor whose confirming grant is Whole Church does. Their DCC
+   line does stay with them. `SKILL.md` §7 carries the corrected sentence.*
 8. **Their screens are the Admin's, showing their Network**, every tab of Reports and Cells
    included. The `Admin` item has *Home* and *Accounts*, and no *Settings* or *Audit Log*, and
    is where they land when they sign in.
