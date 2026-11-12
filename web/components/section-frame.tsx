@@ -48,7 +48,11 @@ export function SectionFrame({
     cells: recording
       ? { name: 'Cells', tab: 'My Cell', href: '/my-cell' }
       : { name: 'Cells', tab: 'Active Cells', href: '/cells' },
-    record: { name: 'Record', tab: 'Update Records', href: '/dashboard?list=awaiting' },
+    // The Senior Pastors' Record is Recording Progress alone (decision 0480).
+    record:
+      me.data?.screens === 'SENIOR_PASTOR'
+        ? { name: 'Record', tab: 'Recording Progress', href: '/dashboard' }
+        : { name: 'Record', tab: 'Update Records', href: '/dashboard?list=awaiting' },
     account: { name: 'Account', tab: 'My Account', href: '/session' },
   };
   const chosen = section === 'people' ? null : frame[section];

@@ -1177,41 +1177,31 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     return page.getByText(label, { exact: true }).locator('..');
   }
 
-  test('opens on Recording Progress, with Awaiting a record as the other tab', async ({ page }) => {
+  // Decision 0480: the Admin records their records, so Recording Progress is the whole screen,
+  // under a heading rather than a tab row of one.
+  test('is Recording Progress alone, under its heading, with no Update Records (decision 0480)', async ({
+    page,
+  }) => {
     await page.clock.setFixedTime(OCTOBER_8);
     await mockSeniorPastor(page);
 
     await page.goto('/dashboard');
 
-    const tabs = page.getByRole('group', { name: 'Record' });
-    await expect(tabs.getByRole('button')).toHaveText(['Recording Progress', /^Update Records/]);
-    await expect(tabs.getByRole('button', { name: 'Recording Progress' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    // No heading of its own: the tab names it (decision 0327).
+    await expect(page.getByRole('heading', { level: 2, name: 'Recording Progress' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Recording Progress' })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
+    await expect(page.getByText('Whether the church has recorded.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Record' })).toHaveCount(0);
+    await expect(page.getByText(/Update Records/)).toHaveCount(0);
     // No figure links anywhere: no Pending list sits beside it (decision 0370).
     await expect(page.getByText('Celestino Ocampo').first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Pending (CG|DCC) Records/ })).toHaveCount(0);
     // None of the other lists of section 19, and no month figures.
     await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
 
-    await tabs.getByRole('button', { name: /^Update Records/ }).click();
-
-    await expect(page).toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('region', { name: 'Update Records' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Recording Progress' })).toHaveCount(0);
-    // Their own work only: no Whose switch.
-    await expect(page.getByRole('group', { name: 'Whose' })).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: 'Leaders Under Me' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /^Record Young Pro · / }).first()).toBeVisible();
-
-    await tabs.getByRole('button', { name: 'Recording Progress' }).click();
-    await expect(page).not.toHaveURL(/list=awaiting/);
-    await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
+    // An address naming Update Records opens Recording Progress.
+    await page.goto('/dashboard?list=awaiting');
+    await expect(page.getByRole('heading', { level: 2, name: 'Recording Progress' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
   });
 
   test('opens on the current week and asks for the period the Week and Month switch names', async ({
@@ -1437,9 +1427,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
 
       const targets = page.locator('main button, main a[href], main input, main select');
       const count = await targets.count();
-      // Two tabs, Week and Month, the period before and after, and five leader names in each
-      // rendering (the hidden one counted, not measured).
-      expect(count).toBeGreaterThanOrEqual(16);
+      // Week and Month, the period before and after, and five leader names in each rendering
+      // (the hidden one counted, not measured). No tabs since decision 0480.
+      expect(count).toBeGreaterThanOrEqual(14);
 
       const small: string[] = [];
       for (let index = 0; index < count; index += 1) {
