@@ -1280,7 +1280,9 @@ test.describe('the Senior Pastors’ Record (decision 0325)', () => {
     const dcc = box(page, 'Recorded their DCC checklist');
     await expect(dcc).toContainText('9 of 13 leaders · 69%');
     await expect(dcc).toContainText('Last week: 8 of 11 leaders');
-    await expect(page.getByText(/^Open until /)).toBeVisible();
+    // A week before the weekly rule has no due date, so the line says when it closes (0476).
+    await expect(page.getByText('Closes 7 November', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Open until /)).toHaveCount(0);
   });
 
   test('a box reading 0 of 0 shows no percentage, and an open period before says so', async ({
@@ -1581,6 +1583,94 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
 
     expect(asked[0]?.get('scope')).toBe('LEADER');
     expect(asked[0]?.get('leader_id')).toBe(SIGNED_IN_PERSON_ID);
+  });
+
+  test('says plainly when nobody beneath owed a record, and drops its line on a phone (decision 0476)', async ({
+    page,
+  }) => {
+    await mockFullRecord(page);
+    await mockGrants(page, ['reports.view_subtree']);
+    await page.route('**/api/v1/reports/recording-status/leader?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          kind: 'WEEK',
+          start: '2026-10-05',
+          end: '2026-10-11',
+          open: true,
+          branch: { cell: { ...column(0, 0), percent: null }, dcc: { ...column(0, 0), percent: null } },
+          previous: {
+            start: '2026-09-28',
+            end: '2026-10-04',
+            open: true,
+            cell: column(0, 0),
+            dcc: column(0, 0),
+          },
+          rows: [],
+          others: null,
+        }),
+      }),
+    );
+    const intro = 'How your leaders are doing with their records, week by week or month by month.';
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/dashboard');
+    await page.getByRole('group', { name: 'Outstanding work' }).getByRole('button').last().click();
+
+    const region = page.getByRole('region', { name: 'Recording Progress' });
+    await expect(region.getByText('No leaders to follow up this week')).toBeVisible();
+    await expect(
+      region.getByText('None of the leaders under you had a Cell group or a DCC Sunday to record'),
+    ).toBeVisible();
+    // No "0 of 0" boxes, no heading over them, and no line saying nobody is under the reader.
+    await expect(region.getByText(/0 of 0/)).toHaveCount(0);
+    await expect(region.getByText('Leaders Under Me')).toHaveCount(0);
+    await expect(page.getByText(/Nobody is under you/)).toHaveCount(0);
+    // The line under the tab is not on a phone, and is from sm up.
+    await expect(page.getByText(intro)).toBeHidden();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(intro)).toBeVisible();
+  });
+
+  test('says when a week is due and when it closes on one line, breaking only between the two (decision 0476)', async ({
+    page,
+  }) => {
+    await mockFullRecord(page);
+    // 10:30 on Thursday 12 November 2026 in Manila: it opens on the week of 26 October.
+    await page.clock.setFixedTime(new Date('2026-11-12T02:30:00Z'));
+    await mockGrants(page, ['reports.view_subtree']);
+    await page.route('**/api/v1/reports/recording-status/leader?*', (route) => {
+      const start = new URL(route.request().url()).searchParams.get('start') ?? '2026-10-26';
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          kind: 'WEEK',
+          start,
+          end: start,
+          open: true,
+          deadline: true,
+          branch: { cell: { ...column(1, 2), percent: 50 }, dcc: { ...column(1, 1), percent: 100 } },
+          previous: { start, end: start, open: true, deadline: true, cell: column(1, 1), dcc: column(1, 1) },
+          rows: [],
+          others: null,
+        }),
+      });
+    });
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/dashboard');
+    await page.getByRole('group', { name: 'Outstanding work' }).getByRole('button').last().click();
+
+    const region = page.getByRole('region', { name: 'Recording Progress' });
+    await expect(region.getByText('Due 9 Nov, 12NN · closes 30 Nov, 12NN')).toBeVisible();
+    await expect(region.getByText(/Open until/)).toHaveCount(0);
+    // Each half keeps its words together: at 320 the line breaks at the dot and nowhere else.
+    for (const half of ['Due 9 Nov, 12NN', 'closes 30 Nov, 12NN']) {
+      const box = await region.getByText(half, { exact: true }).boundingBox();
+      expect(box?.height ?? 0).toBeLessThan(24);
+    }
   });
 
   test('opens CG Records Due for a row’s branch from its figure, and Show everyone clears it (decision 0370)', async ({

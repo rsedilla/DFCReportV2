@@ -86,11 +86,9 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
           start={shown}
           current={current}
           open={data?.open}
+          due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
-        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
-          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
-        ) : null}
       </div>
 
       <div className="mt-4">
@@ -218,11 +216,9 @@ export function LeaderRecordingStatusPanel({
           start={shown}
           current={current}
           open={data?.open}
+          due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
-        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
-          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
-        ) : null}
       </div>
 
       <div className="mt-4">
@@ -237,6 +233,16 @@ export function LeaderRecordingStatusPanel({
             This {unit} cannot be shown: the pastoral tree it resolves holds a fault that needs
             repair.
           </p>
+        ) : data.branch.cell.owed === 0 && data.branch.dcc.owed === 0 ? (
+          // Nobody beneath owed anything: one plain card rather than two "0 of 0" boxes and a
+          // line that read as though the reader had nobody under them (decision 0476).
+          <div className="border-line mt-4 border p-4">
+            <p className="text-ink text-base font-bold">No leaders to follow up this {unit}</p>
+            <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+              None of the leaders under you had a Cell group or a DCC Sunday to record for this{' '}
+              {unit}. Your own records are on <span className="font-semibold">Update Records</span>.
+            </p>
+          </div>
         ) : (
           <>
             <h3 className="field-label mt-4">Leaders Under Me</h3>
@@ -269,9 +275,7 @@ export function LeaderRecordingStatusPanel({
                 open={data.open}
                 onPending={onPending}
               />
-            ) : data.others ? null : (
-              <p className="text-muted mt-6 text-sm">Nobody is under you this {unit}.</p>
-            )}
+            ) : null}
             {data.others ? (
               <div className="mt-6">
                 <h3 className="text-base font-bold tracking-tight">Others</h3>
