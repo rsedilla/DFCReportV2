@@ -167,7 +167,7 @@ export async function filingFor(
 
   // A Network root is nobody's direct disciple and nobody's downline, so neither
   // capability reaches them through the tree; a Whole Church grant of the confirming
-  // one does (sections 27 and 28).
+  // one does (sections 27 and 28), and a Network one does not (section 7, decision 0469).
   if (assignment.leaderId === null) {
     return holdsWholeChurch(authority, capabilities.confirm)
       ? { confirmedBy: null, onBehalf: false }

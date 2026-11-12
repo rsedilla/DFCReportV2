@@ -374,6 +374,14 @@ describe('the Network Admin records on a leader’s behalf (decision 0469)', () 
       });
     });
 
+    it('records the line of somebody in a leader’s 12 who holds an Admin account (decision 0475)', async () => {
+      const wynn = await createPerson(db, { firstName: 'Wynn', network: 'WOMENS' });
+      await assignTo(db, wynn.id, wanda.id);
+      await createAccount(app, db, { person: wynn, roles: ['ADMIN'] });
+
+      await mark(networkAdmin, wynn).expect(201);
+    });
+
     it('still refuses a Leader anybody off their own checklist', async () => {
       expect(refused(await mark(wandaAccount, wendy))).toEqual([403, 'SCOPE_DENIED']);
     });
