@@ -161,8 +161,9 @@ export function ReportsTabs({
   // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
   // owner's layout): a switch inside it chooses which, and each keeps its own address. **The
   // Senior Pastors' are two tabs, *CG Attendance* and *DCC Attendance*, with no switch**
-  // (decision 0481): a tab inside a tab was one step too many for them.
-  const merged = !seniorPastor;
+  // (decision 0481): a tab inside a tab was one step too many for them, **and so are a Full view
+  // leader's** (decision 0483). The Admin and a Network Admin keep the switch.
+  const merged = !seniorPastor && !branch;
   const attendance = merged && (current === 'cells' || current === 'dcc');
   // The Admin's *Counts* holds the three # figures (decision 0433).
   const counts = !seniorPastor && !branch && (COUNT_KEYS as readonly string[]).includes(current);
@@ -198,8 +199,9 @@ export function ReportsTabs({
         <nav
           aria-label="Which report"
           // Every tab one size, for every reader (decision 0416).
-          // The Senior Pastors' five on one row from `lg` (decision 0481).
-          className={cn('mt-6', TAB_GRID, TAB_ROW, seniorPastor && 'lg:grid-cols-5')}
+          // The Senior Pastors' five, and a Full view leader's, on one row from `lg` (decisions
+          // 0481 and 0483).
+          className={cn('mt-6', TAB_GRID, TAB_ROW, !merged && 'lg:grid-cols-5')}
         >
           {rowTabs.map((tab) => {
             const active =
@@ -342,8 +344,14 @@ export function ReportViewSwitch({
   value,
   onPeriod,
   leader,
+  inBar = false,
 }: {
   tab: ReportTab;
+  /**
+   * Inside the report's control bar beside the month, as a Full view leader's Attendance has it
+   * (decision 0483), rather than on its own line above the bar.
+   */
+  inBar?: boolean;
   /** The length on screen, or `TREND` for the twelve months. */
   value: RangeKind | 'TREND';
   /** Another length of the same tab; left out, it opens the tab's own address. */
@@ -383,7 +391,7 @@ export function ReportViewSwitch({
       label="Report period"
       // Attendance's sits on the line beside Cell Group and DCC (decision 0443); a count's, in
       // its control bar beside the month. One size, as every switch is (decision 0416).
-      className={attendance ? 'lg:ml-2' : 'mt-0'}
+      className={inBar ? 'mt-0 w-full lg:w-auto' : attendance ? 'lg:ml-2' : 'mt-0'}
       options={options}
       value={value}
       onChange={(next) => {

@@ -76,10 +76,11 @@ const twelveTable = (page: Page) =>
 const coverageLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ of \d+ records filed/ });
 const sundaysLine = (page: Page) =>
-  page.locator('main p').filter({ hasText: /^\d+ Sundays? counted/ });
+  // The line under coverage, not How often people came's "N Sundays counted this month."
+  page.locator('main p').filter({ hasText: /^\d+ Sundays? counted( ·|$)/ });
 /** A Full view leader's note under the controls (decision 0363). */
 const noteLine = (page: Page) =>
-  page.locator('main p').filter({ hasText: /^(As of today, |No service on )/ });
+  page.locator('main p').filter({ hasText: /^(As of today, |Sunday \d+ \w+ not counted)/ });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -184,7 +185,7 @@ test.describe('the coverage line and the Sundays under it', () => {
     await expect(coverageLine(page)).toHaveCount(0);
     await expect(sundaysLine(page)).toHaveCount(0);
     // No count of Sundays, no closing time (decision 0451).
-    await expect(noteLine(page)).toHaveText('As of today, 20 Jun · No service on Sunday 14 June');
+    await expect(noteLine(page)).toHaveText('As of today, 20 Jun · Sunday 14 June not counted');
     await expect(page.getByText(/Sundays?[.,]/)).toHaveCount(0);
     await expect(page.getByText(/Still open, until/)).toHaveCount(0);
 
@@ -194,7 +195,7 @@ test.describe('the coverage line and the Sundays under it', () => {
 
     // The week whose only Sunday was removed says why.
     await page.goto('/reports/dcc?period=week&start=2026-06-08');
-    await expect(noteLine(page)).toHaveText(/No service on Sunday 14 June$/);
+    await expect(noteLine(page)).toHaveText(/Sunday 14 June not counted$/);
   });
 
   // An installed app left open overnight must not go on saying yesterday (decision 0478).
@@ -218,14 +219,14 @@ test.describe('the coverage line and the Sundays under it', () => {
     await arrange(page, { church: true });
 
     await page.goto('/reports/dcc');
-    await expect(sundaysLine(page)).toHaveText('3 Sundays counted · no service on Sunday 14 June');
+    await expect(sundaysLine(page)).toHaveText('3 Sundays counted · Sunday 14 June not counted');
 
     await page.goto('/reports/dcc?period=week');
     await expect(sundaysLine(page)).toHaveText('1 Sunday counted');
 
     // The week whose only Sunday was removed counts none, and says why.
     await page.goto('/reports/dcc?period=week&start=2026-06-08');
-    await expect(sundaysLine(page)).toHaveText('0 Sundays counted · no service on Sunday 14 June');
+    await expect(sundaysLine(page)).toHaveText('0 Sundays counted · Sunday 14 June not counted');
   });
 
   test('a leader opened has their own coverage line, linking nowhere', async ({ page }) => {
@@ -439,7 +440,7 @@ test.describe('How often people came, and no month-by-month table', () => {
       often.getByRole('term').filter({ hasText: '3 times — all of them' }),
     ).toBeVisible();
     await expect(
-      often.getByText('3 Sundays carried a service this month.', { exact: false }),
+      often.getByText('3 Sundays counted this month.', { exact: false }),
     ).toBeVisible();
 
     // A Full view leader's other length is Weekly (decision 0380).

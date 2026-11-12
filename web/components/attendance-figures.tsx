@@ -106,7 +106,7 @@ export function AttendanceBuckets({
         How often people came
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        {summary(n)} Each row counts the people who attended that many of them.
+        {summary(n)} Each row counts the people who came that many times.
       </p>
 
       <dl className="mt-3">

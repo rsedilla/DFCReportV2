@@ -152,7 +152,7 @@ function YourMonth() {
         key: `dcc-${event.id}`,
         date: event.event_date,
         label: 'DCC',
-        state: `No service${event.removal_reason ? `: ${event.removal_reason}` : ''}`,
+        state: `Not counted${event.removal_reason ? `: ${event.removal_reason}` : ''}`,
         href: null,
       });
       continue;

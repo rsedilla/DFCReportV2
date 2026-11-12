@@ -60,7 +60,7 @@ export interface DccEventsMonth {
 export function notRecordableLabel(reason: NotRecordableReason): string {
   switch (reason) {
     case 'REMOVED':
-      return 'No service was held';
+      return 'Not counted';
     case 'NOT_YET_HELD':
       return 'Has not happened yet';
     case 'MONTH_CLOSED':

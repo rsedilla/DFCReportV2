@@ -31,6 +31,7 @@ import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
 import { dayLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 import { useAsOfToday } from '@/lib/use-as-of-today';
 
 /**
@@ -120,10 +121,16 @@ export function DccReport() {
       <ReportsTabs current="dcc" month={guardMonth}>
         {/* Weekly, Monthly and Yearly on the line beside Cell Group and DCC, for every reader
             (decision 0443). */}
-        <ReportViewSwitch tab="dcc" value={kind} onPeriod={period.choosePeriodKind} />
+        {/* A Full view leader's sits in the bar beside the month (decision 0483). */}
+        {branchReader ? null : (
+          <ReportViewSwitch tab="dcc" value={kind} onPeriod={period.choosePeriodKind} />
+        )}
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
-        <div className={`mt-6 ${CONTROL_BAR}`}>
+        <div className={cn(branchReader ? 'mt-4' : 'mt-6', CONTROL_BAR, branchReader && 'items-center')}>
+          {branchReader ? (
+            <ReportViewSwitch tab="dcc" value={kind} onPeriod={period.choosePeriodKind} inBar />
+          ) : null}
           {/* The month, then Figures for (owner, 2026-10-09). */}
           <RangeNavigator
             kind={kind}
@@ -189,7 +196,8 @@ export function DccReport() {
               const note = [
                 twelve.data.open ? asOfToday : null,
                 twelve.data.removed_events.length > 0
-                  ? `No service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                  ? // Counted, never "no service": DCC is held every Sunday (decision 0483).
+                    `${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')} not counted`
                   : null,
               ].filter((part) => part !== null);
               return note.length === 0 ? null : (
@@ -250,14 +258,14 @@ export function DccReport() {
                 {seniorPastor ? (
                   twelve.data.removed_events.length > 0 ? (
                     <p className="text-muted">
-                      No service on {twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}
+                      {twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')} not counted
                     </p>
                   ) : null
                 ) : (
                   <p className="text-muted mt-1">
                     {twelve.data.n} {twelve.data.n === 1 ? 'Sunday' : 'Sundays'} counted
                     {twelve.data.removed_events.length > 0
-                      ? ` · no service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
+                      ? ` · ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')} not counted`
                       : ''}
                   </p>
                 )}
@@ -301,8 +309,8 @@ export function DccReport() {
                 // service on, and never a count of records filed.
                 summary={(n) =>
                   n === 1
-                    ? 'One Sunday carried a service this month.'
-                    : `${n} Sundays carried a service this month.`
+                    ? 'One Sunday counted this month.'
+                    : `${n} Sundays counted this month.`
                 }
               />
             ) : null}

@@ -1384,7 +1384,7 @@ const SCANS = [
       await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
-      ).toHaveText('Attendance');
+      ).toHaveText('CG Attendance');
     },
   },
   {
@@ -1628,7 +1628,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
       // The note: As of today and the Sunday with no service (decision 0451).
-      await expect(page.getByText(/^As of today, \d{1,2} [A-Z][a-z]{2} · No service on Sunday 14 June$/)).toBeVisible();
+      await expect(page.getByText(/^As of today, \d{1,2} [A-Z][a-z]{2} · Sunday 14 June not counted$/)).toBeVisible();
       await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
     },
@@ -2073,16 +2073,16 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // A Full view leader's four report tabs and the Cell Group / DCC switch's two (decision
-    // 0420), the one switch's three, Weekly, Monthly and Last 12 months (decision 0398), and the
-    // navigator's two: **eleven**. No Figures
+    // A Full view leader's five report tabs, with no Cell Group / DCC switch (decision 0483), the
+    // one switch's three, Weekly, Monthly and Last 12 months (decision 0398), and the
+    // navigator's two: **ten**. No Figures
     // for, and the names of their 12 open nothing. Settled on the last name, which renders from
     // the data.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'cell' as const,
     settle: 'Teresita Alcantara',
-    minimum: 11,
+    minimum: 10,
   },
   {
     // The same controls, and the Back link: **eleven**.
@@ -2110,14 +2110,14 @@ const TARGET_SWEEP = [
     minimum: 8,
   },
   {
-    // The four report tabs and the Cell Group / DCC switch's two (decision 0420), and the
-    // switch's three (decisions 0380 and 0398): **nine**. Show the figures is a `summary`, which
-    // this count does not take.
+    // The five report tabs, with no Cell Group / DCC switch (decision 0483), and the switch's
+    // three (decisions 0380 and 0398): **eight**. Show the figures is a `summary`, which this
+    // count does not take.
     name: 'last 12 months, own branch',
     route: '/trends',
     settleRole: 'heading' as const,
     settle: 'CG Attendance · Your Disciples',
-    minimum: 9,
+    minimum: 8,
   },
   {
     // Back to SUYNL alone, a Full view leader's one Growth tab being drawn as no row (decisions
@@ -2571,8 +2571,8 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'cell attendance report, week',
     why:
-      'The same controls as the measured "cell attendance report" -- the tabs, the two views, ' +
-      'the two period buttons and the navigator -- with Weekly pressed rather than Monthly.',
+      'The same controls as the measured "cell attendance report" -- the tabs, the period ' +
+      'switch and the navigator -- with Weekly pressed rather than Monthly.',
   },
   {
     name: 'dcc figures report, one network',

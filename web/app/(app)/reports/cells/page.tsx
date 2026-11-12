@@ -29,6 +29,7 @@ import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 import { useAsOfToday } from '@/lib/use-as-of-today';
 
 /**
@@ -106,10 +107,16 @@ export function CellReport() {
       <ReportsTabs current="cells" month={guardMonth}>
         {/* Weekly, Monthly and Yearly on the line beside Cell Group and DCC, for every reader
             (decision 0443). */}
-        <ReportViewSwitch tab="cells" value={kind} onPeriod={period.choosePeriodKind} />
+        {/* A Full view leader's sits in the bar beside the month (decision 0483). */}
+        {branchReader ? null : (
+          <ReportViewSwitch tab="cells" value={kind} onPeriod={period.choosePeriodKind} />
+        )}
 
         {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
-        <div className={`mt-6 ${CONTROL_BAR}`}>
+        <div className={cn(branchReader ? 'mt-4' : 'mt-6', CONTROL_BAR, branchReader && 'items-center')}>
+          {branchReader ? (
+            <ReportViewSwitch tab="cells" value={kind} onPeriod={period.choosePeriodKind} inBar />
+          ) : null}
           {/* The month, then Figures for (owner, 2026-10-09). */}
           <RangeNavigator
             kind={kind}
