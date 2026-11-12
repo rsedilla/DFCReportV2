@@ -202,7 +202,8 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.getByRole('button', { name: 'About this page' }).click();
     await expect(
       page.getByText(
-        'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.',
+        // June: a week before the weekly rule has no due date to state (decision 0477).
+        'Record your Cell Group meetings and DCC Sundays here.',
       ),
     ).toBeVisible();
     await expect(
@@ -281,7 +282,8 @@ test.describe('a Recording-only account (decision 0323)', () => {
     await page.goto('/dashboard');
 
     const due =
-      'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.';
+      // June: a week before the weekly rule has no due date to state (decision 0477).
+      'Record your Cell Group meetings and DCC Sundays here.';
     await expect(page.getByRole('heading', { level: 1, name: 'Welcome, Marilou' })).toBeVisible();
     await expect(page.getByText('Record · June 2026')).toBeHidden();
     await expect(page.getByText(due)).toBeHidden();

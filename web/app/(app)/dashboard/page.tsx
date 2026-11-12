@@ -48,7 +48,7 @@ import {
   todayInManila,
 } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
-import { mayStillBeOpen, monthOpenUntilLabel } from '@/lib/weekly-deadline';
+import { mayStillBeOpen, monthOpenUntilLabel, thisWeekDue } from '@/lib/weekly-deadline';
 import { getRecordVerse } from '@/lib/settings';
 import { cn } from '@/lib/utils';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
@@ -81,6 +81,14 @@ export default function DashboardPage() {
 function Dashboard() {
   const month = reportingMonthOf();
   const today = todayInManila();
+  // This week's due date as dates, so nobody counts Mondays (decision 0477).
+  const thisWeek = thisWeekDue(today);
+  const thisWeekLine = thisWeek ? (
+    <>
+      {' '}
+      This week, <strong>{thisWeek.week}</strong>, is due by <strong>{thisWeek.due}</strong>.
+    </>
+  ) : null;
 
   // **Each earlier month while it may still be open**: until its last week closes, 29 to 35
   // days after its last day, which can fall in the month after next (section 13, decisions
@@ -278,9 +286,11 @@ function Dashboard() {
         {me.data === undefined || seniorPastor ? null : (
           <InfoToggle label="About this page" className="hidden self-center sm:inline-flex">
             <span className="block font-bold">Record · {monthLabel(month)}</span>
-            {recordingOnly
-              ? 'Record your Cell Group meetings and DCC Sundays here. Each week is due by 12 noon on the second Monday after it.'
-              : null}
+            {recordingOnly ? (
+              <>
+                Record your Cell Group meetings and DCC Sundays here.{thisWeekLine}
+              </>
+            ) : null}
           </InfoToggle>
         )}
         {/* A Full view leader's tabs already say what is recorded here and who is behind,
@@ -354,8 +364,7 @@ function Dashboard() {
             {/* What the tab is for; a Recording-only account reads it in the heading above. */}
             {recordingOnly ? null : (
               <p className="mb-4 text-sm leading-relaxed">
-                Please record your own Cell Group meetings and DCC Sundays. Each week is due by 12
-                noon on the second Monday after it.
+                Record your own Cell Group meetings and DCC Sundays here.{thisWeekLine}
               </p>
             )}
             <ViewSwitch
@@ -440,7 +449,13 @@ function Dashboard() {
               <LoadingBlocks shape="rows" className="mt-4" />
             ) : shown.length === 0 ? (
               <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-                All recorded. Thank you for your faithfulness!
+                {/* Says what is recorded (decision 0477). */}
+                {branchView
+                  ? "Your leaders' Cell Group meetings are all recorded."
+                  : filter === 'DCC'
+                    ? 'All your DCC Sundays are recorded.'
+                    : 'All your Cell Group meetings are recorded.'}{' '}
+                Thank you for your faithfulness!
               </p>
             ) : branchView ? (
               <LeaderGroups

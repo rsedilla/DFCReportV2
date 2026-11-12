@@ -83,6 +83,36 @@ export function mayStillBeOpen(reportingMonth: string, today: string): boolean {
   return today <= monthClose(reportingMonth).day;
 }
 
+/**
+ * Update Records' deadline as dates rather than as the rule (decision 0477), for the week holding
+ * `today`, a Manila date: `{ week: '9–15 Nov', due: '12 noon on Monday 23 Nov' }`, read as "This
+ * week, 9–15 Nov, is due by 12 noon on Monday 23 Nov." Null for a week before the weekly rule,
+ * which has no due date.
+ */
+export function thisWeekDue(today: string): { week: string; due: string } | null {
+  const monday = weekStart(today);
+  if (monday < WEEKLY_FROM) {
+    return null;
+  }
+  const sunday = addDays(monday, 6);
+  const day = (date: string, parts: Intl.DateTimeFormatOptions) => {
+    const [year, month, dayOfMonth] = date.split('-').map(Number);
+    return new Intl.DateTimeFormat('en-GB', { ...parts, timeZone: 'UTC' }).format(
+      new Date(Date.UTC(year, month - 1, dayOfMonth)),
+    );
+  };
+  const week =
+    monday.slice(0, 7) === sunday.slice(0, 7)
+      ? `${day(monday, { day: 'numeric' })}–${day(sunday, { day: 'numeric', month: 'short' })}`
+      : `${day(monday, { day: 'numeric', month: 'short' })} – ${day(sunday, { day: 'numeric', month: 'short' })}`;
+  const due = day(addDays(monday, 14), { weekday: 'long', day: 'numeric', month: 'short' }).replace(
+    ',',
+    '',
+  );
+
+  return { week, due: `12 noon on ${due}` };
+}
+
 /** "Mon 9 Nov, 12NN" for an instant the API sent, read in Manila. */
 function noonLabel(instant: string): string {
   const day = new Intl.DateTimeFormat('en-CA', {

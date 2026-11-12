@@ -1921,16 +1921,67 @@ test.describe('the Record queue', () => {
 
     await page.goto('/dashboard');
 
-    await expect(page.getByText('All recorded. Thank you for your faithfulness!')).toBeVisible();
-    // Each tab says what it is for (owner, 2026-10-26).
+    // It says what is recorded (decision 0477).
     await expect(
-      page.getByText(
-        'Please record your own Cell Group meetings and DCC Sundays. Each week is due by 12 noon on the second Monday after it.',
-      ),
+      page.getByText('All your Cell Group meetings are recorded. Thank you for your faithfulness!'),
+    ).toBeVisible();
+    // Each tab says what it is for (owner, 2026-10-26); 3 October is before the weekly rule,
+    // so there is no due date to state (decision 0477).
+    await expect(
+      page.getByText('Record your own Cell Group meetings and DCC Sundays here.', { exact: true }),
     ).toBeVisible();
     // A 0 shows no box (decision 0350).
     await expect(
       awaitingHalves(page).getByRole('button', { name: /^Cell Group$/ }),
+    ).toBeVisible();
+  });
+
+  // Decision 0477: the due date as dates rather than as a rule to count, and the CG and DCC
+  // Records Due lines pointing at what each row shows.
+  test('states this week and its due date, and tells the reader what to tap (decision 0477)', async ({
+    page,
+  }) => {
+    // 10:30 on Thursday 12 November 2026 in Manila.
+    await page.clock.setFixedTime(new Date('2026-11-12T02:30:00Z'));
+    await mockRecordScreen(page, { '2026-11-01': { meetings: [] }, '2026-10-01': { meetings: [] } });
+    await page.goto('/dashboard');
+
+    await expect(
+      page.getByText(
+        'Record your own Cell Group meetings and DCC Sundays here. This week, 9–15 Nov, is due by 12 noon on Monday 23 Nov.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/second Monday/)).toHaveCount(0);
+
+    await page.goto('/dashboard?list=behind');
+    await expect(
+      page.getByText(
+        'Cell Group meetings in your branch that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+
+    await page.goto('/dashboard?list=dcc');
+    await expect(
+      page.getByText(
+        'DCC Sundays in your branch that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
+
+  test('names both months when this week spans two (decision 0477)', async ({ page }) => {
+    // Wednesday 2 December 2026 in Manila: the week of 30 November to 6 December.
+    await page.clock.setFixedTime(new Date('2026-12-02T02:30:00Z'));
+    await mockRecordScreen(page, {});
+    await page.goto('/dashboard');
+
+    await expect(
+      page.getByText(
+        'Record your own Cell Group meetings and DCC Sundays here. This week, 30 Nov – 6 Dec, is due by 12 noon on Monday 14 Dec.',
+        { exact: true },
+      ),
     ).toBeVisible();
   });
 
