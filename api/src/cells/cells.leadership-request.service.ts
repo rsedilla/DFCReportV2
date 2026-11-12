@@ -2075,7 +2075,7 @@ export class CellsLeadershipRequestService {
 
     if (!wholeChurch && !(await this.mayDecide(trx, request, actor, authority))) {
       throw new ScopeDeniedError(
-        'This request goes to an administrator: it is outside your branch, or it is your ' +
+        'This request goes to an administrator: it is outside your care, or it is your ' +
           'own request, your own leadership, a Cell you lead, or a Cell for your own ' +
           'direct disciple (SKILL.md section 10).',
         { capability: Capability.CellApproveLeadership },
@@ -2093,7 +2093,7 @@ export class CellsLeadershipRequestService {
     if (move === 'capability') {
       throw new CapabilityDeniedError(
         'This request goes to an administrator: approving it would move somebody out of a ' +
-          'Cell, which only the Primary of the branch or the Admin does (SKILL.md section ' +
+          'Cell, which only the Primary over them or the Admin does (SKILL.md section ' +
           '10, decision 0357).',
         { capability: Capability.CellMoveMembers },
       );
@@ -2102,7 +2102,7 @@ export class CellsLeadershipRequestService {
     if (move === 'scope') {
       throw new ScopeDeniedError(
         'This request goes to an administrator: approving it would make a move outside ' +
-          'your branch (SKILL.md section 10, decision 0357).',
+          'your care (SKILL.md section 10, decision 0357).',
         { capability: Capability.CellMoveMembers },
       );
     }

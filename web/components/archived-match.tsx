@@ -86,7 +86,7 @@ export function OtherBranchMatches({
       {current ? (
         <li className={itemClassName}>
           <p className="text-muted text-sm leading-relaxed">
-            Someone with a similar name is already recorded in another branch.{' '}
+            Someone with a similar name is already recorded under another leader.{' '}
             {adding ? 'Ask the Admin before adding them.' : 'Ask the Admin before saving.'}
           </p>
         </li>
@@ -95,7 +95,7 @@ export function OtherBranchMatches({
         <li className={itemClassName}>
           <p className="text-muted text-sm leading-relaxed">
             <span className={TAG_CLASS}>Archived</span>
-            Someone with a similar name in another branch was archived.{' '}
+            Someone with a similar name under another leader was archived.{' '}
             {adding
               ? 'Ask the Admin to restore them instead of adding them again.'
               : 'If this is them, ask the Admin to restore them.'}

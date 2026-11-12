@@ -75,7 +75,7 @@ export async function assertMayMoveMembersWithin(
 
   if (answer === 'capability') {
     throw new CapabilityDeniedError(
-      'Moving somebody out of a Cell is done by the Primary of the branch or the Admin ' +
+      'Moving somebody out of a Cell is done by the Primary over them or the Admin ' +
         '(SKILL.md section 10, decision 0357).',
       { capability: Capability.CellMoveMembers },
     );
@@ -83,7 +83,7 @@ export async function assertMayMoveMembersWithin(
 
   if (answer === 'scope') {
     throw new ScopeDeniedError(
-      'You move members only between Cells of your own branch. Other moves are made by the ' +
+      'You move members only between Cells in your care. Other moves are made by the ' +
         'Admin (SKILL.md section 10, decision 0357).',
       { capability: Capability.CellMoveMembers },
     );

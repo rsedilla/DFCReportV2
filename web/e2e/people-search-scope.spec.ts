@@ -120,7 +120,7 @@ test.describe('which search each surface asks for', () => {
     await mockPeople(page);
     await page.goto('/people');
 
-    const note = page.getByText('Add searches every branch as you type', { exact: false });
+    const note = page.getByText('Add searches the whole church as you type', { exact: false });
     const info = page.getByRole('button', { name: 'How to find someone' });
     // Not part of the box's name.
     await expect(page.getByRole('searchbox', { name: 'Search by name or Member ID', exact: true })).toBeVisible();

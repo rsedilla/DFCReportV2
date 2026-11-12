@@ -127,7 +127,7 @@ test.describe('Cells to Approve (decision 0352)', () => {
     await expect(line('Group')).toHaveText('Couple');
     await expect(line('Meets')).toHaveText(/^Wednesdays at 7:30/);
     await expect(line('Asked by')).toHaveText('Corazon Batac, 20 Jun');
-    await expect(line('Branch')).toHaveText('Elena Cruz’s');
+    await expect(line('Under')).toHaveText('Elena Cruz');
     await expect(card.getByRole('heading', { name: 'Members (3)' })).toBeVisible();
     await expect(card.getByRole('list').getByRole('listitem')).toHaveText([
       'Ana Dela Cruz · M-000701',

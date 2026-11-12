@@ -292,7 +292,7 @@ test.describe('My 12', () => {
       'Counted under more than one leader',
       '−1',
     ]);
-    expect((await cellsOf(rows.nth(5))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
+    expect((await cellsOf(rows.nth(5))).slice(0, 2)).toEqual(['Others in your care', '+2']);
     const totalRow = await cellsOf(rows.nth(6));
     expect(totalRow).toEqual(['Total', '10', '2', '2', '1', '1', '4']);
 
@@ -336,7 +336,7 @@ test.describe('My 12', () => {
     await expect(
       twelveTable(page).getByText('Counted under more than one leader', { exact: true }),
     ).toHaveCount(0);
-    await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
+    await expect(twelveTable(page).getByText(/^Others in .*care$/)).toHaveCount(0);
     expect(await cellsOf(rows.nth(2))).toEqual(['Total', '4', '1', '1', '0', '1', '1']);
 
     // A Full view leader has no Figures for (decision 0380).
@@ -408,7 +408,7 @@ test.describe('My 12', () => {
     // With no own row there is no branch to be elsewhere in: the line says "Under none of these leaders".
     expect(await cellsOf(rows.nth(2))).toEqual(['Under none of these leaders', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
-    await expect(twelveTable(page).getByText('Elsewhere in this branch')).toHaveCount(0);
+    await expect(twelveTable(page).getByText(/^Others in .*care$/)).toHaveCount(0);
     await expect(twelveTable(page).getByText(/^You · /)).toHaveCount(0);
   });
 });

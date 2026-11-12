@@ -276,7 +276,7 @@ export function PersonAccount({
                 }
                 describe={(shown) =>
                   shown
-                    ? `${firstName} sees Record, Reports, People, Cells and SUYNL over their branch.`
+                    ? `${firstName} sees Record, Reports, People, Cells and SUYNL for the people in their care.`
                     : `${firstName} sees the recording screens: Record, People, Cells and SUYNL.`
                 }
               />
@@ -299,7 +299,7 @@ export function PersonAccount({
                     save={(next) => setApprovesCells(current.id, next, crypto.randomUUID())}
                     describe={(shown) =>
                       shown
-                        ? `${firstName} approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.`
+                        ? `${firstName} approves new Cells, new leaders and reopened Cells in their care, except their own and those for their own disciples.`
                         : `${firstName} does not approve Cells; an administrator does.`
                     }
                   />
@@ -312,7 +312,7 @@ export function PersonAccount({
                     save={(next) => setMovesPeople(current.id, next, crypto.randomUUID())}
                     describe={(shown) =>
                       shown
-                        ? `${firstName} moves anyone in their branch to another leader at once. A move to another branch is made by the Admin.`
+                        ? `${firstName} moves anyone in their care to another leader at once. A move outside their care is made by the Admin.`
                         : `${firstName} does not move people to another leader.`
                     }
                   />

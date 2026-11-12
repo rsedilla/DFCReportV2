@@ -95,7 +95,7 @@ test.describe('a Full view leader’s Last 12 months', () => {
     const asked = await mockBranchTrends(page);
     await page.goto('/trends?figure=CG');
 
-    await expect(page.getByRole('heading', { name: 'CG Attendance · Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CG Attendance · Your Disciples' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Show' })).toHaveCount(0);
     // The one switch, its twelve months chosen, and no month to step (decision 0398).
     const view = page.getByRole('group', { name: 'Report period' });
@@ -122,7 +122,7 @@ test.describe('a Full view leader’s Last 12 months', () => {
     // The figures stay one click away, one column, the gap said in words.
     await page.getByText('Show the figures').click();
     const figures = page.getByRole('table', { name: 'CG Attendance by month' });
-    await expect(figures.getByRole('columnheader')).toHaveText(['Month', 'Your branch']);
+    await expect(figures.getByRole('columnheader')).toHaveText(['Month', 'Your Disciples']);
     await expect(figures.getByText('could not be read')).toHaveCount(1);
   });
 
@@ -158,7 +158,7 @@ test.describe('a Full view leader’s Last 12 months', () => {
     });
     await page.goto('/trends?figure=PEOPLE&leader=3f1b7c6e-0000-4000-8000-000000000701');
 
-    await expect(page.getByRole('heading', { name: 'Number of people · Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Number of people · Your Disciples' })).toBeVisible();
     expect(asked.every((query) => query.get('leader_id') === READER)).toBe(true);
     expect(church).toEqual([]);
   });
@@ -170,7 +170,7 @@ test.describe('a Full view leader’s Last 12 months', () => {
     await mockBranchTrends(page);
     await page.goto('/trends');
 
-    await expect(page.getByRole('heading', { name: 'CG Attendance · Your branch' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CG Attendance · Your Disciples' })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);

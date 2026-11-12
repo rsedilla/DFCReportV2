@@ -996,7 +996,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await expect(links).toHaveCount(2);
     await expect(links.nth(0)).toHaveAttribute('href', `/reports/suynl?leader=${READINESS_ARTURO_ID}`);
 
-    await expect(page.getByText('In neither pastor’s branch')).toHaveCount(0);
+    await expect(page.getByText('Under neither pastor')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Back to your report' })).toHaveCount(0);
     expect([...new Set(traffic.asked)]).toEqual(['/api/v1/suynl/readiness?names=false']);
   });
@@ -1055,7 +1055,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await page.goto('/reports/suynl');
 
     await page.getByRole('button', { name: 'Benita Navarro', exact: true }).click();
-    await expect(table(page, 'My 12').getByText('Nobody in this branch is counted.')).toBeVisible();
+    await expect(table(page, 'My 12').getByText('Nobody here is counted.')).toBeVisible();
     expect(traffic.asked.some((path) => path.includes(READINESS_BENITA_ID))).toBe(false);
   });
 
@@ -1109,7 +1109,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
     await expectRows(page, 'Whole Church', [
       ['Honorio Villanueva · Men’s their 12', '1', '2', '0', '3'],
       ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
-      ['In neither pastor’s branch', '0', '0', '1', '1'],
+      ['Under neither pastor', '0', '0', '1', '1'],
       ['Total', '1', '2', '2', '5'],
     ]);
     await expectTotalAddsUp(page, 'Whole Church');
@@ -1133,7 +1133,7 @@ test.describe('the SUYNL readiness table (decision 0297)', () => {
       ['Imelda Quizon · Women’s their 12', '0', '0', '1', '1'],
       ['Total', '1', '2', '1', '4'],
     ]);
-    await expect(page.getByText('In neither pastor’s branch')).toHaveCount(0);
+    await expect(page.getByText('Under neither pastor')).toHaveCount(0);
   });
 
   test("a leader opened: their 12, their own row by name, and the way back", async ({ page }) => {

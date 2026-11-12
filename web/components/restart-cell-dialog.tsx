@@ -125,7 +125,7 @@ export function RestartCellDialog({
         <p className="text-sm leading-relaxed">
           This asks for a new Cell that resumes{' '}
           {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })}. The closed Cell
-          stays as it is, with its history. An approver of the branch or an administrator
+          stays as it is, with its history. An approver over its leader or an administrator
           decides it.
         </p>
 

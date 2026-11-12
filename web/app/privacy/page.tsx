@@ -77,7 +77,7 @@ export default function PrivacyNoticePage() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
             The leaders above you in the discipleship line, within your Network, and the leader of
-            your Cell Group. Each leader sees only the people in their own branch, except that a
+            your Cell Group. Each leader sees only the people in their care, except that a
             leader adding someone new may be shown the name of a possible match elsewhere in the
             church, so that nobody is entered twice.
           </li>

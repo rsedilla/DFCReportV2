@@ -146,8 +146,8 @@ function PeopleList() {
             labelAside={
               <InfoToggle label="How to find someone" small className="hidden sm:inline-flex">
                 <span className="block font-bold">Finds the people you oversee</span>
-                Type a name or a Member ID, then Search. Not there? Add searches every branch as you
-                type, so look there before adding someone new.
+                Type a name or a Member ID, then Search. Not there? Add searches the whole church as
+                you type, so look there before adding someone new.
               </InfoToggle>
             }
             name="q"
@@ -199,7 +199,7 @@ function PeopleList() {
               <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
               {mayAdd ? (
                 <p className="text-muted mt-2 text-sm leading-relaxed">
-                  They may still be elsewhere in the church. Adding a person searches every branch
+                  They may still be elsewhere in the church. Adding a person searches the whole church
                   as you type, so start there rather than assuming they are new.
                 </p>
               ) : null}

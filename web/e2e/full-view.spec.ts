@@ -982,7 +982,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     await box.click();
     await expect(box).toBeChecked();
     await expect(
-      page.getByText('Marilou sees Record, Reports, People, Cells and SUYNL over their branch.'),
+      page.getByText('Marilou sees Record, Reports, People, Cells and SUYNL for the people in their care.'),
     ).toBeVisible();
     await expect.poll(() => sent.length).toBe(1);
     await expect(box).toBeEnabled();
@@ -1048,7 +1048,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     ]);
     await expect(
       page.getByText(
-        'Marilou approves new Cells, handovers and restarts in their branch, except their own and those for their own disciples.',
+        'Marilou approves new Cells, new leaders and reopened Cells in their care, except their own and those for their own disciples.',
       ),
     ).toBeVisible();
   });
@@ -1099,7 +1099,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     ]);
     await expect(
       page.getByText(
-        'Marilou moves anyone in their branch to another leader at once. A move to another branch is made by the Admin.',
+        'Marilou moves anyone in their care to another leader at once. A move outside their care is made by the Admin.',
       ),
     ).toBeVisible();
   });
@@ -1721,7 +1721,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await page.goto('/dashboard?list=status');
     const table = page.getByRole('table', { name: 'My 12' });
     // Somebody in Ana's branch has not recorded their Cell group, and everybody has their DCC.
-    const cellFigure = table.getByRole('button', { name: /Ana Lim’s branch in CG Records Due/ });
+    const cellFigure = table.getByRole('button', { name: /those in Ana Lim’s care, in CG Records Due/ });
     await expect(cellFigure).toHaveText('1 of 2 leaders');
     await expect(table.getByRole('button', { name: /DCC Records Due/ })).toHaveCount(0);
     // Ben was moved out of the branch since the week, so his figures are plain text.
@@ -1732,7 +1732,7 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await expect(page).toHaveURL(/list=behind/);
     await expect(page.getByText(/Ana Lim\s+and everyone beneath them/)).toBeVisible();
     // Drawn for the table and for the phone list; one of the two is showing.
-    await expect(page.getByText('Nothing still to record in Ana Lim’s branch.').first()).toBeVisible();
+    await expect(page.getByText('Nothing still to record for those in Ana Lim’s care.').first()).toBeVisible();
     await expect.poll(() => pending.at(-1)?.get('leader_id')).toBe(PERSON_IN_SCOPE.id);
 
     await page.getByRole('button', { name: 'Show everyone' }).click();

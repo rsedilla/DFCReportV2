@@ -333,7 +333,11 @@ export function TwelveTable({
           {twelve.elsewhere === 0 ? null : (
             <tr className={rowClasses}>
               <td className="text-muted px-3 py-3 italic" colSpan={STAGES.length + 1}>
-                {subjectName === null && twelve.own === null ? 'Under none of these leaders' : 'Elsewhere in this branch'}
+                {subjectName === null && twelve.own === null
+                  ? 'Under none of these leaders'
+                  : subjectName === null
+                    ? 'Others in your care'
+                    : `Others in ${subjectName}’s care`}
               </td>
               <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
             </tr>
@@ -501,7 +505,7 @@ export function BranchTwelve({
           {twelve.elsewhere === 0 ? null : (
             <tr className={rowClasses}>
               <td className={`${NAME_CELL} text-muted italic`}>
-                {said('Elsewhere in this branch', 'Elsewhere in branch')}
+                {said('Others in your care', 'Others in care')}
               </td>
               <td className={`${FIGURE_CELL} text-muted italic`}>+{twelve.elsewhere}</td>
               <td colSpan={STAGES.length} />

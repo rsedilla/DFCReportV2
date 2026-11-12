@@ -156,7 +156,7 @@ export function PossibleMatches({
         </h2>
         <p className="text-muted mt-1 text-sm leading-relaxed">
           You checked 60 names in the last minute. It runs again by itself in a minute and shows
-          any match it finds, in your branch or another.{' '}
+          any match it finds, in your care or elsewhere in the church.{' '}
           {excludeId ? 'Save' : 'Add Person'} waits until it has.
         </p>
       </section>

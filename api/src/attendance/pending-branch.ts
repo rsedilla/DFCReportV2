@@ -30,7 +30,7 @@ export async function pendingBranch(
 
   if (!inScope) {
     throw new ScopeDeniedError(
-      'That leader is outside your authorized scope, so their branch cannot be listed.',
+      'That leader is outside your authorized scope, so the people in their care cannot be listed.',
       { capability, field: 'leader_id' },
     );
   }
