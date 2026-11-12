@@ -159,17 +159,22 @@ export function ReportsTabs({
   // the report inside is not remounted when the answer arrives.
   const tabbed = !me.isPending;
   // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
-  // owner's layout): a switch inside it chooses which, and each keeps its own address.
-  const attendance = current === 'cells' || current === 'dcc';
+  // owner's layout): a switch inside it chooses which, and each keeps its own address. **The
+  // Senior Pastors' are two tabs, *CG Attendance* and *DCC Attendance*, with no switch**
+  // (decision 0481): a tab inside a tab was one step too many for them.
+  const merged = !seniorPastor;
+  const attendance = merged && (current === 'cells' || current === 'dcc');
   // The Admin's *Counts* holds the three # figures (decision 0433).
   const counts = !seniorPastor && !branch && (COUNT_KEYS as readonly string[]).includes(current);
-  const rowTabs = tabs.flatMap((tab) =>
-    tab.key === 'dcc'
-      ? []
-      : tab.key === 'cells'
-        ? [{ ...tab, label: 'Attendance', name: undefined }]
-        : [tab],
-  );
+  const rowTabs = merged
+    ? tabs.flatMap((tab) =>
+        tab.key === 'dcc'
+          ? []
+          : tab.key === 'cells'
+            ? [{ ...tab, label: 'Attendance', name: undefined }]
+            : [tab],
+      )
+    : tabs;
   // All five figures have Yearly for every reader of them (decisions 0443 and 0459), so a tab
   // that has one keeps the graph; the Admin's Encounter Readiness and Training have none.
   const keepsTrend = (key: ReportTab) => view === 'trend' && key in TREND_FIGURE;
@@ -193,11 +198,12 @@ export function ReportsTabs({
         <nav
           aria-label="Which report"
           // Every tab one size, for every reader (decision 0416).
-          className={cn('mt-6', TAB_GRID, TAB_ROW)}
+          // The Senior Pastors' five on one row from `lg` (decision 0481).
+          className={cn('mt-6', TAB_GRID, TAB_ROW, seniorPastor && 'lg:grid-cols-5')}
         >
           {rowTabs.map((tab) => {
             const active =
-              tab.key === 'cells'
+              tab.key === 'cells' && merged
                 ? attendance
                 : tab.key === 'number-of-cells' && !seniorPastor && !branch
                   ? counts

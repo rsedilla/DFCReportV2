@@ -36,7 +36,7 @@ const MENS_TABLE = `${SP_MENS_ROOT.full_name}’s leaders`;
 const WOMENS_TABLE = `${SP_WOMENS_ROOT.full_name}’s leaders`;
 
 test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
-  test('are Attendance and the three counts, each count named in words (decision 0420)', async ({
+  test('are CG and DCC Attendance and the three counts, each count named in words (decisions 0420 and 0481)', async ({
     page,
   }) => {
     await seniorPastor(page);
@@ -45,8 +45,10 @@ test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
     await page.goto('/reports/number-of-cells');
 
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
+    // CG and DCC Attendance as two tabs (decision 0481).
     await expect(tabs).toHaveText([
-      'Attendance',
+      'CG Attendance',
+      'DCC Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',
@@ -234,17 +236,29 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByRole('button', { name: /How these are counted/i })).toHaveCount(0);
   });
 
-  test('the lengths sit beside Cell Group and DCC, the month and Figures for are one row, and an open month says As of today', async ({
+  test('CG and DCC Attendance are tabs of their own, with no switch inside, the month and Figures for are one row, and an open month says As of today', async ({
     page,
   }) => {
     await attendance(page);
 
     await page.goto('/reports/cells');
 
-    // On the line beside Cell Group and DCC (decision 0443).
-    const which = await page.getByRole('group', { name: 'Which attendance' }).boundingBox();
-    const period = await page.getByRole('group', { name: 'Report period' }).boundingBox();
-    expect(Math.abs(which!.y - period!.y)).toBeLessThanOrEqual(1);
+    // Two tabs rather than a tab and a switch inside it (decision 0481), the five on one row.
+    const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
+    await expect(tabs).toHaveText([
+      'CG Attendance',
+      'DCC Attendance',
+      '# of Cell Groups',
+      '# of Cell Leaders',
+      '# of People',
+    ]);
+    await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('group', { name: 'Which attendance' })).toHaveCount(0);
+    const rows = new Set(
+      await Promise.all((await tabs.all()).map(async (tab) => Math.round((await tab.boundingBox())!.y))),
+    );
+    expect(rows.size).toBe(1);
+    await expect(page.getByRole('group', { name: 'Report period' })).toBeVisible();
 
     const bar = page.getByLabel('Figures for').locator('xpath=../..');
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
@@ -252,6 +266,11 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     // Beside the month from `lg`; a phone says it under the bar instead.
     await expect(bar.getByText(AS_OF_TODAY).first()).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
+
+    // DCC Attendance opens the DCC report and is the tab marked current.
+    await tabs.nth(1).click();
+    await expect(page).toHaveURL(/\/reports\/dcc/);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-current', 'page');
   });
 
   test('on a phone a Primary’s name is short, and the link is named short then full (decision 0451)', async ({
@@ -373,7 +392,7 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
   const graph = (page: Page) => page.getByRole('img', { name: /, November 2025 to October 2026: / });
 
-  test('has the same four tabs, keeping the leader chosen', async ({ page }) => {
+  test('has the same five tabs, keeping the leader chosen', async ({ page }) => {
     await seniorPastor(page);
     await mockChurchCounts(page);
     const asked = await mockTrends(page);
@@ -381,8 +400,10 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
     await page.goto(`/trends?leader=${SP_PRIMARIES.abad.id}`);
 
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
+    // CG and DCC Attendance as two tabs (decision 0481).
     await expect(tabs).toHaveText([
-      'Attendance',
+      'CG Attendance',
+      'DCC Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',
