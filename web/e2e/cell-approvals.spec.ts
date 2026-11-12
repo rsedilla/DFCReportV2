@@ -111,6 +111,13 @@ test.describe('Cells to Approve (decision 0352)', () => {
 
     await tabs.getByRole('button', { name: /Cells to Approve/ }).click();
     await expect(page).toHaveURL(/view=APPROVE/);
+    // What a handover and a restart are, rather than their names (decision 0479).
+    await expect(
+      page.getByText(
+        'Waiting for your approval across the church: a new Cell, a new leader for a Cell, or a closed Cell reopened. Oldest first.',
+        { exact: true },
+      ),
+    ).toBeVisible();
 
     // Plain text, one line each, and the members one per line with their Member IDs (owner,
     // 2026-11-06).

@@ -46,7 +46,8 @@ test.describe('Absent 3+ Months (decision 0397)', () => {
     // The year said once where the three months share it (decision 0432).
     await expect(
       page.getByText(
-        'This list shows people who were never marked Present at a Cell meeting or DCC Sunday in March, April, and May 2026, but were marked Absent at least once each month. Only full months in a Cell Group or under a leader count, so new members are excluded.',
+        // Half the words, the same rule (decision 0479).
+        'People marked Absent every month, and never Present, at Cell meetings and DCC Sundays in March, April, and May 2026. Anyone who joined during those months is not listed.',
       ),
     ).toBeVisible();
     await expect(table(page).getByRole('columnheader')).toHaveText([
@@ -73,7 +74,7 @@ test.describe('Absent 3+ Months (decision 0397)', () => {
     );
     await page.goto('/people/absent');
 
-    await expect(page.getByText(/in November 2025, December 2025, and January 2026, but/)).toBeVisible();
+    await expect(page.getByText(/in November 2025, December 2025, and January 2026\. Anyone/)).toBeVisible();
   });
 
   test('is not on the recording screens', async ({ page }) => {
