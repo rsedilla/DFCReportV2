@@ -47,9 +47,10 @@ export function CellApprovals({ wholeChurch }: { wholeChurch: boolean }) {
           Cells to Approve
         </h2>
         <p className="text-muted text-sm">
+          {/* What a handover and a restart are, rather than their names (decision 0479). */}
           {wholeChurch
-            ? 'Requests for a new Cell, a handover or a restart, across the church, oldest first.'
-            : 'Requests for a new Cell, a handover or a restart in your branch, oldest first.'}
+            ? 'Waiting for your approval across the church: a new Cell, a new leader for a Cell, or a closed Cell reopened. Oldest first.'
+            : 'Waiting for your approval: a new Cell, a new leader for a Cell, or a closed Cell reopened. Oldest first.'}
         </p>
       </div>
 

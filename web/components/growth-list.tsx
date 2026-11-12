@@ -274,9 +274,10 @@ export function GrowthPersonName({ row, self }: { row: PersonRow; self: boolean 
       </Link>
       {!row.may_file ? (
         // Decision 0280: nobody records their own; anyone else here is somebody the
-        // reader may not file for, a Network root among them, who has no leader.
+        // reader may not file for, a Network root among them, who has no leader. Who does it
+        // rather than who does not (decision 0479); "another" because a root has no leader.
         <span className="text-muted block text-xs">
-          {self ? 'You · another leader records these' : 'Not yours to record'}
+          {self ? 'You · another leader records these' : 'Another leader records these'}
         </span>
       ) : null}
     </div>

@@ -171,11 +171,12 @@ function SuynlTab() {
               ? 'SUYNL'
               : 'Growth'}
         </h1>
+        {/* What SUYNL is first, then the count (decision 0479). */}
         <p className="text-muted text-sm">
+          Start Up Your New Life (SUYNL): ten lessons, one to one.{' '}
           {counts.data
             ? `${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'} ${careWords(me.data, 'suynl.view_subtree')}.`
-            : `The people ${careWords(me.data, 'suynl.view_subtree')}.`}{' '}
-          Start Up Your New Life (SUYNL): ten lessons, taken one to one.
+            : `The people ${careWords(me.data, 'suynl.view_subtree')}.`}
         </p>
       </div>
 

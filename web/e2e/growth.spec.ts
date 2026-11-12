@@ -109,9 +109,13 @@ test.describe('the SUYNL tab', () => {
   test('shows two counts, and a card narrows the list and the address', async ({ page }) => {
     const traffic = await openSuynl(page);
 
-    await expect(page.getByText('4 people in your care.')).toBeVisible();
-    // Each abbreviation is spelled out once, under the heading (UI label audit, Medium 7).
-    await expect(page.getByText('Start Up Your New Life (SUYNL): ten lessons, taken one to one.')).toBeVisible();
+    // Each abbreviation is spelled out once, under the heading (UI label audit, Medium 7),
+    // what SUYNL is first and the count after it (decision 0479).
+    await expect(
+      page.getByText('Start Up Your New Life (SUYNL): ten lessons, one to one. 4 people in your care.', {
+        exact: true,
+      }),
+    ).toBeVisible();
     const notStarted = page.getByRole('button', { name: /^Not started/ });
     const inProgress = page.getByRole('button', { name: /^In progress/ });
     await expect(notStarted).toContainText('1');
@@ -326,7 +330,7 @@ test.describe('the SUYNL tab', () => {
 
     const row = page.getByRole('row', { name: /Bayani Castillo/ });
     await expect(row).toBeVisible();
-    await expect(row.getByText('Not yours to record')).toBeVisible();
+    await expect(row.getByText('Another leader records these')).toBeVisible();
     await expect(row.getByRole('checkbox')).toHaveCount(0);
     await expect(page.getByRole('checkbox', { name: /Bayani Castillo/ })).toHaveCount(0);
     await expect(row).toContainText('1 of 10');
@@ -409,7 +413,7 @@ test.describe('the Training tab', () => {
     await expect(page.getByRole('row', { name: /Lualhati Dizon/ })).toContainText('All five');
 
     const notMine = page.getByRole('row', { name: /Bayani Castillo/ });
-    await expect(notMine.getByText('Not yours to record')).toBeVisible();
+    await expect(notMine.getByText('Another leader records these')).toBeVisible();
     await expect(notMine.getByRole('checkbox')).toHaveCount(0);
   });
 

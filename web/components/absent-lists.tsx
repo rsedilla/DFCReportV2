@@ -94,9 +94,9 @@ function AbsentList({ mayArchive }: { mayArchive: boolean }) {
     <>
       {months.length === 3 ? (
         <p className="text-muted mt-3 text-sm leading-relaxed">
-          This list shows people who were never marked Present at a Cell meeting or DCC Sunday
-          in {threeMonths(months)}, but were marked Absent at least once each month. Only full
-          months in a Cell Group or under a leader count, so new members are excluded.
+          {/* Half the words, the same rule (decision 0479). */}
+          People marked Absent every month, and never Present, at Cell meetings and DCC Sundays
+          in {threeMonths(months)}. Anyone who joined during those months is not listed.
         </p>
       ) : null}
       {!mayArchive ? (

@@ -114,7 +114,9 @@ export function AwaitingLeaderList() {
           No Leader Yet
         </h2>
         <p className="text-muted text-sm">
-          People you oversee whose pastoral leader is not in the pastoral tree.
+          {/* What happened, in everyday words (decision 0479). */}
+          People {careWords(me.data, 'people.view_subtree')} who have no leader now, because their
+          leader left or was archived.
         </p>
       </div>
       {/* Read only for a reader who may not move them (owner, 2026-10-16, decision 0356). */}

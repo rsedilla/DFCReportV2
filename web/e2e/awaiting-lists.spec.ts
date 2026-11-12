@@ -207,6 +207,13 @@ test.describe('No Leader Yet, a tab of People (decision 0381)', () => {
     await page.goto('/people/awaiting-leader');
 
     await expect(peopleTabs(page).getByRole('link', { name: /^No Leader Yet$/ })).toBeVisible();
+    // What happened, in everyday words (decision 0479).
+    await expect(
+      page.getByText(
+        'People in your care who have no leader now, because their leader left or was archived.',
+        { exact: true },
+      ),
+    ).toBeVisible();
     await expect(page.getByRole('table', { name: 'No Leader Yet' }).getByRole('cell')).toHaveText([
       'Everyone in your care has a leader.',
     ]);

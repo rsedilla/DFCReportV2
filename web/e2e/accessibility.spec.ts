@@ -1679,7 +1679,7 @@ const SCANS = [
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
-      await expect(page.getByText('Not yours to record').filter({ visible: true })).toBeVisible();
+      await expect(page.getByText('Another leader records these').filter({ visible: true })).toBeVisible();
       // SUYNL says nothing of those who have finished, even on everyone (decision 0386).
       await expect(
         page.getByRole('button', { name: 'Show only those still to finish' }),
