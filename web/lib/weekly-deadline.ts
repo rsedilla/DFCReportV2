@@ -63,11 +63,6 @@ export function monthOpenUntilLabel(reportingMonth: string): string {
   return openUntil(monthClose(reportingMonth));
 }
 
-/** The same for any period, by its last day: a week closes with its own records. */
-export function periodOpenUntilLabel(lastDay: string): string {
-  return openUntil(dayClose(lastDay));
-}
-
 function openUntil(close: { day: string; noon: boolean }): string {
   if (!close.noon) {
     const [, month, day] = close.day.split('-').map(Number);
@@ -134,7 +129,32 @@ function closeOfMonthLabel(instant: string): string {
   return `end of ${shortDay(day)}`;
 }
 
-/** "Due Mon 9 Nov, 12NN" for a week by its Monday, or null for a week before the rule. */
+/** "9 Nov" for a `YYYY-MM-DD` day: every weekly deadline is a Monday, so no weekday. */
+function dayMonth(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
+  );
+}
+
+/**
+ * "Due 9 Nov, 12NN" for a week by its Monday, or null for a week before the rule. Short, so it
+ * shares one line with when the week closes on a phone (decision 0476).
+ */
 export function weekDueLabel(monday: string): string | null {
-  return weekStart(monday) < WEEKLY_FROM ? null : `Due ${shortDay(addDays(weekStart(monday), 14))}, 12NN`;
+  return weekStart(monday) < WEEKLY_FROM ? null : `Due ${dayMonth(addDays(weekStart(monday), 14))}, 12NN`;
+}
+
+/**
+ * "Closes 30 Nov, 12NN" for a period by its last day, or "Closes 7 November" for one before the
+ * weekly rule: Recording Progress's line beside its due date (decision 0476).
+ */
+export function periodClosesLabel(lastDay: string): string {
+  const close = dayClose(lastDay);
+
+  return openUntil(close).replace(/^Open until /, 'Closes ').replace(
+    /^Closes \w{3} (\d+ \w+), 12NN$/,
+    'Closes $1, 12NN',
+  );
 }

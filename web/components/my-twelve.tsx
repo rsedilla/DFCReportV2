@@ -14,7 +14,7 @@ import {
   shortRangeLabel,
   type RangeKind,
 } from '@/lib/report-range';
-import { periodOpenUntilLabel } from '@/lib/weekly-deadline';
+import { periodClosesLabel } from '@/lib/weekly-deadline';
 
 const STAGES: readonly [keyof Classification, string][] = [
   ['vip', 'VIP'],
@@ -73,7 +73,13 @@ export function RangeNavigator({
   quiet = false,
   labelled = false,
   asOfToday = false,
+  due = null,
 }: {
+  /**
+   * When an open week is due, "Due 9 Nov, 12NN", said on one line with when it closes (Record's
+   * Recording Progress, decision 0476). Null for a month or a week before the weekly rule.
+   */
+  due?: string | null;
   kind: RangeKind;
   start: string;
   current: string;
@@ -172,9 +178,25 @@ export function RangeNavigator({
         open ? (
           <span className="text-muted text-sm">· As of today</span>
         ) : null
-      ) : open === undefined ? null : (
+      ) : open === undefined ? null : open ? (
+        // Record's Recording Progress: when the period is due and closes, in one plain line,
+        // breaking only between the two (decision 0476, replacing an "Open until" tag).
+        <span className="text-muted w-full text-sm sm:w-auto">
+          {due ? (
+            <>
+              <span className="whitespace-nowrap">{due}</span>
+              {' · '}
+            </>
+          ) : null}
+          <span className="whitespace-nowrap">
+            {due
+              ? periodClosesLabel(rangeEndOf(kind, start)).replace(/^Closes/, 'closes')
+              : periodClosesLabel(rangeEndOf(kind, start))}
+          </span>
+        </span>
+      ) : (
         <span className="border-line bg-surface rounded-full border px-2.5 py-0.5 text-xs font-semibold">
-          {open ? periodOpenUntilLabel(rangeEndOf(kind, start)) : 'Closed'}
+          Closed
         </span>
       )}
     </div>

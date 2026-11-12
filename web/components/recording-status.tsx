@@ -86,11 +86,9 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
           start={shown}
           current={current}
           open={data?.open}
+          due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
-        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
-          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
-        ) : null}
       </div>
 
       <div className="mt-4">
@@ -218,11 +216,9 @@ export function LeaderRecordingStatusPanel({
           start={shown}
           current={current}
           open={data?.open}
+          due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
-        {kind === 'WEEK' && weekDueLabel(shown) !== null ? (
-          <span className="text-muted text-sm">{weekDueLabel(shown)}</span>
-        ) : null}
       </div>
 
       <div className="mt-4">
