@@ -3,6 +3,9 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import { mockCellTwelve, TWELVE } from './mock-attendance';
 
+/** An open period's note, dated (decision 0478). */
+const AS_OF_TODAY = /^As of today, \d{1,2} [A-Z][a-z]{2}$/;
+
 /**
  * Cell Groups: Weekly and Monthly, each opening on My 12, and Yearly the last 12 months
  * (SKILL.md sections 12, 13 and 20; decisions 0293 and 0443).
@@ -214,7 +217,7 @@ test.describe('the navigator', () => {
       await expect(after).toBeDisabled();
       await expect(before).toBeEnabled();
       // A Full view leader reads it in the note under the controls (decisions 0363, 0451).
-      await expect(page.getByText('As of today', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(AS_OF_TODAY).first()).toBeVisible();
 
       await before.click();
       const previous = BEFORE[each.kind];
@@ -222,7 +225,7 @@ test.describe('the navigator', () => {
       await expectAsked(asked, { kind: each.kind, start: previous.start, period: previous.period });
       await expect(after).toBeEnabled();
       // A finished period says nothing (decision 0451).
-      await expect(page.getByText('As of today', { exact: true })).toHaveCount(previous.open ? 1 : 0);
+      await expect(page.getByText(AS_OF_TODAY)).toHaveCount(previous.open ? 1 : 0);
 
       await after.click();
       await expect(periodLabel(page, each.label)).toBeVisible();
@@ -461,7 +464,7 @@ test.describe('the coverage line', () => {
     page,
   }) => {
     await arrange(page);
-    const note = page.locator('main p').filter({ hasText: /^As of today$/ });
+    const note = page.locator('main p').filter({ hasText: AS_OF_TODAY });
 
     await page.goto('/reports/cells');
     await expect(page.locator('main p').filter({ hasText: /meetings recorded/ })).toHaveCount(0);

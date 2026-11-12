@@ -31,6 +31,7 @@ import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
 import { dayLabel } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useAsOfToday } from '@/lib/use-as-of-today';
 
 /**
  * The DCC report (SKILL.md sections 9, 13, 17, 19 and 20; decisions 0216, 0224, 0257, 0292
@@ -68,6 +69,8 @@ export function DccReport() {
   // Every control lives in the address, so Back steps back through the period, the leader
   // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
+  // "As of today, 12 Nov" (decision 0478).
+  const asOfToday = useAsOfToday();
   const period = useReportPeriod();
   const { kind, current, me, wholeChurch, ownNetwork, seniorPastor } = period;
   const { start, guardMonth, own, periodParams } = period;
@@ -184,7 +187,7 @@ export function DccReport() {
           {branchReader && twelve.data && !twelve.isPlaceholderData ? (
             (() => {
               const note = [
-                twelve.data.open ? 'As of today' : null,
+                twelve.data.open ? asOfToday : null,
                 twelve.data.removed_events.length > 0
                   ? `No service on ${twelve.data.removed_events.map((date) => dayLabel(date)).join(', ')}`
                   : null,

@@ -69,6 +69,22 @@ export function todayInManila(at: Date = new Date()): string {
   }).format(at);
 }
 
+/**
+ * An open period's note under Reports, dated (decision 0478): "As of
+ * today, 12 Nov". The day keeps "today" honest on a screen left open overnight or sent on as a
+ * screenshot; the year is left out, today being in the current one.
+ */
+export function asOfTodayLabel(today: string = todayInManila()): string {
+  const [year, month, day] = today.split('-').map(Number);
+  const dayMonth = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+
+  return `As of today, ${dayMonth}`;
+}
+
 /** The month before or after this one, as the same `YYYY-MM-01` spelling. */
 export function shiftMonth(reportingMonth: string, by: number): string {
   const [year, month] = reportingMonth.split('-').map(Number);

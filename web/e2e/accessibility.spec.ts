@@ -75,6 +75,9 @@ import {
   mockTrends,
 } from './mock-senior-pastor';
 
+/** An open period's note, dated (decision 0478). */
+const AS_OF_TODAY = /^As of today, \d{1,2} [A-Z][a-z]{2}$/;
+
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
  *
@@ -1373,7 +1376,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       // One control panel with its note and no coverage line (decision 0363), the note
       // saying As of today (decision 0451), then the disciples' table, and the tabs.
-      await expect(page.getByText('As of today', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(AS_OF_TODAY).first()).toBeVisible();
       await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
       // One table at every width (decision 0451): the line in full, or short on a phone with
       // its full words for a screen reader.
@@ -1625,7 +1628,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
       // The note: As of today and the Sunday with no service (decision 0451).
-      await expect(page.getByText('As of today · No service on Sunday 14 June', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^As of today, \d{1,2} [A-Z][a-z]{2} · No service on Sunday 14 June$/)).toBeVisible();
       await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
     },

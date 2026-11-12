@@ -32,6 +32,7 @@ import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { getBranchCounts, getBranchPeople, type ChurchCountFigures } from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
+import { useAsOfToday } from '@/lib/use-as-of-today';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
 
 /** The three # tabs' labels, as the Senior Pastors' (decision 0326). */
@@ -72,7 +73,7 @@ type Row = {
  * own branch.
  *
  * **A month at a time**, counted as theirs is: a month that has ended on its last day, the
- * current one as of now, *As of today* (decision 0451). The box is the branch, then one row per direct disciple
+ * current one as of now, *As of today, 12 Nov* (decisions 0451 and 0478). The box is the branch, then one row per direct disciple
  * counting them and everyone beneath them, then the leader's own row, adding up to the box. Rows
  * are in first-name order, never sorted by a figure, never numbered or coloured (sections 13
  * and 17). **A name is plain text and opens nothing** (decision 0380).
@@ -92,6 +93,7 @@ export function BranchCountsPanel({
 }) {
   const go = useScreenAddress();
   const phone = usePhone();
+  const today = useAsOfToday();
   const current = monthFromQuery(null);
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
@@ -177,7 +179,7 @@ export function BranchCountsPanel({
             <CountTiles
               figure={figure}
               value={(key) => value(data.total, key)}
-              asOf={asAt(month, month === current)}
+              asOf={asAt(month, month === current, today)}
             />
 
             {/* The figures in equal columns, short headings and names on a phone where there are

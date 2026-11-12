@@ -11,6 +11,9 @@ import {
   mockTrends,
 } from './mock-senior-pastor';
 
+/** An open period's note, dated (decision 0478). */
+const AS_OF_TODAY = /^As of today, \d{1,2} [A-Z][a-z]{2}$/;
+
 /**
  * The two Senior Pastors' `Reports` and `Trends` (SKILL.md sections 17, 19 and 23; decisions
  * 0326 and 0327).
@@ -75,7 +78,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     const counts = page.getByRole('region', { name: 'Number of Cell Groups' });
     await expect(counts.getByRole('term')).toHaveText(['Total', 'J12 Kids', 'Youth', 'Young Pro', 'Couple']);
     // The first tile also says when it is as of (decision 0451).
-    await expect(counts.getByRole('definition')).toHaveText(['5', 'As of today', '0', '1', '3', '1']);
+    await expect(counts.getByRole('definition')).toHaveText(['5', AS_OF_TODAY, '0', '1', '3', '1']);
 
     const mens = page.getByRole('table', { name: MENS_TABLE });
     await expect(mens.getByRole('columnheader')).toHaveText([
@@ -138,7 +141,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-cell-leaders');
     const leaders = page.getByRole('region', { name: 'Number of Cell Leaders' });
     await expect(leaders.getByRole('term')).toHaveText(['Cell Leaders']);
-    await expect(leaders.getByRole('definition')).toHaveText(['5', 'As of today']);
+    await expect(leaders.getByRole('definition')).toHaveText(['5', AS_OF_TODAY]);
     await expect(page.getByRole('table', { name: MENS_TABLE }).getByRole('columnheader')).toHaveText([
       'Primaries',
       'Cell Leaders',
@@ -147,7 +150,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await page.goto('/reports/number-of-people');
     const people = page.getByRole('region', { name: 'Number of people' });
     await expect(people.getByRole('term')).toHaveText(['People']);
-    await expect(people.getByRole('definition')).toHaveText(['36', 'As of today']);
+    await expect(people.getByRole('definition')).toHaveText(['36', AS_OF_TODAY]);
   });
 
   test('step a month at a time with the same ‹ › control as the attendance tabs', async ({
@@ -160,7 +163,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
 
     await expect(page.getByText('October 2026', { exact: true })).toBeVisible();
     // In the first tile, not beside the month (decision 0451).
-    await expect(page.getByText('As of today', { exact: true })).toBeVisible();
+    await expect(page.getByText(AS_OF_TODAY)).toBeVisible();
     // A month that has not begun is not reported (decision 0216).
     await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
     // No length but the month, and no second switch for it (decision 0398).
@@ -247,7 +250,7 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
     // Two words, once "so far" (decision 0451).
     // Beside the month from `lg`; a phone says it under the bar instead.
-    await expect(bar.getByText('As of today', { exact: true }).first()).toBeVisible();
+    await expect(bar.getByText(AS_OF_TODAY).first()).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
   });
 

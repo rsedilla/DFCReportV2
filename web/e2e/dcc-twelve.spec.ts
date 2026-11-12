@@ -79,7 +79,7 @@ const sundaysLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ Sundays? counted/ });
 /** A Full view leader's note under the controls (decision 0363). */
 const noteLine = (page: Page) =>
-  page.locator('main p').filter({ hasText: /^(As of today|No service on )/ });
+  page.locator('main p').filter({ hasText: /^(As of today, |No service on )/ });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -184,16 +184,34 @@ test.describe('the coverage line and the Sundays under it', () => {
     await expect(coverageLine(page)).toHaveCount(0);
     await expect(sundaysLine(page)).toHaveCount(0);
     // No count of Sundays, no closing time (decision 0451).
-    await expect(noteLine(page)).toHaveText('As of today · No service on Sunday 14 June');
+    await expect(noteLine(page)).toHaveText('As of today, 20 Jun · No service on Sunday 14 June');
     await expect(page.getByText(/Sundays?[.,]/)).toHaveCount(0);
     await expect(page.getByText(/Still open, until/)).toHaveCount(0);
 
     await page.goto('/reports/dcc?period=week');
-    await expect(noteLine(page)).toHaveText('As of today');
+    // Dated (decision 0478): the clock is 20 June.
+    await expect(noteLine(page)).toHaveText('As of today, 20 Jun');
 
     // The week whose only Sunday was removed says why.
     await page.goto('/reports/dcc?period=week&start=2026-06-08');
     await expect(noteLine(page)).toHaveText(/No service on Sunday 14 June$/);
+  });
+
+  // An installed app left open overnight must not go on saying yesterday (decision 0478).
+  test('the dated note moves on when the app comes back the next day (decision 0478)', async ({
+    page,
+  }) => {
+    await arrange(page);
+    // 23:50 on 20 June in Manila. Fifteen minutes, so the idle sign-out (decision 0435) does
+    // not come first.
+    await page.clock.setFixedTime(new Date('2026-06-20T15:50:00Z'));
+    await page.goto('/reports/dcc?period=week');
+    await expect(noteLine(page)).toHaveText('As of today, 20 Jun');
+
+    // 00:05 on 21 June, the app brought back to the front.
+    await page.clock.setFixedTime(new Date('2026-06-20T16:05:00Z'));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(noteLine(page)).toHaveText('As of today, 21 Jun');
   });
 
   test('names the Sundays counted, and any Sunday that had no service', async ({ page }) => {
