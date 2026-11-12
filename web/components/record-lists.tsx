@@ -1158,8 +1158,11 @@ export function PendingCgPane({
           CG Records Due
         </h2>
         <p className="text-muted text-sm">
-          These Cell Groups in your branch have meetings not yet recorded. Record the ones
-          that are yours, and remind their leader about the rest.
+          {/* Points at what each row shows rather than asking which are "yours" (decision
+              0477); a whole-church reader reads "in the church" (decision 0436). */}
+          Cell Group meetings {wholeChurch ? 'in the church' : 'in your branch'} that are not
+          recorded yet. Tap <strong>Record</strong> where it shows; for the others, remind the
+          leader named to record them.
         </p>
       </div>
       <PendingFilters
@@ -1217,8 +1220,10 @@ export function PendingDccPane({
           DCC Records Due
         </h2>
         <p className="text-muted text-sm">
-          These leaders have DCC Sundays not yet recorded. Record the ones that are yours,
-          and remind the others.
+          {/* As CG Records Due's (decision 0477). */}
+          DCC Sundays {wholeChurch ? 'in the church' : 'in your branch'} that are not recorded
+          yet. Tap <strong>Record</strong> where it shows; for the others, remind the leader
+          named to record them.
         </p>
       </div>
       <PendingFilters
