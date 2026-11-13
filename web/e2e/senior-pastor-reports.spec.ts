@@ -336,7 +336,7 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
   await expect(page).toHaveURL(/\/reports\/number-of-cell-leaders$/);
 });
 
-test('the Senior Pastors’ attendance switch is Weekly, Monthly and Yearly, and a length chosen on Yearly opens the tab by it (decisions 0398 and 0443)', async ({
+test('the Senior Pastors’ attendance switch is Monthly and Yearly, and a length chosen on Yearly opens the tab by it (decisions 0398, 0443 and 0485)', async ({
   page,
 }) => {
   await seniorPastor(page);
@@ -347,15 +347,30 @@ test('the Senior Pastors’ attendance switch is Weekly, Monthly and Yearly, and
 
   await page.goto('/reports/cells');
   const view = page.getByRole('group', { name: 'Report period' });
-  await expect(view.getByRole('button')).toHaveText(['Weekly', 'Monthly', 'Yearly']);
+  await expect(view.getByRole('button')).toHaveText(['Monthly', 'Yearly']);
+  await expect(view.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
 
   await view.getByRole('button', { name: 'Yearly' }).click();
   await expect(page).toHaveURL(/\/trends(\?figure=CG)?$/);
-  await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }).click();
-  await expect(page).toHaveURL(/\/reports\/cells\?period=week$/);
-  await expect(
-    page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Monthly' }).click();
+  await expect(page).toHaveURL(/\/reports\/cells$/);
+});
+
+// A week address kept from before opens the month for them, as a quarter's does (decision 0485).
+test('a week address opens the month for the Senior Pastors, on both Attendance tabs (decision 0485)', async ({
+  page,
+}) => {
+  await seniorPastor(page);
+  await mockCellTwelve(page);
+  await mockRootLeadersTwelve(page);
+  await mockDccTwelve(page);
+
+  for (const path of ['/reports/cells', '/reports/dcc']) {
+    await page.goto(`${path}?period=week`);
+    const view = page.getByRole('group', { name: 'Report period' });
+    await expect(view.getByRole('button')).toHaveText(['Monthly', 'Yearly']);
+    await expect(view.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
+  }
 });
 
 test.describe('one size for every report control (decision 0398)', () => {
@@ -370,7 +385,8 @@ test.describe('one size for every report control (decision 0398)', () => {
 
       await page.goto('/reports/cells');
       const buttons = page.getByRole('group', { name: 'Report period' }).getByRole('button');
-      await expect(buttons).toHaveCount(3);
+      // Monthly and Yearly: the Senior Pastors have no Weekly (decision 0485).
+      await expect(buttons).toHaveCount(2);
       const boxes = await buttons.evaluateAll((nodes) =>
         nodes.map((node) => {
           const box = node.getBoundingClientRect();

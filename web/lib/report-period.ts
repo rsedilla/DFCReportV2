@@ -22,7 +22,8 @@ export type OwnScope =
  * Which period a My 12 report shows, shared by the Cell Groups and DCC reports, read from
  * the address so Back steps back through it and a reload opens the same figures.
  *
- * **Weekly and Monthly, for every reader** (decision 0443): Yearly is the last 12 months, a
+ * **Weekly and Monthly, for every reader but the two Senior Pastors, who have Monthly alone**
+ * (decisions 0443 and 0485): Yearly is the last 12 months, a
  * screen of its own, and the quarter and the calendar year are withdrawn, so an address naming
  * either, kept from before, opens the month instead. A period that has not begun is not
  * reported, so an address naming one opens the current period instead (decision 0216).
@@ -42,7 +43,9 @@ export function useReportPeriod() {
   // The two Senior Pastors' rows are both roots' direct leaders (decision 0326), named by the
   // server's screens and never by a role.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
-  const kind: ReportKind = search.get('period') === 'week' ? 'WEEK' : 'MONTH';
+  // The Senior Pastors read by month alone (decision 0485), so a week address kept from before
+  // opens the month for them, as a quarter's does for everyone.
+  const kind: ReportKind = search.get('period') === 'week' && !seniorPastor ? 'WEEK' : 'MONTH';
   const current = rangeStartOf(kind, today);
 
   const own: OwnScope | null = seniorPastor
