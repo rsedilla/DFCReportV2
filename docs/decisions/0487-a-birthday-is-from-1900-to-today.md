@@ -16,8 +16,8 @@ from 1 January 1900 to today, and the Encounter season boxes stop at 9999. The g
 the sex correction's date already stopped at today. The server stays the check (Section 7); the box
 only stops the mistake before Save.
 
-A birthday already recorded outside the range is left as it was. An edit that sends it unchanged
-is refused, which asks the editor to correct it.
+A birthday already recorded outside the range stays until an edit sends a corrected one. Edit
+details sends the recorded birthday with every save, so the server refuses the save and asks for it.
 
 ## Why
 

@@ -26,7 +26,7 @@
 import { createHash } from 'node:crypto';
 
 import { type Candidate, findCandidates, normalizeName } from '../../people/duplicate-matching';
-import { EARLIEST_BIRTHDAY, isCalendarDate } from '../../common/time/manila';
+import { EARLIEST_BIRTHDAY, isCalendarDate, manilaDayOf } from '../../common/time/manila';
 
 /**
  * The columns, in order. Section 2's ruling fixes `row_id` and `leader_row_id`;
@@ -390,7 +390,8 @@ const EMPTY_SUMMARY: TreeSummary = {
 export function validateTreeCsv(text: string, options: ValidateOptions = {}): TreeReport {
   const findings: Finding[] = [];
   const add = (finding: Finding) => findings.push(finding);
-  const today = options.today ?? new Date().toISOString().slice(0, 10);
+  // The Manila day, as every date here is (section 20); the UTC date ran eight hours behind.
+  const today = options.today ?? manilaDayOf(new Date());
 
   const records = parseCsv(text);
   if (records.length === 0) {

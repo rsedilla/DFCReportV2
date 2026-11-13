@@ -192,6 +192,19 @@ describe('fields', () => {
     ).toContain('BIRTH_DATE_FUTURE');
   });
 
+  // An error rather than a warning since decision 0487: no birthday may be before 1900.
+  it('refuses a birthday before 1900', () => {
+    expect(
+      errorsOf(file('3,Marisol,Ventura,1899-12-31,FEMALE,SINGLE,2')).map((f) => f.code),
+    ).toContain('BIRTH_DATE_IMPLAUSIBLE');
+  });
+
+  it('accepts 1 January 1900, the earliest birthday', () => {
+    expect(
+      errorsOf(file('3,Marisol,Ventura,1900-01-01,FEMALE,SINGLE,2')).map((f) => f.code),
+    ).not.toContain('BIRTH_DATE_IMPLAUSIBLE');
+  });
+
   it('refuses a lowercase enum and says the values are case-sensitive', () => {
     const found = errorsOf(file('3,Marisol,Ventura,1985-06-15,female,SINGLE,2'));
     expect(found.find((f) => f.code === 'SEX_INVALID')?.message).toMatch(/case-sensitive/);

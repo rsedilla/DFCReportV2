@@ -131,6 +131,25 @@ describe('the Network Admin (decision 0469)', () => {
   }
 
   describe('the one form', () => {
+    // The form shares Add a person's fields, so it shares the birthday's range (decision 0487).
+    it('refuses a birthday in the future or before 1900', async () => {
+      for (const day of ['2999-01-01', '1899-12-31']) {
+        const response = await create(
+          admin,
+          form({ birth_date_not_given: undefined, birth_date: day }),
+        );
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+      expect(
+        await db
+          .selectFrom('accounts')
+          .select('id')
+          .where('email', '=', 'naomi@example.test')
+          .execute(),
+      ).toHaveLength(0);
+    });
+
     it('creates a Person with no assignment and an account', async () => {
       const response = await create(admin, form());
 
