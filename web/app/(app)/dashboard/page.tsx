@@ -35,7 +35,7 @@ import { isBranchReader } from '@/components/reports-tabs';
 import { SentRequests } from '@/components/sent-requests';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { InfoToggle } from '@/components/ui/info-toggle';
-import { CONTROL_BAR, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
+import { CONTROL_BAR, FRAME, TAB_PANE, TAB_ROW } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -133,10 +133,10 @@ function Dashboard() {
   // decision 0323): no other list, and Leaders Under Me only while the
   // server says a leader holding an account sits directly beneath it.
   const recordingOnly = me.data?.screens === 'RECORDING';
-  // **The Senior Pastors' Record has two tabs, Recording Progress first** (decision 0325):
-  // their own Awaiting a record with no Leaders Under Me, and none of the other lists.
+  // **The Senior Pastors' Record is Recording Progress alone** (decision 0480, replacing decision
+  // 0325's second tab): the Admin, or their Network Admin, records their records on their behalf,
+  // so there is no Update Records, and an address naming it opens Recording Progress.
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
-  const spTab: 'status' | 'awaiting' = search.get('list') === 'awaiting' ? 'awaiting' : 'status';
   const fullRecord = me.data !== undefined && !recordingOnly && !seniorPastor;
   // **Recording Progress, last, for a reader who reads reports over their own branch**
   // (decision 0334): a Full view leader, whose Leader default gives `reports.view_subtree` that scope.
@@ -213,7 +213,8 @@ function Dashboard() {
     openPastMonths,
     shownWhose,
     branchView,
-    whoseKnown,
+    // A Senior Pastor has no Update Records to read (decision 0480).
+    whoseKnown: whoseKnown && !seniorPastor,
   });
 
   const shown = queue.filter((item) => (filter === 'CELLS') === (item.kind === 'cell'));
@@ -296,7 +297,7 @@ function Dashboard() {
         {/* A Full view leader's tabs already say what is recorded here and who is behind,
             so their heading carries no line (decision 0402). */}
         {seniorPastor ? (
-          <p className="text-muted text-sm">Whether the church has recorded, and your own work.</p>
+          <p className="text-muted text-sm">Whether the church has recorded.</p>
         ) : null}
       </div>
 
@@ -318,18 +319,7 @@ function Dashboard() {
           current="awaiting"
           onChoose={() => go({ list: null })}
         />
-      ) : seniorPastor ? (
-        <TabBar
-          label="Record"
-          className={cn('mt-6', TAB_ROW)}
-          tabs={[
-            { key: 'status', label: 'Recording Progress', count: null },
-            { key: 'awaiting', label: 'Update Records', count: tabs[0].count },
-          ]}
-          current={spTab}
-          onChoose={(next) => go({ list: next === 'status' ? null : 'awaiting' })}
-        />
-      ) : (
+      ) : seniorPastor ? null : (
         <TabBar
           label="Outstanding work"
           className={cn('mt-6', TAB_ROW)}
@@ -340,8 +330,21 @@ function Dashboard() {
       )}
 
       {/* The chosen list's pane. */}
-      <div className={TAB_PANE}>
-        {seniorPastor && spTab === 'status' ? <RecordingStatusPanel /> : null}
+      {/* One list, so a heading rather than a tab row of one (decision 0480); on a phone the
+          heading alone, as Record's other lines (decisions 0454, 0455 and 0476). */}
+      <div className={seniorPastor ? cn('mt-6 min-w-0 px-4 sm:px-5', FRAME) : TAB_PANE}>
+        {seniorPastor ? (
+          // The panel names its own region; this heads it, as a tab did.
+          <div>
+            <h2 className="mb-4 text-lg font-bold tracking-tight sm:mb-1">
+              Recording Progress
+            </h2>
+            <p className="text-muted mb-4 hidden text-sm sm:block">
+              How many leaders recorded on time, week by week or month by month.
+            </p>
+            <RecordingStatusPanel />
+          </div>
+        ) : null}
         {listTab === 'status' && me.data ? (
           <div className={LIST}>
             {/* Not on a phone, where the tab names it (decision 0476, as 0454 and 0455). */}
@@ -357,7 +360,7 @@ function Dashboard() {
             )}
           </div>
         ) : null}
-        {listTab === 'awaiting' && !(seniorPastor && spTab === 'status') ? (
+        {listTab === 'awaiting' && !seniorPastor ? (
           // The tab names the list, so its pane repeats no heading (decision 0362), for a
           // Recording-only account too, whose one tab names it.
           <section aria-label="Update Records" className={LIST}>
