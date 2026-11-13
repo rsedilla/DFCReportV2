@@ -88,7 +88,10 @@ function Suynl() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="Who is getting ready for the next Encounter God Weekend, as of today." />
+      <ReportsHeading
+        current="suynl"
+        line="Who is getting ready for the next Encounter God Weekend, as of today."
+      />
       <ReportsTabs current="suynl">
         <div className="mt-6">
           <FailureNotice

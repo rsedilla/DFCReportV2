@@ -3,12 +3,13 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe, holdsNetwork, holdsWholeChurch } from '@/lib/me';
 import type { RangeKind } from '@/lib/report-range';
+import { setReportSection, type ReportSection } from '@/lib/report-section';
 import type { TrendFigure } from '@/lib/reports';
 import { cn } from '@/lib/utils';
 
@@ -73,25 +74,36 @@ const BRANCH_TABS = [
 ] as const;
 
 /**
- * The two Senior Pastors' five tabs (decision 0326, point 3), in place of a whole-church
- * reader's. The first
- * two are the same reports under the names the church uses. **A `#` label keeps its words as
- * the link's name** (owner, 2026-10-09), because a screen reader says `#` as "number sign" or
- * "hash" (section 23).
+ * The two Senior Pastors' reports, under the three items of their menu that hold them (decision
+ * 0488, replacing decision 0326's five tabs): *People* holds # of People, *Cells* three tabs,
+ * and *Services* DCC Attendance. An item holding one report shows no tab. **A `#` label keeps
+ * its words as the link's name** (owner, 2026-10-09), because a screen reader says `#` as
+ * "number sign" or "hash" (section 23).
  */
-const SENIOR_PASTOR_TABS = [
-  { key: 'cells', label: 'CG Attendance', path: '/reports/cells' },
-  { key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' },
-  ...CELL_COUNT_TABS,
-  PEOPLE_TAB,
-] as const;
+const SENIOR_PASTOR_SECTIONS: Record<
+  ReportSection,
+  { title: string; tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] }
+> = {
+  people: { title: 'People', tabs: [PEOPLE_TAB] },
+  cells: {
+    title: 'Cells',
+    tabs: [{ key: 'cells', label: 'CG Attendance', path: '/reports/cells' }, ...CELL_COUNT_TABS],
+  },
+  services: {
+    title: 'Services',
+    tabs: [{ key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' }],
+  },
+};
 
-export type ReportTab =
-  | (typeof TABS)[number]['key']
-  | (typeof SENIOR_PASTOR_TABS)[number]['key'];
+export type ReportTab = (typeof TABS)[number]['key'] | (typeof BRANCH_TABS)[number]['key'];
+
+/** Which of the Senior Pastors' items a report sits under (decision 0488). */
+export function sectionOf(tab: ReportTab): ReportSection {
+  return tab === 'number-of-people' ? 'people' : tab === 'dcc' ? 'services' : 'cells';
+}
 
 /** A tab as a figure of the twelve-month view (decisions 0377 and 0459). */
-const TREND_FIGURE: Record<(typeof SENIOR_PASTOR_TABS)[number]['key'], TrendFigure> = {
+const TREND_FIGURE: Record<(typeof BRANCH_TABS)[number]['key'], TrendFigure> = {
   cells: 'CG',
   dcc: 'DCC',
   'number-of-cells': 'CELLS',
@@ -151,13 +163,22 @@ export function ReportsTabs({
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const branch = isBranchReader(me.data);
+  const section = sectionOf(current);
   const tabs: readonly { key: ReportTab; label: string; name?: string; path: string }[] =
-    seniorPastor ? SENIOR_PASTOR_TABS : branch ? BRANCH_TABS : TABS;
+    seniorPastor ? SENIOR_PASTOR_SECTIONS[section].tabs : branch ? BRANCH_TABS : TABS;
+
+  // The menu marks the Senior Pastors' item from the address, except on the twelve months,
+  // whose figure is in the query: the page says which item it is under (decision 0488).
+  useEffect(() => {
+    setReportSection(section);
+    return () => setReportSection(null);
+  }, [section]);
 
   // No tabs until the server names the screens, so a Senior Pastor never sees a whole-church reader's five
-  // flash before their own five (owner, 2026-10-11). The pane stays where it is either way, so
-  // the report inside is not remounted when the answer arrives.
-  const tabbed = !me.isPending;
+  // flash before their own (owner, 2026-10-11). The pane stays where it is either way, so
+  // the report inside is not remounted when the answer arrives. **An item of the Senior
+  // Pastors' holding one report shows no tab** (decision 0488).
+  const tabbed = !me.isPending && tabs.length > 1;
   // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
   // owner's layout): a switch inside it chooses which, and each keeps its own address. **The
   // Senior Pastors' are two tabs, *CG Attendance* and *DCC Attendance*, with no switch**
@@ -201,7 +222,16 @@ export function ReportsTabs({
           // Every tab one size, for every reader (decision 0416).
           // The Senior Pastors' five, and a Full view leader's, on one row from `lg` (decisions
           // 0481 and 0483).
-          className={cn('mt-6', TAB_GRID, TAB_ROW, !merged && 'lg:grid-cols-5')}
+          className={cn(
+            'mt-6',
+            TAB_GRID,
+            TAB_ROW,
+            // The Senior Pastors' *Cells* holds three, across one row at every width (decision
+            // 0488); a Full view leader's five are one row from `lg` (decision 0483).
+            seniorPastor
+              ? 'grid-cols-3 sm:grid-cols-3 [&>:last-child:nth-child(odd)]:col-span-1'
+              : !merged && 'lg:grid-cols-5',
+          )}
         >
           {rowTabs.map((tab) => {
             const active =
@@ -380,7 +410,7 @@ export function ReportViewSwitch({
   ) {
     return null;
   }
-  const path = SENIOR_PASTOR_TABS.find((each) => each.key === tab)!.path;
+  const path = BRANCH_TABS.find((each) => each.key === tab)!.path;
 
   const options: { key: RangeKind | 'TREND'; label: string; icon?: ReactNode }[] = [
     ...periodsOf(tab, seniorPastor).map((key) => ({ key, label: PERIOD_LABEL[key] })),
@@ -433,10 +463,20 @@ export function isBranchReader(me: Parameters<typeof holdsWholeChurch>[0]): bool
  * The heading every report shares, with its one line beside it. The line is not shown on a
  * phone (decision 0451): the tabs under it say what each report is, and the rows start higher.
  */
-export function ReportsHeading({ line }: { line: string }) {
+export function ReportsHeading({ line, current }: { line: string; current: ReportTab }) {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  // The Senior Pastors' reports are headed by the item of their menu that holds them (decision
+  // 0488); every other reader's by Reports.
+  const title =
+    me.data?.screens === 'SENIOR_PASTOR'
+      ? SENIOR_PASTOR_SECTIONS[sectionOf(current)].title
+      : me.isPending
+        ? ''
+        : 'Reports';
+
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+      <h1 className="min-h-8 text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="text-muted hidden text-sm lg:block">{line}</p>
     </div>
   );

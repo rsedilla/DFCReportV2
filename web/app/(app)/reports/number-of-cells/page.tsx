@@ -30,7 +30,7 @@ function NumberOfCells() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="The Cell Groups running, month by month." />
+      <ReportsHeading current="number-of-cells" line="The Cell Groups running, month by month." />
       <ReportsTabs current="number-of-cells" month={monthFromQuery(month)}>
         {me.data === undefined ? (
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>

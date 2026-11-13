@@ -118,7 +118,10 @@ export function DccReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="Who came to DCC (Doulos Cell Celebration), and where they are in their journey." />
+      <ReportsHeading
+        current="dcc"
+        line="Who came to DCC (Doulos Cell Celebration), and where they are in their journey."
+      />
       <ReportsTabs current="dcc" month={guardMonth}>
         {/* Weekly, Monthly and Yearly on the line beside Cell Group and DCC, for every reader
             (decision 0443). */}

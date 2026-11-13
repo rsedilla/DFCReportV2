@@ -123,7 +123,7 @@ test('a Full view leader’s person page keeps its People tabs and Back to peopl
   await expect(page.getByRole('link', { name: 'Edit details' })).toBeVisible();
 });
 
-test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and Back to Record', async ({
+test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and Back to Cells', async ({
   page,
 }) => {
   await as(page, 'SENIOR_PASTOR');
@@ -131,14 +131,14 @@ test('a Senior Pastor’s Cell pages offer no Cells tab, no change buttons, and 
   await page.goto(MEETINGS);
   // A meeting row first, so the buttons' absence is read after the meetings arrived.
   await expect(page.getByRole('row').filter({ hasText: 'Saturday 27 June' })).toBeVisible();
-  // The way back is a small arrow naming Record (decision 0467), the Senior Pastors having no
-  // Cells item and, since decision 0480, no Update Records.
+  // The way back is a small arrow naming their Cells (decisions 0467 and 0488), which holds their
+  // Cell figures; Record is not theirs.
   await expect(
-    page.getByRole('main').getByRole('link', { name: 'Record', exact: true }),
-  ).toHaveAttribute('href', '/dashboard');
+    page.getByRole('main').getByRole('link', { name: 'Cells', exact: true }),
+  ).toHaveAttribute('href', '/reports/cells');
   await expect(
     page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
-  ).toHaveText('Record');
+  ).toHaveText('Cells');
   await expect(page.getByRole('button', { name: 'Change Schedule' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change category' })).toHaveCount(0);
 

@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   ChartColumn,
+  Church,
   CircleUserRound,
   ClipboardCheck,
   LayoutGrid,
@@ -15,7 +16,7 @@ import {
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 
 import { isBranchReader } from '@/components/reports-tabs';
 import { IdleGuard } from '@/components/idle-guard';
@@ -25,6 +26,12 @@ import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
 import { getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
+import {
+  noReportSection,
+  reportSection,
+  subscribeReportSection,
+  type ReportSection,
+} from '@/lib/report-section';
 import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
@@ -57,25 +64,12 @@ function matchedLength(pathname: string, match: string | RegExp): number {
   return match.exec(pathname)?.[0].length ?? -1;
 }
 
-/**
- * **A Cell's meeting screens are recording, so they are Record's** (ruling of
- * 2026-09-14), although their address begins with `/cells/`. The pattern matches a
- * Cell's list of meetings and every meeting beneath it, and nothing else under a Cell.
- */
-const CELL_MEETINGS = /^\/cells\/[^/]+\/meetings(?=\/|$)/;
-
 const RECORD: NavEntry = {
   href: RECORD_PATH,
   label: 'Record',
   icon: ClipboardCheck,
   matches: [RECORD_PATH, '/dcc'],
 };
-/**
- * The Senior Pastors' Record, which also holds a Cell's meeting screens: they reach them from
- * Update Records and have no Cells item. Every other account reaches them from Cells, and they
- * are Cells' (decision 0467, replacing the ruling of 2026-09-14 for those accounts).
- */
-const RECORD_WITH_MEETINGS: NavEntry = { ...RECORD, matches: [...RECORD.matches, CELL_MEETINGS] };
 const REPORTS: NavEntry = {
   href: REPORTS_PATH,
   label: 'Reports',
@@ -130,6 +124,34 @@ const SUYNL: NavEntry = {
   label: 'SUYNL',
   icon: Sprout,
   matches: ['/growth'],
+};
+/**
+ * **The Senior Pastors' four items** (decision 0488, owner, 2026-11-14): *People*, *Cells*,
+ * *Services* and *Conquest*, the reports they read split by what each counts. Record and
+ * Reports are not theirs: the Admin keeps the records for both Networks, and they read. Each
+ * item owns the addresses of the reports it holds; on the twelve months, `/trends`, the page
+ * says which item it is under (`lib/report-section.ts`).
+ */
+const SENIOR_PASTOR_ITEMS: Record<ReportSection, NavEntry> = {
+  people: {
+    href: '/reports/number-of-people',
+    label: 'People',
+    icon: Users,
+    matches: ['/reports/number-of-people'],
+  },
+  cells: {
+    href: '/reports/cells',
+    label: 'Cells',
+    icon: LayoutGrid,
+    // A Cell's meetings and members, which lead back here, are under it too.
+    matches: [
+      '/reports/cells',
+      '/reports/number-of-cells',
+      '/reports/number-of-cell-leaders',
+      '/cells',
+    ],
+  },
+  services: { href: '/reports/dcc', label: 'Services', icon: Church, matches: ['/reports/dcc'] },
 };
 /** The Admin area (decision 0419): set apart from the items above, never one of them. */
 const ADMIN: NavEntry = { href: '/admin', label: 'Admin', icon: ShieldCheck, matches: ['/admin'] };
@@ -259,7 +281,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ...(me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL]
           : me.data?.screens === 'SENIOR_PASTOR'
-            ? [RECORD_WITH_MEETINGS, REPORTS]
+            ? [SENIOR_PASTOR_ITEMS.people, SENIOR_PASTOR_ITEMS.cells, SENIOR_PASTOR_ITEMS.services]
             : isBranchReader(me.data)
               ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
@@ -291,6 +313,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   let current: NavEntry | null = null;
   let longest = -1;
+  // The twelve months name their figure in the query; the page says which item holds it.
+  const trendSection = useSyncExternalStore(
+    subscribeReportSection,
+    reportSection,
+    noReportSection,
+  );
+
+  if (offered && me.data?.screens === 'SENIOR_PASTOR' && pathname === '/trends' && trendSection) {
+    current = SENIOR_PASTOR_ITEMS[trendSection];
+    longest = Number.MAX_SAFE_INTEGER;
+  }
 
   // On the note no item is current: the page is none of them.
   for (const link of offered ? [...links, ACCOUNT, ...(administers ? [ADMIN] : [])] : []) {

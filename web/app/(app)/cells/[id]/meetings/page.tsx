@@ -100,13 +100,13 @@ function CellMeetings() {
   const mayConfigure = (me.data?.capabilities ?? []).some(
     (grant) => grant.capability === 'cell.manage_configuration',
   );
-  // Back to where the account's own screens reached this from: Record for the Senior Pastors,
-  // who have no Cells item and, since decision 0480, no Update Records, My Cell on the recording
-  // screens, and the Cells list for everyone else (decision 0379). A small arrow naming it, as an
-  // app's detail page opens (decision 0467).
+  // Back to where the account's own screens reached this from: the Senior Pastors' Cells, which
+  // since decision 0488 holds their Cell figures and Record is not theirs, My Cell on the
+  // recording screens, and the Cells list for everyone else (decision 0379). A small arrow
+  // naming it, as an app's detail page opens (decision 0467).
   const seniorPastor = me.data?.screens === 'SENIOR_PASTOR';
   const back = seniorPastor
-    ? { href: '/dashboard', label: 'Record' }
+    ? { href: '/reports/cells', label: 'Cells' }
     : me.data?.screens === 'RECORDING'
       ? { href: '/my-cell', label: 'My Cell' }
       : { href: '/cells', label: 'Cells' };

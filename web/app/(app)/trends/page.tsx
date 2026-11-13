@@ -116,7 +116,7 @@ function TrendsScreen() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="The last 12 months, one point a month." />
+      <ReportsHeading current={TAB_OF[figure]} line="The last 12 months, one point a month." />
 
       {/* The twelve months are a view of Reports (decision 0377): the same tabs,
           and the one switch back to a length first in the bar (decision 0398). */}
