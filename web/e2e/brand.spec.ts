@@ -33,6 +33,15 @@ test('the sidebar names DREAMS beside the logo, from lg', async ({ page }) => {
   await expect(page.getByText(FULL_NAME)).toBeVisible();
 });
 
+// The browser tab names the page, so a screen reader is told where a click went (decision 0484).
+test('the browser tab names the page, then DREAMS', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+
+  await page.goto('/people');
+  await expect(page).toHaveTitle('People – DREAMS');
+});
+
 test('the tab icon and the home-screen manifest are served', async ({ page, request }) => {
   await page.goto('/sign-in');
   const icon = await page.locator('link[rel="icon"]').first().getAttribute('href');

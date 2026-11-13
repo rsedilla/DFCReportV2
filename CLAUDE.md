@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-12, the trigger being decision 0483: of 482 files, 481 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0483 each moved the first two and
+2026-11-13, the trigger being decision 0484: of 483 files, 482 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0484 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-12 and triggered by 0483, and was left stale by 0484 the next day. The one before that was dated
 2026-11-12 and triggered by 0482, and was left stale by 0483 the same day. The one before that was dated
 2026-11-12 and triggered by 0481, and was left stale by 0482 the same day. The one before that was dated
 2026-11-12 and triggered by 0480, and was left stale by 0481 the same day. The one before that was dated
@@ -1010,6 +1011,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-12 — [The Senior Pastors' Attendance is two tabs](docs/decisions/0481-the-senior-pastors-attendance-is-two-tabs.md)
 - 2026-11-12 — [No screen says *branch*](docs/decisions/0482-no-screen-says-branch.md)
 - 2026-11-12 — [A Primary's Reports: two Attendance tabs, one control bar, and *not counted*](docs/decisions/0483-a-primarys-reports-two-tabs-one-bar-and-not-counted.md)
+- 2026-11-13 — [The browser tab names the page, and a control's border is dark](docs/decisions/0484-the-browser-tab-names-the-page.md)
 
 ### Open — awaiting a ruling
 

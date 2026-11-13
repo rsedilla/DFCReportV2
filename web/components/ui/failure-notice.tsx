@@ -36,7 +36,7 @@ export function FailureNotice({ failure }: { failure: Failure | null }) {
   const Icon = failure?.aboutInput ? CircleAlert : Info;
 
   return (
-    <div role="alert" aria-live="assertive">
+    <div role="alert">
       {failure ? (
         // A refusal of input carries `field-invalid` on its icon and sets its words
         // in `ink`, the same shape as the message beside a field (`FieldError`):

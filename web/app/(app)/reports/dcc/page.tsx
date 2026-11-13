@@ -159,7 +159,7 @@ export function DccReport() {
                     : { network: null, leader: value === '' ? null : value },
                 );
               }}
-              className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="border-edge bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <option value="">
                 {wholeChurch
