@@ -586,7 +586,8 @@ export async function chooseThreeMembers(dialog: Locator): Promise<void> {
     await dialog.getByLabel(`Search by name for member ${slot + 1}`).fill(MEMBER_SEARCH_TERM);
     // Earlier pickers have collapsed to their choice, so the first Search left is this one's.
     await dialog.getByRole('button', { name: 'Search people' }).first().click();
-    await dialog.getByRole('button', { name: 'Choose', exact: true }).nth(slot).click();
+    // A Choose button is named for its person, "Choose Ana Reyes" (decision 0484).
+    await dialog.getByRole('button', { name: /^Choose / }).nth(slot).click();
   }
 }
 

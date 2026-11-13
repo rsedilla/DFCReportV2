@@ -190,6 +190,17 @@ function PeopleList() {
           />
         </div>
 
+        {/* What a search found, said to a screen reader (WCAG 4.1.3); mounted always. */}
+        <p role="status" className="sr-only">
+          {awaitingSearch || results.isError || (me.isError && me.data === undefined)
+            ? ''
+            : results.isPending
+              ? 'Searching'
+              : rows.length === 0
+                ? `Nobody you oversee matches “${submitted}”`
+                : `${rows.length} ${rows.length === 1 ? 'person' : 'people'} shown${results.data?.next_cursor ? ', more on the next page' : ''}`}
+        </p>
+
         <div className="mt-4">
           {/* Nothing before a search: the label says what to type (decision 0455). */}
           {me.isError && me.data === undefined ? null : awaitingSearch ? null : results.isPending ? (

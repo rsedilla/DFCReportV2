@@ -15,7 +15,7 @@ import {
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { isBranchReader } from '@/components/reports-tabs';
 import { IdleGuard } from '@/components/idle-guard';
@@ -303,6 +303,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
     }
   }
+
+  // **The browser tab names the page** (decision 0484, WCAG 2.4.2): the current sidebar item,
+  // then the application's name, so a screen reader is told where a click went.
+  const pageTitle = current === null ? APPLICATION_NAME : `${current.label} – ${APPLICATION_NAME}`;
+
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle]);
 
   function renderItem(link: NavEntry) {
     const active = link.href === current?.href;

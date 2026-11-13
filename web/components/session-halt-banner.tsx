@@ -22,7 +22,7 @@ export function SessionHaltBanner() {
   const halted = useSyncExternalStore(subscribe, isHalted, () => false);
 
   return (
-    <div role="alert" aria-live="assertive">
+    <div role="alert">
       {halted ? (
         <div className="border-line bg-raised flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
           <p className="text-sm leading-relaxed">

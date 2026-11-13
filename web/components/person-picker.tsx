@@ -208,6 +208,20 @@ export function PersonPicker({
         <FailureNotice failure={pages.isError ? describeFailure(pages.error) : null} />
       </div>
 
+      {/*
+        What a search found, said to a screen reader (WCAG 4.1.3). Mounted always for the
+        reason above; the text on screen below is not a live region.
+      */}
+      <p role="status" className="sr-only">
+        {submitted.trim().length === 0 || results.isError
+          ? ''
+          : results.isPending
+            ? 'Searching'
+            : results.data.length === 0
+              ? `Nobody matches “${submitted}”`
+              : `${results.data.length} ${results.data.length === 1 ? 'person' : 'people'} shown${pages.hasNextPage ? ', more to show' : ''}`}
+      </p>
+
       {submitted.trim().length === 0 ? null : results.isPending ? (
         <p className="text-muted mt-3 text-sm">Searching…</p>
       ) : results.isError ? null : results.data.length === 0 ? (
@@ -228,7 +242,7 @@ export function PersonPicker({
                   variant="secondary"
                   onClick={() => onSelect({ id: person.id, full_name: person.full_name })}
                 >
-                  Choose
+                  Choose<span className="sr-only"> {person.full_name}</span>
                 </Button>
               </li>
             ))}
