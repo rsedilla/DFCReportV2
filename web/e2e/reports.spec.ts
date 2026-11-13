@@ -87,7 +87,9 @@ const TABS = [
  * reads reports over one Network. No Encounter Readiness, Training or Conquest.
  */
 const BRANCH_TABS = [
-  { label: 'Attendance', path: '/reports/cells', dated: true, pages: ['/reports/cells', '/reports/dcc'] },
+  // CG and DCC Attendance as two tabs, as the Senior Pastors' (decisions 0481 and 0483).
+  { label: 'CG Attendance', path: '/reports/cells', dated: true, pages: ['/reports/cells'] },
+  { label: 'DCC Attendance', path: '/reports/dcc', dated: true, pages: ['/reports/dcc'] },
   {
     label: '# of Cell Groups',
     name: 'Number of Cell Groups',
@@ -172,7 +174,8 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
-    await mockEveryReport(page);
+    // The Admin's: a Full view leader's are two tabs (decision 0483).
+    await mockEveryReport(page, { church: true });
     await page.goto('/reports/dcc?month=2026-05-01');
 
     const which = page.getByRole('group', { name: 'Which attendance' });
@@ -251,7 +254,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await page.goto('/reports/cells');
 
     const which = page.getByRole('navigation', { name: 'Which report' });
-    await expect(which.getByRole('link')).toHaveCount(4);
+    await expect(which.getByRole('link')).toHaveCount(5);
     // Nor a Conquest item in their sidebar (decision 0407).
     await expect(page.getByRole('link', { name: /Conquest/ })).toHaveCount(0);
     for (const name of ['Encounter Readiness', 'Training', 'Conquest']) {
@@ -273,7 +276,7 @@ test.describe('the Reports tabs (decisions 0292 and 0340)', () => {
     await expect(page.getByText('Your screens are Record, Reports, People, Cells and SUYNL.')).toBeVisible();
   });
 
-  test('the month travels to every one of a Full view leader’s four tabs', async ({
+  test('the month travels to every one of a Full view leader’s five tabs', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
@@ -792,8 +795,8 @@ test.describe('a Full view leader’s 12 at a phone and a computer', () => {
 
 /**
  * A Full view leader's controls (decision 0363, owner 2026-10-18; no Figures for since decision
- * 0380): Cell Group and DCC, then Weekly, Monthly and Yearly, side by side from a laptop's width
- * (decision 0443); stacked on a phone, where they cannot fit.
+ * 0380): Weekly, Monthly and Yearly beside the month in one control bar from a laptop's width,
+ * with no Cell Group / DCC switch (decision 0483); stacked on a phone, where they cannot fit.
  */
 test.describe('a Full view leader’s report controls', () => {
   const ROW = [
@@ -814,29 +817,24 @@ test.describe('a Full view leader’s report controls', () => {
         await expect(page.getByRole('region', { name: 'Your Disciples' })).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
 
-        // Weekly, Monthly and Yearly on the line beside Cell Group and DCC (decision 0443); no
-        // Figures for (decision 0380).
+        // Weekly, Monthly and Yearly beside the month, in one bar, and no Cell Group / DCC switch
+        // (decision 0483); no Figures for (decision 0380).
         await expect(page.getByRole('combobox', { name: 'Figures for' })).toHaveCount(0);
-        const tops = await Promise.all(
-          [
-            page.getByRole('group', { name: 'Which attendance' }),
-            page.getByRole('group', { name: 'Report period' }),
-          ].map(async (control) => Math.round((await control.boundingBox())!.y)),
-        );
-        // One row is one bottom edge.
-        const bottoms = await Promise.all(
-          [
-            page.getByRole('group', { name: 'Which attendance' }),
-            page.getByRole('group', { name: 'Report period' }),
-          ].map(async (control) => {
-            const box = (await control.boundingBox())!;
-            return Math.round(box.y + box.height);
-          }),
-        );
+        await expect(page.getByRole('group', { name: 'Which attendance' })).toHaveCount(0);
+        const controls = [
+          page.getByRole('group', { name: 'Report period' }),
+          page.getByRole('button', { name: 'The period before' }),
+        ];
+        const boxes = await Promise.all(controls.map(async (control) => (await control.boundingBox())!));
+        // Both inside the one bar.
+        const bar = page.getByRole('group', { name: 'Report period' }).locator('xpath=..');
+        await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
+        const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
         if (row) {
-          expect(Math.abs(bottoms[0] - bottoms[1]), `${path}: the two controls share one row`).toBeLessThanOrEqual(1);
+          // One row is one centre line.
+          expect(Math.abs(middle(boxes[0]) - middle(boxes[1])), `${path}: the two controls share one row`).toBeLessThanOrEqual(2);
         } else {
-          expect(tops[0]).toBeLessThan(tops[1]);
+          expect(boxes[0].y + boxes[0].height).toBeLessThanOrEqual(boxes[1].y);
         }
 
         const { scrollWidth, clientWidth } = await page.evaluate(() => ({
@@ -893,17 +891,21 @@ test.describe('the tabs at a phone, a tablet and a desktop', () => {
             }),
           );
           const row = await which.evaluate((nav) => nav.getBoundingClientRect().width);
-          const columns = layout.width < 640 ? 2 : Math.min(tabs.length, Math.floor(row / 208));
+          // A Full view leader's five are one row from `lg` (decision 0483), and on a phone the
+          // odd fifth fills its row (decision 0420).
+          const five = tabs.length === 5;
+          const columns =
+            layout.width < 640 ? 2 : five && layout.width >= 1024 ? 5 : Math.min(tabs.length, Math.floor(row / 208));
 
           expect(new Set(boxes.map((box) => box.left)).size, `${tab.path}: columns`).toBe(columns);
           for (const box of boxes) {
             expect(box.height, `${box.text} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
             expect(box.scroll, `${box.text} does not fit its tab`).toBeLessThanOrEqual(box.client);
-            if (layout.width >= 640) {
+            if (layout.width >= 640 && !(five && layout.width >= 1024)) {
               expect(Math.abs(box.width - 208), `${box.text} is ${box.width}px wide`).toBeLessThanOrEqual(1);
             }
           }
-          const widths = boxes.map((box) => box.width);
+          const widths = (five && layout.width < 640 ? boxes.slice(0, -1) : boxes).map((box) => box.width);
           expect(Math.max(...widths) - Math.min(...widths), `${tab.path}: unequal tabs`).toBeLessThanOrEqual(1);
 
           const { scrollWidth, clientWidth } = await page.evaluate(() => ({

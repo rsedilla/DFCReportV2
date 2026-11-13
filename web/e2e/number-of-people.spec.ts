@@ -44,8 +44,10 @@ test.describe('a Full view leader’s # of People', () => {
     expect(asked[0]).toMatchObject({ period: '2026-10-01' });
 
     const tabs = page.getByRole('navigation', { name: 'Which report' });
+    // CG and DCC Attendance as two tabs (decision 0483).
     await expect(tabs.getByRole('link')).toHaveText([
-      'Attendance',
+      'CG Attendance',
+      'DCC Attendance',
       '# of Cell Groups',
       '# of Cell Leaders',
       '# of People',
