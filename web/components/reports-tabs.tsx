@@ -258,10 +258,11 @@ const PERIOD_LABEL: Record<RangeKind, string> = {
 /**
  * The lengths each tab offers beside its last twelve months (decision 0398): Attendance's
  * Weekly and Monthly for every reader, the quarter and the calendar year withdrawn (decision
- * 0443), and a count's month.
+ * 0443), and a count's month. **The two Senior Pastors' Attendance has the month alone**
+ * (decision 0485): they read the church by month, and a week is what a leader follows up.
  */
-export function periodsOf(tab: ReportTab): readonly RangeKind[] {
-  return tab === 'cells' || tab === 'dcc' ? ['WEEK', 'MONTH'] : ['MONTH'];
+export function periodsOf(tab: ReportTab, seniorPastor = false): readonly RangeKind[] {
+  return (tab === 'cells' || tab === 'dcc') && !seniorPastor ? ['WEEK', 'MONTH'] : ['MONTH'];
 }
 
 /** Yearly's small graph, so the button says what it opens (owner, 2026-11-05). */
@@ -382,7 +383,7 @@ export function ReportViewSwitch({
   const path = SENIOR_PASTOR_TABS.find((each) => each.key === tab)!.path;
 
   const options: { key: RangeKind | 'TREND'; label: string; icon?: ReactNode }[] = [
-    ...periodsOf(tab).map((key) => ({ key, label: PERIOD_LABEL[key] })),
+    ...periodsOf(tab, seniorPastor).map((key) => ({ key, label: PERIOD_LABEL[key] })),
     { key: 'TREND', label: 'Yearly', icon: GRAPH_ICON },
   ];
 
