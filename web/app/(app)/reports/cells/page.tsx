@@ -17,13 +17,14 @@ import {
   ReportsTabs,
   ReportViewSwitch,
 } from '@/components/reports-tabs';
+import { FiguresForSwitch } from '@/components/figures-for-switch';
 import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { useKeptLeader } from '@/lib/merged-leader';
-import { getCellTwelve } from '@/lib/reports';
+import { getCellTwelve, type ReportNetwork } from '@/lib/reports';
 import { networkLabel } from '@/lib/people';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
@@ -74,7 +75,16 @@ export function CellReport() {
   const mergedFrom = useKeptLeader(leader);
   // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
   const branchReader = isBranchReader(me.data);
-  const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
+  // The Senior Pastors' Figures for chooses a Network (decision 0486), counted by the Cell's
+  // Network (section 20, decision 0469); it narrows a whole-church grant and never widens one.
+  const networkParam = search.get('network');
+  const network: ReportNetwork | null =
+    seniorPastor && (networkParam === 'MENS' || networkParam === 'WOMENS') ? networkParam : null;
+  const subject = leader
+    ? ({ kind: 'LEADER', person_id: leader } as const)
+    : network !== null && wholeChurch
+      ? ({ kind: 'NETWORK', network } as const)
+      : own;
 
   const twelveKey = ['cell-twelve', kind, start, subject] as const;
   const twelve = useQuery({
@@ -128,8 +138,15 @@ export function CellReport() {
             asOfToday
             onChange={period.choosePeriodStart}
           />
-          {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
-          {branchReader ? null : (
+          {/* A Full view leader reads their own branch only, with no Figures for (decision 0380).
+              The Senior Pastors' is All, Men's and Women's, a Primary opening by name (0486). */}
+          {branchReader ? null : seniorPastor ? (
+            <FiguresForSwitch
+              network={network}
+              leaderOpen={leader !== null}
+              onChange={(next) => go({ network: next, leader: null })}
+            />
+          ) : (
           <div>
             <label htmlFor="cell-scope" className="field-label block">
               Figures for

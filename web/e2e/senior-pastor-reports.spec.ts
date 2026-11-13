@@ -273,6 +273,33 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(tabs.nth(1)).toHaveAttribute('aria-current', 'page');
   });
 
+  // Figures for is three buttons, and a Primary opens by their name (decision 0486).
+  test('Figures for is All, Men’s and Women’s, with no list of names, on both Attendance tabs (decision 0486)', async ({
+    page,
+  }) => {
+    await attendance(page);
+
+    for (const path of ['/reports/cells', '/reports/dcc']) {
+      await page.goto(path);
+      const figuresFor = page.getByRole('group', { name: 'Figures for' });
+      await expect(figuresFor.getByRole('button')).toHaveText(['All', 'Men’s', 'Women’s']);
+      await expect(figuresFor.getByRole('button', { name: 'All, the whole church' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByRole('combobox', { name: 'Figures for' })).toHaveCount(0);
+
+      await figuresFor.getByRole('button', { name: 'Men’s Network', exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${path}\\?network=MENS$`));
+      await expect(figuresFor.getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await figuresFor.getByRole('button', { name: 'All, the whole church' }).click();
+      await expect(page).toHaveURL(new RegExp(`${path}$`));
+    }
+  });
+
   test('on a phone a Primary’s name is short, and the link is named short then full (decision 0451)', async ({
     page,
   }) => {

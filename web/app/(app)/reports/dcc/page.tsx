@@ -18,6 +18,7 @@ import {
   ReportsTabs,
   ReportViewSwitch,
 } from '@/components/reports-tabs';
+import { FiguresForSwitch } from '@/components/figures-for-switch';
 import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
@@ -142,8 +143,15 @@ export function DccReport() {
             asOfToday
             onChange={period.choosePeriodStart}
           />
-          {/* A Full view leader reads their own branch only, with no Figures for (decision 0380). */}
-          {branchReader ? null : (
+          {/* A Full view leader reads their own branch only, with no Figures for (decision 0380).
+              The Senior Pastors' is All, Men's and Women's, a Primary opening by name (0486). */}
+          {branchReader ? null : seniorPastor ? (
+            <FiguresForSwitch
+              network={network}
+              leaderOpen={leader !== null}
+              onChange={(next) => go({ network: next, leader: null })}
+            />
+          ) : (
           <div>
             <label htmlFor="dcc-scope" className="field-label block">
               Figures for
