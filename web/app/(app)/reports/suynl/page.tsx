@@ -297,7 +297,7 @@ function ReadinessTable({ readiness, opened }: { readiness: SuynlReadiness; open
 
           {readiness.elsewhere === null || readiness.elsewhere.people === 0 ? null : (
             <tr className={rowClasses}>
-              <td className="text-muted px-3 py-3 italic">In neither pastor’s branch</td>
+              <td className="text-muted px-3 py-3 italic">Under neither pastor</td>
               {figureCells(readiness.elsewhere)}
             </tr>
           )}
@@ -334,7 +334,7 @@ function RowPeople({ leader }: { leader: string }) {
 /** The people behind a row, grouped by column, each with their lessons. */
 function People({ members }: { members: ReadinessPerson[] }) {
   if (members.length === 0) {
-    return <span className="text-muted">Nobody in this branch is counted.</span>;
+    return <span className="text-muted">Nobody here is counted.</span>;
   }
   const groups = [
     ['Graduated', members.filter((person) => person.lessons >= 10)],

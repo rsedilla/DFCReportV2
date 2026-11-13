@@ -663,7 +663,7 @@ const SCANS = [
       // nobody (decision 0405), and only the candidate in scope is linked.
       await expect(
         page.getByText(
-          'Someone with a similar name is already recorded in another branch. Ask the Admin before adding them.',
+          'Someone with a similar name is already recorded under another leader. Ask the Admin before adding them.',
         ),
       ).toHaveCount(1);
       await expect(page.getByText('Zenaida Cruz Ocampo')).toHaveCount(0);
@@ -1250,7 +1250,7 @@ const SCANS = [
       await mockBranchTrends(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'CG Attendance · Your branch' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'CG Attendance · Your Disciples' })).toBeVisible();
       await expect(page.getByText('Show the figures')).toBeVisible();
     },
   },
@@ -1477,7 +1477,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('button', { name: 'Honorio Villanueva · Men’s' })).toBeVisible();
-      await expect(page.getByText('In neither pastor’s branch')).toBeVisible();
+      await expect(page.getByText('Under neither pastor')).toBeVisible();
     },
   },
   {
@@ -2116,7 +2116,7 @@ const TARGET_SWEEP = [
     name: 'last 12 months, own branch',
     route: '/trends',
     settleRole: 'heading' as const,
-    settle: 'CG Attendance · Your branch',
+    settle: 'CG Attendance · Your Disciples',
     minimum: 9,
   },
   {

@@ -352,7 +352,7 @@ test.describe('a person’s Cell', () => {
     ],
     [
       'SCOPE_DENIED',
-      'You move members only between Cells of your own branch. Other moves are made by the Admin.',
+      'You move members only between Cells in your care. Other moves are made by the Admin.',
     ],
   ] as const) {
     test(`a move refused ${code} says who makes it, in plain words (decision 0357)`, async ({
@@ -472,7 +472,7 @@ test.describe('editing a person', () => {
     await expect(box.getByText(/^Check before saving\./)).toBeVisible();
     await expect(
       box.getByText(
-        'Someone with a similar name is already recorded in another branch. Ask the Admin before saving.',
+        'Someone with a similar name is already recorded under another leader. Ask the Admin before saving.',
       ),
     ).toBeVisible();
     await expect(box.getByText(PERSON_IN_SCOPE.full_name)).toHaveCount(0);
@@ -495,7 +495,7 @@ test.describe('editing a person', () => {
     ).toHaveCount(1);
     await expect(
       box.getByText(
-        'Someone with a similar name in another branch was archived. If this is them, ask the Admin to restore them.',
+        'Someone with a similar name under another leader was archived. If this is them, ask the Admin to restore them.',
       ),
     ).toHaveCount(1);
     const inScope = ARCHIVED_MATCHES[1] as { id: string; full_name: string };
@@ -869,10 +869,10 @@ test.describe('who pastors a person', () => {
     await dialog.getByLabel('Search for a leader by name').fill('ann');
     await dialog.getByRole('button', { name: 'Search people' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
-    await expect(dialog.getByText('Moves outside your branch are made by the Admin.')).toHaveCount(0);
+    await expect(dialog.getByText('Moves to anyone outside your care are made by the Admin.')).toHaveCount(0);
     await dialog.getByRole('button', { name: `Move under ${PERSON_WITHHELD.full_name}` }).click();
 
-    await expect(dialog.getByText('Moves outside your branch are made by the Admin.')).toBeVisible();
+    await expect(dialog.getByText('Moves to anyone outside your care are made by the Admin.')).toBeVisible();
   });
 
   test('offers no move to an account that may not move people', async ({ page }) => {

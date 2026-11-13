@@ -240,7 +240,7 @@ function details(request: ApprovalRequest, wholeChurch: boolean): [string, React
       : day(request.requested_at),
   ]);
   if (wholeChurch && request.branch_of) {
-    rows.push(['Branch', `${request.branch_of.full_name}’s`]);
+    rows.push(['Under', request.branch_of.full_name]);
   }
   return rows;
 }

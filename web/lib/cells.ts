@@ -1023,7 +1023,7 @@ export function membershipFailure(error: unknown, personName: string, cellHandle
       message:
         error.code === 'CAPABILITY_DENIED'
           ? 'You can add somebody who is in no Cell. Moves between Cells are made by the Primary.'
-          : 'You move members only between Cells of your own branch. Other moves are made by the Admin.',
+          : 'You move members only between Cells in your care. Other moves are made by the Admin.',
       aboutInput: false,
     };
   }

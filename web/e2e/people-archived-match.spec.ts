@@ -26,7 +26,7 @@ test.describe('an archived match (decisions 0404 and 0405)', () => {
     await expect(box).toBeVisible();
     const elsewhere = box.getByRole('listitem').filter({
       hasText:
-        'Someone with a similar name in another branch was archived. Ask the Admin to restore them instead of adding them again.',
+        'Someone with a similar name under another leader was archived. Ask the Admin to restore them instead of adding them again.',
     });
     const inScope = box.getByRole('listitem').filter({ hasText: IN_SCOPE.full_name });
 
@@ -75,7 +75,7 @@ test.describe('an archived match (decisions 0404 and 0405)', () => {
     await expect(box.getByRole('listitem')).toHaveCount(2);
     await expect(
       box.getByText(
-        'Someone with a similar name is already recorded in another branch. Ask the Admin before adding them.',
+        'Someone with a similar name is already recorded under another leader. Ask the Admin before adding them.',
       ),
     ).toBeVisible();
     await expect(box.getByText('Archived', { exact: true })).toHaveCount(1);

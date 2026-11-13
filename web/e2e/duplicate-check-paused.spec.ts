@@ -10,7 +10,7 @@ import { PERSON_IN_SCOPE, mockPeople, mockPossibleMatches, mockSignedIn } from '
  */
 
 const PAUSED_TEXT =
-  'It runs again by itself in a minute and shows any match it finds, in your branch or another.';
+  'It runs again by itself in a minute and shows any match it finds, in your care or elsewhere in the church.';
 
 /**
  * Answers the check as `mode` says: refused for its limit, held unanswered, failed, or passed to the

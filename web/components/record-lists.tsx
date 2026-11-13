@@ -1160,7 +1160,7 @@ export function PendingCgPane({
         <p className="text-muted text-sm">
           {/* Points at what each row shows rather than asking which are "yours" (decision
               0477); a whole-church reader reads "in the church" (decision 0436). */}
-          Cell Group meetings {wholeChurch ? 'in the church' : 'in your branch'} that are not
+          Cell Group meetings {wholeChurch ? 'in the church' : 'in your care'} that are not
           recorded yet. Tap <strong>Record</strong> where it shows; for the others, remind the
           leader named to record them.
         </p>
@@ -1180,7 +1180,7 @@ export function PendingCgPane({
             rows={rows}
             empty={
               filter.leader !== null
-                ? `Nothing still to record in ${filter.leader.name}’s branch.`
+                ? `Nothing still to record for those in ${filter.leader.name}’s care.`
                 : filter.late
                 ? 'No Cell you oversee has a meeting past its deadline.'
                 : filter.q !== '' || filter.network !== null
@@ -1221,7 +1221,7 @@ export function PendingDccPane({
         </h2>
         <p className="text-muted text-sm">
           {/* As CG Records Due's (decision 0477). */}
-          DCC Sundays {wholeChurch ? 'in the church' : 'in your branch'} that are not recorded
+          DCC Sundays {wholeChurch ? 'in the church' : 'in your care'} that are not recorded
           yet. Tap <strong>Record</strong> where it shows; for the others, remind the leader
           named to record them.
         </p>
@@ -1241,7 +1241,7 @@ export function PendingDccPane({
             rows={rows}
             empty={
               filter.leader !== null
-                ? `Nothing still to record in ${filter.leader.name}’s branch.`
+                ? `Nothing still to record for those in ${filter.leader.name}’s care.`
                 : filter.late
                 ? 'No leader you oversee has a Sunday past its deadline.'
                 : filter.q !== '' || filter.network !== null

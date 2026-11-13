@@ -277,7 +277,7 @@ test.describe('My 12 on DCC', () => {
     await expect(table.getByRole('link')).toHaveCount(0);
     // The reader alone, labelled "You" with no Cell count: nobody records their own DCC.
     expect(await cellsOf(rows.nth(3))).toEqual(['You', '1', '0', '1', '0', '0', '0']);
-    expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual(['Elsewhere in this branch', '+2']);
+    expect((await cellsOf(rows.nth(4))).slice(0, 2)).toEqual(['Others in your care', '+2']);
     const totalRow = await cellsOf(rows.nth(5));
     expect(totalRow).toEqual(['Total', '10', '3', '2', '1', '1', '3']);
     await expect(table.getByText('Counted under more than one leader', { exact: true })).toHaveCount(0);

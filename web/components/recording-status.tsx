@@ -280,7 +280,7 @@ export function LeaderRecordingStatusPanel({
               <div className="mt-6">
                 <h3 className="text-base font-bold tracking-tight">Others</h3>
                 <p className="text-muted mt-1 max-w-2xl text-sm">
-                  Leaders counted in your branch for this {unit} who cannot be named here.
+                  Leaders in your care counted for this {unit} who cannot be named here.
                 </p>
                 <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                   <dt className="text-muted">Cell group recorded</dt>
@@ -546,7 +546,7 @@ function RowFigure({
       type="button"
       onClick={() => onPending(list, { id: row.leader.id, name })}
       // The figure leads the name, so what is seen is what is said (2.5.3).
-      aria-label={`${text}: ${name}’s branch in ${where}`}
+      aria-label={`${text}: those in ${name}’s care, in ${where}`}
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 cursor-pointer items-center text-left underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       {text}

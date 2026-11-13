@@ -141,7 +141,7 @@ export function MoveLeaderDialog({
         <FailureNotice failure={move.isError ? describeFailure(move.error) : null} />
         {/* A move outside the mover's branch is the Admin's (decision 0356, point 4). */}
         {move.error instanceof ApiRequestError && move.error.code === 'SCOPE_DENIED' ? (
-          <p className="mt-2 text-sm">Moves outside your branch are made by the Admin.</p>
+          <p className="mt-2 text-sm">Moves to anyone outside your care are made by the Admin.</p>
         ) : null}
       </div>
 

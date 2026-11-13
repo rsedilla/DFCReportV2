@@ -1957,7 +1957,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard?list=behind');
     await expect(
       page.getByText(
-        'Cell Group meetings in your branch that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
+        'Cell Group meetings in your care that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
         { exact: true },
       ),
     ).toBeVisible();
@@ -1965,7 +1965,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard?list=dcc');
     await expect(
       page.getByText(
-        'DCC Sundays in your branch that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
+        'DCC Sundays in your care that are not recorded yet. Tap Record where it shows; for the others, remind the leader named to record them.',
         { exact: true },
       ),
     ).toBeVisible();

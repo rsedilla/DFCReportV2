@@ -41,16 +41,16 @@ const TAB_OF: Record<TrendFigure, ReportTab> = {
 
 /** The same five names as Reports (owner, 2026-10-09); a `#` label keeps its words as its name. */
 const FIGURES: readonly { key: TrendFigure; label: string; name?: string; what: string }[] = [
-  { key: 'CG', label: 'CG Attendance', what: 'the different people who came to a Cell Group in the month' },
-  { key: 'DCC', label: 'DCC Attendance', what: 'the different people who came to DCC in the month' },
-  { key: 'CELLS', label: '# of Cell Groups', name: 'Number of Cell Groups', what: 'the Cell Groups running on the month’s last day' },
+  { key: 'CG', label: 'CG Attendance', what: 'How many people came to a Cell Group each month, each person counted once.' },
+  { key: 'DCC', label: 'DCC Attendance', what: 'How many people came to DCC each month, each person counted once.' },
+  { key: 'CELLS', label: '# of Cell Groups', name: 'Number of Cell Groups', what: 'How many Cell Groups were running at the end of each month.' },
   {
     key: 'CELL_LEADERS',
     label: '# of Cell Leaders',
     name: 'Number of Cell Leaders',
-    what: 'the people leading a Cell on the month’s last day',
+    what: 'How many people were leading a Cell at the end of each month.',
   },
-  { key: 'PEOPLE', label: '# of People', name: 'Number of people', what: 'everyone in the branch on the month’s last day' },
+  { key: 'PEOPLE', label: '# of People', name: 'Number of people', what: 'How many people there were at the end of each month.' },
 ];
 
 /**
@@ -147,8 +147,8 @@ function TrendsScreen() {
             >
               <option value="">
                 {roster.data?.network
-                  ? 'The Network and its root’s branch'
-                  : 'Whole Church and each Network root’s branch'}
+                  ? 'The Network and its pastor’s disciples'
+                  : 'Whole Church and each pastor’s disciples'}
               </option>
               {(roster.data?.tables ?? []).map((table) => (
                 <optgroup
@@ -274,7 +274,7 @@ function TrendsChart({
   const single = data.lines.length === 1 && data.lines[0].leader !== null;
   const all = data.lines.map((line, index) => ({
     index,
-    name: ownBranch ? 'Your branch' : lineName(line, single),
+    name: ownBranch ? 'Your Disciples' : lineName(line, single),
     church: line.leader === null,
     values: line.values,
     // Lines are told apart by weight and dash as well as colour, because lines cross (1.4.1).
@@ -354,9 +354,9 @@ function TrendsChart({
         <div>
           <h2 id="trends-heading" className="text-base font-bold tracking-tight">
             {label}
-            {ownBranch ? ' · Your branch' : single ? ` · ${all[0].name} and their branch` : null}
+            {ownBranch ? ' · Your Disciples' : single ? ` · ${all[0].name}’s Disciples` : null}
           </h2>
-          <p className="text-muted text-xs">Each point counts {what}.</p>
+          <p className="text-muted text-xs">{what}</p>
         </div>
         {ownBranch ? null : (
         <ViewSwitch
