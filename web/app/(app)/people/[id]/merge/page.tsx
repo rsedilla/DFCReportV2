@@ -20,7 +20,8 @@ import { getMergePreview, mergePerson } from '@/lib/merge';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { formatMobile } from '@/lib/mobile';
-import { getPerson } from '@/lib/people';
+import { EARLIEST_BIRTHDAY, getPerson } from '@/lib/people';
+import { todayInManila } from '@/lib/reporting-month';
 
 /** The longest reason the API takes. */
 const REASON_MAX = 500;
@@ -251,7 +252,13 @@ function copies(
 ): string[] {
   const lines: string[] = [];
   if (kept.birth_date === null && other.birth_date !== null) {
-    lines.push('The birthday the kept record lacks is copied over.');
+    // Decision 0487: a birthday outside 1900 to today is not copied.
+    const inRange = other.birth_date >= EARLIEST_BIRTHDAY && other.birth_date <= todayInManila();
+    lines.push(
+      inRange
+        ? 'The birthday the kept record lacks is copied over.'
+        : 'The other record’s birthday is not a possible date, so it is not copied. Add the right one later.',
+    );
   }
   if (kept.mobile_number === null && other.mobile_number !== null) {
     lines.push('The mobile number the kept record lacks is copied over.');

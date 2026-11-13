@@ -16,8 +16,15 @@ from 1 January 1900 to today, and the Encounter season boxes stop at 9999. The g
 the sex correction's date already stopped at today. The server stays the check (Section 7); the box
 only stops the mistake before Save.
 
-A birthday already recorded outside the range stays until an edit sends a corrected one. Edit
+A future birthday recorded before this ruling stays until an edit sends a corrected one. Edit
 details sends the recorded birthday with every save, so the server refuses the save and asks for it.
+
+**A merge does not copy a birthday outside the range.** Person Merge copies a birthday the kept
+record lacks from the duplicate; where the duplicate's is outside 1 January 1900 to today, it is
+not copied and the kept record stays without one, so somebody adds the right one later by an edit.
+The merge goes through, and the merge screen says before it that the birthday is not copied. Owner ruling, 2026-11-14, on a Stop Condition `architecture-guardian`
+raised: Section 3 never fills a birthday in for the sake of having one, and refusing the merge
+would hold a duplicate in every count over a detail.
 
 ## Why
 
@@ -27,12 +34,14 @@ refused, by the `YYYY-MM-DD` check, but only after Save. A birthday in the futur
 one before 1900 is almost always a two-digit year expanded wrongly, which is what the import already
 warned of.
 
-## What is owed
+## The database constraint
 
-**The 1900 floor as a database constraint**, which the Definition of Done asks of an invariant a
-constraint can express. The Migration policy requires the live data to be checked first, so it is
-owed until somebody confirms on the server that `SELECT count(*) FROM persons WHERE birth_date <
-'1900-01-01'` answers 0. The future half cannot be a constraint, because today moves.
+**The 1900 floor is a database constraint**, `persons_birth_date_not_before_1900`, added by
+migration `0047_birth_date_floor.sql`, which the Definition of Done asks of an invariant a constraint
+can express. The Migration policy requires the live data to be checked first: on 2026-11-14 the
+server answered 0 to `SELECT count(*) FROM persons WHERE birth_date < '1900-01-01'`, so the
+constraint is validated rather than added `NOT VALID`. The future half cannot be a constraint,
+because today moves.
 
 ---
 

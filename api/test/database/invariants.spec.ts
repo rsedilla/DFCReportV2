@@ -408,6 +408,26 @@ describe('the database enforces the section 5 invariants', () => {
     });
   });
 
+  describe('a birthday is not before 1900 (section 3, decision 0487)', () => {
+    it('refuses a birthday before 1 January 1900 and admits that day', async () => {
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await expect(
+        db
+          .updateTable('persons')
+          .set({ birth_date: '1899-12-31' })
+          .where('id', '=', person.id)
+          .execute(),
+      ).rejects.toThrow(/persons_birth_date_not_before_1900/);
+
+      await db
+        .updateTable('persons')
+        .set({ birth_date: '1900-01-01' })
+        .where('id', '=', person.id)
+        .execute();
+    });
+  });
+
   describe('history is never deleted (principle 12)', () => {
     it('refuses a DELETE on each effective-dated table', async () => {
       // A DELETE was the one path around every constraint in the migration: both
