@@ -18,6 +18,7 @@ import {
 } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
+import { IsBirthdayInRange } from '../../common/time/is-birthday-in-range';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type { CivilStatus, NetworkName, Sex } from '../../database/schema';
@@ -119,6 +120,8 @@ export class PersonFieldsDto {
    */
   @ValidateIf((body: PersonFieldsDto) => body.birth_date_not_given !== true)
   @IsManilaCalendarDate()
+  // From 1900 to today (section 3, decision 0487).
+  @IsBirthdayInRange()
   birth_date?: string;
 
   /** *Not given yet* (decision 0328). Refused alongside a birthday. Nothing stores it. */
@@ -224,6 +227,8 @@ export class EditPersonDto {
    */
   @ValidateIf((body: EditPersonDto) => body.birth_date !== undefined)
   @IsManilaCalendarDate()
+  // From 1900 to today (section 3, decision 0487).
+  @IsBirthdayInRange()
   birth_date?: string;
 
   @IsOptional()

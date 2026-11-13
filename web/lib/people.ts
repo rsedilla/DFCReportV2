@@ -98,6 +98,9 @@ export interface PersonPage {
  * least two letters of a name.", which the screens show as the API words it. Repeating
  * that normalization here would be a second copy of a rule the API owns.
  */
+/** The earliest birthday a person may have (SKILL.md section 3, decision 0487); the server refuses earlier. */
+export const EARLIEST_BIRTHDAY = '1900-01-01';
+
 export const MINIMUM_SEARCH_LENGTH = 2;
 
 /** The shortest church-wide search the API accepts, counted the same way (decision 0303). */

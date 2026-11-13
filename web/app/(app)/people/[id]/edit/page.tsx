@@ -27,6 +27,7 @@ import { formatMobile } from '@/lib/mobile';
 import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
+  EARLIEST_BIRTHDAY,
   CIVIL_STATUS_OPTIONS,
   editPerson,
   getPerson,
@@ -37,6 +38,7 @@ import {
   type PersonEdit,
   type PersonFull,
 } from '@/lib/people';
+import { todayInManila } from '@/lib/reporting-month';
 
 /**
  * Editing a person's own descriptive fields (SKILL.md sections 3 and 7).
@@ -384,6 +386,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
               <Field
                 label="Birthday (optional)"
                 type="date"
+                // From 1900 to today, so the year takes four digits (decision 0487).
+                min={EARLIEST_BIRTHDAY}
+                max={todayInManila()}
                 name="birth_date"
                 autoComplete="off"
                 value={values.birth_date}

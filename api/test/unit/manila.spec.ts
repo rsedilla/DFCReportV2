@@ -1,4 +1,6 @@
 import {
+  EARLIEST_BIRTHDAY,
+  birthdayOutOfRange,
   isCalendarDate,
   manilaDayAfter,
   manilaDayOf,
@@ -257,5 +259,21 @@ describe('Asia/Manila dates and instants (section 20)', () => {
         }
       }
     });
+  });
+});
+
+// A birthday is a day from 1900 to today in Manila (section 3, decision 0487).
+describe('birthdayOutOfRange', () => {
+  const today = '2026-11-13';
+
+  it('accepts the two ends and a day between', () => {
+    expect(birthdayOutOfRange(EARLIEST_BIRTHDAY, today)).toBeNull();
+    expect(birthdayOutOfRange(today, today)).toBeNull();
+    expect(birthdayOutOfRange('1985-06-15', today)).toBeNull();
+  });
+
+  it('refuses tomorrow and the day before 1900, each with its reason', () => {
+    expect(birthdayOutOfRange('2026-11-14', today)).toBe('A birthday cannot be in the future.');
+    expect(birthdayOutOfRange('1899-12-31', today)).toBe('A birthday cannot be before 1900.');
   });
 });

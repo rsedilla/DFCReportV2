@@ -26,7 +26,7 @@
 import { createHash } from 'node:crypto';
 
 import { type Candidate, findCandidates, normalizeName } from '../../people/duplicate-matching';
-import { isCalendarDate } from '../../common/time/manila';
+import { EARLIEST_BIRTHDAY, isCalendarDate } from '../../common/time/manila';
 
 /**
  * The columns, in order. Section 2's ruling fixes `row_id` and `leader_row_id`;
@@ -618,13 +618,15 @@ function checkBirthDate(row: TreeRow, add: (finding: Finding) => void, today: st
     });
     return;
   }
-  if (birthDate < '1900-01-01') {
+  // Refused since decision 0487, which made 1900 the earliest birthday anywhere (section 3).
+  if (birthDate < EARLIEST_BIRTHDAY) {
     add({
-      severity: 'warning',
+      severity: 'error',
       code: 'BIRTH_DATE_IMPLAUSIBLE',
       line,
       rowId,
-      message: 'birth_date is before 1900, which is usually a two-digit year expanded wrongly.',
+      message:
+        'birth_date is before 1900, which is usually a two-digit year expanded wrongly, and no birthday may be (section 3).',
       detail: birthDate,
     });
   }
