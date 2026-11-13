@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-12, the trigger being decision 0480: of 479 files, 478 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0480 each moved the first two and
+2026-11-12, the trigger being decision 0481: of 480 files, 479 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0481 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-12 and triggered by 0480, and was left stale by 0481 the same day. The one before that was dated
 2026-11-12 and triggered by 0479, and was left stale by 0480 the same day. The one before that was dated
 2026-11-12 and triggered by 0478, and was left stale by 0479 the same day. The one before that was dated
 2026-11-12 and triggered by 0477, and was left stale by 0478 the same day. The one before that was dated
@@ -1004,6 +1005,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-12 — [*As of today* names the day](docs/decisions/0478-as-of-today-names-the-day.md)
 - 2026-11-12 — [Four list lines in everyday words](docs/decisions/0479-four-list-lines-in-everyday-words.md)
 - 2026-11-12 — [The Senior Pastors' Record is Recording Progress alone](docs/decisions/0480-the-senior-pastors-record-is-recording-progress-alone.md)
+- 2026-11-12 — [The Senior Pastors' Attendance is two tabs](docs/decisions/0481-the-senior-pastors-attendance-is-two-tabs.md)
 
 ### Open — awaiting a ruling
 
