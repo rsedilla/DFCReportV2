@@ -71,13 +71,40 @@ export function churchCounts(period: string, current: boolean) {
   };
 }
 
-/** Answers every month as {@link churchCounts}, October 2026 being current; returns the periods asked. */
+/**
+ * One Network's counts (decision 0490): its total and its root's table, the two Networks adding
+ * up to {@link churchCounts}'s whole church, field by field.
+ */
+export function networkCounts(period: string, current: boolean, network: 'MENS' | 'WOMENS') {
+  const church = churchCounts(period, current);
+  return {
+    ...church,
+    network,
+    whole_church: network === 'MENS' ? figures([0, 2, 1], 3, 20) : figures([1, 1, 0], 2, 16),
+    tables: church.tables.filter((table) => table.network === network),
+    others: network === 'MENS' ? figures([0, 0, 1], 1, 3) : figures([0, 0, 0], 0, 0),
+  };
+}
+
+/**
+ * Answers every month as {@link churchCounts}, or {@link networkCounts} where one Network is
+ * asked, October 2026 being current; returns the periods asked, and each Network asked as
+ * `period|network`.
+ */
 export async function mockChurchCounts(page: Page): Promise<string[]> {
   const asked: string[] = [];
   await page.route('**/api/v1/reports/church-counts?*', (route) => {
-    const period = new URL(route.request().url()).searchParams.get('period') ?? '2026-10-01';
-    asked.push(period);
-    return route.fulfill(json(churchCounts(period, period === '2026-10-01')));
+    const params = new URL(route.request().url()).searchParams;
+    const period = params.get('period') ?? '2026-10-01';
+    const network = params.get('network');
+    asked.push(network ? `${period}|${network}` : period);
+    return route.fulfill(
+      json(
+        network === 'MENS' || network === 'WOMENS'
+          ? networkCounts(period, period === '2026-10-01', network)
+          : churchCounts(period, period === '2026-10-01'),
+      ),
+    );
   });
   return asked;
 }

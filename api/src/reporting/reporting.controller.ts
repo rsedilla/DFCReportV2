@@ -994,7 +994,13 @@ export class ReportingController {
     @Query() query: ChurchCountsDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    const network = await this.churchOrNetworkOf(actor);
+    const own = await this.churchOrNetworkOf(actor);
+    // A Whole Church reader may ask for one Network (decision 0490); a Network Admin reads only
+    // their own.
+    if (own !== null && query.network !== undefined && query.network !== own) {
+      throw new ScopeDeniedError('This report is outside your scope.', {});
+    }
+    const network = own ?? query.network ?? null;
     const counts = await this.reporting.churchCounts(query.period, [], network);
     const { person, byName } = await this.namer(
       (counts.tables ?? []).flatMap((table) => [

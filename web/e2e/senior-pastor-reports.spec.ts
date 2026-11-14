@@ -6,6 +6,7 @@ import {
   SP_MENS_ROOT,
   SP_PRIMARIES,
   SP_WOMENS_ROOT,
+  mockBranchPeople,
   mockChurchCounts,
   mockRootLeadersTwelve,
   mockTrends,
@@ -93,6 +94,112 @@ test.describe('the Senior Pastors’ four items (decision 0488)', () => {
     await expect(
       page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
     ).toHaveText('People');
+  });
+});
+
+test.describe('People’s Men, Women and Both (decision 0490)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  async function asRoot(page: Page, rootId: string) {
+    await page.clock.setFixedTime(OCTOBER_8);
+    await mockSignedIn(page);
+    await mockScreens(page, 'SENIOR_PASTOR', { personId: rootId });
+    return mockChurchCounts(page);
+  }
+
+  const people = (page: Page) => page.getByRole('region', { name: 'Number of people' });
+  const which = (page: Page) => page.getByRole('group', { name: 'Which Network' });
+
+  test('the Bishop opens on Men, then Women, then Both, each with its total and table', async ({ page }) => {
+    const asked = await asRoot(page, SP_MENS_ROOT.id);
+
+    await page.goto('/reports/number-of-people');
+
+    await expect(which(page).getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+    await expect(which(page).getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(people(page).getByRole('heading', { name: 'Men’s Network' })).toBeVisible();
+    await expect(people(page).getByRole('definition').first()).toHaveText('20');
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toHaveCount(0);
+    await expect.poll(() => asked.includes('2026-10-01|MENS')).toBe(true);
+
+    await which(page).getByRole('button', { name: 'Women’s Network', exact: true }).click();
+    await expect(page).toHaveURL(/[?&]network=WOMENS\b/);
+    await expect(people(page).getByRole('definition').first()).toHaveText('16');
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toHaveCount(0);
+
+    await which(page).getByRole('button', { name: /^Both/ }).click();
+    await expect(page).toHaveURL(/[?&]network=BOTH\b/);
+    // Men's 20 and Women's 16 are the whole church's 36.
+    await expect(people(page).getByRole('heading', { name: 'Whole Church' })).toBeVisible();
+    await expect(people(page).getByRole('definition').first()).toHaveText('36');
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
+  });
+
+  test('Pastora opens on Women, then Men, then Both', async ({ page }) => {
+    await asRoot(page, SP_WOMENS_ROOT.id);
+
+    await page.goto('/reports/number-of-people');
+
+    await expect(which(page).getByRole('button')).toHaveText(['Women', 'Men', 'Both']);
+    await expect(which(page).getByRole('button', { name: 'Women’s Network', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(people(page).getByRole('definition').first()).toHaveText('16');
+  });
+
+  test('a Primary’s name opens their 12 here, with the way back to People', async ({ page }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    const asked = await mockBranchPeople(page);
+
+    await page.goto('/reports/number-of-people');
+    const name = page.getByRole('link', { name: SP_PRIMARIES.abad.full_name });
+    await expect(name).toHaveAttribute('href', `/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
+
+    await name.click();
+
+    await expect(page).toHaveURL(new RegExp(`leader=${SP_PRIMARIES.abad.id}`));
+    await expect.poll(() => asked.at(-1)?.leader).toBe(SP_PRIMARIES.abad.id);
+    await expect(page.getByRole('link', { name: 'Back to People' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people',
+    );
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('People');
+    // The other counts keep a name opening the person's page.
+    await page.goto('/reports/number-of-cells');
+    await expect(page.getByRole('link', { name: SP_PRIMARIES.abad.full_name })).toHaveAttribute(
+      'href',
+      `/people/${SP_PRIMARIES.abad.id}`,
+    );
+    await expect(page.getByRole('group', { name: 'Which Network' })).toHaveCount(0);
+  });
+
+  test('a Primary’s 12 opens for the month and Network on screen, and the way back keeps both', async ({
+    page,
+  }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    const asked = await mockBranchPeople(page);
+
+    await page.goto('/reports/number-of-people?network=WOMENS&month=2026-09-01');
+    const name = page.getByRole('link', { name: SP_PRIMARIES.bautista.full_name });
+    await expect(name).toHaveAttribute(
+      'href',
+      `/reports/number-of-people?leader=${SP_PRIMARIES.bautista.id}&month=2026-09-01&network=WOMENS`,
+    );
+
+    await name.click();
+
+    await expect.poll(() => asked.at(-1)).toEqual({ leader: SP_PRIMARIES.bautista.id, period: '2026-09-01' });
+    await expect(page.getByRole('link', { name: 'Back to People' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?month=2026-09-01&network=WOMENS',
+    );
   });
 });
 

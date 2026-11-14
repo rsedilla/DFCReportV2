@@ -294,6 +294,22 @@ describe('the Network Admin (decision 0469)', () => {
       expect(response.body.tables[0].network).toBe('WOMENS');
     });
 
+    it('may name their own Network on church-counts, and is refused the other (decision 0490)', async () => {
+      const own = await get(
+        networkAdmin,
+        `/reports/church-counts?period=${await thisMonth()}&network=WOMENS`,
+      );
+      const other = await get(
+        networkAdmin,
+        `/reports/church-counts?period=${await thisMonth()}&network=MENS`,
+      );
+
+      expect(own.status).toBe(200);
+      expect(own.body.network).toBe('WOMENS');
+      expect(other.status).toBe(403);
+      expect(other.body.error.code).toBe('SCOPE_DENIED');
+    });
+
     it('refuses a Leader church-counts as it always did', async () => {
       const leader = await createAccount(app, db, { person: woman, roles: ['LEADER'] });
 

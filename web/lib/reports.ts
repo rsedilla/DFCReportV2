@@ -497,9 +497,14 @@ export interface ChurchCounts {
   others: ChurchCountFigures | null;
 }
 
-export async function getChurchCounts(period: string, signal?: AbortSignal): Promise<ChurchCounts> {
+export async function getChurchCounts(
+  period: string,
+  signal?: AbortSignal,
+  /** One Network's figures, for a Whole Church reader (decision 0490). */
+  network?: 'MENS' | 'WOMENS',
+): Promise<ChurchCounts> {
   return authenticatedRequest<ChurchCounts>(
-    `/api/v1/reports/church-counts?${new URLSearchParams({ period }).toString()}`,
+    `/api/v1/reports/church-counts?${new URLSearchParams({ period, ...(network ? { network } : {}) }).toString()}`,
     { signal },
   );
 }

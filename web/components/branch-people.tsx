@@ -83,6 +83,8 @@ export function BranchCountsPanel({
   readerId,
   leader,
   month: asked,
+  backLabel = 'Back to your disciples',
+  backNetwork = null,
 }: {
   figure: CountFigure;
   readerId: string;
@@ -90,6 +92,10 @@ export function BranchCountsPanel({
   leader: string | null;
   /** The month in the address, as the first of it. */
   month: string | null;
+  /** The way back's words where a leader is open: the Senior Pastors' go back to People. */
+  backLabel?: string;
+  /** Kept on the way back: the Senior Pastors' Men, Women or Both (decision 0490). */
+  backNetwork?: string | null;
 }) {
   const go = useScreenAddress();
   const phone = usePhone();
@@ -154,8 +160,16 @@ export function BranchCountsPanel({
 
       {leader !== null ? (
         <p className="mt-4 text-sm">
-          <TextLink href={month === current ? PATH[figure] : `${PATH[figure]}?month=${month}`}>
-            Back to your disciples
+          <TextLink
+            href={(() => {
+              const query = new URLSearchParams({
+                ...(month === current ? {} : { month }),
+                ...(backNetwork ? { network: backNetwork } : {}),
+              }).toString();
+              return query ? `${PATH[figure]}?${query}` : PATH[figure];
+            })()}
+          >
+            {backLabel}
           </TextLink>
         </p>
       ) : null}

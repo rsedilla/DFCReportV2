@@ -15,7 +15,9 @@ import { monthFromQuery } from '@/lib/reporting-month';
  * decisions 0326 and 0376): everyone in a branch on a month's last day, whether or not they
  * attended. A whole-church reader, the Senior Pastors and the Admin, sees the whole church and
  * each root's direct leaders; a Full view leader sees their own branch, its names plain text
- * (decision 0364's figure, moved here from People; decision 0380).
+ * (decision 0364's figure, moved here from People; decision 0380). **The Senior Pastors also
+ * choose Men, Women or Both, and open a Primary's 12 from their name** (decision 0490), which is
+ * the Full view leader's view of that Primary's branch, with the way back to People.
  */
 export default function NumberOfPeoplePage() {
   return (
@@ -40,6 +42,16 @@ function NumberOfPeople() {
       <ReportsTabs current="number-of-people" month={monthFromQuery(month)}>
         {me.data === undefined ? (
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+        ) : wholeChurch && leader !== null && me.data.screens === 'SENIOR_PASTOR' ? (
+          // A Senior Pastor opens a Primary's 12 from their name (decision 0490).
+          <BranchCountsPanel
+            figure="PEOPLE"
+            readerId={me.data.person_id}
+            leader={leader}
+            month={month}
+            backLabel="Back to People"
+            backNetwork={params.get('network')}
+          />
         ) : wholeChurch ? (
           <ChurchCountsPanel figure="PEOPLE" month={month} />
         ) : (

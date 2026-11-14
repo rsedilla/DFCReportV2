@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-14, the trigger being decision 0489: of 488 files, 487 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0489 each moved the first two and
+2026-11-14, the trigger being decision 0490: of 489 files, 488 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0490 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-14 and triggered by 0489, and was left stale by 0490 the same day. The one before that was dated
 2026-11-14 and triggered by 0488, and was left stale by 0489 the same day. The one before that was dated
 2026-11-13 and triggered by 0487, and was left stale by 0488 the next day. The one before that was dated
 2026-11-13 and triggered by 0486, and was left stale by 0487 the same day. The one before that was dated
@@ -1022,6 +1023,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-13 — [A birthday is a day from 1900 to today](docs/decisions/0487-a-birthday-is-from-1900-to-today.md)
 - 2026-11-14 — [The Senior Pastors' screens are People, Cells, Services and Conquest](docs/decisions/0488-the-senior-pastors-screens-are-people-cells-services-and-conquest.md)
 - 2026-11-14 — [Conquest is four tabs, one per goal](docs/decisions/0489-conquest-is-four-tabs-one-per-goal.md)
+- 2026-11-14 — [The Senior Pastors' *People* is Men, Women and Both, and a Primary opens their 12](docs/decisions/0490-the-senior-pastors-people-is-men-women-and-both.md)
 
 ### Open — awaiting a ruling
 
