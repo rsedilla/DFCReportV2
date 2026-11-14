@@ -550,11 +550,13 @@ export function notAdded(kind: RangeKind): string {
 export function RootLeadersTwelve({
   twelve,
   openHref,
+  title = 'Whole Church',
 }: {
   twelve: Omit<CellTwelve, 'own' | 'coverage'>;
   kind: RangeKind;
   openHref: (leaderId: string) => string;
   where?: string;
+  title?: string;
 }) {
   const cell = 'px-3 py-3 text-right tabular-nums';
   const roots = twelve.roots ?? [];
@@ -566,7 +568,7 @@ export function RootLeadersTwelve({
     // decision 0451).
     <section aria-labelledby="root-leaders-heading">
       <h2 id="root-leaders-heading" className="field-label">
-        Whole Church
+        {title}
       </h2>
 
       <dl className="mt-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
@@ -646,7 +648,7 @@ export function RootLeadersTwelve({
         );
       })}
 
-      <Table caption="Under both tables" className="mt-5">
+      <Table caption={roots.length === 1 ? 'Under the table' : 'Under both tables'} className="mt-5">
         <tbody>
           {twelve.overlap === 0 ? null : (
             <tr className={rowClasses}>
@@ -657,7 +659,9 @@ export function RootLeadersTwelve({
           {twelve.elsewhere === 0 ? null : (
             <tr className={rowClasses}>
               <td className="text-muted px-3 py-3 italic">
-                Under none of these leaders, the two Network roots among them
+                {roots.length === 1
+                  ? `Under none of these leaders, ${roots[0].full_name ?? 'the Network root'} among them`
+                  : 'Under none of these leaders, the two Network roots among them'}
               </td>
               <td className={`${cell} text-muted italic`}>+{twelve.elsewhere}</td>
             </tr>

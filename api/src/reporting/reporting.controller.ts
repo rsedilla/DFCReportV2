@@ -314,7 +314,7 @@ export class ReportingController {
    *
    * **The Cell table's route on the DCC report's guard and selector.** A whole-church reader's
    * rows are the two roots' 12s; a `NETWORK` selector returns the Network's total, by
-   * membership, and no rows. The reach check, naming and order are the Cell table's, shared.
+   * membership, and its root's 12 (decision 0491). The reach check, naming and order are the Cell table's, shared.
    */
   @Get('dcc/twelve')
   @RequiresCapability(Capability.ReportsViewSubtree, {
@@ -356,7 +356,9 @@ export class ReportingController {
       total: twelve.total,
       buckets: twelve.buckets,
       calendar_start: twelve.calendar_start,
-      ...(rootLeaders ? { roots: await this.rootsOf(twelve.rows) } : {}),
+      ...(rootLeaders || scope.kind === 'NETWORK'
+        ? { roots: await this.rootsOf(twelve.rows) }
+        : {}),
     };
   }
 
@@ -1030,6 +1032,8 @@ export class ReportingController {
                 rows: [...table.rows]
                   .sort((left, right) => byName(left.leaderId, right.leaderId))
                   .map((row) => ({ leader: person(row.leaderId), ...countFigures(row.figures) })),
+                // The root alone, from the same read as the rows (decision 0491).
+                own: countFigures(table.own),
               })),
       others: counts.others === null ? null : countFigures(counts.others),
     };

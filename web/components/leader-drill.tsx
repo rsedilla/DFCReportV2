@@ -15,12 +15,15 @@ export function LeaderDrill({
   report,
   month,
   backHref,
+  backLabel = 'Back to your report',
 }: {
   personId: string;
   report: 'dcc' | 'cells';
   month: string;
   /** Where Back goes, when the report has more than a month to keep. */
   backHref?: string;
+  /** The way back's words: one level up names the leader above (decision 0491). */
+  backLabel?: string;
 }) {
   const person = useQuery({
     queryKey: ['person', personId],
@@ -37,7 +40,7 @@ export function LeaderDrill({
       <TextLink
         href={backHref ?? `/reports/${report}?${new URLSearchParams({ month }).toString()}`}
       >
-        Back to your report
+        {backLabel}
       </TextLink>
     </p>
   );
