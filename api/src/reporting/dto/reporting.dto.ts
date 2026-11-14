@@ -200,7 +200,7 @@ export class CellTwelveDto extends CellMonthlyReportDto {
 /**
  * `GET /reports/dcc/twelve`: DCC's My 12 over a week, a month, a quarter or a year (decision
  * 0294), with the same `kind`, `start` and `period` as the Cell table. A `NETWORK` selector
- * answers the Network's total, by membership, with no rows.
+ * answers the Network's total, by membership, and its root's 12 as rows (decision 0491).
  */
 export class DccTwelveDto extends DccMonthlyReportDto {
   @IsIn(REPORT_RANGE_KINDS)

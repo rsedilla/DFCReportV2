@@ -50,8 +50,10 @@ test.describe('the Senior Pastors’ four items (decision 0488)', () => {
     await expect(items).toHaveText(['People', 'Cells', 'Services', 'Conquest']);
     await expect(items.nth(2)).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Services');
-    // Services holds one report, so no tab is drawn.
-    await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);
+    // Services holds one tab, DCC, Crossover being parked (decision 0491).
+    const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
+    await expect(tabs).toHaveText(['DCC']);
+    await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
     await expect(page).toHaveTitle('Services – DREAMS');
   });
 
@@ -185,13 +187,13 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
       '/reports/number-of-people',
     );
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('People');
-    // The other counts keep a name opening the person's page.
+    // The two Cell counts do the same (decision 0491).
     await page.goto('/reports/number-of-cells');
     await expect(page.getByRole('link', { name: SP_PRIMARIES.abad.full_name })).toHaveAttribute(
       'href',
-      `/people/${SP_PRIMARIES.abad.id}`,
+      `/reports/number-of-cells?leader=${SP_PRIMARIES.abad.id}`,
     );
-    await expect(page.getByRole('group', { name: 'Which Network' })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Which Network' })).toBeVisible();
   });
 
   test('in a leader’s 12 a name with people beneath links a level down, and a count of one stays a name', async ({
@@ -223,17 +225,22 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
 
     await page.goto(`/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
     const consuelo = page.getByRole('link', { name: 'Consuelo Bautista' });
+    // The leader opened on the way here is kept, for the way back (decision 0491).
     await expect(consuelo).toHaveAttribute(
       'href',
-      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000701',
+      `/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000701&trail=${SP_PRIMARIES.abad.id}`,
     );
     await expect(page.getByRole('link', { name: 'Efren Dimaculangan' })).toBeVisible();
 
     await consuelo.click();
     await expect(page.getByRole('link', { name: 'Lourdes Magsaysay' })).toHaveAttribute(
       'href',
-      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000703',
+      `/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000703&trail=${SP_PRIMARIES.abad.id}%2C3f1b7c6e-0000-4000-8000-000000000701`,
     );
+    // **Two levels down the way back goes up one level** (decision 0491), naming the leader.
+    const back = page.getByRole('link', { name: /^Back to / });
+    await expect(back).not.toHaveText('Back to People');
+    await expect(back).toHaveAttribute('href', `/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
 
     await page.goto(`/reports/number-of-people?leader=${solo}`);
     await expect(page.getByRole('cell', { name: 'Teofilo Rosales' })).toBeVisible();
@@ -288,11 +295,11 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
       'Young Pro',
       'Couple',
     ]);
-    // The server's order, and each name a link in the link colour to that Primary's page (decision 0364).
+    // The server's order, and each name a link in the link colour to that Primary's 12 (decision 0491).
     const names = mens.getByRole('link');
     await expect(names).toHaveText([SP_PRIMARIES.abad.full_name, SP_PRIMARIES.ocampo.full_name]);
     await expect(names.first()).toHaveClass(/text-accent/);
-    await expect(names.first()).toHaveAttribute('href', `/people/${SP_PRIMARIES.abad.id}`);
+    await expect(names.first()).toHaveAttribute('href', `/reports/number-of-cells?leader=${SP_PRIMARIES.abad.id}`);
     await expect(mens.getByRole('row').nth(1).getByRole('cell')).toHaveText([
       SP_PRIMARIES.abad.full_name,
       '2',
@@ -302,7 +309,11 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
       '0',
     ]);
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
-    await expect(page.getByText('Total 1 · J12 Kids 0 · Youth 0 · Young Pro 0 · Couple 1')).toBeVisible();
+    // The Couple Cell the Men's root leads is his own row now, not Others, which has nothing left
+    // to show (decision 0491).
+    const ownRow = mens.getByRole('row').filter({ hasText: SP_MENS_ROOT.full_name });
+    await expect(ownRow.getByRole('cell')).toHaveText([SP_MENS_ROOT.full_name, '1', '0', '0', '0', '1']);
+    await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
   });
 
   test('# of Cells sets its five figures on one line, and on a phone Total across the top', async ({
@@ -452,7 +463,7 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     expect(rows.size).toBe(1);
     await expect(page.getByRole('group', { name: 'Report period' })).toBeVisible();
 
-    const bar = page.getByLabel('Figures for').locator('xpath=../..');
+    const bar = page.getByRole('group', { name: 'Which Network' }).locator('xpath=../..');
     await expect(bar.getByRole('button', { name: 'The period before' })).toBeVisible();
     // Two words, once "so far" (decision 0451).
     // Beside the month from `lg`; a phone says it under the bar instead.
@@ -465,17 +476,18 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(tabs.nth(1)).toHaveAttribute('aria-current', 'page');
   });
 
-  // Figures for is three buttons, and a Primary opens by their name (decision 0486).
-  test('Figures for is All, Men’s and Women’s, with no list of names, on both Attendance tabs (decision 0486)', async ({
+  // Three buttons, and a Primary opens by their name (decisions 0486 and 0491).
+  test('the Network buttons are Men, Women and Both, with no list of names, on both Attendance tabs (decision 0491)', async ({
     page,
   }) => {
     await attendance(page);
 
     for (const path of ['/reports/cells', '/reports/dcc']) {
       await page.goto(path);
-      const figuresFor = page.getByRole('group', { name: 'Figures for' });
-      await expect(figuresFor.getByRole('button')).toHaveText(['All', 'Men’s', 'Women’s']);
-      await expect(figuresFor.getByRole('button', { name: 'All, the whole church' })).toHaveAttribute(
+      const figuresFor = page.getByRole('group', { name: 'Which Network' });
+      await expect(figuresFor.getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+      // A reader who is neither root opens on Both.
+      await expect(figuresFor.getByRole('button', { name: 'Both Networks, the whole church' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
@@ -487,8 +499,8 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
         'aria-pressed',
         'true',
       );
-      await figuresFor.getByRole('button', { name: 'All, the whole church' }).click();
-      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      await figuresFor.getByRole('button', { name: 'Both Networks, the whole church' }).click();
+      await expect(page).toHaveURL(new RegExp(`${path}\\?network=BOTH$`));
     }
   });
 
@@ -817,3 +829,176 @@ for (const width of [390, 1280]) {
     });
   }
 }
+
+test.describe('Cells and Services open on the reader’s own Network (decision 0491)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  /** The Bishop, the Men's root: the church's counts name him, so his Network is Men's. */
+  async function asBishop(page: Page) {
+    await page.clock.setFixedTime(OCTOBER_8);
+    await mockSignedIn(page);
+    await mockScreens(page, 'SENIOR_PASTOR', { personId: SP_MENS_ROOT.id });
+    await mockChurchCounts(page);
+  }
+
+  /** One Network's twelve, its root's Primaries as rows (decision 0491); returns the queries. */
+  async function networkTwelve(page: Page): Promise<string[]> {
+    const asked: string[] = [];
+    for (const report of ['cells', 'dcc']) {
+      await page.route(`**/api/v1/reports/${report}/twelve*`, (route) => {
+        const params = new URL(route.request().url()).searchParams;
+        if (params.get('scope') !== 'NETWORK') {
+          return route.fallback();
+        }
+        asked.push(`${report}|${params.get('network')}`);
+        const stage = (vip: number, regular: number) => ({
+          unique_people: vip + regular,
+          classification: { vip, second_timer: 0, third_timer: 0, fourth_timer: 0, regular },
+        });
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            kind: 'MONTH',
+            start: '2026-10-01',
+            end: '2026-10-31',
+            open: true,
+            coverage: report === 'cells' ? { recorded: 2, scheduled: 4, through: '2026-10-31' } : { met: 1, owed: 2 },
+            n: 4,
+            removed_events: [],
+            buckets: null,
+            calendar_start: '2025-01-05',
+            roots: [{ ...SP_MENS_ROOT, network: 'MENS' }],
+            rows: [
+              { leader: SP_PRIMARIES.abad, root_id: SP_MENS_ROOT.id, ...stage(1, 1) },
+              { leader: SP_PRIMARIES.ocampo, root_id: SP_MENS_ROOT.id, ...stage(0, 1) },
+            ],
+            own: null,
+            overlap: 0,
+            elsewhere: 1,
+            total: stage(2, 2),
+          }),
+        });
+      });
+    }
+    return asked;
+  }
+
+  test('# of Cell Groups ends the root’s table with his own row and a Total, and shows no Others', async ({
+    page,
+  }) => {
+    await asBishop(page);
+
+    await page.goto('/reports/number-of-cells');
+
+    const which = page.getByRole('group', { name: 'Which Network' });
+    await expect(which.getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+    await expect(which.getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const mens = page.getByRole('table', { name: MENS_TABLE });
+    // Abad 2, Ocampo 0, the Bishop's own 1, and the Total the Men's box shows, 3.
+    await expect(mens.getByRole('row').nth(3).getByRole('cell').first()).toHaveText(SP_MENS_ROOT.full_name);
+    await expect(mens.getByRole('row').nth(3).getByRole('cell').nth(1)).toHaveText('1');
+    await expect(mens.getByRole('row').nth(4).getByRole('cell')).toHaveText(['Total', '3', '0', '0', '2', '1']);
+    await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
+  });
+
+  test('shows Others only for what is left once each root has a row, and the API line if that would go below 0', async ({
+    page,
+  }) => {
+    await asBishop(page);
+    // One Cell more in the Men's Others than the Bishop leads: somebody in no table leads it.
+    const others = { cell_groups: 2, j12_kids: 0, youth: 0, young_pro: 1, couple: 1, cell_leaders: 2, people: 3 };
+    let own = { cell_groups: 1, j12_kids: 0, youth: 0, young_pro: 0, couple: 1, cell_leaders: 1, people: 1 };
+    await page.route('**/api/v1/reports/church-counts?*network=MENS*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          period: '2026-10-01',
+          current: true,
+          at: '2026-10-08T02:00:00.000Z',
+          network: 'MENS',
+          whole_church: { cell_groups: 4, j12_kids: 0, youth: 0, young_pro: 3, couple: 1, cell_leaders: 4, people: 9 },
+          tables: [
+            {
+              root: SP_MENS_ROOT,
+              network: 'MENS',
+              rows: [
+                {
+                  leader: SP_PRIMARIES.abad,
+                  cell_groups: 2,
+                  j12_kids: 0,
+                  youth: 0,
+                  young_pro: 2,
+                  couple: 0,
+                  cell_leaders: 2,
+                  people: 6,
+                },
+              ],
+              own,
+            },
+          ],
+          others,
+        }),
+      }),
+    );
+
+    await page.goto('/reports/number-of-cells?network=MENS');
+    await expect(page.getByText('Anyone in no table above.')).toBeVisible();
+    await expect(page.getByText('Total 1 · J12 Kids 0 · Youth 0 · Young Pro 1 · Couple 0')).toBeVisible();
+    const mens = page.getByRole('table', { name: MENS_TABLE });
+    await expect(mens.getByRole('row').last().getByRole('cell').first()).toHaveText('Total');
+
+    // Were the root's own figures more than Others holds, the tables would not add up: the API's
+    // line is shown as it is, saying it holds the root, and no root row.
+    own = { ...own, cell_groups: 3, young_pro: 2 };
+    await page.reload();
+    await expect(page.getByText('The Network root, and anyone in no table above.')).toBeVisible();
+    await expect(mens.getByRole('cell', { name: 'Total', exact: true })).toHaveCount(0);
+  });
+
+  test('CG Attendance and Services open on Men, listing the Bishop’s Primaries', async ({ page }) => {
+    await asBishop(page);
+    await mockCellTwelve(page);
+    await mockDccTwelve(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockRootLeadersTwelve(page);
+    const asked = await networkTwelve(page);
+
+    for (const report of ['cells', 'dcc']) {
+      await page.goto(`/reports/${report}`);
+      const which = page.getByRole('group', { name: 'Which Network' });
+      await expect(which.getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+      await expect(which.getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByRole('heading', { name: /^Men.s Network$/ })).toBeVisible();
+      const mens = page.getByRole('table', { name: MENS_TABLE });
+      await expect(mens.getByRole('link')).toHaveText([SP_PRIMARIES.abad.full_name, SP_PRIMARIES.ocampo.full_name]);
+      await expect(page.getByRole('table', { name: WOMENS_TABLE })).toHaveCount(0);
+      expect(asked).toContain(`${report}|MENS`);
+    }
+  });
+
+  test('on a phone the three buttons sit side by side', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await asBishop(page);
+    await mockCellTwelve(page);
+    await mockRootLeadersTwelve(page);
+    await networkTwelve(page);
+
+    await page.goto('/reports/cells');
+
+    const buttons = page.getByRole('group', { name: 'Which Network' }).getByRole('button');
+    await expect(buttons).toHaveCount(3);
+    const tops = new Set(
+      await Promise.all((await buttons.all()).map(async (button) => Math.round((await button.boundingBox())!.y))),
+    );
+    expect(tops.size).toBe(1);
+  });
+});

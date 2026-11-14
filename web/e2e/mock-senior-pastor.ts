@@ -60,11 +60,14 @@ export function churchCounts(period: string, current: boolean) {
           { leader: SP_PRIMARIES.abad, ...figures([0, 2, 0], 2, 6) },
           { leader: SP_PRIMARIES.ocampo, ...figures([0, 0, 0], 0, 11) },
         ],
+        // The root alone: the Couple Cell he leads, and himself (decision 0491).
+        own: figures([0, 0, 1], 1, 1),
       },
       {
         root: SP_WOMENS_ROOT,
         network: 'WOMENS',
         rows: [{ leader: SP_PRIMARIES.bautista, ...figures([1, 1, 0], 2, 16) }],
+        own: figures([0, 0, 0], 0, 1),
       },
     ],
     others: figures([0, 0, 1], 1, 3),

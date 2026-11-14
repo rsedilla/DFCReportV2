@@ -492,6 +492,8 @@ export interface ChurchCounts {
             title?: string | null;
           };
         })[];
+        /** The root alone, their own Cells and themselves, from the same read (decision 0491). */
+        own: ChurchCountFigures;
       }[]
     | null;
   others: ChurchCountFigures | null;

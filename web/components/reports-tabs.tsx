@@ -91,7 +91,7 @@ const SENIOR_PASTOR_SECTIONS: Record<
   },
   services: {
     title: 'Services',
-    tabs: [{ key: 'dcc', label: 'DCC Attendance', path: '/reports/dcc' }],
+    tabs: [{ key: 'dcc', label: 'DCC', path: '/reports/dcc' }],
   },
 };
 
@@ -178,7 +178,7 @@ export function ReportsTabs({
   // flash before their own (owner, 2026-10-11). The pane stays where it is either way, so
   // the report inside is not remounted when the answer arrives. **An item of the Senior
   // Pastors' holding one report shows no tab** (decision 0488).
-  const tabbed = !me.isPending && tabs.length > 1;
+  const tabbed = !me.isPending && (tabs.length > 1 || (seniorPastor && section === 'services'));
   // **Cell Groups and DCC are one tab, *Attendance*** (ruling of 2026-11-02, decision 0420, the
   // owner's layout): a switch inside it chooses which, and each keeps its own address. **The
   // Senior Pastors' are two tabs, *CG Attendance* and *DCC Attendance*, with no switch**

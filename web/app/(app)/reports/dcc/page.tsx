@@ -27,6 +27,7 @@ import { getBranch } from '@/lib/network';
 import { networkLabel } from '@/lib/people';
 import { useKeptLeader } from '@/lib/merged-leader';
 import { getDccTwelve, type ReportNetwork } from '@/lib/reports';
+import { useOwnRootNetwork } from '@/lib/own-network';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
@@ -80,17 +81,30 @@ export function DccReport() {
   // A leader merged away opens the record kept's report (decision 0408, point 22).
   const mergedFrom = useKeptLeader(leader);
   const networkParam = search.get('network');
+  // **The Senior Pastors open on their own Network** (decision 0491), so the page waits until
+  // that is known; everyone else opens on the whole church, as before.
+  const ownRoot = useOwnRootNetwork(seniorPastor);
   const network: ReportNetwork | null =
-    networkParam === 'MENS' || networkParam === 'WOMENS' ? networkParam : null;
+    networkParam === 'MENS' || networkParam === 'WOMENS'
+      ? networkParam
+      : seniorPastor && networkParam !== 'BOTH'
+        ? ownRoot.network
+        : null;
+  const waiting = seniorPastor && networkParam === null && leader === null && !ownRoot.settled;
   // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
   const branchReader = isBranchReader(me.data);
   // A Network narrows a whole-church grant and never widens a leader's (section 19).
-  const subject = leader
-    ? ({ kind: 'LEADER', person_id: leader } as const)
-    : network !== null && wholeChurch
-      ? ({ kind: 'NETWORK', network } as const)
-      : own;
+  const subject = waiting
+    ? null
+    : leader
+      ? ({ kind: 'LEADER', person_id: leader } as const)
+      : network !== null && wholeChurch
+        ? ({ kind: 'NETWORK', network } as const)
+        : own;
 
+  // A Primary opened from a Network keeps it, so Back returns there (decision 0491).
+  const openHref = (id: string) =>
+    `/reports/dcc?${periodParams({ leader: id, ...(networkParam ? { network: networkParam } : {}) })}`;
   const twelveKey = ['dcc-twelve', kind, start, subject] as const;
   const twelve = useQuery({
     queryKey: twelveKey,
@@ -147,9 +161,11 @@ export function DccReport() {
             onChange={period.choosePeriodStart}
           />
           {/* A Full view leader reads their own branch only, with no Figures for (decision 0380).
-              The Senior Pastors' is All, Men's and Women's, a Primary opening by name (0486). */}
+              The Senior Pastors' is Men, Women and Both, their own Network first, a Primary opening
+              by name (decisions 0486 and 0491). */}
           {branchReader ? null : seniorPastor ? (
             <FiguresForSwitch
+              own={ownRoot.network}
               network={network}
               leaderOpen={leader !== null}
               onChange={(next) => go({ network: next, leader: null })}
@@ -223,7 +239,8 @@ export function DccReport() {
             personId={leader}
             report="dcc"
             month={guardMonth}
-            backHref={`/reports/dcc?${periodParams({})}`}
+            // Back keeps the Network the reader was on (decision 0491).
+            backHref={`/reports/dcc?${periodParams(networkParam ? { network: networkParam } : {})}`}
           />
         ) : null}
 
@@ -283,7 +300,17 @@ export function DccReport() {
               </div>
             )}
 
-            {subject?.kind === 'NETWORK' ? (
+            {seniorPastor && subject?.kind === 'NETWORK' ? (
+              // A Network laid out as Both is: its total, by membership, and its root's 12
+              // (decision 0491).
+              <RootLeadersTwelve
+                title={networkLabel(subject.network)}
+                twelve={twelve.data}
+                kind={kind}
+                where="DCC"
+                openHref={openHref}
+              />
+            ) : subject?.kind === 'NETWORK' ? (
               // A Network's own total, by membership (decision 0219); its rows are the pastors'.
               <TwelveTable
                 twelve={{ ...twelve.data, rows: [], own: null, overlap: 0, elsewhere: 0 }}
@@ -291,14 +318,14 @@ export function DccReport() {
                 subjectName={null}
                 where="DCC"
                 title={networkLabel(subject.network)}
-                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+                openHref={openHref}
               />
             ) : subject?.kind === 'ROOT_LEADERS' ? (
               <RootLeadersTwelve
                 twelve={twelve.data}
                 kind={kind}
                 where="DCC"
-                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+                openHref={openHref}
               />
             ) : branchReader ? (
               <BranchTwelve twelve={twelve.data} kind={kind} subjectName={subjectName} />
@@ -308,7 +335,7 @@ export function DccReport() {
                 kind={kind}
                 subjectName={subjectName}
                 where="DCC"
-                openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+                openHref={openHref}
               />
             )}
 

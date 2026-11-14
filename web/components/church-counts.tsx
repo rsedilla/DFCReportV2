@@ -15,6 +15,7 @@ import { CountsSwitch, ReportViewSwitch, type ReportTab } from '@/components/rep
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { getMe } from '@/lib/me';
+import { networkChoices, useOwnRootNetwork } from '@/lib/own-network';
 import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { ShortText } from '@/components/ui/short-text';
@@ -25,7 +26,11 @@ import { usePhone } from '@/lib/phone';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { asOfTodayLabel, monthFromQuery, monthLabel } from '@/lib/reporting-month';
 import { useAsOfToday } from '@/lib/use-as-of-today';
-import { getChurchCounts, type ChurchCountFigures, type ChurchCounts } from '@/lib/reports';
+import {
+  getChurchCounts,
+  type ChurchCountFigures,
+  type ChurchCounts,
+} from '@/lib/reports';
 import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
 
@@ -149,7 +154,8 @@ const LABEL: Record<Figure, string> = {
  * each root's direct leaders, the Men's root first, then *Others*, so the rows and *Others*
  * add up to the whole church. Rows are in first-name order, never sorted by a figure, never
  * numbered or coloured (sections 13 and 17); each name opens that leader's page (decision 0364),
- * except on the Senior Pastors' *People*, where it opens that Primary's 12 here (decision 0490).
+ * except on the Senior Pastors' three, where it opens that Primary's 12 here (decisions 0490
+ * and 0491).
  */
 export function ChurchCountsPanel({
   figure,
@@ -165,29 +171,22 @@ export function ChurchCountsPanel({
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
 
-  // **The Senior Pastors' *People* has a Men · Women · Both switch** (decision 0490), the
-  // reader's own Network first and chosen when the page opens, then the other, then Both. Each
-  // Network shows its total and its root's 12, Both the whole church and both tables.
+  // **The Senior Pastors' *People* and their two Cell counts have a Men · Women · Both switch**
+  // (decisions 0490 and 0491), the reader's own Network first and chosen when the page opens,
+  // then the other, then Both. Each Network shows its total and its root's 12, Both the whole
+  // church and both tables.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const switched = figure === 'PEOPLE' && me.data?.screens === 'SENIOR_PASTOR';
+  const switched = me.data?.screens === 'SENIOR_PASTOR';
   const askedNetwork = useSearchParams().get('network');
-  // The church's figures name the roots, so the reader's own Network is read from them: the
-  // current month's, once, under the key Both itself uses, so a month change does not unsettle
-  // the choice and Both is not asked for twice.
-  const both = useQuery({
-    queryKey: ['church-counts', current, null],
-    queryFn: ({ signal }) => getChurchCounts(current, signal),
-    enabled: switched,
-  });
-  const ownNetwork =
-    both.data?.tables?.find((table) => table.root.id === me.data?.person_id)?.network ?? null;
+  const own = useOwnRootNetwork(switched);
+  const ownNetwork = own.network;
   // Until the church's figures say which root the reader is, no choice is made; a reader who is
   // neither root opens on Both.
   const choice: 'MENS' | 'WOMENS' | 'BOTH' | null = !switched
     ? null
     : askedNetwork === 'MENS' || askedNetwork === 'WOMENS' || askedNetwork === 'BOTH'
       ? askedNetwork
-      : both.isFetched
+      : own.settled
         ? (ownNetwork ?? 'BOTH')
         : null;
   const network = choice === 'MENS' || choice === 'WOMENS' ? choice : undefined;
@@ -202,7 +201,6 @@ export function ChurchCountsPanel({
     enabled: !switched || choice !== null,
   });
   const data = counts.data;
-  const order: ('MENS' | 'WOMENS')[] = ownNetwork === 'WOMENS' ? ['WOMENS', 'MENS'] : ['MENS', 'WOMENS'];
 
   return (
     <section aria-label={LABEL[figure]}>
@@ -223,18 +221,11 @@ export function ChurchCountsPanel({
           />
         </div>
         {/* Drawn once the reader's own Network is known, so no choice shows that is not made. */}
-        {switched && choice !== null && both.isFetched ? (
+        {switched && choice !== null && own.settled ? (
           <ViewSwitch<'MENS' | 'WOMENS' | 'BOTH'>
             label="Which Network"
             className="mt-0 w-full lg:w-auto"
-            options={[
-              ...order.map((key) => ({
-                key,
-                label: key === 'MENS' ? 'Men' : 'Women',
-                name: key === 'MENS' ? 'Men’s Network' : 'Women’s Network',
-              })),
-              { key: 'BOTH' as const, label: 'Both', name: 'Both Networks, the whole church' },
-            ]}
+            options={networkChoices(ownNetwork)}
             value={choice}
             onChange={(next) => go({ network: next })}
           />
@@ -272,14 +263,22 @@ export function ChurchCountsPanel({
           ) : (
             <>
               {(() => {
-                // **On the Senior Pastors' *People*, each root's own row and a Total close their
-                // table, and *Others* holds only who is left over** (decision 0490): each root is
-                // one person of *Others*, so that line is shown only for anybody beyond them. Where
-                // *Others* holds fewer than the roots shown, it is left as the API answered it.
-                const rootsHere = switched ? data.tables.length : 0;
-                const leftOver =
-                  data.others && switched ? data.others.people - rootsHere : null;
-                const ownRows = switched && leftOver !== null && leftOver >= 0;
+                // **On the Senior Pastors' three counts each root's own row and a Total close their
+                // table, and *Others* holds only who is left over** (decisions 0490 and 0491). The
+                // root's own figures come with the rows, in the same read, so the table adds up to
+                // the box; *Others* is the API's line less each root, shown only where it is not 0.
+                // Were it ever below 0, the line is shown as the API answered it, with no root rows.
+                const leftRead =
+                  switched && data.others
+                    ? (Object.fromEntries(
+                        COUNT_COLUMNS[figure].map(([key]) => [
+                          key,
+                          data.others![key] - data.tables!.reduce((sum, table) => sum + table.own[key], 0),
+                        ]),
+                      ) as unknown as ChurchCountFigures)
+                    : null;
+                const ownRows =
+                  leftRead !== null && COUNT_COLUMNS[figure].every(([key]) => leftRead[key] >= 0);
                 return (
                   <>
               {data.tables.map((table) => (
@@ -291,21 +290,21 @@ export function ChurchCountsPanel({
                   drill={
                     switched
                       ? (id) =>
-                          `/reports/number-of-people?${new URLSearchParams({
+                          `/reports/${TAB[figure]}?${new URLSearchParams({
                             leader: id,
                             ...(month === current ? {} : { month }),
                             ...(askedNetwork && choice ? { network: choice } : {}),
                           }).toString()}`
                       : undefined
                   }
-                  ownRow={ownRows}
+                  ownFigures={ownRows ? table.own : undefined}
                 />
               ))}
               {data.others && !ownRows ? (
-                <OthersLine figure={figure} others={data.others} />
+                <OthersLine figure={figure} others={data.others} roots={data.tables.length} />
               ) : null}
-              {ownRows && leftOver !== null && leftOver > 0 ? (
-                <OthersLine figure={figure} others={{ ...data.others!, people: leftOver }} rootsShown />
+              {ownRows && leftRead && COUNT_COLUMNS[figure].some(([key]) => leftRead[key] !== 0) ? (
+                <OthersLine figure={figure} others={leftRead} rootsShown />
               ) : null}
                   </>
                 );
@@ -343,14 +342,14 @@ function CountTable({
   figure,
   table,
   drill,
-  ownRow = false,
+  ownFigures,
 }: {
   figure: Figure;
   table: NonNullable<ChurchCounts['tables']>[number];
   /** A Primary's name opens their 12 here, at this address, rather than their own page (decision 0490). */
   drill?: (leaderId: string) => string;
-  /** The root's own row, counting one, and a Total (decision 0490); *# of People* alone. */
-  ownRow?: boolean;
+  /** The root's own row, and a Total (decisions 0490 and 0491), on the Senior Pastors' three. */
+  ownFigures?: ChurchCountFigures;
 }) {
   const phone = usePhone();
   // No count in the heading (owner, 2026-10-09).
@@ -402,17 +401,23 @@ function CountTable({
               ))}
             </tr>
           ))}
-          {ownRow ? (
+          {ownFigures ? (
             <>
               <tr className={rowClasses}>
                 <td className={NAME_CELL}>{table.root.full_name ?? 'A Network root'}</td>
-                <td className={FIGURE_CELL}>1</td>
+                {columns.map(([key]) => (
+                  <td key={key} className={FIGURE_CELL}>
+                    {ownFigures[key]}
+                  </td>
+                ))}
               </tr>
               <tr className="border-ink border-t-2">
                 <td className={`${NAME_CELL} font-bold`}>Total</td>
-                <td className={`${FIGURE_CELL} font-bold`}>
-                  {table.rows.reduce((sum, row) => sum + row.people, 1)}
-                </td>
+                {columns.map(([key]) => (
+                  <td key={key} className={`${FIGURE_CELL} font-bold`}>
+                    {table.rows.reduce((sum, row) => sum + row[key], ownFigures[key])}
+                  </td>
+                ))}
               </tr>
             </>
           ) : null}
@@ -427,17 +432,26 @@ function OthersLine({
   figure,
   others,
   rootsShown = false,
+  roots = 2,
 }: {
   figure: Figure;
   others: ChurchCountFigures;
   /** The roots already have rows of their own, so the line counts anyone else (decision 0490). */
   rootsShown?: boolean;
+  /** How many roots' tables there are: one where a single Network is shown (decision 0491). */
+  roots?: number;
 }) {
   return (
     <div className="mt-6">
       <h3 className="text-base font-bold tracking-tight">Others</h3>
       <p className="text-muted mt-1 max-w-2xl text-sm">
-        {rootsShown ? 'Anyone in no table above.' : 'The two Network roots, and anyone in neither table.'}
+        {rootsShown
+          ? 'Anyone in no table above.'
+          : roots === 0
+            ? 'Everyone, no table being shown.'
+            : roots === 1
+              ? 'The Network root, and anyone in no table above.'
+              : 'The two Network roots, and anyone in neither table.'}
       </p>
       <p className="mt-2 text-sm tabular-nums">
         {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${others[key]}`).join(' · ')}
@@ -464,7 +478,7 @@ function BranchLink({
       // (decision 0451; WCAG 2.5.3).
       aria-label={shortened ? `${short}, ${full}` : undefined}
       // The person's page, Branch having left People (decision 0364), unless the table says
-      // otherwise: the Senior Pastors' *People* opens a Primary's 12 (decision 0490).
+      // otherwise: the Senior Pastors' three open a Primary's 12 (decisions 0490 and 0491).
       href={href ?? `/people/${leader.id}`}
       // The accent, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
