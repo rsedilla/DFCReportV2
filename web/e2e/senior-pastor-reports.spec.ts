@@ -180,6 +180,52 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
     await expect(page.getByRole('group', { name: 'Which Network' })).toHaveCount(0);
   });
 
+  test('in a leader’s 12 a name with people beneath links a level down, and a count of one stays a name', async ({
+    page,
+  }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    await mockBranchPeople(page);
+    const solo = '3f1b7c6e-0000-4000-8000-000000000799';
+    // One leader whose 12 holds somebody leading nobody, answered after the shared mock.
+    await page.route(`**/api/v1/reports/people/branch?*leader_id=${solo}*`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          period: '2026-10-01',
+          current: true,
+          at: '2026-10-08T02:00:00.000Z',
+          total: 2,
+          own: 1,
+          rows: [
+            {
+              leader: { id: '3f1b7c6e-0000-4000-8000-000000000798', member_id: 'M-000898', full_name: 'Teofilo Rosales' },
+              people: 1,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto(`/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
+    const consuelo = page.getByRole('link', { name: 'Consuelo Bautista' });
+    await expect(consuelo).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000701',
+    );
+    await expect(page.getByRole('link', { name: 'Efren Dimaculangan' })).toBeVisible();
+
+    await consuelo.click();
+    await expect(page.getByRole('link', { name: 'Lourdes Magsaysay' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000703',
+    );
+
+    await page.goto(`/reports/number-of-people?leader=${solo}`);
+    await expect(page.getByRole('cell', { name: 'Teofilo Rosales' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Teofilo Rosales' })).toHaveCount(0);
+  });
+
   test('a Primary’s 12 opens for the month and Network on screen, and the way back keeps both', async ({
     page,
   }) => {

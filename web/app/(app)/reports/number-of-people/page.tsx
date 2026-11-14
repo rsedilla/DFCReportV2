@@ -51,6 +51,14 @@ function NumberOfPeople() {
             month={month}
             backLabel="Back to People"
             backNetwork={params.get('network')}
+            // Down another level, keeping the month and the Network chosen (decision 0490).
+            drill={(id) =>
+              `/reports/number-of-people?${new URLSearchParams({
+                leader: id,
+                ...(month && monthFromQuery(month) !== monthFromQuery(null) ? { month } : {}),
+                ...(params.get('network') ? { network: params.get('network')! } : {}),
+              }).toString()}`
+            }
           />
         ) : wholeChurch ? (
           <ChurchCountsPanel figure="PEOPLE" month={month} />

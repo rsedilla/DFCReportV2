@@ -20,7 +20,11 @@ the address as `network`.
 per direct disciple counting them and everyone beneath, and their own row, under *[name]'s
 Disciples*, with *Back to People*. It is the view a Full view leader has of their own branch
 (decision 0380), read at `GET /api/v1/reports/people/branch` under `reports.view_subtree` against a
-`LEADER` selector, which a Whole Church holder may name. Its names open nothing further. On
+`LEADER` selector, which a Whole Church holder may name. **A name there with people beneath it
+opens that leader's 12 in turn**, keeping the month and the Network chosen, so the Senior Pastors
+go down the tree a level at a time; a name counting one, the leader alone, and the opened leader's
+own row stay plain text (owner, 2026-11-14, added after seeing the first build). A Full view
+leader's names stay plain text (decision 0380). On
 *# of Cell Groups* and *# of Cell Leaders* a name still opens the person's page (decision 0364).
 
 **4. `GET /api/v1/reports/church-counts` takes an optional `network`, `MENS` or `WOMENS`.** A
