@@ -36,7 +36,7 @@ function NumberOfPeople() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="Everyone in your care, month by month." />
+      <ReportsHeading current="number-of-people" line="Everyone in your care, month by month." />
       <ReportsTabs current="number-of-people" month={monthFromQuery(month)}>
         {me.data === undefined ? (
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>

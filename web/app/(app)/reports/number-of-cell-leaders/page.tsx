@@ -30,7 +30,7 @@ function NumberOfCellLeaders() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="The Cell Leaders, month by month." />
+      <ReportsHeading current="number-of-cell-leaders" line="The Cell Leaders, month by month." />
       <ReportsTabs current="number-of-cell-leaders" month={monthFromQuery(month)}>
         {me.data === undefined ? (
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>

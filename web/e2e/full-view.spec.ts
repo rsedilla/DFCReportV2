@@ -28,7 +28,6 @@ import {
   mockDccRoster,
   mockMeetingsAwaiting,
   mockPastoralPath,
-  recordingStatus,
   mockPendingDcc,
 } from './mock-attendance';
 import { mockSuynl } from './mock-growth';
@@ -49,9 +48,6 @@ import { mockSuynl } from './mock-growth';
 
 /** 10:00 on 20 June 2026 in Manila, the month the attendance mocks describe. */
 const JUNE_20 = new Date('2026-06-20T02:00:00Z');
-
-/** 10:00 on Thursday 8 October 2026 in Manila: the week of 5 October, past the 7th. */
-const OCTOBER_8 = new Date('2026-10-08T02:00:00Z');
 
 function json(body: unknown, status = 200) {
   return { status, contentType: 'application/json', body: JSON.stringify(body) };
@@ -160,15 +156,20 @@ test.describe('a Recording-only account (decision 0323)', () => {
 
   // It said "keeps the five items" and passed only by matching the sidebar before `/auth/me`
   // answered, when every account shows the default five; decision 0326 gave them three, and
-  // decision 0377 folded Trends into Reports.
-  test('a Senior Pastor has Record, Reports and Conquest (decision 0407)', async ({ page }) => {
+  // decision 0377 folded Trends into Reports, and decision 0488 replaced Record and Reports.
+  test('a Senior Pastor has People, Cells, Services and Conquest (decision 0488)', async ({ page }) => {
     await mockSignedIn(page);
     await mockScreens(page, 'SENIOR_PASTOR');
     await mockPeople(page);
 
     await page.goto('/people');
 
-    await expect(mainNavigation(page).getByRole('link')).toHaveText(['Record', 'Reports', 'Conquest']);
+    await expect(mainNavigation(page).getByRole('link')).toHaveText([
+      'People',
+      'Cells',
+      'Services',
+      'Conquest',
+    ]);
   });
 
   async function mockRecord(page: Page) {
@@ -1147,310 +1148,26 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
   });
 });
 
-test.describe('the Senior Pastors’ Record (decision 0325)', () => {
-  async function mockSeniorPastor(page: Page, answer: (url: URL) => unknown = defaultAnswer) {
-    await mockSignedIn(page);
-    await mockScreens(page, 'SENIOR_PASTOR');
-    await mockCellMeetings(page);
-    await mockMeetingsAwaiting(page);
-    await mockDccEvents(page);
-    await mockDccRoster(page);
+/**
+ * The Senior Pastors' Record was Recording Progress alone (decision 0480); since decision 0488
+ * Record is not theirs at all, the Admin keeping the records for both Networks. Hidden, not
+ * removed: its address answers the note, and the screen stays for whoever it is offered to.
+ */
+test('the Senior Pastors have no Record, and its address answers the note (decision 0488)', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+  await mockScreens(page, 'SENIOR_PASTOR');
 
-    const asked: URLSearchParams[] = [];
-    await page.route('**/api/v1/reports/recording-status?*', (route) => {
-      const url = new URL(route.request().url());
-      asked.push(url.searchParams);
-      return route.fulfill(json(answer(url)));
-    });
+  await page.goto('/dashboard');
 
-    return asked;
-  }
-
-  function defaultAnswer(url: URL) {
-    const kind = url.searchParams.get('kind') === 'MONTH' ? 'MONTH' : 'WEEK';
-    const start = url.searchParams.get('start') ?? '2026-10-05';
-    return recordingStatus(kind, start, start);
-  }
-
-  function box(page: Page, label: string) {
-    // Each box's label stands alone under one Whole Church heading (decision 0327).
-    return page.getByText(label, { exact: true }).locator('..');
-  }
-
-  // Decision 0480: the Admin records their records, so Recording Progress is the whole screen,
-  // under a heading rather than a tab row of one.
-  test('is Recording Progress alone, under its heading, with no Update Records (decision 0480)', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page);
-
-    await page.goto('/dashboard');
-
-    await expect(page.getByRole('heading', { level: 2, name: 'Recording Progress' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Recording Progress' })).toBeVisible();
-    await expect(page.getByText('Whether the church has recorded.', { exact: true })).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Record' })).toHaveCount(0);
-    await expect(page.getByText(/Update Records/)).toHaveCount(0);
-    // No figure links anywhere: no Pending list sits beside it (decision 0370).
-    await expect(page.getByText('Celestino Ocampo').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /Pending (CG|DCC) Records/ })).toHaveCount(0);
-    // None of the other lists of section 19, and no month figures.
-    await expect(page.getByRole('group', { name: 'Outstanding work' })).toHaveCount(0);
-
-    // An address naming Update Records opens Recording Progress.
-    await page.goto('/dashboard?list=awaiting');
-    await expect(page.getByRole('heading', { level: 2, name: 'Recording Progress' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Update Records' })).toHaveCount(0);
-  });
-
-  test('opens on the current week and asks for the period the Week and Month switch names', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    const asked = await mockSeniorPastor(page);
-
-    await page.goto('/dashboard');
-
-    const period = page.getByRole('group', { name: 'Period' });
-    await expect(period.getByRole('button', { name: 'Week' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await expect(page.getByText(/^5 Oct – 11 Oct 2026/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
-    await expect.poll(() => asked.length).toBeGreaterThan(0);
-    expect(Object.fromEntries(asked[asked.length - 1])).toEqual({
-      kind: 'WEEK',
-      start: '2026-10-05',
-      period: '2026-10-01',
-    });
-
-    await page.getByRole('button', { name: 'The period before' }).click();
-    await expect(page.getByText(/^28 Sept? – 4 Oct 2026/)).toBeVisible();
-    await expect
-      .poll(() => Object.fromEntries(asked[asked.length - 1]))
-      .toEqual({
-        kind: 'WEEK',
-        start: '2026-09-28',
-        period: '2026-10-01',
-      });
-
-    await period.getByRole('button', { name: 'Month' }).click();
-    await expect(page.getByText(/^October 2026/)).toBeVisible();
-    await expect
-      .poll(() => Object.fromEntries(asked[asked.length - 1]))
-      .toEqual({
-        kind: 'MONTH',
-        start: '2026-10-01',
-        period: '2026-10-01',
-      });
-    await expect(page.getByRole('button', { name: 'The period after' })).toBeDisabled();
-
-    await page.getByRole('button', { name: 'The period before' }).click();
-    await expect(page.getByText(/^September 2026/)).toBeVisible();
-    await expect
-      .poll(() => Object.fromEntries(asked[asked.length - 1]))
-      .toEqual({
-        kind: 'MONTH',
-        start: '2026-09-01',
-        period: '2026-09-01',
-      });
-  });
-
-  test('shows the whole church as two boxes, each X of Y leaders with its percentage and the week before', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page);
-
-    await page.goto('/dashboard');
-
-    const cell = box(page, 'Recorded their Cell group');
-    await expect(cell).toContainText('6 of 10 leaders · 60%');
-    await expect(cell).toContainText('Last week: 5 of 9 leaders');
-    const dcc = box(page, 'Recorded their DCC checklist');
-    await expect(dcc).toContainText('9 of 13 leaders · 69%');
-    await expect(dcc).toContainText('Last week: 8 of 11 leaders');
-    // A week before the weekly rule has no due date, so the line says when it closes (0476).
-    await expect(page.getByText('Closes 7 November', { exact: true })).toBeVisible();
-    await expect(page.getByText(/^Open until /)).toHaveCount(0);
-  });
-
-  test('a box reading 0 of 0 shows no percentage, and an open period before says so', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page, (url) => {
-      const status = defaultAnswer(url);
-      return {
-        ...status,
-        whole_church: {
-          cell: { recorded: 0, owed: 0, percent: null },
-          dcc: { recorded: 1, owed: 1, percent: 100 },
-        },
-        previous: { ...status.previous, open: true },
-      };
-    });
-
-    await page.goto('/dashboard');
-
-    const cell = box(page, 'Recorded their Cell group');
-    await expect(cell).toContainText('0 of 0 leaders');
-    await expect(cell).not.toContainText('%');
-    await expect(cell).toContainText('Last week (still open): 5 of 9 leaders');
-    await expect(box(page, 'Recorded their DCC checklist')).toContainText('1 of 1 leader · 100%');
-  });
-
-  test('lists each root’s direct leaders in the server’s order, with no percentage', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page);
-
-    await page.goto('/dashboard');
-
-    // The Men's root first, as the server sends it, although his name sorts second.
-    await expect(page.getByRole('heading', { level: 3 })).toHaveText([
-      // The boxes' one heading (decision 0327).
-      'Whole Church',
-      'Ptr. Teodulo Villareal’s leaders',
-      'Ptra. Amparo Lacson’s leaders',
-      'Others',
-    ]);
-
-    const mens = page.getByRole('table', { name: 'Ptr. Teodulo Villareal’s leaders' });
-    await expect(mens.getByRole('columnheader')).toHaveText([
-      'Primaries',
-      'Cell group recorded',
-      'DCC checklist recorded',
-      'Status',
-    ]);
-
-    const rows = mens.getByRole('row').filter({ has: page.getByRole('cell') });
-    // First-name order (decision 0359), never sorted by a figure.
-    await expect(rows.getByRole('link')).toHaveText([
-      'Bernardo Abad',
-      'Celestino Ocampo',
-      'Dionisio Yap',
-    ]);
-    await expect(rows.nth(0).getByRole('cell')).toHaveText([
-      'Bernardo Abad',
-      '2 of 2 leaders',
-      '3 of 3 leaders',
-      'Completed',
-    ]);
-    await expect(rows.nth(1).getByRole('cell')).toHaveText([
-      'Celestino Ocampo',
-      '1 of 4 leaders',
-      '2 of 4 leaders',
-      '3 leaders still to record',
-    ]);
-    // Nobody owed reads as a dash, said as "None owed" (decision 0432).
-    await expect(rows.nth(2).getByRole('cell')).toHaveText([
-      'Dionisio Yap',
-      '—None owed',
-      '—None owed',
-      'Nothing owed',
-    ]);
-    // Each name opens that leader's page, Branch having left People (decision 0364).
-    await expect(rows.nth(1).getByRole('link')).toHaveAttribute(
-      'href',
-      '/people/3f1b7c6e-0000-4000-8000-000000000b02',
-    );
-
-    const womens = page.getByRole('table', { name: 'Ptra. Amparo Lacson’s leaders' });
-    await expect(
-      womens
-        .getByRole('row')
-        .filter({ has: page.getByRole('cell') })
-        .getByRole('cell')
-        .nth(3),
-    ).toHaveText('1 leader still to record');
-
-    for (const table of [mens, womens]) {
-      await expect(table).not.toContainText('%');
-    }
-  });
-
-  test('counts everybody in neither table on an Others line, with no link to the Cells behind', async ({
-    page,
-  }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page);
-
-    await page.goto('/dashboard');
-
-    const others = page.getByRole('heading', { level: 3, name: 'Others' }).locator('..');
-    await expect(others.getByRole('term')).toHaveText([
-      'Cell group recorded',
-      'DCC checklist recorded',
-      'Status',
-    ]);
-    await expect(others.getByRole('definition')).toHaveText([
-      '0 of 0 leaders',
-      '1 of 2 leaders',
-      '1 leader still to record',
-    ]);
-
-    // Filed Reports is withdrawn for every account (decision 0340), so nothing leads there.
-    await expect(page.getByRole('link', { name: 'See which Cells are behind' })).toHaveCount(0);
-    await expect(page.locator('a[href^="/reports/filed"]')).toHaveCount(0);
-  });
-
-  test('keeps the boxes and says why where the server refuses the tables', async ({ page }) => {
-    await page.clock.setFixedTime(OCTOBER_8);
-    await mockSeniorPastor(page, (url) => ({ ...defaultAnswer(url), tables: null, others: null }));
-
-    await page.goto('/dashboard');
-
-    await expect(box(page, 'Recorded their Cell group')).toContainText('6 of 10 leaders · 60%');
-    await expect(page.getByText(/The leaders’ tables cannot be shown for this week/)).toBeVisible();
-    await expect(page.getByRole('table')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
-  });
-
-  // WCAG 2.5.8, measured here because the accessibility sweep signs in no Senior Pastor (its
-  // TARGET_EXEMPT entry for "record, recording progress" points here). Measured as that sweep
-  // measures: focused, and by the label a control sits in where it has one. A phone width,
-  // where the tables are cards, and a desktop one, where they are tables.
-  for (const width of [390, 1280]) {
-    test(`every control on Recording Progress is at least 24 by 24 at ${width}px`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await page.clock.setFixedTime(OCTOBER_8);
-      await mockSeniorPastor(page);
-
-      await page.goto('/dashboard');
-      await expect(page.getByRole('heading', { level: 3, name: 'Others' })).toBeVisible();
-
-      const targets = page.locator('main button, main a[href], main input, main select');
-      const count = await targets.count();
-      // Week and Month, the period before and after, and five leader names in each rendering
-      // (the hidden one counted, not measured). No tabs since decision 0480.
-      expect(count).toBeGreaterThanOrEqual(14);
-
-      const small: string[] = [];
-      for (let index = 0; index < count; index += 1) {
-        const target = targets.nth(index);
-        if (!(await target.isVisible())) {
-          continue;
-        }
-        await target.focus().catch(() => {});
-        const measured = await target.evaluate((node) => {
-          const rect = (node.closest('label') ?? node).getBoundingClientRect();
-          const text = (node.textContent ?? '').trim().slice(0, 40);
-          return { width: rect.width, height: rect.height, name: `${node.tagName}: ${text}` };
-        });
-        if (measured.width < 24 || measured.height < 24) {
-          small.push(`${measured.name} (${measured.width} by ${measured.height})`);
-        }
-      }
-
-      expect(small).toEqual([]);
-    });
-  }
+  await expect(page.getByRole('heading', { name: 'This page isn’t part of your screens' })).toBeVisible();
+  await expect(page.getByText('Your screens are People, Cells, Services and Conquest.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go to your start screen' })).toHaveAttribute(
+    'href',
+    '/reports/dcc',
+  );
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Record' })).toHaveCount(0);
 });
 
 /**

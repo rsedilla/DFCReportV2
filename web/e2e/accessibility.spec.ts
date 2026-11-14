@@ -54,7 +54,6 @@ import {
   mockMeetingRoster,
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
-  mockRecordingStatus,
   mockPendingCg,
   mockPendingDcc,
 } from './mock-attendance';
@@ -989,26 +988,6 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('This Sunday takes no record')).toBeVisible();
-    },
-  },
-  {
-    // The Senior Pastors' Record opens on Recording Progress (decision 0325): two Whole Church
-    // boxes, a table per root's direct leaders, and Others. Completed is a pale red label,
-    // the one status shown by colour, which is why its contrast is worth scanning.
-    name: 'record, recording progress',
-    route: '/dashboard',
-    async before(page: import('@playwright/test').Page) {
-      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
-      await mockSignedIn(page);
-      await mockScreens(page, 'SENIOR_PASTOR');
-      await mockMeetingsAwaiting(page);
-      await mockDccEvents(page);
-      await mockDccRoster(page);
-      await mockRecordingStatus(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { level: 3, name: 'Others' })).toBeVisible();
-      await expect(page.getByText('Completed').filter({ visible: true }).first()).toBeVisible();
     },
   },
   {
@@ -2340,12 +2319,6 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       "person picker's search field and Find button, measured under \"new cell\", which counts " +
       'that same picker, labelled radios as on "add a person", a time field, and two Buttons, ' +
       'the primitive measured on every screen.',
-  },
-  {
-    name: 'record, recording progress',
-    why:
-      'The sweep signs in one account, which is no Senior Pastor. Its targets are measured in ' +
-      'full-view.spec.ts, on the same fixture.',
   },
   {
     name: 'reports, # of cells',

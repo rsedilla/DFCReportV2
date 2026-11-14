@@ -35,8 +35,26 @@ async function seniorPastor(page: Page) {
 const MENS_TABLE = `${SP_MENS_ROOT.full_name}’s leaders`;
 const WOMENS_TABLE = `${SP_WOMENS_ROOT.full_name}’s leaders`;
 
-test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
-  test('are CG and DCC Attendance and the three counts, each count named in words (decisions 0420 and 0481)', async ({
+test.describe('the Senior Pastors’ four items (decision 0488)', () => {
+  test('are People, Cells, Services and Conquest, with no Record or Reports, and they open on Services', async ({
+    page,
+  }) => {
+    await seniorPastor(page);
+    await mockChurchCounts(page);
+    await mockDccTwelve(page);
+
+    await page.goto('/reports/dcc');
+
+    const items = page.getByRole('navigation', { name: 'Main' }).getByRole('link');
+    await expect(items).toHaveText(['People', 'Cells', 'Services', 'Conquest']);
+    await expect(items.nth(2)).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Services');
+    // Services holds one report, so no tab is drawn.
+    await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);
+    await expect(page).toHaveTitle('Services – DREAMS');
+  });
+
+  test('Cells holds CG Attendance and the two Cell counts as tabs, each count named in words', async ({
     page,
   }) => {
     await seniorPastor(page);
@@ -44,25 +62,37 @@ test.describe('the Senior Pastors’ Reports tabs (decision 0327)', () => {
 
     await page.goto('/reports/number-of-cells');
 
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cells');
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
-    // CG and DCC Attendance as two tabs (decision 0481).
-    await expect(tabs).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
-      '# of Cell Groups',
-      '# of Cell Leaders',
-      '# of People',
-    ]);
+    await expect(tabs).toHaveText(['CG Attendance', '# of Cell Groups', '# of Cell Leaders']);
     // A screen reader says `#` as "number sign", so each keeps its words as its name.
-    for (const name of ['Number of Cell Groups', 'Number of Cell Leaders', 'Number of people']) {
+    for (const name of ['Number of Cell Groups', 'Number of Cell Leaders']) {
       await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
     }
     await expect(page.getByRole('link', { name: 'Number of Cell Groups', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    // Encounter candidates is withdrawn.
-    await expect(page.getByRole('link', { name: /Encounter/ })).toHaveCount(0);
+    await expect(
+      page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
+    ).toHaveText('Cells');
+    // The three sit on one row on a phone too.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const ys = await Promise.all((await tabs.all()).map(async (tab) => (await tab.boundingBox())!.y));
+    expect(new Set(ys).size).toBe(1);
+  });
+
+  test('People is # of People under its own heading, with no tabs', async ({ page }) => {
+    await seniorPastor(page);
+    await mockChurchCounts(page);
+
+    await page.goto('/reports/number-of-people');
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('People');
+    await expect(page.getByRole('navigation', { name: 'Which report' })).toHaveCount(0);
+    await expect(
+      page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
+    ).toHaveText('People');
   });
 });
 
@@ -180,9 +210,9 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     await expect(page.getByText('As of 30 September 2026', { exact: true })).toBeVisible();
     await expect.poll(() => asked.at(-1)).toBe('2026-09-01');
     // The month travels to the other tabs.
-    await expect(page.getByRole('link', { name: 'Number of people', exact: true })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Number of Cell Groups', exact: true })).toHaveAttribute(
       'href',
-      '/reports/number-of-people?month=2026-09-01',
+      '/reports/number-of-cells?month=2026-09-01',
     );
   });
 });
@@ -236,22 +266,17 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(page.getByRole('button', { name: /How these are counted/i })).toHaveCount(0);
   });
 
-  test('CG and DCC Attendance are tabs of their own, with no switch inside, the month and Figures for are one row, and an open month says As of today', async ({
+  test('CG Attendance is a tab of Cells with no switch inside, the month and Figures for are one row, and an open month says As of today', async ({
     page,
   }) => {
     await attendance(page);
 
     await page.goto('/reports/cells');
 
-    // Two tabs rather than a tab and a switch inside it (decision 0481), the five on one row.
+    // A tab of Cells, with no attendance switch inside it (decisions 0481 and 0488), the three
+    // on one row.
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
-    await expect(tabs).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
-      '# of Cell Groups',
-      '# of Cell Leaders',
-      '# of People',
-    ]);
+    await expect(tabs).toHaveText(['CG Attendance', '# of Cell Groups', '# of Cell Leaders']);
     await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('group', { name: 'Which attendance' })).toHaveCount(0);
     const rows = new Set(
@@ -267,9 +292,9 @@ test.describe('the Senior Pastors’ attendance tabs (decision 0327)', () => {
     await expect(bar.getByText(AS_OF_TODAY).first()).toBeVisible();
     await expect(page.getByText(/^Open until /)).toHaveCount(0);
 
-    // DCC Attendance opens the DCC report and is the tab marked current.
+    // # of Cell Groups opens its count and is the tab marked current.
     await tabs.nth(1).click();
-    await expect(page).toHaveURL(/\/reports\/dcc/);
+    await expect(page).toHaveURL(/\/reports\/number-of-cells/);
     await expect(tabs.nth(1)).toHaveAttribute('aria-current', 'page');
   });
 
@@ -347,13 +372,13 @@ test('Reports switches a figure between Monthly and its last 12 months on one sw
 
   await view.getByRole('button', { name: 'Yearly' }).click();
   await expect(page).toHaveURL(/\/trends\?figure=CELL_LEADERS$/);
-  await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cells', level: 1 })).toBeVisible();
   const tabs = page.getByRole('navigation', { name: 'Which report' });
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText('# of Cell Leaders');
-  // The sidebar marks Reports; there is no Trends item.
+  // The sidebar marks Cells, which holds the figure; there is no Trends item (decision 0488).
   const main = page.getByRole('navigation', { name: 'Main' });
-  await expect(main.getByRole('link')).toHaveText(['Record', 'Reports', 'Conquest']);
-  await expect(main.locator('a[aria-current="page"]')).toHaveText('Reports');
+  await expect(main.getByRole('link')).toHaveText(['People', 'Cells', 'Services', 'Conquest']);
+  await expect(main.locator('a[aria-current="page"]')).toHaveText('Cells');
 
   const back = page.getByRole('group', { name: 'Report period' });
   await expect(back.getByRole('button', { name: 'Yearly' })).toHaveAttribute('aria-pressed', 'true');
@@ -435,22 +460,19 @@ test.describe('Trends (decisions 0326 and 0327)', () => {
 
   const graph = (page: Page) => page.getByRole('img', { name: /, November 2025 to October 2026: / });
 
-  test('has the same five tabs, keeping the leader chosen', async ({ page }) => {
+  test('has the same tabs as the item it is under, keeping the leader chosen (decision 0488)', async ({ page }) => {
     await seniorPastor(page);
     await mockChurchCounts(page);
     const asked = await mockTrends(page);
 
     await page.goto(`/trends?leader=${SP_PRIMARIES.abad.id}`);
 
+    // CG Attendance's twelve months are under Cells, with its three tabs (decision 0488).
     const tabs = page.getByRole('navigation', { name: 'Which report' }).getByRole('link');
-    // CG and DCC Attendance as two tabs (decision 0481).
-    await expect(tabs).toHaveText([
-      'CG Attendance',
-      'DCC Attendance',
-      '# of Cell Groups',
-      '# of Cell Leaders',
-      '# of People',
-    ]);
+    await expect(tabs).toHaveText(['CG Attendance', '# of Cell Groups', '# of Cell Leaders']);
+    await expect(
+      page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
+    ).toHaveText('Cells');
     await expect(page.getByRole('link', { name: 'Number of Cell Leaders', exact: true })).toHaveAttribute(
       'href',
       `/trends?figure=CELL_LEADERS&leader=${SP_PRIMARIES.abad.id}`,
@@ -596,7 +618,7 @@ for (const width of [390, 1280]) {
       await mockTrends(page);
 
       await page.goto(route);
-      await expect(page.getByRole('link', { name: 'Number of people', exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Number of Cell Groups', exact: true })).toBeVisible();
       if (route === '/trends') {
         await expect(page.getByRole('checkbox', { name: 'Whole Church' })).toBeVisible();
       } else {

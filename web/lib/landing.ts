@@ -24,6 +24,12 @@ export const RECORD_PATH = '/dashboard';
  */
 export const REPORTS_PATH = '/reports/dcc';
 
+/**
+ * **The Senior Pastors open on *Services*** (decision 0488, owner, 2026-11-14): DCC Attendance,
+ * which is what they follow each week. The same page as Reports opened on before.
+ */
+export const SERVICES_PATH = '/reports/dcc';
+
 /** The Admin area's Home (decision 0419). */
 export const ADMIN_PATH = '/admin';
 
@@ -31,7 +37,7 @@ export function landingPath(me: SessionDescription | undefined): string {
   if (me !== undefined && holdsWide(me, 'accounts.manage')) {
     return ADMIN_PATH;
   }
-  return me?.screens === 'SENIOR_PASTOR' ? REPORTS_PATH : RECORD_PATH;
+  return me?.screens === 'SENIOR_PASTOR' ? SERVICES_PATH : RECORD_PATH;
 }
 
 /**

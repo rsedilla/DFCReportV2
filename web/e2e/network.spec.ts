@@ -14,7 +14,7 @@ for (const [who, arrange, screens, start] of [
   [
     'a Senior Pastor',
     async (page: import('@playwright/test').Page) => mockScreens(page, 'SENIOR_PASTOR'),
-    'Record, Reports and Conquest',
+    'People, Cells, Services and Conquest',
     '/reports/dcc',
   ],
   [

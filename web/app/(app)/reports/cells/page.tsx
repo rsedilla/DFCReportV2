@@ -113,7 +113,10 @@ export function CellReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
+      <ReportsHeading
+        current="cells"
+        line="Who came to a Cell, and where they are in their journey."
+      />
       <ReportsTabs current="cells" month={guardMonth}>
         {/* Weekly, Monthly and Yearly on the line beside Cell Group and DCC, for every reader
             (decision 0443). */}

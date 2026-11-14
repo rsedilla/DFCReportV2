@@ -53,9 +53,14 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/people\/mine$/)) {
     return me.screens === 'RECORDING';
   }
-  // Every account has its own Account page and Record, and a Sunday's checklist from Record.
-  if (at(/^\/(session|dashboard|dcc)(\/|$)/)) {
+  // Every account has its own Account page.
+  if (at(/^\/session(\/|$)/)) {
     return true;
+  }
+  // Record, and a Sunday's checklist from it, are every account's but the Senior Pastors', whose
+  // menu holds no Record (decision 0488): the Admin keeps the records for both Networks.
+  if (at(/^\/(dashboard|dcc)(\/|$)/)) {
+    return me.screens !== 'SENIOR_PASTOR';
   }
 
   // A Cell's meetings and members, opened from Record on every account's screens.
@@ -72,8 +77,9 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     at(/^\/people\/number-of-people(\/|$)/);
 
   if (me.screens === 'SENIOR_PASTOR') {
-    // Record and Reports (decisions 0326 and 0377), and what they open: a Cell's meetings and
-    // members, and a person (until the owner rules on their person pages).
+    // People, Cells and Services (decision 0488), their twelve months (decision 0377), and what
+    // they open: a Cell's meetings and members, and a person (until the owner rules on their
+    // person pages).
     return fiveReports || cellRecord || person;
   }
 

@@ -30,6 +30,7 @@ function Training() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <ReportsHeading
+        current="training"
         line={`Training for ${counts.data ? `the ${counts.data.people} ${counts.data.people === 1 ? 'person' : 'people'}` : 'the people'} you oversee, as of today.`}
       />
       <ReportsTabs current="training">

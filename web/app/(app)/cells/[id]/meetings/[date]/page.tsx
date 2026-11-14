@@ -565,9 +565,9 @@ function RecordMeeting() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING} data-form-layout>
-      {/* Cells' for every account that has a Cells item; Record's for the Senior Pastors, who
-          reach a meeting from Update Records (decision 0467). */}
-      <SectionFrame section={me.data?.screens === 'SENIOR_PASTOR' ? 'record' : 'cells'}>
+      {/* Cells' for every account (decision 0467), the Senior Pastors' too since Record is not
+          theirs and their Cells item holds their Cell figures (decision 0488). */}
+      <SectionFrame section="cells">
       <p className="mb-4">
         <TextLink href={`/cells/${params.id}/meetings`}>
           Back to this Cell&rsquo;s meetings
