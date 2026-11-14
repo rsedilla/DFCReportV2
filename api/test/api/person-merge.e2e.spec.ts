@@ -319,6 +319,25 @@ describe('Person Merge (section 3, decision 0408)', () => {
       });
     });
 
+    it("leaves the kept record without a birthday when the duplicate's is out of range (decision 0487)", async () => {
+      await db.updateTable('persons').set({ birth_date: null }).where('id', '=', juan.id).execute();
+      await db
+        .updateTable('persons')
+        .set({ birth_date: '2999-01-01' })
+        .where('id', '=', juanAgain.id)
+        .execute();
+
+      const response = await mergeInto(juan, juanAgain).expect(200);
+      expect(response.body.copied).not.toContain('birth_date');
+
+      const kept = await db
+        .selectFrom('persons')
+        .select(['birth_date'])
+        .where('id', '=', juan.id)
+        .executeTakeFirstOrThrow();
+      expect(kept.birth_date).toBeNull();
+    });
+
     it("disables the duplicate's account and ends its sessions (section 3)", async () => {
       await request(server())
         .get('/api/v1/auth/me')

@@ -26,6 +26,7 @@ import { formatMobile } from '@/lib/mobile';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
+  EARLIEST_BIRTHDAY,
   CIVIL_STATUS_OPTIONS,
   SEX_OPTIONS,
   createNetworkAdmin,
@@ -40,6 +41,7 @@ import {
   type PersonFull,
   type Sex,
 } from '@/lib/people';
+import { todayInManila } from '@/lib/reporting-month';
 
 /**
  * Adding a person (SKILL.md sections 3 and 9).
@@ -506,6 +508,9 @@ function NewPersonForm() {
               <Field
                 label="Birthday (required)"
                 type="date"
+                // From 1900 to today, so the year takes four digits (decision 0487).
+                min={EARLIEST_BIRTHDAY}
+                max={todayInManila()}
                 name="birth_date"
                 autoComplete="off"
                 value={notGiven.birth_date ? '' : values.birth_date}

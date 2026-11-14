@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-13, the trigger being decision 0486: of 485 files, 484 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0486 each moved the first two and
+2026-11-13, the trigger being decision 0487: of 486 files, 485 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0487 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-13 and triggered by 0486, and was left stale by 0487 the same day. The one before that was dated
 2026-11-13 and triggered by 0485, and was left stale by 0486 the same day. The one before that was dated
 2026-11-13 and triggered by 0484, and was left stale by 0485 the same day. The one before that was dated
 2026-11-12 and triggered by 0483, and was left stale by 0484 the next day. The one before that was dated
@@ -1016,6 +1017,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-13 — [The browser tab names the page, and a control's border is dark](docs/decisions/0484-the-browser-tab-names-the-page.md)
 - 2026-11-13 — [The Senior Pastors read Attendance by month, with no Weekly](docs/decisions/0485-the-senior-pastors-read-by-month.md)
 - 2026-11-13 — [The Senior Pastors' *Figures for* is All, Men's and Women's](docs/decisions/0486-the-senior-pastors-figures-for-is-three-buttons.md)
+- 2026-11-13 — [A birthday is a day from 1900 to today](docs/decisions/0487-a-birthday-is-from-1900-to-today.md)
 
 ### Open — awaiting a ruling
 

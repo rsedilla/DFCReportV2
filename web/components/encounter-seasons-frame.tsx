@@ -124,6 +124,8 @@ export function EncounterSeasonsFrame({ editable }: { editable: boolean }) {
       <input
         id={`season-${name}`}
         type="date"
+        // A four-digit year: without a maximum the box takes six (decision 0487).
+        max="9999-12-31"
         value={draft?.[name] ?? ''}
         onChange={(event) => change(name, event.target.value)}
         aria-describedby={`season-${name}-hint`}

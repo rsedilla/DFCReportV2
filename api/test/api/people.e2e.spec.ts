@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
+import { manilaDayOf } from '../../src/common/time/manila';
 import { PeopleService } from '../../src/people/people.service';
 import { lastNameKey } from '../../src/people/duplicate-matching';
 import {
@@ -557,6 +558,70 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
       },
     );
+
+    describe('a birthday is a day from 1900 to today (section 3, decision 0487)', () => {
+      // Tomorrow in Manila, the zone a birthday is read in: the first day refused.
+      const tomorrow = manilaDayOf(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+      it.each([
+        [tomorrow, 'A birthday cannot be in the future.'],
+        ['1899-12-31', 'A birthday cannot be before 1900.'],
+      ])('refuses %s, and says why', async (day, why) => {
+        const response = await post(raymondAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, birth_date: day }),
+        );
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(JSON.stringify(response.body.error)).toContain(why);
+        expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+      });
+
+      it('accepts 1 January 1900 and today, the two ends', async () => {
+        const today = manilaDayOf(new Date());
+        for (const [day, first] of [
+          ['1900-01-01', 'Elena'],
+          [today, 'Lorna'],
+        ]) {
+          const response = await post(raymondAccount, randomUUID()).send(
+            personBody({
+              pastoral_leader_id: manuel.id,
+              first_name: first,
+              last_name: 'Ocampo',
+              birth_date: day,
+            }),
+          );
+          expect(response.status).toBe(201);
+        }
+      });
+
+      it('refuses an edit to a future birthday, and keeps the one recorded', async () => {
+        const created = await post(raymondAccount, randomUUID()).send(
+          personBody({
+            pastoral_leader_id: manuel.id,
+            first_name: 'Nora',
+            last_name: 'Lazaro',
+            birth_date: '1990-05-01',
+          }),
+        );
+        expect(created.status).toBe(201);
+
+        const edited = await request(app.getHttpServer())
+          .patch(`/api/v1/people/${created.body.id}`)
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({ birth_date: tomorrow });
+
+        expect(edited.status).toBe(422);
+        expect(edited.body.error.code).toBe('VALIDATION_FAILED');
+        const stored = await db
+          .selectFrom('persons')
+          .select('birth_date')
+          .where('id', '=', created.body.id)
+          .executeTakeFirstOrThrow();
+        expect(stored.birth_date).toBe('1990-05-01');
+      });
+    });
 
     it('refuses a request with no idempotency key', async () => {
       const response = await request(app.getHttpServer())

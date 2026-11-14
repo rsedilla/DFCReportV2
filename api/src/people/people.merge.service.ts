@@ -9,6 +9,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { birthdayOutOfRange, manilaDayOf } from '../common/time/manila';
 import { sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -190,8 +191,14 @@ export class PeopleMergeService {
       const at = new Date();
 
       // Point 3: a detail the kept record lacks is copied; where both have one, the kept stands.
+      // A birthday outside 1900 to today is not copied, and the kept record stays without one
+      // (decision 0487): section 3 never fills a birthday in for the sake of having one.
       const copied: Record<string, string> = {};
-      if (kept.birth_date === null && duplicate.birth_date !== null) {
+      if (
+        kept.birth_date === null &&
+        duplicate.birth_date !== null &&
+        birthdayOutOfRange(duplicate.birth_date, manilaDayOf(at)) === null
+      ) {
         copied.birth_date = duplicate.birth_date;
       }
       if (kept.mobile_number === null && duplicate.mobile_number !== null) {

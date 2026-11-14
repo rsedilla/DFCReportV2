@@ -84,6 +84,9 @@ export interface PersonPage {
  * Section 22 uses cursors and returns no total count, so no screen here offers
  * "page 3 of 12" or a result count, both of which it would have to invent.
  */
+/** The earliest birthday a person may have (SKILL.md section 3, decision 0487); the server refuses earlier. */
+export const EARLIEST_BIRTHDAY = '1900-01-01';
+
 /**
  * The shortest search the API accepts.
  *

@@ -81,6 +81,24 @@ export function manilaDayOf(instant: Date): string {
   return `${pad(wall.year, 4)}-${pad(wall.month, 2)}-${pad(wall.day, 2)}`;
 }
 
+/** The earliest birthday anywhere (SKILL.md section 3, decision 0487). */
+export const EARLIEST_BIRTHDAY = '1900-01-01';
+
+/**
+ * Why a birthday is refused, or `null` when it is a day from 1 January 1900 to today in
+ * Manila (section 3, decision 0487). Compared as `YYYY-MM-DD` strings, which order as the
+ * days do. Called only on a value that is already a calendar date.
+ */
+export function birthdayOutOfRange(day: string, today: string): string | null {
+  if (day > today) {
+    return 'A birthday cannot be in the future.';
+  }
+  if (day < EARLIEST_BIRTHDAY) {
+    return 'A birthday cannot be before 1900.';
+  }
+  return null;
+}
+
 /**
  * Whether a string is a `YYYY-MM-DD` date that **exists** (SKILL.md section 20).
  *
