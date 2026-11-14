@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
-import { GrowthCards, GrowthFilters } from '@/components/growth-controls';
+import { GrowthFilters } from '@/components/growth-controls';
 
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   getConquestCounts,
@@ -21,6 +22,7 @@ import { describeFailure } from '@/lib/messages';
 import { useCursorPages } from '@/lib/cursor-pages';
 import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 
 /**
  * Conquest, an item of the sidebar of its own for holders of `conquest.view_subtree` at Whole
@@ -34,6 +36,11 @@ import { useScreenAddress } from '@/lib/screen-address';
  * **A reached goal shows the month it was first reached, with today's count beneath it,
  * never instead of it** (section 27). One not yet reached shows how far it is, out of its
  * target. Nothing is coloured or graded (sections 17 and 19).
+ *
+ * **One tab per goal** (decision 0489, owner, 2026-11-14, as Bishop Oriel asked): *Win 3*, *Open
+ * a Cell*, *Completion of 12* and *Raise 12 Leaders*. Each shows how many have reached it and then
+ * everyone, with their progress on that goal alone, in first-name order (decision 0359) and never
+ * by progress (decision 0009). The tab is the address's `goal`, Win 3 where it names none.
  */
 export default function ConquestPage() {
   return (
@@ -50,9 +57,9 @@ const GOALS: readonly {
   target: number | null;
 }[] = [
   { goal: 'WIN_3', key: 'win_3', label: 'Win 3', target: 3 },
-  { goal: 'OPEN_A_CELL', key: 'open_a_cell', label: 'Open a cell', target: null },
+  { goal: 'OPEN_A_CELL', key: 'open_a_cell', label: 'Open a Cell', target: null },
   { goal: 'COMPLETION_OF_12', key: 'completion_of_12', label: 'Completion of 12', target: 12 },
-  { goal: 'RAISE_12_LEADERS', key: 'raise_12_leaders', label: 'Raise 12 leaders', target: 12 },
+  { goal: 'RAISE_12_LEADERS', key: 'raise_12_leaders', label: 'Raise 12 Leaders', target: 12 },
 ];
 
 function isGoal(value: string | null): value is ConquestGoal {
@@ -65,31 +72,39 @@ function ConquestTab() {
   const q = search.get('q') ?? '';
   const mine = search.get('mine') === '1';
   const chosen = search.get('goal');
-  const goal = isGoal(chosen) ? chosen : null;
+  const tab = GOALS.find((entry) => entry.goal === (isGoal(chosen) ? chosen : 'WIN_3'))!;
 
   const pageSize = usePageSize();
-  // A new size starts the list again, so no row is skipped between two page lengths.
-  const pages = useCursorPages(`${q}|${mine}|${goal ?? ''}|${pageSize}`);
+  // A new size starts the list again, so no row is skipped between two page lengths. Every tab
+  // lists the same people, so changing tab keeps the page.
+  const pages = useCursorPages(`${q}|${mine}|${pageSize}`);
 
   const counts = useQuery({
     queryKey: ['conquest-counts'],
     queryFn: ({ signal }) => getConquestCounts(signal),
   });
   const people = useQuery({
-    queryKey: ['conquest-people', q, mine, goal, pages.cursor, pageSize],
+    queryKey: ['conquest-people', q, mine, pages.cursor, pageSize],
     queryFn: ({ signal }) =>
-      listConquestPeople(
-        { q, mine, goal: goal ?? undefined, cursor: pages.cursor, limit: pageSize },
-        signal,
-      ),
+      listConquestPeople({ q, mine, cursor: pages.cursor, limit: pageSize }, signal),
   });
 
   const rows = people.data?.data ?? [];
-  const cards = GOALS.map((entry) => ({
-    step: entry.goal,
-    label: entry.label,
-    count: counts.data?.[entry.key],
-  }));
+  // A tab keeps the search and Only my disciples.
+  const tabHref = (goal: ConquestGoal) => {
+    const params = new URLSearchParams();
+    if (goal !== 'WIN_3') {
+      params.set('goal', goal);
+    }
+    if (q) {
+      params.set('q', q);
+    }
+    if (mine) {
+      params.set('mine', '1');
+    }
+    const query = params.toString();
+    return query ? `/conquest?${query}` : '/conquest';
+  };
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -102,9 +117,24 @@ function ConquestTab() {
         </p>
       </div>
 
-      {/* The tab pane's green frame, closed at the top: Conquest has no tabs (decision 0407). */}
-      <div className="border-accent mt-6 flow-root min-w-0 border-2 px-4 pb-5 sm:px-5">
+      <nav
+        aria-label="Which goal"
+        // Two by two on a phone, one row of four from `lg` (decision 0489).
+        className={cn('mt-6', TAB_GRID, TAB_ROW, 'lg:grid-cols-4')}
+      >
+        {GOALS.map((entry) => (
+          <Link
+            key={entry.goal}
+            href={tabHref(entry.goal)}
+            aria-current={entry.goal === tab.goal ? 'page' : undefined}
+            className={tabClasses(entry.goal === tab.goal)}
+          >
+            {entry.label}
+          </Link>
+        ))}
+      </nav>
 
+      <div className={TAB_PANE}>
         <GrowthFilters
           submitted={q}
           mine={mine}
@@ -112,7 +142,16 @@ function ConquestTab() {
           onMine={(next) => go({ mine: next ? '1' : null })}
         />
 
-        <GrowthCards cards={cards} selected={goal} onSelect={(next) => go({ goal: next })} />
+        {/* How many have reached this tab's goal: a count to read, not a filter (decision 0489). */}
+        <div className="border-edge bg-surface mt-4 flex flex-col items-start border p-3 sm:max-w-64">
+          <span className="text-accent text-xs font-bold tracking-[0.08em] uppercase">
+            {tab.label}
+          </span>
+          <span className="mt-1 text-2xl font-bold tabular-nums">
+            {counts.data?.[tab.key] ?? '\u2013'}
+          </span>
+          <span className="text-muted pt-1 text-xs">Reached</span>
+        </div>
 
         <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
           Goals fill in by themselves from lessons, Cells and leaders. If one looks wrong, fix the
@@ -138,14 +177,11 @@ function ConquestTab() {
             <p className="text-sm">Nobody here matches.</p>
           ) : (
             <>
-              <Table caption="Conquest goals for the people you oversee" className="hidden lg:block">
+              <Table caption={`${tab.label} for the people you oversee`} className="hidden lg:block">
                 <thead>
                   <tr>
                     <HeaderCell>Person</HeaderCell>
-                    {GOALS.map((entry) => (
-                      <HeaderCell key={entry.goal}>{entry.label}</HeaderCell>
-                    ))}
-                    <HeaderCell className="text-right">Goals</HeaderCell>
+                    <HeaderCell>{tab.label}</HeaderCell>
                   </tr>
                 </thead>
                 <tbody>
@@ -154,36 +190,26 @@ function ConquestTab() {
                       <td className="px-3 py-3 align-top">
                         <PersonName row={row} />
                       </td>
-                      {GOALS.map((entry) => (
-                        <td key={entry.goal} className="px-3 py-3 align-top text-sm">
-                          <GoalCell state={row.goals[entry.key]} target={entry.target} />
-                        </td>
-                      ))}
-                      <td className="px-3 py-3 text-right align-top text-sm tabular-nums">
-                        {reachedCount(row)} of 4
+                      <td className="px-3 py-3 align-top text-sm">
+                        <GoalCell state={row.goals[tab.key]} target={tab.target} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </Table>
 
+              {/* A phone: each person with this goal beside or under the name. */}
               <ul className="border-line divide-line divide-y border-t border-b lg:hidden">
                 {rows.map((row) => (
-                  <li key={row.person_id} className="py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <PersonName row={row} />
-                      <span className="text-sm tabular-nums">{reachedCount(row)} of 4</span>
-                    </div>
-                    <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
-                      {GOALS.map((entry) => (
-                        <div key={entry.goal} className="contents">
-                          <dt className="font-medium">{entry.label}</dt>
-                          <dd>
-                            <GoalCell state={row.goals[entry.key]} target={entry.target} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
+                  <li
+                    key={row.person_id}
+                    className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-3"
+                  >
+                    <PersonName row={row} />
+                    <span className="text-sm">
+                      <span className="sr-only">{tab.label}: </span>
+                      <GoalCell state={row.goals[tab.key]} target={tab.target} />
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -240,10 +266,6 @@ function GoalCell({ state, target }: { state: ConquestGoalState; target: number 
       )}
     </>
   );
-}
-
-function reachedCount(row: ConquestPerson): number {
-  return GOALS.filter((entry) => row.goals[entry.key].reached_on !== null).length;
 }
 
 /** "Mar 2026", from a `YYYY-MM-DD` day. */
