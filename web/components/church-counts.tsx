@@ -271,6 +271,17 @@ export function ChurchCountsPanel({
             </p>
           ) : (
             <>
+              {(() => {
+                // **On the Senior Pastors' *People*, each root's own row and a Total close their
+                // table, and *Others* holds only who is left over** (decision 0490): each root is
+                // one person of *Others*, so that line is shown only for anybody beyond them. Where
+                // *Others* holds fewer than the roots shown, it is left as the API answered it.
+                const rootsHere = switched ? data.tables.length : 0;
+                const leftOver =
+                  data.others && switched ? data.others.people - rootsHere : null;
+                const ownRows = switched && leftOver !== null && leftOver >= 0;
+                return (
+                  <>
               {data.tables.map((table) => (
                 <CountTable
                   key={table.root.id}
@@ -287,9 +298,18 @@ export function ChurchCountsPanel({
                           }).toString()}`
                       : undefined
                   }
+                  ownRow={ownRows}
                 />
               ))}
-              {data.others ? <OthersLine figure={figure} others={data.others} /> : null}
+              {data.others && !ownRows ? (
+                <OthersLine figure={figure} others={data.others} />
+              ) : null}
+              {ownRows && leftOver !== null && leftOver > 0 ? (
+                <OthersLine figure={figure} others={{ ...data.others!, people: leftOver }} rootsShown />
+              ) : null}
+                  </>
+                );
+              })()}
             </>
           )}
         </>
@@ -323,11 +343,14 @@ function CountTable({
   figure,
   table,
   drill,
+  ownRow = false,
 }: {
   figure: Figure;
   table: NonNullable<ChurchCounts['tables']>[number];
   /** A Primary's name opens their 12 here, at this address, rather than their own page (decision 0490). */
   drill?: (leaderId: string) => string;
+  /** The root's own row, counting one, and a Total (decision 0490); *# of People* alone. */
+  ownRow?: boolean;
 }) {
   const phone = usePhone();
   // No count in the heading (owner, 2026-10-09).
@@ -379,6 +402,20 @@ function CountTable({
               ))}
             </tr>
           ))}
+          {ownRow ? (
+            <>
+              <tr className={rowClasses}>
+                <td className={NAME_CELL}>{table.root.full_name ?? 'A Network root'}</td>
+                <td className={FIGURE_CELL}>1</td>
+              </tr>
+              <tr className="border-ink border-t-2">
+                <td className={`${NAME_CELL} font-bold`}>Total</td>
+                <td className={`${FIGURE_CELL} font-bold`}>
+                  {table.rows.reduce((sum, row) => sum + row.people, 1)}
+                </td>
+              </tr>
+            </>
+          ) : null}
         </tbody>
       </Table>
       <CountsKey figure={figure} />
@@ -386,12 +423,21 @@ function CountTable({
   );
 }
 
-function OthersLine({ figure, others }: { figure: Figure; others: ChurchCountFigures }) {
+function OthersLine({
+  figure,
+  others,
+  rootsShown = false,
+}: {
+  figure: Figure;
+  others: ChurchCountFigures;
+  /** The roots already have rows of their own, so the line counts anyone else (decision 0490). */
+  rootsShown?: boolean;
+}) {
   return (
     <div className="mt-6">
       <h3 className="text-base font-bold tracking-tight">Others</h3>
       <p className="text-muted mt-1 max-w-2xl text-sm">
-        The two Network roots, and anyone in neither table.
+        {rootsShown ? 'Anyone in no table above.' : 'The two Network roots, and anyone in neither table.'}
       </p>
       <p className="mt-2 text-sm tabular-nums">
         {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${others[key]}`).join(' · ')}

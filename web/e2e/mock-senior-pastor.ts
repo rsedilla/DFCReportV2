@@ -80,9 +80,10 @@ export function networkCounts(period: string, current: boolean, network: 'MENS' 
   return {
     ...church,
     network,
-    whole_church: network === 'MENS' ? figures([0, 2, 1], 3, 20) : figures([1, 1, 0], 2, 16),
+    // Each Network's Others holds its root; the Men's also one person in no table.
+    whole_church: network === 'MENS' ? figures([0, 2, 1], 3, 19) : figures([1, 1, 0], 2, 17),
     tables: church.tables.filter((table) => table.network === network),
-    others: network === 'MENS' ? figures([0, 0, 1], 1, 3) : figures([0, 0, 0], 0, 0),
+    others: network === 'MENS' ? figures([0, 0, 1], 1, 2) : figures([0, 0, 0], 0, 1),
   };
 }
 

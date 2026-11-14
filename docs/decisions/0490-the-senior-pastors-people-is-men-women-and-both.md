@@ -7,7 +7,15 @@ phone and a laptop, today beside the change.
 
 **1. The two Senior Pastors' *People* has a *Men* · *Women* · *Both* switch**, under the month.
 *Men* shows the Men's Network's total and the Men's root's table of Primaries, *Women* the same
-for the Women's Network, and *Both* the whole church and both tables, with *Others*, as before.
+for the Women's Network, and *Both* the whole church and both tables.
+
+**1a. Each root's table ends with the root's own row, counting one, and a Total** (owner,
+2026-11-14, added after seeing the build), so the table adds up without the reader looking
+elsewhere. *Others*, decision 0326's line under the tables, counted the roots; on *People* it now
+shows only somebody beyond them, as *Anyone in no table above*, and is not shown when nobody is
+left over. Where *Others* holds fewer people than the roots shown, it is shown as the API answered
+it, with no root rows. The two Cell counts keep *Others* as it was, a root's own Cells not being
+separable the same way.
 
 **2. The reader's own Network comes first and is chosen when the page opens**: Bishop Oriel sees
 *Men* · *Women* · *Both* and opens on *Men*; Pastora Geraldine sees *Women* · *Men* · *Both* and

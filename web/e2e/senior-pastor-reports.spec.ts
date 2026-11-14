@@ -121,24 +121,38 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
       'true',
     );
     await expect(people(page).getByRole('heading', { name: 'Men’s Network' })).toBeVisible();
-    await expect(people(page).getByRole('definition').first()).toHaveText('20');
+    await expect(people(page).getByRole('definition').first()).toHaveText('19');
     await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toHaveCount(0);
+    // The root's own row and a Total close the table (decision 0490): 6 + 11 + 1.
+    const mensRows = page.getByRole('table', { name: MENS_TABLE }).getByRole('row');
+    await expect(mensRows.nth(-2).getByRole('cell')).toHaveText([SP_MENS_ROOT.full_name, '1']);
+    await expect(mensRows.last().getByRole('cell')).toHaveText(['Total', '18']);
+    // Others holds only who is left over beyond the root: 19 - 18.
+    await expect(page.getByText('Anyone in no table above.')).toBeVisible();
+    await expect(page.getByText('People 1', { exact: true })).toBeVisible();
     await expect.poll(() => asked.includes('2026-10-01|MENS')).toBe(true);
 
     await which(page).getByRole('button', { name: 'Women’s Network', exact: true }).click();
     await expect(page).toHaveURL(/[?&]network=WOMENS\b/);
-    await expect(people(page).getByRole('definition').first()).toHaveText('16');
+    await expect(people(page).getByRole('definition').first()).toHaveText('17');
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: MENS_TABLE })).toHaveCount(0);
+    // Nobody is left over, so there is no Others at all.
+    await expect(
+      page.getByRole('table', { name: WOMENS_TABLE }).getByRole('row').last().getByRole('cell'),
+    ).toHaveText(['Total', '17']);
+    await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
 
     await which(page).getByRole('button', { name: /^Both/ }).click();
     await expect(page).toHaveURL(/[?&]network=BOTH\b/);
-    // Men's 20 and Women's 16 are the whole church's 36.
+    // Men's 19 and Women's 17 are the whole church's 36.
     await expect(people(page).getByRole('heading', { name: 'Whole Church' })).toBeVisible();
     await expect(people(page).getByRole('definition').first()).toHaveText('36');
     await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
+    // Both roots have rows; one person is left over beyond them.
+    await expect(page.getByText('Anyone in no table above.')).toBeVisible();
   });
 
   test('Pastora opens on Women, then Men, then Both', async ({ page }) => {
@@ -151,7 +165,7 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
       'aria-pressed',
       'true',
     );
-    await expect(people(page).getByRole('definition').first()).toHaveText('16');
+    await expect(people(page).getByRole('definition').first()).toHaveText('17');
   });
 
   test('a Primary’s name opens their 12 here, with the way back to People', async ({ page }) => {
