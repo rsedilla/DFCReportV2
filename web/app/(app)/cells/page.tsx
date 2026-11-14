@@ -131,8 +131,9 @@ function CellsIndex() {
   const [closing, setClosing] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
   // Offered only where the route would answer; the route still decides (section 1, principle 4).
+  // New Cell is the Admin's and, for their own Network, a Network Admin's (decision 0492).
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
+  const mayCreate = holdsWide(me.data, 'cell.approve_leadership');
   // **The administrator's lists** (decision 0366): *Under 3 Members*, *Inactive 3+
   // Months* and *Closed Cells* are offered to an account holding `cell.manage_lifecycle`
   // at Whole Church or as a Network Admin (decisions 0355 and 0469), which is who closes a Cell and the same answer the server

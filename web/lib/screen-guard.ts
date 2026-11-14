@@ -104,9 +104,10 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     return false;
   }
   // New Cell is offered from the Cells list to a Whole Church holder of
-  // `cell.approve_leadership` alone (sections 2 and 10).
+  // `cell.approve_leadership` and to a Network Admin, who holds it over their Network
+  // (sections 2 and 10, decision 0492).
   if (at(/^\/cells\/new(\/|$)/)) {
-    return holdsWholeChurch(me, 'cell.approve_leadership');
+    return holdsWide(me, 'cell.approve_leadership');
   }
   // A Full view leader, reading their own branch, has the five reports and SUYNL alone
   // (decisions 0360, 0380 and 0383). The Encounter seasons page stays open: decision 0360 marks

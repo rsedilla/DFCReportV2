@@ -28,12 +28,13 @@ import { describeFailure } from '@/lib/messages';
 
 /**
  * New Cell (SKILL.md sections 2 and 10): an administrator creates a Cell with its leader
- * while the initial encoding is open. The owner's design sends this to Cells without
+ * while the initial encoding is open, the Admin for the whole church and a Network Admin for
+ * their own Network (decision 0492), whose leader search finds their Network alone. The owner's design sends this to Cells without
  * drawing it (2026-09-22), so it follows Add a person.
  *
  * Whether this account may is the server's answer: the Cells list offers the link only to
- * a Whole Church holder of `cell.approve_leadership`, and the route decides (section 1,
- * principle 4).
+ * a holder of `cell.approve_leadership` over the whole church or a whole Network, and the
+ * route decides (section 1, principle 4).
  */
 export default function NewCellPage() {
   return (

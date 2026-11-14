@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -21,7 +22,8 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
 /**
  * The Network Admin's Cell powers and their limits (SKILL.md sections 7 and 10, decision
  * 0469, point 4): deciding requests, members, schedule and category, and closing, in their
- * own Network. Direct creation, *Created in error* and backdating stay the Admin's. Every
+ * own Network. Direct creation is theirs too for their own Network, during initial encoding
+ * (decision 0492). *Created in error* and backdating stay the Admin's. Every
  * name is invented (CLAUDE.md, Secrets).
  *
  * The tree: Wilma (Women's root) -> Wanda (Leader account, a Cell) -> Winnie, and Wilma ->
@@ -215,17 +217,94 @@ describe('the Network Admin’s Cells (decision 0469)', () => {
 
       expect(refused(response)).toEqual([403, 'CAPABILITY_DENIED']);
     });
+  });
 
-    it('creates no Cell directly', async () => {
-      const response = await send('post', networkAdmin, '/cells', {
-        cell_leader_id: winnie.id,
+  describe('creating a Cell directly (decision 0492)', () => {
+    const create = (account: TestAccount, leaderId: string) =>
+      send('post', account, '/cells', {
+        cell_leader_id: leaderId,
         category: 'YOUTH',
         day_of_week: 6,
         time_of_day: '19:00',
       });
 
-      expect(response.status).toBe(403);
-      expect(await db.selectFrom('cells').select('id').execute()).toHaveLength(3);
+    const cellCount = async () => (await db.selectFrom('cells').select('id').execute()).length;
+
+    it('creates a Cell for a leader of their own Network, and the audit log names them', async () => {
+      const response = await create(networkAdmin, winnie.id);
+
+      expect(response.status).toBe(201);
+      expect(response.body.cell_leader_id).toBe(winnie.id);
+      expect(await cellCount()).toBe(4);
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'actor_id'])
+        .where('action', 'in', ['cell.created', 'cell_leadership.opened'])
+        .execute();
+      expect(entries).toHaveLength(2);
+      expect(entries.every((entry) => entry.actor_id === networkAdmin.id)).toBe(true);
+    });
+
+    it('refuses a leader of the other Network, and somebody who does not exist, alike', async () => {
+      expect(refused(await create(networkAdmin, milo.id))).toEqual([403, 'SCOPE_DENIED']);
+      expect(refused(await create(networkAdmin, randomUUID()))).toEqual([403, 'SCOPE_DENIED']);
+      expect(await cellCount()).toBe(3);
+    });
+
+    it('refuses an archived person of the other Network as it refuses anyone there', async () => {
+      const archived = await createPerson(db, {
+        firstName: 'Marco',
+        network: 'MENS',
+        archived: true,
+      });
+
+      expect(refused(await create(networkAdmin, archived.id))).toEqual([403, 'SCOPE_DENIED']);
+    });
+
+    it('refuses an archived person of their own Network for being archived', async () => {
+      const archived = await createPerson(db, {
+        firstName: 'Wren',
+        network: 'WOMENS',
+        archived: true,
+      });
+
+      expect(refused(await create(networkAdmin, archived.id))).toEqual([
+        409,
+        'INVARIANT_VIOLATION',
+      ]);
+      expect(await cellCount()).toBe(3);
+    });
+
+    it('is refused once initial encoding is closed, as the Admin is', async () => {
+      await sql`UPDATE settings SET value = 'false'::jsonb WHERE key = 'initial_encoding_open'`.execute(
+        db,
+      );
+
+      expect(refused(await create(networkAdmin, winnie.id))).toEqual([409, 'INVARIANT_VIOLATION']);
+      expect(refused(await create(admin, winnie.id))).toEqual([409, 'INVARIANT_VIOLATION']);
+      expect(await cellCount()).toBe(3);
+    });
+
+    it('refuses a Leader holding both capabilities over a Network by an explicit grant', async () => {
+      for (const capability of ['cell.approve_leadership', 'cell.manage_leadership']) {
+        await db
+          .insertInto('capability_grants')
+          .values({
+            account_id: wandaAccount.id,
+            capability,
+            scope_type: 'NETWORK',
+            scope_network: 'WOMENS',
+            read_only: false,
+            reason: 'Invented for this case (CLAUDE.md, Secrets).',
+            granted_by: admin.id,
+          })
+          .execute();
+      }
+
+      // Section 7 gives `cell.approve_leadership` at Whole Church only, apart from the defaults
+      // the Network Admin role and *Approves Cells* select, so this grant covers nothing.
+      expect(refused(await create(wandaAccount, winnie.id))).toEqual([403, 'SCOPE_DENIED']);
+      expect(await cellCount()).toBe(3);
     });
   });
 
