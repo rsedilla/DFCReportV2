@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import {
   FIGURE_CELL,
@@ -12,6 +13,8 @@ import {
 } from '@/components/my-twelve';
 import { CountsSwitch, ReportViewSwitch, type ReportTab } from '@/components/reports-tabs';
 import { CONTROL_BAR } from '@/components/ui/frame';
+import { ViewSwitch } from '@/components/ui/view-switch';
+import { getMe } from '@/lib/me';
 import { KeptFigures } from '@/components/kept-figures';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { ShortText } from '@/components/ui/short-text';
@@ -145,7 +148,8 @@ const LABEL: Record<Figure, string> = {
  * day, and the current month as of now, *As of today* (decision 0451). The whole church first, then one table for
  * each root's direct leaders, the Men's root first, then *Others*, so the rows and *Others*
  * add up to the whole church. Rows are in first-name order, never sorted by a figure, never
- * numbered or coloured (sections 13 and 17); each name opens that leader's page (decision 0364).
+ * numbered or coloured (sections 13 and 17); each name opens that leader's page (decision 0364),
+ * except on the Senior Pastors' *People*, where it opens that Primary's 12 here (decision 0490).
  */
 export function ChurchCountsPanel({
   figure,
@@ -161,14 +165,44 @@ export function ChurchCountsPanel({
   // A month that has not begun is not reported (decision 0216); the address opens this one.
   const month = monthFromQuery(asked);
 
-  const countsKey = ['church-counts', month];
+  // **The Senior Pastors' *People* has a Men · Women · Both switch** (decision 0490), the
+  // reader's own Network first and chosen when the page opens, then the other, then Both. Each
+  // Network shows its total and its root's 12, Both the whole church and both tables.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const switched = figure === 'PEOPLE' && me.data?.screens === 'SENIOR_PASTOR';
+  const askedNetwork = useSearchParams().get('network');
+  // The church's figures name the roots, so the reader's own Network is read from them: the
+  // current month's, once, under the key Both itself uses, so a month change does not unsettle
+  // the choice and Both is not asked for twice.
+  const both = useQuery({
+    queryKey: ['church-counts', current, null],
+    queryFn: ({ signal }) => getChurchCounts(current, signal),
+    enabled: switched,
+  });
+  const ownNetwork =
+    both.data?.tables?.find((table) => table.root.id === me.data?.person_id)?.network ?? null;
+  // Until the church's figures say which root the reader is, no choice is made; a reader who is
+  // neither root opens on Both.
+  const choice: 'MENS' | 'WOMENS' | 'BOTH' | null = !switched
+    ? null
+    : askedNetwork === 'MENS' || askedNetwork === 'WOMENS' || askedNetwork === 'BOTH'
+      ? askedNetwork
+      : both.isFetched
+        ? (ownNetwork ?? 'BOTH')
+        : null;
+  const network = choice === 'MENS' || choice === 'WOMENS' ? choice : undefined;
+
+  const countsKey = ['church-counts', month, network ?? null];
   const counts = useQuery({
     queryKey: countsKey,
     // Another month keeps the counts shown, faded, until its own arrive (owner, 2026-11-06).
     placeholderData: keepPreviousPeriod(countsKey, [1]),
-    queryFn: ({ signal }) => getChurchCounts(month, signal),
+    queryFn: ({ signal }) => getChurchCounts(month, signal, network),
+    // A Senior Pastor's waits for their own Network to be known, so Both does not flash first.
+    enabled: !switched || choice !== null,
   });
   const data = counts.data;
+  const order: ('MENS' | 'WOMENS')[] = ownNetwork === 'WOMENS' ? ['WOMENS', 'MENS'] : ['MENS', 'WOMENS'];
 
   return (
     <section aria-label={LABEL[figure]}>
@@ -188,6 +222,23 @@ export function ChurchCountsPanel({
             onChange={(value) => go({ month: value })}
           />
         </div>
+        {/* Drawn once the reader's own Network is known, so no choice shows that is not made. */}
+        {switched && choice !== null && both.isFetched ? (
+          <ViewSwitch<'MENS' | 'WOMENS' | 'BOTH'>
+            label="Which Network"
+            className="mt-0 w-full lg:w-auto"
+            options={[
+              ...order.map((key) => ({
+                key,
+                label: key === 'MENS' ? 'Men' : 'Women',
+                name: key === 'MENS' ? 'Men’s Network' : 'Women’s Network',
+              })),
+              { key: 'BOTH' as const, label: 'Both', name: 'Both Networks, the whole church' },
+            ]}
+            value={choice}
+            onChange={(next) => go({ network: next })}
+          />
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -220,10 +271,45 @@ export function ChurchCountsPanel({
             </p>
           ) : (
             <>
+              {(() => {
+                // **On the Senior Pastors' *People*, each root's own row and a Total close their
+                // table, and *Others* holds only who is left over** (decision 0490): each root is
+                // one person of *Others*, so that line is shown only for anybody beyond them. Where
+                // *Others* holds fewer than the roots shown, it is left as the API answered it.
+                const rootsHere = switched ? data.tables.length : 0;
+                const leftOver =
+                  data.others && switched ? data.others.people - rootsHere : null;
+                const ownRows = switched && leftOver !== null && leftOver >= 0;
+                return (
+                  <>
               {data.tables.map((table) => (
-                <CountTable key={table.root.id} figure={figure} table={table} />
+                <CountTable
+                  key={table.root.id}
+                  figure={figure}
+                  table={table}
+                  // A Primary's 12 opens for the month and the Network on screen (decision 0490).
+                  drill={
+                    switched
+                      ? (id) =>
+                          `/reports/number-of-people?${new URLSearchParams({
+                            leader: id,
+                            ...(month === current ? {} : { month }),
+                            ...(askedNetwork && choice ? { network: choice } : {}),
+                          }).toString()}`
+                      : undefined
+                  }
+                  ownRow={ownRows}
+                />
               ))}
-              {data.others ? <OthersLine figure={figure} others={data.others} /> : null}
+              {data.others && !ownRows ? (
+                <OthersLine figure={figure} others={data.others} />
+              ) : null}
+              {ownRows && leftOver !== null && leftOver > 0 ? (
+                <OthersLine figure={figure} others={{ ...data.others!, people: leftOver }} rootsShown />
+              ) : null}
+                  </>
+                );
+              })()}
             </>
           )}
         </>
@@ -256,9 +342,15 @@ export function asAt(month: string, current: boolean, today: string = asOfTodayL
 function CountTable({
   figure,
   table,
+  drill,
+  ownRow = false,
 }: {
   figure: Figure;
   table: NonNullable<ChurchCounts['tables']>[number];
+  /** A Primary's name opens their 12 here, at this address, rather than their own page (decision 0490). */
+  drill?: (leaderId: string) => string;
+  /** The root's own row, counting one, and a Total (decision 0490); *# of People* alone. */
+  ownRow?: boolean;
 }) {
   const phone = usePhone();
   // No count in the heading (owner, 2026-10-09).
@@ -297,7 +389,11 @@ function CountTable({
             // Every other row shaded, to follow a row across, never numbered (owner, 2026-10-09).
             <tr key={row.leader.id} className={rowClasses}>
               <td className={NAME_CELL}>
-                <BranchLink leader={row.leader} short={short?.[index] ?? null} />
+                <BranchLink
+                  leader={row.leader}
+                  short={short?.[index] ?? null}
+                  href={drill?.(row.leader.id)}
+                />
               </td>
               {columns.map(([key]) => (
                 <td key={key} className={FIGURE_CELL}>
@@ -306,6 +402,20 @@ function CountTable({
               ))}
             </tr>
           ))}
+          {ownRow ? (
+            <>
+              <tr className={rowClasses}>
+                <td className={NAME_CELL}>{table.root.full_name ?? 'A Network root'}</td>
+                <td className={FIGURE_CELL}>1</td>
+              </tr>
+              <tr className="border-ink border-t-2">
+                <td className={`${NAME_CELL} font-bold`}>Total</td>
+                <td className={`${FIGURE_CELL} font-bold`}>
+                  {table.rows.reduce((sum, row) => sum + row.people, 1)}
+                </td>
+              </tr>
+            </>
+          ) : null}
         </tbody>
       </Table>
       <CountsKey figure={figure} />
@@ -313,12 +423,21 @@ function CountTable({
   );
 }
 
-function OthersLine({ figure, others }: { figure: Figure; others: ChurchCountFigures }) {
+function OthersLine({
+  figure,
+  others,
+  rootsShown = false,
+}: {
+  figure: Figure;
+  others: ChurchCountFigures;
+  /** The roots already have rows of their own, so the line counts anyone else (decision 0490). */
+  rootsShown?: boolean;
+}) {
   return (
     <div className="mt-6">
       <h3 className="text-base font-bold tracking-tight">Others</h3>
       <p className="text-muted mt-1 max-w-2xl text-sm">
-        The two Network roots, and anyone in neither table.
+        {rootsShown ? 'Anyone in no table above.' : 'The two Network roots, and anyone in neither table.'}
       </p>
       <p className="mt-2 text-sm tabular-nums">
         {COUNT_COLUMNS[figure].map(([key, label]) => `${label} ${others[key]}`).join(' · ')}
@@ -330,10 +449,12 @@ function OthersLine({ figure, others }: { figure: Figure; others: ChurchCountFig
 function BranchLink({
   leader,
   short,
+  href,
 }: {
   leader: { id: string; member_id: string | null; full_name: string | null };
   /** The name a phone shows where the table has several figures (decision 0451). */
   short: string | null;
+  href?: string;
 }) {
   const full = leader.full_name ?? leader.member_id ?? 'A leader';
   const shortened = short !== null && short !== full;
@@ -342,8 +463,9 @@ function BranchLink({
       // A short name keeps the words it shows first in its name, so speaking them selects it
       // (decision 0451; WCAG 2.5.3).
       aria-label={shortened ? `${short}, ${full}` : undefined}
-      // The person's page, Branch having left People (decision 0364).
-      href={`/people/${leader.id}`}
+      // The person's page, Branch having left People (decision 0364), unless the table says
+      // otherwise: the Senior Pastors' *People* opens a Primary's 12 (decision 0490).
+      href={href ?? `/people/${leader.id}`}
       // The accent, as every Primary's name on Reports (owner, 2026-10-09).
       className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
     >

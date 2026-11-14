@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import {
   asAt,
@@ -83,6 +84,9 @@ export function BranchCountsPanel({
   readerId,
   leader,
   month: asked,
+  backLabel = 'Back to your disciples',
+  backNetwork = null,
+  drill,
 }: {
   figure: CountFigure;
   readerId: string;
@@ -90,6 +94,15 @@ export function BranchCountsPanel({
   leader: string | null;
   /** The month in the address, as the first of it. */
   month: string | null;
+  /** The way back's words where a leader is open: the Senior Pastors' go back to People. */
+  backLabel?: string;
+  /** Kept on the way back: the Senior Pastors' Men, Women or Both (decision 0490). */
+  backNetwork?: string | null;
+  /**
+   * Where a leader's name opens their own 12, for a leader with people beneath them (decision
+   * 0490, the Senior Pastors'). Without it every name is plain text (decision 0380).
+   */
+  drill?: (leaderId: string) => string;
 }) {
   const go = useScreenAddress();
   const phone = usePhone();
@@ -154,8 +167,16 @@ export function BranchCountsPanel({
 
       {leader !== null ? (
         <p className="mt-4 text-sm">
-          <TextLink href={month === current ? PATH[figure] : `${PATH[figure]}?month=${month}`}>
-            Back to your disciples
+          <TextLink
+            href={(() => {
+              const query = new URLSearchParams({
+                ...(month === current ? {} : { month }),
+                ...(backNetwork ? { network: backNetwork } : {}),
+              }).toString();
+              return query ? `${PATH[figure]}?${query}` : PATH[figure];
+            })()}
+          >
+            {backLabel}
           </TextLink>
         </p>
       ) : null}
@@ -215,6 +236,15 @@ export function BranchCountsPanel({
                     <td className={NAME_CELL}>
                       {row.leader === null ? (
                         <span className="text-muted">A leader not named here</span>
+                      ) : drill && value(row, 'people') > 1 ? (
+                        // **The Senior Pastors go down a level from a name with people beneath it**
+                        // (decision 0490): a count of one is the leader alone, and stays a name.
+                        <Link
+                          href={drill(row.leader.id)}
+                          className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {row.leader.full_name ?? row.leader.member_id ?? 'A leader'}
+                        </Link>
                       ) : (
                         // A name, not a link (decision 0380), short on a phone where there are
                         // several figures beside it (decision 0451).

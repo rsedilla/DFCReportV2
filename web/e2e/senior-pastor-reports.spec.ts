@@ -6,6 +6,7 @@ import {
   SP_MENS_ROOT,
   SP_PRIMARIES,
   SP_WOMENS_ROOT,
+  mockBranchPeople,
   mockChurchCounts,
   mockRootLeadersTwelve,
   mockTrends,
@@ -93,6 +94,172 @@ test.describe('the Senior Pastors’ four items (decision 0488)', () => {
     await expect(
       page.getByRole('navigation', { name: 'Main' }).locator('a[aria-current="page"]'),
     ).toHaveText('People');
+  });
+});
+
+test.describe('People’s Men, Women and Both (decision 0490)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  async function asRoot(page: Page, rootId: string) {
+    await page.clock.setFixedTime(OCTOBER_8);
+    await mockSignedIn(page);
+    await mockScreens(page, 'SENIOR_PASTOR', { personId: rootId });
+    return mockChurchCounts(page);
+  }
+
+  const people = (page: Page) => page.getByRole('region', { name: 'Number of people' });
+  const which = (page: Page) => page.getByRole('group', { name: 'Which Network' });
+
+  test('the Bishop opens on Men, then Women, then Both, each with its total and table', async ({ page }) => {
+    const asked = await asRoot(page, SP_MENS_ROOT.id);
+
+    await page.goto('/reports/number-of-people');
+
+    await expect(which(page).getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+    await expect(which(page).getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(people(page).getByRole('heading', { name: 'Men’s Network' })).toBeVisible();
+    await expect(people(page).getByRole('definition').first()).toHaveText('19');
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toHaveCount(0);
+    // The root's own row and a Total close the table (decision 0490): 6 + 11 + 1.
+    const mensRows = page.getByRole('table', { name: MENS_TABLE }).getByRole('row');
+    await expect(mensRows.nth(-2).getByRole('cell')).toHaveText([SP_MENS_ROOT.full_name, '1']);
+    await expect(mensRows.last().getByRole('cell')).toHaveText(['Total', '18']);
+    // Others holds only who is left over beyond the root: 19 - 18.
+    await expect(page.getByText('Anyone in no table above.')).toBeVisible();
+    await expect(page.getByText('People 1', { exact: true })).toBeVisible();
+    await expect.poll(() => asked.includes('2026-10-01|MENS')).toBe(true);
+
+    await which(page).getByRole('button', { name: 'Women’s Network', exact: true }).click();
+    await expect(page).toHaveURL(/[?&]network=WOMENS\b/);
+    await expect(people(page).getByRole('definition').first()).toHaveText('17');
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toHaveCount(0);
+    // Nobody is left over, so there is no Others at all.
+    await expect(
+      page.getByRole('table', { name: WOMENS_TABLE }).getByRole('row').last().getByRole('cell'),
+    ).toHaveText(['Total', '17']);
+    await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
+
+    await which(page).getByRole('button', { name: /^Both/ }).click();
+    await expect(page).toHaveURL(/[?&]network=BOTH\b/);
+    // Men's 19 and Women's 17 are the whole church's 36.
+    await expect(people(page).getByRole('heading', { name: 'Whole Church' })).toBeVisible();
+    await expect(people(page).getByRole('definition').first()).toHaveText('36');
+    await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
+    await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
+    // Both roots have rows; one person is left over beyond them.
+    await expect(page.getByText('Anyone in no table above.')).toBeVisible();
+  });
+
+  test('Pastora opens on Women, then Men, then Both', async ({ page }) => {
+    await asRoot(page, SP_WOMENS_ROOT.id);
+
+    await page.goto('/reports/number-of-people');
+
+    await expect(which(page).getByRole('button')).toHaveText(['Women', 'Men', 'Both']);
+    await expect(which(page).getByRole('button', { name: 'Women’s Network', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(people(page).getByRole('definition').first()).toHaveText('17');
+  });
+
+  test('a Primary’s name opens their 12 here, with the way back to People', async ({ page }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    const asked = await mockBranchPeople(page);
+
+    await page.goto('/reports/number-of-people');
+    const name = page.getByRole('link', { name: SP_PRIMARIES.abad.full_name });
+    await expect(name).toHaveAttribute('href', `/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
+
+    await name.click();
+
+    await expect(page).toHaveURL(new RegExp(`leader=${SP_PRIMARIES.abad.id}`));
+    await expect.poll(() => asked.at(-1)?.leader).toBe(SP_PRIMARIES.abad.id);
+    await expect(page.getByRole('link', { name: 'Back to People' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people',
+    );
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('People');
+    // The other counts keep a name opening the person's page.
+    await page.goto('/reports/number-of-cells');
+    await expect(page.getByRole('link', { name: SP_PRIMARIES.abad.full_name })).toHaveAttribute(
+      'href',
+      `/people/${SP_PRIMARIES.abad.id}`,
+    );
+    await expect(page.getByRole('group', { name: 'Which Network' })).toHaveCount(0);
+  });
+
+  test('in a leader’s 12 a name with people beneath links a level down, and a count of one stays a name', async ({
+    page,
+  }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    await mockBranchPeople(page);
+    const solo = '3f1b7c6e-0000-4000-8000-000000000799';
+    // One leader whose 12 holds somebody leading nobody, answered after the shared mock.
+    await page.route(`**/api/v1/reports/people/branch?*leader_id=${solo}*`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          period: '2026-10-01',
+          current: true,
+          at: '2026-10-08T02:00:00.000Z',
+          total: 2,
+          own: 1,
+          rows: [
+            {
+              leader: { id: '3f1b7c6e-0000-4000-8000-000000000798', member_id: 'M-000898', full_name: 'Teofilo Rosales' },
+              people: 1,
+            },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto(`/reports/number-of-people?leader=${SP_PRIMARIES.abad.id}`);
+    const consuelo = page.getByRole('link', { name: 'Consuelo Bautista' });
+    await expect(consuelo).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000701',
+    );
+    await expect(page.getByRole('link', { name: 'Efren Dimaculangan' })).toBeVisible();
+
+    await consuelo.click();
+    await expect(page.getByRole('link', { name: 'Lourdes Magsaysay' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?leader=3f1b7c6e-0000-4000-8000-000000000703',
+    );
+
+    await page.goto(`/reports/number-of-people?leader=${solo}`);
+    await expect(page.getByRole('cell', { name: 'Teofilo Rosales' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Teofilo Rosales' })).toHaveCount(0);
+  });
+
+  test('a Primary’s 12 opens for the month and Network on screen, and the way back keeps both', async ({
+    page,
+  }) => {
+    await asRoot(page, SP_MENS_ROOT.id);
+    const asked = await mockBranchPeople(page);
+
+    await page.goto('/reports/number-of-people?network=WOMENS&month=2026-09-01');
+    const name = page.getByRole('link', { name: SP_PRIMARIES.bautista.full_name });
+    await expect(name).toHaveAttribute(
+      'href',
+      `/reports/number-of-people?leader=${SP_PRIMARIES.bautista.id}&month=2026-09-01&network=WOMENS`,
+    );
+
+    await name.click();
+
+    await expect.poll(() => asked.at(-1)).toEqual({ leader: SP_PRIMARIES.bautista.id, period: '2026-09-01' });
+    await expect(page.getByRole('link', { name: 'Back to People' })).toHaveAttribute(
+      'href',
+      '/reports/number-of-people?month=2026-09-01&network=WOMENS',
+    );
   });
 });
 

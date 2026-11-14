@@ -219,6 +219,15 @@ export class DccTwelveDto extends DccMonthlyReportDto {
 export class ChurchCountsDto {
   @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
   period!: string;
+
+  /**
+   * One Network's figures, for a Whole Church reader (decision 0490): its total and its root's
+   * table. A Network Admin is answered their own Network whatever this says, and the other one
+   * is refused.
+   */
+  @IsOptional()
+  @IsIn(['MENS', 'WOMENS'])
+  network?: 'MENS' | 'WOMENS';
 }
 
 /**

@@ -480,6 +480,78 @@ describe('Senior Pastor reports (decision 0326)', () => {
     });
   });
 
+  describe('GET /reports/church-counts for one Network (decision 0490)', () => {
+    function networkCounts(as: TestAccount, period: string, network: string): request.Test {
+      return counts(as, period).query({ network });
+    }
+
+    it('answers each Network its total and its root’s table, and the two add up to the whole church', async () => {
+      const ben = await leader('Ben', 'Dizon', oriel);
+      const ana = await leader('Ana', 'Zamora', oriel);
+      await leader('Dan', 'Esguerra', ana);
+      const cara = await leader('Cara', 'Flores', gemma);
+      // In the Women's Network and in no root's table: in its total all the same.
+      const adele = await createPerson(db, {
+        firstName: 'Adele',
+        lastName: 'Ocampo',
+        network: 'WOMENS',
+      });
+      const ines = await createPerson(db, {
+        firstName: 'Ines',
+        lastName: 'Pineda',
+        network: 'WOMENS',
+      });
+      await assignTo(db, ines.id, adele.id);
+      await cellOf(oriel, 'YOUNG_PRO');
+      await cellOf(ana, 'YOUTH');
+      await cellOf(cara, 'COUPLE');
+      await cellOf(ines, 'COUPLE');
+      const last = shiftMonth(await currentMonth(), -1);
+
+      const both = (await counts(pastor, last).expect(200)).body as Counts & {
+        network: string | null;
+      };
+      const mens = (await networkCounts(pastor, last, 'MENS').expect(200)).body as Counts & {
+        network: string | null;
+      };
+      const womens = (await networkCounts(pastor, last, 'WOMENS').expect(200)).body as Counts & {
+        network: string | null;
+      };
+
+      expect(both.network).toBeNull();
+      expect(mens.network).toBe('MENS');
+      expect(womens.network).toBe('WOMENS');
+      expect(mens.tables!.map((table) => table.root.id)).toEqual([oriel.id]);
+      expect(womens.tables!.map((table) => table.root.id)).toEqual([gemma.id]);
+      expect(mens.tables![0].rows.map((row) => row.leader.id)).toEqual([ana.id, ben.id]);
+
+      // Section 20's identity: Men's + Women's is the whole church, figure by figure. A
+      // failure is a data-integrity defect, not a rounding issue.
+      for (const key of FIELDS) {
+        expect(mens.whole_church[key] + womens.whole_church[key]).toBe(both.whole_church[key]);
+      }
+      expect(mens.whole_church.people).toBe(4);
+      expect(womens.whole_church.people).toBe(4);
+      // Each Network's figures reconcile within themselves too.
+      expectReconciles(mens);
+      expectReconciles(womens);
+    });
+
+    it('answers the other Senior Pastor alike', async () => {
+      const last = shiftMonth(await currentMonth(), -1);
+      const body = (await networkCounts(otherPastor, last, 'MENS').expect(200)).body as {
+        network: string | null;
+      };
+      expect(body.network).toBe('MENS');
+    });
+
+    it('refuses a Network it does not know', async () => {
+      const last = shiftMonth(await currentMonth(), -1);
+      const response = await networkCounts(pastor, last, 'BOTH').expect(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // A Cell created in error (decision 0330, SKILL.md section 19)
   // ---------------------------------------------------------------------------

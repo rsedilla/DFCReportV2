@@ -270,8 +270,11 @@ export async function mockScreens(
   {
     peopleIOversee = false,
     wholeChurch = [],
+    personId = ME.person_id,
   }: {
     peopleIOversee?: boolean;
+    /** The account's person, where a case needs it to be somebody in particular. */
+    personId?: string;
     /** Further capabilities held at Whole Church, as the Senior Pastor role holds the Growth reads. */
     wholeChurch?: readonly string[];
   } = {},
@@ -309,6 +312,7 @@ export async function mockScreens(
     route.fulfill(
       json({
         ...ME,
+        person_id: personId,
         roles: screens === 'SENIOR_PASTOR' ? ['SENIOR_PASTOR'] : ['LEADER'],
         screens,
         people_i_oversee: screens === 'RECORDING' && peopleIOversee,
