@@ -1733,7 +1733,9 @@ const SCANS = [
     // Conquest (section 27), read-only: four cards, and each goal as its month with today's
     // count beneath it, or how far it is, or "Not yet". No box and no save bar.
     name: 'growth conquest',
-    route: '/conquest',
+    // The Open a Cell tab, where a reached goal and one not yet reached are both shown (decision
+    // 0489).
+    route: '/conquest?goal=OPEN_A_CELL',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       // A whole-church reader's: a Full view leader is shown the note (decisions 0360 and 0379).
@@ -1741,8 +1743,8 @@ const SCANS = [
       await mockConquest(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: /^Raise 12 leaders/ })).toContainText('1');
-      await expect(page.getByText('Reached Mar 2026').filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText('Reached', { exact: true }).locator('..')).toContainText('2');
+      await expect(page.getByText('Reached Nov 2025').filter({ visible: true }).first()).toBeVisible();
       await expect(page.getByText('Not yet').filter({ visible: true })).toBeVisible();
     },
   },
