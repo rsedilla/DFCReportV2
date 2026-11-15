@@ -101,9 +101,11 @@ export class AuditReadService {
       // One more than asked for, which is how the last page is recognised without a count.
       .limit(limit + 1);
 
-    if (kind !== 'EVERYTHING') {
-      query = query.where('action', 'in', actionsOfKind(kind));
-    }
+    // *Everything* is every change; the readings are listed under *Lookups* alone (decision 0493).
+    query =
+      kind === 'EVERYTHING'
+        ? query.where('action', 'not in', actionsOfKind('LOOKUPS'))
+        : query.where('action', 'in', actionsOfKind(kind));
 
     if (matching !== null) {
       query = query.where((eb) =>

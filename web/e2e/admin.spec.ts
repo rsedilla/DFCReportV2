@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -247,6 +248,7 @@ test.describe('the Audit Log tab (decision 0428)', () => {
       'Growth',
       'Accounts',
       'Settings',
+      'Lookups',
     ]);
     await chips.getByRole('button', { name: 'Moves' }).click();
     await expect(page).toHaveURL(/kind=MOVES/);
@@ -293,6 +295,180 @@ test.describe('the Audit Log tab (decision 0428)', () => {
     await expect(card).toContainText('From Celestina Abad to Teodoro Vergara');
     await expect(card).toContainText('by Rosario Dimaculangan');
     await expect(card.getByRole('link', { name: 'Lorenzo Pascual' })).toBeVisible();
+  });
+});
+
+test.describe('the Audit Log, quieter (decision 0493)', () => {
+  const LEADER = '3f1b7c6e-0000-4000-8000-000000000956';
+  const LEADER_ACCOUNT = '3f1b7c6e-0000-4000-8000-000000000966';
+  const people = [
+    ['3f1b7c6e-0000-4000-8000-000000000991', 'Ana Santos', 3],
+    ['3f1b7c6e-0000-4000-8000-000000000992', 'Ben Cruz', 2],
+    ['3f1b7c6e-0000-4000-8000-000000000993', 'Carla Diaz', 4],
+    ['3f1b7c6e-0000-4000-8000-000000000994', 'Dante Reyes', 1],
+    ['3f1b7c6e-0000-4000-8000-000000000995', 'Elena Flores', 5],
+    ['3f1b7c6e-0000-4000-8000-000000000996', 'Felix Garcia', 2],
+  ] as const;
+  const lessons = people.map(([id, , lesson], index) => ({
+    id: `3f1b7c6e-0000-4000-8000-0000000009c${index}`,
+    occurred_at: '2026-11-02T13:35:00.000Z',
+    action: 'suynl_lesson.confirmed',
+    kind: 'GROWTH',
+    actor: { account_id: LEADER_ACCOUNT, person_id: LEADER },
+    target: { type: 'person', id, person_id: id, cell_code: null },
+    before: null,
+    after: { lesson },
+    reason: null,
+  }));
+  const sundays = ['2027-11-21', '2027-11-07', '2027-11-14'].map((day, index) => ({
+    id: `3f1b7c6e-0000-4000-8000-0000000009d${index}`,
+    occurred_at: '2026-11-01T16:00:00.000Z',
+    action: 'dcc_event.created',
+    kind: 'ATTENDANCE',
+    actor: null,
+    target: { type: 'dcc_event', id: day, person_id: null, cell_code: null },
+    before: null,
+    after: { event_date: day },
+    reason: null,
+  }));
+  const names = {
+    [LEADER]: { name: 'Josefina Ramos', member_id: 'M-000906' },
+    ...Object.fromEntries(people.map(([id, name], i) => [id, { name, member_id: `M-00091${i}` }])),
+  };
+
+  async function openLog(page: Page, path = '/admin?tab=audit'): Promise<string[]> {
+    const asked: string[] = [];
+    await page.route(
+      (url) => url.pathname === '/api/v1/audit-log',
+      (route) => {
+        asked.push(new URL(route.request().url()).search);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: [...lessons, ...sundays], names, truncated: false, next_cursor: null }),
+        });
+      },
+    );
+    await openAdmin(page, path);
+    return asked;
+  }
+
+  test('says Everything is changes and searches are under Lookups, which asks for them', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const asked = await openLog(page);
+
+    await expect(
+      page.getByText('Every change, newest first. Searches and duplicate checks are under Lookups.'),
+    ).toBeVisible();
+    await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Lookups' }).click();
+    await expect(page).toHaveURL(/kind=LOOKUPS/);
+    await expect.poll(() => asked.at(-1)).toContain('kind=LOOKUPS');
+    await expect(page.getByText('Searches of the whole church and duplicate checks, newest first.')).toBeVisible();
+  });
+
+  test('shows one save as one row, which opens to list each entry', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openLog(page);
+
+    const table = page.getByRole('table', { name: 'Audit Log' });
+    const save = table.getByRole('row').filter({ hasText: '6 SUYNL lessons filed' });
+    await expect(save).toContainText('Josefina Ramos');
+    await expect(save).toContainText('Ana Santos, lesson 3 · Ben Cruz, lesson 2 · Carla Diaz, lesson 4 · and 3 more');
+    await expect(save).toContainText('6 people');
+    await expect(table.getByRole('row').filter({ hasText: /^.*SUYNL lesson filed.*$/ })).toHaveCount(0);
+
+    const toggle = save.getByRole('button', { name: 'Show all 6' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(save.getByRole('button', { name: 'Hide them' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(table.getByRole('row').filter({ hasText: 'SUYNL lesson filed' })).toHaveCount(6);
+    await save.getByRole('button', { name: 'Hide them' }).click();
+    await expect(table.getByRole('row').filter({ hasText: 'SUYNL lesson filed' })).toHaveCount(0);
+
+    // The calendar's run is one row too, by its first and last Sunday.
+    const run = table.getByRole('row').filter({ hasText: '3 Sundays added to the DCC calendar' });
+    await expect(run).toContainText('7 November 2027 to 21 November 2027');
+    await expect(run).toContainText('System');
+  });
+
+  test('joins a save however its instant orders it, and one search repeated as one row', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // Another action of the same save, landing among the lessons as a random identifier sorts it.
+    const other = { ...lessons[0], id: '3f1b7c6e-0000-4000-8000-0000000009e0', action: 'suynl_lesson.corrected' };
+    const searched = (id: string, at: string, term: string, returned: number) => ({
+      id,
+      occurred_at: at,
+      action: 'directory.searched',
+      kind: 'LOOKUPS',
+      actor: { account_id: LEADER_ACCOUNT, person_id: LEADER },
+      target: { type: 'account', id: LEADER_ACCOUNT, person_id: LEADER, cell_code: null },
+      before: null,
+      after: { term, returned },
+      reason: null,
+    });
+    const searches = [
+      searched('3f1b7c6e-0000-4000-8000-0000000009f0', '2026-11-03T09:08:00.000Z', 'Maria', 6),
+      searched('3f1b7c6e-0000-4000-8000-0000000009f1', '2026-11-03T09:05:00.000Z', ' maria', 20),
+      searched('3f1b7c6e-0000-4000-8000-0000000009f2', '2026-11-03T09:04:00.000Z', 'Maria', 20),
+      // Over ten minutes before the one above it: a search of its own.
+      searched('3f1b7c6e-0000-4000-8000-0000000009f3', '2026-11-03T08:50:00.000Z', 'Maria', 20),
+    ];
+    await page.route(
+      (url) => url.pathname === '/api/v1/audit-log',
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [...searches, ...lessons.slice(0, 3), other, ...lessons.slice(3)],
+            names,
+            truncated: false,
+            next_cursor: null,
+          }),
+        }),
+    );
+    await openAdmin(page, '/admin?tab=audit');
+
+    const table = page.getByRole('table', { name: 'Audit Log' });
+    await expect(table.getByRole('row').filter({ hasText: '6 SUYNL lessons filed' })).toHaveCount(1);
+    await expect(table.getByRole('row').filter({ hasText: 'SUYNL lesson corrected' })).toHaveCount(1);
+
+    const repeated = table.getByRole('row').filter({ hasText: 'Searched the whole church · 3 times' });
+    await expect(repeated).toContainText('“Maria”');
+    // The search over ten minutes earlier is a row of its own.
+    await expect(table.getByRole('row').filter({ hasText: 'found' })).toHaveCount(1);
+    await repeated.getByRole('button', { name: 'Show all 3' }).click();
+    // Every search is still listed on its own when opened (decision 0303).
+    await expect(table.getByRole('row').filter({ hasText: 'found' })).toHaveCount(4);
+    await expect(table.getByRole('row').filter({ hasText: '“Maria”, 6 found' })).toHaveCount(1);
+  });
+
+  test('opens a group from the keyboard, with a target of at least 24 by 24 and no axe violation', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openLog(page);
+
+    const toggle = page.getByRole('button', { name: 'Show all 6' });
+    const box = await toggle.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(24);
+    expect(box?.height).toBeGreaterThanOrEqual(24);
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    const hide = page.getByRole('button', { name: 'Hide them' });
+    await expect(hide).toHaveAttribute('aria-expanded', 'true');
+    await expect(hide).toBeFocused();
+
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test('shows one save as one card on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openLog(page);
+
+    const card = page.getByRole('listitem').filter({ hasText: '6 SUYNL lessons filed' });
+    await expect(card).toContainText('About 6 people · by Josefina Ramos');
+    await card.getByRole('button', { name: 'Show all 6' }).click();
+    await expect(page.getByRole('listitem').filter({ hasText: 'SUYNL lesson filed' })).toHaveCount(6);
   });
 });
 

@@ -30,10 +30,13 @@ import {
   type AuditKind,
   type AuditLogPage,
   SEARCH_PEOPLE_CEILING,
+  type AuditGroup,
   describeEntry,
+  describeGroup,
   entryAbout,
   entryActor,
   entryWhen,
+  groupEntries,
   listAuditLog,
 } from '@/lib/audit-log';
 import { listApprovalRequests } from '@/lib/cell-approvals';
@@ -645,6 +648,19 @@ function AuditLog() {
     placeholderData: keepPreviousPage(key, 3),
   });
   const names = log.data?.names ?? {};
+  // One save is one row, opened to list each entry (decision 0493).
+  const groups = groupEntries(log.data?.data ?? []);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  // A group's own entries are listed once it is opened; a lone entry always is.
+  const listed = (group: AuditGroup) =>
+    group.entries.length === 1 || open.has(group.key) ? group.entries : [];
+  const toggle = (key: string) =>
+    setOpen((was) => {
+      const next = new Set(was);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   return (
     <>
@@ -687,7 +703,12 @@ function AuditLog() {
       </div>
 
       <p className="text-muted mt-4 text-sm">
-        Everything recorded, newest first. Reading it is not itself recorded.
+        {kind === 'LOOKUPS'
+          ? 'Searches of the whole church and duplicate checks, newest first.'
+          : kind === 'EVERYTHING'
+            ? 'Every change, newest first. Searches and duplicate checks are under Lookups.'
+            : 'Newest first.'}{' '}
+        Reading it is not itself recorded.
       </p>
 
       {/* A search that matched more people than are looked through says so (decision 0429). */}
@@ -721,39 +742,61 @@ function AuditLog() {
                 </tr>
               </thead>
               <tbody>
-                {log.data.data.map((entry) => {
-                  const { what, detail } = describeEntry(entry, names);
-                  return (
-                    <tr key={entry.id} className={rowClasses}>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">{entryWhen(entry.occurred_at)}</td>
-                      <td className="px-3 py-3">{entryActor(entry, names)}</td>
-                      <td className="px-3 py-3">
-                        {what}
-                        {detail ? <span className="text-muted block text-sm">{detail}</span> : null}
-                      </td>
-                      <td className="px-3 py-3">
-                        <EntryAbout entry={entry} names={names} />
-                      </td>
-                    </tr>
-                  );
-                })}
+                {groups.flatMap((group) => [
+                  group.entries.length > 1 ? (
+                    <GroupRow
+                      key={group.key}
+                      group={group}
+                      names={names}
+                      open={open.has(group.key)}
+                      onToggle={() => toggle(group.key)}
+                    />
+                  ) : null,
+                  ...listed(group).map((entry) => {
+                    const { what, detail } = describeEntry(entry, names);
+                    return (
+                      <tr key={entry.id} className={rowClasses}>
+                        <td className="px-3 py-3 text-sm whitespace-nowrap">{entryWhen(entry.occurred_at)}</td>
+                        <td className="px-3 py-3">{entryActor(entry, names)}</td>
+                        <td className="px-3 py-3">
+                          {what}
+                          {detail ? <span className="text-muted block text-sm">{detail}</span> : null}
+                        </td>
+                        <td className="px-3 py-3">
+                          <EntryAbout entry={entry} names={names} />
+                        </td>
+                      </tr>
+                    );
+                  }),
+                ])}
               </tbody>
             </Table>
 
             <ul className="mt-6 flex flex-col gap-3 lg:hidden">
-              {log.data.data.map((entry) => {
-                const { what, detail } = describeEntry(entry, names);
-                return (
-                  <li key={entry.id} className={cn(FRAME, 'p-4')}>
-                    <p className="text-muted text-sm">{entryWhen(entry.occurred_at)}</p>
-                    <p className="mt-1 font-semibold">{what}</p>
-                    {detail ? <p className="text-muted text-sm break-words">{detail}</p> : null}
-                    <p className="mt-2 text-sm">
-                      About <EntryAbout entry={entry} names={names} /> · by {entryActor(entry, names)}
-                    </p>
-                  </li>
-                );
-              })}
+              {groups.flatMap((group) => [
+                group.entries.length > 1 ? (
+                  <GroupCard
+                    key={group.key}
+                    group={group}
+                    names={names}
+                    open={open.has(group.key)}
+                    onToggle={() => toggle(group.key)}
+                  />
+                ) : null,
+                ...listed(group).map((entry) => {
+                  const { what, detail } = describeEntry(entry, names);
+                  return (
+                    <li key={entry.id} className={cn(FRAME, 'p-4')}>
+                      <p className="text-muted text-sm">{entryWhen(entry.occurred_at)}</p>
+                      <p className="mt-1 font-semibold">{what}</p>
+                      {detail ? <p className="text-muted text-sm break-words">{detail}</p> : null}
+                      <p className="mt-2 text-sm">
+                        About <EntryAbout entry={entry} names={names} /> · by {entryActor(entry, names)}
+                      </p>
+                    </li>
+                  );
+                }),
+              ])}
             </ul>
 
             <CursorPager
@@ -767,6 +810,75 @@ function AuditLog() {
         ) : null}
       </div>
     </>
+  );
+}
+
+/** Opens or closes a group's own rows (decision 0493). A text button, at least 24px high. */
+function GroupToggle({ group, open, onToggle }: { group: AuditGroup; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="text-accent mt-1 inline-flex min-h-6 items-center text-sm font-medium underline underline-offset-4"
+    >
+      {open ? 'Hide them' : `Show all ${group.entries.length}`}
+    </button>
+  );
+}
+
+/** One save of several entries, as one table row (decision 0493). */
+function GroupRow({
+  group,
+  names,
+  open,
+  onToggle,
+}: {
+  group: AuditGroup;
+  names: AuditLogPage['names'];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const first = group.entries[0];
+  const { what, detail, about } = describeGroup(group, names);
+  return (
+    <tr className={rowClasses}>
+      <td className="px-3 py-3 text-sm whitespace-nowrap">{entryWhen(first.occurred_at)}</td>
+      <td className="px-3 py-3">{entryActor(first, names)}</td>
+      <td className="px-3 py-3">
+        {what}
+        {detail ? <span className="text-muted block text-sm">{detail}</span> : null}
+        <GroupToggle group={group} open={open} onToggle={onToggle} />
+      </td>
+      <td className="px-3 py-3">{about}</td>
+    </tr>
+  );
+}
+
+/** One save of several entries, as one card on a phone (decision 0493). */
+function GroupCard({
+  group,
+  names,
+  open,
+  onToggle,
+}: {
+  group: AuditGroup;
+  names: AuditLogPage['names'];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const first = group.entries[0];
+  const { what, detail, about } = describeGroup(group, names);
+  return (
+    <li className={cn(FRAME, 'p-4')}>
+      <p className="text-muted text-sm">{entryWhen(first.occurred_at)}</p>
+      <p className="mt-1 font-semibold">{what}</p>
+      {detail ? <p className="text-muted text-sm break-words">{detail}</p> : null}
+      <p className="mt-2 text-sm">
+        About {about} · by {entryActor(first, names)}
+      </p>
+      <GroupToggle group={group} open={open} onToggle={onToggle} />
+    </li>
   );
 }
 

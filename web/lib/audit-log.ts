@@ -15,6 +15,8 @@ export const AUDIT_KINDS = [
   'GROWTH',
   'ACCOUNTS',
   'SETTINGS',
+  // Searches and duplicate checks, which record a reading rather than a change (decision 0493).
+  'LOOKUPS',
 ] as const;
 
 export type AuditKind = (typeof AUDIT_KINDS)[number];
@@ -28,6 +30,7 @@ export const AUDIT_KIND_LABELS: Record<AuditKind, string> = {
   GROWTH: 'Growth',
   ACCOUNTS: 'Accounts',
   SETTINGS: 'Settings',
+  LOOKUPS: 'Lookups',
 };
 
 type Values = Record<string, unknown> | null;
@@ -340,4 +343,127 @@ export function entryWhen(iso: string): string {
     hour12: true,
   });
   return `${date}, ${time}`;
+}
+
+/**
+ * Entries the list shows as one row (decision 0493). Each entry stays stored and found on its
+ * own; only the list joins them, and only within one page, so a run a page break splits stays
+ * two rows.
+ *
+ * - One save: entries one account made with one action carrying one instant, the instant the
+ *   log stamps from the save's transaction. Order within one instant is not kept (the log breaks
+ *   the tie on a random identifier), so they are joined wherever they fall among that instant's
+ *   entries, and the row stands where the first of them does.
+ * - One search repeated: church-wide searches one account made for the same words, compared
+ *   trimmed and without regard to case, next to each other in the list and each within ten
+ *   minutes of the one before. Every one of them is still recorded (decision 0303).
+ */
+export interface AuditGroup {
+  key: string;
+  entries: AuditEntry[];
+}
+
+const TEN_MINUTES = 10 * 60 * 1000;
+
+const actorOf = (entry: AuditEntry) => entry.actor?.account_id ?? null;
+const termOf = (entry: AuditEntry) => String(entry.after?.term ?? '').trim().toLowerCase();
+
+function sameSearch(earlier: AuditEntry, later: AuditEntry): boolean {
+  return (
+    earlier.action === 'directory.searched' &&
+    later.action === 'directory.searched' &&
+    actorOf(earlier) === actorOf(later) &&
+    termOf(earlier) === termOf(later) &&
+    Date.parse(earlier.occurred_at) - Date.parse(later.occurred_at) <= TEN_MINUTES
+  );
+}
+
+export function groupEntries(entries: readonly AuditEntry[]): AuditGroup[] {
+  const groups: AuditGroup[] = [];
+  const bySave = new Map<string, AuditGroup>();
+  for (const entry of entries) {
+    // The list runs newest first, so the group's last entry is the one just before this.
+    const previous = groups[groups.length - 1];
+    const latest = previous?.entries[previous.entries.length - 1];
+    if (latest !== undefined && sameSearch(latest, entry)) {
+      previous.entries.push(entry);
+      continue;
+    }
+    const save = `${entry.occurred_at}|${actorOf(entry) ?? ''}|${entry.action}`;
+    const joined = bySave.get(save);
+    if (joined !== undefined) {
+      joined.entries.push(entry);
+      continue;
+    }
+    // Prefixed, so an opened group's own row never shares a key with its first entry's row.
+    const group = { key: `group:${entry.id}`, entries: [entry] };
+    bySave.set(save, group);
+    groups.push(group);
+  }
+  return groups;
+}
+
+/** How a run of one action reads, by how many: "6 SUYNL lessons filed". */
+const MANY: Record<string, (n: number) => string> = {
+  'dcc_event.created': (n) => `${n} Sundays added to the DCC calendar`,
+  'suynl_lesson.confirmed': (n) => `${n} SUYNL lessons filed`,
+  'suynl_lesson.corrected': (n) => `${n} SUYNL lessons corrected`,
+  'training_graduation.confirmed': (n) => `${n} graduations filed`,
+  'training_graduation.corrected': (n) => `${n} graduations corrected`,
+  'dcc_attendance.submitted_on_behalf': (n) => `${n} DCC records made for the leader`,
+  'dcc_attendance.corrected': (n) => `${n} DCC records corrected`,
+  'dcc_attendance.amended': (n) => `${n} DCC records changed after their week closed`,
+};
+
+const lowerFirst = (value: string) => value.charAt(0).toLowerCase() + value.slice(1);
+
+/** A group of more than one entry in words: what, the line beneath it, and what it was about. */
+export function describeGroup(
+  group: AuditGroup,
+  names: AuditLogPage['names'],
+): { what: string; detail: string | null; about: string } {
+  const { entries } = group;
+  const first = entries[0];
+  const count = entries.length;
+  const what = MANY[first.action]?.(count) ?? `${WHAT[first.action] ?? first.action} · ${count} entries`;
+
+  // One search repeated reads as its words; opening it lists each with how many it found.
+  if (first.action === 'directory.searched') {
+    return {
+      what: `${WHAT[first.action]} · ${count} times`,
+      detail: text(first.after?.term) === null ? null : `“${String(first.after?.term).trim()}”`,
+      about: entryAbout(first, names).label,
+    };
+  }
+
+  // The calendar's run reads as its first and last Sunday.
+  if (first.target.type === 'dcc_event') {
+    const dates = entries
+      .map((entry) => text(entry.after?.event_date))
+      .filter((date): date is string => date !== null)
+      .sort();
+    const from = day(dates[0]);
+    const to = day(dates[dates.length - 1]);
+    return {
+      what,
+      detail: from !== null && to !== null ? `${from} to ${to}` : null,
+      about: `${count} Sundays`,
+    };
+  }
+
+  // Otherwise the first three, each as its own row would name it, and how many more.
+  const named = entries.slice(0, 3).map((entry) => {
+    const { detail } = describeEntry(entry, names);
+    const about = entryAbout(entry, names).label;
+    return detail === null ? about : `${about}, ${lowerFirst(detail)}`;
+  });
+  const more = count - named.length;
+  const targets = new Set(entries.map((entry) => `${entry.target.type}:${entry.target.id}`)).size;
+  const noun =
+    first.target.type === 'person' ? 'people' : first.target.type === 'cell' ? 'Cells' : 'records';
+  return {
+    what,
+    detail: [...named, ...(more > 0 ? [`and ${more} more`] : [])].join(' · '),
+    about: targets === 1 ? entryAbout(first, names).label : `${targets} ${noun}`,
+  };
 }

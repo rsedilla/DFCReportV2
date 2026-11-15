@@ -187,6 +187,20 @@ describe('the Audit Log (decision 0428)', () => {
     await get(admin, '?kind=EVERYONE').expect(422);
   });
 
+  it('keeps searches and duplicate checks under Lookups alone (decision 0493)', async () => {
+    await entry({ action: 'person.created', targetType: 'person', targetId: carla.id });
+    await entry({ action: 'directory.searched', targetType: 'account', targetId: admin.id });
+    await entry({ action: 'directory.matched', targetType: 'account', targetId: admin.id });
+
+    expect(await actions('')).toEqual(['person.created']);
+    expect(await actions('?kind=EVERYTHING')).toEqual(['person.created']);
+    expect(await actions('?kind=ACCOUNTS')).toEqual([]);
+    expect((await actions('?kind=LOOKUPS')).sort()).toEqual([
+      'directory.matched',
+      'directory.searched',
+    ]);
+  });
+
   it('finds the entries about a person, or made by them, by name or Member ID', async () => {
     const brunoAccount = await createAccount(app, db, { person: bruno, roles: ['LEADER'] });
     await truncateLog();
@@ -200,7 +214,7 @@ describe('the Audit Log (decision 0428)', () => {
     });
 
     expect(await actions('?q=mendez')).toEqual(['person.created']);
-    expect(await actions('?q=lacson')).toEqual(['directory.searched']);
+    expect(await actions('?q=lacson&kind=LOOKUPS')).toEqual(['directory.searched']);
     const { member_id } = await db
       .selectFrom('persons')
       .select('member_id')

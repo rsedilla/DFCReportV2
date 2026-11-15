@@ -2,7 +2,7 @@ import type { AuditAction } from '../database/schema';
 
 /**
  * The chips of the Admin's Audit Log tab (SKILL.md section 19, decision 0428), each a group of
- * actions. `EVERYTHING` is no filter and so belongs to no action.
+ * actions. `EVERYTHING` belongs to no action: it lists every action but `LOOKUPS`' (decision 0493).
  */
 export const AUDIT_KINDS = [
   'EVERYTHING',
@@ -13,6 +13,7 @@ export const AUDIT_KINDS = [
   'GROWTH',
   'ACCOUNTS',
   'SETTINGS',
+  'LOOKUPS',
 ] as const;
 
 export type AuditKind = (typeof AUDIT_KINDS)[number];
@@ -58,8 +59,8 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'second_step.reset': 'ACCOUNTS',
   'second_step.recovery_code_used': 'ACCOUNTS',
   'second_step.paused': 'ACCOUNTS',
-  'directory.searched': 'ACCOUNTS',
-  'directory.matched': 'ACCOUNTS',
+  'directory.searched': 'LOOKUPS',
+  'directory.matched': 'LOOKUPS',
   'password.reset': 'ACCOUNTS',
   'password.changed': 'ACCOUNTS',
   'sign_in.paused': 'ACCOUNTS',

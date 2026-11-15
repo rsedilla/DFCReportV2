@@ -2248,13 +2248,13 @@ const TARGET_SWEEP = [
     admin: true,
   },
   {
-    // Four tabs, the search and Search, eight chips, the five About links of the table, and
-    // the two pager buttons: **twenty-one**.
+    // Four tabs, the search and Search, nine chips (decision 0493), the five About links of the
+    // table, and the two pager buttons: **twenty-two**.
     name: 'admin audit log',
     route: '/admin?tab=audit',
     settleRole: 'link' as const,
     settle: 'Lorenzo Pascual',
-    minimum: 21,
+    minimum: 22,
     admin: true,
   },
 ] as const;
