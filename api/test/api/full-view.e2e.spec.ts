@@ -135,6 +135,7 @@ describe('Full view (decision 0323)', () => {
           .set('Authorization', `Bearer ${token}`)
           .set('Idempotency-Key', randomUUID())
           .send({ changes: [{ person_id: disciple, program: 'LIFE_CLASS', graduated: true }] }),
+      'GET /conquest/branches': get('conquest/branches'),
       'GET /conquest/counts': get('conquest/counts'),
       'GET /conquest/people': get('conquest/people'),
     };
@@ -157,6 +158,8 @@ describe('Full view (decision 0323)', () => {
     'GET /reports/recording-status',
     'GET /reports/church-counts',
     'GET /reports/trends',
+    // The Senior Pastors' Conquest tables (decision 0494).
+    'GET /conquest/branches',
   ]);
   /** Every route whose declared capability is one Full view withholds, from the controllers. */
   function declaredGuardedRoutes(): string[] {

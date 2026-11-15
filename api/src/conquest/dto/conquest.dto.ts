@@ -1,4 +1,4 @@
-import { IsIn, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
 
 import { GrowthListDto } from '../../common/growth/growth-list.dto';
 
@@ -17,4 +17,20 @@ export class ConquestListDto extends GrowthListDto {
   @IsOptional()
   @IsIn(CONQUEST_GOALS)
   goal?: ConquestGoalName;
+}
+
+/**
+ * `GET /api/v1/conquest/branches`, the Senior Pastors' tables (decision 0494): one Network's
+ * roots and their 12, or one leader's 12.
+ */
+export class ConquestBranchesDto {
+  /** Which Network's roots; both where absent. Refused beside a leader, whose 12 have no Network. */
+  @IsOptional()
+  @IsIn(['MENS', 'WOMENS'])
+  network?: 'MENS' | 'WOMENS';
+
+  /** One leader's 12, the level a name opens. */
+  @IsOptional()
+  @IsUUID()
+  leader_id?: string;
 }

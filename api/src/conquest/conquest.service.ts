@@ -6,6 +6,7 @@ import { CellsReadService } from '../cells/cells.read.service';
 import { growthPage, growthPopulation, listPopulation } from '../common/growth/growth-list';
 import { uniqueIds } from '../common/growth/growth-submit';
 import { resolverOf } from '../common/merged-identity';
+import { NotFoundError, ScopeDeniedError, ValidationFailedError } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow } from '../common/time/submission-window';
@@ -17,7 +18,7 @@ import { SuynlService } from '../suynl/suynl.service';
 
 import { countedAt, earliestReached, overlap, period, type Period } from './conquest-derivation';
 
-import type { ConquestGoalName, ConquestListDto } from './dto/conquest.dto';
+import type { ConquestBranchesDto, ConquestGoalName, ConquestListDto } from './dto/conquest.dto';
 
 /** One goal for one person: when it was first reached, and where it stands now. */
 interface Goal {
@@ -114,6 +115,167 @@ export class ConquestService {
         };
       }),
       next_cursor: nextCursor,
+    };
+  }
+
+  /**
+   * `GET /api/v1/conquest/branches`: the Senior Pastors' tables (decision 0494). Without a
+   * leader, one table per root of the Network asked, or of both, ordered Men's first: one row
+   * per direct disciple of the root, the root's own row, the Network's total and *Others*, which
+   * holds whoever in the Network the rows and the roots leave out, so the table adds up to the
+   * total. With a leader, that leader's one table, their branch being the total.
+   *
+   * **Whole Church only**: a grant over a Network or a branch is refused, so a Network Admin
+   * keeps the list. A branch is the leader and everyone beneath them in the tree as it stands
+   * now, read as every Conquest figure is (decision 0278), and its counts are the current
+   * people in it and those of them who have reached each goal.
+   */
+  async branches(actor: Actor, query: ConquestBranchesDto): Promise<Record<string, unknown>> {
+    if ((await this.authorization.wideReachOf(actor, Capability.ConquestViewSubtree)) !== null) {
+      throw new ScopeDeniedError('These tables are read across the whole church only.', {});
+    }
+
+    const now = await databaseNow(this.db);
+    const reached = await this.reachedBy(null, now);
+    const figures = async (people: ReadonlySet<string> | null) => {
+      const count = (goal: ConquestGoalName) =>
+        people === null
+          ? reached[goal].size
+          : [...reached[goal]].filter((id) => people.has(id)).length;
+      return {
+        people: await this.people.countCurrent(people),
+        win_3: count('WIN_3'),
+        open_a_cell: count('OPEN_A_CELL'),
+        completion_of_12: count('COMPLETION_OF_12'),
+        raise_12_leaders: count('RAISE_12_LEADERS'),
+      };
+    };
+    const branchOf = async (personId: string) =>
+      new Set((await this.hierarchy.subtreeOf(this.db, personId)).map(canonicalId));
+
+    let owners: { personId: string; network: string | null }[];
+    let total: Awaited<ReturnType<typeof figures>>;
+    let network: 'MENS' | 'WOMENS' | null = null;
+
+    if (query.leader_id !== undefined && query.network !== undefined) {
+      // A leader's 12 is their branch whatever the Network; a network sent with it would be
+      // accepted and ignored, which section 22 refuses.
+      throw new ValidationFailedError('Send a leader or a network, not both.', {
+        field: 'network',
+      });
+    }
+
+    if (query.leader_id !== undefined) {
+      const leaderId = canonicalId(query.leader_id);
+      // A record merged into another is not somebody of their own (section 3, decision 0408).
+      const found = keyed(await this.people.forDecisions([leaderId])).get(leaderId);
+      if (found === undefined || found.mergedIntoId !== null) {
+        throw new NotFoundError('That person is not recorded.', { field: 'leader_id' });
+      }
+      owners = [{ personId: leaderId, network: null }];
+      total = await figures(await branchOf(leaderId));
+    } else {
+      network = query.network ?? null;
+      owners = (await this.hierarchy.rootSeatsAsOf(this.db, now))
+        .filter((seat) => network === null || seat.network === network)
+        .sort((left, right) =>
+          left.network === right.network ? 0 : left.network === 'MENS' ? -1 : 1,
+        )
+        .map((seat) => ({ personId: canonicalId(seat.personId), network: seat.network }));
+      total = await figures(
+        network === null
+          ? null
+          : new Set([...(await this.people.whoseNetworkIsNow(network))].map(canonicalId)),
+      );
+    }
+
+    type Figures = Awaited<ReturnType<typeof figures>>;
+    const tables: {
+      owner: { personId: string; network: string | null };
+      rows: { personId: string; branch: number; figures: Figures }[];
+      own: Figures;
+    }[] = [];
+    for (const owner of owners) {
+      const disciples = (await this.hierarchy.directChildrenOf(owner.personId)).map(canonicalId);
+      const rows = [];
+      for (const disciple of disciples) {
+        const branch = await branchOf(disciple);
+        rows.push({ personId: disciple, branch: branch.size, figures: await figures(branch) });
+      }
+      tables.push({ owner, rows, own: await figures(new Set([owner.personId])) });
+    }
+
+    const ids = tables.flatMap((table) => [
+      table.owner.personId,
+      ...table.rows.map((row) => row.personId),
+    ]);
+    const names = keyed(await this.people.namesOf(ids));
+    const goals = await this.goalsOf(ids, now);
+    const person = (id: string) => {
+      const name = names.get(id);
+      return {
+        id,
+        full_name: name?.fullName ?? null,
+        first_name: name?.firstName ?? null,
+        last_name: name?.lastName ?? null,
+      };
+    };
+    const goalsOfPerson = (id: string) => {
+      const own = goals.get(id) as Goals;
+      return {
+        win_3: shape(own.WIN_3),
+        open_a_cell: shape(own.OPEN_A_CELL),
+        completion_of_12: shape(own.COMPLETION_OF_12),
+        raise_12_leaders: shape(own.RAISE_12_LEADERS),
+      };
+    };
+    const byName = (left: string, right: string) => {
+      const a = names.get(left);
+      const b = names.get(right);
+      return (
+        (a?.firstName ?? '').localeCompare(b?.firstName ?? '') ||
+        (a?.lastName ?? '').localeCompare(b?.lastName ?? '') ||
+        left.localeCompare(right)
+      );
+    };
+
+    // Whoever the rows and the owners leave out of the total, shown by the screen where not 0.
+    const keys = [
+      'people',
+      'win_3',
+      'open_a_cell',
+      'completion_of_12',
+      'raise_12_leaders',
+    ] as const;
+    const others = Object.fromEntries(
+      keys.map((key) => [
+        key,
+        total[key] -
+          tables.reduce(
+            (sum, table) =>
+              sum + table.own[key] + table.rows.reduce((inner, row) => inner + row.figures[key], 0),
+            0,
+          ),
+      ]),
+    );
+
+    return {
+      network,
+      total,
+      tables: tables.map((table) => ({
+        root: person(table.owner.personId),
+        network: table.owner.network,
+        rows: [...table.rows]
+          .sort((left, right) => byName(left.personId, right.personId))
+          .map((row) => ({
+            leader: person(row.personId),
+            has_disciples: row.branch > 1,
+            goals: goalsOfPerson(row.personId),
+            ...row.figures,
+          })),
+        own: { goals: goalsOfPerson(table.owner.personId), ...table.own },
+      })),
+      others,
     };
   }
 
