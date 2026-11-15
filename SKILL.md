@@ -4824,7 +4824,7 @@ Audit important actions, including:
 - Cell leadership request approved, with the kind
 - Cell leadership request declined, with the kind and the reason
 - Cell leadership opened, ended, or changed, carrying the outgoing and the incoming leader where each exists — a reader asking who led a Cell before a handover must find it here, which is the same requirement Section 5 makes of a pastoral transfer
-- Cell created directly by Admin during initial encoding
+- Cell created directly by Admin, or by a Network Admin for their own Network (decision 0492), during initial encoding
 - Initial encoding closed
 - Cell created
 - Cell category change
