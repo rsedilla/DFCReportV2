@@ -397,6 +397,42 @@ test.describe('New Cell', () => {
     );
   });
 
+  test('is offered to a Network Admin, who holds it over their own Network (decision 0492)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    const held = (capability: string) => ({
+      capability,
+      scope_type: 'NETWORK',
+      scope_network: 'WOMENS',
+      read_only: null,
+      source: 'role',
+    });
+    await page.route('**/api/v1/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account_id: '3f1b7c6e-0000-4000-8000-000000000e01',
+          person_id: '3f1b7c6e-0000-4000-8000-000000000e02',
+          email: 'nora@example.test',
+          username: null,
+          first_name: 'Nora',
+          roles: ['NETWORK_ADMIN'],
+          screens: 'FULL',
+          people_i_oversee: true,
+          capabilities: ['people.view_subtree', 'cell.view_subtree', 'cell.approve_leadership'].map(held),
+        }),
+      }),
+    );
+    await page.goto('/cells');
+
+    await page.getByRole('link', { name: 'New Cell' }).click();
+    await expect(page).toHaveURL(/\/cells\/new$/);
+    await expect(page.getByRole('heading', { name: 'New Cell', level: 1 })).toBeVisible();
+  });
+
   test('sends the leader, category, day and time, then opens the new Cell’s members', async ({
     page,
   }) => {
