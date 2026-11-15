@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import {
   asAt,
@@ -138,6 +139,23 @@ export function BranchCountsPanel({
     enabled: leader !== null,
   });
   const name = leader === null ? null : (opened.data?.full_name ?? 'This leader');
+  // **The way back goes up one level** (decision 0491): the leaders opened on the way here are
+  // kept in the address as `trail`, so Back names the leader above until the first level.
+  const trail = (useSearchParams().get('trail') ?? '').split(',').filter(Boolean);
+  const parentId = trail.length > 0 ? trail[trail.length - 1] : null;
+  const parent = useQuery({
+    queryKey: ['person', parentId],
+    queryFn: ({ signal }) => getPerson(parentId!, signal),
+    enabled: parentId !== null,
+  });
+  const drillWithTrail = drill
+    ? (id: string) => {
+        const href = drill(id);
+        const url = new URL(href, 'http://x');
+        url.searchParams.set('trail', [...trail, leader!].join(','));
+        return `${url.pathname}?${url.searchParams.toString()}`;
+      }
+    : undefined;
   const heading = name === null ? 'Your Disciples' : `${name}’s Disciples`;
   const data = counts.data;
   // Short names only where there are several figures to fit beside them (decision 0451).
@@ -170,13 +188,15 @@ export function BranchCountsPanel({
           <TextLink
             href={(() => {
               const query = new URLSearchParams({
+                ...(parentId ? { leader: parentId } : {}),
+                ...(trail.length > 1 ? { trail: trail.slice(0, -1).join(',') } : {}),
                 ...(month === current ? {} : { month }),
                 ...(backNetwork ? { network: backNetwork } : {}),
               }).toString();
               return query ? `${PATH[figure]}?${query}` : PATH[figure];
             })()}
           >
-            {backLabel}
+            {parentId ? `Back to ${parent.data?.full_name ?? 'the leader above'}` : backLabel}
           </TextLink>
         </p>
       ) : null}
@@ -236,11 +256,11 @@ export function BranchCountsPanel({
                     <td className={NAME_CELL}>
                       {row.leader === null ? (
                         <span className="text-muted">A leader not named here</span>
-                      ) : drill && value(row, 'people') > 1 ? (
+                      ) : drillWithTrail && value(row, 'people') > 1 ? (
                         // **The Senior Pastors go down a level from a name with people beneath it**
                         // (decision 0490): a count of one is the leader alone, and stays a name.
                         <Link
-                          href={drill(row.leader.id)}
+                          href={drillWithTrail(row.leader.id)}
                           className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                         >
                           {row.leader.full_name ?? row.leader.member_id ?? 'A leader'}

@@ -863,8 +863,9 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
 
   /**
    * **A Network's figure is its membership, not its root's subtree**, exactly as the monthly
-   * report counts it (decision 0219), and it has no rows: nothing is in a row, so the whole
-   * total is `elsewhere` and section 20's identity still holds in plain sight.
+   * report counts it (decision 0219), and its rows are its root's 12 (decision 0491), each
+   * holding only the Network's people, so section 20's identity holds in plain sight with
+   * whoever is in no row counted as `elsewhere`.
    *
    * Teodoro holds no pastoral assignment and is in the Men's Network, so he is in no root's
    * subtree and is in the Men's figure. Rosa was in the Men's Network until 20 June and is in
@@ -916,7 +917,7 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
     });
 
     it.each(['MENS', 'WOMENS'] as const)(
-      '%s: a month answers what the monthly NETWORK report answers, with no rows',
+      '%s: a month answers what the monthly NETWORK report answers, its root’s 12 as rows (decision 0491)',
       async (network) => {
         const month = await monthly(
           `period=${JUNE}&scope=NETWORK&network=${network}`,
@@ -925,10 +926,26 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
         const body = await ok(networkOf(network), adminAccount);
 
         expect(month.status).toBe(200);
-        expect(body.rows).toEqual([]);
+        reconcile(body);
+        const extra = body as unknown as {
+          rows: { leader: { id: string } | null; root_id: string }[];
+          roots: { id: string; network: string }[];
+        };
+        // The root's direct disciples in first-name order, and that root alone (decision 0491).
+        const root = network === 'MENS' ? raymond : oriel;
+        expect(extra.rows.map((row) => [row.leader?.id, row.root_id])).toEqual(
+          network === 'MENS'
+            ? [
+                [manuel.id, root.id],
+                [onofre.id, root.id],
+                [pio.id, root.id],
+              ]
+            : [[carmelita.id, root.id]],
+        );
+        expect(extra.roots.map((each) => [each.id, each.network])).toEqual([[root.id, network]]);
         expect(body.own).toBeNull();
-        expect(body.overlap).toBe(0);
-        expect(body.elsewhere).toBe(body.total.unique_people);
+        // Teodoro is under no root and Rosa moved on the 20th: each is in the total, in no row.
+        expect(body.elsewhere).toBe(1);
         expect(body.total.unique_people).toBe(month.body.unique_people);
         expect(body.total.classification).toEqual(month.body.classification);
         expect(body.buckets).toEqual(month.body.buckets);
@@ -985,7 +1002,7 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
 
       expect(quarter.coverage).toEqual({ met, owed });
       expect(quarter.coverage.owed).toBeGreaterThan(0);
-      expect(quarter.rows).toEqual([]);
+      expect(quarter.rows).toHaveLength(3);
     });
 
     it.each([

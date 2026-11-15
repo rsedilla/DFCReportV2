@@ -710,9 +710,9 @@ export function PendingFilters({
                 onChange({ ...value, network: next === 'ALL' ? null : (next as 'MENS' | 'WOMENS') })
               }
               options={[
-                { key: 'ALL', label: 'All' },
-                { key: 'MENS', label: 'Men’s' },
-                { key: 'WOMENS', label: 'Women’s' },
+                { key: 'MENS', label: 'Men', name: 'Men’s Network' },
+                { key: 'WOMENS', label: 'Women', name: 'Women’s Network' },
+                { key: 'ALL', label: 'Both', name: 'Both Networks, the whole church' },
               ]}
             />
           </div>

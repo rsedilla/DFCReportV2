@@ -178,6 +178,12 @@ export interface ChurchCounts {
         rootId: string;
         network: NetworkName | null;
         rows: { leaderId: string; figures: ChurchCountFigures }[];
+        /**
+         * The root alone: their own Cells, and themselves (decision 0491), counted in the same
+         * transaction as the rows, so a root's row and a Total add up with them. Each root is
+         * also in `others`, which is unchanged.
+         */
+        own: ChurchCountFigures;
       }[]
     | null;
   others: ChurchCountFigures | null;
@@ -412,8 +418,8 @@ export type CellTwelveSubject =
 
 /**
  * Who a DCC My 12 table is about: a leader, Whole Church, or a Network (decision 0294). A
- * Network has no rows: its population is its membership (decision 0219), and it is the
- * leaders' own 12s, not the Network's, that break a figure down by row.
+ * Network's population is its membership (decision 0219); its rows are its root's direct
+ * disciples, each holding only the Network's own people (decision 0491).
  */
 export type DccTwelveSubject =
   | Exclude<CellTwelveSubject, { kind: 'NETWORK_LEADERS' }>
@@ -951,8 +957,8 @@ export class ReportingService {
    * **The Cell table's rule, attributed by the person** (section 20). Rows are the subject's
    * direct disciples at the period's end, or the Network roots for a whole-church reader,
    * each counting the placement subtree the DCC monthly report counts for that leader. A
-   * Network has no rows, and its total is its membership at the period's end, as the monthly
-   * report counts it (decision 0219).
+   * Network's rows are its root's direct disciples (decision 0491), and its total is its
+   * membership at the period's end, as the monthly report counts it (decision 0219).
    *
    * **Coverage sums decision 0224's obligations over the period's Sundays**, placed at each
    * event date as the month's line is; a Sunday that has not come owes nothing.
@@ -981,7 +987,7 @@ export class ReportingService {
       });
 
       // One read of the placement graph serves every row and the total (it was one per row),
-      // made only when a subtree is asked for: a Network subject asks for none.
+      // made only when a subtree is asked for.
       let graph: Awaited<ReturnType<HierarchyService['reportingGraph']>> | null = null;
 
       const rowIds: { personId: string; network: NetworkName | null; root?: RootOfRow }[] =
@@ -990,7 +996,14 @@ export class ReportingService {
               (personId) => ({ personId, network: null }),
             )
           : subject.kind === 'NETWORK'
-            ? []
+            ? // The Network root's Primaries (decision 0491), as the Cell table's Network rows.
+              (
+                await this.rootLeadersAsOf(
+                  trx,
+                  end,
+                  (graph ??= await this.placementGraph(trx, start, end)),
+                )
+              ).filter((row) => row.root.root_network === subject.network)
             : subject.kind === 'ROOT_LEADERS'
               ? await this.rootLeadersAsOf(
                   trx,
@@ -1008,8 +1021,20 @@ export class ReportingService {
           network: NetworkName | null;
           people: Set<string>;
         })[] = [];
+      // A Network's rows hold only its own people, as its total does (decision 0491), so the
+      // rows, overlap and elsewhere add up to that total whatever the placement graph holds.
+      const networkIds =
+        subject.kind === 'NETWORK' ? await this.networkPeople(trx, subject.network, end) : null;
+      const withinNetwork = networkIds === null ? null : new Set(networkIds.map(canonicalId));
+      // Membership is held by the record kept, so a row's people are read as kept too (0408).
+      const kept = resolverOf(merges);
       for (const { personId: leaderId, network, root } of rowIds) {
-        const { people } = await figuresOf(await subtreeOf(leaderId));
+        const beneath = await subtreeOf(leaderId);
+        const { people } = await figuresOf(
+          withinNetwork === null
+            ? beneath
+            : beneath.filter((id) => withinNetwork.has(canonicalId(kept(id)))),
+        );
         rows.push({
           leader_id: leaderId,
           network,
@@ -1026,7 +1051,7 @@ export class ReportingService {
         subject.kind === 'LEADER'
           ? await subtreeOf(subject.person_id)
           : subject.kind === 'NETWORK'
-            ? await this.networkPeople(trx, subject.network, end)
+            ? networkIds!
             : undefined,
       );
 
@@ -1441,7 +1466,8 @@ export class ReportingService {
    * **A Cell counts towards the leader it had then**, and a person towards themselves, so a
    * row counts the Cells led by, and the people who are, that leader or anyone beneath them
    * on the graph. *Others* is everything in no table, the two roots among them, so the rows
-   * and *Others* add up to the whole church. Where section 20 refuses the graph, the tables,
+   * and *Others* add up to the whole church. Each table also carries its root alone, `own`
+   * (decision 0491), from the same read. Where section 20 refuses the graph, the tables,
    * *Others* and the branches are null and the whole-church figures stand.
    */
   async churchCounts(
@@ -1501,8 +1527,18 @@ export class ReportingService {
               const beneath = new Set(graph.subtree(leaderId));
               beneath.forEach((id) => placed.add(id));
 
-              return { leaderId, figures: figuresOf(beneath) };
+              // One Network's rows hold only its members, as its box and *Others* do (decision
+              // 0491), so somebody who moved Network within the month is counted in one place.
+              return {
+                leaderId,
+                figures: figuresOf(
+                  networkMembers === null
+                    ? beneath
+                    : new Set([...beneath].filter((id) => networkMembers.has(id))),
+                ),
+              };
             }),
+            own: figuresOf(new Set([rootId])),
           }));
 
         const inNetwork = (id: string) => networkMembers === null || networkMembers.has(id);

@@ -25,7 +25,8 @@ import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { useKeptLeader } from '@/lib/merged-leader';
 import { getCellTwelve, type ReportNetwork } from '@/lib/reports';
-import { networkLabel } from '@/lib/people';
+import { useOwnRootNetwork } from '@/lib/own-network';
+import { getPerson, networkLabel } from '@/lib/people';
 import { useReportPeriod } from '@/lib/report-period';
 import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { rangeLabel } from '@/lib/report-range';
@@ -75,16 +76,41 @@ export function CellReport() {
   const mergedFrom = useKeptLeader(leader);
   // A Full view leader reads their branch in the Senior Pastors' layout (decision 0340).
   const branchReader = isBranchReader(me.data);
-  // The Senior Pastors' Figures for chooses a Network (decision 0486), counted by the Cell's
-  // Network (section 20, decision 0469); it narrows a whole-church grant and never widens one.
+  // The Senior Pastors' switch chooses a Network, counted by the Cell's Network (section 20,
+  // decision 0469); it narrows a whole-church grant and never widens one. **It opens on the
+  // reader's own Network** (decision 0491), so the page waits until that is known.
   const networkParam = search.get('network');
-  const network: ReportNetwork | null =
-    seniorPastor && (networkParam === 'MENS' || networkParam === 'WOMENS') ? networkParam : null;
-  const subject = leader
-    ? ({ kind: 'LEADER', person_id: leader } as const)
-    : network !== null && wholeChurch
-      ? ({ kind: 'NETWORK', network } as const)
-      : own;
+  const ownRoot = useOwnRootNetwork(seniorPastor);
+  const network: ReportNetwork | null = !seniorPastor
+    ? null
+    : networkParam === 'MENS' || networkParam === 'WOMENS'
+      ? networkParam
+      : networkParam === 'BOTH'
+        ? null
+        : ownRoot.network;
+  const waiting = seniorPastor && networkParam === null && leader === null && !ownRoot.settled;
+  // **The way back goes up one level** (decision 0491): the leaders opened on the way here.
+  const trail = (search.get('trail') ?? '').split(',').filter(Boolean);
+  const parentId = trail.length > 0 ? trail[trail.length - 1] : null;
+  const parent = useQuery({
+    queryKey: ['person', parentId],
+    queryFn: ({ signal }) => getPerson(parentId!, signal),
+    enabled: parentId !== null,
+  });
+  const subject = waiting
+    ? null
+    : leader
+      ? ({ kind: 'LEADER', person_id: leader } as const)
+      : network !== null && wholeChurch
+        ? ({ kind: 'NETWORK', network } as const)
+        : own;
+  // A name opened from inside a leader's 12 remembers that leader, for the way back.
+  const openHref = (id: string) =>
+    `/reports/cells?${periodParams({
+      leader: id,
+      ...(leader ? { trail: [...trail, leader].join(',') } : {}),
+      ...(networkParam ? { network: networkParam } : {}),
+    })}`;
 
   const twelveKey = ['cell-twelve', kind, start, subject] as const;
   const twelve = useQuery({
@@ -142,12 +168,14 @@ export function CellReport() {
             onChange={period.choosePeriodStart}
           />
           {/* A Full view leader reads their own branch only, with no Figures for (decision 0380).
-              The Senior Pastors' is All, Men's and Women's, a Primary opening by name (0486). */}
+              The Senior Pastors' is Men, Women and Both, their own Network first, a Primary opening
+              by name (decisions 0486 and 0491). */}
           {branchReader ? null : seniorPastor ? (
             <FiguresForSwitch
               network={network}
               leaderOpen={leader !== null}
-              onChange={(next) => go({ network: next, leader: null })}
+              own={ownRoot.network}
+              onChange={(next) => go({ network: next, leader: null, trail: null })}
             />
           ) : (
           <div>
@@ -194,7 +222,18 @@ export function CellReport() {
             personId={leader}
             report="cells"
             month={guardMonth}
-            backHref={`/reports/cells?${periodParams({})}`}
+            backHref={`/reports/cells?${periodParams(
+              parentId
+                ? {
+                    leader: parentId,
+                    ...(trail.length > 1 ? { trail: trail.slice(0, -1).join(',') } : {}),
+                    ...(networkParam ? { network: networkParam } : {}),
+                  }
+                : networkParam
+                  ? { network: networkParam }
+                  : {},
+            )}`}
+            backLabel={parentId ? `Back to ${parent.data?.full_name ?? 'the leader above'}` : undefined}
           />
         ) : null}
 
@@ -241,7 +280,15 @@ export function CellReport() {
               <RootLeadersTwelve
                 twelve={twelve.data}
                 kind={kind}
-                openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+                openHref={openHref}
+              />
+            ) : seniorPastor && subject?.kind === 'NETWORK' ? (
+              // A Network laid out as Both is, its root's table alone (decision 0491).
+              <RootLeadersTwelve
+                title={networkLabel(subject.network)}
+                twelve={twelve.data}
+                kind={kind}
+                openHref={openHref}
               />
             ) : branchReader ? (
               <BranchTwelve twelve={twelve.data} kind={kind} subjectName={subjectName} />
@@ -251,7 +298,7 @@ export function CellReport() {
                 kind={kind}
                 subjectName={subjectName}
                 title={subject?.kind === 'NETWORK' ? networkLabel(subject.network) : undefined}
-                openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+                openHref={openHref}
               />
             )}
           </div>

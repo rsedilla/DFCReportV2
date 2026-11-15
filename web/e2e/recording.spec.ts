@@ -3529,10 +3529,11 @@ test.describe('CG Records Due laid out as DCC Records Due (decision 0368)', () =
 
     const pane = page.getByRole('region', { name: 'CG Records Due' });
     const network = pane.getByRole('group', { name: 'Network' });
-    await expect(network.getByRole('button')).toHaveText(['All', 'Men’s', 'Women’s']);
-    await expect(network.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
-    await network.getByRole('button', { name: 'Men’s', exact: true }).click();
-    await expect(network.getByRole('button', { name: 'Men’s', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // One wording for every Network switch (decision 0491), opening on Both.
+    await expect(network.getByRole('button')).toHaveText(['Men', 'Women', 'Both']);
+    await expect(network.getByRole('button', { name: /^Both/ })).toHaveAttribute('aria-pressed', 'true');
+    await network.getByRole('button', { name: 'Men’s Network', exact: true }).click();
+    await expect(network.getByRole('button', { name: 'Men’s Network', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => asked.some((query) => query.includes('network=MENS'))).toBe(true);
 
     // The chip keeps its name, and says it is on by aria-pressed and a tick.

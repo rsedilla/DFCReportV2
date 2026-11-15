@@ -183,6 +183,7 @@ describe('Senior Pastor reports (decision 0326)', () => {
     root: { id: string };
     network: string | null;
     rows: CountRow[];
+    own: Figures;
   }
   interface Counts {
     period: string;
@@ -208,6 +209,14 @@ describe('Senior Pastor reports (decision 0326)', () => {
         field,
         total: body.whole_church[field],
       });
+      // Each root alone is inside *Others* (decision 0491): the table's root row and *Others*
+      // less the roots add up with the rows to the same box, read in one transaction.
+      const own = body.tables!.reduce((sum, table) => sum + table.own[field], 0);
+      expect({ field, beyond: body.others![field] - own >= 0 }).toEqual({ field, beyond: true });
+    }
+    for (const table of body.tables!) {
+      // A root is one person, in the tree (decision 0339 counts nobody outside it).
+      expect(table.own.people).toBe(1);
     }
   }
 
@@ -537,6 +546,46 @@ describe('Senior Pastor reports (decision 0326)', () => {
       expectReconciles(womens);
     });
 
+    it('counts somebody who moved Network within the month in one Network only, so each adds up (decision 0491)', async () => {
+      const cara = await leader('Cara', 'Flores', gemma);
+      const wilma = await leader('Wilma', 'Garcia', cara);
+      const last = shiftMonth(await currentMonth(), -1);
+      const moved = new Date(`${last.slice(0, 8)}15T00:00:00+08:00`);
+      // Her assignment ends and her Network changes at one instant, as an archive, a sex
+      // correction and a restore leave it (sections 3 and 4): placed under Cara for the month,
+      // a member of the Men's Network at its end.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: moved })
+        .where('person_id', '=', wilma.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: moved })
+        .where('person_id', '=', wilma.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({
+          person_id: wilma.id,
+          network: 'MENS',
+          reason: 'A fixture standing in for a section 4 correction.',
+          actor_id: null,
+          started_at: moved,
+        })
+        .execute();
+
+      const womens = (await networkCounts(pastor, last, 'WOMENS').expect(200)).body as Counts;
+      const mens = (await networkCounts(pastor, last, 'MENS').expect(200)).body as Counts;
+
+      // Cara's row is Cara alone: Wilma is not a member of the Women's Network at the month's end.
+      expect(womens.tables![0].rows.find((row) => row.leader.id === cara.id)!.people).toBe(1);
+      expectReconciles(womens);
+      expectReconciles(mens);
+    });
+
     it('answers the other Senior Pastor alike', async () => {
       const last = shiftMonth(await currentMonth(), -1);
       const body = (await networkCounts(otherPastor, last, 'MENS').expect(200)).body as {
@@ -661,6 +710,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
         cell_leaders: 3,
       });
       expect(body.others).toMatchObject({ cell_groups: 1, young_pro: 1, cell_leaders: 1 });
+      // That Cell is the root's own, and the root's table carries it as their row (decision 0491).
+      const ownCells = body.tables!.reduce((sum, table) => sum + table.own.cell_groups, 0);
+      expect(ownCells).toBe(1);
 
       expectReconciles(body);
     });
