@@ -364,7 +364,8 @@ function Home({
             ['Cell Leaders this month', number(church.data?.whole_church.cell_leaders)],
           ]}
           links={[
-            // Direct creation of a Cell is the whole-church Admin's (decision 0469).
+            // This home links New Cell for the whole-church Admin; a Network Admin reaches it
+            // from Cells (decisions 0469 and 0492).
             ...(wholeChurch ? ([['New Cell', '/cells/new']] as [string, string][]) : []),
             ['Under 3 Members', '/cells?view=FEW'],
             [`Inactive ${cells.data?.attention_months ?? 3}+ Months`, '/cells?view=QUIET'],

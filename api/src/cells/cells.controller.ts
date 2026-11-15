@@ -85,12 +85,14 @@ export class CellsController {
    * module. `cell.approve_leadership` is the decision being made — whether this
    * person should lead a Cell.
    *
-   * **The target is the church**, because section 10 requires that capability at Whole
-   * Church for this path (decision 0352): an account holding it only through Approves
-   * Cells, over its own branch, is refused `SCOPE_DENIED` here.
+   * **The guard asks only that the capability is held** (decision 0492): the Admin holds it
+   * at Whole Church and a Network Admin over their own Network, and which of the two the
+   * actor is, and whether their scope covers the leader, is decided in the service under the
+   * leader's lock. An account holding it only through Approves Cells, over its own branch,
+   * passes here and is refused there, holding neither role.
    */
   @Post()
-  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
+  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'held' })
   async create(
     @Body() body: CreateCellDto,
     @CurrentActor() actor: Actor,

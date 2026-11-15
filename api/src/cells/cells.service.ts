@@ -8,6 +8,7 @@ import {
   CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
@@ -15,8 +16,9 @@ import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock
 import { PeopleReadService } from '../people/people.read.service';
 
 import { insertCellWithin } from './insert-cell';
-import { assertNoScheduleClashWithin } from './schedule-clash';
+import { assertNoScheduleClashWithin, clashViewerFor } from './schedule-clash';
 
+import type { ActorAuthority } from '../auth/authorization/authorization.service';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -41,6 +43,11 @@ export interface CreateCellDirectlyInput {
  * Whole Church scope" — the request step is skipped because there is nothing to
  * request, the Cells already exist in the church, and approval is not bypassed
  * since Admin is the approver.
+ *
+ * **A Network Admin creates directly too, for a leader in their own Network** (decision 0492),
+ * on the same terms: while the phase is open, and exercising the same two capabilities, which
+ * the role holds at `NETWORK` scope. The request step is skipped for the same reason, a
+ * Network Admin being an approver of their own Network's requests.
  *
  * **The account step is deliberately not here.** Section 10 has approval proceed to
  * it, and section 7 provides in terms for "an actor holding only the first, who
@@ -80,9 +87,27 @@ export class CellsService {
     // shares that pool. `PeopleReassignmentService` is the established shape and
     // this follows it.
     //
-    // Nothing in the tree can change the answer between here and the write, because
-    // this grant is Whole Church: it does not resolve through the tree at all.
-    await this.assertActorHoldsBothCapabilities(actor);
+    // On the Admin's path nothing in the tree can change the answer between here and the
+    // write, because that grant is Whole Church: it does not resolve through the tree at all.
+    //
+    // **Which path, by how wide `cell.approve_leadership` reaches** (decision 0492). Whole
+    // Church is the Admin's path, checked as it always was: both capabilities now, the role
+    // under the lock. A Network is a Network Admin's: the role and the leader's own Network
+    // are read inside the transaction once the leader's lock is held, so a sex correction
+    // cannot move the leader between the check and the write. Narrower than either, which
+    // is *Approves Cells* over one's own branch, is refused as the church target refused it.
+    const authority = await this.authorization.authorityFor(actor.accountId);
+    const reach = await this.authorization.wideReachOf(actor, Capability.CellApproveLeadership);
+    const asAdmin = reach === null;
+    if (reach === undefined) {
+      throw new ScopeDeniedError(
+        `You hold ${Capability.CellApproveLeadership}, but not over this record.`,
+        { capability: Capability.CellApproveLeadership, target_kind: 'church' },
+      );
+    }
+    if (asAdmin) {
+      await this.assertActorHoldsBothCapabilities(actor);
+    }
 
     return this.db.transaction().execute(async (trx) => {
       // The leader's lock first, so this and any other write for the same leader decide the
@@ -91,7 +116,11 @@ export class CellsService {
       await lockPersonsWithin(trx, [input.cellLeaderId]);
 
       await this.assertEncodingPhaseOpen(trx);
-      await this.assertActorIsAdmin(trx, actor);
+      if (asAdmin) {
+        await this.assertActorIsAdmin(trx, actor);
+      } else {
+        await this.assertNetworkAdminCovers(trx, actor, authority, input.cellLeaderId);
+      }
 
       const person = await this.people.forDecisionWithin(trx, input.cellLeaderId);
 
@@ -129,8 +158,9 @@ export class CellsService {
       await assertNoScheduleClashWithin(trx, {
         leaderId: input.cellLeaderId,
         slots: [{ dayOfWeek: input.dayOfWeek, timeOfDay: input.timeOfDay }],
-        // Only Admin creates directly, checked above, and Admin sees the whole church.
-        viewer: () => Promise.resolve(true),
+        // The asker's own grants decide what a refusal names: the whole church for the
+        // Admin, their Network for a Network Admin, where every Cell of this leader is.
+        viewer: clashViewerFor(this.authorization, trx, actor, authority),
       });
 
       const created = await insertCellWithin(trx, input, actor.accountId);
@@ -287,6 +317,57 @@ export class CellsService {
     await this.authorization.authorize(actor, Capability.CellManageLeadership, {
       kind: 'church',
     });
+  }
+
+  /**
+   * **A Network Admin, for a leader in their own Network** (decision 0492).
+   *
+   * The role is required, as `ADMIN` is on the other path and for the same reason: a Cell
+   * created outside request-and-approve mints a Cell Leader, and a Leader holding the two
+   * capabilities by an explicit grant is not who section 2 gives this to. Then both
+   * capabilities must cover the leader, read through this transaction after the leader's
+   * lock, so the leader's Network is the one in force at the write.
+   *
+   * **Then a Network root, a Senior Pastor and an administrator are refused** (decision 0492,
+   * point 6): the Admin alone makes one of them a Cell Leader. Read here, after the lock and
+   * after the encoding phase, so a sex correction made at the same instant cannot move the
+   * leader past it, and a closed phase answers as it does for anybody else.
+   *
+   * **Before any refusal about the person**: somebody outside the Network, or nobody at all,
+   * is answered `SCOPE_DENIED` alike, so the refusal says nothing about who exists in the
+   * other Network or whether they are archived or merged (section 8, decision 0390).
+   */
+  private async assertNetworkAdminCovers(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+    leaderId: string,
+  ): Promise<void> {
+    const roles = await this.authorization.honouredRolesWithin(trx, actor.accountId);
+
+    if (!roles.includes('NETWORK_ADMIN')) {
+      throw new CapabilityDeniedError(
+        "Creating a Cell directly is the Admin's or a Network Admin's, during initial encoding " +
+          'only (SKILL.md section 2). Outside it, a Cell comes into existence through ' +
+          'request-and-approve.',
+        { required_role: 'NETWORK_ADMIN' },
+      );
+    }
+
+    const target = { kind: 'person', personId: leaderId } as const;
+    for (const capability of [Capability.CellApproveLeadership, Capability.CellManageLeadership]) {
+      if (!(await this.authorization.coversWith(trx, actor, authority, capability, target))) {
+        throw new ScopeDeniedError(
+          'That person is not in your Network, so you cannot give them a Cell to lead.',
+          { field: 'cell_leader_id' },
+        );
+      }
+    }
+
+    const adminOnly = await this.authorization.adminOnlyRefusalWithin(trx, leaderId);
+    if (adminOnly !== null) {
+      throw new ScopeDeniedError(adminOnly, { field: 'cell_leader_id' });
+    }
   }
 
   /**

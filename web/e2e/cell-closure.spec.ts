@@ -317,7 +317,7 @@ test.describe('the Cells page for a Network Admin (decision 0469)', () => {
     );
   });
 
-  test('has the Admin’s tabs, Time Clashes among them, and no New Cell', async ({ page }) => {
+  test('has the Admin’s tabs, Time Clashes among them, and New Cell (decision 0492)', async ({ page }) => {
     await page.route('**/api/v1/cells/schedule-clashes', (route) =>
       route.fulfill(json({ data: [] })),
     );
@@ -331,7 +331,7 @@ test.describe('the Cells page for a Network Admin (decision 0469)', () => {
       'Cells to Approve',
     ]);
     await expect(page.getByRole('button', { name: /^Time Clashes/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'New Cell' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'New Cell' })).toBeVisible();
   });
 
   test('closes with every reason but Created in error', async ({ page }) => {

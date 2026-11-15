@@ -427,6 +427,31 @@ export class AuthorizationService {
     }
   }
 
+  /**
+   * `changeRefusal`'s two tests, read through the caller's transaction, for a check made under
+   * a lock that must see what the lock serializes (decision 0492, point 6): whether the Person
+   * holds a Network root's seat, or holds `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`. It
+   * does not ask the actor's reach; the caller has.
+   */
+  async adminOnlyRefusalWithin(executor: Db, personId: string): Promise<string | null> {
+    if ((await this.hierarchy.rootsAsOf(executor, new Date())).includes(personId)) {
+      return 'A Network root’s record is the Admin’s to change.';
+    }
+
+    const holder = await executor
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('accounts.id')
+      .where('accounts.person_id', '=', personId)
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    return holder
+      ? 'A Senior Pastor’s or an administrator’s record is the Admin’s to change.'
+      : null;
+  }
+
   /** Why `assertMayChange` refuses, or null where it does not. */
   private async changeRefusal(
     actor: Actor,
