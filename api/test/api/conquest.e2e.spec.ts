@@ -55,6 +55,7 @@ describe('Conquest (section 27)', () => {
   let hannah: TestPerson;
 
   let admin: TestAccount;
+  let raymondAccount: TestAccount;
   let manuelAccount: TestAccount;
   let markAccount: TestAccount;
 
@@ -83,7 +84,7 @@ describe('Conquest (section 27)', () => {
     const adele = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
     admin = await createAccount(app, db, { person: adele, roles: ['ADMIN'] });
 
-    await createAccount(app, db, {
+    raymondAccount = await createAccount(app, db, {
       person: raymond,
       roles: ['SENIOR_PASTOR'],
       seniorPastorSlot: 1,
@@ -250,6 +251,191 @@ describe('Conquest (section 27)', () => {
       .executeTakeFirst();
     expect(Number(updated.numUpdatedRows)).toBe(1);
   };
+
+  // ---------------------------------------------------------------------------
+  // The Senior Pastors' tables (decision 0494)
+  // ---------------------------------------------------------------------------
+
+  describe('the Senior Pastors’ tables (decision 0494)', () => {
+    interface Figures {
+      people: number;
+      win_3: number;
+      open_a_cell: number;
+      completion_of_12: number;
+      raise_12_leaders: number;
+    }
+    const KEYS = [
+      'people',
+      'win_3',
+      'open_a_cell',
+      'completion_of_12',
+      'raise_12_leaders',
+    ] as const;
+
+    /** Mark wins three: three disciples, each with three lessons by 7 March. */
+    const markWinsThree = async () => {
+      for (const disciple of await disciplesOf(mark, 3)) {
+        await fileLessons(disciple.id, [5, 6, 7]);
+      }
+    };
+
+    /** Every table adds up to the total, *Others* holding the rest. */
+    const addsUp = (body: {
+      total: Figures;
+      others: Figures;
+      tables: { rows: Figures[]; own: Figures }[];
+    }) => {
+      for (const key of KEYS) {
+        const sum =
+          body.others[key] +
+          body.tables.reduce(
+            (all, table) =>
+              all + table.own[key] + table.rows.reduce((one, row) => one + row[key], 0),
+            0,
+          );
+        expect(sum).toBe(body.total[key]);
+      }
+    };
+
+    it('lists the Network’s root with their 12, their branch’s counts and their own goals', async () => {
+      await markWinsThree();
+
+      const response = await get(raymondAccount, 'branches?network=MENS');
+      expect(response.status).toBe(200);
+      expect(response.body.network).toBe('MENS');
+      expect(response.body.tables).toHaveLength(1);
+      const [table] = response.body.tables;
+      expect(table.root).toMatchObject({ id: raymond.id, first_name: 'Raymond' });
+      expect(table.rows).toHaveLength(1);
+      // Manuel's branch: Manuel, Mark, Nathan and Mark's three.
+      expect(table.rows[0]).toMatchObject({
+        leader: { id: manuel.id },
+        has_disciples: true,
+        people: 6,
+        win_3: 1,
+        goals: { win_3: { reached_on: null, now: 0 } },
+      });
+      expect(table.own).toMatchObject({ people: 1, win_3: 0 });
+      expect(response.body.total).toMatchObject({ people: 7, win_3: 1 });
+      addsUp(response.body);
+    });
+
+    it('opens one leader’s 12, a name with nobody beneath them marked so', async () => {
+      await markWinsThree();
+
+      const response = await get(raymondAccount, `branches?leader_id=${manuel.id}`);
+      expect(response.status).toBe(200);
+      const [table] = response.body.tables;
+      expect(table.root.id).toBe(manuel.id);
+      expect(table.rows.map((row: { leader: { id: string } }) => row.leader.id)).toEqual([
+        mark.id,
+        nathan.id,
+      ]);
+      expect(table.rows[0]).toMatchObject({
+        has_disciples: true,
+        people: 4,
+        win_3: 1,
+        goals: { win_3: { reached_on: dayOf(7), now: 3 } },
+      });
+      expect(table.rows[1]).toMatchObject({ has_disciples: false, people: 1, win_3: 0 });
+      expect(response.body.total).toMatchObject({ people: 6, win_3: 1 });
+      addsUp(response.body);
+    });
+
+    it('gives both roots under Both, the Men’s first, adding up to the whole church', async () => {
+      const response = await get(raymondAccount, 'branches');
+      expect(response.status).toBe(200);
+      expect(response.body.network).toBeNull();
+      expect(response.body.tables.map((table: { root: { id: string } }) => table.root.id)).toEqual([
+        raymond.id,
+        grace.id,
+      ]);
+      addsUp(response.body);
+    });
+
+    it('serves the Admin too, and refuses a reader over their own branch only', async () => {
+      expect((await get(admin, 'branches')).status).toBe(200);
+
+      const refused = await get(manuelAccount, 'branches');
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    it('answers NOT_FOUND for a leader nobody is, and for a record merged into another', async () => {
+      expect((await get(raymondAccount, `branches?leader_id=${randomUUID()}`)).status).toBe(404);
+
+      await db
+        .updateTable('persons')
+        .set({ merged_into_id: manuel.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+        .where('id', '=', nathan.id)
+        .execute();
+      expect((await get(raymondAccount, `branches?leader_id=${nathan.id}`)).status).toBe(404);
+    });
+
+    it('refuses a leader and a network sent together', async () => {
+      const response = await get(raymondAccount, `branches?network=MENS&leader_id=${manuel.id}`);
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('refuses a Network Admin, who keeps the list', async () => {
+      const networkAdmin = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Nora', network: 'MENS' }),
+        roles: ['NETWORK_ADMIN'],
+      });
+
+      // The guard admits her to Conquest, so the refusal below is the route's own Whole Church
+      // check, and the list stays hers.
+      expect((await get(networkAdmin, 'people')).status).toBe(200);
+
+      const response = await get(networkAdmin, 'branches?network=MENS');
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    it('puts whoever is beneath no root under Others, never in a row', async () => {
+      // Zeno's own assignment ended with none after it, so Zeno and the disciple beneath them
+      // are in the Men's Network and in no root's branch (decision 0232).
+      const zeno = await discipleOf(raymond, onDay(1), 'Zeno');
+      const below = await discipleOf(zeno, onDay(2), 'Below');
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: onDay(3) })
+        .where('person_id', '=', zeno.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await get(raymondAccount, 'branches?network=MENS');
+      expect(response.status).toBe(200);
+      expect(response.body.others).toMatchObject({ people: 2, win_3: 0 });
+      expect(response.body.total.people).toBe(6);
+      const ids = response.body.tables.flatMap((table: { rows: { leader: { id: string } }[] }) =>
+        table.rows.map((row) => row.leader.id),
+      );
+      expect(ids).not.toContain(zeno.id);
+      expect(ids).not.toContain(below.id);
+      addsUp(response.body);
+    });
+
+    it('counts the whole church under Both as the counts route does, the administrator outside the tree left out', async () => {
+      await markWinsThree();
+
+      const both = await get(raymondAccount, 'branches');
+      const counts = await get(raymondAccount, 'counts');
+      expect(both.status).toBe(200);
+      // Raymond, Manuel, Mark, Nathan and Mark's three; Grace and Hannah. Adele, an
+      // administrator never in the tree, is not counted (decision 0339).
+      expect(both.body.total).toMatchObject({ people: 9, win_3: 1 });
+      expect(both.body.total).toEqual({
+        people: counts.body.people,
+        win_3: counts.body.win_3,
+        open_a_cell: counts.body.open_a_cell,
+        completion_of_12: counts.body.completion_of_12,
+        raise_12_leaders: counts.body.raise_12_leaders,
+      });
+      expect(both.body.others).toMatchObject({ people: 0, win_3: 0 });
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // 1. Authorization

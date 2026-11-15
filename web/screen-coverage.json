@@ -513,6 +513,11 @@
       "screen": "web/app/(app)/conquest/page.tsx"
     },
     {
+      "route": "GET /api/v1/conquest/branches",
+      "reason": "The Senior Pastors' Conquest tables, each root's 12 and a level down (section 27, decision 0494).",
+      "screen": "web/app/(app)/conquest/page.tsx"
+    },
+    {
       "route": "GET /api/v1/suynl/counts",
       "reason": "The SUYNL tab’s three count cards (decision 0281).",
       "screen": "web/app/(app)/growth/suynl/page.tsx"

@@ -6,7 +6,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import { CurrentActor } from '../auth/current-actor.decorator';
 
 import { ConquestService } from './conquest.service';
-import { ConquestListDto } from './dto/conquest.dto';
+import { ConquestBranchesDto, ConquestListDto } from './dto/conquest.dto';
 
 /**
  * `/api/v1/conquest` (SKILL.md section 27), read-only.
@@ -34,5 +34,18 @@ export class ConquestController {
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
     return this.conquest.list(actor, query);
+  }
+
+  /**
+   * The Senior Pastors' tables (decision 0494): each root's 12, or one leader's, with each
+   * row's own goals and their branch's counts. Whole Church only, checked in the service.
+   */
+  @Get('branches')
+  @RequiresCapability(Capability.ConquestViewSubtree, { kind: 'actor' })
+  async branches(
+    @Query() query: ConquestBranchesDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.conquest.branches(actor, query);
   }
 }

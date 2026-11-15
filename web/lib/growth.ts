@@ -281,6 +281,59 @@ export function getConquestCounts(signal?: AbortSignal): Promise<ConquestCounts>
   return authenticatedRequest<ConquestCounts>('/api/v1/conquest/counts', { signal });
 }
 
+/** One branch's counts: its current people, and how many of them have reached each goal. */
+export interface ConquestFigures {
+  people: number;
+  win_3: number;
+  open_a_cell: number;
+  completion_of_12: number;
+  raise_12_leaders: number;
+}
+
+export interface ConquestBranchPerson {
+  id: string;
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+/**
+ * `GET /conquest/branches`, the Senior Pastors' tables (decision 0494): each root's 12, or one
+ * leader's, each row with its own goals and its branch's counts.
+ */
+export interface ConquestBranches {
+  network: 'MENS' | 'WOMENS' | null;
+  total: ConquestFigures;
+  tables: {
+    root: ConquestBranchPerson;
+    network: 'MENS' | 'WOMENS' | null;
+    rows: (ConquestFigures & {
+      leader: ConquestBranchPerson;
+      has_disciples: boolean;
+      goals: ConquestPerson['goals'];
+    })[];
+    own: ConquestFigures & { goals: ConquestPerson['goals'] };
+  }[];
+  others: ConquestFigures;
+}
+
+export function getConquestBranches(
+  query: { network?: 'MENS' | 'WOMENS'; leaderId?: string },
+  signal?: AbortSignal,
+): Promise<ConquestBranches> {
+  const params = new URLSearchParams();
+  if (query.leaderId) {
+    params.set('leader_id', query.leaderId);
+  } else if (query.network) {
+    params.set('network', query.network);
+  }
+  const suffix = params.toString();
+  return authenticatedRequest<ConquestBranches>(
+    `/api/v1/conquest/branches${suffix ? `?${suffix}` : ''}`,
+    { signal },
+  );
+}
+
 export function listConquestPeople(
   query: GrowthListQuery & { goal?: ConquestGoal },
   signal?: AbortSignal,
