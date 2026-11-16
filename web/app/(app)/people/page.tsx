@@ -99,7 +99,8 @@ function PeopleList() {
   const results = useQuery({
     queryKey: resultsKey,
     queryFn: ({ signal }) => searchPeople(submitted, pages.cursor, signal, { limit: PAGE_SIZE }),
-    enabled: me.data !== undefined && !awaitingSearch,
+    // Started at once: the search needs nothing from the account read (Loading batch C).
+    enabled: !awaitingSearch,
     // The page shown stays, faded, while the next one loads.
     placeholderData: keepPreviousPage(resultsKey, 2),
   });

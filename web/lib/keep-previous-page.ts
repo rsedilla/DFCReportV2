@@ -27,6 +27,16 @@ export function keepPreviousPeriod(key: QueryKey, periodIndexes: number[]) {
   return keepWhileOnlyChanging(key, periodIndexes);
 }
 
+/**
+ * Keeps a list on screen, faded, while the same list loads for another month or with a filter
+ * switched (owner, 2026-11-17, Loading batch C), as well as on a page turn. `changing` names the
+ * parts of the key that may differ: the month, the filters and the cursor. A new search or
+ * another view is still a different list and shows Loading.
+ */
+export function keepPreviousList(key: QueryKey, changing: number[]) {
+  return keepWhileOnlyChanging(key, changing);
+}
+
 function keepWhileOnlyChanging(key: QueryKey, changing: number[]) {
   return <T>(previous: T | undefined, previousQuery?: { queryKey: QueryKey }): T | undefined => {
     if (previous === undefined || previousQuery === undefined) {
