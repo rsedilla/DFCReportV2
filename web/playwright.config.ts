@@ -35,6 +35,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3100',
     trace: 'retain-on-failure',
+    // The offline page's helper (decision 0497) is kept out of every suite but its own
+    // (`e2e/offline.spec.ts`), so a mocked request is never answered past the mock.
+    serviceWorkers: 'block',
   },
 
   /**

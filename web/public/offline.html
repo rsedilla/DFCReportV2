@@ -1,0 +1,157 @@
+<!doctype html>
+<!--
+  The page shown when DREAMS is opened with no connection (SKILL.md section 23, decision 0497).
+
+  Kept on the device by `sw.js` and shown in place of the browser's own "No internet" page. It
+  is one file with its styles and script inside it, because nothing else of the application is
+  kept on the device: no stylesheet, no script and no font of the build can be relied on here.
+  The colours are the palette's (`app/globals.css`), copied because that file is not kept either.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#006b35" />
+    <title>You're offline · DREAMS</title>
+    <style>
+      :root {
+        --surface: #ffffff;
+        --raised: #f7f7f7;
+        --ink: #111111;
+        --muted: #6b6b6b;
+        --line: #dbe5df;
+        --accent: #007a39;
+        --on-accent: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #121212;
+          --raised: #1c1c1c;
+          --ink: #f2f2f2;
+          --muted: #a6a6a6;
+          --line: #2f3d35;
+          --accent: #1dce78;
+          --on-accent: #06210f;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--ink);
+        font-family:
+          Archivo,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      main {
+        display: flex;
+        min-height: 100dvh;
+        max-width: 28rem;
+        flex-direction: column;
+        justify-content: center;
+        margin: 0 auto;
+        padding: 3rem 1.25rem;
+        text-align: center;
+      }
+      img {
+        display: block;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto;
+        border-radius: 1.5rem;
+      }
+      .name {
+        margin: 0.875rem 0 0;
+        font-size: 1.875rem;
+        font-weight: 700;
+        letter-spacing: 0.025em;
+      }
+      .full {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      h1 {
+        margin: 1.75rem 0 0;
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+      .lead {
+        margin: 0.5rem 0 0;
+        color: var(--muted);
+        font-size: 0.9375rem;
+        line-height: 1.6;
+      }
+      .box {
+        margin: 1.5rem 0 0;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: var(--raised);
+        font-size: 0.875rem;
+        line-height: 1.55;
+        text-align: left;
+      }
+      .box b {
+        display: block;
+        margin-bottom: 0.125rem;
+      }
+      button {
+        width: 100%;
+        min-height: 2.75rem;
+        margin: 1.5rem 0 0;
+        border: 0;
+        border-radius: 0.5rem;
+        background: var(--accent);
+        color: var(--on-accent);
+        font: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .foot {
+        margin: 1rem 0 0;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Decorative: the name under it says the same. -->
+      <img src="/dreams-logo-168.png" alt="" width="120" height="120" />
+      <p class="name">DREAMS</p>
+      <p class="full">Doulos Reporting, Equipping, And Monitoring System</p>
+      <h1>You&rsquo;re offline</h1>
+      <p class="lead">
+        DREAMS needs the internet to open. Check your Wi&#8209;Fi or mobile data, then try again.
+      </p>
+      <div class="box">
+        <b>Your attendance marks are safe.</b>
+        Marks you made but have not saved yet are kept on this device. They will be offered back
+        when you open the meeting or the DCC checklist again.
+      </div>
+      <button type="button" id="retry">Try again</button>
+      <p class="foot">DREAMS opens by itself once you are back online.</p>
+    </main>
+    <script>
+      // This page stands at the address that was asked for, so loading it again asks for
+      // that address again.
+      function retry() {
+        window.location.reload();
+      }
+      document.getElementById('retry').addEventListener('click', retry);
+      window.addEventListener('online', retry);
+    </script>
+  </body>
+</html>

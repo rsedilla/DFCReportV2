@@ -248,9 +248,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-15, the trigger being decision 0494: of 493 files, 492 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0494 each moved the first two and
-neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-17, the trigger being decision 0497: of 494 files, 493 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0494, and 0497, each moved the first two and
+neither of the others, none of them carrying a `Next:`; 0495 and 0496 are on branches not yet
+merged and are not in this count. The recount before this one was dated
+2026-11-15 and triggered by 0494, and was left stale by 0497 two days later. The one before that was dated
 2026-11-15 and triggered by 0493, and was left stale by 0494 the same day. The one before that was dated
 2026-11-14 and triggered by 0492, and was left stale by 0493 the next day. The one before that was dated
 2026-11-14 and triggered by 0491, and was left stale by 0492 the same day. The one before that was dated
@@ -1032,6 +1034,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-14 — [A Network Admin creates a Cell directly in their own Network, as the Admin does](docs/decisions/0492-a-network-admin-creates-a-cell-directly-in-their-own-network.md)
 - 2026-11-15 — [The Audit Log shows changes, keeps searches under *Lookups*, and shows one save as one row](docs/decisions/0493-the-audit-log-shows-changes-and-keeps-searches-under-lookups.md)
 - 2026-11-15 — [The Senior Pastors' *Conquest* opens on their own Network's 12, and a name goes a level down](docs/decisions/0494-the-senior-pastors-conquest-opens-on-their-own-networks-12.md)
+- 2026-11-17 — [An offline page for the installed app](docs/decisions/0497-an-offline-page-for-the-installed-app.md)
 
 ### Open — awaiting a ruling
 
