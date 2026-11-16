@@ -21,6 +21,7 @@ import { CredentialsService } from './credentials.service';
 import { AuthService } from './auth.service';
 import { AccessTokenGuard } from './authorization/access-token.guard';
 import { PasswordService } from './password.service';
+import { PrivacyNoticeService } from './privacy-notice.service';
 import { PersonArchiveAccountsAdapter } from './person-archive.adapter';
 import { SecondStepService } from './second-step.service';
 import { SignInPauseService } from './sign-in-pause.service';
@@ -65,6 +66,7 @@ import { UsernamesService } from './usernames.service';
     CredentialsService,
     PasswordService,
     PersonArchiveAccountsAdapter,
+    PrivacyNoticeService,
     SecondStepService,
     SignInPauseService,
     TokensService,

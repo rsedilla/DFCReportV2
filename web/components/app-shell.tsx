@@ -20,6 +20,7 @@ import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 
 import { isBranchReader } from '@/components/reports-tabs';
 import { IdleGuard } from '@/components/idle-guard';
+import { PrivacyNoticeGate } from '@/components/privacy-notice-gate';
 import { RequireSession } from '@/components/require-session';
 import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
@@ -421,6 +422,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     names.length > 1
       ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
       : names.join('');
+
+  // **Asked once, in place of every screen, as soon as `/auth/me` answers** (decision 0496): an
+  // account that has not ticked the Privacy Notice in force sees only that question from then
+  // on. The page beneath may have rendered while `/auth/me` was still loading. Absent from a
+  // server that predates it, which asks nothing.
+  if (me.data?.privacy_notice?.acknowledged_at === null) {
+    return (
+      <RequireSession>
+        <IdleGuard />
+        <PrivacyNoticeGate version={me.data.privacy_notice.version} />
+      </RequireSession>
+    );
+  }
 
   return (
     <RequireSession>

@@ -250,6 +250,17 @@ export interface SignInPauseAlertsTable {
 }
 
 /**
+ * An account holder's tick that they read the Privacy Notice (SKILL.md sections 6 and 24,
+ * decision 0496). Append-only by trigger: a row is never changed or removed.
+ */
+export interface PrivacyNoticeAcknowledgmentsTable {
+  account_id: string;
+  /** The notice's "Last updated" date, `YYYY-MM-DD`. */
+  notice_version: string;
+  acknowledged_at: ColumnType<Date, Date | undefined, never>;
+}
+
+/**
  * The wrong second-step codes of one account in the last fifteen minutes, and the pause they
  * start at the tenth (section 6, decision 0441). Transient: removed by a right code, by a reset
  * of the step, and a day after it was last touched.
@@ -984,6 +995,7 @@ export interface Database {
   sign_in_pauses: SignInPausesTable;
   sign_in_pause_alerts: SignInPauseAlertsTable;
   second_step_pauses: SecondStepPausesTable;
+  privacy_notice_acknowledgments: PrivacyNoticeAcknowledgmentsTable;
   cells: CellsTable;
   cell_categories: CellCategoriesTable;
   cell_schedules: CellSchedulesTable;

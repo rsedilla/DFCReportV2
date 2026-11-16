@@ -272,6 +272,12 @@ export function compose(
         text: 'Well done, good and faithful servant! You have been faithful with a few things; I will put you in charge of many things.',
         reference: 'Matthew 25:21',
       },
+      // Says the tick is coming and carries none: a scanner opening the link is not the
+      // person reading the notice (decision 0496).
+      {
+        kind: 'p',
+        text: 'DREAMS holds the personal information of our members, children among them, under the Data Privacy Act of 2012. When you set your password, you will be asked to read our Privacy Notice and tick a box to say you have.',
+      },
       { kind: 'p', text: 'Your account is ready. Choose your password to get started:' },
       { kind: 'button', label: 'Set my password', href: link },
       {

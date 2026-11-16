@@ -112,6 +112,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         approves_cells: false,
         // Nor Moves people (decision 0356).
         moves_people: false,
+        // Nor has its holder ticked the Privacy Notice (decision 0496).
+        privacy_notice_acknowledged_at: null,
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);

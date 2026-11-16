@@ -24,6 +24,11 @@ export interface PersonAccount {
   approves_cells: boolean;
   /** Moves people (decision 0356); meaningful on a Leader account only. */
   moves_people: boolean;
+  /**
+   * When the holder ticked the Privacy Notice in force, or null where they have not (decision
+   * 0496). Absent from a server that predates it.
+   */
+  privacy_notice_acknowledged_at?: string | null;
 }
 
 export async function getAccountForPerson(

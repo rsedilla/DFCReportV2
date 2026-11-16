@@ -1519,3 +1519,30 @@ export async function expectTwoKeys(keys: string[]): Promise<void> {
   expect(keys[0]).not.toBe('');
   expect(keys[1]).not.toBe(keys[0]);
 }
+
+/**
+ * A signed-in account that has not ticked the Privacy Notice in force (decision 0496), so every
+ * screen opens on *Before you continue*. The tick answers as the API does, and `/auth/me` then
+ * says it was ticked. Returns the bodies and keys the tick was sent with.
+ */
+export async function mockPrivacyNoticeUnread(
+  page: Page,
+): Promise<{ sent: { body: unknown; key: string | undefined }[] }> {
+  await mockSignedIn(page);
+  let acknowledgedAt: string | null = null;
+  const sent: { body: unknown; key: string | undefined }[] = [];
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({ ...ME, privacy_notice: { version: '2026-11-16', acknowledged_at: acknowledgedAt } }),
+    ),
+  );
+  await page.route('**/api/v1/auth/privacy-notice', (route) => {
+    sent.push({
+      body: route.request().postDataJSON(),
+      key: route.request().headers()['idempotency-key'],
+    });
+    acknowledgedAt = '2026-11-16T01:14:00.000Z';
+    return route.fulfill(json({ version: '2026-11-16', acknowledged_at: acknowledgedAt }));
+  });
+  return { sent };
+}

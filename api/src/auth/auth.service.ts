@@ -8,6 +8,7 @@ import { AccountsRepository, sessionPredatesSecondStep } from './accounts.reposi
 import { AuthorizationService, type Actor } from './authorization/authorization.service';
 import { grantCoversNothing } from './authorization/single-scope';
 import { PasswordService } from './password.service';
+import { PrivacyNoticeService } from './privacy-notice.service';
 import { SecondStepService, type SecondStepChallenge } from './second-step.service';
 import { notePasswordPause, type PauseAlertDeps } from './sign-in-pause-alert';
 import { pauseIdentifier, SignInPauseService, type SignInName } from './sign-in-pause.service';
@@ -46,6 +47,7 @@ export class AuthService {
     private readonly secondSteps: SecondStepService,
     private readonly pauses: SignInPauseService,
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
+    private readonly privacyNotice: PrivacyNoticeService,
   ) {}
 
   /**
@@ -421,6 +423,10 @@ export class AuthService {
       // on the recording screens only while a leader holding an account sits directly beneath
       // the reader (decision 0323); on the Senior Pastors' never (decision 0325, point 1).
       // Decided here so the client derives nothing. Additive (section 22).
+      // Whether the caller has ticked the Privacy Notice in force (decision 0496), so the
+      // website asks them once, in place of every screen, as soon as it reads this. Their own
+      // account's, and a fact rather than a grant: nothing reads it to decide access. Additive (section 22).
+      privacy_notice: await this.privacyNotice.ownStatus(actor.accountId),
       people_i_oversee:
         screens === 'FULL' ||
         (screens === 'RECORDING' &&
