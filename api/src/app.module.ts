@@ -37,6 +37,7 @@ import { PeopleModule } from './people/people.module';
 import { ConquestModule } from './conquest/conquest.module';
 import { SuynlModule } from './suynl/suynl.module';
 import { TrainingModule } from './training/training.module';
+import { EquippingModule } from './equipping/equipping.module';
 
 /**
  * A modular monolith (SKILL.md section 1, principle 13). Modules are named in
@@ -80,6 +81,7 @@ import { TrainingModule } from './training/training.module';
     SuynlModule,
     ConquestModule,
     TrainingModule,
+    EquippingModule,
     SettingsRoutesModule,
     CellRelationshipsBindingModule,
     AdminAccountsBindingModule,

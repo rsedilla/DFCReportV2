@@ -30,12 +30,18 @@ export const REPORTS_PATH = '/reports/dcc';
  */
 export const SERVICES_PATH = '/reports/dcc';
 
+/** An Equipper starts on Registration, the first of their steps (decision 0499). */
+export const EQUIPPING_PATH = '/equipping/registration';
+
 /** The Admin area's Home (decision 0419). */
 export const ADMIN_PATH = '/admin';
 
 export function landingPath(me: SessionDescription | undefined): string {
   if (me !== undefined && holdsWide(me, 'accounts.manage')) {
     return ADMIN_PATH;
+  }
+  if (me?.screens === 'EQUIPPING') {
+    return EQUIPPING_PATH;
   }
   return me?.screens === 'SENIOR_PASTOR' ? SERVICES_PATH : RECORD_PATH;
 }

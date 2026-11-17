@@ -384,6 +384,8 @@ export function PersonAccount({
               { value: 'LEADER', label: 'Leader' },
               { value: 'SENIOR_PASTOR', label: 'Senior Pastor' },
               { value: 'ADMIN', label: 'Admin' },
+              // Runs the church's school (decision 0499); holds no other role.
+              { value: 'EQUIPPER', label: 'Equipper' },
             ]}
           />
           )}

@@ -24,7 +24,7 @@ import { IsStorableText } from '../../common/text/is-storable-text';
  * with `INVARIANT_VIOLATION` and says so, which is the answer an administrator can
  * act on.
  */
-const ROLES: AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
+const ROLES: AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER', 'EQUIPPER'];
 
 export class ProvisionAccountDto {
   /** The Person the account belongs to. One Person has at most one Account. */

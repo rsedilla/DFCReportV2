@@ -95,7 +95,12 @@ export class AccountsRepository {
             .selectFrom('account_roles')
             .select('account_roles.id')
             .whereRef('account_roles.account_id', '=', 'accounts.id')
-            .where('account_roles.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'SENIOR_PASTOR'])
+            .where('account_roles.role', 'in', [
+              'ADMIN',
+              'NETWORK_ADMIN',
+              'SENIOR_PASTOR',
+              'EQUIPPER',
+            ])
             .where('account_roles.revoked_at', 'is', null),
         )
         .$castTo<boolean>()

@@ -112,6 +112,23 @@ export class EncounterSeasonsService {
     };
   }
 
+  /**
+   * Every season with both halves, in the order of its earlier weekend, for `equipping`
+   * (SKILL.md section 29, decision 0499): a class names its season, and a student's age is
+   * checked against the weekend of their own Network. Authorization is the caller's: its
+   * routes are Whole Church `equipping.manage`, which shows both halves as a Whole Church
+   * reader of this list is shown them.
+   */
+  async allSeasons(executor: Db = this.db): Promise<(SeasonDates & { id: string })[]> {
+    const rows = await executor
+      .selectFrom('encounter_seasons')
+      .select([...COLUMNS])
+      .orderBy(sql`least(mens_encounter_on, womens_encounter_on)`)
+      .orderBy('mens_encounter_on')
+      .execute();
+    return rows.map((row) => this.shape(row));
+  }
+
   /** `POST /encounter-seasons`: record a season. */
   async create(
     actor: Actor,

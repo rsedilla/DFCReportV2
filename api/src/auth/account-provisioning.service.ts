@@ -49,7 +49,9 @@ const ACTIVATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
  * exceptions to the *qualification* rather than to the workflow: each still gets an
  * account, an activation email, and a password the holder sets.
  */
-const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
+// `EQUIPPER` (decision 0499) is qualified by nothing but being chosen: the Admin gives it to
+// a current Person, who holds no other account (section 6) and so no other role.
+const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER', 'EQUIPPER'];
 
 export interface ProvisionAccountInput {
   personId: string;

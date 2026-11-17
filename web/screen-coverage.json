@@ -507,6 +507,54 @@
       "screen": "web/components/encounter-seasons-frame.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/people",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/people/:id",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/encounter-seasons",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/registrations",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/registrations",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/registrations/:id/cancel",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/classes",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/classes/:id",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/enrollments",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/enrollments/:id/move",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/enrollments/:id/withdraw",
+      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
       "route": "GET /api/v1/conquest/counts",
       "reason": "Conquest’s four count cards (section 27, decision 0407).",
       "screen": "web/app/(app)/conquest/page.tsx"

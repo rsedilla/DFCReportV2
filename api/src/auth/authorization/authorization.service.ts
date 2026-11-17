@@ -381,7 +381,7 @@ export class AuthorizationService {
       .selectFrom('accounts')
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.person_id')
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
@@ -443,7 +443,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.id')
       .where('accounts.person_id', '=', personId)
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 
@@ -479,7 +479,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.id')
       .where('accounts.person_id', '=', personId)
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 

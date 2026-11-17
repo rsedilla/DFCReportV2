@@ -298,6 +298,23 @@ export class PeopleReadService {
   }
 
   /**
+   * Each of these people's birthday, or null where none is recorded, for section 29's checks
+   * (decision 0499): a birthday is needed to enroll, and the age it gives is checked against
+   * the Encounter. `YYYY-MM-DD`, read through the pinned `DateStyle` (section 24).
+   */
+  async birthDatesOf(personIds: readonly string[]): Promise<Map<string, string | null>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.db
+      .selectFrom('persons')
+      .select(['id', sql<string | null>`to_char(birth_date, 'YYYY-MM-DD')`.as('birth_date')])
+      .where('id', 'in', [...personIds])
+      .execute();
+    return new Map(rows.map((row) => [row.id, row.birth_date]));
+  }
+
+  /**
    * Which of these identifiers name a Person {@link findById} would find: existing and not
    * absorbed by a merge. For a caller answering many people at once.
    */

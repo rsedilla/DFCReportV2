@@ -23,7 +23,7 @@ export type ArchiveReason =
   | 'ATTENDS_ANOTHER_CHURCH'
   | 'PASSED_AWAY';
 export type AccountStatus = 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
-export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'NETWORK_ADMIN' | 'LEADER';
+export type AccountRole = 'SENIOR_PASTOR' | 'ADMIN' | 'NETWORK_ADMIN' | 'LEADER' | 'EQUIPPER';
 export type AccountTokenPurpose = 'PASSWORD_RESET' | 'ACTIVATION' | 'EMAIL_CHANGE';
 export type ScopeTypeValue = 'OWN_SUBTREE' | 'SUBTREE_EXCL_SELF' | 'NETWORK' | 'WHOLE_CHURCH';
 
@@ -411,6 +411,14 @@ export type AuditAction =
   | 'training_graduation.corrected'
   | 'encounter_season.created'
   | 'encounter_season.changed'
+  // Section 29's five (decision 0499). A registration and an enrollment target the Person
+  // they are about, as section 21 resolves an entry's scope through its target; a class
+  // targets itself, being about nobody in particular.
+  | 'equipping_registration.created'
+  | 'equipping_registration.cancelled'
+  | 'equipping_class.created'
+  | 'equipping_enrollment.created'
+  | 'equipping_enrollment.ended'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -921,6 +929,65 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
  * LC Party before each, recorded by an administrator. Each party is at least five weeks
  * before its own weekend, a constraint in migration 0019.
  */
+/** Section 29's levels (decision 0499): Life Class first, SOL 1 to 3 later. */
+export type EquippingLevel = 'LIFE_CLASS';
+
+/** The record requirements a registration can be made despite (decision 0499, point 7). */
+export type EquippingRequirement = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_FIVE';
+
+/** A class of one level in one term (section 29, migration 0050). Never deleted. */
+export interface EquippingClassesTable {
+  id: Generated<string>;
+  level: EquippingLevel;
+  term_year: number;
+  term_number: number;
+  name: string;
+  /** ISO 8601: 1 is Monday, 7 is Sunday. */
+  day_of_week: number;
+  /** `HH:MM:SS`, as `pg` returns a `time`. */
+  time_of_day: string;
+  place: string | null;
+  first_lesson_on: DateOnly;
+  teacher_person_id: string;
+  encounter_season_id: string;
+  run_by: Generated<'CHURCH'>;
+  created_by: string;
+  created_at: ServerTimestamp;
+}
+
+/** A person signed up for a level in a term (section 29, migration 0050). Never deleted. */
+export interface EquippingRegistrationsTable {
+  id: Generated<string>;
+  person_id: string;
+  level: EquippingLevel;
+  term_year: number;
+  term_number: number;
+  devotion_confirmed: boolean;
+  bible_confirmed: boolean;
+  manual_confirmed: boolean;
+  unmet: Generated<EquippingRequirement[]>;
+  exception_reason: string | null;
+  note: string | null;
+  registered_by: string;
+  registered_at: ServerTimestamp;
+  cancelled_at: Date | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+}
+
+/** A registration placed in a class (section 29, migration 0050). Ended, never deleted. */
+export interface EquippingEnrollmentsTable {
+  id: Generated<string>;
+  registration_id: string;
+  class_id: string;
+  started_at: ServerTimestamp;
+  started_by: string;
+  ended_at: Date | null;
+  ended_by: string | null;
+  end_reason: 'MOVED' | 'WITHDRAWN' | null;
+  withdraw_note: string | null;
+}
+
 export interface EncounterSeasonsTable {
   id: Generated<string>;
   mens_lc_party_on: DateOnly;
@@ -1015,6 +1082,9 @@ export interface Database {
   training_graduations: TrainingGraduationsTable;
   conquest_confirmations: ConquestConfirmationsTable;
   encounter_seasons: EncounterSeasonsTable;
+  equipping_classes: EquippingClassesTable;
+  equipping_registrations: EquippingRegistrationsTable;
+  equipping_enrollments: EquippingEnrollmentsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;

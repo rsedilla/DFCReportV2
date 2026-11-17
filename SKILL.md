@@ -137,6 +137,7 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `conquest` | The four G12 goals: what a leader confirms about them, and their corrections (Section 27) |
 | `suynl` | SUYNL lessons and their corrections (Section 28) |
 | `training` | Graduation from the Encounter, Life Class and SOL 1 to 3, and their corrections; the Encounter seasons (Section 28) |
+| `equipping` | The church's school: classes, registrations and enrollments (Section 29) |
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
@@ -1822,7 +1823,7 @@ Sex is excluded deliberately. Sex determines Network under the homogeneous-netwo
 
 ### Role catalog
 
-Four roles exist. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it. **Two capabilities are an exception and may not be granted to an account holding `SENIOR_PASTOR` at all** — see How grants are held, below.
+Five roles exist: the four in the table below, and the Equipper, whose one capability is given in Section 29 and who holds nothing else. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it. **Two capabilities are an exception and may not be granted to an account holding `SENIOR_PASTOR` at all** — see How grants are held, below.
 
 | Capability | Senior Pastor | Admin | Network Admin | Leader |
 | --- | --- | --- | --- | --- |
@@ -1864,6 +1865,7 @@ Four roles exist. Each carries the default capabilities and scopes below. Anythi
 | `training.view_subtree` | Whole Church | Whole Church | Network | own/subtree, with Full view |
 | `training.confirm` | — | Whole Church | Network | own/subtree, with Full view |
 | `training.confirm_on_behalf` | — | Whole Church | Network | own/subtree, with Full view |
+| `equipping.manage` | — | Whole Church | — | — |
 
 Eight of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
@@ -4918,6 +4920,7 @@ Recommended REST areas:
 /api/v1/suynl                             Section 28
 /api/v1/training                          Section 28
 /api/v1/encounter-seasons                 Section 28 (decision 0296)
+/api/v1/equipping                         Section 29 (decision 0499)
 /api/v1/settings                          Section 7 (decision 0425)
 ```
 
@@ -5869,9 +5872,9 @@ SUYNL, then the LC Party, then Life Class, whose fifth lesson is the Encounter, 
 
 So there are four schools, Life Class and SOL 1 to 3, with the Encounter inside Life Class. Together they run from a personal foundation in Christ to leadership and disciple-making.
 
-**The order is displayed and never enforced.** No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none.
+**The order is displayed and never enforced** for these graduations. No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. **Registering for Life Class is the exception, and it warns rather than refuses** (decision 0499): five SUYNL lessons are one of its requirements, read and shown when somebody is registered, and a person not meeting it is registered with exception and a reason (Section 29). An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none.
 
-**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to nine lessons and is recorded here as a single graduation. An enrolment application planned elsewhere will own enrolment and lesson progress for the schools; recording their lessons here as well would give the church two records of one fact, free to disagree, with nothing able to keep them in step.
+**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to nine lessons and is recorded here as a single graduation. An enrolment application planned elsewhere was to own enrolment and lesson progress for the schools; **that application is Section 29's `equipping` module** (decision 0499), and it records enrolment here rather than elsewhere, so the two records the sentence warned of are one. Its lessons and grades are owed by later rulings, and until a posted final grade files a graduation, Training's graduations are still filed by leaders.
 
 ### SUYNL
 
@@ -6019,6 +6022,48 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 ### What Section 21 records
 
 `suynl_lesson.confirmed`, `suynl_lesson.corrected`, `training_graduation.confirmed` and `training_graduation.corrected`, each naming the **Person** the record is about as its target, with the lesson or the program and the dates in `before` and `after`, the reason on a correction, and — where it was filed for a downline leader — the confirming leader alongside the actor, as one entry rather than two (Section 21).
+
+## 29. Equipping
+
+`Equipping` is the church's school (owner rulings of 2026-11-17, decision 0499), behind which is the `equipping` module, owning `equipping_classes`, `equipping_registrations` and `equipping_enrollments` (migration `0050_equipping.sql`). Its first two steps are built, **Registration** and **Enrollment**, for **Life Class** alone; Faculty, make-up lessons, weekly grades, final grades and posting them are owed by later rulings. Nothing here files a Training graduation (Section 28).
+
+### Who
+
+**`equipping.manage`, at Whole Church only, guards every route.** The Admin holds it by default, and so does the **Equipper**, a role of its own given by the Admin when creating an account (Section 6), which holds that capability and nothing else and is **held alone**, partial unique indexes over `account_roles` pairing it with each of the other four as `NETWORK_ADMIN` is paired. An Equipper's screens are `EQUIPPING`: `Registration` and `Enrollment` in the sidebar, and no other item; the Admin has one `Equipping` item whose tabs they are. An Equipper signs in with the second step and holds the shorter session, as an Admin does (Section 6), because the school reads church-wide records, minors' birthdays among them; and a Network Admin reads an Equipper's Person and never changes it, as an administrator's (Section 7). The person picker searches the church and is **bounded and recorded as a church-wide search is** (Section 8, decision 0303), five fields a row. What the module reads of a person it reads through the owning modules (Section 2), so the role holds no read capability of theirs.
+
+**An Equipper who also leads is a second matter, not settled here.** The owner chose two accounts tied to the same Person; Section 6 says one Person has one account, and `accounts.person_id` is unique, so until that is ruled an Equipper is a Person holding no other account.
+
+### Registration
+
+**A registration is a Person, a level and a term.** The Person is chosen from the system and current; a term is Term 1, 2 or 3 of a year; one registration per Person, level and term, a cancelled one aside (an index). No money is recorded.
+
+**Life Class has seven requirements.** Four are read from the records when the person is picked, each as things stand now:
+
+- **Has a leader**: an open pastoral assignment (Section 5).
+- **Regular in a Cell Group**: five or more Cell meetings attended, Section 12's ladder, counted as the person's own page counts them.
+- **Regular in DCC**: five or more Sundays, Section 9's ladder.
+- **SUYNL, at least five lessons**: five or more current lesson rows, any lessons (Section 28).
+
+Three are ticked by the Equipper after asking the person's leader: **consistent in devotion**, **has a physical Bible**, and **has the Life Class Manual**. All three are always required, and the row records who registered and when.
+
+**A record requirement not met warns rather than refuses.** The Equipper says why they are registered anyway, which is then required; the row keeps the requirements not met and the reason, a constraint refusing one without the other, and reads *Registered with exception*. A merged record's attendance and lessons count for the record kept (Section 3).
+
+**A registration is never deleted.** It is *Registered*, *Registered with exception*, *Enrolled* while an enrollment of it is open, or *Cancelled* with a reason, which is refused while it is in a class.
+
+### Enrollment
+
+**A class is a level in a term**, with a name unique in its term, a day and time, a place, its first lesson, a Teacher (a current Person), and an Encounter season (Section 28). **It records who runs it, which is the church for now**: each Primary running classes for the people in their care is the owner's plan, and the column is what lets it be turned on. The Teacher gains their own access with the weekly grades.
+
+**Enrolling places several registrations in one class at once, all or none**, each of the class's level and term, not cancelled and in no class, and two checks are never overridden:
+
+- **a birthday is recorded**; and
+- **the person is 15 on the first day of their own Network's Encounter weekend** in the class's season. The Encounter is Life Class lesson 5 (decision 0295), so this is where its age is checked.
+
+**One class per person, level and term**, an index on the open enrollment. A person is **moved** to another class of the same level and term, the two checks made again against its season, or **withdrawn** with a reason; an enrollment that ends is kept, with when and why. Nothing in the three tables is deleted, a trigger refusing it.
+
+### What Section 21 records
+
+`equipping_registration.created` and `.cancelled`, and `equipping_enrollment.created` and `.ended`, each targeting the **Person**, with the requirements not met and the reason, or the class and the end reason; and `equipping_class.created`, targeting the class, which is about nobody in particular. The Audit Log shows them under Growth for now.
 
 ---
 

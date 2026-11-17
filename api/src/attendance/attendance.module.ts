@@ -20,6 +20,7 @@ import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCalendarService } from './dcc-calendar.service';
 import { CellFiguresService } from './cell-figures.service';
 import { DccFiguresService } from './dcc-figures.service';
+import { AttendanceStandingService } from './attendance-standing.service';
 import { DccCoverageService } from './dcc-coverage.service';
 import { DccPersonAttendanceService } from './dcc-person-attendance.service';
 import { DccController } from './dcc.controller';
@@ -82,6 +83,7 @@ import { DccController } from './dcc.controller';
   ],
   controllers: [DccController, CellMeetingsController, BranchFiguresController],
   providers: [
+    AttendanceStandingService,
     DccCalendarService,
     DccAttendanceService,
     DccCoverageService,
@@ -116,6 +118,8 @@ import { DccController } from './dcc.controller';
     DccCoverageService,
     // People's Absent 3+ Months list, only to be bound to `people`'s port (decision 0397).
     AbsentPeopleService,
+    // A person's DCC and Cell attendance so far, for `equipping`'s requirements (decision 0499).
+    AttendanceStandingService,
   ],
 })
 export class AttendanceModule {}

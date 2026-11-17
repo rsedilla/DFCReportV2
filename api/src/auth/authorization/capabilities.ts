@@ -50,6 +50,8 @@ export const Capability = {
   TrainingViewSubtree: 'training.view_subtree',
   TrainingConfirm: 'training.confirm',
   TrainingConfirmOnBehalf: 'training.confirm_on_behalf',
+  // Section 29 (decision 0499): registering, opening classes and enrolling.
+  EquippingManage: 'equipping.manage',
 } as const;
 
 export type Capability = (typeof Capability)[keyof typeof Capability];

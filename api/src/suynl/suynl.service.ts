@@ -529,6 +529,32 @@ export class SuynlService {
     return new Map(result.rows.map((row) => [row.person_id, row.confirmed_at]));
   }
 
+  /**
+   * How many current lessons each of these people holds, any lessons, for a Life Class
+   * registration's "at least five" (SKILL.md section 29, decision 0499). A lesson corrected away
+   * never counted (section 28), and a merged pair is one person whose lesson on both records
+   * counts once (decision 0408). Somebody with none is absent.
+   */
+  async currentLessonCountsOf(personIds: readonly string[]): Promise<Map<string, number>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const result = await sql<{ person_id: string; lessons: number }>`
+      WITH ${mergedCte(pairs)}
+      SELECT coalesce(m.kept_id, l.person_id) AS person_id,
+             count(DISTINCT l.lesson)::int AS lessons
+        FROM suynl_lessons l
+        LEFT JOIN merged m ON m.absorbed_id = l.person_id
+       WHERE l.superseded_at IS NULL
+         AND coalesce(m.kept_id, l.person_id) = ANY(${[...personIds]}::uuid[])
+       GROUP BY coalesce(m.kept_id, l.person_id)
+    `.execute(this.db);
+
+    return new Map(result.rows.map((row) => [row.person_id, row.lessons]));
+  }
+
   /** Each current person with at least one current lesson, and how many they hold. */
   private async currentProgress(
     population: ReadonlySet<string> | null,

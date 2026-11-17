@@ -94,6 +94,13 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'suynl_lesson.corrected': 'GROWTH',
   'training_graduation.confirmed': 'GROWTH',
   'training_graduation.corrected': 'GROWTH',
+  // Section 29 (decision 0499): the school sits beside Training under Growth until the
+  // Audit Log is given a kind of its own for it.
+  'equipping_registration.created': 'GROWTH',
+  'equipping_registration.cancelled': 'GROWTH',
+  'equipping_class.created': 'GROWTH',
+  'equipping_enrollment.created': 'GROWTH',
+  'equipping_enrollment.ended': 'GROWTH',
 };
 
 /** The actions one chip finds. */
