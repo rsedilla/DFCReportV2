@@ -76,6 +76,8 @@ test('activation fills the suggestion, says when it moved, and sends the usernam
   await expect(page.getByText(/rbsantiago is already taken, so a number was added/)).toBeVisible();
 
   await page.getByLabel('New password').fill('a long enough passphrase');
+  // The Privacy Notice tick comes first (decision 0496).
+  await page.getByRole('checkbox', { name: /I have read the Privacy Notice/ }).check();
   await page.getByRole('button', { name: 'Activate account' }).click();
 
   await expect.poll(() => sent.length).toBe(1);

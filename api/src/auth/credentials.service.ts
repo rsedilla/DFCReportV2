@@ -25,6 +25,7 @@ import {
   sessionPredatesSecondStep,
 } from './accounts.repository';
 import { PasswordService } from './password.service';
+import { PrivacyNoticeService } from './privacy-notice.service';
 import { noteCurrentPasswordPause, type PauseAlertDeps } from './sign-in-pause-alert';
 import { pauseIdentifier, SignInPauseService } from './sign-in-pause.service';
 import { TokensService, hashToken } from './tokens.service';
@@ -66,6 +67,7 @@ export class CredentialsService {
     private readonly idempotency: IdempotencyService,
     private readonly accounts: AccountsRepository,
     private readonly pauses: SignInPauseService,
+    private readonly privacyNotice: PrivacyNoticeService,
   ) {}
 
   /**
@@ -271,9 +273,14 @@ export class CredentialsService {
    * sent (decision 0337). A name another account holds refuses the whole activation, so the
    * token is not spent on a request that changed nothing.
    */
-  async activate(token: string, password: string, username?: string): Promise<void> {
+  async activate(
+    token: string,
+    password: string,
+    username?: string,
+    privacyNoticeVersion?: string,
+  ): Promise<void> {
     const name = username === undefined ? null : assertUsernameShape(username);
-    await this.setPassword('ACTIVATION', token, password, name);
+    await this.setPassword('ACTIVATION', token, password, name, null, privacyNoticeVersion ?? null);
   }
 
   /**
@@ -671,6 +678,7 @@ export class CredentialsService {
     password: string,
     username: string | null = null,
     proofHash: string | null = null,
+    privacyNoticeVersion: string | null = null,
   ): Promise<void> {
     assertPasswordIsAcceptable(password);
 
@@ -746,6 +754,18 @@ export class CredentialsService {
 
       if (username !== null) {
         await this.usernames.setWithin(trx, claimed.accountId, username);
+      }
+
+      // The tick on the activation page, in the transaction that sets the password, so neither
+      // is kept without the other (decision 0496). A notice that is not the one in force is
+      // refused here and the token is not used up.
+      if (privacyNoticeVersion !== null) {
+        await this.privacyNotice.acknowledgeWithin(
+          trx,
+          claimed.accountId,
+          privacyNoticeVersion,
+          'privacy_notice_version',
+        );
       }
 
       // **Every existing session dies**, and through the one implementation that

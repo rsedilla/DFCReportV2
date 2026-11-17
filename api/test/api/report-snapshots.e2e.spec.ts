@@ -149,6 +149,7 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['person_view_alerts', 'who opened a page'],
       ['sign_in_pauses', 'sign-in state'],
       ['second_step_pauses', 'sign-in state'],
+      ['privacy_notice_acknowledgments', 'an account holder’s tick, not a figure (decision 0496)'],
       ['sign_in_pause_alerts', 'sign-in state'],
       ['cell_leadership_requests', 'a request is not a leadership until approved'],
       [

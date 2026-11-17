@@ -44,6 +44,10 @@
       "screen": "web/app/(app)/session/page.tsx"
     },
     {
+      "route": "POST /api/v1/auth/privacy-notice",
+      "screen": "web/components/privacy-notice-gate.tsx"
+    },
+    {
       "route": "POST /api/v1/auth/password",
       "screen": "web/app/(app)/session/page.tsx"
     },

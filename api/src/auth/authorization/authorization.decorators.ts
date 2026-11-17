@@ -129,7 +129,9 @@ export function Public(reason: string): CustomDecorator<string> {
  * claims, signing out, ending one's own sessions. Or, since decision 0269, because it
  * returns only records the caller's own account created: the Cell leadership
  * requests they sent. Or, since decision 0425, because it reads the verse on Record,
- * the one setting every signed-in account is shown.
+ * the one setting every signed-in account is shown. Ticking that one read the Privacy
+ * Notice (decision 0496) is one of the caller's own: it writes that tick on their own
+ * account and nothing else.
  *
  * This is the only way past the capability guard, and it is deliberately narrow.
  * Beyond those requests, which name the Person and the Cell their sender named, and

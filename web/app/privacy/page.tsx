@@ -44,8 +44,8 @@ export default function PrivacyNoticePage() {
             SUYNL, Life Class, the Encounter and School of Leaders.
           </li>
           <li>
-            If you lead and have an account: your email address or username, and a record of the
-            changes you make.
+            If you lead and have an account: your email address or username, a record of the
+            changes you make, and when you ticked that you read this notice.
           </li>
         </ul>
         <p className="mt-3">
@@ -59,9 +59,12 @@ export default function PrivacyNoticePage() {
           for and who is ready for the next step. And to see, in totals, how the church as a whole
           is doing.
         </p>
+        {/* Solely for the church, in the owner's words (decision 0495). */}
         <p className="mt-3">
-          We never sell your information, never use it for advertising, and never share it outside
-          the church, except where the law requires us to.
+          Your information is used{' '}
+          <strong>solely by and for Doulos For Christ World Harvest Ministry</strong>, and for
+          nothing and nobody else. We never sell it, never use it for advertising, and never share
+          it outside the church, except where the law requires us to.
         </p>
       </Part>
 
@@ -153,7 +156,7 @@ export default function PrivacyNoticePage() {
         </p>
       </Part>
 
-      <p className="text-muted mt-10 text-xs">Last updated: November 7, 2026</p>
+      <p className="text-muted mt-10 text-xs">Last updated: November 16, 2026</p>
       <p className="border-line mt-6 border-t pt-6 text-sm">
         <TextLink href="/sign-in">Back to sign in</TextLink>
       </p>
