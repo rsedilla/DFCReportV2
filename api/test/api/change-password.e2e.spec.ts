@@ -289,6 +289,21 @@ describe('changing one’s own password (decision 0351)', () => {
       }
     }
 
+    /**
+     * A pause is written to the audit log without being awaited, in a transaction of its own.
+     * A case that ends in a pause waits for it here, so the next case's TRUNCATE does not meet
+     * that transaction and deadlock.
+     */
+    async function pauseNoted() {
+      for (let wait = 0; wait < 50; wait += 1) {
+        if ((await pauses()).length > 0) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      throw new Error('The pause was never written to the audit log.');
+    }
+
     /** The alert is sent without being awaited, so it is waited for. */
     async function alertsSent(kind: 'CURRENT_PASSWORD_PAUSED' | 'SIGN_IN_PAUSED') {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -378,6 +393,7 @@ describe('changing one’s own password (decision 0351)', () => {
       const tenth = await changeEmail(device, WRONG);
       expect(tenth.status).toBe(429);
       expect(tenth.body.error.details.reason).toBe('SIGN_IN_PAUSED');
+      await pauseNoted();
     });
 
     it('starts the count again on a right one, as sign-in does', async () => {
@@ -397,6 +413,7 @@ describe('changing one’s own password (decision 0351)', () => {
       for (let attempt = 1; attempt <= 10; attempt += 1) {
         await change(device, { current_password: WRONG });
       }
+      await pauseNoted();
       resetRateLimits(app);
       const key = randomUUID();
       expect((await change(device, {}, key)).status).toBe(429);
