@@ -2269,6 +2269,16 @@ const TARGET_SWEEP = [
     minimum: 22,
     admin: true,
   },
+  {
+    // In place of every screen until the notice is ticked (decision 0496): the box, the
+    // Privacy Notice link, Continue and Sign out: **four**. Last, because its `/auth/me` stays.
+    // Settled on Continue, not Sign out, which My Account has too.
+    name: 'privacy notice, before you continue',
+    route: '/session',
+    settle: 'Continue',
+    minimum: 4,
+    privacyUnread: true,
+  },
 ] as const;
 
 /**
@@ -2710,6 +2720,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
       await mockAuditLog(page);
+    }
+    if ('privacyUnread' in entry && entry.privacyUnread) {
+      await mockPrivacyNoticeUnread(page);
     }
 
     await page.goto(route);
