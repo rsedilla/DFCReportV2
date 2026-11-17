@@ -172,9 +172,10 @@ CREATE TRIGGER equipping_enrollments_never_deleted
   FOR EACH ROW EXECUTE FUNCTION refuse_delete_from_equipping();
 
 -- migrate:down
--- migrate:down:refuse-if-populated equipping_registrations
+-- migrate:down:refuse-if-populated equipping_classes equipping_registrations equipping_enrollments
 
--- Refused once anybody is registered: the rows are the school's history (decision 0499).
+-- Refused once any of the three holds a row: a term held, a registration and an
+-- enrollment are each the school's history (decision 0499).
 -- On a database where nobody is, it removes the tables cleanly.
 
 DROP TRIGGER equipping_enrollments_never_deleted ON equipping_enrollments;

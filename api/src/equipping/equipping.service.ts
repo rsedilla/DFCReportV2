@@ -11,7 +11,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, isUuid } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -60,6 +60,9 @@ function encodeCursor(row: { registered_at: Date; id: string }): string {
   );
 }
 
+/** Exactly what `toISOString` writes, so a forged key cannot carry text to the query. */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 /** A cursor that cannot be resolved is refused (decision 0159). */
 function decodeCursor(cursor: string | undefined): { at: string; id: string } | null {
   if (cursor === undefined) {
@@ -71,9 +74,10 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
       Array.isArray(value) &&
       value.length === 2 &&
       typeof value[0] === 'string' &&
+      ISO_INSTANT.test(value[0]) &&
       !Number.isNaN(Date.parse(value[0])) &&
       typeof value[1] === 'string' &&
-      /^[0-9a-f-]{36}$/i.test(value[1])
+      isUuid(value[1])
     ) {
       return { at: value[0], id: value[1] };
     }

@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Matches,
   Max,
   MaxLength,
@@ -17,6 +18,7 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
@@ -57,7 +59,7 @@ export class ListRegistrationsDto extends EquippingTermDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 }
 
