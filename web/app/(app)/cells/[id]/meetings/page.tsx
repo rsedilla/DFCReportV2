@@ -11,6 +11,7 @@ import { SectionFrame } from '@/components/section-frame';
 import { CellCategoryDialog } from '@/components/cell-category-dialog';
 import { CellScheduleDialog } from '@/components/cell-schedule-dialog';
 import { CoverageFigure } from '@/components/coverage-figure';
+import { KeptFigures } from '@/components/kept-figures';
 import { MonthPicker } from '@/components/month-picker';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -27,6 +28,7 @@ import {
   type CellCategory,
   type ScheduledMeeting,
 } from '@/lib/cells';
+import { keepPreviousPeriod } from '@/lib/keep-previous-page';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
@@ -86,9 +88,12 @@ function CellMeetings() {
   const [changingCategory, setChangingCategory] = useState(false);
   const [savedCategory, setSavedCategory] = useState<CellCategory | null>(null);
 
+  const meetingsKey = ['cell-meetings', params.id, month];
   const meetings = useQuery({
-    queryKey: ['cell-meetings', params.id, month],
+    queryKey: meetingsKey,
     queryFn: ({ signal }) => listCellMeetings(params.id, month, signal),
+    // The month shown stays, faded, while another month of the same Cell loads (Loading batch C).
+    placeholderData: keepPreviousPeriod(meetingsKey, [2]),
   });
 
   const today = todayInManila();
@@ -226,6 +231,7 @@ function CellMeetings() {
             question the API settles.
           */}
           <MonthPicker month={month} onChange={(next) => go({ month: next })} />
+          <KeptFigures kept={meetings.isPlaceholderData} loading={monthLabel(month)}>
           <p className="mt-2">
             <CoverageFigure
               headline
@@ -303,6 +309,7 @@ function CellMeetings() {
               </ul>
             </>
           )}
+          </KeptFigures>
         </section>
       ) : null}
     </SectionFrame>

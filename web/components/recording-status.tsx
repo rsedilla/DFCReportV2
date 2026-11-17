@@ -4,13 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { KeptFigures } from '@/components/kept-figures';
 import { RangeNavigator } from '@/components/my-twelve';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { ViewSwitch } from '@/components/ui/view-switch';
 import { describeFailure } from '@/lib/messages';
-import { rangeGuardMonth, rangeStartOf } from '@/lib/report-range';
+import { keepPreviousPeriod } from '@/lib/keep-previous-page';
+import { rangeGuardMonth, rangeLabel, rangeStartOf } from '@/lib/report-range';
 import { todayInManila } from '@/lib/reporting-month';
 import { weekDueLabel } from '@/lib/weekly-deadline';
 import {
@@ -52,10 +54,13 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
   const [start, setStart] = useState(() => openingWeek(new Date()) ?? current);
   const shown = rangeStartOf(kind, start);
 
+  const statusKey = ['recording-status', kind, shown];
   const status = useQuery({
-    queryKey: ['recording-status', kind, shown],
+    queryKey: statusKey,
     queryFn: ({ signal }) =>
       getRecordingStatus(kind, shown, rangeGuardMonth(kind, shown, today), signal),
+    // The week or month shown stays, faded, while another loads (Loading batch C).
+    placeholderData: keepPreviousPeriod(statusKey, [2]),
   });
 
   const unit = kind === 'WEEK' ? 'week' : 'month';
@@ -85,7 +90,7 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
           kind={kind}
           start={shown}
           current={current}
-          open={data?.open}
+          open={status.isPlaceholderData ? undefined : data?.open}
           due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
@@ -98,7 +103,7 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
       {status.isPending ? (
         <LoadingBlocks shape="rows" className="mt-4" />
       ) : data ? (
-        <>
+        <KeptFigures kept={status.isPlaceholderData} loading={rangeLabel(kind, shown)}>
           <h3 className="field-label mt-4">Whole Church</h3>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <WholeChurchBox
@@ -159,7 +164,7 @@ export function RecordingStatusPanel({ onPending }: { onPending?: OpenPending } 
             </>
           )}
 
-        </>
+        </KeptFigures>
       ) : null}
     </section>
   );
@@ -183,10 +188,13 @@ export function LeaderRecordingStatusPanel({
   const [start, setStart] = useState(() => openingWeek(new Date()) ?? current);
   const shown = rangeStartOf(kind, start);
 
+  const statusKey = ['leader-recording-status', leaderId, kind, shown];
   const status = useQuery({
-    queryKey: ['leader-recording-status', leaderId, kind, shown],
+    queryKey: statusKey,
     queryFn: ({ signal }) =>
       getLeaderRecordingStatus(leaderId, kind, shown, rangeGuardMonth(kind, shown, today), signal),
+    // The week or month shown stays, faded, while another loads (Loading batch C).
+    placeholderData: keepPreviousPeriod(statusKey, [3]),
   });
 
   const unit = kind === 'WEEK' ? 'week' : 'month';
@@ -215,7 +223,7 @@ export function LeaderRecordingStatusPanel({
           kind={kind}
           start={shown}
           current={current}
-          open={data?.open}
+          open={status.isPlaceholderData ? undefined : data?.open}
           due={kind === 'WEEK' ? weekDueLabel(shown) : null}
           onChange={setStart}
         />
@@ -228,7 +236,8 @@ export function LeaderRecordingStatusPanel({
       {status.isPending ? (
         <LoadingBlocks shape="rows" className="mt-4" />
       ) : data ? (
-        data.branch === null || data.rows === null ? (
+        <KeptFigures kept={status.isPlaceholderData} loading={rangeLabel(kind, shown)}>
+        {data.branch === null || data.rows === null ? (
           <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
             This {unit} cannot be shown: the pastoral tree it resolves holds a fault that needs
             repair.
@@ -295,7 +304,8 @@ export function LeaderRecordingStatusPanel({
               </div>
             ) : null}
           </>
-        )
+        )}
+        </KeptFigures>
       ) : null}
     </section>
   );

@@ -34,10 +34,10 @@ import {
 } from '@/lib/cells';
 import { listApprovalRequests } from '@/lib/cell-approvals';
 import { useCursorPages } from '@/lib/cursor-pages';
-import { keepPreviousPage, pageTurnProps } from '@/lib/keep-previous-page';
+import { keepPreviousList, pageTurnProps } from '@/lib/keep-previous-page';
 import { getMe, holdsWholeChurch, holdsWide } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { reportingMonthOf } from '@/lib/reporting-month';
+import { monthLabel, reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
@@ -198,8 +198,9 @@ function CellsIndex() {
   ];
   const cells = useQuery({
     queryKey: cellsKey,
-    // The page shown stays, faded, while the next one of the same list loads.
-    placeholderData: keepPreviousPage(cellsKey, 4),
+    // The list shown stays, faded, while the same list loads for another month, with a filter
+    // switched, or on its next page (Loading batch C). A search or another view shows Loading.
+    placeholderData: keepPreviousList(cellsKey, [1, 2, 3, 5]),
     queryFn: ({ signal }) =>
       listCells(
         {
@@ -217,6 +218,11 @@ function CellsIndex() {
       ),
     enabled: shown !== 'APPROVE' && shown !== 'NOCELL' && shown !== 'CLASH',
   });
+  // The kept list is another month's while the month asked for loads; the line below says so.
+  const loadingMonth =
+    cells.isPlaceholderData &&
+    cells.data !== undefined &&
+    cells.data.reporting_month.slice(0, 7) !== month.slice(0, 7);
   // A kept page's cursor is the one already being loaded.
   const nextPage = () => {
     if (!cells.isPlaceholderData) pages.next(cells.data?.next_cursor);
@@ -370,7 +376,8 @@ function CellsIndex() {
             <MonthPicker
               month={month}
               onChange={(next) => go({ month: next })}
-              open={cells.data?.open}
+              // A kept list's flag is another month's, so none is shown until this one answers.
+              open={loadingMonth ? undefined : cells.data?.open}
             />
           )}
           {/*
@@ -411,6 +418,11 @@ function CellsIndex() {
           <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
         </div>
 
+        {loadingMonth ? (
+          <p role="status" className="text-muted mt-6 text-sm">
+            Loading {monthLabel(month)}&hellip;
+          </p>
+        ) : null}
         <div {...pageTurnProps(cells.isPlaceholderData)}>
         {cells.isPending ? (
           <LoadingBlocks shape="rows" className="mt-6" />
