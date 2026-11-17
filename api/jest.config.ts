@@ -13,7 +13,10 @@ const config: Config = {
   testEnvironment: 'node',
   rootDir: '.',
   roots: ['<rootDir>/test'],
-  testMatch: ['<rootDir>/test/**/*.spec.ts'],
+  // A regex rather than a glob: from Jest 30 a `**` glob skips a directory whose name starts
+  // with a dot, so in a checkout under `.claude/worktrees` it matched nothing and the suite
+  // "passed" by finding no tests. `roots` above keeps it to `test/`.
+  testRegex: '\\.spec\\.ts$',
   setupFiles: ['<rootDir>/test/setup/env.ts'],
   // One database, so one worker. The concurrency these tests care about is
   // concurrency inside PostgreSQL, which they create explicitly.

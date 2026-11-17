@@ -65,6 +65,7 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
       sign_in_pauses,
       refresh_tokens,
       account_tokens,
+      privacy_notice_acknowledgments,
       capability_grants,
       account_roles,
       accounts,

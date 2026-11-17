@@ -23,6 +23,7 @@ import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
 import { isNamedSeniorPastor } from './authorization/senior-pastors';
+import { PrivacyNoticeService } from './privacy-notice.service';
 import { SecondStepService } from './second-step.service';
 import { TokensService } from './tokens.service';
 
@@ -95,6 +96,7 @@ export class AccountProvisioningService {
     private readonly idempotency: IdempotencyService,
     private readonly secondSteps: SecondStepService,
     private readonly sessions: TokensService,
+    private readonly privacyNotice: PrivacyNoticeService,
   ) {}
 
   /**
@@ -119,6 +121,8 @@ export class AccountProvisioningService {
       approves_cells: boolean;
       /** Moves people (decision 0356). */
       moves_people: boolean;
+      /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
+      privacy_notice_acknowledged_at: string | null;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -166,6 +170,7 @@ export class AccountProvisioningService {
         full_view: account.full_view,
         approves_cells: account.approves_cells,
         moves_people: account.moves_people,
+        privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
       },
     };
   }

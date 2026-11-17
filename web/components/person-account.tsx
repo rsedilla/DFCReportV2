@@ -173,6 +173,30 @@ export function PersonAccount({
                 ? `. ${firstName} can’t sign in.`
                 : '.'}
           </p>
+          {/* The holder's Privacy Notice tick, shown and never set here (decision 0496). */}
+          {current.privacy_notice_acknowledged_at === undefined ? null : (
+            <p className="mt-1 text-sm">
+              {current.privacy_notice_acknowledged_at === null ? (
+                <>
+                  Privacy Notice: <strong>not read yet</strong>. {firstName} is asked{' '}
+                  {current.status === 'PENDING_ACTIVATION'
+                    ? 'when setting a password.'
+                    : 'the next time DREAMS is opened.'}
+                </>
+              ) : (
+                `Privacy Notice: read on ${new Date(
+                  current.privacy_notice_acknowledged_at,
+                ).toLocaleString('en-PH', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  timeZone: 'Asia/Manila',
+                })}.`
+              )}
+            </p>
+          )}
           {current.status === 'PENDING_ACTIVATION' ? (
             <div className="mt-3">
               <div className="flex flex-wrap gap-3">
