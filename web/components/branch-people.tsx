@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   asAt,
   COUNT_COLUMNS,
+  nameShare,
   CountHead,
   CountsKey,
   CountTiles,
@@ -123,11 +124,7 @@ export function BranchCountsPanel({
     queryFn: async ({ signal }) => {
       if (figure === 'PEOPLE') {
         const people = await getBranchPeople(subject, month, signal);
-        return {
-          total: people.total === null ? null : { people: people.total },
-          own: people.own === null ? null : { people: people.own },
-          rows: people.rows as Row[] | null,
-        };
+        return { total: people.total, own: people.own, rows: people.rows as Row[] | null };
       }
       const cells = await getBranchCounts(subject, month, signal);
       return { total: cells.total, own: cells.own, rows: cells.rows as Row[] | null };
@@ -234,7 +231,7 @@ export function BranchCountsPanel({
                 <tr>
                   <HeaderCell
                     className={NAME_HEAD}
-                    style={{ width: columns.length > 1 ? '36%' : '70%' }}
+                    style={{ width: `${nameShare(figure)}%` }}
                   >
                     Leader
                   </HeaderCell>
@@ -242,7 +239,7 @@ export function BranchCountsPanel({
                     <HeaderCell
                       key={key}
                       className={FIGURE_HEAD}
-                      style={{ width: `${(columns.length > 1 ? 64 : 30) / columns.length}%` }}
+                      style={{ width: `${(100 - nameShare(figure)) / columns.length}%` }}
                     >
                       <CountHead label={label} column={key} phone={phone} />
                     </HeaderCell>

@@ -56,8 +56,25 @@ export const COUNT_COLUMNS: Record<Figure, readonly [keyof ChurchCountFigures, s
     ['couple', 'Couple'],
   ],
   CELL_LEADERS: [['cell_leaders', 'Cell Leaders']],
-  PEOPLE: [['people', 'People']],
+  // Everyone in the count, split in three that add up to it, a leader counted once (decision
+  // 0498): *Cell Leaders* here is the leaders among the people counted.
+  PEOPLE: [
+    ['cell_members', 'Cell Members'],
+    ['leading_a_cell', 'Cell Leaders'],
+    ['not_in_a_cell', 'Not in a Cell'],
+    ['people', 'Total'],
+  ],
 };
+
+/**
+ * The share of a # tab's table the names take (owner, 2026-10-09: the figures share the rest
+ * equally). *# of People*'s four leave its names a little less, so their headings have room on
+ * the narrowest phone (decision 0498); a phone shows short names there anyway (decision 0451).
+ */
+export function nameShare(figure: Figure): number {
+  const columns = COUNT_COLUMNS[figure].length;
+  return columns === 1 ? 70 : figure === 'PEOPLE' ? 28 : 36;
+}
 
 /** Each # tab's headings on a phone (decision 0451), its key said under the table. */
 const COLUMN_SHORT: Partial<Record<keyof ChurchCountFigures, string>> = {
@@ -65,6 +82,9 @@ const COLUMN_SHORT: Partial<Record<keyof ChurchCountFigures, string>> = {
   youth: 'Y',
   young_pro: 'YP',
   couple: 'C',
+  // Not shortened, only free to break as *Mem-bers* where the narrowest phone needs it (decision
+  // 0498); a screen reader hears *Cell Members*.
+  cell_members: 'Cell Mem­bers',
 };
 
 /** What the short headings stand for, under a table that uses them (decision 0451). */
@@ -91,7 +111,9 @@ export function CountHead({
  * A # tab's figures as tiles (decision 0451): the label above a large figure, the first tile
  * saying when it is as of — *As of today* while the month runs, *As of 31 October 2026* once it
  * has ended. A tab with one figure gives it the whole row; *# of Cell Groups* keeps its total
- * across the top and the four two by two on a phone, five on a line wider (decision 0431).
+ * across the top and the four two by two on a phone, five on a line wider (decision 0431);
+ * *# of People*'s four are two by two on a phone and four on a line wider, each saying when it
+ * is as of (decision 0498).
  */
 export function CountTiles({
   figure,
@@ -108,7 +130,9 @@ export function CountTiles({
       className={
         figure === 'CELLS'
           ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5'
-          : 'mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3'
+          : figure === 'PEOPLE'
+            ? 'mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4'
+            : 'mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3'
       }
     >
       {columns.map(([key, label], index) => (
@@ -123,13 +147,18 @@ export function CountTiles({
           <dd
             className={cn(
               'mt-1 font-bold tabular-nums',
-              columns.length === 1 ? 'text-4xl leading-tight' : 'text-xl',
+              columns.length === 1
+                ? 'text-4xl leading-tight'
+                : figure === 'PEOPLE'
+                  ? 'text-3xl leading-tight'
+                  : 'text-xl',
             )}
           >
             {value(key).toLocaleString()}
           </dd>
-          {index === 0 ? (
-            <dd className="text-muted mt-1 text-xs" aria-live="polite">
+          {/* Announced once, from the first tile, however many tiles repeat it. */}
+          {index === 0 || figure === 'PEOPLE' ? (
+            <dd className="text-muted mt-1 text-xs" aria-live={index === 0 ? 'polite' : undefined}>
               {asOf}
             </dd>
           ) : null}
@@ -368,7 +397,7 @@ function CountTable({
       <Table caption={heading} className="mt-2" tableClassName="table-fixed">
         <thead>
           <tr>
-            <HeaderCell className={NAME_HEAD} style={{ width: columns.length > 1 ? '36%' : '70%' }}>
+            <HeaderCell className={NAME_HEAD} style={{ width: `${nameShare(figure)}%` }}>
               Primaries
             </HeaderCell>
             {/* The figures share the rest of the row equally (owner, 2026-10-09). */}
@@ -376,7 +405,7 @@ function CountTable({
               <HeaderCell
                 key={key}
                 className={FIGURE_HEAD}
-                style={{ width: `${(columns.length > 1 ? 64 : 30) / columns.length}%` }}
+                style={{ width: `${(100 - nameShare(figure)) / columns.length}%` }}
               >
                 <CountHead label={label} column={key} phone={phone} />
               </HeaderCell>

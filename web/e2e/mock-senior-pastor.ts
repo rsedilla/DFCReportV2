@@ -29,7 +29,7 @@ export const SP_PRIMARIES = {
   bautista: { id: '3f1b7c6e-0000-4000-8000-000000000d03', member_id: 'M-000923', full_name: 'Felicidad Bautista', first_name: 'Felicidad', last_name: 'Bautista' },
 };
 
-function figures(cells: [number, number, number], leaders: number, people: number) {
+function figures(cells: [number, number, number], leaders: number, people: number, members = 0) {
   const [youth, youngPro, couple] = cells;
   return {
     cell_groups: youth + youngPro + couple,
@@ -39,6 +39,20 @@ function figures(cells: [number, number, number], leaders: number, people: numbe
     couple,
     cell_leaders: leaders,
     people,
+    // *# of People* split in three that add up to it (decision 0498).
+    cell_members: members,
+    leading_a_cell: leaders,
+    not_in_a_cell: people - leaders - members,
+  };
+}
+
+/** *# of People* and its split (decision 0498), as `people/branch` answers each figure. */
+function split(people: number, members: number, leaders: number) {
+  return {
+    people,
+    cell_members: members,
+    leading_a_cell: leaders,
+    not_in_a_cell: people - members - leaders,
   };
 }
 
@@ -51,13 +65,13 @@ export function churchCounts(period: string, current: boolean) {
     period,
     current,
     at: current ? '2026-10-08T02:00:00.000Z' : '2026-09-30T15:59:59.999Z',
-    whole_church: figures([1, 3, 1], 5, 36),
+    whole_church: figures([1, 3, 1], 5, 36, 3),
     tables: [
       {
         root: SP_MENS_ROOT,
         network: 'MENS',
         rows: [
-          { leader: SP_PRIMARIES.abad, ...figures([0, 2, 0], 2, 6) },
+          { leader: SP_PRIMARIES.abad, ...figures([0, 2, 0], 2, 6, 3) },
           { leader: SP_PRIMARIES.ocampo, ...figures([0, 0, 0], 0, 11) },
         ],
         // The root alone: the Couple Cell he leads, and himself (decision 0491).
@@ -84,7 +98,8 @@ export function networkCounts(period: string, current: boolean, network: 'MENS' 
     ...church,
     network,
     // Each Network's Others holds its root; the Men's also one person in no table.
-    whole_church: network === 'MENS' ? figures([0, 2, 1], 3, 19) : figures([1, 1, 0], 2, 17),
+    whole_church:
+      network === 'MENS' ? figures([0, 2, 1], 3, 19, 3) : figures([1, 1, 0], 2, 17),
     tables: church.tables.filter((table) => table.network === network),
     others: network === 'MENS' ? figures([0, 0, 1], 1, 2) : figures([0, 0, 0], 0, 1),
   };
@@ -140,25 +155,25 @@ export async function mockBranchPeople(page: Page): Promise<{ leader: string; pe
         period,
         current: period === '2026-10-01',
         at: '2026-10-08T02:00:00.000Z',
-        total: consuelo ? 4 : 42,
-        own: 1,
+        total: consuelo ? split(4, 2, 1) : split(42, 20, 8),
+        own: split(1, 0, 0),
         rows: consuelo
           ? [
               {
                 leader: named('3f1b7c6e-0000-4000-8000-000000000703', 'M-000803', 'Lourdes Magsaysay'),
-                people: 3,
+                ...split(3, 2, 1),
               },
             ]
           : [
               {
                 leader: named('3f1b7c6e-0000-4000-8000-000000000701', 'M-000801', 'Consuelo Bautista'),
-                people: 14,
+                ...split(14, 8, 2),
               },
               {
                 leader: named('3f1b7c6e-0000-4000-8000-000000000702', 'M-000802', 'Efren Dimaculangan'),
-                people: 10,
+                ...split(10, 5, 3),
               },
-              { leader: null, people: 17 },
+              { leader: null, ...split(17, 7, 3) },
             ],
       }),
     );

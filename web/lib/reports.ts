@@ -460,7 +460,20 @@ export interface ChurchCountFigures {
   couple: number;
   cell_leaders: number;
   people: number;
+  /**
+   * *# of People* split in three that add up to `people` (decision 0498): those holding a Cell
+   * membership who lead none, those leading a Cell, and the rest.
+   */
+  cell_members: number;
+  leading_a_cell: number;
+  not_in_a_cell: number;
 }
+
+/** *# of People* and its split in three (decision 0498), for {@link BranchPeople}. */
+export type PeopleFigures = Pick<
+  ChurchCountFigures,
+  'people' | 'cell_members' | 'leading_a_cell' | 'not_in_a_cell'
+>;
 
 /** `GET /reports/church-counts`: a month's counts, the current one as of now (decision 0326). */
 export interface ChurchCounts {
@@ -519,10 +532,10 @@ export interface BranchPeople {
   period: string;
   current: boolean;
   at: string;
-  total: number | null;
-  own: number | null;
+  total: PeopleFigures | null;
+  own: PeopleFigures | null;
   rows:
-    | {
+    | (PeopleFigures & {
         /** Null for a leader the reader may not open; the row still counts. */
         leader: {
           id: string;
@@ -532,8 +545,7 @@ export interface BranchPeople {
           last_name?: string | null;
           title?: string | null;
         } | null;
-        people: number;
-      }[]
+      })[]
     | null;
 }
 
