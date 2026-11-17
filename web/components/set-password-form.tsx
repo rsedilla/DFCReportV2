@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { PrivacyNoticeTick } from '@/components/privacy-notice-tick';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
@@ -11,6 +12,7 @@ import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
 import { useLinkToken } from '@/lib/link-token';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
+import { PRIVACY_NOTICE_VERSION } from '@/lib/privacy-notice';
 import { keepResetProof } from '@/lib/reset-proof';
 import { suggestActivationUsername, usernameHint } from '@/lib/username';
 import { cn } from '@/lib/utils';
@@ -68,6 +70,8 @@ export function SetPasswordForm({
   const activation = path === '/api/v1/auth/activate';
   const [username, setUsername] = useState<string | null>(null);
   const [usernameError, setUsernameError] = useState<string | null>(null);
+  // Activation asks for the Privacy Notice tick, empty to begin with (decision 0496).
+  const [readNotice, setReadNotice] = useState(false);
   const suggestion = useQuery({
     queryKey: ['activation-username-suggestion', token],
     queryFn: () => suggestActivationUsername(token ?? ''),
@@ -145,7 +149,14 @@ export function SetPasswordForm({
       const name = shownUsername.trim();
       const answer = await apiRequest<{ sign_in_proof?: string } | void>(path, {
         method: 'POST',
-        body: activation && name !== '' ? { token, password, username: name } : { token, password },
+        body: activation
+          ? {
+              token,
+              password,
+              privacy_notice_version: PRIVACY_NOTICE_VERSION,
+              ...(name !== '' ? { username: name } : {}),
+            }
+          : { token, password },
       });
       // A reset answers with a proof that lets this browser through a pause for fifteen
       // minutes (decision 0413); kept here alone, and sent by the next sign-in.
@@ -208,7 +219,10 @@ export function SetPasswordForm({
         description="At least 12 characters. There is no requirement to include a digit, a symbol or a capital — length is what matters, and a password manager is the easiest way to hold a long one."
       />
 
-      <Button type="submit" disabled={submitting}>
+      {activation ? <PrivacyNoticeTick checked={readNotice} onChange={setReadNotice} /> : null}
+
+      {/* Does nothing until the notice is ticked, on activation (decision 0496). */}
+      <Button type="submit" disabled={submitting || (activation && !readNotice)}>
         {submitting ? 'Saving…' : submitLabel}
       </Button>
     </form>

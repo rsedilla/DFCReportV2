@@ -44,6 +44,11 @@ export interface SessionDescription {
   screens: Screens;
   /** Whether `Record` offers *Leaders Under Me* (section 19, decisions 0323 and 0333). */
   people_i_oversee: boolean;
+  /**
+   * The caller's tick of the Privacy Notice in force (decision 0496); null `acknowledged_at`
+   * until they tick it. Absent from a server that predates it.
+   */
+  privacy_notice?: { version: string; acknowledged_at: string | null };
   capabilities: GrantSummary[];
 }
 

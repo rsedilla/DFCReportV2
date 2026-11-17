@@ -128,6 +128,25 @@ export class ActivateDto extends SetPasswordDto {
   @MaxLength(100)
   @IsStorableText()
   username?: string;
+
+  /**
+   * The Privacy Notice the holder ticked, by its "Last updated" date (decision 0496). Optional,
+   * so a client that predates the tick still activates (section 22); that account is asked at
+   * its first open. The service refuses any date but the notice in force.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  @IsStorableText()
+  privacy_notice_version?: string | null;
+}
+
+/** The caller ticks the Privacy Notice in force (decision 0496). */
+export class AcknowledgePrivacyNoticeDto {
+  @IsString()
+  @MaxLength(10)
+  @IsStorableText()
+  version!: string;
 }
 
 /** Activation's username suggestion: the activation token is the credential (decision 0337). */

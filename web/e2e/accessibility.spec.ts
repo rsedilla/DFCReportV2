@@ -9,6 +9,7 @@ import {
   mockAccountsAdministrator,
   mockAdminArea,
   mockAuditLog,
+  mockPrivacyNoticeUnread,
   mockSettings,
   mockAdministrator,
   mockMyPeople,
@@ -228,6 +229,17 @@ const SCANS = [
     },
   },
   { name: 'activate', route: '/activate?token=example-activation-token' },
+  // Decision 0496: an account that has not ticked the Privacy Notice, in place of the screen.
+  {
+    name: 'privacy notice, before you continue',
+    route: '/session',
+    async before(page: import('@playwright/test').Page) {
+      await mockPrivacyNoticeUnread(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Before you continue' })).toBeVisible();
+    },
+  },
   { name: 'activate, link missing its token', route: '/activate' },
   { name: 'reset-password', route: '/reset-password?token=example-reset-token' },
   // Decision 0415: the page a new address's link opens, before and after confirming.
@@ -2257,6 +2269,16 @@ const TARGET_SWEEP = [
     minimum: 22,
     admin: true,
   },
+  {
+    // In place of every screen until the notice is ticked (decision 0496): the box, the
+    // Privacy Notice link, Continue and Sign out: **four**. Last, because its `/auth/me` stays.
+    // Settled on Continue, not Sign out, which My Account has too.
+    name: 'privacy notice, before you continue',
+    route: '/session',
+    settle: 'Continue',
+    minimum: 4,
+    privacyUnread: true,
+  },
 ] as const;
 
 /**
@@ -2698,6 +2720,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
       await mockAuditLog(page);
+    }
+    if ('privacyUnread' in entry && entry.privacyUnread) {
+      await mockPrivacyNoticeUnread(page);
     }
 
     await page.goto(route);

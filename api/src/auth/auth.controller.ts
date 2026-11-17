@@ -21,6 +21,7 @@ import {
   type SecondStepSetup,
 } from './second-step.service';
 import {
+  AcknowledgePrivacyNoticeDto,
   ActivateDto,
   ActivationTokenDto,
   ChangeEmailDto,
@@ -30,6 +31,7 @@ import {
   SetPasswordDto,
   SetUsernameDto,
 } from './dto/credentials.dto';
+import { PrivacyNoticeService } from './privacy-notice.service';
 import { UsernamesService, type Suggestion } from './usernames.service';
 import {
   CurrentIdempotency,
@@ -45,6 +47,7 @@ export class AuthController {
     private readonly credentials: CredentialsService,
     private readonly secondSteps: SecondStepService,
     private readonly usernames: UsernamesService,
+    private readonly privacyNotice: PrivacyNoticeService,
   ) {}
 
   /**
@@ -61,7 +64,13 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async activate(@Body() body: ActivateDto): Promise<void> {
     // A null username is an omitted one (decision 0199).
-    await this.credentials.activate(body.token, body.password, body.username ?? undefined);
+    await this.credentials.activate(
+      body.token,
+      body.password,
+      body.username ?? undefined,
+      // A null notice is an omitted one, as for the username (decision 0199).
+      body.privacy_notice_version ?? undefined,
+    );
   }
 
   /**
@@ -84,6 +93,23 @@ export class AuthController {
   @AuthenticatedOnly('Suggests a username for the caller’s own account, from their own name.')
   async usernameSuggestion(@CurrentActor() actor: Actor): Promise<Suggestion> {
     return this.usernames.suggestionFor(actor);
+  }
+
+  /**
+   * The caller ticks that they read the Privacy Notice in force (sections 6 and 24, decision
+   * 0496). Their own account only: nothing in the body names one.
+   */
+  @Post('privacy-notice')
+  @HttpCode(HttpStatus.OK)
+  @AuthenticatedOnly(
+    'Records that the caller read the Privacy Notice, on their own account, and no church data.',
+  )
+  async acknowledgePrivacyNotice(
+    @CurrentActor() actor: Actor,
+    @Body() body: AcknowledgePrivacyNoticeDto,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<{ version: string; acknowledged_at: string }> {
+    return this.privacyNotice.acknowledgeOwn(actor, body.version, claim);
   }
 
   /** Sets or changes the caller's own username (decision 0337). */

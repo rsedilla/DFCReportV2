@@ -44,8 +44,8 @@ export default function PrivacyNoticePage() {
             SUYNL, Life Class, the Encounter and School of Leaders.
           </li>
           <li>
-            If you lead and have an account: your email address or username, and a record of the
-            changes you make.
+            If you lead and have an account: your email address or username, a record of the
+            changes you make, and when you ticked that you read this notice.
           </li>
         </ul>
         <p className="mt-3">
