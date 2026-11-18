@@ -10,6 +10,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field, SearchField } from '@/components/ui/field';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { SelectField } from '@/components/ui/select-field';
+import { timeLabel } from '@/lib/cells';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   DAY_NAMES,
@@ -65,9 +66,18 @@ export default function EnrollmentPage() {
               type="button"
               variant={each.id === classId ? 'primary' : 'secondary'}
               aria-pressed={each.id === classId}
+              className="py-1.5"
               onClick={() => setChosen(each.id)}
             >
-              {each.name} · {DAY_NAMES[each.day_of_week - 1].slice(0, 3)} {each.time_of_day} · {each.enrolled}
+              {/* Two lines (owner, 2026-11-18): the name, then when it meets and how many are in
+                  it, the count saying what it counts. */}
+              <span className="flex flex-col items-start leading-tight">
+                <span>{each.name}</span>
+                <span className="text-xs font-normal">
+                  {DAY_NAMES[each.day_of_week - 1].slice(0, 3)} {timeLabel(each.time_of_day)} · {each.enrolled}{' '}
+                  enrolled
+                </span>
+              </span>
             </Button>
           ))}
         </div>
@@ -141,7 +151,7 @@ function ClassView({
       <div className={cn(FRAME, 'mt-4')}>
         <h2 className="text-lg font-semibold">{cls.name}</h2>
         <p className="text-muted mt-1 text-sm">
-          {DAY_NAMES[cls.day_of_week - 1]}s, {cls.time_of_day}
+          {DAY_NAMES[cls.day_of_week - 1]}s, {timeLabel(cls.time_of_day)}
           {cls.place ? ` · ${cls.place}` : ''} · Teacher: {cls.teacher.full_name} · Starts {cls.first_lesson_on}
           {' · '}Encounter weekend: men {cls.encounter_weekends.mens}, women {cls.encounter_weekends.womens}
         </p>

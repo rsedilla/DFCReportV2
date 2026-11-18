@@ -108,7 +108,11 @@ why it ended. A move keeps the registration, so what later steps record carries 
 The people ready to enroll are a table on a wider screen and, on a phone, a card each (owner,
 2026-11-18, choosing from screenshots of both; the table's four columns did not fit a phone's
 width): the name beside its tick box, the reason a person cannot be enrolled under it instead,
-then their leader, their age at the Encounter and how they registered.
+then their leader, their age at the Encounter and how they registered. Each of the term's classes
+is a button of two lines, its name and then its day, its time as said aloud and how many are
+enrolled ("Tue 7:00 pm · 1 enrolled"), because a bare count beside a 24-hour time did not say
+what it counted (owner, 2026-11-18, from screenshots of both); the form opening a class stays as
+it was built.
 
 **12. Archiving and merging** (2026-11-18). The owner was told that, unless they said
 otherwise, these would follow the recommendation shown, and answered the session question
