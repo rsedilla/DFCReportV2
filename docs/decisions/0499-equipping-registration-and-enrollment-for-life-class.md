@@ -89,7 +89,14 @@ season. Any number of classes in a term ("you can have more class per term"). Ev
 records who runs it, and for now that is always the church: "all primaries will set their
 class respectively" is the plan for later, and each class carrying its runner is what lets
 that be turned on without rebuilding. The Teacher is recorded now and gains their own access
-to the class's weekly grades with that step.
+to the class's weekly grades with that step. **The Teacher must be a current Cell Leader in the
+tree** (owner, 2026-11-18: "yes a teacher must be a cell leader in the tree structure", settling
+the Stop Condition `architecture-guardian`'s fifth review raised, that opening a class accepted
+by its identifier a Teacher the picker never offered): an open leadership of an `ACTIVE` Cell
+(Section 11) and an open pastoral assignment, a Network root's included (Section 5). Opening a
+class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them. An
+administrator outside the tree, a Network Admin and the Equipping record lead no Cell, so none
+of them may teach; the Equipping record answers `NOT_FOUND`, as below.
 
 **11. Enrolling takes several registered people into one class at once**, and checks two
 things that are never overridden:
@@ -151,7 +158,7 @@ Network Admin included, and its page and pastoral path answer `NOT_FOUND` to the
 scope would otherwise admit it (a reader outside it is refused as for anybody else); the Admin's
 search marks it *Equipping account*. To the school it does not exist for the Admin either, being
 an account's record and never somebody signed up for a class: the Equipping picker leaves it
-out, and the registration form and registering answer `NOT_FOUND` (owner, 2026-11-18, taking the
+out, and the registration form, registering and naming it a class's Teacher answer `NOT_FOUND` (owner, 2026-11-18, taking the
 recommendation shown, "ok go with your recommendation", on the Stop Condition the fourth review
 raised after the third review's fix had set the rule without a ruling). **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
 leave it out", settling the Stop Condition the third review raised): for anybody not holding

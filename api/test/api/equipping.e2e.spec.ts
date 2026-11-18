@@ -35,6 +35,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * Fixture names are invented (CLAUDE.md, Secrets).
  *
  *   Ramon (Men's root) -> Mario -> Ben, Carlo, Dino
+ *   Mario leads a Cell, so he may teach (point 13)
  *   Ada: an administrator outside the tree; Eva: an Equipper
  */
 describe('Equipping (section 29, decision 0499)', () => {
@@ -67,6 +68,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     await assignTo(db, ramon.id, null);
     mario = await createPerson(db, { firstName: 'Mario', network: 'MENS' });
     await assignTo(db, mario.id, ramon.id);
+    await createCell(db, { leader: mario });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS', birthDate: '1999-02-01' });
     await assignTo(db, ben.id, mario.id);
     carlo = await createPerson(db, { firstName: 'Carlo', network: 'MENS', birthDate: null });
@@ -123,7 +125,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       ...extra,
     });
 
-  const openClass = (name = 'Life Class A') =>
+  const openClass = (name = 'Life Class A', teacherId: string = mario.id) =>
     post(equipper, 'classes', {
       ...TERM,
       name,
@@ -131,9 +133,55 @@ describe('Equipping (section 29, decision 0499)', () => {
       time_of_day: '19:00',
       place: 'Room 2',
       first_lesson_on: '2027-01-12',
-      teacher_person_id: mario.id,
+      teacher_person_id: teacherId,
       encounter_season_id: seasonId,
     });
+
+  describe('the Teacher (owner, 2026-11-18: a Cell Leader in the tree)', () => {
+    const refusal = async (teacherId: string) => {
+      const response = await openClass('Life Class T', teacherId);
+      return { status: response.status, code: response.body.error?.code };
+    };
+
+    it('opens a class taught by a current Cell Leader in the tree', async () => {
+      await openClass().expect(201);
+    });
+
+    it('refuses a Teacher in the tree who leads no Cell', async () => {
+      expect(await refusal(ben.id)).toEqual({ status: 409, code: 'INVARIANT_VIOLATION' });
+    });
+
+    it('refuses a Teacher who leads a Cell but is outside the tree', async () => {
+      // Ada holds no pastoral assignment; leading a Cell does not put her in the tree.
+      const ada = await db
+        .selectFrom('accounts')
+        .select('person_id')
+        .where('id', '=', admin.id)
+        .executeTakeFirstOrThrow();
+      await createCell(db, { leader: { id: ada.person_id } as TestPerson });
+      expect(await refusal(ada.person_id)).toEqual({ status: 409, code: 'INVARIANT_VIOLATION' });
+    });
+
+    it('answers NOT_FOUND for an Equipping record, as registering does', async () => {
+      expect(await refusal(equipper.personId)).toEqual({ status: 404, code: 'NOT_FOUND' });
+    });
+
+    it('offers only current Cell Leaders in the tree when the picker asks for Teachers', async () => {
+      const all = (await get(equipper, 'people?q=Mar').expect(200)).body as {
+        data: { id: string }[];
+      };
+      const teachers = (await get(equipper, 'people?q=Mar&teachers=true').expect(200)).body as {
+        data: { id: string }[];
+      };
+      expect(all.data.map((row) => row.id)).toContain(mario.id);
+      expect(teachers.data.map((row) => row.id)).toEqual([mario.id]);
+
+      const noLeader = (await get(equipper, 'people?q=Ben&teachers=true').expect(200)).body as {
+        data: unknown[];
+      };
+      expect(noLeader.data).toEqual([]);
+    });
+  });
 
   describe('who may', () => {
     it('lets the Equipper and the Admin read the classes, and refuses a Leader', async () => {

@@ -1353,22 +1353,29 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * {@link isCurrentCellLeaderWithin} states for one person.
    *
    * For the Network screen's *Cell Leaders beneath* (decision 0252), asked of the branch's
-   * people only (checklist row perf-network-cell-figures).
+   * people only (checklist row perf-network-cell-figures). `null` is everyone, for the
+   * Equipping Teacher search (decision 0499, point 13), which picks among every current
+   * Cell Leader of the church; an empty array is nobody, as everywhere else.
    */
-  async currentCellLeaderIds(among: readonly string[]): Promise<Set<string>> {
-    if (among.length === 0) {
+  async currentCellLeaderIds(
+    among: readonly string[] | null,
+    executor: Db | Transaction<Database> = this.db,
+  ): Promise<Set<string>> {
+    if (among !== null && among.length === 0) {
       return new Set();
     }
 
-    const rows = await this.db
+    let query = executor
       .selectFrom('cell_leaderships')
       .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
       .select('cell_leaderships.person_id')
       .distinct()
       .where('cell_leaderships.ended_at', 'is', null)
-      .where('cells.state', '=', 'ACTIVE')
-      .where(sql<boolean>`cell_leaderships.person_id = ANY(${[...among]}::uuid[])`)
-      .execute();
+      .where('cells.state', '=', 'ACTIVE');
+    if (among !== null) {
+      query = query.where(sql<boolean>`cell_leaderships.person_id = ANY(${[...among]}::uuid[])`);
+    }
+    const rows = await query.execute();
 
     return new Set(rows.map((row) => row.person_id));
   }

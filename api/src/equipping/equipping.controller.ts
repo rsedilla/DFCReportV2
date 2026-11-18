@@ -76,7 +76,11 @@ export class EquippingController {
     if (spent.isBlocked) {
       throw new ThrottlerException();
     }
-    const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT);
+    const data = await this.equipping.search(
+      query.q,
+      CHURCH_WIDE_PAGE_LIMIT,
+      query.teachers === true,
+    );
     await this.people.recordDirectorySearch(actor.accountId, query.q, data.length);
     return { data };
   }

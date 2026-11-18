@@ -444,8 +444,8 @@ function OpenClassDialog({
   const [showErrors, setShowErrors] = useState(false);
 
   const found = useQuery({
-    queryKey: ['equipping', 'search', searched],
-    queryFn: ({ signal }) => searchPeople(searched!, signal),
+    queryKey: ['equipping', 'search', 'teachers', searched],
+    queryFn: ({ signal }) => searchPeople(searched!, signal, true),
     enabled: searched !== null,
   });
   const save = useMutation({
@@ -508,7 +508,7 @@ function OpenClassDialog({
           <div>
             <SearchField
               label="Teacher"
-              description="At least three letters of their name."
+              description="A current Cell Leader. At least three letters of their name."
               autoComplete="off"
               value={teacherQuery}
               onChange={(event) => setTeacherQuery(event.target.value)}
@@ -519,6 +519,9 @@ function OpenClassDialog({
               }
             />
             <FailureNotice failure={found.isError ? describeFailure(found.error) : null} />
+            {found.isSuccess && found.data.data.length === 0 ? (
+              <p className="text-muted mt-2 text-sm">No current Cell Leader with that name.</p>
+            ) : null}
             <ul className="mt-2 flex flex-col gap-1">
               {(found.data?.data ?? []).map((each) => (
                 <li key={each.id}>

@@ -1324,6 +1324,28 @@ export class HierarchyService {
    *
    * `executor` lets an add read it inside its own transaction, after its lock (decision 0401).
    */
+  /**
+   * Which of these people hold an open pastoral assignment now: in the tree, a Network root
+   * included (its row carries a null `leader_id`, section 5). An administrator outside the
+   * tree, and a leader whose assignment has ended (decision 0232), hold none. For the
+   * Equipping Teacher (decision 0499, point 13), who must be a Cell Leader in the tree.
+   */
+  async withOpenAssignment(
+    personIds: readonly string[],
+    executor: Db | Transaction<Database> = this.db,
+  ): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .where(sql<boolean>`person_id = ANY(${[...personIds]}::uuid[])`)
+      .where('ended_at', 'is', null)
+      .execute();
+    return new Set(rows.map((row) => row.person_id));
+  }
+
   async directLeaderIdsOf(
     personIds: readonly string[],
     executor: Db = this.db,

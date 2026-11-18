@@ -117,8 +117,14 @@ const termQuery = (term: Term) =>
     term_number: String(term.term_number),
   }).toString();
 
-export async function searchPeople(q: string, signal?: AbortSignal): Promise<{ data: FoundPerson[] }> {
-  return authenticatedRequest(`/api/v1/equipping/people?${new URLSearchParams({ q }).toString()}`, {
+/** `teachers` lists only who may teach a class, a current Cell Leader in the tree (decision 0499). */
+export async function searchPeople(
+  q: string,
+  signal?: AbortSignal,
+  teachers = false,
+): Promise<{ data: FoundPerson[] }> {
+  const params = new URLSearchParams(teachers ? { q, teachers: 'true' } : { q });
+  return authenticatedRequest(`/api/v1/equipping/people?${params.toString()}`, {
     signal,
   });
 }

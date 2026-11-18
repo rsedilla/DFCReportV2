@@ -161,4 +161,10 @@ export class EquippingSearchDto {
   @IsStorableText()
   @MaxLength(100)
   q!: string;
+
+  /** Only who may teach a class: a current Cell Leader in the tree (decision 0499, point 13). */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  teachers?: boolean;
 }
