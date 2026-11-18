@@ -188,7 +188,21 @@ export class PeopleController {
             membership.personIds.has(canonicalId(candidateId)) ||
             (leaderId !== null && membership.personIds.has(canonicalId(leaderId))),
         ),
+      await this.hiddenFromDuplicateCheck(actor),
     );
+  }
+
+  /**
+   * **An Equipping account's record is left out of the duplicate check for anybody but the
+   * Admin** (owner, 2026-11-18, decision 0499): neither shown nor withheld, and never gated on.
+   * It is a second record of one person on purpose, so a person's own record beside it is no
+   * duplicate, and that own record still catches a real one.
+   */
+  private async hiddenFromDuplicateCheck(actor: Actor): Promise<ReadonlySet<string>> {
+    const isAdmin = (await this.authorization.authorityFor(actor.accountId)).roles.includes(
+      'ADMIN',
+    );
+    return isAdmin ? new Set() : this.read.equippingAccountPersons();
   }
 
   /**
@@ -275,6 +289,8 @@ export class PeopleController {
       undefined,
       // The pre-flight list gives the reason the save will stop on (decision 0399).
       APPLICATION_RULES,
+      undefined,
+      await this.hiddenFromDuplicateCheck(actor),
     );
 
     const shown = visible.slice(0, limit);
@@ -890,6 +906,7 @@ export class PeopleController {
       claim,
       // The same scope test creation uses, so a refusal discloses nothing a read may not.
       (candidateId) => this.read.isWithinViewScope(actor, candidateId),
+      await this.hiddenFromDuplicateCheck(actor),
     );
   }
 

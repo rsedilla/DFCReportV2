@@ -121,7 +121,12 @@ principle names it. A merge is refused while either record holds an Equipping ac
 either direction. Only the Admin finds it: "only the accounts of equipping is visible in super
 admin search". Every people search and picker leaves it out for anybody not holding `ADMIN`, a
 Network Admin included, and its page answers `NOT_FOUND` to them; the Admin's search marks it
-*Equipping account*.
+*Equipping account*. **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
+leave it out", settling the Stop Condition the third review raised): for anybody not holding
+`ADMIN` it is neither listed nor shown as a line naming nobody, and adding or editing a Person
+is never asked about it. It is a second record of one person on purpose, so the person's own
+record beside it is no duplicate, and that own record still catches a real one. The Admin's
+check lists it and asks about it as about anybody else.
 
 ## Why
 

@@ -561,6 +561,51 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(picker.data.map((row) => row.id)).not.toContain(equipper.personId);
     });
 
+    it("leaves an Equipping record out of everyone's duplicate check but the Admin's", async () => {
+      // Owner, 2026-11-18: neither shown nor withheld, and never gated on. Eva's Equipping
+      // record is Eva Testfixture, born 1985-06-15, so the same three are a Tier 1 match.
+      const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
+      await assignTo(db, nora.id, null);
+      const networkAdmin = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Nadia', network: 'WOMENS' }),
+        roles: ['NETWORK_ADMIN'],
+      });
+      const check = (as: TestAccount) =>
+        request(app.getHttpServer())
+          .get('/api/v1/people/duplicate-candidates')
+          .query({ first_name: 'Eva', last_name: 'Testfixture', birth_date: '1985-06-15' })
+          .set('Authorization', `Bearer ${as.accessToken}`)
+          .expect(200);
+
+      expect(JSON.stringify((await check(admin)).body.data)).toContain(equipper.personId);
+      // Not a withheld line either: a covering Network Admin sees her named nowhere, and a
+      // Leader, outside whose scope she sits, is shown no "possible match" line for her.
+      expect(JSON.stringify((await check(networkAdmin)).body.data)).not.toContain(
+        equipper.personId,
+      );
+      const byLeader = (await check(leader)).body.data as { possible_match?: true }[];
+      expect(byLeader.filter((row) => row.possible_match)).toEqual([]);
+
+      const add = (as: TestAccount) =>
+        request(app.getHttpServer())
+          .post('/api/v1/people')
+          .set('Authorization', `Bearer ${as.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            first_name: 'Eva',
+            last_name: 'Testfixture',
+            birth_date: '1985-06-15',
+            sex: 'FEMALE',
+            civil_status: 'SINGLE',
+            mobile_number_not_given: true,
+            pastoral_leader_id: nora.id,
+          });
+      // The Admin is asked about it; a Network Admin adds her own record without being asked.
+      const asked = await add(admin).expect(409);
+      expect(JSON.stringify(asked.body)).toContain(equipper.personId);
+      await add(networkAdmin).expect(201);
+    });
+
     it('refuses merging an Equipping record, in either direction', async () => {
       const evaAgain = await createPerson(db, { firstName: 'Eva', network: 'WOMENS' });
       for (const [kept, duplicate] of [

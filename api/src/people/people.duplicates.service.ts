@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type ExpressionBuilder } from 'kysely';
 
+import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database } from '../database/schema';
 
@@ -111,6 +112,12 @@ export class PeopleDuplicatesService {
     rules: MatchingRules = {},
     /** An add reads inside its own transaction, after its lock (decision 0401). */
     executor: Db = this.db,
+    /**
+     * Left out altogether, neither shown nor withheld: an Equipping account's record for
+     * anybody but the Admin (owner, 2026-11-18, decision 0499). It is a second record of one
+     * person on purpose, so it is never the duplicate this check exists to catch.
+     */
+    hidden: ReadonlySet<string> = new Set(),
   ): Promise<VisibleCandidate[]> {
     // **One read of the population, scored twice.** The publishable subject carries no
     // birthday and no mobile number, so its population is exactly the rows the names
@@ -147,9 +154,10 @@ export class PeopleDuplicatesService {
     // It is applied inside `visibleCandidates` instead, against the match the
     // viewer is entitled to — the full one in scope, the publishable one
     // otherwise.
+    const shownTo = (match: Match) => !hidden.has(canonicalId(match.candidate.id));
     return visibleCandidates(
-      matches,
-      new Map(publishable.map((match) => [match.candidate.id, match])),
+      matches.filter(shownTo),
+      new Map(publishable.filter(shownTo).map((match) => [match.candidate.id, match])),
       inScope,
       only,
       archived,
