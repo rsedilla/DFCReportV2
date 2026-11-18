@@ -129,7 +129,9 @@ Network Admin included, and its page and pastoral path answer `NOT_FOUND` to the
 scope would otherwise admit it (a reader outside it is refused as for anybody else); the Admin's
 search marks it *Equipping account*. To the school it does not exist for the Admin either, being
 an account's record and never somebody signed up for a class: the Equipping picker leaves it
-out, and the registration form and registering answer `NOT_FOUND` (third review). **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
+out, and the registration form and registering answer `NOT_FOUND` (owner, 2026-11-18, taking the
+recommendation shown, "ok go with your recommendation", on the Stop Condition the fourth review
+raised after the third review's fix had set the rule without a ruling). **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
 leave it out", settling the Stop Condition the third review raised): for anybody not holding
 `ADMIN` it is neither listed nor shown as a line naming nobody, and adding or editing a Person
 is never asked about it. It is a second record of one person on purpose, so the person's own
