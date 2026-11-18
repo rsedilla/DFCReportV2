@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-16, the trigger being decision 0496: of 495 files, 494 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0496 each moved the first two and
+2026-11-17, the trigger being decision 0497: of 496 files, 495 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0497 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-16 and triggered by 0496, and was left stale by 0497 the next day. The one before that was dated
 2026-11-16 and triggered by 0495, and was left stale by 0496 the same day. The one before that was dated
 2026-11-15 and triggered by 0494, and was left stale by 0495 the next day. The one before that was dated
 2026-11-15 and triggered by 0493, and was left stale by 0494 the same day. The one before that was dated
@@ -1036,6 +1037,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-15 — [The Senior Pastors' *Conquest* opens on their own Network's 12, and a name goes a level down](docs/decisions/0494-the-senior-pastors-conquest-opens-on-their-own-networks-12.md)
 - 2026-11-16 — [The Privacy Notice says the information is used solely for the church](docs/decisions/0495-the-privacy-notice-says-the-information-is-used-solely-for-the-church.md)
 - 2026-11-16 — [Every account holder ticks that they have read the Privacy Notice](docs/decisions/0496-every-account-holder-ticks-that-they-have-read-the-privacy-notice.md)
+- 2026-11-17 — [An offline page for the installed app](docs/decisions/0497-an-offline-page-for-the-installed-app.md)
 
 ### Open — awaiting a ruling
 
