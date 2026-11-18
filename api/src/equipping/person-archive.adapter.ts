@@ -22,14 +22,16 @@ export class PersonArchiveEquippingAdapter implements ArchiveEquippingPort {
     personId: string,
     actorAccountId: string,
   ): Promise<{ registrations: number; enrollments: number }> {
-    // Locked in the order every Equipping write takes them: registrations, then enrollments.
+    // FOR NO KEY UPDATE rather than FOR UPDATE: a move or a withdrawal holds the enrollment
+    // and its insert's foreign-key check takes FOR KEY SHARE on the registration, which this
+    // lock does not block, so the two cannot wait on each other. Cancelling changes no key.
     const registrations = await executor
       .selectFrom('equipping_registrations')
       .select(['id', 'unmet'])
       .where('person_id', '=', personId)
       .where('cancelled_at', 'is', null)
       .orderBy('id')
-      .forUpdate()
+      .forNoKeyUpdate()
       .execute();
 
     if (registrations.length === 0) {
@@ -43,8 +45,24 @@ export class PersonArchiveEquippingAdapter implements ArchiveEquippingPort {
       .set({ ended_at: sql<Date>`now()`, ended_by: actorAccountId, end_reason: 'ARCHIVED' })
       .where('registration_id', 'in', ids)
       .where('ended_at', 'is', null)
-      .returning(['id', 'registration_id'])
+      .returning(['id', 'registration_id', 'class_id'])
       .execute();
+
+    const classNames = new Map(
+      ended.length === 0
+        ? []
+        : (
+            await executor
+              .selectFrom('equipping_classes')
+              .select(['id', 'name'])
+              .where(
+                'id',
+                'in',
+                ended.map((row) => row.class_id),
+              )
+              .execute()
+          ).map((row) => [row.id, row.name] as const),
+    );
 
     for (const row of ended) {
       await this.audit.writeWithin(executor, {
@@ -52,7 +70,7 @@ export class PersonArchiveEquippingAdapter implements ArchiveEquippingPort {
         action: 'equipping_enrollment.ended',
         targetType: 'person',
         targetId: personId,
-        before: { enrollment_id: row.id },
+        before: { enrollment_id: row.id, class_name: classNames.get(row.class_id) ?? null },
         after: { end_reason: 'ARCHIVED' },
       });
     }

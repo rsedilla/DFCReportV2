@@ -530,21 +530,20 @@ export class SuynlService {
   }
 
   /**
-   * How many current lessons each of these people holds, any lessons, for a Life Class
-   * registration's "at least five" (SKILL.md section 29, decision 0499). A lesson corrected away
-   * never counted (section 28), and a merged pair is one person whose lesson on both records
-   * counts once (decision 0408). Somebody with none is absent.
+   * Each person's current SUYNL lessons, as their numbers, for Equipping's Life Class check
+   * (decision 0499, point 6: lessons 1 to 4). A merged pair is one person (decision 0408), so
+   * each record's lessons count for the record kept and a lesson on both counts once.
    */
-  async currentLessonCountsOf(personIds: readonly string[]): Promise<Map<string, number>> {
+  async currentLessonsOf(personIds: readonly string[]): Promise<Map<string, number[]>> {
     if (personIds.length === 0) {
       return new Map();
     }
 
     const pairs = await this.people.mergedPairsWithin(this.db);
-    const result = await sql<{ person_id: string; lessons: number }>`
+    const result = await sql<{ person_id: string; lessons: number[] }>`
       WITH ${mergedCte(pairs)}
       SELECT coalesce(m.kept_id, l.person_id) AS person_id,
-             count(DISTINCT l.lesson)::int AS lessons
+             array_agg(DISTINCT l.lesson ORDER BY l.lesson)::int[] AS lessons
         FROM suynl_lessons l
         LEFT JOIN merged m ON m.absorbed_id = l.person_id
        WHERE l.superseded_at IS NULL

@@ -200,7 +200,6 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
   const [person, setPerson] = useState<FoundPerson | null>(null);
-  const [devotion, setDevotion] = useState(false);
   const [bible, setBible] = useState(false);
   const [manual, setManual] = useState(false);
   const [reason, setReason] = useState('');
@@ -212,7 +211,6 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     setQuery('');
     setSearched(null);
     setPerson(null);
-    setDevotion(false);
     setBible(false);
     setManual(false);
     setReason('');
@@ -232,7 +230,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     enabled: person !== null,
   });
   const unmet = (candidate.data?.requirements ?? []).filter((each) => !each.met);
-  const ticked = devotion && bible && manual;
+  const ticked = bible && manual;
   const needsReason = unmet.length > 0;
 
   const save = useMutation({
@@ -241,7 +239,6 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
         {
           ...term,
           person_id: person!.id,
-          devotion_confirmed: devotion,
           bible_confirmed: bible,
           manual_confirmed: manual,
           ...(needsReason ? { exception_reason: reason.trim() } : {}),
@@ -388,9 +385,6 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             <legend className="field-label">
               Ticked by you, after asking {candidate.data?.leader_name ?? 'their leader'}
             </legend>
-            <Tick checked={devotion} onChange={setDevotion}>
-              Consistent in devotion
-            </Tick>
             <Tick checked={bible} onChange={setBible}>
               Has a physical Bible
             </Tick>

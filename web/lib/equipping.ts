@@ -7,7 +7,7 @@ import { authenticatedRequest } from './session';
  */
 
 export type EquippingLevel = 'LIFE_CLASS';
-export type RequirementCode = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_FIVE';
+export type RequirementCode = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_LESSONS_1_TO_4';
 export type RegistrationStatus =
   | 'REGISTERED'
   | 'REGISTERED_WITH_EXCEPTION'
@@ -25,7 +25,7 @@ export const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   HAS_LEADER: 'Has a leader',
   CELL_REGULAR: 'Regular in a Cell Group',
   DCC_REGULAR: 'Regular in DCC',
-  SUYNL_FIVE: 'SUYNL: at least 5 lessons',
+  SUYNL_LESSONS_1_TO_4: 'SUYNL: lessons 1 to 4',
 };
 
 export const STATUS_LABELS: Record<RegistrationStatus, string> = {
@@ -140,7 +140,6 @@ export async function listRegistrations(
 export async function register(
   input: Term & {
     person_id: string;
-    devotion_confirmed: boolean;
     bible_confirmed: boolean;
     manual_confirmed: boolean;
     exception_reason?: string;

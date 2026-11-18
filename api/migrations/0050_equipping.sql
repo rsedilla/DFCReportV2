@@ -61,16 +61,16 @@ CREATE TABLE equipping_registrations (
   level text NOT NULL CONSTRAINT equipping_registrations_level CHECK (level IN ('LIFE_CLASS')),
   term_year smallint NOT NULL CONSTRAINT equipping_registrations_term_year CHECK (term_year BETWEEN 2020 AND 2100),
   term_number smallint NOT NULL CONSTRAINT equipping_registrations_term_number CHECK (term_number BETWEEN 1 AND 3),
-  -- The three ticks, confirmed by `registered_by` at `registered_at` (point 6). Always
+  -- The two ticks, confirmed by `registered_by` at `registered_at` (point 6; the owner
+  -- withdrew a third, consistent in devotion, on 2026-11-18). Always
   -- true: a registration is refused without them, and a column that may only hold
   -- true still says on the row what was confirmed.
-  devotion_confirmed boolean NOT NULL CONSTRAINT equipping_registrations_devotion CHECK (devotion_confirmed),
   bible_confirmed boolean NOT NULL CONSTRAINT equipping_registrations_bible CHECK (bible_confirmed),
   manual_confirmed boolean NOT NULL CONSTRAINT equipping_registrations_manual CHECK (manual_confirmed),
   -- The record requirements not met when the person was registered (point 7), and
   -- the reason they were registered anyway. One without the other is refused.
   unmet text[] NOT NULL DEFAULT '{}' CONSTRAINT equipping_registrations_unmet_known CHECK (
-    unmet <@ ARRAY['HAS_LEADER', 'CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_FIVE']::text[]
+    unmet <@ ARRAY['HAS_LEADER', 'CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_LESSONS_1_TO_4']::text[]
   ),
   exception_reason text CONSTRAINT equipping_registrations_reason_not_blank CHECK (
     exception_reason IS NULL OR (btrim(exception_reason) <> '' AND char_length(exception_reason) <= 500)

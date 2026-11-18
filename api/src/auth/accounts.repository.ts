@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 
 import type { AccountStatus, Database } from '../database/schema';
@@ -172,6 +173,19 @@ export class AccountsRepository {
       .execute();
 
     return new Set(rows.map((row) => row.person_id));
+  }
+
+  /** `AdminAccountsPort`. Every Person holding a live `EQUIPPER` role (decision 0499). */
+  async equippingAccountPersonsWithin(executor: Db | Transaction<Database>): Promise<Set<string>> {
+    const rows = await executor
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select('account.person_id as person_id')
+      .where('role.role', '=', 'EQUIPPER')
+      .where('role.revoked_at', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => canonicalId(row.person_id)));
   }
 
   /**

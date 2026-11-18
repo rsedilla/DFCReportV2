@@ -16,6 +16,8 @@ export interface PersonAccount {
   status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
   roles: AccountRole[];
   created_at: string;
+  /** Archiving the record disables it, with no choice offered (decision 0499). Absent from older servers. */
+  disabled_with_record?: boolean;
   /** Whether it signs in with a second step, and since when (decision 0302). */
   second_step: { required: boolean; set_up_at: string | null };
   /** Full view (decision 0323); meaningful on a Leader account only. */

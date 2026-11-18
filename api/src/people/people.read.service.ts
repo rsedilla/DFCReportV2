@@ -292,6 +292,20 @@ export class PeopleReadService {
     return new Set(admins.filter((id) => !assigned.has(id)));
   }
 
+  /**
+   * Every Person holding an Equipping account (decision 0499), whom only the Admin's search
+   * finds. Refuses when the port is unbound, rather than showing them to everybody.
+   */
+  async equippingAccountPersons(): Promise<Set<string>> {
+    if (!this.adminAccounts) {
+      throw new Error(
+        'Cannot say who holds an Equipping account: ADMIN_ACCOUNTS_PORT is not bound. ' +
+          'This is a deployment fault.',
+      );
+    }
+    return this.adminAccounts.equippingAccountPersonsWithin(this.db);
+  }
+
   /** {@link forDecisionsWithin} on the pooled connection, for a caller holding no transaction. */
   async forDecisions(personIds: readonly string[]): Promise<Map<string, PersonForDecision>> {
     return this.forDecisionsWithin(this.db, personIds);

@@ -33,6 +33,8 @@ export interface PersonIdentity {
   sex: Sex;
   network: Network | null;
   direct_leader_name: string | null;
+  /** On the Admin's search rows only: an Equipping account's own record (decision 0499). */
+  equipping_account?: true;
 }
 
 /** The whole record, for somebody inside it. */
@@ -52,6 +54,8 @@ export interface PersonFull {
   mobile_number: string | null;
   /** On a search row only (decision 0259); absent elsewhere. */
   direct_leader_name?: string | null;
+  /** On the Admin's search rows only: an Equipping account's own record (decision 0499). */
+  equipping_account?: true;
   /** On one person's record only: their archived line, null while current (decision 0397). */
   archived?: ArchivedLine | null;
   /** On one person's record only: how many people they pastor now (decision 0397). */

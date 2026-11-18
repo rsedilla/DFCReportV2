@@ -14,6 +14,7 @@ import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres
 import { canonicalId, isUuid } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
+import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 import { SuynlService } from '../suynl/suynl.service';
@@ -30,8 +31,11 @@ import type {
 
 /** Section 12's and section 9's ladder: the fifth attendance and beyond is a Regular. */
 const REGULAR_FROM = 5;
-/** "At least 5 lessons tick in SUYNL regardless of lesson" (decision 0499, point 6). */
-const SUYNL_LESSONS_NEEDED = 5;
+/**
+ * SUYNL lessons 1 to 4 recorded, whatever else is (owner, 2026-11-18: "must have SUYNL lesson
+ * 1 - 4 ticked regardless he or she is ticked 5 7 8 9"), replacing any five (decision 0499, point 6).
+ */
+const SUYNL_LESSONS_NEEDED = [1, 2, 3, 4] as const;
 /** "Must be 15 on the day the Encounter weekend starts; 14 is refused" (point 11). */
 const ENCOUNTER_MINIMUM_AGE = 15;
 /** Section 22: a collection's default page. */
@@ -125,7 +129,7 @@ export class EquippingService {
       this.hierarchy.directLeaderIdsOf(ids),
       this.people.directLeaderNamesOf(ids),
       this.attendance.standingOf(ids),
-      this.suynl.currentLessonCountsOf(ids),
+      this.suynl.currentLessonsOf(ids),
     ]);
 
     return new Map(
@@ -135,7 +139,8 @@ export class EquippingService {
           cellAttended: 0,
           lastCellMeetingOn: null,
         };
-        const lessonCount = lessons.get(id) ?? 0;
+        const held = new Set(lessons.get(id) ?? []);
+        const missing = SUYNL_LESSONS_NEEDED.filter((lesson) => !held.has(lesson));
         const leaderName = leaderNames.get(id) ?? null;
         return [
           id,
@@ -160,9 +165,12 @@ export class EquippingService {
               detail: `${attended.dccAttended} ${attended.dccAttended === 1 ? 'Sunday' : 'Sundays'} recorded`,
             },
             {
-              code: 'SUYNL_FIVE' as const,
-              met: lessonCount >= SUYNL_LESSONS_NEEDED,
-              detail: `${lessonCount} of 10 lessons`,
+              code: 'SUYNL_LESSONS_1_TO_4' as const,
+              met: missing.length === 0,
+              detail:
+                missing.length === 0
+                  ? 'Lessons 1 to 4 recorded'
+                  : `Lesson ${missing.join(', ')} not recorded yet`,
             },
           ],
         ];
@@ -209,10 +217,12 @@ export class EquippingService {
     return { data: await this.seasons.allSeasons() };
   }
 
-  /** The person picker: current people by name, church-wide, five fields each (section 8). */
+  /** The person picker: current people by name, church-wide, four fields each (section 8). */
   async search(term: string, limit: number): Promise<Record<string, unknown>[]> {
+    // An Equipping record is never somebody signed up for a class (decision 0499).
     const { rows } = await this.people.searchByName(term, limit, null, null, {
       currentOnly: true,
+      exclude: await this.people.equippingAccountPersons(),
     });
     const names = await this.people.directLeaderNamesOf(rows.map((row) => row.id));
     const decided = await this.people.forDecisions(rows.map((row) => row.id));
@@ -431,10 +441,11 @@ export class EquippingService {
     body: RegisterDto,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    for (const field of ['devotion_confirmed', 'bible_confirmed', 'manual_confirmed'] as const) {
+    // Two ticks since the owner withdrew the devotion tick on 2026-11-18 (decision 0499, point 6).
+    for (const field of ['bible_confirmed', 'manual_confirmed'] as const) {
       if (body[field] !== true) {
         throw new ValidationFailedError(
-          'Devotion, a physical Bible and the Life Class Manual are each ticked before registering.',
+          'A physical Bible and the Life Class Manual are each ticked before registering.',
           { field },
         );
       }
@@ -462,6 +473,20 @@ export class EquippingService {
     }
 
     return this.write(async (trx) => {
+      // **The Person's lock, which archive and merge take too** (section 24, lock then decide):
+      // without it a registration could commit for somebody archived or merged away at the same
+      // moment, after the archive found nothing to close. Decided again under the lock.
+      await lockPersonsWithin(trx, [personId]);
+      const locked = await this.people.forDecisionWithin(trx, personId);
+      if (!locked || locked.mergedIntoId !== null) {
+        throw new NotFoundError('No such person.');
+      }
+      if (locked.isArchived) {
+        throw new InvariantViolationError('That person is archived, so is not registered.', {
+          person_id: personId,
+        });
+      }
+
       const row = await trx
         .insertInto('equipping_registrations')
         .values({
@@ -469,7 +494,6 @@ export class EquippingService {
           level: body.level,
           term_year: body.term_year,
           term_number: body.term_number,
-          devotion_confirmed: true,
           bible_confirmed: true,
           manual_confirmed: true,
           unmet,

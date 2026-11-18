@@ -651,7 +651,8 @@ export class PeopleService {
   }
 
   /**
-   * The Person a Network Admin account is created with (section 7, decision 0469): a current
+   * The Person a Network Admin account (section 7, decision 0469) or an Equipping account
+   * (section 29, decision 0499) is created with: a current
    * Person in the Network their sex sets, with no pastoral leader and no assignment row, under
    * section 3's duplicate rules. The caller creates the account in the same transaction. Its
    * route needs `accounts.manage` at Whole Church, and every candidate is shown to it.

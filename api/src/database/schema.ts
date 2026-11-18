@@ -933,7 +933,7 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
 export type EquippingLevel = 'LIFE_CLASS';
 
 /** The record requirements a registration can be made despite (decision 0499, point 7). */
-export type EquippingRequirement = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_FIVE';
+export type EquippingRequirement = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_LESSONS_1_TO_4';
 
 /** A class of one level in one term (section 29, migration 0050). Never deleted. */
 export interface EquippingClassesTable {
@@ -962,7 +962,6 @@ export interface EquippingRegistrationsTable {
   level: EquippingLevel;
   term_year: number;
   term_number: number;
-  devotion_confirmed: boolean;
   bible_confirmed: boolean;
   manual_confirmed: boolean;
   unmet: Generated<EquippingRequirement[]>;

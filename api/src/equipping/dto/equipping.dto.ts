@@ -64,16 +64,13 @@ export class ListRegistrationsDto extends EquippingTermDto {
 }
 
 /**
- * Registering a person (decision 0499, points 5 to 7). The three ticks must be ticked;
+ * Registering a person (decision 0499, points 5 to 7). The two ticks must be ticked;
  * `exception_reason` is required where a record requirement is not met, and the service
  * decides that, since only it reads the records.
  */
 export class RegisterDto extends EquippingTermDto {
   @IsUUID()
   person_id!: string;
-
-  @IsBoolean()
-  devotion_confirmed!: boolean;
 
   @IsBoolean()
   bible_confirmed!: boolean;

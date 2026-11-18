@@ -42,7 +42,8 @@ export interface MergeRefusal {
     | 'NETWORKS_DIFFERED'
     | 'LEADS_A_CELL'
     | 'PASTORS_PEOPLE'
-    | 'IN_THE_SCHOOL';
+    | 'IN_THE_SCHOOL'
+    | 'EQUIPPING_ACCOUNT';
   message: string;
 }
 
@@ -423,6 +424,18 @@ export class PeopleMergeService {
           disciples.length === 1 ? 'person' : 'people'
         }. Move ${disciples.length === 1 ? 'them' : 'each of them'} to another leader first, then merge.`,
       });
+    }
+
+    // **An Equipping account's record is a second record of one person on purpose** (owner,
+    // 2026-11-18, decision 0499): never merged, in either direction.
+    const { accounts } = this.ports();
+    for (const record of [kept, duplicate]) {
+      if ((await accounts.accountOfWithin(executor, record.id))?.equipper) {
+        refusals.push({
+          code: 'EQUIPPING_ACCOUNT',
+          message: `${composeName(record)} (${record.member_id}) is an Equipping account, a record of its own on purpose. It is never merged into a person's own record, or the other way.`,
+        });
+      }
     }
 
     // Section 29 (decision 0499): a duplicate holding an open registration is not absorbed,

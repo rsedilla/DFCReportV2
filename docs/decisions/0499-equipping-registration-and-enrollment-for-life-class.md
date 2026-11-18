@@ -19,7 +19,7 @@ enrolment and lessons to "an enrolment application planned elsewhere". That appl
 this module. Training's graduations are unchanged by this ruling: nothing here files one, and
 a graduation from a posted final grade is a later ruling.
 
-**3. The Equipper.** A new role, `EQUIPPER`, given by the Admin when creating an account,
+**3. The Equipper.** A new role, `EQUIPPER`, given by the Admin (point 3a says how),
 holds `equipping.manage` at Whole Church (the owner chose "Equipper Admin" and "Equipper";
 this ruling builds the Equipper, and the Equipper Admin follows with posting grades). The
 Admin holds it too, by default ("the admin sees everything"). It is held alone, as
@@ -36,35 +36,35 @@ creates the record and the account together, by its own form, as a Network Admin
 (decision 0469). Like a Network Admin's record it is outside the pastoral tree and the Cells,
 has no disciples and no DCC line, and is in no count of people (decision 0339); a Network Admin
 reads it and never changes it. A leader who also runs the school therefore has two records;
-the duplicate check names one to the other when the Equipping record is made. Archiving the
-Equipping record disables its account; archiving their own record does not touch it, and the
-Admin disables it separately.
+the duplicate check names one to the other when the Equipping record is made. What archiving
+does to the Equipping account is in point 12, not in the owner's words.
 
 **4. Its screens are the steps, in the sidebar.** An Equipper's sidebar is `Registration` and
 `Enrollment`, the six steps' first two in their order, and nothing else. The Admin has one
-`Equipping` item whose tabs are the same two. A phone shows them as a switch at the top of
-the page rather than in the bottom bar.
+`Equipping` item whose tabs are the same two. A phone shows them in the bottom tab bar, as
+every account's items are (owner, 2026-11-18, choosing from screenshots of both; a switch at
+the top of the page was the first plan, and would not hold the four steps still to come).
 
 **5. A registration is a person, a level and a term.** The person is chosen from the system,
 never typed. A term is "Term 1, 2 or 3" of a year, three a year, with no dates yet. One
 registration per person, level and term; a second is refused. Nothing records money: "fees
 are paid by bank transfer outside the app".
 
-**6. Life Class has seven requirements.** Four are read from the records when the person is
-picked, and three are ticked by the Equipper after asking the person's leader ("i will stick
-to three tickbox"):
+**6. Life Class has six requirements.** Four are read from the records when the person is
+picked, and two are ticked by the Equipper after asking the person's leader. The owner first
+chose three ticks ("i will stick to three tickbox") and withdrew *consistent in devotion* on
+2026-11-18 ("remove the tick of consistent in devotion"):
 
 | Requirement | Read from |
 | --- | --- |
 | Has a leader | an open pastoral assignment (Section 5) |
 | Regular in a Cell Group | Cell classification, `Regular` being five or more meetings attended (Section 12) |
 | Regular in DCC | DCC classification, five or more Sundays (Section 9) |
-| SUYNL: at least five lessons | five or more current SUYNL lesson rows, any lessons ("regardless of lesson") |
-| Consistent in devotion | ticked by the Equipper |
+| SUYNL: lessons 1 to 4 | a current SUYNL row for each of lessons 1, 2, 3 and 4, whatever else is recorded ("must have SUYNL lesson 1 - 4 ticked regardless he or she is ticked 5 7 8 9", 2026-11-18, replacing "at least 5 lessons ... regardless of lesson") |
 | Has a physical Bible | ticked by the Equipper |
 | Has the Life Class Manual | ticked by the Equipper |
 
-Each tick is saved with who ticked it and when. The three ticks are always required.
+Each tick is saved with who ticked it and when. The two ticks are always required.
 
 **7. A record that is not met warns; it does not block** ("ok just warn"). When any of the four
 is not met, registering asks "Why register them anyway?", which is required, and the
@@ -77,8 +77,8 @@ recorded.
 **8. This amends Section 28's "the order is displayed and never enforced."** That sentence
 stands for Training's graduations. It no longer stands for registering for Life Class, where
 SUYNL lessons are a requirement, and so is the gate Section 28 records as withdrawn, in a
-different shape: five lessons rather than four, at Life Class rather than at the Encounter,
-and a warning rather than a refusal.
+different shape: lessons 1 to 4 by number, at Life Class rather than at the Encounter, and a
+warning rather than a refusal.
 
 **9. A registration is never deleted.** Its status is *Registered*, *Registered with
 exception*, *Enrolled* while it is in a class, or *Cancelled*, with a reason, by an Equipper.
@@ -109,10 +109,19 @@ why it ended. A move keeps the registration, so what later steps record carries 
 otherwise, these would follow the recommendation shown, and answered the session question
 alone; they are recorded here as that recommendation, and the owner may still change them.
 Archiving a Person ends their open class place (`ARCHIVED`) and cancels their registration
-with the reason "Archived", keeping both. Enrolling and moving refuse an archived or merged
+with the reason "Archived", keeping both. Archiving the Equipping record disables its account and
+does not offer keeping it; archiving the person's own record does not touch it. Enrolling and moving refuse an archived or merged
 Person. A merge is refused while the duplicate holds an open registration. Each person the
 Equipper opens on the registration form is recorded for the Admin as a full-record read is
 (decision 0414).
+
+**13. The Equipping record is the one exception to one record per person** (owner, 2026-11-18,
+"ok" to the proposal shown from screenshots of two records of one person). Section 1's first
+principle names it. A merge is refused while either record holds an Equipping account, in
+either direction. Only the Admin finds it: "only the accounts of equipping is visible in super
+admin search". Every people search and picker leaves it out for anybody not holding `ADMIN`, a
+Network Admin included, and its page answers `NOT_FOUND` to them; the Admin's search marks it
+*Equipping account*.
 
 ## Why
 

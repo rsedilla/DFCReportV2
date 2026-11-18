@@ -125,6 +125,11 @@ export class AccountProvisioningService {
       moves_people: boolean;
       /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
       privacy_notice_acknowledged_at: string | null;
+      /**
+       * Archiving the record disables this account with nobody asked (an Equipping account,
+       * decision 0499), so the archive offers no choice about it.
+       */
+      disabled_with_record: boolean;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -173,6 +178,7 @@ export class AccountProvisioningService {
         approves_cells: account.approves_cells,
         moves_people: account.moves_people,
         privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
+        disabled_with_record: roles.some((row) => row.role === 'EQUIPPER'),
       },
     };
   }

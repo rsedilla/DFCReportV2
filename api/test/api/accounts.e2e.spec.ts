@@ -114,6 +114,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         moves_people: false,
         // Nor has its holder ticked the Privacy Notice (decision 0496).
         privacy_notice_acknowledged_at: null,
+        // A Leader account is not disabled with its record unasked (decision 0499).
+        disabled_with_record: false,
       });
       // Nothing a credential is made of.
       expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);

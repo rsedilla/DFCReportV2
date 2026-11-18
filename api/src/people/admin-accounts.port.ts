@@ -47,6 +47,12 @@ export interface AdminAccountsPort {
   personsHoldingAdminAtWithin(executor: Db | Transaction<Database>, at: Date): Promise<Set<string>>;
 
   /**
+   * Every Person holding a live `EQUIPPER` role (decision 0499): records found by the
+   * Admin's search alone, and never merged.
+   */
+  equippingAccountPersonsWithin(executor: Db | Transaction<Database>): Promise<Set<string>>;
+
+  /**
    * Where an alert to the Admin goes (decisions 0413 and 0414): every `ACTIVE` account
    * holding a live `ADMIN` role, with its address and Person.
    */

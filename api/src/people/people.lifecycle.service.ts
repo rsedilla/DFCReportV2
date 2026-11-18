@@ -208,6 +208,14 @@ export class PeopleLifecycleService {
       const equipperAccount = account !== null && account.equipper && account.status !== 'DISABLED';
       const asksAboutAccess = account !== null && account.status !== 'DISABLED' && !equipperAccount;
 
+      // Offered no choice, so a choice sent is refused rather than silently overridden.
+      if (equipperAccount && input.accountAccess === 'KEEP') {
+        throw new ValidationFailedError(
+          'An Equipping account is disabled with its record, so it cannot be kept (decision 0499).',
+          { field: 'account_access' },
+        );
+      }
+
       if (asksAboutAccess && input.accountAccess === undefined) {
         throw new ValidationFailedError(
           'This person has an account. Choose whether to disable it or keep it (SKILL.md section 6).',

@@ -4,7 +4,13 @@ import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import { PeopleReadService } from '../../src/people/people.read.service';
-import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
+import {
+  assignTo,
+  createAccount,
+  createCell,
+  createPerson,
+  createTestApp,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -18,7 +24,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * What is pinned, each from the ruling rather than from the service:
  *
  *   - only the Admin and an Equipper reach these routes, and a Leader is refused;
- *   - the three ticks are always required;
+ *   - the two ticks (a physical Bible, the Life Class Manual) are always required;
  *   - a record requirement not met asks for a reason, and with one the person is registered
  *     with exception, the requirements not met kept on the row;
  *   - one registration per person, level and term;
@@ -106,7 +112,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       .get(`/api/v1/equipping/${path}`)
       .set('Authorization', `Bearer ${account.accessToken}`);
 
-  const ticks = { devotion_confirmed: true, bible_confirmed: true, manual_confirmed: true };
+  const ticks = { bible_confirmed: true, manual_confirmed: true };
 
   const register = (person: TestPerson, extra: object = {}, as: TestAccount = equipper) =>
     post(as, 'registrations', {
@@ -157,28 +163,41 @@ describe('Equipping (section 29, decision 0499)', () => {
   });
 
   describe('registering', () => {
-    it('reads the four record requirements for the form', async () => {
-      for (let lesson = 1; lesson <= 5; lesson += 1) {
-        await db
-          .insertInto('suynl_lessons')
-          .values({ person_id: ben.id, lesson, confirmed_by: mario.id, recorded_by: admin.id })
-          .execute();
-      }
-
-      const body = (await get(equipper, `people/${ben.id}`).expect(200)).body as {
-        requirements: { code: string; met: boolean }[];
-        birth_date: string | null;
+    it('reads the four record requirements for the form, SUYNL being lessons 1 to 4', async () => {
+      const lessonsOf = async (lessons: number[]) => {
+        for (const lesson of lessons) {
+          await db
+            .insertInto('suynl_lessons')
+            .values({ person_id: ben.id, lesson, confirmed_by: mario.id, recorded_by: admin.id })
+            .execute();
+        }
       };
-      expect(body.birth_date).toBe('1999-02-01');
-      expect(body.requirements.map((each) => [each.code, each.met])).toEqual([
+      const read = async () =>
+        (await get(equipper, `people/${ben.id}`).expect(200)).body as {
+          requirements: { code: string; met: boolean; detail: string }[];
+          birth_date: string | null;
+        };
+
+      // Seven lessons, but not lesson 4 (owner, 2026-11-18: lessons 1 to 4, whatever else).
+      await lessonsOf([1, 2, 3, 5, 7, 8, 9]);
+      const before = await read();
+      expect(before.birth_date).toBe('1999-02-01');
+      expect(before.requirements.map((each) => [each.code, each.met])).toEqual([
         ['HAS_LEADER', true],
         ['CELL_REGULAR', false],
         ['DCC_REGULAR', false],
-        ['SUYNL_FIVE', true],
+        ['SUYNL_LESSONS_1_TO_4', false],
       ]);
+      expect(before.requirements[3].detail).toBe('Lesson 4 not recorded yet');
+
+      await lessonsOf([4]);
+      expect((await read()).requirements[3]).toMatchObject({
+        code: 'SUYNL_LESSONS_1_TO_4',
+        met: true,
+      });
     });
 
-    it('refuses a registration missing any of the three ticks', async () => {
+    it('refuses a registration missing either of the two ticks', async () => {
       const response = await register(ben, { bible_confirmed: false });
       expect({ status: response.status, field: response.body.error?.details?.field }).toEqual({
         status: 422,
@@ -191,7 +210,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(response.status).toBe(422);
       expect(response.body.error?.details).toMatchObject({
         field: 'exception_reason',
-        unmet: ['CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_FIVE'],
+        unmet: ['CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_LESSONS_1_TO_4'],
       });
     });
 
@@ -203,7 +222,7 @@ describe('Equipping (section 29, decision 0499)', () => {
         .selectFrom('equipping_registrations')
         .selectAll()
         .executeTakeFirstOrThrow();
-      expect(row.unmet).toEqual(['CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_FIVE']);
+      expect(row.unmet).toEqual(['CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_LESSONS_1_TO_4']);
       expect(row.exception_reason).toBe('Their leader confirms they attend every week.');
       expect(row.registered_by).toBe(equipper.id);
 
@@ -427,6 +446,135 @@ describe('Equipping (section 29, decision 0499)', () => {
         reason: '   ',
       }).expect(422);
       expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+  describe('the Equipping record and its history (decision 0499, second review)', () => {
+    it('keeps the Equipping record out of the tree and its Cells', async () => {
+      const wilma = await createPerson(db, { firstName: 'Wilma', network: 'WOMENS' });
+      await assignTo(db, wilma.id, null);
+      const wren = await createPerson(db, { firstName: 'Wren', network: 'WOMENS' });
+      await assignTo(db, wren.id, wilma.id);
+
+      const asLeader = await request(app.getHttpServer())
+        .put(`/api/v1/people/${wren.id}/pastoral-leader`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ pastoral_leader_id: equipper.personId });
+      expect(asLeader.status).toBe(409);
+      expect(JSON.stringify(asLeader.body)).toContain('Equipping account');
+
+      const cell = await createCell(db, { leader: wilma });
+      const asMember = await request(app.getHttpServer())
+        .post(`/api/v1/cells/${cell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ person_id: equipper.personId });
+      expect(asMember.status).toBe(409);
+      expect(JSON.stringify(asMember.body)).toContain('Equipping account');
+    });
+
+    it('disables an Equipping account with its record, and refuses keeping it', async () => {
+      const archive = (body: object) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/people/${equipper.personId}/archive`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body);
+
+      await archive({ reason: 'OTHER', note: 'Left the school.', account_access: 'KEEP' }).expect(
+        422,
+      );
+      const done = await archive({ reason: 'OTHER', note: 'Left the school.' }).expect(200);
+      expect(done.body.account_access).toBe('DISABLE');
+
+      const account = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('id', '=', equipper.id)
+        .executeTakeFirstOrThrow();
+      expect(account.status).toBe('DISABLED');
+    });
+
+    it('refuses rewriting a registration, undoing a cancellation, or a class place on a cancelled one', async () => {
+      const registered = (await register(ben).expect(201)).body as { id: string };
+      const cls = (await openClass().expect(201)).body as { id: string };
+
+      await expect(
+        db
+          .updateTable('equipping_registrations')
+          .set({ person_id: carlo.id })
+          .where('id', '=', registered.id)
+          .execute(),
+      ).rejects.toThrow(/keeps the person, level and term/);
+
+      await post(equipper, `registrations/${registered.id}/cancel`, {
+        reason: 'Moved to another church.',
+      }).expect(200);
+
+      await expect(
+        db
+          .updateTable('equipping_registrations')
+          .set({ cancelled_at: null, cancelled_by: null, cancel_reason: null })
+          .where('id', '=', registered.id)
+          .execute(),
+      ).rejects.toThrow(/stays cancelled/);
+
+      await expect(
+        db
+          .insertInto('equipping_enrollments')
+          .values({ registration_id: registered.id, class_id: cls.id, started_by: equipper.id })
+          .execute(),
+      ).rejects.toThrow(/cancelled registration/);
+    });
+  });
+  describe('the Equipping record, found and merged (owner, 2026-11-18)', () => {
+    const search = (as: TestAccount, q: string, extra = '') =>
+      request(app.getHttpServer())
+        .get(`/api/v1/people?q=${encodeURIComponent(q)}${extra}`)
+        .set('Authorization', `Bearer ${as.accessToken}`);
+
+    it("finds an Equipping record in the Admin's search alone, labelled", async () => {
+      const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
+      const networkAdmin = await createAccount(app, db, { person: nora, roles: ['NETWORK_ADMIN'] });
+
+      const byAdmin = (await search(admin, 'Eva', '&church_wide=true').expect(200)).body as {
+        data: { id: string; equipping_account?: boolean }[];
+      };
+      expect(byAdmin.data.find((row) => row.id === equipper.personId)).toMatchObject({
+        equipping_account: true,
+      });
+
+      const byNetworkAdmin = (await search(networkAdmin, 'Eva').expect(200)).body as {
+        data: { id: string }[];
+      };
+      expect(byNetworkAdmin.data.map((row) => row.id)).not.toContain(equipper.personId);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/people/${equipper.personId}`)
+        .set('Authorization', `Bearer ${networkAdmin.accessToken}`)
+        .expect(404);
+
+      // Nor does the Equipper's own picker offer an Equipping record to sign up.
+      const picker = (await get(equipper, 'people?q=Eva').expect(200)).body as {
+        data: { id: string }[];
+      };
+      expect(picker.data.map((row) => row.id)).not.toContain(equipper.personId);
+    });
+
+    it('refuses merging an Equipping record, in either direction', async () => {
+      const evaAgain = await createPerson(db, { firstName: 'Eva', network: 'WOMENS' });
+      for (const [kept, duplicate] of [
+        [evaAgain.id, equipper.personId],
+        [equipper.personId, evaAgain.id],
+      ]) {
+        const preview = await request(app.getHttpServer())
+          .get(`/api/v1/people/${kept}/merge-preview?duplicate_id=${duplicate}`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200);
+        expect(
+          (preview.body.refusals as { code: string }[]).map((refusal) => refusal.code),
+        ).toContain('EQUIPPING_ACCOUNT');
+      }
     });
   });
 });

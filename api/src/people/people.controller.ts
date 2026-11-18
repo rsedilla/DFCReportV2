@@ -614,6 +614,14 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @Param('id') id: string,
   ): Promise<Record<string, unknown>> {
+    // **An Equipping account's record opens for the Admin alone** (owner, 2026-11-18, decision
+    // 0499), as the Admin's search alone finds it: anybody else is told it does not exist.
+    if (
+      (await this.read.equippingAccountPersons()).has(canonicalId(id)) &&
+      !(await this.authorization.authorityFor(actor.accountId)).roles.includes('ADMIN')
+    ) {
+      throw new NotFoundError('No such person.');
+    }
     const person = await this.read.findById(id);
     if (!person) {
       // A record merged away keeps its page, read only, naming where the person is now
@@ -790,6 +798,13 @@ export class PeopleController {
           ? inNetwork
           : new Set([...scoped].filter((id) => inNetwork.has(id)));
 
+    // **An Equipping account's record is found by the Admin's search alone** (owner, 2026-11-18,
+    // decision 0499): a Network Admin, a Senior Pastor and every picker leave it out, in the
+    // query so a page is never short. The Admin's rows say which records they are.
+    const equipping = await this.read.equippingAccountPersons();
+    const isAdmin = (await this.authorization.authorityFor(actor.accountId)).roles.includes(
+      'ADMIN',
+    );
     const { rows, nextCursor } = await this.read.searchByName(
       query.q ?? null,
       query.limit ?? (query.church_wide ? CHURCH_WIDE_PAGE_LIMIT : 50),
@@ -797,7 +812,7 @@ export class PeopleController {
       restrictTo,
       // A Member ID matches only inside the searcher's own scope: church-wide, a prefix
       // such as `M-00` would page the directory the minimum exists to protect.
-      { memberId: !query.church_wide },
+      { memberId: !query.church_wide, ...(isAdmin ? {} : { exclude: equipping }) },
     );
 
     // **The page is answered in a fixed number of queries** (checklist row
@@ -814,23 +829,28 @@ export class PeopleController {
         rows.filter((person) => !inView(person.id)).map((person) => person.id),
       ),
     ]);
+    const labelled = (row: Record<string, unknown>, id: string) =>
+      isAdmin && equipping.has(canonicalId(id)) ? { ...row, equipping_account: true } : row;
     const data = rows.map((person) =>
-      inView(person.id)
-        ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
-          // People list's leader column (decision 0259).
-          // A list row's name has the middle name's initial (decision 0375); the person's own
-          // record, `GET /people/{id}`, keeps it whole.
-          {
-            // Without birthday, civil status and mobile number (decision 0414).
-            ...listedProfile(person),
-            full_name: composeName(person),
-            direct_leader_name: leaderNames.get(person.id) ?? null,
-          }
-        : this.read.identityOnly(
-            person,
-            networks.get(person.id) ?? null,
-            leaderNames.get(person.id) ?? null,
-          ),
+      labelled(
+        inView(person.id)
+          ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
+            // People list's leader column (decision 0259).
+            // A list row's name has the middle name's initial (decision 0375); the person's own
+            // record, `GET /people/{id}`, keeps it whole.
+            {
+              // Without birthday, civil status and mobile number (decision 0414).
+              ...listedProfile(person),
+              full_name: composeName(person),
+              direct_leader_name: leaderNames.get(person.id) ?? null,
+            }
+          : this.read.identityOnly(
+              person,
+              networks.get(person.id) ?? null,
+              leaderNames.get(person.id) ?? null,
+            ),
+        person.id,
+      ),
     );
 
     if (query.church_wide) {
