@@ -126,6 +126,15 @@ function ClassView({
   }
   const cls = detail.data.class;
   const enrollable = detail.data.ready.filter((row) => row.blocked === null);
+  const tick = (registrationId: string, checked: boolean) => {
+    const next = new Set(ticked);
+    if (checked) {
+      next.add(registrationId);
+    } else {
+      next.delete(registrationId);
+    }
+    setTicked(next);
+  };
 
   return (
     <>
@@ -146,7 +155,7 @@ function ClassView({
         <p className="text-muted mt-2 text-sm">Nobody registered is waiting for a class.</p>
       ) : (
         <>
-          <Table caption={`Ready to enroll in ${cls.name}`} className="mt-2">
+          <Table caption={`Ready to enroll in ${cls.name}`} className="mt-2 hidden sm:block">
             <thead>
               <tr>
                 <HeaderCell>
@@ -165,15 +174,7 @@ function ClassView({
                     {row.blocked === null ? (
                       <Tick
                         checked={ticked.has(row.registration_id)}
-                        onChange={(checked) => {
-                          const next = new Set(ticked);
-                          if (checked) {
-                            next.add(row.registration_id);
-                          } else {
-                            next.delete(row.registration_id);
-                          }
-                          setTicked(next);
-                        }}
+                        onChange={(checked) => tick(row.registration_id, checked)}
                       >
                         <span className="sr-only">Enroll {row.person.full_name}</span>
                       </Tick>
@@ -194,6 +195,37 @@ function ClassView({
               ))}
             </tbody>
           </Table>
+          {/* On a phone, a card per person rather than the table (owner, 2026-11-18): the
+              name is the tick box's label, and the reason a person cannot be enrolled sits
+              under it in place of the box. */}
+          <ul
+            aria-label={`Ready to enroll in ${cls.name}`}
+            className="border-line divide-line bg-surface mt-2 divide-y rounded-xl border sm:hidden"
+          >
+            {detail.data.ready.map((row) => (
+              <li key={row.registration_id} className="px-3 py-2">
+                {row.blocked === null ? (
+                  <Tick
+                    checked={ticked.has(row.registration_id)}
+                    onChange={(checked) => tick(row.registration_id, checked)}
+                  >
+                    {row.person.full_name}
+                  </Tick>
+                ) : (
+                  <>
+                    <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
+                    <p className="text-field-invalid text-sm">Can&rsquo;t enroll yet: {row.blocked}.</p>
+                  </>
+                )}
+                <p className="text-muted pb-1 text-sm">
+                  {row.leader_name ?? 'No leader yet'}
+                  {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
+                  {' · '}
+                  {row.with_exception ? 'Registered with exception' : 'Registered'}
+                </p>
+              </li>
+            ))}
+          </ul>
           <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button type="button" disabled={ticked.size === 0 || save.isPending} onClick={() => save.mutate()}>

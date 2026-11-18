@@ -6067,6 +6067,8 @@ Two are ticked by the Equipper after asking the person's leader: **has a physica
 
 **One class per person, level and term**, an index on the open enrollment. A person is **moved** to another class of the same level and term, the two checks made again against its season, or **withdrawn** with a reason; an enrollment that ends is kept, with when and why. Nothing in the three tables is deleted, nor is a row’s person, level, term, registration or class rewritten, nor a cancellation or an ending undone, a trigger refusing each; nobody is placed in a class on a cancelled registration. A move closes one enrollment and opens another on the same registration, so what later steps record hangs on the registration and carries with a move (the owner’s “Move keeps grades”).
 
+**The people ready to enroll are a table, and on a phone a card each** (owner, 2026-11-18): the name beside its tick box, or with the reason the person cannot be enrolled under it and no box, then their leader, their age at the Encounter and how they registered.
+
 ### What Section 21 records
 
 `equipping_registration.created` and `.cancelled`, and `equipping_enrollment.created` and `.ended`, each targeting the **Person**, with the requirements not met and the reason, or the class and the end reason; and `equipping_class.created`, targeting the class, which is about nobody in particular. The Audit Log shows them under Growth for now.

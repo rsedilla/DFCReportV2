@@ -105,6 +105,11 @@ level and term, or withdrawn with a reason; an enrollment that ends is kept, wit
 why it ended. A move keeps the registration, so what later steps record carries with it
 ("Move (keeps grades)", 2026-11-17).
 
+The people ready to enroll are a table on a wider screen and, on a phone, a card each (owner,
+2026-11-18, choosing from screenshots of both; the table's four columns did not fit a phone's
+width): the name beside its tick box, the reason a person cannot be enrolled under it instead,
+then their leader, their age at the Encounter and how they registered.
+
 **12. Archiving and merging** (2026-11-18). The owner was told that, unless they said
 otherwise, these would follow the recommendation shown, and answered the session question
 alone; they are recorded here as that recommendation, and the owner may still change them.
