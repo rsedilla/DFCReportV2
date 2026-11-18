@@ -184,7 +184,7 @@ export class EquippingService {
    */
   async candidate(personId: string): Promise<Record<string, unknown>> {
     const person = await this.people.forDecision(personId);
-    if (!person || person.mergedIntoId !== null) {
+    if (!person || person.mergedIntoId !== null || (await this.isEquippingRecord(personId))) {
       throw new NotFoundError('No such person.');
     }
     const id = canonicalId(person.id);
@@ -219,7 +219,8 @@ export class EquippingService {
 
   /** The person picker: current people by name, church-wide, four fields each (section 8). */
   async search(term: string, limit: number): Promise<Record<string, unknown>[]> {
-    // An Equipping record is never somebody signed up for a class (decision 0499).
+    // An Equipping record is never somebody signed up for a class, for the Admin too (decision
+    // 0499, point 13); `candidate` and `register` refuse it the same way.
     const { rows } = await this.people.searchByName(term, limit, null, null, {
       currentOnly: true,
       exclude: await this.people.equippingAccountPersons(),
@@ -470,6 +471,12 @@ export class EquippingService {
         'A requirement is not met, so say why they are registered anyway.',
         { field: 'exception_reason', unmet },
       );
+    }
+
+    // Before the transaction, so it holds one pool connection (section 24). An Equipping record
+    // is made with its account and never becomes one later, so there is nothing to race.
+    if (await this.isEquippingRecord(personId)) {
+      throw new NotFoundError('No such person.');
     }
 
     return this.write(async (trx) => {
@@ -986,10 +993,38 @@ export class EquippingService {
     return cls;
   }
 
+  /**
+   * **An Equipping record does not exist to the school, for the Admin too** (decision 0499,
+   * point 13): it is an account's record, never somebody signed up for a class. The picker
+   * leaves it out, and the form and registering answer `NOT_FOUND`, as the picker's silence does.
+   */
+  private async isEquippingRecord(personId: string): Promise<boolean> {
+    return (await this.people.equippingAccountPersons()).has(canonicalId(personId));
+  }
+
   private async openEnrollmentWithin(
     trx: Transaction<Database>,
     enrollmentId: string,
   ): Promise<{ id: string; registration_id: string; class_id: string; person_id: string }> {
+    // **The registration is locked before the enrollment**, which is the order an archive
+    // takes them in (person-archive.adapter.ts): registration first, then its enrollments.
+    // Locking the enrollment first let an archive waiting on the registration miss the
+    // enrollment a move had just opened, and its cancel then failed the history check with a
+    // 500 (third review). FOR NO KEY UPDATE, as the archive's, so the new enrollment's
+    // foreign-key check on the registration is not blocked by this transaction's own lock.
+    const owner = await trx
+      .selectFrom('equipping_enrollments')
+      .select('registration_id')
+      .where('id', '=', enrollmentId)
+      .executeTakeFirst();
+    if (owner !== undefined) {
+      await trx
+        .selectFrom('equipping_registrations')
+        .select('id')
+        .where('id', '=', owner.registration_id)
+        .forNoKeyUpdate()
+        .execute();
+    }
     const row = await trx
       .selectFrom('equipping_enrollments as e')
       .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')

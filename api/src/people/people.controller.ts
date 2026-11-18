@@ -193,6 +193,20 @@ export class PeopleController {
   }
 
   /**
+   * **An Equipping account's record opens for the Admin alone** (owner, 2026-11-18, decision
+   * 0499), as the Admin's search alone finds it: its page and its pastoral path tell anybody
+   * else it does not exist.
+   */
+  private async assertEquippingRecordOpensForAdmin(actor: Actor, id: string): Promise<void> {
+    if (
+      (await this.read.equippingAccountPersons()).has(canonicalId(id)) &&
+      !(await this.authorization.authorityFor(actor.accountId)).roles.includes('ADMIN')
+    ) {
+      throw new NotFoundError('No such person.');
+    }
+  }
+
+  /**
    * **An Equipping account's record is left out of the duplicate check for anybody but the
    * Admin** (owner, 2026-11-18, decision 0499): neither shown nor withheld, and never gated on.
    * It is a second record of one person on purpose, so a person's own record beside it is no
@@ -571,7 +585,10 @@ export class PeopleController {
    */
   @Get(':id/pastoral-path')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async pastoralPath(@Param('id') id: string): Promise<{
+  async pastoralPath(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<{
     data: Record<string, unknown>[];
     next_cursor: string | null;
     no_leader_reason: 'ARCHIVED' | 'OUTSIDE_TREE' | null;
@@ -579,6 +596,7 @@ export class PeopleController {
     // Asked before the path, so an unknown identifier is a 404 rather than a
     // one-element path naming a person who does not exist. The guard resolved
     // scope against this id and does not establish that the row is there.
+    await this.assertEquippingRecordOpensForAdmin(actor, id);
     const person = await this.read.findById(id);
     if (!person) {
       throw new NotFoundError('No such person.');
@@ -630,14 +648,7 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @Param('id') id: string,
   ): Promise<Record<string, unknown>> {
-    // **An Equipping account's record opens for the Admin alone** (owner, 2026-11-18, decision
-    // 0499), as the Admin's search alone finds it: anybody else is told it does not exist.
-    if (
-      (await this.read.equippingAccountPersons()).has(canonicalId(id)) &&
-      !(await this.authorization.authorityFor(actor.accountId)).roles.includes('ADMIN')
-    ) {
-      throw new NotFoundError('No such person.');
-    }
+    await this.assertEquippingRecordOpensForAdmin(actor, id);
     const person = await this.read.findById(id);
     if (!person) {
       // A record merged away keeps its page, read only, naming where the person is now

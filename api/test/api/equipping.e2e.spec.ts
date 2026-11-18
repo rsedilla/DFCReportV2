@@ -559,6 +559,18 @@ describe('Equipping (section 29, decision 0499)', () => {
         data: { id: string }[];
       };
       expect(picker.data.map((row) => row.id)).not.toContain(equipper.personId);
+
+      // Nor its pastoral path, which would name it (third review).
+      await request(app.getHttpServer())
+        .get(`/api/v1/people/${equipper.personId}/pastoral-path`)
+        .set('Authorization', `Bearer ${networkAdmin.accessToken}`)
+        .expect(404);
+    });
+
+    it('treats an Equipping record as nobody in the school, for the Admin too', async () => {
+      // Third review: the picker left it out and the form and register did not.
+      await get(admin, `people/${equipper.personId}`).expect(404);
+      await register({ id: equipper.personId } as TestPerson, {}, admin).expect(404);
     });
 
     it("leaves an Equipping record out of everyone's duplicate check but the Admin's", async () => {

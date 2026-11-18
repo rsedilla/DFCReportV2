@@ -34,8 +34,8 @@ Admin's does ("7 days", 2026-11-18).
 emails tied to the same Person, which Section 6's one account per Person forbade. The Admin
 creates the record and the account together, by its own form, as a Network Admin's are
 (decision 0469). Like a Network Admin's record it is outside the pastoral tree and the Cells,
-has no disciples and no DCC line, and is in no count of people (decision 0339); a Network Admin
-reads it and never changes it. A leader who also runs the school therefore has two records;
+has no disciples and no DCC line, and is in no count of people (decision 0339). Only the Admin
+reads it (point 13); to a Network Admin it answers `NOT_FOUND`, as to anybody else. A leader who also runs the school therefore has two records;
 the duplicate check names one to the other when the Equipping record is made. What archiving
 does to the Equipping account is in point 12, not in the owner's words.
 
@@ -120,8 +120,10 @@ Equipper opens on the registration form is recorded for the Admin as a full-reco
 principle names it. A merge is refused while either record holds an Equipping account, in
 either direction. Only the Admin finds it: "only the accounts of equipping is visible in super
 admin search". Every people search and picker leaves it out for anybody not holding `ADMIN`, a
-Network Admin included, and its page answers `NOT_FOUND` to them; the Admin's search marks it
-*Equipping account*. **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
+Network Admin included, and its page and pastoral path answer `NOT_FOUND` to them; the Admin's
+search marks it *Equipping account*. To the school it does not exist for the Admin either, being
+an account's record and never somebody signed up for a class: the Equipping picker leaves it
+out, and the registration form and registering answer `NOT_FOUND` (third review). **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok
 leave it out", settling the Stop Condition the third review raised): for anybody not holding
 `ADMIN` it is neither listed nor shown as a line naming nobody, and adding or editing a Person
 is never asked about it. It is a second record of one person on purpose, so the person's own

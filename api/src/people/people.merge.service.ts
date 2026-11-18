@@ -430,7 +430,9 @@ export class PeopleMergeService {
     // 2026-11-18, decision 0499): never merged, in either direction.
     const { accounts } = this.ports();
     for (const record of [kept, duplicate]) {
-      if ((await accounts.accountOfWithin(executor, record.id))?.equipper) {
+      // Unlocked: a preview locks nobody first, and two previews naming the pair in opposite
+      // orders must not wait on each other's account rows (section 24).
+      if (await accounts.holdsEquipperWithin(executor, record.id)) {
         refusals.push({
           code: 'EQUIPPING_ACCOUNT',
           message: `${composeName(record)} (${record.member_id}) is an Equipping account, a record of its own on purpose. It is never merged into a person's own record, or the other way.`,
