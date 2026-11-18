@@ -1529,7 +1529,9 @@ const SCANS = [
       await mockEquipping(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('table', { name: 'Ready to enroll in Life Class A' })).toBeVisible();
+      // A table from `sm` and a card each on a phone (decision 0499), so the heading is what
+      // every width shows.
+      await expect(page.getByRole('heading', { name: /^Ready to enroll/ })).toBeVisible();
     },
   },
   {

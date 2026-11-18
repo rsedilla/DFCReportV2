@@ -114,6 +114,13 @@ enrolled ("Tue 7:00 pm · 1 enrolled"), because a bare count beside a 24-hour ti
 what it counted (owner, 2026-11-18, from screenshots of both); the form opening a class stays as
 it was built.
 
+Those who can be enrolled are listed first, with the Enroll button under them, and those who
+cannot after, under *Can't enroll yet*, whose reason says what is missing and who mends it ("No
+birthday recorded. Ask their leader to add it."; "14 on 2026-12-04, the Encounter weekend. Must
+be 15."). Where more than one can be enrolled, one control ticks them all, and a saved Enroll
+says back whom it placed ("Enrolled in Life Class A: …"). The owner chose this on 2026-11-18
+from screenshots of the screen as built beside the proposal; the two checks are unchanged.
+
 **12. Archiving and merging** (2026-11-18). The owner was told that, unless they said
 otherwise, these would follow the recommendation shown, and answered the session question
 alone; they are recorded here as that recommendation, and the owner may still change them.

@@ -118,10 +118,13 @@ function ClassView({
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [moving, setMoving] = useState<ClassDetail['enrolled'][number] | null>(null);
   const [withdrawing, setWithdrawing] = useState<ClassDetail['enrolled'][number] | null>(null);
+  // Who the last Enroll placed, said back once it has saved (owner, 2026-11-18).
+  const [justEnrolled, setJustEnrolled] = useState<string[]>([]);
 
   const save = useMutation({
-    mutationFn: () => enroll(classId, [...ticked], key),
-    onSuccess: async () => {
+    mutationFn: (names: string[]) => enroll(classId, [...ticked], key).then(() => names),
+    onSuccess: async (names) => {
+      setJustEnrolled(names);
       setTicked(new Set());
       setKey(crypto.randomUUID());
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
@@ -136,7 +139,9 @@ function ClassView({
   }
   const cls = detail.data.class;
   const enrollable = detail.data.ready.filter((row) => row.blocked === null);
+  const waiting = detail.data.ready.filter((row) => row.blocked !== null);
   const tick = (registrationId: string, checked: boolean) => {
+    setJustEnrolled([]);
     const next = new Set(ticked);
     if (checked) {
       next.add(registrationId);
@@ -161,90 +166,66 @@ function ClassView({
       <h2 className="mt-6 text-lg font-semibold">
         Ready to enroll <span className="text-muted text-sm font-normal">· registered for Life Class, in no class yet</span>
       </h2>
+      {justEnrolled.length > 0 ? (
+        <p role="status" className="border-accent text-ink bg-surface mt-2 rounded-xl border px-4 py-3 text-sm font-semibold">
+          Enrolled in {cls.name}: {justEnrolled.join(', ')}.
+        </p>
+      ) : null}
       {detail.data.ready.length === 0 ? (
         <p className="text-muted mt-2 text-sm">Nobody registered is waiting for a class.</p>
       ) : (
         <>
-          <Table caption={`Ready to enroll in ${cls.name}`} className="mt-2 hidden sm:block">
-            <thead>
-              <tr>
-                <HeaderCell>
-                  <span className="sr-only">Choose</span>
-                </HeaderCell>
-                <HeaderCell>Name</HeaderCell>
-                <HeaderCell>Leader</HeaderCell>
-                <HeaderCell>Age at the Encounter</HeaderCell>
-                <HeaderCell>Registration</HeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.data.ready.map((row) => (
-                <tr key={row.registration_id} className={rowClasses}>
-                  <td className="px-3 py-2 align-top">
-                    {row.blocked === null ? (
-                      <Tick
-                        checked={ticked.has(row.registration_id)}
-                        onChange={(checked) => tick(row.registration_id, checked)}
-                      >
-                        <span className="sr-only">Enroll {row.person.full_name}</span>
-                      </Tick>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3 align-top">
-                    {row.person.full_name}
-                    {row.blocked ? (
-                      <span className="text-field-invalid block text-sm">Can&rsquo;t enroll yet: {row.blocked}.</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3 align-top">{row.leader_name ?? 'No leader yet'}</td>
-                  <td className="px-3 py-3 align-top">{row.age_at_encounter ?? '—'}</td>
-                  <td className="px-3 py-3 align-top">
-                    {row.with_exception ? 'Registered with exception' : 'Registered'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-          {/* On a phone, a card per person rather than the table (owner, 2026-11-18): the
-              name is the tick box's label, and the reason a person cannot be enrolled sits
-              under it in place of the box. */}
-          <ul
-            aria-label={`Ready to enroll in ${cls.name}`}
-            className="border-line divide-line bg-surface mt-2 divide-y rounded-xl border sm:hidden"
-          >
-            {detail.data.ready.map((row) => (
-              <li key={row.registration_id} className="px-3 py-2">
-                {row.blocked === null ? (
-                  <Tick
-                    checked={ticked.has(row.registration_id)}
-                    onChange={(checked) => tick(row.registration_id, checked)}
-                  >
-                    {row.person.full_name}
-                  </Tick>
-                ) : (
-                  <>
-                    <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
-                    <p className="text-field-invalid text-sm">Can&rsquo;t enroll yet: {row.blocked}.</p>
-                  </>
-                )}
-                <p className="text-muted pb-1 text-sm">
-                  {row.leader_name ?? 'No leader yet'}
-                  {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
-                  {' · '}
-                  {row.with_exception ? 'Registered with exception' : 'Registered'}
+          {/* Those who can be enrolled first, with the Enroll button under them, and those
+              who cannot after, in a group of their own (owner, 2026-11-18). */}
+          {enrollable.length > 0 ? (
+            <>
+              {enrollable.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="quiet"
+                  className="mt-1"
+                  onClick={() => {
+                    setJustEnrolled([]);
+                    setTicked(new Set(enrollable.map((row) => row.registration_id)));
+                  }}
+                >
+                  Tick all who can be enrolled ({enrollable.length})
+                </Button>
+              ) : null}
+              <ReadyRows rows={enrollable} caption={`Ready to enroll in ${cls.name}`} ticked={ticked} onTick={tick} />
+              <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  disabled={ticked.size === 0 || save.isPending}
+                  onClick={() =>
+                    save.mutate(
+                      enrollable.filter((row) => ticked.has(row.registration_id)).map((row) => row.person.full_name ?? 'someone'),
+                    )
+                  }
+                >
+                  Enroll {ticked.size} in {cls.name}
+                </Button>
+                <p className="text-muted text-sm">
+                  {ticked.size} of the {enrollable.length} who can be enrolled {ticked.size === 1 ? 'is' : 'are'}{' '}
+                  ticked
                 </p>
-              </li>
-            ))}
-          </ul>
-          <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button type="button" disabled={ticked.size === 0 || save.isPending} onClick={() => save.mutate()}>
-              Enroll {ticked.size} in {cls.name}
-            </Button>
-            <p className="text-muted text-sm">
-              {ticked.size} of the {enrollable.length} who can be enrolled {ticked.size === 1 ? 'is' : 'are'} ticked
-            </p>
-          </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-muted mt-2 text-sm">Nobody waiting can be enrolled yet.</p>
+          )}
+          {waiting.length > 0 ? (
+            <>
+              <h3 className="mt-6 font-semibold">
+                Can&rsquo;t enroll yet{' '}
+                <span className="text-muted text-sm font-normal">
+                  · {waiting.length} · their leader fixes what is missing
+                </span>
+              </h3>
+              <ReadyRows rows={waiting} caption={`Can't enroll in ${cls.name} yet`} ticked={ticked} onTick={tick} />
+            </>
+          ) : null}
         </>
       )}
 
@@ -533,5 +514,104 @@ function OpenClassDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+type ReadyRow = ClassDetail['ready'][number];
+
+/**
+ * Why a person cannot be enrolled, said as what is missing and who mends it. The API's
+ * reason is the source; this only words it for the Equipper (owner, 2026-11-18).
+ */
+function blockedText(blocked: string): string {
+  const age = /^(\d+) on (\S+), under (\d+) for the Encounter$/.exec(blocked);
+  if (age) {
+    return `${age[1]} on ${age[2]}, the Encounter weekend. Must be ${age[3]}.`;
+  }
+  if (blocked === 'no birthday recorded') {
+    return 'No birthday recorded. Ask their leader to add it.';
+  }
+  return `${blocked.charAt(0).toUpperCase()}${blocked.slice(1)}.`;
+}
+
+/**
+ * The people waiting for a class: a table on a wider screen and a card each on a phone
+ * (owner, 2026-11-18). The name is the tick box's label; somebody who cannot be enrolled has
+ * no box, and the reason sits under their name.
+ */
+function ReadyRows({
+  rows,
+  caption,
+  ticked,
+  onTick,
+}: {
+  rows: ReadyRow[];
+  caption: string;
+  ticked: ReadonlySet<string>;
+  onTick: (registrationId: string, checked: boolean) => void;
+}) {
+  return (
+    <>
+      <Table caption={caption} className="mt-2 hidden sm:block" tableClassName="table-fixed">
+        <thead>
+          <tr>
+            <HeaderCell className="w-16">
+              <span className="sr-only">Choose</span>
+            </HeaderCell>
+            <HeaderCell className="w-[34%]">Name</HeaderCell>
+            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell className="w-44">Age at the Encounter</HeaderCell>
+            <HeaderCell>Registration</HeaderCell>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.registration_id} className={rowClasses}>
+              <td className="px-3 py-2 align-top">
+                {row.blocked === null ? (
+                  <Tick
+                    checked={ticked.has(row.registration_id)}
+                    onChange={(checked) => onTick(row.registration_id, checked)}
+                  >
+                    <span className="sr-only">Enroll {row.person.full_name}</span>
+                  </Tick>
+                ) : null}
+              </td>
+              <td className="px-3 py-3 align-top">
+                {row.person.full_name}
+                {row.blocked ? (
+                  <span className="text-field-invalid block text-sm">{blockedText(row.blocked)}</span>
+                ) : null}
+              </td>
+              <td className="px-3 py-3 align-top">{row.leader_name ?? 'No leader yet'}</td>
+              <td className="px-3 py-3 align-top">{row.age_at_encounter ?? '—'}</td>
+              <td className="px-3 py-3 align-top">{row.with_exception ? 'Registered with exception' : 'Registered'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <ul aria-label={caption} className="border-line divide-line bg-surface mt-2 divide-y rounded-xl border sm:hidden">
+        {rows.map((row) => (
+          <li key={row.registration_id} className="px-3 py-2">
+            {row.blocked === null ? (
+              <Tick checked={ticked.has(row.registration_id)} onChange={(checked) => onTick(row.registration_id, checked)}>
+                {row.person.full_name}
+              </Tick>
+            ) : (
+              <>
+                <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
+                <p className="text-field-invalid text-sm">{blockedText(row.blocked)}</p>
+              </>
+            )}
+            <p className="text-muted pb-1 text-sm">
+              {row.leader_name ?? 'No leader yet'}
+              {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
+              {' · '}
+              {row.with_exception ? 'Registered with exception' : 'Registered'}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
