@@ -120,7 +120,8 @@ Equipper opens on the registration form is recorded for the Admin as a full-reco
 principle names it. A merge is refused while either record holds an Equipping account, in
 either direction. Only the Admin finds it: "only the accounts of equipping is visible in super
 admin search". Every people search and picker leaves it out for anybody not holding `ADMIN`, a
-Network Admin included, and its page and pastoral path answer `NOT_FOUND` to them; the Admin's
+Network Admin included, and its page and pastoral path answer `NOT_FOUND` to them where their
+scope would otherwise admit it (a reader outside it is refused as for anybody else); the Admin's
 search marks it *Equipping account*. To the school it does not exist for the Admin either, being
 an account's record and never somebody signed up for a class: the Equipping picker leaves it
 out, and the registration form and registering answer `NOT_FOUND` (third review). **The duplicate check leaves it out the same way** (owner, 2026-11-18, "ok

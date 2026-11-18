@@ -1007,7 +1007,7 @@ export class EquippingService {
     enrollmentId: string,
   ): Promise<{ id: string; registration_id: string; class_id: string; person_id: string }> {
     // **The registration is locked before the enrollment**, which is the order an archive
-    // takes them in (person-archive.adapter.ts): registration first, then its enrollments.
+    // takes them in (equipping/person-archive.adapter.ts): registration first, then its enrollments.
     // Locking the enrollment first let an archive waiting on the registration miss the
     // enrollment a move had just opened, and its cancel then failed the history check with a
     // 500 (third review). FOR NO KEY UPDATE, as the archive's, so the new enrollment's

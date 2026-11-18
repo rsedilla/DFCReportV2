@@ -22,9 +22,10 @@ export class PersonArchiveEquippingAdapter implements ArchiveEquippingPort {
     personId: string,
     actorAccountId: string,
   ): Promise<{ registrations: number; enrollments: number }> {
-    // FOR NO KEY UPDATE rather than FOR UPDATE: a move or a withdrawal holds the enrollment
-    // and its insert's foreign-key check takes FOR KEY SHARE on the registration, which this
-    // lock does not block, so the two cannot wait on each other. Cancelling changes no key.
+    // **The registration first, then its enrollments**, the order a move and a withdrawal take
+    // them in too (`EquippingService.openEnrollmentWithin`), so the two serialize: whichever
+    // waits then sees what the other wrote. FOR NO KEY UPDATE rather than FOR UPDATE, so a new
+    // enrollment's foreign-key check (FOR KEY SHARE) is not blocked. Cancelling changes no key.
     const registrations = await executor
       .selectFrom('equipping_registrations')
       .select(['id', 'unmet'])
