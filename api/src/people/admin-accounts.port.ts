@@ -27,8 +27,8 @@ export const ADMIN_ACCOUNTS_PORT = Symbol('ADMIN_ACCOUNTS_PORT');
 
 export interface AdminAccountsPort {
   /**
-   * Of these Persons, those holding an `ADMIN` or `NETWORK_ADMIN` role that has not been
-   * revoked.
+   * Of these Persons, those holding an `ADMIN`, `NETWORK_ADMIN` or `EQUIPPER` role that has
+   * not been revoked (an Equipping account's Person is outside the tree, decision 0499).
    *
    * Takes the caller's executor so the answer is read inside the transaction that asked,
    * rather than asking a bounded pool for a second connection while holding one (section
@@ -40,8 +40,9 @@ export interface AdminAccountsPort {
   ): Promise<Set<string>>;
 
   /**
-   * Every Person holding an `ADMIN` or `NETWORK_ADMIN` role at one instant: granted by then and not revoked by
-   * then. For decision 0339, which judges a month at its own end.
+   * Every Person holding an `ADMIN`, `NETWORK_ADMIN` or `EQUIPPER` role at one instant: granted by
+   * then and not revoked by then. For decision 0339, which judges a month at its own end, and
+   * decision 0499, which puts an Equipping account's Person in no count of people.
    */
   personsHoldingAdminAtWithin(executor: Db | Transaction<Database>, at: Date): Promise<Set<string>>;
 

@@ -251,10 +251,10 @@ export class PeopleService {
         // Section 4 gives a new Person's Network its effect on the date they are
         // encoded, so there is no earlier instant for this edge to be checked at.
         await assertLeaderIsAssignable(trx, pastoralLeaderId, network, new Date(), this.networks);
-        await this.authorization.assertNoNetworkAdminWithin(
+        await this.authorization.assertOutsideTreeAccountWithin(
           trx,
           [pastoralLeaderId],
-          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+          'That person holds a Network Admin or Equipping account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
         );
       }
 

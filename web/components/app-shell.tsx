@@ -624,7 +624,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                       {me.data.first_name}
                     </span>
                   ) : null}
-                  <span className="text-[0.8125rem]">{ACCOUNT.label}</span>
+                  {/* An Equipping account reads so under the real name (decision 0499). */}
+                  <span className="text-[0.8125rem]">
+                    {me.data?.screens === 'EQUIPPING' ? 'Equipping account' : ACCOUNT.label}
+                  </span>
                 </span>
               </Link>
             </div>

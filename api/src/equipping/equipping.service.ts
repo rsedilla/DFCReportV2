@@ -524,7 +524,7 @@ export class EquippingService {
     return this.write(async (trx) => {
       const row = await trx
         .selectFrom('equipping_registrations')
-        .select(['id', 'person_id', 'cancelled_at'])
+        .select(['id', 'person_id', 'cancelled_at', 'unmet'])
         .where('id', '=', registrationId)
         .forUpdate()
         .executeTakeFirst();
@@ -564,7 +564,10 @@ export class EquippingService {
         action: 'equipping_registration.cancelled',
         targetType: 'person',
         targetId: row.person_id,
-        before: { registration_id: registrationId, status: 'REGISTERED' },
+        before: {
+          registration_id: registrationId,
+          status: row.unmet.length > 0 ? 'REGISTERED_WITH_EXCEPTION' : 'REGISTERED',
+        },
         after: { registration_id: registrationId, status: 'CANCELLED', reason: reason.trim() },
       });
 
@@ -858,10 +861,11 @@ export class EquippingService {
     byPerson: Map<string, { birthDate: string | null; age: number | null; blocked: string | null }>;
   }> {
     const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
-    const [births, networks, seasons] = await Promise.all([
+    const [births, networks, seasons, decisions] = await Promise.all([
       this.people.birthDatesOf(ids),
       this.people.currentNetworksOf(ids),
       this.seasons.allSeasons(),
+      this.people.forDecisions(ids),
     ]);
     const season = seasons.find((each) => each.id === seasonId) ?? null;
     const weekends = {
@@ -879,14 +883,22 @@ export class EquippingService {
       const weekend =
         network === 'MENS' ? weekends.mens : network === 'WOMENS' ? weekends.womens : null;
       const age = birthDate !== null && weekend !== null ? ageOn(birthDate, weekend) : null;
+      // **An archived or merged Person acquires no new live relationship** (sections 3 and 6),
+      // so a registration made while they were current enrols or moves nobody once they are
+      // not. Archiving closes their open registration (section 29), so this is the backstop.
+      const decision = decisions.get(id);
       const blocked =
-        birthDate === null
-          ? 'no birthday recorded'
-          : weekend === null
-            ? 'no Network, so no Encounter weekend'
-            : age! < ENCOUNTER_MINIMUM_AGE
-              ? `${age} on ${weekend}, under ${ENCOUNTER_MINIMUM_AGE} for the Encounter`
-              : null;
+        decision === undefined || decision.mergedIntoId !== null
+          ? 'merged into another record'
+          : decision.isArchived
+            ? 'archived'
+            : birthDate === null
+              ? 'no birthday recorded'
+              : weekend === null
+                ? 'no Network, so no Encounter weekend'
+                : age! < ENCOUNTER_MINIMUM_AGE
+                  ? `${age} on ${weekend}, under ${ENCOUNTER_MINIMUM_AGE} for the Encounter`
+                  : null;
       byPerson.set(id, { birthDate, age, blocked });
     }
     return { weekends, byPerson };

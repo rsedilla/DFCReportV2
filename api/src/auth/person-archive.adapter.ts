@@ -23,7 +23,11 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
   async accountOfWithin(
     executor: Transaction<Database>,
     personId: string,
-  ): Promise<{ id: string; status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED' } | null> {
+  ): Promise<{
+    id: string;
+    status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
+    equipper: boolean;
+  } | null> {
     // Locked, so a re-enable racing an archive or a merge waits for it and then sees the
     // Person it belongs to as that left it (decision 0408): a re-enable locks this same row
     // before checking the Person, so whichever comes second decides on what the first wrote.
@@ -34,7 +38,19 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
       .forNoKeyUpdate()
       .executeTakeFirst();
 
-    return account ?? null;
+    if (account === undefined) {
+      return null;
+    }
+
+    const equipper = await executor
+      .selectFrom('account_roles')
+      .select('id')
+      .where('account_id', '=', account.id)
+      .where('role', '=', 'EQUIPPER')
+      .where('revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    return { ...account, equipper: equipper !== undefined };
   }
 
   async disableWithin(

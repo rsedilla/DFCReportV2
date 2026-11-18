@@ -60,6 +60,28 @@ export interface ArchiveCellsPort {
   >;
 }
 
+export const ARCHIVE_EQUIPPING_PORT = Symbol('ARCHIVE_EQUIPPING_PORT');
+
+/**
+ * What archiving and merging a Person ask of `equipping` (section 29, decision 0499), which
+ * imports `PeopleModule` and so is reached by a port, as `cells` is.
+ */
+export interface ArchiveEquippingPort {
+  /**
+   * Ends the person's open class place with `ARCHIVED` and then cancels their open
+   * registration with the reason "Archived", inside the archive's transaction, auditing each.
+   * Nothing is deleted. Answers how many of each it closed.
+   */
+  closeOpenWithin(
+    executor: Transaction<Database>,
+    personId: string,
+    actorAccountId: string,
+  ): Promise<{ registrations: number; enrollments: number }>;
+
+  /** How many open (not cancelled) registrations the person holds, for the merge refusal. */
+  openRegistrationsOfWithin(executor: Transaction<Database>, personId: string): Promise<number>;
+}
+
 export const ARCHIVE_ACCOUNTS_PORT = Symbol('ARCHIVE_ACCOUNTS_PORT');
 
 export interface ArchiveAccountsPort {
@@ -67,7 +89,12 @@ export interface ArchiveAccountsPort {
   accountOfWithin(
     executor: Transaction<Database>,
     personId: string,
-  ): Promise<{ id: string; status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED' } | null>;
+  ): Promise<{
+    id: string;
+    status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
+    /** Holds a live `EQUIPPER` role: archiving the record disables it (decision 0499). */
+    equipper: boolean;
+  } | null>;
 
   /**
    * Disables the account inside the caller's transaction: every session and every link ends

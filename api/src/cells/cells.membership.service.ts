@@ -190,10 +190,10 @@ export class CellsMembershipService {
         );
       }
 
-      await this.authorization.assertNoNetworkAdminWithin(
+      await this.authorization.assertOutsideTreeAccountWithin(
         trx,
         [personId],
-        'That person is a Network Admin, who belongs to no Cell (SKILL.md section 7).',
+        'That person holds a Network Admin or Equipping account, which belongs to no Cell (SKILL.md sections 7 and 29).',
       );
 
       if (person.isArchived) {

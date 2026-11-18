@@ -23,10 +23,22 @@ a graduation from a posted final grade is a later ruling.
 holds `equipping.manage` at Whole Church (the owner chose "Equipper Admin" and "Equipper";
 this ruling builds the Equipper, and the Equipper Admin follows with posting grades). The
 Admin holds it too, by default ("the admin sees everything"). It is held alone, as
-`NETWORK_ADMIN` is: the owner chose that an Equipper who also leads keeps two accounts, "two
-emails tied to the same person", and until the rule that one Person has one account
-(Section 6) is changed for that, an Equipper is a Person with no other account. The account
-shows the person's real name with "Equipping account" under it, never a second name.
+`NETWORK_ADMIN` is. The account shows the person's real name with "Equipping account" under
+it, never a second name. It signs in with the second step ("the Equipping account gets the
+second sign-in step", 2026-11-17) and its session ends seven days after sign-in, as an
+Admin's does ("7 days", 2026-11-18).
+
+**3a. The Equipping account is a Person record of its own, in no count of people** (owner,
+2026-11-18: "can we decide two different person instead so it will not be confusing?" and
+"the equipping account is not count of people"). This replaces the choice of 2026-11-17, two
+emails tied to the same Person, which Section 6's one account per Person forbade. The Admin
+creates the record and the account together, by its own form, as a Network Admin's are
+(decision 0469). Like a Network Admin's record it is outside the pastoral tree and the Cells,
+has no disciples and no DCC line, and is in no count of people (decision 0339); a Network Admin
+reads it and never changes it. A leader who also runs the school therefore has two records;
+the duplicate check names one to the other when the Equipping record is made. Archiving the
+Equipping record disables its account; archiving their own record does not touch it, and the
+Admin disables it separately.
 
 **4. Its screens are the steps, in the sidebar.** An Equipper's sidebar is `Registration` and
 `Enrollment`, the six steps' first two in their order, and nothing else. The Admin has one
@@ -90,7 +102,17 @@ things that are never overridden:
 
 One class per person per level per term. A person is moved to another class of the same
 level and term, or withdrawn with a reason; an enrollment that ends is kept, with when and
-why it ended.
+why it ended. A move keeps the registration, so what later steps record carries with it
+("Move (keeps grades)", 2026-11-17).
+
+**12. Archiving and merging** (2026-11-18). The owner was told that, unless they said
+otherwise, these would follow the recommendation shown, and answered the session question
+alone; they are recorded here as that recommendation, and the owner may still change them.
+Archiving a Person ends their open class place (`ARCHIVED`) and cancels their registration
+with the reason "Archived", keeping both. Enrolling and moving refuse an archived or merged
+Person. A merge is refused while the duplicate holds an open registration. Each person the
+Equipper opens on the registration form is recorded for the Admin as a full-record read is
+(decision 0414).
 
 ## Why
 
@@ -101,8 +123,6 @@ drift apart.
 
 ## What it does not settle
 
-- The two-account rule for a leader who is also an Equipper (Section 6 says one Person has one
-  account, and `accounts.person_id` is unique).
 - The Equipper Admin, Faculty, make-up lessons, weekly grades, final grades and posting them.
 - What "Regular" means beyond Sections 9 and 12, and whether to add "attended recently".
 - The Encounter as its own registration after Life Class, which would replace decision 0295.

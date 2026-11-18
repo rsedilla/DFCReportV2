@@ -198,6 +198,21 @@ export async function createPerson(
   });
 }
 
+/**
+ * The one form giving an Equipping account (section 29, decision 0499): a Person record of its
+ * own, outside the tree and in no count of people, created with its account.
+ */
+export async function createEquipper(
+  input: Omit<PersonInput, 'pastoral_leader_id'> & { email: string },
+  idempotencyKey: string,
+): Promise<{ id: string; person_id: string }> {
+  return authenticatedRequest<{ id: string; person_id: string }>('/api/v1/accounts/equipper', {
+    method: 'POST',
+    body: input,
+    idempotencyKey,
+  });
+}
+
 /** The one form giving a Network Admin account (section 7, decision 0469). */
 export async function createNetworkAdmin(
   input: Omit<PersonInput, 'pastoral_leader_id'> & { email: string },

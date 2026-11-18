@@ -489,10 +489,11 @@ export class AuthorizationService {
   }
 
   /**
-   * Refuses a Person holding `NETWORK_ADMIN` a place in the tree or a Cell (section 7,
-   * decision 0469). `message` says what was being done, since the callers differ.
+   * Refuses a Person holding `NETWORK_ADMIN` (section 7, decision 0469) or `EQUIPPER` (section
+   * 29, decision 0499) a place in the tree or a Cell: each such account sits on a Person record
+   * of its own, outside the tree. `message` says what was being done, since the callers differ.
    */
-  async assertNoNetworkAdminWithin(
+  async assertOutsideTreeAccountWithin(
     executor: Db,
     personIds: readonly string[],
     message: string,
@@ -508,7 +509,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.person_id')
       .where('accounts.person_id', 'in', [...personIds])
-      .where('account_roles.role', '=', 'NETWORK_ADMIN')
+      .where('account_roles.role', 'in', ['NETWORK_ADMIN', 'EQUIPPER'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 

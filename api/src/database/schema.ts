@@ -984,7 +984,7 @@ export interface EquippingEnrollmentsTable {
   started_by: string;
   ended_at: Date | null;
   ended_by: string | null;
-  end_reason: 'MOVED' | 'WITHDRAWN' | null;
+  end_reason: 'MOVED' | 'WITHDRAWN' | 'ARCHIVED' | null;
   withdraw_note: string | null;
 }
 

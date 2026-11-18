@@ -12,6 +12,7 @@ import { TrainingModule } from '../training/training.module';
 
 import { EquippingController } from './equipping.controller';
 import { EquippingService } from './equipping.service';
+import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
 
 /**
  * `equipping` owns `equipping_classes`, `equipping_registrations` and
@@ -31,6 +32,7 @@ import { EquippingService } from './equipping.service';
     AuditModule,
   ],
   controllers: [EquippingController],
-  providers: [EquippingService],
+  providers: [EquippingService, PersonArchiveEquippingAdapter],
+  exports: [PersonArchiveEquippingAdapter],
 })
 export class EquippingModule {}

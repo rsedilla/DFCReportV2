@@ -4,7 +4,7 @@
 -- Equipping: registration and enrollment for Life Class (SKILL.md section 29,
 -- decision 0499).
 --
--- Additive: three new tables owned by the `equipping` module, and three indexes on
+-- Additive: three new tables owned by the `equipping` module, and four indexes on
 -- `account_roles` that refuse nothing existing, since nobody holds EQUIPPER when
 -- this runs. Nothing existing is read or rewritten.
 --
@@ -111,7 +111,8 @@ CREATE TABLE equipping_enrollments (
   started_by uuid NOT NULL REFERENCES accounts (id),
   ended_at timestamptz,
   ended_by uuid REFERENCES accounts (id),
-  end_reason text CONSTRAINT equipping_enrollments_end_reason CHECK (end_reason IN ('MOVED', 'WITHDRAWN')),
+  -- ARCHIVED: ended because the person was archived (section 29, decision 0499).
+  end_reason text CONSTRAINT equipping_enrollments_end_reason CHECK (end_reason IN ('MOVED', 'WITHDRAWN', 'ARCHIVED')),
   withdraw_note text,
   CONSTRAINT equipping_enrollments_end_whole CHECK (
     (ended_at IS NULL AND ended_by IS NULL AND end_reason IS NULL AND withdraw_note IS NULL)
@@ -152,6 +153,74 @@ CREATE TRIGGER equipping_enrollments_match_class
   BEFORE INSERT OR UPDATE OF registration_id, class_id ON equipping_enrollments
   FOR EACH ROW EXECUTE FUNCTION assert_enrollment_matches_class();
 
+-- **A row's history is not rewritten either** (decision 0499, point 9). A registration
+-- keeps the person, level and term it was made for, and a cancellation stands once made;
+-- an enrollment keeps its registration and class, and an ending stands once made. Undoing
+-- a cancellation or an ending in place would erase it as a DELETE would, one column over.
+-- A registration is not cancelled while it is in a class, and nobody is placed in a class
+-- on a cancelled registration: the service refuses both first, and these refuse the rest.
+CREATE FUNCTION assert_registration_history_kept() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.person_id <> OLD.person_id OR NEW.level <> OLD.level
+     OR NEW.term_year <> OLD.term_year OR NEW.term_number <> OLD.term_number
+     OR NEW.registered_at <> OLD.registered_at OR NEW.registered_by <> OLD.registered_by THEN
+    RAISE EXCEPTION 'a registration keeps the person, level and term it was made for (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF OLD.cancelled_at IS NOT NULL AND (
+       NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
+       OR NEW.cancelled_by IS DISTINCT FROM OLD.cancelled_by
+       OR NEW.cancel_reason IS DISTINCT FROM OLD.cancel_reason) THEN
+    RAISE EXCEPTION 'a cancelled registration stays cancelled (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF OLD.cancelled_at IS NULL AND NEW.cancelled_at IS NOT NULL AND EXISTS (
+       SELECT 1 FROM equipping_enrollments e
+        WHERE e.registration_id = NEW.id AND e.ended_at IS NULL) THEN
+    RAISE EXCEPTION 'a registration in a class is not cancelled until the enrollment ends (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER equipping_registrations_history_kept
+  BEFORE UPDATE ON equipping_registrations
+  FOR EACH ROW EXECUTE FUNCTION assert_registration_history_kept();
+
+CREATE FUNCTION assert_enrollment_history_kept() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.registration_id <> OLD.registration_id OR NEW.class_id <> OLD.class_id
+       OR NEW.started_at <> OLD.started_at OR NEW.started_by <> OLD.started_by THEN
+      RAISE EXCEPTION 'an enrollment keeps its registration and class (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.ended_at IS NOT NULL AND (
+         NEW.ended_at IS DISTINCT FROM OLD.ended_at
+         OR NEW.ended_by IS DISTINCT FROM OLD.ended_by
+         OR NEW.end_reason IS DISTINCT FROM OLD.end_reason
+         OR NEW.withdraw_note IS DISTINCT FROM OLD.withdraw_note) THEN
+      RAISE EXCEPTION 'an ended enrollment stays ended (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW.ended_at IS NULL AND EXISTS (
+       SELECT 1 FROM equipping_registrations r
+        WHERE r.id = NEW.registration_id AND r.cancelled_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'nobody is placed in a class on a cancelled registration (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER equipping_enrollments_history_kept
+  BEFORE INSERT OR UPDATE ON equipping_enrollments
+  FOR EACH ROW EXECUTE FUNCTION assert_enrollment_history_kept();
+
 -- Nothing is ever deleted (point 9).
 CREATE FUNCTION refuse_delete_from_equipping() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -182,6 +251,10 @@ DROP TRIGGER equipping_enrollments_never_deleted ON equipping_enrollments;
 DROP TRIGGER equipping_registrations_never_deleted ON equipping_registrations;
 DROP TRIGGER equipping_classes_never_deleted ON equipping_classes;
 DROP FUNCTION refuse_delete_from_equipping();
+DROP TRIGGER equipping_enrollments_history_kept ON equipping_enrollments;
+DROP FUNCTION assert_enrollment_history_kept();
+DROP TRIGGER equipping_registrations_history_kept ON equipping_registrations;
+DROP FUNCTION assert_registration_history_kept();
 DROP TRIGGER equipping_enrollments_match_class ON equipping_enrollments;
 DROP FUNCTION assert_enrollment_matches_class();
 DROP TABLE equipping_enrollments;

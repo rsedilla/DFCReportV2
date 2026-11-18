@@ -167,7 +167,7 @@ export class AccountsRepository {
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
       .where('account.person_id', 'in', [...personIds])
-      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN'])
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
       .where('role.revoked_at', 'is', null)
       .execute();
 
@@ -191,8 +191,8 @@ export class AccountsRepository {
   }
 
   /**
-   * `AdminAccountsPort`. Every Person holding an `ADMIN` or `NETWORK_ADMIN` role at `at`
-   * (decisions 0339 and 0469).
+   * `AdminAccountsPort`. Every Person holding an `ADMIN`, `NETWORK_ADMIN` or `EQUIPPER` role at `at`
+   * (decisions 0339, 0469 and 0499).
    */
   async personsHoldingAdminAtWithin(
     executor: Db | Transaction<Database>,
@@ -202,7 +202,7 @@ export class AccountsRepository {
       .selectFrom('accounts as account')
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
-      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN'])
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
       .where('role.granted_at', '<=', at)
       .where((eb) => eb.or([eb('role.revoked_at', 'is', null), eb('role.revoked_at', '>', at)]))
       .execute();

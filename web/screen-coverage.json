@@ -254,6 +254,10 @@
       "screen": "web/app/(app)/people/new/page.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/equipper",
+      "screen": "web/app/(app)/people/new/page.tsx"
+    },
+    {
       "route": "POST /api/v1/accounts/:id/activation-email",
       "screen": "web/components/person-account.tsx"
     },

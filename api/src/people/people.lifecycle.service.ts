@@ -18,8 +18,10 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   ARCHIVE_ACCOUNTS_PORT,
   ARCHIVE_CELLS_PORT,
+  ARCHIVE_EQUIPPING_PORT,
   type ArchiveAccountsPort,
   type ArchiveCellsPort,
+  type ArchiveEquippingPort,
 } from './person-archive.ports';
 import { composeName } from './people.shared';
 
@@ -68,6 +70,7 @@ export class PeopleLifecycleService {
     private readonly idempotency: IdempotencyService,
     @Optional() @Inject(ARCHIVE_CELLS_PORT) private readonly cells?: ArchiveCellsPort,
     @Optional() @Inject(ARCHIVE_ACCOUNTS_PORT) private readonly accounts?: ArchiveAccountsPort,
+    @Optional() @Inject(ARCHIVE_EQUIPPING_PORT) private readonly equipping?: ArchiveEquippingPort,
   ) {}
 
   async archive(
@@ -76,7 +79,7 @@ export class PeopleLifecycleService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    const { cells, accounts } = this.ports();
+    const { cells, accounts, equipping } = this.ports();
     const note = input.note?.trim() === '' ? undefined : input.note?.trim();
 
     if (input.reason === 'OTHER' && note === undefined) {
@@ -200,7 +203,10 @@ export class PeopleLifecycleService {
       }
 
       const account = await accounts.accountOfWithin(trx, personId);
-      const asksAboutAccess = account !== null && account.status !== 'DISABLED';
+      // **An Equipping account is disabled with its record** (decision 0499): it is a record of
+      // its own, so archiving it means the account stops, and nobody is asked.
+      const equipperAccount = account !== null && account.equipper && account.status !== 'DISABLED';
+      const asksAboutAccess = account !== null && account.status !== 'DISABLED' && !equipperAccount;
 
       if (asksAboutAccess && input.accountAccess === undefined) {
         throw new ValidationFailedError(
@@ -235,7 +241,13 @@ export class PeopleLifecycleService {
 
       const ended = await this.hierarchy.endAssignmentWithin(trx, personId, at);
       const membership = await cells.endMembershipWithin(trx, personId, at, actor.accountId);
-      const accountAccess = asksAboutAccess ? (input.accountAccess ?? null) : null;
+      // Their open place in the school closes with them (section 29, decision 0499).
+      await equipping.closeOpenWithin(trx, personId, actor.accountId);
+      const accountAccess = equipperAccount
+        ? 'DISABLE'
+        : asksAboutAccess
+          ? (input.accountAccess ?? null)
+          : null;
 
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
@@ -473,14 +485,18 @@ export class PeopleLifecycleService {
   }
 
   /** Refuses rather than half-archiving when a port is not bound. */
-  private ports(): { cells: ArchiveCellsPort; accounts: ArchiveAccountsPort } {
-    if (this.cells === undefined || this.accounts === undefined) {
+  private ports(): {
+    cells: ArchiveCellsPort;
+    accounts: ArchiveAccountsPort;
+    equipping: ArchiveEquippingPort;
+  } {
+    if (this.cells === undefined || this.accounts === undefined || this.equipping === undefined) {
       throw new InvariantViolationError(
         'This deployment cannot archive a person: a port it needs is not bound.',
         {},
       );
     }
 
-    return { cells: this.cells, accounts: this.accounts };
+    return { cells: this.cells, accounts: this.accounts, equipping: this.equipping };
   }
 }

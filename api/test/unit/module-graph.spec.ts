@@ -111,6 +111,11 @@ describe('the application module graph (section 2)', () => {
       // accounts halves, and the Absent 3+ Months list.
       ['ARCHIVE_CELLS_PORT', moduleRef.get(PeopleLifecycleService, { strict: false }), 'cells'],
       [
+        'ARCHIVE_EQUIPPING_PORT',
+        moduleRef.get(PeopleLifecycleService, { strict: false }),
+        'equipping',
+      ],
+      [
         'ARCHIVE_ACCOUNTS_PORT',
         moduleRef.get(PeopleLifecycleService, { strict: false }),
         'accounts',

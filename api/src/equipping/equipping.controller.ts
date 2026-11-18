@@ -18,6 +18,7 @@ import {
   CHURCH_WIDE_SEARCHES_PER_MINUTE,
 } from '../people/dto/people.dto';
 import { PeopleService } from '../people/people.service';
+import { PersonViewsService } from '../people/person-views.service';
 
 import {
   EnrollDto,
@@ -45,13 +46,14 @@ export class EquippingController {
   constructor(
     private readonly equipping: EquippingService,
     private readonly people: PeopleService,
+    private readonly views: PersonViewsService,
     @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
   ) {}
 
   /**
    * The person picker. **It searches the church, so it is bounded and recorded as a
    * church-wide search is** (section 8, decision 0303): three letters, a page of at most
-   * twenty, thirty a minute per account, each one audited. Five fields a row, the ones
+   * twenty, thirty a minute per account, each one audited. Four fields a row, the ones
    * section 8 publishes church-wide.
    */
   @Get('people')
@@ -84,8 +86,15 @@ export class EquippingController {
   @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
   async candidate(
     @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.equipping.candidate(id);
+    const candidate = await this.equipping.candidate(id);
+    // **Recorded as a full-record read is** (section 8, decision 0414): it carries the
+    // birthday and the attendance figures, so it counts toward the hour's alert to the Admin.
+    if (actor.personId !== null) {
+      await this.views.record(id, actor.personId);
+    }
+    return candidate;
   }
 
   /** The seasons a class names, read here so an Equipper needs no SUYNL capability. */

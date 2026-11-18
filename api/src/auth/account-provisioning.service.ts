@@ -49,9 +49,9 @@ const ACTIVATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
  * exceptions to the *qualification* rather than to the workflow: each still gets an
  * account, an activation email, and a password the holder sets.
  */
-// `EQUIPPER` (decision 0499) is qualified by nothing but being chosen: the Admin gives it to
-// a current Person, who holds no other account (section 6) and so no other role.
-const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER', 'EQUIPPER'];
+// `EQUIPPER` is not given here: an Equipping account comes with a Person record of its own,
+// outside the tree (decision 0499), from `provisionOutsideTree`, as `NETWORK_ADMIN` does.
+const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
 
 export interface ProvisionAccountInput {
   personId: string;
@@ -410,6 +410,28 @@ export class AccountProvisioningService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    return this.provisionOutsideTree('NETWORK_ADMIN', input, actor, claim);
+  }
+
+  /**
+   * Creates a Person and their `EQUIPPER` account together (section 29, decision 0499): an
+   * Equipping account is a Person record of its own, outside the tree and in no count of
+   * people, so a leader who also runs the school keeps their own record apart from it.
+   */
+  async provisionEquipper(
+    input: Omit<CreatePersonInput, 'placement'> & { email: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.provisionOutsideTree('EQUIPPER', input, actor, claim);
+  }
+
+  private async provisionOutsideTree(
+    role: 'NETWORK_ADMIN' | 'EQUIPPER',
+    input: Omit<CreatePersonInput, 'placement'> & { email: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
     const outcome = await this.db.transaction().execute(async (trx) => {
       const takenEmail = await trx
         .selectFrom('accounts')
@@ -441,7 +463,7 @@ export class AccountProvisioningService {
         .insertInto('account_roles')
         .values({
           account_id: account.id,
-          role: 'NETWORK_ADMIN',
+          role,
           senior_pastor_slot: null,
           granted_by: actor.accountId,
         })
@@ -466,7 +488,7 @@ export class AccountProvisioningService {
         action: 'role.granted',
         targetType: 'account',
         targetId: account.id,
-        after: { role: 'NETWORK_ADMIN', network: person.network },
+        after: { role, network: person.network },
       });
 
       const body = {
@@ -475,7 +497,7 @@ export class AccountProvisioningService {
         member_id: person.memberId,
         email: account.email,
         status: account.status,
-        role: 'NETWORK_ADMIN',
+        role,
         network: person.network,
       };
 

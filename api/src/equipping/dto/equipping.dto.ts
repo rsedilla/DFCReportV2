@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -97,6 +97,9 @@ export class RegisterDto extends EquippingTermDto {
 /** A reason, for cancelling a registration or withdrawing from a class (point 9). */
 export class ReasonDto {
   @IsString()
+  // Trimmed, then required to be non-empty: the column refuses a blank, and two spaces
+  // would otherwise reach it and answer 500 (section 22).
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsStorableText()
   @MinLength(1)
   @MaxLength(500)
@@ -106,6 +109,9 @@ export class ReasonDto {
 /** Opening a class (decision 0499, point 10). */
 export class OpenClassDto extends EquippingTermDto {
   @IsString()
+  // Trimmed, then required to be non-empty: the column refuses a blank, and two spaces
+  // would otherwise reach it and answer 500 (section 22).
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsStorableText()
   @MinLength(1)
   @MaxLength(80)

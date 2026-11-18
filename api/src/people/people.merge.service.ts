@@ -19,8 +19,10 @@ import { NetworksService } from '../networks/networks.service';
 import {
   ARCHIVE_ACCOUNTS_PORT,
   ARCHIVE_CELLS_PORT,
+  ARCHIVE_EQUIPPING_PORT,
   type ArchiveAccountsPort,
   type ArchiveCellsPort,
+  type ArchiveEquippingPort,
 } from './person-archive.ports';
 import { composeName } from './people.shared';
 
@@ -39,7 +41,8 @@ export interface MergeRefusal {
     | 'DIFFERENT_NETWORKS'
     | 'NETWORKS_DIFFERED'
     | 'LEADS_A_CELL'
-    | 'PASTORS_PEOPLE';
+    | 'PASTORS_PEOPLE'
+    | 'IN_THE_SCHOOL';
   message: string;
 }
 
@@ -81,6 +84,7 @@ export class PeopleMergeService {
     private readonly idempotency: IdempotencyService,
     @Optional() @Inject(ARCHIVE_CELLS_PORT) private readonly cells?: ArchiveCellsPort,
     @Optional() @Inject(ARCHIVE_ACCOUNTS_PORT) private readonly accounts?: ArchiveAccountsPort,
+    @Optional() @Inject(ARCHIVE_EQUIPPING_PORT) private readonly equipping?: ArchiveEquippingPort,
   ) {}
 
   /** What a merge of `duplicateId` into `keptId` would be refused for, now. Writes nothing. */
@@ -421,16 +425,30 @@ export class PeopleMergeService {
       });
     }
 
+    // Section 29 (decision 0499): a duplicate holding an open registration is not absorbed,
+    // or one human could hold two places in one level and term. The Equipper cancels it first.
+    const { equipping } = this.ports();
+    if ((await equipping.openRegistrationsOfWithin(executor, duplicate.id)) > 0) {
+      refusals.push({
+        code: 'IN_THE_SCHOOL',
+        message: `${duplicateName} is registered in Equipping. Cancel the registration first, then merge.`,
+      });
+    }
+
     return refusals;
   }
 
-  private ports(): { cells: ArchiveCellsPort; accounts: ArchiveAccountsPort } {
-    if (this.cells === undefined || this.accounts === undefined) {
+  private ports(): {
+    cells: ArchiveCellsPort;
+    accounts: ArchiveAccountsPort;
+    equipping: ArchiveEquippingPort;
+  } {
+    if (this.cells === undefined || this.accounts === undefined || this.equipping === undefined) {
       throw new InvariantViolationError(
         'This deployment cannot merge people: a port it needs is not bound.',
         {},
       );
     }
-    return { cells: this.cells, accounts: this.accounts };
+    return { cells: this.cells, accounts: this.accounts, equipping: this.equipping };
   }
 }

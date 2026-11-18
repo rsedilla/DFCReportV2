@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
+import { PeopleReadService } from '../../src/people/people.read.service';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
@@ -321,6 +322,111 @@ describe('Equipping (section 29, decision 0499)', () => {
           .values({ account_id: equipper.id, role: 'LEADER' })
           .execute(),
       ).rejects.toThrow(/account_roles_equipper_not_with_leader/);
+    });
+  });
+  describe('the Equipping account and the rest of the church (decision 0499, 18 Nov)', () => {
+    const form = (overrides: Record<string, unknown> = {}) => ({
+      first_name: 'Elena',
+      last_name: 'Fixtureson',
+      birth_date_not_given: true,
+      sex: 'FEMALE',
+      civil_status: 'SINGLE',
+      mobile_number_not_given: true,
+      email: 'elena.equipping@example.test',
+      ...overrides,
+    });
+
+    const createEquipper = (as: TestAccount, body: object) =>
+      request(app.getHttpServer())
+        .post('/api/v1/accounts/equipper')
+        .set('Authorization', `Bearer ${as.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(body);
+
+    it('gives an Equipping account only with a record of its own, outside the tree', async () => {
+      const made = await createEquipper(admin, form()).expect(201);
+      expect(made.body.role).toBe('EQUIPPER');
+
+      // In no count of people: outside the tree, as a Network Admin's record is.
+      const outside = await app
+        .get(PeopleReadService)
+        .outsideTreeAt(db, new Date(Date.now() + 1000));
+      expect(outside.has(made.body.person_id)).toBe(true);
+
+      // The ordinary form no longer gives the role to a Person who already has a record.
+      await request(app.getHttpServer())
+        .post('/api/v1/accounts')
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ person_id: ben.id, email: 'ben.equipping@example.test', role: 'EQUIPPER' })
+        .expect(422);
+    });
+
+    it('refuses a Network Admin the school and the Equipping account', async () => {
+      const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
+      const networkAdmin = await createAccount(app, db, { person: nora, roles: ['NETWORK_ADMIN'] });
+
+      await get(networkAdmin, 'classes?level=LIFE_CLASS&term_year=2027&term_number=1').expect(403);
+      await createEquipper(networkAdmin, form()).expect(403);
+    });
+
+    it("closes an archived person's registration and class place, keeping both", async () => {
+      const registered = await register(ben).expect(201);
+      const cls = await openClass().expect(201);
+      await post(equipper, `classes/${cls.body.id}/enrollments`, {
+        registration_ids: [registered.body.id],
+      }).expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/people/${ben.id}/archive`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ reason: 'MOVED_AWAY' })
+        .expect(200);
+
+      const registration = await db
+        .selectFrom('equipping_registrations')
+        .select(['cancelled_at', 'cancel_reason'])
+        .where('id', '=', registered.body.id)
+        .executeTakeFirstOrThrow();
+      expect(registration.cancel_reason).toBe('Archived');
+      const enrollment = await db
+        .selectFrom('equipping_enrollments')
+        .select(['ended_at', 'end_reason'])
+        .where('registration_id', '=', registered.body.id)
+        .executeTakeFirstOrThrow();
+      expect(enrollment.end_reason).toBe('ARCHIVED');
+    });
+
+    it('refuses to merge away a record that is registered', async () => {
+      await register(ben).expect(201);
+
+      const preview = await request(app.getHttpServer())
+        .get(`/api/v1/people/${dino.id}/merge-preview?duplicate_id=${ben.id}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+      expect(
+        (preview.body.refusals as { code: string }[]).map((refusal) => refusal.code),
+      ).toContain('IN_THE_SCHOOL');
+    });
+
+    it('records each person the Equipper opens, as a full-record read is', async () => {
+      await get(equipper, `people/${ben.id}`).expect(200);
+
+      const views = await db
+        .selectFrom('person_views')
+        .select('viewer_person_id')
+        .where('person_id', '=', ben.id)
+        .execute();
+      expect(views).toHaveLength(1);
+    });
+
+    it('refuses a reason of spaces at the edge rather than at the column', async () => {
+      const registered = await register(ben).expect(201);
+      const refused = await post(equipper, `registrations/${registered.body.id}/cancel`, {
+        reason: '   ',
+      }).expect(422);
+      expect(refused.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 });
