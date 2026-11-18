@@ -82,9 +82,11 @@ const COLUMN_SHORT: Partial<Record<keyof ChurchCountFigures, string>> = {
   youth: 'Y',
   young_pro: 'YP',
   couple: 'C',
-  // Not shortened, only free to break as *Mem-bers* where the narrowest phone needs it (decision
+  // Not shortened, only free to break as *Mem-bers* and *Lead-ers* where the narrowest phone needs it (decision
   // 0498); a screen reader hears *Cell Members*.
   cell_members: 'Cell Mem­bers',
+  // The same for *Cell Leaders*, which is a pixel or two too wide at 320px in some fonts.
+  leading_a_cell: 'Cell Lead­ers',
 };
 
 /** What the short headings stand for, under a table that uses them (decision 0451). */
