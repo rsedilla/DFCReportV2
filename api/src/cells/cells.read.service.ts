@@ -1354,7 +1354,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    *
    * For the Network screen's *Cell Leaders beneath* (decision 0252), asked of the branch's
    * people only (checklist row perf-network-cell-figures). `null` is everyone, for the
-   * Equipping Teacher search (decision 0499, point 13), which picks among every current
+   * Equipping Teacher search (decision 0499, point 10), which picks among every current
    * Cell Leader of the church; an empty array is nobody, as everywhere else.
    */
   async currentCellLeaderIds(

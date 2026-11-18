@@ -162,7 +162,7 @@ export class EquippingSearchDto {
   @MaxLength(100)
   q!: string;
 
-  /** Only who may teach a class: a current Cell Leader in the tree (decision 0499, point 13). */
+  /** Only who may teach a class: a current Cell Leader in the tree (decision 0499, point 10). */
   @IsOptional()
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()

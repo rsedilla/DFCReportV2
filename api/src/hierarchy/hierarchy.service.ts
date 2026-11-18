@@ -1316,19 +1316,10 @@ export class HierarchyService {
   }
 
   /**
-   * Each person's current direct leader, by identifier, for a page of people at once.
-   *
-   * A person with no open assignment, or a root, is absent from the map. Identifiers only,
-   * so the caller names the leaders from its own table rather than this module joining
-   * `persons` a third time (section 2).
-   *
-   * `executor` lets an add read it inside its own transaction, after its lock (decision 0401).
-   */
-  /**
    * Which of these people hold an open pastoral assignment now: in the tree, a Network root
    * included (its row carries a null `leader_id`, section 5). An administrator outside the
    * tree, and a leader whose assignment has ended (decision 0232), hold none. For the
-   * Equipping Teacher (decision 0499, point 13), who must be a Cell Leader in the tree.
+   * Equipping Teacher (decision 0499, point 10), who must be a Cell Leader in the tree.
    */
   async withOpenAssignment(
     personIds: readonly string[],
@@ -1346,6 +1337,15 @@ export class HierarchyService {
     return new Set(rows.map((row) => row.person_id));
   }
 
+  /**
+   * Each person's current direct leader, by identifier, for a page of people at once.
+   *
+   * A person with no open assignment, or a root, is absent from the map. Identifiers only,
+   * so the caller names the leaders from its own table rather than this module joining
+   * `persons` a third time (section 2).
+   *
+   * `executor` lets an add read it inside its own transaction, after its lock (decision 0401).
+   */
   async directLeaderIdsOf(
     personIds: readonly string[],
     executor: Db = this.db,

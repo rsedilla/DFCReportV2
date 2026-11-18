@@ -94,9 +94,9 @@ tree** (owner, 2026-11-18: "yes a teacher must be a cell leader in the tree stru
 the Stop Condition `architecture-guardian`'s fifth review raised, that opening a class accepted
 by its identifier a Teacher the picker never offered): an open leadership of an `ACTIVE` Cell
 (Section 11) and an open pastoral assignment, a Network root's included (Section 5). Opening a
-class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them. An
-administrator outside the tree, a Network Admin and the Equipping record lead no Cell, so none
-of them may teach; the Equipping record answers `NOT_FOUND`, as below.
+class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them. A
+Network Admin and the Equipping record lead no Cell, and an administrator outside the tree holds
+no assignment, so none of them may teach; the Equipping record answers `NOT_FOUND`, as below.
 
 **11. Enrolling takes several registered people into one class at once**, and checks two
 things that are never overridden:

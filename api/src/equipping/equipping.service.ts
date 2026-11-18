@@ -220,7 +220,7 @@ export class EquippingService {
   /**
    * The person picker: current people by name, church-wide, four fields each (section 8).
    * `teachers` narrows it to who may teach a class, a current Cell Leader in the tree (point
-   * 13), in SQL so a page is never spent on rows about to be dropped.
+   * 10), in SQL so a page is never spent on rows about to be dropped.
    */
   async search(term: string, limit: number, teachers = false): Promise<Record<string, unknown>[]> {
     // An Equipping record is never somebody signed up for a class, for the Admin too (decision
@@ -638,8 +638,6 @@ export class EquippingService {
     }
 
     return this.write(async (trx) => {
-      // Read in the transaction that writes, so the answer is this statement's rather than
-      // one taken before the write began.
       const mayTeach = await this.mayTeachWithin(trx, [canonicalId(teacher.id)]);
       if (!mayTeach.has(canonicalId(teacher.id))) {
         throw new InvariantViolationError(
@@ -1021,12 +1019,13 @@ export class EquippingService {
   }
 
   /**
-   * **Who may teach a class: a current Cell Leader in the tree** (decision 0499, point 13,
+   * **Who may teach a class: a current Cell Leader in the tree** (decision 0499, point 10,
    * owner 2026-11-18: "a teacher must be a cell leader in the tree structure"). A current
    * Cell Leader holds an open leadership of an `ACTIVE` Cell (section 11), and being in the
    * tree is holding an open pastoral assignment, a Network root's included (section 5). An
-   * Equipping record, a Network Admin and an administrator outside the tree lead no Cell, so
-   * they never qualify. `null` asks of the whole church, for the Teacher search.
+   * Equipping record and a Network Admin lead no Cell; an administrator outside the tree may
+   * lead one and holds no assignment. None of them qualifies. `null` asks of the whole
+   * church, for the Teacher search.
    */
   private async mayTeachWithin(
     executor: Db | Transaction<Database>,
