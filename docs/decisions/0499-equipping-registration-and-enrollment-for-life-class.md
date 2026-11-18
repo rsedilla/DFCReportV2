@@ -115,11 +115,12 @@ what it counted (owner, 2026-11-18, from screenshots of both); the form opening 
 it was built.
 
 Those who can be enrolled are listed first, with the Enroll button under them, and those who
-cannot after, under *Can't enroll yet*, whose reason says what is missing ("14 on 2026-12-04,
-the Encounter weekend. Must be 15."), naming somebody to ask only where they can mend it: a
-missing birthday reads "Ask their leader to add it." when the person has a leader (third
-sentence corrected after `architecture-guardian`'s fifth review, which found the first wording
-promising a leader would mend an age or an archived record). Where more than one can be enrolled, one control ticks them all, and a saved Enroll
+cannot after, under *Can't enroll yet*, whose reason says what is missing ("No birthday
+recorded."; "14 on 2026-12-04, the Encounter weekend. Must be 15.") and names nobody to ask:
+the screen shown to the owner said "Ask their leader to add it." and its heading that the
+leader fixes what is missing, and `architecture-guardian`'s fifth and sixth reviews found
+both untrue, a leader being unable to mend an age, and a direct leader who is a Senior Pastor
+or has no account being unable to add a birthday. Where more than one can be enrolled, one control ticks them all, and a saved Enroll
 says back whom it placed ("Enrolled in Life Class A: …"). The owner chose this on 2026-11-18
 from screenshots of the screen as built beside the proposal; the two checks are unchanged.
 

@@ -572,17 +572,13 @@ type ReadyRow = ClassDetail['ready'][number];
 
 /**
  * Why a person cannot be enrolled, said as what is missing. The API's reason is the source;
- * this only words it for the Equipper (owner, 2026-11-18). Somebody to ask is named only
- * where they can mend it: a missing birthday, by the person's leader, who may add one
- * (section 3). Age, archiving and a merge are mended by nobody here.
+ * this only words it for the Equipper (owner, 2026-11-18). It names nobody to ask: who may
+ * add a birthday depends on capabilities this screen does not read (sections 3 and 7).
  */
-function blockedText(blocked: string, leaderName: string | null): string {
+function blockedText(blocked: string): string {
   const age = /^(\d+) on (\S+), under (\d+) for the Encounter$/.exec(blocked);
   if (age) {
     return `${age[1]} on ${age[2]}, the Encounter weekend. Must be ${age[3]}.`;
-  }
-  if (blocked === 'no birthday recorded') {
-    return leaderName === null ? 'No birthday recorded.' : 'No birthday recorded. Ask their leader to add it.';
   }
   return `${blocked.charAt(0).toUpperCase()}${blocked.slice(1)}.`;
 }
@@ -633,7 +629,7 @@ function ReadyRows({
               <td className="px-3 py-3 align-top">
                 {row.person.full_name}
                 {row.blocked ? (
-                  <span className="text-field-invalid block text-sm">{blockedText(row.blocked, row.leader_name)}</span>
+                  <span className="text-field-invalid block text-sm">{blockedText(row.blocked)}</span>
                 ) : null}
               </td>
               <td className="px-3 py-3 align-top">{row.leader_name ?? 'No leader yet'}</td>
@@ -653,7 +649,7 @@ function ReadyRows({
             ) : (
               <>
                 <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
-                <p className="text-field-invalid text-sm">{blockedText(row.blocked, row.leader_name)}</p>
+                <p className="text-field-invalid text-sm">{blockedText(row.blocked)}</p>
               </>
             )}
             <p className="text-muted pb-1 text-sm">
