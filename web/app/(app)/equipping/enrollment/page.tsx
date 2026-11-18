@@ -30,6 +30,7 @@ import {
   type Term,
 } from '@/lib/equipping';
 import { describeFailure } from '@/lib/messages';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { cn } from '@/lib/utils';
 
 /**
@@ -116,18 +117,21 @@ function ClassView({
     queryFn: ({ signal }) => getClass(classId, signal),
   });
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
   const [moving, setMoving] = useState<ClassDetail['enrolled'][number] | null>(null);
   const [withdrawing, setWithdrawing] = useState<ClassDetail['enrolled'][number] | null>(null);
   // Who the last Enroll placed, said back once it has saved (owner, 2026-11-18).
   const [justEnrolled, setJustEnrolled] = useState<string[]>([]);
 
   const save = useMutation({
-    mutationFn: (names: string[]) => enroll(classId, [...ticked], key).then(() => names),
+    mutationFn: (names: string[]) => {
+      const ids = [...ticked].sort();
+      return enroll(classId, ids, idempotencyKeyFor('equipping-enroll', writeKey, classId, ids)).then(() => names);
+    },
     onSuccess: async (names) => {
       setJustEnrolled(names);
       setTicked(new Set());
-      setKey(crypto.randomUUID());
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
     },
   });
@@ -220,9 +224,7 @@ function ClassView({
             <>
               <h3 className="mt-6 font-semibold">
                 Can&rsquo;t enroll yet{' '}
-                <span className="text-muted text-sm font-normal">
-                  · {waiting.length} · their leader fixes what is missing
-                </span>
+                <span className="text-muted text-sm font-normal">· {waiting.length}</span>
               </h3>
               <ReadyRows rows={waiting} caption={`Can't enroll in ${cls.name} yet`} ticked={ticked} onTick={tick} />
             </>
@@ -286,11 +288,16 @@ function MoveDialog({
   const queryClient = useQueryClient();
   const descriptionId = useId();
   const [to, setTo] = useState('');
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
   const move = useMutation({
-    mutationFn: () => moveEnrollment(enrolled!.enrollment_id, to, key),
+    mutationFn: () =>
+      moveEnrollment(
+        enrolled!.enrollment_id,
+        to,
+        idempotencyKeyFor('equipping-move', writeKey, enrolled!.enrollment_id, to),
+      ),
     onSuccess: async () => {
-      setKey(crypto.randomUUID());
+      renewWriteKey();
       setTo('');
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
       onClose();
@@ -350,11 +357,16 @@ function WithdrawDialog({
   const queryClient = useQueryClient();
   const descriptionId = useId();
   const [reason, setReason] = useState('');
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
   const withdraw = useMutation({
-    mutationFn: () => withdrawEnrollment(enrolled!.enrollment_id, reason.trim(), key),
+    mutationFn: () =>
+      withdrawEnrollment(
+        enrolled!.enrollment_id,
+        reason.trim(),
+        idempotencyKeyFor('equipping-withdraw', writeKey, enrolled!.enrollment_id, reason.trim()),
+      ),
     onSuccess: async () => {
-      setKey(crypto.randomUUID());
+      renewWriteKey();
       setReason('');
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
       onClose();
@@ -428,7 +440,7 @@ function OpenClassDialog({
   const [teacherQuery, setTeacherQuery] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
   const [teacher, setTeacher] = useState<FoundPerson | null>(null);
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
   const [showErrors, setShowErrors] = useState(false);
 
   const found = useQuery({
@@ -437,22 +449,21 @@ function OpenClassDialog({
     enabled: searched !== null,
   });
   const save = useMutation({
-    mutationFn: () =>
-      openClass(
-        {
-          ...term,
-          name: name.trim(),
-          day_of_week: Number(day),
-          time_of_day: time,
-          ...(place.trim() ? { place: place.trim() } : {}),
-          first_lesson_on: firstLesson,
-          teacher_person_id: teacher!.id,
-          encounter_season_id: season,
-        },
-        key,
-      ),
+    mutationFn: () => {
+      const body = {
+        ...term,
+        name: name.trim(),
+        day_of_week: Number(day),
+        time_of_day: time,
+        ...(place.trim() ? { place: place.trim() } : {}),
+        first_lesson_on: firstLesson,
+        teacher_person_id: teacher!.id,
+        encounter_season_id: season,
+      };
+      return openClass(body, idempotencyKeyFor('equipping-open-class', writeKey, body));
+    },
     onSuccess: async (created) => {
-      setKey(crypto.randomUUID());
+      renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['equipping', 'classes'] });
       onOpened(created.id);
       onClose();
@@ -560,16 +571,18 @@ function OpenClassDialog({
 type ReadyRow = ClassDetail['ready'][number];
 
 /**
- * Why a person cannot be enrolled, said as what is missing and who mends it. The API's
- * reason is the source; this only words it for the Equipper (owner, 2026-11-18).
+ * Why a person cannot be enrolled, said as what is missing. The API's reason is the source;
+ * this only words it for the Equipper (owner, 2026-11-18). Somebody to ask is named only
+ * where they can mend it: a missing birthday, by the person's leader, who may add one
+ * (section 3). Age, archiving and a merge are mended by nobody here.
  */
-function blockedText(blocked: string): string {
+function blockedText(blocked: string, leaderName: string | null): string {
   const age = /^(\d+) on (\S+), under (\d+) for the Encounter$/.exec(blocked);
   if (age) {
     return `${age[1]} on ${age[2]}, the Encounter weekend. Must be ${age[3]}.`;
   }
   if (blocked === 'no birthday recorded') {
-    return 'No birthday recorded. Ask their leader to add it.';
+    return leaderName === null ? 'No birthday recorded.' : 'No birthday recorded. Ask their leader to add it.';
   }
   return `${blocked.charAt(0).toUpperCase()}${blocked.slice(1)}.`;
 }
@@ -620,7 +633,7 @@ function ReadyRows({
               <td className="px-3 py-3 align-top">
                 {row.person.full_name}
                 {row.blocked ? (
-                  <span className="text-field-invalid block text-sm">{blockedText(row.blocked)}</span>
+                  <span className="text-field-invalid block text-sm">{blockedText(row.blocked, row.leader_name)}</span>
                 ) : null}
               </td>
               <td className="px-3 py-3 align-top">{row.leader_name ?? 'No leader yet'}</td>
@@ -640,7 +653,7 @@ function ReadyRows({
             ) : (
               <>
                 <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
-                <p className="text-field-invalid text-sm">{blockedText(row.blocked)}</p>
+                <p className="text-field-invalid text-sm">{blockedText(row.blocked, row.leader_name)}</p>
               </>
             )}
             <p className="text-muted pb-1 text-sm">

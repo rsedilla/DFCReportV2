@@ -25,6 +25,7 @@ import {
   type Term,
 } from '@/lib/equipping';
 import { describeFailure } from '@/lib/messages';
+import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 
 /**
  * Registration (SKILL.md section 29, decision 0499, points 5 to 9): who has signed up for Life
@@ -154,13 +155,18 @@ function CancelDialog({
 }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
   const cancel = useMutation({
-    mutationFn: () => cancelRegistration(registration!.id, reason.trim(), key),
+    mutationFn: () =>
+      cancelRegistration(
+        registration!.id,
+        reason.trim(),
+        idempotencyKeyFor('equipping-cancel', writeKey, registration!.id, reason.trim()),
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
       setReason('');
-      setKey(crypto.randomUUID());
+      renewWriteKey();
       onClose();
     },
   });
@@ -205,7 +211,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [showErrors, setShowErrors] = useState(false);
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [writeKey, renewWriteKey] = useWriteKey();
 
   const reset = () => {
     setQuery('');
@@ -216,7 +222,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     setReason('');
     setNote('');
     setShowErrors(false);
-    setKey(crypto.randomUUID());
+    renewWriteKey();
   };
 
   const found = useQuery({
@@ -234,18 +240,17 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
   const needsReason = unmet.length > 0;
 
   const save = useMutation({
-    mutationFn: () =>
-      register(
-        {
-          ...term,
-          person_id: person!.id,
-          bible_confirmed: bible,
-          manual_confirmed: manual,
-          ...(needsReason ? { exception_reason: reason.trim() } : {}),
-          ...(note.trim() ? { note: note.trim() } : {}),
-        },
-        key,
-      ),
+    mutationFn: () => {
+      const body = {
+        ...term,
+        person_id: person!.id,
+        bible_confirmed: bible,
+        manual_confirmed: manual,
+        ...(needsReason ? { exception_reason: reason.trim() } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      return register(body, idempotencyKeyFor('equipping-register', writeKey, body));
+    },
   });
 
   const submit = async (andAnother: boolean) => {
