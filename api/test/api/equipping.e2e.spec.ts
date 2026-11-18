@@ -35,7 +35,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * Fixture names are invented (CLAUDE.md, Secrets).
  *
  *   Ramon (Men's root) -> Mario -> Ben, Carlo, Dino
- *   Mario leads a Cell, so he may teach (point 13)
+ *   Mario leads a Cell, so he may teach (point 10)
  *   Ada: an administrator outside the tree; Eva: an Equipper
  */
 describe('Equipping (section 29, decision 0499)', () => {

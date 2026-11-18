@@ -97,6 +97,12 @@ by its identifier a Teacher the picker never offered): an open leadership of an 
 class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them. A
 Network Admin and the Equipping record lead no Cell, and an administrator outside the tree holds
 no assignment, so none of them may teach; the Equipping record answers `NOT_FOUND`, as below.
+**The rule binds when a class is opened, not after** (owner, 2026-11-18, "Proceed A", settling
+the Stop Condition `architecture-guardian`'s seventh review raised): a Teacher who stops leading
+a Cell, or whose assignment ends, keeps teaching the class they were named to until it ends,
+and is not offered for the next one. **The Teacher search showing only Cell Leaders is
+accepted** (owner, 2026-11-18, "yes"), though it lets the Equipper tell from it whether a named
+person leads a Cell, which Section 8's church-wide fields do not publish.
 
 **11. Enrolling takes several registered people into one class at once**, and checks two
 things that are never overridden:
