@@ -80,4 +80,4 @@ same set, and `GET /api/v1/reports/people/branch` answers each of `total`, `own`
 `people` with the same three beside it. The members are read from
 `cells` (`CellsReadService.membersInForceAt`), which owns `cell_memberships`.
 
-Previous: [2026-11-16 — Every account holder ticks that they have read the Privacy Notice](0496-every-account-holder-ticks-that-they-have-read-the-privacy-notice.md)
+Previous: [2026-11-17 — An offline page for the installed app](0497-an-offline-page-for-the-installed-app.md)
