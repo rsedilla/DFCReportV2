@@ -95,7 +95,7 @@ If this boundary proves hard to hold, replace Next.js with a plain React SPA, wh
 
 ### Two surfaces, used together
 
-Desktop web and mobile web are used concurrently, by the same people and by different people against the same records, so responsive design is a requirement from the first screen. **The web application is the phone app** (owner ruling of 2026-11-01, decision 0424): a leader adds it to the home screen, where it opens full screen with its own icon, and no App Store or Play Store app is built. It keeps no offline copy of itself, so it opens the version on the server every time.
+Desktop web and mobile web are used concurrently, by the same people and by different people against the same records, so responsive design is a requirement from the first screen. **The web application is the phone app** (owner ruling of 2026-11-01, decision 0424): a leader adds it to the home screen, where it opens full screen with its own icon, and no App Store or Play Store app is built. It keeps no offline copy of itself, so it opens the version on the server every time. The one thing kept on the device is the page shown when it is opened with no connection (decision 0497, Section 23).
 
 The API must therefore be stateless, must support several concurrent sessions per account (Section 6), and must detect write conflicts rather than resolving them silently (Sections 14 and 23).
 
@@ -5482,6 +5482,8 @@ These are not deferred. They are cheap to design in and expensive to retrofit, a
 - partial or delta synchronisation
 
 Do not build offline complexity before it is needed. Do not make architectural choices that prevent it — in particular, never let the server assign an identity that the client needed before it could sync. **Building it takes a ruling first** (owner, 2026-11-02, decision 0424): working offline keeps a copy of the application on the phone, which ends Section 22's permission to narrow `/api/v1` in step with the web application, as a native client would, so that ruling restores a stable version before the first offline release. Attendance marks kept on the device (decision 0345) are data, not a copy of the application, and are not that.
+
+**Opened with no connection, the application shows its own offline page** (owner ruling of 2026-11-17, decision 0497), in place of the browser's: the logo and the name, *You're offline*, that unsaved attendance marks are kept on the device, and a *Try again* button; it opens the application by itself once the connection is back. The device keeps that page and its logo and nothing else: no screen of the application, no script of the build and no answer of the API. So this is not working offline, the application still opens the version on the server every time, and Section 22's permission to narrow `/api/v1` is untouched. Only opening a page is answered; a connection lost while a screen is open shows that screen's own notice. A device takes the page the next time the application is opened with a connection, and nobody reinstalls.
 
 ---
 
