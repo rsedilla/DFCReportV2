@@ -121,6 +121,14 @@ be 15."). Where more than one can be enrolled, one control ticks them all, and a
 says back whom it placed ("Enrolled in Life Class A: …"). The owner chose this on 2026-11-18
 from screenshots of the screen as built beside the proposal; the two checks are unchanged.
 
+In the class's list, Move and Withdraw are outlined buttons, under the person's name on a phone
+and beside it on a wider screen. Each dialog says what it does before it is used: a move keeps
+the registration and anything recorded and makes the two checks again for the new class, whose
+choices name their day, time and count; a withdrawal sends the person back to those ready to
+enroll, is kept with its reason and cannot be undone, and taking them off Life Class for the
+term is cancelling the registration. The withdraw button names the person (owner, 2026-11-18,
+from screenshots of both). Nothing in what either does changed.
+
 **12. Archiving and merging** (2026-11-18). The owner was told that, unless they said
 otherwise, these would follow the recommendation shown, and answered the session question
 alone; they are recorded here as that recommendation, and the owner may still change them.

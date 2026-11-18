@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   termLabel,
   withdrawEnrollment,
   type ClassDetail,
+  type EquippingClass,
   type FoundPerson,
   type Term,
 } from '@/lib/equipping';
@@ -107,7 +108,7 @@ function ClassView({
   classes,
 }: {
   classId: string;
-  classes: { id: string; name: string }[];
+  classes: EquippingClass[];
 }) {
   const queryClient = useQueryClient();
   const detail = useQuery({
@@ -235,17 +236,27 @@ function ClassView({
       {detail.data.enrolled.length === 0 ? (
         <p className="text-muted mt-2 text-sm">Nobody yet.</p>
       ) : (
-        <ul className="border-line mt-2 rounded-md border">
+        // Move and Withdraw are outlined buttons, under the name on a phone so every row
+        // reads alike, and beside it from `sm` (owner, 2026-11-18).
+        <ul className="border-line divide-line bg-surface mt-2 divide-y rounded-xl border">
           {detail.data.enrolled.map((row) => (
-            <li key={row.enrollment_id} className="border-line flex flex-wrap items-center justify-between gap-2 border-b px-3 py-1 last:border-b-0">
+            <li
+              key={row.enrollment_id}
+              className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+            >
               <span>{row.person.full_name}</span>
-              <span className="flex gap-1">
+              <span className="flex gap-2">
                 {classes.length > 1 ? (
-                  <Button type="button" variant="quiet" onClick={() => setMoving(row)}>
+                  <Button type="button" variant="secondary" className="w-auto sm:min-w-28" onClick={() => setMoving(row)}>
                     Move<span className="sr-only"> {row.person.full_name}</span>
                   </Button>
                 ) : null}
-                <Button type="button" variant="quiet" onClick={() => setWithdrawing(row)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-auto sm:min-w-28"
+                  onClick={() => setWithdrawing(row)}
+                >
                   Withdraw<span className="sr-only"> {row.person.full_name}</span>
                 </Button>
               </span>
@@ -269,10 +280,11 @@ function MoveDialog({
   onClose,
 }: {
   enrolled: ClassDetail['enrolled'][number] | null;
-  classes: { id: string; name: string }[];
+  classes: EquippingClass[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const descriptionId = useId();
   const [to, setTo] = useState('');
   const [key, setKey] = useState(() => crypto.randomUUID());
   const move = useMutation({
@@ -285,7 +297,17 @@ function MoveDialog({
     },
   });
   return (
-    <Dialog open={enrolled !== null} onClose={onClose} title={`Move ${enrolled?.person.full_name ?? ''}`}>
+    <Dialog
+      open={enrolled !== null}
+      onClose={onClose}
+      title={`Move ${enrolled?.person.full_name ?? ''}`}
+      describedBy={descriptionId}
+    >
+      {/* What a move does, said before it is made (owner, 2026-11-18). */}
+      <p id={descriptionId} className="text-muted mb-4 text-sm">
+        They keep their registration and anything recorded so far. The birthday and age checks are made again for
+        the new class.
+      </p>
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
@@ -299,7 +321,8 @@ function MoveDialog({
           <option value="">Choose a class</option>
           {classes.map((each) => (
             <option key={each.id} value={each.id}>
-              {each.name}
+              {each.name} · {DAY_NAMES[each.day_of_week - 1].slice(0, 3)} {timeLabel(each.time_of_day)} · {each.enrolled}{' '}
+              enrolled
             </option>
           ))}
         </SelectField>
@@ -325,6 +348,7 @@ function WithdrawDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const descriptionId = useId();
   const [reason, setReason] = useState('');
   const [key, setKey] = useState(() => crypto.randomUUID());
   const withdraw = useMutation({
@@ -337,7 +361,17 @@ function WithdrawDialog({
     },
   });
   return (
-    <Dialog open={enrolled !== null} onClose={onClose} title={`Withdraw ${enrolled?.person.full_name ?? ''}`}>
+    <Dialog
+      open={enrolled !== null}
+      onClose={onClose}
+      title={`Withdraw ${enrolled?.person.full_name ?? ''}`}
+      describedBy={descriptionId}
+    >
+      {/* What a withdrawal does, said before it is made (owner, 2026-11-18). */}
+      <p id={descriptionId} className="text-muted mb-4 text-sm">
+        They go back to Ready to enroll. The withdrawal is kept with your reason and cannot be undone. To take them
+        off Life Class this term, cancel their registration on Registration.
+      </p>
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
@@ -347,11 +381,17 @@ function WithdrawDialog({
           }
         }}
       >
-        <TextBox label="Why" value={reason} onChange={setReason} required />
+        <TextBox
+          label="Why"
+          value={reason}
+          onChange={setReason}
+          required
+          placeholder="For example: moved to another city"
+        />
         <FailureNotice failure={withdraw.isError ? describeFailure(withdraw.error) : null} />
         <div className="flex flex-col gap-3 lg:flex-row">
           <Button type="submit" disabled={withdraw.isPending}>
-            Withdraw
+            Withdraw {enrolled?.person.full_name ?? ''}
           </Button>
           <Button type="button" variant="quiet" onClick={onClose} data-autofocus>
             Keep them
