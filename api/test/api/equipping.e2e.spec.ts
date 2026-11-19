@@ -28,7 +28,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *   - a record requirement not met asks for a reason, and with one the person is registered
  *     with exception, the requirements not met kept on the row;
  *   - one registration per person, level and term;
- *   - enrolling needs a birthday and 15 on the person's own Network's Encounter weekend, all
+ *   - enrolling needs a birthday and 14 on the person's own Network's Encounter weekend, all
  *     of a batch or none;
  *   - a person is moved, or withdrawn with a reason, and nothing is deleted.
  *
@@ -52,7 +52,7 @@ describe('Equipping (section 29, decision 0499)', () => {
   let seasonId: string;
 
   const TERM = { level: 'LIFE_CLASS', term_year: 2027, term_number: 1 };
-  // The season's weekends; Dino turns 15 three days after the Men's.
+  // The season's weekends; Dino turns 14 three days after the Men's.
   const MENS_WEEKEND = '2027-03-06';
   const WOMENS_WEEKEND = '2027-03-13';
 
@@ -73,7 +73,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     await assignTo(db, ben.id, mario.id);
     carlo = await createPerson(db, { firstName: 'Carlo', network: 'MENS', birthDate: null });
     await assignTo(db, carlo.id, mario.id);
-    dino = await createPerson(db, { firstName: 'Dino', network: 'MENS', birthDate: '2012-03-09' });
+    dino = await createPerson(db, { firstName: 'Dino', network: 'MENS', birthDate: '2013-03-09' });
     await assignTo(db, dino.id, mario.id);
 
     const ada = await createPerson(db, { firstName: 'Ada', network: 'WOMENS' });
@@ -311,7 +311,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       ]);
     });
 
-    it('refuses the whole batch when one has no birthday or is under 15 at the Encounter', async () => {
+    it('refuses the whole batch when one has no birthday or is under 14 at the Encounter', async () => {
       const cls = (await openClass().expect(201)).body as { id: string };
       const ids = [];
       for (const person of [ben, carlo, dino]) {
@@ -328,10 +328,25 @@ describe('Equipping (section 29, decision 0499)', () => {
         .map((each) => each.reason)
         .sort();
       expect(reasons).toEqual([
-        `14 on ${MENS_WEEKEND}, under 15 for the Encounter`,
+        `13 on ${MENS_WEEKEND}, under 14 for the Encounter`,
         'no birthday recorded',
       ]);
       expect(await db.selectFrom('equipping_enrollments').selectAll().execute()).toHaveLength(0);
+    });
+
+    it('admits a person who turns 14 on the first day of the Encounter weekend', async () => {
+      // The edge of the owner's "14 by the first day" (2026-11-19): 14 that day is enough.
+      const eli = await createPerson(db, {
+        firstName: 'Eli',
+        network: 'MENS',
+        birthDate: '2013-03-06',
+      });
+      await assignTo(db, eli.id, mario.id);
+      const cls = (await openClass().expect(201)).body as { id: string };
+      const reg = (await register(eli).expect(201)).body as { id: string };
+      await post(equipper, `classes/${cls.id}/enrollments`, { registration_ids: [reg.id] }).expect(
+        201,
+      );
     });
 
     it('moves a person to another class and withdraws them, keeping both rows', async () => {

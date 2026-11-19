@@ -6065,7 +6065,7 @@ Two are ticked by the Equipper after asking the person's leader: **has a physica
 **Enrolling places several registrations in one class at once, all or none**, each of the class's level and term, not cancelled and in no class, and two checks are never overridden:
 
 - **a birthday is recorded**; and
-- **the person is 15 on the first day of their own Network's Encounter weekend** in the class's season. The Encounter is Life Class lesson 5 (decision 0295), so this is where its age is checked.
+- **the person is 14 on the first day of their own Network's Encounter weekend** in the class's season (owner, 2026-11-19: "14 by the first day", replacing 15). The Encounter is Life Class lesson 5 (decision 0295), so this is where its age is checked.
 
 **One class per person, level and term**, an index on the open enrollment. A person is **moved** to another class of the same level and term, the two checks made again against its season, or **withdrawn** with a reason; an enrollment that ends is kept, with when and why. Nothing in the three tables is deleted, nor is a row’s person, level, term, registration or class rewritten, nor a cancellation or an ending undone, a trigger refusing each; nobody is placed in a class on a cancelled registration. A move closes one enrollment and opens another on the same registration, so what later steps record hangs on the registration and carries with a move (the owner’s “Move keeps grades”).
 

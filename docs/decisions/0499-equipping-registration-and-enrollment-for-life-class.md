@@ -108,10 +108,12 @@ person leads a Cell, which Section 8's church-wide fields do not publish.
 things that are never overridden:
 
 - **A birthday is recorded** ("birthday is required to enrol", 2026-09-29).
-- **The person is 15 on the first day of the Encounter weekend of their own Network** in the
-  class's season (2026-09-29: "must be 15 on the day the Encounter weekend starts; 14 is
-  refused"). The Encounter is Life Class lesson 5 (decision 0295), so Life Class is where the
-  age is checked.
+- **The person is 14 on the first day of the Encounter weekend of their own Network** in the
+  class's season (owner, 2026-11-19: "when the student is 14 during the encounter he can
+  attend", then "yes 14 by the first day"). This replaces 15, the owner's answer of 2026-09-29
+  ("must be 15 on the day the Encounter weekend starts; 14 is refused"), which the owner
+  reversed knowing it. The Encounter is Life Class lesson 5 (decision 0295), so Life Class is
+  where the age is checked.
 
 One class per person per level per term. A person is moved to another class of the same
 level and term, or withdrawn with a reason; an enrollment that ends is kept, with when and
@@ -129,7 +131,7 @@ it was built.
 
 Those who can be enrolled are listed first, with the Enroll button under them, and those who
 cannot after, under *Can't enroll yet*, whose reason says what is missing ("No birthday
-recorded."; "14 on 2026-12-04, the Encounter weekend. Must be 15.") and names nobody to ask:
+recorded."; "13 on 2026-12-04, the Encounter weekend. Must be 14.") and names nobody to ask:
 the screen shown to the owner said "Ask their leader to add it." and its heading that the
 leader fixes what is missing, and `architecture-guardian`'s fifth and sixth reviews found
 both untrue, a leader being unable to mend an age, and a direct leader who is a Senior Pastor

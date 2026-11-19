@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
  * Enrollment (SKILL.md section 29, decision 0499, points 10 and 11): the term's classes, and
  * putting registered people into one.
  *
- * **Two checks are never overridden**: a birthday recorded, and 15 on the first day of the
+ * **Two checks are never overridden**: a birthday recorded, and 14 on the first day of the
  * person's own Network's Encounter weekend. Somebody failing either has no tick box, and the
  * row says why. Several are enrolled at once; a move keeps them in the term, and a
  * withdrawal is kept with its reason.

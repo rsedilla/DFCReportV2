@@ -36,8 +36,8 @@ const REGULAR_FROM = 5;
  * 1 - 4 ticked regardless he or she is ticked 5 7 8 9"), replacing any five (decision 0499, point 6).
  */
 const SUYNL_LESSONS_NEEDED = [1, 2, 3, 4] as const;
-/** "Must be 15 on the day the Encounter weekend starts; 14 is refused" (point 11). */
-const ENCOUNTER_MINIMUM_AGE = 15;
+/** 14 by the first day of the Encounter weekend (point 11; owner 2026-11-19, replacing 15). */
+const ENCOUNTER_MINIMUM_AGE = 14;
 /** Section 22: a collection's default page. */
 const DEFAULT_PAGE = 50;
 
@@ -694,7 +694,7 @@ export class EquippingService {
   /**
    * `POST /equipping/classes/{id}/enrollments` (point 11): all of them or none. Each must be
    * registered for the class's level and term, not cancelled, in no class, with a birthday,
-   * and 15 on their own Network's Encounter weekend.
+   * and 14 on their own Network's Encounter weekend.
    */
   async enroll(
     actor: Actor,
@@ -897,7 +897,7 @@ export class EquippingService {
 
   /**
    * The two checks enrolling makes (point 11), for each person against a season: a birthday
-   * recorded, and 15 on the first day of their own Network's Encounter weekend. `blocked` is
+   * recorded, and 14 on the first day of their own Network's Encounter weekend. `blocked` is
    * the reason in words, or null.
    */
   private async eligibilityOf(
