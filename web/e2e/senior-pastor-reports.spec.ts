@@ -110,6 +110,9 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
   }
 
   const people = (page: Page) => page.getByRole('region', { name: 'Number of people' });
+  /** The Total tile's figure, the last of *# of People*'s four (decision 0498). */
+  const totalTile = (page: Page) =>
+    people(page).locator('dl > div').filter({ hasText: /^Total/ }).getByRole('definition').first();
   const which = (page: Page) => page.getByRole('group', { name: 'Which Network' });
 
   test('the Bishop opens on Men, then Women, then Both, each with its total and table', async ({ page }) => {
@@ -123,34 +126,37 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
       'true',
     );
     await expect(people(page).getByRole('heading', { name: 'Men’s Network' })).toBeVisible();
-    await expect(people(page).getByRole('definition').first()).toHaveText('19');
+    await expect(totalTile(page)).toHaveText('19');
     await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toHaveCount(0);
     // The root's own row and a Total close the table (decision 0490): 6 + 11 + 1.
     const mensRows = page.getByRole('table', { name: MENS_TABLE }).getByRole('row');
-    await expect(mensRows.nth(-2).getByRole('cell')).toHaveText([SP_MENS_ROOT.full_name, '1']);
-    await expect(mensRows.last().getByRole('cell')).toHaveText(['Total', '18']);
+    await expect(mensRows.nth(-2).getByRole('cell')).toHaveText([SP_MENS_ROOT.full_name, '0', '1', '0', '1']);
+    // Each column adds up, and each row's three make its Total (decision 0498).
+    await expect(mensRows.last().getByRole('cell')).toHaveText(['Total', '3', '3', '12', '18']);
     // Others holds only who is left over beyond the root: 19 - 18.
     await expect(page.getByText('Anyone in no table above.')).toBeVisible();
-    await expect(page.getByText('People 1', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Cell Members 0 · Cell Leaders 0 · Not in a Cell 1 · Total 1', { exact: true }),
+    ).toBeVisible();
     await expect.poll(() => asked.includes('2026-10-01|MENS')).toBe(true);
 
     await which(page).getByRole('button', { name: 'Women’s Network', exact: true }).click();
     await expect(page).toHaveURL(/[?&]network=WOMENS\b/);
-    await expect(people(page).getByRole('definition').first()).toHaveText('17');
+    await expect(totalTile(page)).toHaveText('17');
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: MENS_TABLE })).toHaveCount(0);
     // Nobody is left over, so there is no Others at all.
     await expect(
       page.getByRole('table', { name: WOMENS_TABLE }).getByRole('row').last().getByRole('cell'),
-    ).toHaveText(['Total', '17']);
+    ).toHaveText(['Total', '0', '2', '15', '17']);
     await expect(page.getByRole('heading', { name: 'Others' })).toHaveCount(0);
 
     await which(page).getByRole('button', { name: /^Both/ }).click();
     await expect(page).toHaveURL(/[?&]network=BOTH\b/);
     // Men's 19 and Women's 17 are the whole church's 36.
     await expect(people(page).getByRole('heading', { name: 'Whole Church' })).toBeVisible();
-    await expect(people(page).getByRole('definition').first()).toHaveText('36');
+    await expect(totalTile(page)).toHaveText('36');
     await expect(page.getByRole('table', { name: MENS_TABLE })).toBeVisible();
     await expect(page.getByRole('table', { name: WOMENS_TABLE })).toBeVisible();
     // Both roots have rows; one person is left over beyond them.
@@ -167,7 +173,7 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
       'aria-pressed',
       'true',
     );
-    await expect(people(page).getByRole('definition').first()).toHaveText('17');
+    await expect(totalTile(page)).toHaveText('17');
   });
 
   test('a Primary’s name opens their 12 here, with the way back to People', async ({ page }) => {
@@ -211,12 +217,15 @@ test.describe('People’s Men, Women and Both (decision 0490)', () => {
           period: '2026-10-01',
           current: true,
           at: '2026-10-08T02:00:00.000Z',
-          total: 2,
-          own: 1,
+          total: { people: 2, cell_members: 1, leading_a_cell: 0, not_in_a_cell: 1 },
+          own: { people: 1, cell_members: 0, leading_a_cell: 0, not_in_a_cell: 1 },
           rows: [
             {
               leader: { id: '3f1b7c6e-0000-4000-8000-000000000798', member_id: 'M-000898', full_name: 'Teofilo Rosales' },
               people: 1,
+              cell_members: 1,
+              leading_a_cell: 0,
+              not_in_a_cell: 0,
             },
           ],
         }),
@@ -344,7 +353,7 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
     expect(total.width).toBeGreaterThan(kids.width * 1.5);
   });
 
-  test('# of Cell Leaders and # of people each show their one figure', async ({ page }) => {
+  test('# of Cell Leaders shows its one figure, and # of people its four (decision 0498)', async ({ page }) => {
     await seniorPastor(page);
     await mockChurchCounts(page);
 
@@ -359,8 +368,30 @@ test.describe('the three counts (decisions 0326 and 0327)', () => {
 
     await page.goto('/reports/number-of-people');
     const people = page.getByRole('region', { name: 'Number of people' });
-    await expect(people.getByRole('term')).toHaveText(['People']);
-    await expect(people.getByRole('definition')).toHaveText(['36', AS_OF_TODAY]);
+    await expect(people.getByRole('term')).toHaveText([
+      'Cell Members',
+      'Cell Leaders',
+      'Not in a Cell',
+      'Total',
+    ]);
+    // Every tile says when it is as of; the four add up to the Total.
+    await expect(people.getByRole('definition')).toHaveText([
+      '3',
+      AS_OF_TODAY,
+      '5',
+      AS_OF_TODAY,
+      '28',
+      AS_OF_TODAY,
+      '36',
+      AS_OF_TODAY,
+    ]);
+    await expect(page.getByRole('table', { name: MENS_TABLE }).getByRole('columnheader')).toHaveText([
+      'Primaries',
+      'Cell Members',
+      'Cell Leaders',
+      'Not in a Cell',
+      'Total',
+    ]);
   });
 
   test('step a month at a time with the same ‹ › control as the attendance tabs', async ({

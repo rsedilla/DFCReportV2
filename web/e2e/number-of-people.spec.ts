@@ -30,16 +30,18 @@ test.describe('a Full view leader’s # of People', () => {
 
     await expect(page.getByRole('heading', { name: 'Your Disciples' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Number of People' }).locator('dl')).toHaveText(
-      /People\s*42/,
+      // Four boxes since decision 0498, Total last; each carries its own as-of line.
+      /Cell Members\s*20.*Cell Leaders\s*8.*Not in a Cell\s*14.*Total\s*42/,
     );
     const rows = table(page).locator('tbody tr');
     await expect(rows).toHaveText([
-      /^Consuelo Bautista\s*14$/,
-      /^Efren Dimaculangan\s*10$/,
+      // Cell Members, Cell Leaders, Not in a Cell, then Total (decision 0498).
+      /^Consuelo Bautista\s*8\s*2\s*4\s*14$/,
+      /^Efren Dimaculangan\s*5\s*3\s*2\s*10$/,
       // A leader the reader may not open is counted and named nobody.
-      /^A leader not named here\s*17$/,
-      /^You\s*1$/,
-      /^Total\s*42$/,
+      /^A leader not named here\s*7\s*3\s*7\s*17$/,
+      /^You\s*0\s*0\s*1\s*1$/,
+      /^Total\s*20\s*8\s*14\s*42$/,
     ]);
     expect(asked[0]).toMatchObject({ period: '2026-10-01' });
 
@@ -86,7 +88,8 @@ test.describe('a Full view leader’s # of People', () => {
 
     await page.getByRole('button', { name: 'The period before' }).click();
     await expect.poll(() => asked.some((each) => each.period === '2026-09-01')).toBe(true);
-    await expect(page.getByText('As of 30 September 2026', { exact: true })).toBeVisible();
+    // Every box names the day it counts to (decision 0478), so the first one is checked.
+    await expect(page.getByText('As of 30 September 2026', { exact: true }).first()).toBeVisible();
   });
 });
 

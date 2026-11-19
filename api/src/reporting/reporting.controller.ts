@@ -50,6 +50,7 @@ import {
   type Classification,
   type CellReportScope,
   type ChurchCountFigures,
+  type PeopleFigures,
   type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
@@ -740,8 +741,8 @@ export class ReportingController {
       period: counts.period,
       current: counts.current,
       at: counts.at.toISOString(),
-      total: counts.total,
-      own: counts.own,
+      total: counts.total === null ? null : peopleFigures(counts.total),
+      own: counts.own === null ? null : peopleFigures(counts.own),
       rows:
         counts.rows === null
           ? null
@@ -763,7 +764,7 @@ export class ReportingController {
                             last_name: identity.lastName,
                             title: identity.title,
                           },
-                    people: row.people,
+                    ...peopleFigures(row.figures),
                   },
                 };
               })
@@ -1653,6 +1654,16 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
   return { kind: 'WHOLE_CHURCH' };
 }
 
+/** *# of People* and its split in three (decision 0498), at the response boundary. */
+function peopleFigures(figures: PeopleFigures): Record<string, number> {
+  return {
+    people: figures.people,
+    cell_members: figures.cellMembers,
+    leading_a_cell: figures.leadingACell,
+    not_in_a_cell: figures.notInACell,
+  };
+}
+
 /** A month's *Number of Cells* and *Number of people*, at the response boundary. */
 function countFigures(figures: ChurchCountFigures): Record<string, number> {
   return {
@@ -1663,6 +1674,9 @@ function countFigures(figures: ChurchCountFigures): Record<string, number> {
     couple: figures.couple,
     cell_leaders: figures.cellLeaders,
     people: figures.people,
+    cell_members: figures.cellMembers,
+    leading_a_cell: figures.leadingACell,
+    not_in_a_cell: figures.notInACell,
   };
 }
 
