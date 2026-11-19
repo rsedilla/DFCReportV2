@@ -52,7 +52,7 @@ describe('Equipping (section 29, decision 0499)', () => {
   let seasonId: string;
 
   const TERM = { level: 'LIFE_CLASS', term_year: 2027, term_number: 1 };
-  // The season's weekends; Dino turns 14 three days after the Men's.
+  // The season's weekends; Dino turns 14 on the Men's second day, which is too late ("by the first day").
   const MENS_WEEKEND = '2027-03-06';
   const WOMENS_WEEKEND = '2027-03-13';
 
@@ -73,7 +73,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     await assignTo(db, ben.id, mario.id);
     carlo = await createPerson(db, { firstName: 'Carlo', network: 'MENS', birthDate: null });
     await assignTo(db, carlo.id, mario.id);
-    dino = await createPerson(db, { firstName: 'Dino', network: 'MENS', birthDate: '2013-03-09' });
+    dino = await createPerson(db, { firstName: 'Dino', network: 'MENS', birthDate: '2013-03-07' });
     await assignTo(db, dino.id, mario.id);
 
     const ada = await createPerson(db, { firstName: 'Ada', network: 'WOMENS' });
