@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { CellPicker } from '@/components/cell-picker';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import {
   addCellMember,
@@ -162,7 +162,7 @@ export function MoveCellDialog({
         />
 
         {/* A column below `lg`, so each button is full width in the sheet. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <DialogActions className="lg:flex-wrap">
           <Button type="submit" disabled={!chosen || move.isPending}>
             {move.isPending ? (current ? 'Moving…' : 'Adding…') : current ? 'Move' : 'Add'}
           </Button>
@@ -171,7 +171,7 @@ export function MoveCellDialog({
           </Button>
           {/* Why the button is not yet offered, said beside it (owner, 2026-10-25). */}
           {!chosen ? <p className="text-muted text-sm lg:self-center">Choose a Cell Group first.</p> : null}
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );
