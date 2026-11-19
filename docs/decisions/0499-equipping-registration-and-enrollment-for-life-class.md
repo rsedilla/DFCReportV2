@@ -21,7 +21,8 @@ a graduation from a posted final grade is a later ruling.
 
 **3. The Equipper.** A new role, `EQUIPPER`, given by the Admin (point 3a says how),
 holds `equipping.manage` at Whole Church (the owner chose "Equipper Admin" and "Equipper";
-this ruling builds the Equipper, and the Equipper Admin follows with posting grades). The
+this ruling builds the Equipper; the owner dropped the Equipper Admin on 2026-11-19, the Equipper
+posting results and the Admin reviewing exceptions, as a university's registrar and dean do). The
 Admin holds it too, by default ("the admin sees everything"). It is held alone, as
 `NETWORK_ADMIN` is. The account shows the person's real name with "Equipping account" under
 it, never a second name. It signs in with the second step ("the Equipping account gets the
@@ -69,7 +70,7 @@ Each tick is saved with who ticked it and when. The two ticks are always require
 **7. A record that is not met warns; it does not block** ("ok just warn"). When any of the four
 is not met, registering asks "Why register them anyway?", which is required, and the
 registration is saved as *Registered with exception* with the reason and the requirements
-not met. The reason is audit logged, and the Equipper Admin will review them. The owner
+not met. The reason is audit logged, and the Admin reviews them (owner, 2026-11-19). The owner
 chose this knowing that DREAMS holds only the attendance recorded since it started, so a
 long-faithful member can read as a 3rd Timer. Revisit blocking once a year of attendance is
 recorded.
@@ -184,7 +185,8 @@ drift apart.
 
 ## What it does not settle
 
-- The Equipper Admin, Faculty, make-up lessons, weekly grades, final grades and posting them.
+- Faculty, make-up lessons, final grades and posting them, which the owner decided on 2026-11-19 and
+  a later ruling records; weekly grades were dropped the same day.
 - What "Regular" means beyond Sections 9 and 12, and whether to add "attended recently".
 - The Encounter as its own registration after Life Class, which would replace decision 0295.
 - Whether a student may join a class a Primary runs for other people, and whether a Primary

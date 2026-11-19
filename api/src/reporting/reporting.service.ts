@@ -160,6 +160,15 @@ export interface ChurchCountFigures {
   couple: number;
   cellLeaders: number;
   people: number;
+  /**
+   * *# of People* split in three (decision 0498), over the people counted in `people`, so the
+   * three add up to it: those leading a Cell then, those holding a Cell membership then who lead
+   * none, and the rest. `leadingACell` is `cellLeaders` read over those people, so the two agree
+   * wherever every leader counted is also a person counted.
+   */
+  cellMembers: number;
+  leadingACell: number;
+  notInACell: number;
 }
 
 /**
@@ -202,10 +211,16 @@ export interface BranchPeople {
   period: string;
   at: Date;
   current: boolean;
-  total: number | null;
-  own: number | null;
-  rows: { leaderId: string; people: number }[] | null;
+  total: PeopleFigures | null;
+  own: PeopleFigures | null;
+  rows: { leaderId: string; figures: PeopleFigures }[] | null;
 }
+
+/** *# of People* and its split in three (decision 0498), for {@link BranchPeople}. */
+export type PeopleFigures = Pick<
+  ChurchCountFigures,
+  'people' | 'cellMembers' | 'leadingACell' | 'notInACell'
+>;
 
 /**
  * *# of Cell Groups* and *# of Cell Leaders* for one leader's branch over a month (decision
@@ -542,6 +557,25 @@ export class ReportingService {
     return items.map((item) =>
       item.leaderId === null ? item : { ...item, leaderId: canonicalId(resolve(item.leaderId)) },
     );
+  }
+
+  /**
+   * Who leads a Cell and who holds a Cell membership at `at`, each resolved to the record kept
+   * (decision 0408: point 16 for a Cell's leader, point 10 for a member), for *# of People*'s split (decision 0498). The leaders are those
+   * of `cells`, the Cells already read at that instant, so a split's *Cell Leaders* and
+   * *# of Cell Leaders* read one set.
+   */
+  private async inCellsAt(
+    trx: Db,
+    at: Date,
+    cells: readonly { leaderId: string }[],
+  ): Promise<{ leaders: ReadonlySet<string>; members: ReadonlySet<string> }> {
+    const resolve = resolverOf(await this.people.mergedPairsWithin(trx));
+    const members = await this.cells.membersInForceAt(trx, at);
+    return {
+      leaders: new Set(cells.map((cell) => canonicalId(cell.leaderId))),
+      members: new Set(members.map((id) => canonicalId(resolve(id)))),
+    };
   }
 
   /**
@@ -1487,11 +1521,16 @@ export class ReportingService {
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
       const networkMembers =
         network === null ? null : new Set(await this.networkPeople(trx, network, at));
+      const inCells = await this.inCellsAt(trx, at, cells);
 
       const figuresOf = (members: ReadonlySet<string> | null): ChurchCountFigures => {
         const counted = cells.filter((cell) => members === null || members.has(cell.leaderId));
 
         return {
+          ...splitByCell(
+            members === null ? people : people.filter((id) => members.has(id)),
+            inCells,
+          ),
           cellGroups: counted.length,
           j12Kids: counted.filter((cell) => cell.category === 'J12_KIDS').length,
           youth: counted.filter((cell) => cell.category === 'YOUTH').length,
@@ -1585,8 +1624,12 @@ export class ReportingService {
           .filter((id) => !outside.has(id))
           .map((id) => canonicalId(id)),
       );
-      const count = (ids: readonly string[]): number =>
-        ids.filter((id) => people.has(canonicalId(id))).length;
+      const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
+      const inCells = await this.inCellsAt(trx, at, cells);
+      const count = (ids: readonly string[]): PeopleFigures => {
+        const counted = ids.filter((id) => people.has(canonicalId(id)));
+        return { people: counted.length, ...splitByCell(counted, inCells) };
+      };
 
       const graph = await this.placementGraph(trx, bounds.start, bounds.end);
       if (graph.refused) {
@@ -1601,7 +1644,7 @@ export class ReportingService {
         own: count([leaderId]),
         rows: graph.children(leaderId).map((id) => ({
           leaderId: id,
-          people: count(graph.subtree(id)),
+          figures: count(graph.subtree(id)),
         })),
       };
     });
@@ -1637,12 +1680,17 @@ export class ReportingService {
       const cells = await this.leadersAsKept(trx, await this.cells.cellsInForceAt(trx, at));
       const outside = await this.people.outsideTreeAt(trx, at);
       const people = (await this.people.currentIdsAt(trx, at)).filter((id) => !outside.has(id));
+      const inCells = await this.inCellsAt(trx, at, cells);
 
       const figuresOf = (ids: readonly string[]): ChurchCountFigures => {
         const members = new Set(ids.map((id) => canonicalId(id)));
         const counted = cells.filter((cell) => members.has(canonicalId(cell.leaderId)));
 
         return {
+          ...splitByCell(
+            people.filter((id) => members.has(canonicalId(id))),
+            inCells,
+          ),
           cellGroups: counted.length,
           j12Kids: counted.filter((cell) => cell.category === 'J12_KIDS').length,
           youth: counted.filter((cell) => cell.category === 'YOUTH').length,
@@ -2008,6 +2056,26 @@ function owedAsKept(owing: OwedByLeader, resolve: (personId: string) => string):
     });
   }
   return kept;
+}
+
+/**
+ * *# of People* split in three over the people counted (decision 0498): a person leading a Cell
+ * is counted there alone, even where they are also a member of another (decision 0353), so the
+ * three add up to the people given.
+ */
+function splitByCell(
+  people: readonly string[],
+  inCells: { leaders: ReadonlySet<string>; members: ReadonlySet<string> },
+): Pick<ChurchCountFigures, 'cellMembers' | 'leadingACell' | 'notInACell'> {
+  let cellMembers = 0;
+  let leadingACell = 0;
+  let notInACell = 0;
+  for (const id of new Set(people.map((person) => canonicalId(person)))) {
+    if (inCells.leaders.has(id)) leadingACell += 1;
+    else if (inCells.members.has(id)) cellMembers += 1;
+    else notInACell += 1;
+  }
+  return { cellMembers, leadingACell, notInACell };
 }
 
 /** *Recording status*'s two columns and status over a set of leaders (decision 0325). */

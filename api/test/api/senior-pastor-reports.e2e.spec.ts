@@ -174,6 +174,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
     'couple',
     'cell_leaders',
     'people',
+    'cell_members',
+    'leading_a_cell',
+    'not_in_a_cell',
   ] as const;
   type Figures = Record<(typeof FIELDS)[number], number>;
   interface CountRow extends Figures {
@@ -201,6 +204,17 @@ describe('Senior Pastor reports (decision 0326)', () => {
   function expectReconciles(body: Counts): void {
     expect(body.tables).not.toBeNull();
     expect(body.others).not.toBeNull();
+    // *# of People*'s split adds up to it in every row, root row, *Others* and box (decision 0498).
+    const everyRow = [
+      body.whole_church,
+      body.others!,
+      ...body.tables!.flatMap((table) => [...table.rows, table.own]),
+    ];
+    for (const figures of everyRow) {
+      expect(figures.cell_members + figures.leading_a_cell + figures.not_in_a_cell).toBe(
+        figures.people,
+      );
+    }
     for (const field of FIELDS) {
       const rows = body
         .tables!.flatMap((table) => table.rows)
@@ -290,6 +304,11 @@ describe('Senior Pastor reports (decision 0326)', () => {
         couple: 2,
         cell_leaders: 6,
         people: 9,
+        // Nobody holds a membership here, so a leader is counted as one and the rest are in no
+        // Cell (decision 0498).
+        cell_members: 0,
+        leading_a_cell: 6,
+        not_in_a_cell: 3,
       });
       // Every Cell here has a category, so the four add up to Cell Groups.
       expect(
@@ -326,6 +345,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
         couple: 1,
         cell_leaders: 3,
         people: 5,
+        cell_members: 0,
+        leading_a_cell: 3,
+        not_in_a_cell: 2,
       });
 
       expectReconciles(body);
@@ -394,6 +416,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
         couple: 0,
         cell_leaders: 2,
         people: 7,
+        cell_members: 0,
+        leading_a_cell: 2,
+        not_in_a_cell: 5,
       });
       // Last month: closed, created and recategorised, and Paz archived.
       expect(later.whole_church).toEqual({
@@ -404,6 +429,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
         couple: 1,
         cell_leaders: 2,
         people: 6,
+        cell_members: 0,
+        leading_a_cell: 2,
+        not_in_a_cell: 4,
       });
 
       expect(rowOf(earlier, ana)).toMatchObject({ cell_groups: 2, youth: 2, people: 4 });
@@ -651,6 +679,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
       couple: 0,
       cell_leaders: 3,
       people: 6,
+      cell_members: 0,
+      leading_a_cell: 3,
+      not_in_a_cell: 3,
     };
 
     it('leaves a Cell closed CREATED_IN_ERROR after a month out of that month’s counts, and still adds up', async () => {
@@ -702,6 +733,9 @@ describe('Senior Pastor reports (decision 0326)', () => {
         // Ana, Lito, Dan (once, for two Cells), Cara and Oriel.
         cell_leaders: 5,
         people: 6,
+        cell_members: 0,
+        leading_a_cell: 5,
+        not_in_a_cell: 1,
       });
       expect(rowOf(body, ana)).toMatchObject({
         cell_groups: 4,

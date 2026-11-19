@@ -2447,6 +2447,29 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The people holding a Cell membership at one instant, for *# of People*'s *Cell Members*
+   * (decision 0498).
+   *
+   * **A membership row in force at the instant**, half-open as {@link cellsInForceAt} reads a
+   * leadership, so a month that has ended reads the rows of its final millisecond, and an ordinary
+   * join or move made later does not move it. A membership of a Cell closed `CREATED_IN_ERROR` is left out at every instant,
+   * as that Cell is (decision 0330). A leader holds no membership row in their own Cell, so this
+   * says nothing about whether they are a member of it.
+   */
+  async membersInForceAt(executor: Db | Transaction<Database>, at: Date): Promise<string[]> {
+    const result = await sql<{ person_id: string }>`
+      SELECT DISTINCT member.person_id
+        FROM cell_memberships AS member
+        JOIN cells AS cell ON cell.id = member.cell_id
+       WHERE member.started_at <= ${at}
+         AND (member.ended_at IS NULL OR member.ended_at > ${at})
+         AND cell.closure_reason IS DISTINCT FROM 'CREATED_IN_ERROR'
+    `.execute(executor);
+
+    return result.rows.map((row) => canonicalId(row.person_id));
+  }
+
+  /**
    * The scheduled meetings of each Cell whose Manila day has begun, by date — the meetings
    * **due** so far (decision 0267).
    *
