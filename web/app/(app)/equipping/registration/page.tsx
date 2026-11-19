@@ -117,7 +117,7 @@ function RegistrationList({ term }: { term: Term }) {
               </td>
               <td className="hidden px-3 py-3 align-top sm:table-cell">{row.leader_name ?? 'No leader yet'}</td>
               <td className="hidden px-3 py-3 align-top sm:table-cell">
-                {row.birthday_recorded ? 'Recorded' : 'Missing: ask their leader'}
+                {row.birthday_recorded ? 'Recorded' : 'Missing'}
               </td>
               <td className="px-3 py-3 align-top">
                 {STATUS_LABELS[row.status]}
