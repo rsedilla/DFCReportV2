@@ -610,7 +610,7 @@ function ReadyRows({
             <HeaderCell className="w-16">
               <span className="sr-only">Choose</span>
             </HeaderCell>
-            <HeaderCell className="w-[34%]">Name</HeaderCell>
+            <HeaderCell className="w-[28%]">Name</HeaderCell>
             <HeaderCell>Leader</HeaderCell>
             <HeaderCell className="w-44">Age at the Encounter</HeaderCell>
             <HeaderCell>Registration</HeaderCell>
