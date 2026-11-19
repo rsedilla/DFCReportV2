@@ -24,6 +24,7 @@ import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { AdminAccountsBindingModule } from './auth/admin-accounts.binding.module';
 import { PersonArchiveAccountsBindingModule } from './auth/person-archive.binding.module';
 import { PersonArchiveCellsBindingModule } from './cells/person-archive.binding.module';
+import { PersonArchiveEquippingBindingModule } from './equipping/person-archive.binding.module';
 import { AbsentPeopleBindingModule } from './attendance/absent-people.binding.module';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
@@ -37,6 +38,7 @@ import { PeopleModule } from './people/people.module';
 import { ConquestModule } from './conquest/conquest.module';
 import { SuynlModule } from './suynl/suynl.module';
 import { TrainingModule } from './training/training.module';
+import { EquippingModule } from './equipping/equipping.module';
 
 /**
  * A modular monolith (SKILL.md section 1, principle 13). Modules are named in
@@ -80,11 +82,13 @@ import { TrainingModule } from './training/training.module';
     SuynlModule,
     ConquestModule,
     TrainingModule,
+    EquippingModule,
     SettingsRoutesModule,
     CellRelationshipsBindingModule,
     AdminAccountsBindingModule,
     PersonArchiveCellsBindingModule,
     PersonArchiveAccountsBindingModule,
+    PersonArchiveEquippingBindingModule,
     AbsentPeopleBindingModule,
     RecordedMeetingsBindingModule,
     MergedPersonsBindingModule,

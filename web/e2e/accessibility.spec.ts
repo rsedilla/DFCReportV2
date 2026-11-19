@@ -36,6 +36,7 @@ import {
   mockSignedIn,
   mockWholeChurchReader,
 } from './mock-api';
+import { mockRegistrar, mockEquipping } from './mock-equipping';
 import {
   mockCellMeetings,
   mockMeetingsAwaiting,
@@ -1506,6 +1507,33 @@ const SCANS = [
       await expect(page.getByText('You are in no Network, so no Encounter God Weekend is shown.')).toBeVisible();
     },
   },
+  // Equipping (section 29, decision 0499), as a Registrar sees it.
+  {
+    name: 'equipping registration',
+    route: '/equipping/registration',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockEquipping(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('table', { name: /Registered for Life Class/ })).toBeVisible();
+    },
+  },
+  {
+    name: 'equipping enrollment',
+    route: '/equipping/enrollment',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockEquipping(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      // A table from `sm` and a card each on a phone (decision 0499), so the heading is what
+      // every width shows.
+      await expect(page.getByRole('heading', { name: /^Ready to enroll/ })).toBeVisible();
+    },
+  },
   {
     // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
     // half, and the sentence saying who may change it.
@@ -2270,6 +2298,24 @@ const TARGET_SWEEP = [
     admin: true,
   },
   {
+    // The term, Register a person, and one Cancel for the one row not yet in a class:
+    // **three**. A Registrar's, whose `/auth/me` stays for the entries after it.
+    name: 'equipping registration',
+    route: '/equipping/registration',
+    settle: 'Register a person',
+    minimum: 3,
+    registrar: true,
+  },
+  {
+    // The term, the class, Open a class, one tick for the one person who can be enrolled,
+    // Enroll, and Withdraw for the one enrolled: **six**.
+    name: 'equipping enrollment',
+    route: '/equipping/enrollment',
+    settle: 'Open a class',
+    minimum: 6,
+    registrar: true,
+  },
+  {
     // In place of every screen until the notice is ticked (decision 0496): the box, the
     // Privacy Notice link, Continue and Sign out: **four**. Last, because its `/auth/me` stays.
     // Settled on Continue, not Sign out, which My Account has too.
@@ -2720,6 +2766,10 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
       await mockAuditLog(page);
+    }
+    if ('registrar' in entry && entry.registrar) {
+      await mockRegistrar(page);
+      await mockEquipping(page);
     }
     if ('privacyUnread' in entry && entry.privacyUnread) {
       await mockPrivacyNoticeUnread(page);

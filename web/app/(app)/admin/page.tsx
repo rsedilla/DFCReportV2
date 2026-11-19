@@ -483,9 +483,13 @@ function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
     <>
       {/* The one form that gives this account (section 7, decision 0469), the Admin's alone. */}
       {wholeChurch ? (
-        <p className="mt-4 flex justify-end">
+        <p className="mt-4 flex flex-wrap justify-end gap-3">
           <Link href="/people/new?as=network-admin" className={buttonClasses('primary')}>
             Add a Network Admin
+          </Link>
+          {/* Its own record, outside the tree (decision 0499). */}
+          <Link href="/people/new?as=registrar" className={buttonClasses('secondary')}>
+            Add a Registrar account
           </Link>
         </p>
       ) : null}

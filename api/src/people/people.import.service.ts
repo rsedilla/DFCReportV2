@@ -180,10 +180,10 @@ export class PeopleImportService {
         input.encodedAt,
         this.networks,
       );
-      await this.authorization.assertNoNetworkAdminWithin(
+      await this.authorization.assertOutsideTreeAccountWithin(
         transaction,
         [input.placement.pastoralLeaderId],
-        'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+        'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
       );
     }
 
@@ -481,12 +481,12 @@ export class PeopleImportService {
       );
     }
 
-    await this.authorization.assertNoNetworkAdminWithin(
+    await this.authorization.assertOutsideTreeAccountWithin(
       transaction,
       input.placement.kind === 'UNDER'
         ? [input.personId, input.placement.pastoralLeaderId]
         : [input.personId],
-      'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+      'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
     );
 
     await this.hierarchy.openAssignmentWithin(

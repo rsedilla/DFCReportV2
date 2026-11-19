@@ -6,10 +6,13 @@ import {
   Church,
   CircleUserRound,
   ClipboardCheck,
+  ClipboardList,
+  GraduationCap,
   LayoutGrid,
   type LucideIcon,
   ShieldCheck,
   Sprout,
+  UserPlus,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -154,6 +157,28 @@ const SENIOR_PASTOR_ITEMS: Record<ReportSection, NavEntry> = {
   },
   services: { href: '/reports/dcc', label: 'Services', icon: Church, matches: ['/reports/dcc'] },
 };
+/**
+ * **A Registrar's two items, the school's first two steps** (decision 0499, point 4), and the
+ * Admin's one `Equipping` item over both, whose tabs they are.
+ */
+const REGISTRATION: NavEntry = {
+  href: '/equipping/registration',
+  label: 'Registration',
+  icon: ClipboardList,
+  matches: ['/equipping/registration'],
+};
+const ENROLLMENT: NavEntry = {
+  href: '/equipping/enrollment',
+  label: 'Enrollment',
+  icon: UserPlus,
+  matches: ['/equipping/enrollment'],
+};
+const EQUIPPING: NavEntry = {
+  href: '/equipping/registration',
+  label: 'Equipping',
+  icon: GraduationCap,
+  matches: ['/equipping'],
+};
 /** The Admin area (decision 0419): set apart from the items above, never one of them. */
 const ADMIN: NavEntry = { href: '/admin', label: 'Admin', icon: ShieldCheck, matches: ['/admin'] };
 const ACCOUNT: NavEntry = {
@@ -279,7 +304,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = me.isPending
     ? []
     : [
-        ...(me.data?.screens === 'RECORDING'
+        ...(me.data?.screens === 'EQUIPPING'
+          ? [REGISTRATION, ENROLLMENT]
+          : me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL]
           : me.data?.screens === 'SENIOR_PASTOR'
             ? [SENIOR_PASTOR_ITEMS.people, SENIOR_PASTOR_ITEMS.cells, SENIOR_PASTOR_ITEMS.services]
@@ -287,6 +314,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
         ...conquest,
+        // The Admin's Equipping, after Conquest (decision 0499); a Registrar has its steps above.
+        ...(me.data !== undefined &&
+        me.data.screens !== 'EQUIPPING' &&
+        holdsWholeChurch(me.data, 'equipping.manage')
+          ? [EQUIPPING]
+          : []),
       ];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
@@ -591,7 +624,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                       {me.data.first_name}
                     </span>
                   ) : null}
-                  <span className="text-[0.8125rem]">{ACCOUNT.label}</span>
+                  {/* A Registrar account reads so under the real name (decision 0499). */}
+                  <span className="text-[0.8125rem]">
+                    {me.data?.screens === 'EQUIPPING' ? 'Registrar account' : ACCOUNT.label}
+                  </span>
                 </span>
               </Link>
             </div>

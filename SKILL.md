@@ -9,7 +9,7 @@ The system is web-first and API-first. One web application serves laptops and ph
 
 ## 1. Non-Negotiable Design Principles
 
-1. Use one master Person record per individual.
+1. Use one master Person record per individual. Section 29 names the one exception, a Registrar account's own record (decision 0499).
 2. Never create separate person databases for DCC, Cell, or leadership.
 3. Pastoral hierarchy, roles/permissions, Cell leadership, and attendance are separate concepts.
 4. All authorization is enforced server-side/API-side, never only in the frontend.
@@ -137,6 +137,7 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `conquest` | The four G12 goals: what a leader confirms about them, and their corrections (Section 27) |
 | `suynl` | SUYNL lessons and their corrections (Section 28) |
 | `training` | Graduation from the Encounter, Life Class and SOL 1 to 3, and their corrections; the Encounter seasons (Section 28) |
+| `equipping` | The church's school: classes, registrations and enrollments (Section 29) |
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
@@ -473,7 +474,7 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
 
-That lookup reads the whole directory, and since the ruling of 2026-09-13 it is the reader that carries duplicate prevention: Section 8's search narrows to the actor's own scope unless asked wider, so this lookup no longer shares a reason with it and stands on its own. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has three parts — of which the first is the one that is easy to get wrong, and the third was found only after the first two had each been got right.
+That lookup reads the whole directory, and since the ruling of 2026-09-13 it is the reader that carries duplicate prevention: Section 8's search narrows to the actor's own scope unless asked wider, so this lookup no longer shares a reason with it and stands on its own. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has three parts — of which the first is the one that is easy to get wrong, and the third was found only after the first two had each been got right. **A Registrar account's record is the one exception to reading the whole directory**: only the Admin's lookup reaches it, and nobody else's add or edit is asked about it (Section 29).
 
 **Which candidates appear.** A candidate outside the viewer's scope is surfaced only if they would **still** have matched a subject carrying nothing Section 8 protects — no birthday, no mobile number. Membership out of scope is therefore a function of the names and sex alone.
 
@@ -939,7 +940,7 @@ Zero is legitimate in exactly three situations: a Person encoded but not yet ass
 
 The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state.
 
-**Nothing stores which of the three a given Person is in; the API derives it from what is stored** (ruling of 2026-09-21). A Person holding no pastoral assignment is *archived* where their lifecycle says so, *outside the pastoral tree* where they hold an `ADMIN` or `NETWORK_ADMIN` account and have never held a pastoral assignment, and otherwise has *no pastoral leader yet*. The server answers which, on the pastoral path, and a client never works it out. "Never held" is narrower than holding `ADMIN`, deliberately: a leader who also holds `ADMIN` and whose own assignment ends is waiting for a leader like anyone else, and reads that way. A screen or attention list that surfaces Persons without a pastoral assignment still excludes accounts holding `ADMIN` or `NETWORK_ADMIN`, which is the remedy this section gave before the label existed.
+**Nothing stores which of the three a given Person is in; the API derives it from what is stored** (ruling of 2026-09-21). A Person holding no pastoral assignment is *archived* where their lifecycle says so, *outside the pastoral tree* where they hold an `ADMIN`, `NETWORK_ADMIN` or `REGISTRAR` account (decisions 0469 and 0499) and have never held a pastoral assignment, and otherwise has *no pastoral leader yet*. The server answers which, on the pastoral path, and a client never works it out. "Never held" is narrower than holding `ADMIN`, deliberately: a leader who also holds `ADMIN` and whose own assignment ends is waiting for a leader like anyone else, and reads that way. A screen or attention list that surfaces Persons without a pastoral assignment still excludes accounts holding `ADMIN` or `NETWORK_ADMIN`, which is the remedy this section gave before the label existed.
 
 **A person whose pastoral leader holds no open pastoral assignment appears on an attention list, and it is reachable at `GET /api/v1/people/awaiting-reassignment`** (ruling of 2026-09-10). Section 20 requires the list and named its subject by lifecycle — "a person whose pastoral leader is **archived**" — where the condition that produces the gap is the wider one stated here: a leader holding no assignment, by any of the three causes above (archival among them no longer, since decision 0397 refuses archiving somebody who pastors anyone). Keyed on the flag it would surface one cause and miss two, while Section 20's reconstruction fires on all three. **It excludes a person whose leader holds an `ADMIN` account**, which is this section's own remedy one relationship over: there it keeps an administrator off a list of people waiting for a leader, and here it keeps their disciples off a list of leaders needing replacement. The exclusion prejudges nothing — whether such a Person may hold disciples at all is recorded as open, and this list is simply not where that state would be surfaced.
 
@@ -947,7 +948,7 @@ It is guarded by `people.view_subtree` against the actor, with the scope narrowe
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
-Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time — that index carries *at most one*, and Section 11 adds a deferred constraint trigger for *at least one* on an `ACTIVE` Cell, which is a constraint on an absent row and so is not expressible as an index; one `PENDING` `NEW_CELL` row per prospective leader and one `PENDING` `HANDOVER` row per Cell for `cell_leadership_requests`, which are two rules rather than one and are argued separately in Section 10; and one active row per account per role for `account_roles`. `account_roles` carries further uniqueness constraints of its own, all named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, at most one of `SENIOR_PASTOR` and `ADMIN` per account, and `NETWORK_ADMIN` held alone. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
+Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time — that index carries *at most one*, and Section 11 adds a deferred constraint trigger for *at least one* on an `ACTIVE` Cell, which is a constraint on an absent row and so is not expressible as an index; one `PENDING` `NEW_CELL` row per prospective leader and one `PENDING` `HANDOVER` row per Cell for `cell_leadership_requests`, which are two rules rather than one and are argued separately in Section 10; and one active row per account per role for `account_roles`. `account_roles` carries further uniqueness constraints of its own, all named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, at most one of `SENIOR_PASTOR` and `ADMIN` per account, and `NETWORK_ADMIN` and `REGISTRAR` each held alone (Sections 7 and 29). `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
 
 Two concurrently open assignments would place one person in two branches at once and double-count them in every subtree total, violating the unique-people rule in Section 20.
 
@@ -1178,6 +1179,7 @@ Exceptions with explicit system access:
 - Senior Pastor
 - Administrator
 - Network Admin (Section 7, decision 0469)
+- Registrar (Section 29, decision 0499)
 
 ### Account fields
 
@@ -1211,7 +1213,7 @@ refresh_tokens
 
 An access token lives **15 minutes**. A refresh token lives until its session ends (below), at most 30 days from issue, and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
 
-**A session ends thirty days after its sign-in, and seven for an account holding `ADMIN`, `NETWORK_ADMIN` or `SENIOR_PASTOR`, however often it is used** (ruling of 2026-11-06, decision 0450). Before it, each rotation moved the thirty days forward, so a session in the installed app, which has no idle limit, never ended. Each refresh token carries `session_ends_at`, set at sign-in from the account's roles and carried unchanged to every replacement, and its `expires_at` never passes it, which a `CHECK` constraint holds. A renewal past it is refused `UNAUTHENTICATED` with `details: { reason: 'SESSION_AGE', days }`, after the checks that refuse a revoked or disabled session, and is no reuse signal, a retry of a renewal whose answer was lost (decision 0128) included. The tab that tried to renew opens the sign-in page saying "It has been 30 days since you signed in on this device. Sign in again to continue, to keep members' details safe." (7 for those accounts). A password change keeps the session it was made on with its end unchanged (decision 0351), and signing in again starts a new session. A session signed in before the ruling was given an end counted from the day its migration ran, not from a sign-in no row records, so nothing is backdated.
+**A session ends thirty days after its sign-in, and seven for an account holding `ADMIN`, `NETWORK_ADMIN`, `SENIOR_PASTOR` or `REGISTRAR`, however often it is used** (ruling of 2026-11-06, decision 0450; `REGISTRAR` by decision 0499). Before it, each rotation moved the thirty days forward, so a session in the installed app, which has no idle limit, never ended. Each refresh token carries `session_ends_at`, set at sign-in from the account's roles and carried unchanged to every replacement, and its `expires_at` never passes it, which a `CHECK` constraint holds. A renewal past it is refused `UNAUTHENTICATED` with `details: { reason: 'SESSION_AGE', days }`, after the checks that refuse a revoked or disabled session, and is no reuse signal, a retry of a renewal whose answer was lost (decision 0128) included. The tab that tried to renew opens the sign-in page saying "It has been 30 days since you signed in on this device. Sign in again to continue, to keep members' details safe." (7 for those accounts). A password change keeps the session it was made on with its end unchanged (decision 0351), and signing in again starts a new session. A session signed in before the ruling was given an end counted from the day its migration ran, not from a sign-in no row records, so nothing is backdated.
 
 **A session begun in a browser signs out after thirty minutes without activity; one begun in the app installed on a phone or tablet's home screen has no idle limit** (ruling of 2026-11-04, decision 0435), and ends with its session (decision 0450). An app installed on a computer signs out as a browser does. Activity is a click, tap, key, scroll or pointer movement in any DREAMS tab of the browser, every tab being one session; at twenty-eight minutes a box asks whether somebody is still there, with *Stay signed in* and *Sign out now*, and at thirty the session is signed out as *Sign out* signs it out, the sign-in page saying why. The client tells the server at sign-in which the session begins in (`session_kind`, `BROWSER` by default, or `INSTALLED`), and the server holds a deadline of its own for a session that says it began in a browser: its refresh token carries `idle_expires_at`, thirty-five minutes after issue and renewed with each rotation, and a refresh past it is refused as an expired one is and is no reuse signal. The client renews on any activity two minutes or more after its last renewal, and an idle tab renews nothing, so while renewals succeed the server's deadline falls at least thirty-three minutes after the last activity, after the client's warning and sign-out. The kind is what the client says, so the deadline guards a session left behind, not one whose client says `INSTALLED`. A session signed in before this carries no server deadline until it signs in again, though a browser still signs it out when idle, and an idle sign-out deletes unsaved attendance marks as any sign-out does (decision 0345).
 
@@ -1303,7 +1305,7 @@ Include:
 - Account Activation / Set Password via email
 - Change Password
 - Secure token handling
-- A second sign-in step for `ADMIN`, `NETWORK_ADMIN` and `SENIOR_PASTOR` accounts (below)
+- A second sign-in step for `ADMIN`, `NETWORK_ADMIN`, `SENIOR_PASTOR` and `REGISTRAR` accounts (below)
 - A pause after ten wrong passwords (below)
 
 ### A pause after ten wrong passwords
@@ -1338,7 +1340,7 @@ signing in is unchanged, and email remains how the system reaches the holder.
 
 ### The second sign-in step
 
-**An account holding `ADMIN`, `NETWORK_ADMIN` or `SENIOR_PASTOR` passes a second step to sign in** (ruling of
+**An account holding `ADMIN`, `NETWORK_ADMIN`, `SENIOR_PASTOR` or `REGISTRAR` passes a second step to sign in** (ruling of
 2026-09-28): a six-digit authenticator-app code (TOTP, RFC 6238). These are the accounts that
 read the whole church or, for a Network Admin (decision 0469), one Network, minors' records included. `LEADER` accounts sign in with a password
 alone. *This section said "Do not require 2-step verification/MFA in V1" until that ruling.*
@@ -1387,7 +1389,7 @@ That is what makes a password permissible. A password *is* a cognitive function 
 - a puzzle or a transcription challenge is a cognitive function test that neither object-recognition nor personal-content covers, so 3.3.8 forbids it outright unless an alternative or a mechanism is provided. A distorted-text CAPTCHA on its own is a conformance failure, not a matter of taste
 - **image selection is permitted by 3.3.8** under object recognition. Refusing it here goes beyond Level AA and matches 3.3.9 at AAA, and it is a choice about the people using this system, most of whom sign in on a phone
 
-**The second sign-in step is the one exception, and it is narrow** (ruling of 2026-09-28). An authenticator code on the same device as the sign-in is filled by paste or autofill, which is a mechanism. Read from a phone and typed into another device, it is a transcription task, and 3.3.8 is not met there. The owner accepted that for `ADMIN`, `NETWORK_ADMIN` (decision 0469) and `SENIOR_PASTOR` accounts alone; every other web sign-in conforms.
+**The second sign-in step is the one exception, and it is narrow** (ruling of 2026-09-28). An authenticator code on the same device as the sign-in is filled by paste or autofill, which is a mechanism. Read from a phone and typed into another device, it is a transcription task, and 3.3.8 is not met there. The owner accepted that for `ADMIN`, `NETWORK_ADMIN` (decision 0469), `SENIOR_PASTOR` and `REGISTRAR` (decision 0499) accounts alone; every other web sign-in conforms.
 
 ### Tokens, not browser sessions
 
@@ -1615,8 +1617,8 @@ an administrator can obtain through the product.
 
 **Provisioning is an explicit action under `accounts.manage`, and what it may
 create is bounded by what qualifies the holder.** Cell leadership is the ordinary
-qualification and it is the one this section describes. The three exceptions above —
-Senior Pastor, Administrator and Network Admin — are the others, and they are exceptions to the
+qualification and it is the one this section describes. The four exceptions above —
+Senior Pastor, Administrator, Network Admin and Registrar — are the others, and they are exceptions to the
 *qualification*, never to the workflow: each still gets an account created,
 an activation email sent, and a password the holder sets themselves.
 
@@ -1822,7 +1824,7 @@ Sex is excluded deliberately. Sex determines Network under the homogeneous-netwo
 
 ### Role catalog
 
-Four roles exist. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it. **Two capabilities are an exception and may not be granted to an account holding `SENIOR_PASTOR` at all** — see How grants are held, below.
+Five roles exist: the four in the table below, and the Registrar, whose one capability is given in Section 29 and who holds nothing else. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it. **Two capabilities are an exception and may not be granted to an account holding `SENIOR_PASTOR` at all** — see How grants are held, below.
 
 | Capability | Senior Pastor | Admin | Network Admin | Leader |
 | --- | --- | --- | --- | --- |
@@ -1864,6 +1866,7 @@ Four roles exist. Each carries the default capabilities and scopes below. Anythi
 | `training.view_subtree` | Whole Church | Whole Church | Network | own/subtree, with Full view |
 | `training.confirm` | — | Whole Church | Network | own/subtree, with Full view |
 | `training.confirm_on_behalf` | — | Whole Church | Network | own/subtree, with Full view |
+| `equipping.manage` | — | Whole Church | — | — |
 
 Eight of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
@@ -1893,15 +1896,15 @@ A role is a starting set, never a ceiling or a substitute for the checks themsel
 
 ### The Network Admin
 
-**A Network Admin administers one Network from outside its pastoral tree** (owner ruling of 2026-11-11, decision 0469). `NETWORK_ADMIN` is a role of its own, with no limit on how many one Network has. It is given only by an account holding `accounts.manage` at Whole Church, on one form in the `Admin` item that creates the Person and the account together, with no pastoral leader and under Section 3's duplicate rules; that is the only route creating a Person with no leader, beside Section 2's import of a root and Section 6's first Admin account. Its defaults are the column above. "Network" there is the holder's own Network, set by their sex (Section 4), read from their `network_assignments` as it stands now and stored on no role row, so a correction of their sex (Section 4) moves it, and ends their sessions so that no screen goes on showing the old Network. Wherever this section says a `NETWORK` grant covers a target, this role's default covers it on the same terms and at the instant that target carries; a holder with no Network covers nothing.
+**A Network Admin administers one Network from outside its pastoral tree** (owner ruling of 2026-11-11, decision 0469). `NETWORK_ADMIN` is a role of its own, with no limit on how many one Network has. It is given only by an account holding `accounts.manage` at Whole Church, on one form in the `Admin` item that creates the Person and the account together, with no pastoral leader and under Section 3's duplicate rules; that and the form giving a Registrar account (Section 29) are the only routes creating a Person with no leader, beside Section 2's import of a root and Section 6's first Admin account. Its defaults are the column above. "Network" there is the holder's own Network, set by their sex (Section 4), read from their `network_assignments` as it stands now and stored on no role row, so a correction of their sex (Section 4) moves it, and ends their sessions so that no screen goes on showing the old Network. Wherever this section says a `NETWORK` grant covers a target, this role's default covers it on the same terms and at the instant that target carries; a holder with no Network covers nothing.
 
-**It is held alone, and outside the tree.** An account holding `NETWORK_ADMIN` holds no other role, which partial unique indexes over `account_roles` enforce by pairing it with each of the other three. The form creates the Person it gives the role to, so nobody who has held a place in the tree or a Cell comes to hold it that way (what a merge into such a record does is recorded as open in `CLAUDE.md`), and a Person holding it is refused, `INVARIANT_VIOLATION`, as the subject or the leader of a pastoral assignment, as a Cell's leader and as a Cell's member. So they have no disciples and no DCC line, are outside the pastoral tree (Section 5), and are in no count of people (decision 0339). Nobody is upline of them, so Section 5 invariant 4 asks nothing of them and exempts them from nothing.
+**It is held alone, and outside the tree.** An account holding `NETWORK_ADMIN` holds no other role, which partial unique indexes over `account_roles` enforce by pairing it with each of the other four. The form creates the Person it gives the role to, so nobody who has held a place in the tree or a Cell comes to hold it that way (what a merge into such a record does is recorded as open in `CLAUDE.md`), and a Person holding it is refused, `INVARIANT_VIOLATION`, as the subject or the leader of a pastoral assignment, as a Cell's leader and as a Cell's member. So they have no disciples and no DCC line, are outside the pastoral tree (Section 5), and are in no count of people (decision 0339). Nobody is upline of them, so Section 5 invariant 4 asks nothing of them and exempts them from nothing.
 
 **What the column gives is narrowed by domain checks**, each refused `SCOPE_DENIED` because each concerns the actor's authority over the target:
 
 - **`accounts.manage` reaches only an account holding `LEADER` and no other role, whose Person is in their Network and is not a Network root** (decision 0470). They give such an account, resend its activation, send it a reset, change its email, end its sessions, and disable or re-enable it. Any other account is neither listed for them nor touched, their own included; their own password, email and sessions are their own to change, as anyone's are (Section 6).
 - **`roles.manage` reaches only *Full view* on such an account.** *Approves Cells* and *Moves people* need it at Whole Church, and clearing Full view while either is on is refused, so that a tick only the Admin gives is only the Admin's to remove; the Admin clears those first.
-- **A Person holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`, and a Network root with or without an account, is read and never changed.** No edit, archive, restore or move reaches them. A move reaches the person moved: a Network Admin moves a person to their Network's root, and away from that root to another leader (decision 0472). Nor are they added to or removed from a Cell as a member; a closure, or the approval of a request, still decides for every member, such a Person included, and a Cell such a Person leads is a Cell like any other (decision 0473). Their own basic details are the one exception, and only for their own Person. `GET /api/v1/people/{id}` answers `read_only: true` for such a record read by a Network Admin, so its page offers none of the four. Nor do they place anybody under an administrator who holds no pastoral assignment (owner ruling of 2026-11-11, decision 0471): that stays with a Whole Church holder, and whether such a Person may be given disciples at all is recorded as open in `CLAUDE.md`.
+- **A Person holding `SENIOR_PASTOR`, `ADMIN` or `NETWORK_ADMIN`, and a Network root with or without an account, is read and never changed.** A Registrar account's record (`REGISTRAR`) is not read at all by anybody not holding `ADMIN`: it answers `NOT_FOUND` where their scope would otherwise admit it, and is refused as any person outside their scope is where it would not (Section 29, decision 0499). No edit, archive, restore or move reaches them. A move reaches the person moved: a Network Admin moves a person to their Network's root, and away from that root to another leader (decision 0472). Nor are they added to or removed from a Cell as a member; a closure, or the approval of a request, still decides for every member, such a Person included, and a Cell such a Person leads is a Cell like any other (decision 0473). Their own basic details are the one exception, and only for their own Person. `GET /api/v1/people/{id}` answers `read_only: true` for such a record read by a Network Admin, so its page offers none of the four. Nor do they place anybody under an administrator who holds no pastoral assignment (owner ruling of 2026-11-11, decision 0471): that stays with a Whole Church holder, and whether such a Person may be given disciples at all is recorded as open in `CLAUDE.md`.
 - **A Network root's own DCC line stays with the root and a Whole Church holder, and their own SUYNL, Training and Conquest with another actor whose confirming grant is Whole Church**, nobody filing their own (decision 0280, Sections 27 and 28). What a root or an administrator in the tree owes for other people is another matter: a root's 12 on a Sunday, whether or not the root holds an account, and the meetings of a Cell they lead, are recorded and corrected by a Network Admin on their behalf while the week is open, as by the Admin (Sections 9 and 14). Whose line a Network Admin records is decided by the Network the person is in now: somebody whose sex is corrected while a week is open has that Sunday recorded by the Network Admin of their new Network, and not by the one they left (owner ruling of 2026-11-12, decision 0474). No screen leads the new Network's Admin to that line, its checklist belonging to a leader of the other Network.
 - **What a leader owes for a Person in the tree who holds an `ADMIN` account is recorded like anybody else's** (owner ruling of 2026-11-12, decision 0475). Their DCC line, their SUYNL lessons and their Training graduations are their pastoral leader's records about them, so a Network Admin records and corrects them on that leader's behalf, while editing, archiving, restoring and moving that Person stay refused. A Network root stays as the bullet above leaves it, whatever account the root holds.
 
@@ -2363,7 +2366,7 @@ What travels with it is decided by the surface rather than by this list. A membe
 
 Selecting an existing person during a duplicate-resolution workflow reuses that Person record but must not automatically transfer pastoral ownership, Cell membership, or any other relationship. Any such transfer requires its own explicit, authorized action.
 
-Senior Pastors retain authorized whole-church visibility across both Men's and Women's Networks per Section 4 and are not subject to the out-of-scope restriction above. Admin access follows explicit administrative permissions per Section 7. A Network Admin's search and pickers stay inside their own Network, which is their scope, and the church-wide directory is refused them; Section 3's lookup gives them, for a match in the other Network, the line a leader gets for one outside their scope, naming nobody (decision 0469).
+Senior Pastors retain authorized whole-church visibility across both Men's and Women's Networks per Section 4 and are not subject to the out-of-scope restriction above, with one exception: a Registrar account's record, which only the Admin reads (Section 29). Admin access follows explicit administrative permissions per Section 7. A Network Admin's search and pickers stay inside their own Network, which is their scope, and the church-wide directory is refused them; Section 3's lookup gives them, for a match in the other Network, the line a leader gets for one outside their scope, naming nobody (decision 0469).
 
 ---
 
@@ -4918,6 +4921,7 @@ Recommended REST areas:
 /api/v1/suynl                             Section 28
 /api/v1/training                          Section 28
 /api/v1/encounter-seasons                 Section 28 (decision 0296)
+/api/v1/equipping                         Section 29 (decision 0499)
 /api/v1/settings                          Section 7 (decision 0425)
 ```
 
@@ -5431,7 +5435,7 @@ Six criteria are called out, in four groups, because this system's own rules bea
 
 **2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
 
-**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it, and the one stated exception: the second sign-in step of `ADMIN`, `NETWORK_ADMIN` and `SENIOR_PASTOR` accounts, where a code typed from another device does not meet 3.3.8.
+**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it, and the one stated exception: the second sign-in step of `ADMIN`, `NETWORK_ADMIN`, `SENIOR_PASTOR` and `REGISTRAR` accounts, where a code typed from another device does not meet 3.3.8.
 
 **2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
 
@@ -5728,6 +5732,9 @@ Shapes are given in the section that owns each rule; this is the index.
 | `suynl_lessons` | `suynl` | Section 28 |
 | `training_graduations` | `training` | Section 28 |
 | `encounter_seasons` | `training` | Section 28, decision 0296 |
+| `equipping_classes` | `equipping` | Section 29, decision 0499 |
+| `equipping_registrations` | `equipping` | Section 29, decision 0499 |
+| `equipping_enrollments` | `equipping` | Section 29, decision 0499 |
 
 Eight of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`, `conquest_confirmations`, `suynl_lessons`, `training_graduations` — the last three because Sections 27 and 28 supersede a record rather than deleting it, and a column per goal, lesson and school on `persons` would satisfy every sentence of those sections while losing every correction. A column satisfies every sentence about them and cannot answer a question about a past period.
 
@@ -5871,9 +5878,9 @@ SUYNL, then the LC Party, then Life Class, whose fifth lesson is the Encounter, 
 
 So there are four schools, Life Class and SOL 1 to 3, with the Encounter inside Life Class. Together they run from a personal foundation in Christ to leadership and disciple-making.
 
-**The order is displayed and never enforced.** No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none.
+**The order is displayed and never enforced** for these graduations. No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. **Registering for Life Class is the exception, and it warns rather than refuses** (decision 0499): SUYNL lessons 1 to 4 are one of its requirements, read and shown when somebody is registered, and a person not meeting it is registered with exception and a reason (Section 29). An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none; the Life Class requirement brings it back in another shape, at Life Class rather than at the Encounter, and as a warning rather than a refusal (decision 0499, point 8).
 
-**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to nine lessons and is recorded here as a single graduation. An enrolment application planned elsewhere will own enrolment and lesson progress for the schools; recording their lessons here as well would give the church two records of one fact, free to disagree, with nothing able to keep them in step.
+**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to nine lessons and is recorded here as a single graduation. An enrolment application planned elsewhere was to own enrolment and lesson progress for the schools; **that application is Section 29's `equipping` module** (decision 0499), and it records enrolment here rather than elsewhere, so the two records the sentence warned of are one. Its lessons and grades are owed by later rulings, and until a posted final grade files a graduation, Training's graduations are still filed by leaders.
 
 ### SUYNL
 
@@ -6021,6 +6028,52 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 ### What Section 21 records
 
 `suynl_lesson.confirmed`, `suynl_lesson.corrected`, `training_graduation.confirmed` and `training_graduation.corrected`, each naming the **Person** the record is about as its target, with the lesson or the program and the dates in `before` and `after`, the reason on a correction, and — where it was filed for a downline leader — the confirming leader alongside the actor, as one entry rather than two (Section 21).
+
+## 29. Equipping
+
+`Equipping` is the church's school (owner rulings of 2026-11-17, decision 0499), behind which is the `equipping` module, owning `equipping_classes`, `equipping_registrations` and `equipping_enrollments` (migration `0050_equipping.sql`). Its first two steps are built, **Registration** and **Enrollment**, for **Life Class** alone; Faculty, make-up lessons, weekly grades, final grades and posting them are owed by later rulings. Nothing here files a Training graduation (Section 28).
+
+### Who
+
+**`equipping.manage`, at Whole Church only, guards every route.** The Admin holds it by default, and so does the **Registrar**, a role of its own given by the Admin, which holds that capability and nothing else and is **held alone**, partial unique indexes over `account_roles` pairing it with each of the other four as `NETWORK_ADMIN` is paired. A Registrar's screens are `EQUIPPING`: `Registration` and `Enrollment` in the sidebar, and in the bottom tab bar on a phone (owner, 2026-11-18), and no other item; the Admin has one `Equipping` item whose tabs they are. A Registrar signs in with the second step and holds the seven-day session, as an Admin does (Section 6; the owner, 2026-11-17 and 2026-11-18), because the school reads church-wide records, minors' birthdays among them; and only the Admin reads a Registrar's Person, which answers `NOT_FOUND` to a Network Admin and a Senior Pastor as to anybody else (below). The person picker searches the church and is **bounded and recorded as a church-wide search is** (Section 8, decision 0303), four fields a row. What the module reads of a person it reads through the owning modules (Section 2), so the role holds no read capability of theirs.
+
+**The Registrar account is a Person record of its own, and in no count of people** (owner, 2026-11-18, replacing the two accounts tied to one Person chosen the day before). The Admin creates it with the record, by a form of its own, as the form giving `NETWORK_ADMIN` does (Section 7), under the person's real name, and the account row reads *Registrar account* under the name. Like a Network Admin's record it is outside the pastoral tree: refused, `INVARIANT_VIOLATION`, as the subject or the leader of a pastoral assignment and as a Cell's leader or member, so it has no disciples and no DCC line and is in no count of people (decision 0339). The ordinary account form does not give the role. A leader who also runs the school has two records, their own and the Registrar account's; the duplicate check names the one to the other when the Registrar record is made, and the Admin goes on deliberately. **Archiving the Registrar record disables its account**, and the archive does not offer keeping it; archiving their own record leaves the Registrar account as it is, and the Admin disables it separately. That archiving sentence follows the recommendation below rather than the owner's words. **It is the one exception to one Person record per individual** (Section 1; owner, 2026-11-18): **a merge is refused while either record holds a Registrar account** (`EQUIPPING_ACCOUNT`), in either direction. **Only the Admin finds it**: every people search and picker leaves it out for anybody not holding `ADMIN`, a Network Admin and a Senior Pastor included, and its page and pastoral path answer `NOT_FOUND` to them where their scope would otherwise admit it, a reader outside that scope being refused as for anybody else (decision 0390). **To the school it does not exist for the Admin either**, being an account's record and never somebody signed up for a class: the Equipping person picker leaves it out, and the registration form, registering and naming it a class's Teacher answer `NOT_FOUND` (owner, 2026-11-18). The Admin's search rows mark it *Registrar account* (owner, 2026-11-18: "only the accounts of equipping is visible in super admin search"). **Section 3's duplicate check leaves it out the same way** (owner, 2026-11-18): for anybody not holding `ADMIN` it is neither listed nor withheld as a line naming nobody (decision 0405), and adding or editing a Person is never asked about it, because the person's own record beside it is no duplicate and still catches a real one; the Admin's check lists it and asks about it as about anybody else.
+
+**Archiving a Person closes their open place in the school** (decision 0499, point 12: the recommendation shown to the owner on 2026-11-18, which they left standing without ruling on it): in the archive's own transaction their open enrollment ends `ARCHIVED` and their registration is cancelled with the reason *Archived*, each kept and audited. A Teacher who is archived stays recorded on their class, and who teaches after that is settled with Faculty. Enrolling and moving refuse an archived or merged Person, as registering does (Sections 3 and 6). **A merge is refused while the duplicate holds an open registration** (`IN_THE_SCHOOL`), so one human never holds two places in one level and term; the Registrar cancels it first. **Each person opened on the registration form is recorded** as a full-record read is (Section 8, decision 0414), since it carries the birthday and the attendance figures.
+
+### Registration
+
+**A registration is a Person, a level and a term.** The Person is chosen from the system and current; a term is Term 1, 2 or 3 of a year; one registration per Person, level and term, a cancelled one aside (an index). No money is recorded.
+
+**Life Class has six requirements.** Four are read from the records when the person is picked, each as things stand now:
+
+- **Has a leader**: an open pastoral assignment (Section 5).
+- **Regular in a Cell Group**: five or more Cell meetings attended, Section 12's ladder, counted as the person's own page counts them.
+- **Regular in DCC**: five or more Sundays, Section 9's ladder.
+- **SUYNL, lessons 1 to 4**: a current row for each of lessons 1, 2, 3 and 4, whatever other lessons are recorded (Section 28; the owner, 2026-11-18, replacing any five).
+
+Two are ticked by the Registrar after asking the person's leader: **has a physical Bible** and **has the Life Class Manual** (the owner withdrew a third, consistent in devotion, on 2026-11-18). Both are always required, and the row records who registered and when.
+
+**A record requirement not met warns rather than refuses.** The Registrar says why they are registered anyway, which is then required; the row keeps the requirements not met and the reason, a constraint refusing one without the other, and reads *Registered with exception*. A merged record's attendance and lessons count for the record kept (Section 3).
+
+**A registration is never deleted.** It is *Registered*, *Registered with exception*, *Enrolled* while an enrollment of it is open, or *Cancelled* with a reason, which is refused while it is in a class.
+
+### Enrollment
+
+**A class is a level in a term**, with a name unique in its term, a day and time, a place, its first lesson, a Teacher, and an Encounter season (Section 28). **The Teacher is a current Cell Leader in the tree** (owner, 2026-11-18): an open leadership of an `ACTIVE` Cell (Section 11) and an open pastoral assignment, a Network root's included (Section 5). Opening a class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them, which the owner accepted although it tells the Registrar who leads a Cell (owner, 2026-11-18). **The rule binds when a class is opened**: a Teacher who later stops leading a Cell, or whose assignment ends, keeps the class they were named to (owner, 2026-11-18). **It records who runs it, which is the church for now**: each Primary running classes for the people in their care is the owner's plan, and the column is what lets it be turned on. The Teacher gains their own access with the weekly grades.
+
+**Enrolling places several registrations in one class at once, all or none**, each of the class's level and term, not cancelled and in no class, and two checks are never overridden:
+
+- **a birthday is recorded**; and
+- **the person is 14 on the first day of their own Network's Encounter weekend** in the class's season (owner, 2026-11-19: "14 by the first day", replacing 15). The Encounter is Life Class lesson 5 (decision 0295), so this is where its age is checked.
+
+**One class per person, level and term**, an index on the open enrollment. A person is **moved** to another class of the same level and term, the two checks made again against its season, or **withdrawn** with a reason; an enrollment that ends is kept, with when and why. Nothing in the three tables is deleted, nor is a row’s person, level, term, registration or class rewritten, nor a cancellation or an ending undone, a trigger refusing each; nobody is placed in a class on a cancelled registration. A move closes one enrollment and opens another on the same registration, so what later steps record hangs on the registration and carries with a move (the owner’s “Move keeps grades”).
+
+**The people ready to enroll are a table, and on a phone a card each** (owner, 2026-11-18): the name beside its tick box, or with the reason the person cannot be enrolled under it and no box, then their leader, their age at the Encounter and how they registered. **Each class is a button of two lines** (owner, 2026-11-18): its name, then its day, its time as said aloud and how many are enrolled, as in *Tue 7:00 pm · 1 enrolled*. **Those who can be enrolled come first**, with the Enroll button under them, and those who cannot after, under *Can't enroll yet*, each reason saying what is missing; where more than one can be enrolled one control ticks them all, and a saved Enroll names whom it placed (owner, 2026-11-18). **Move and Withdraw are buttons that say what they do** (owner, 2026-11-18): the move dialog saying that the registration and what was recorded carry and the two checks are made again, the withdraw dialog saying that the person goes back to those ready to enroll, that the withdrawal is kept and cannot be undone, and that taking them off Life Class for the term is cancelling the registration.
+
+### What Section 21 records
+
+`equipping_registration.created` and `.cancelled`, and `equipping_enrollment.created` and `.ended`, each targeting the **Person**, with the requirements not met and the reason, or the class and the end reason; and `equipping_class.created`, targeting the class, which is about nobody in particular. The Audit Log shows them under Growth for now.
 
 ---
 

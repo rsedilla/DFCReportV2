@@ -45,8 +45,12 @@ export function ArchivePersonDialog({
     queryFn: ({ signal }) => getAccountForPerson(person.id, signal),
     enabled: open,
   });
+  // A Registrar account is disabled with its record (decision 0499): the server says so, and
+  // no choice is offered.
   const asksAboutAccess =
-    account.data?.account != null && account.data.account.status !== 'DISABLED';
+    account.data?.account != null &&
+    account.data.account.status !== 'DISABLED' &&
+    account.data.account.disabled_with_record !== true;
 
   const [writeKey, renewWriteKey] = useWriteKey();
   const send = useMutation({

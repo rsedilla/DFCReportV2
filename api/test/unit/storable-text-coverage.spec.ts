@@ -104,6 +104,10 @@ describe('storable text is refused at the edge, on every field that takes text',
     'CellByLeaderDto.cursor',
     'DccPendingLeadersDto.cursor',
     'CellPendingQueryDto.cursor',
+    // Decision 0499's registrations list. `decodeCursor` in `equipping.service.ts` accepts
+    // its instant only in the exact form `toISOString` writes and its identifier only where
+    // `isUuid` holds, so neither key can carry a null byte or a lone surrogate to the query.
+    'ListRegistrationsDto.cursor',
     'RefreshDto.refresh_token',
     'LogoutDto.refresh_token',
     'LoginDto.password',

@@ -188,7 +188,35 @@ export class PeopleController {
             membership.personIds.has(canonicalId(candidateId)) ||
             (leaderId !== null && membership.personIds.has(canonicalId(leaderId))),
         ),
+      await this.hiddenFromDuplicateCheck(actor),
     );
+  }
+
+  /**
+   * **A Registrar account's record opens for the Admin alone** (owner, 2026-11-18, decision
+   * 0499), as the Admin's search alone finds it: its page and its pastoral path tell anybody
+   * else it does not exist.
+   */
+  private async assertEquippingRecordOpensForAdmin(actor: Actor, id: string): Promise<void> {
+    if (
+      (await this.read.equippingAccountPersons()).has(canonicalId(id)) &&
+      !(await this.authorization.authorityFor(actor.accountId)).roles.includes('ADMIN')
+    ) {
+      throw new NotFoundError('No such person.');
+    }
+  }
+
+  /**
+   * **A Registrar account's record is left out of the duplicate check for anybody but the
+   * Admin** (owner, 2026-11-18, decision 0499): neither shown nor withheld, and never gated on.
+   * It is a second record of one person on purpose, so a person's own record beside it is no
+   * duplicate, and that own record still catches a real one.
+   */
+  private async hiddenFromDuplicateCheck(actor: Actor): Promise<ReadonlySet<string>> {
+    const isAdmin = (await this.authorization.authorityFor(actor.accountId)).roles.includes(
+      'ADMIN',
+    );
+    return isAdmin ? new Set() : this.read.equippingAccountPersons();
   }
 
   /**
@@ -275,6 +303,8 @@ export class PeopleController {
       undefined,
       // The pre-flight list gives the reason the save will stop on (decision 0399).
       APPLICATION_RULES,
+      undefined,
+      await this.hiddenFromDuplicateCheck(actor),
     );
 
     const shown = visible.slice(0, limit);
@@ -555,7 +585,10 @@ export class PeopleController {
    */
   @Get(':id/pastoral-path')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async pastoralPath(@Param('id') id: string): Promise<{
+  async pastoralPath(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<{
     data: Record<string, unknown>[];
     next_cursor: string | null;
     no_leader_reason: 'ARCHIVED' | 'OUTSIDE_TREE' | null;
@@ -563,6 +596,7 @@ export class PeopleController {
     // Asked before the path, so an unknown identifier is a 404 rather than a
     // one-element path naming a person who does not exist. The guard resolved
     // scope against this id and does not establish that the row is there.
+    await this.assertEquippingRecordOpensForAdmin(actor, id);
     const person = await this.read.findById(id);
     if (!person) {
       throw new NotFoundError('No such person.');
@@ -614,6 +648,7 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @Param('id') id: string,
   ): Promise<Record<string, unknown>> {
+    await this.assertEquippingRecordOpensForAdmin(actor, id);
     const person = await this.read.findById(id);
     if (!person) {
       // A record merged away keeps its page, read only, naming where the person is now
@@ -790,6 +825,13 @@ export class PeopleController {
           ? inNetwork
           : new Set([...scoped].filter((id) => inNetwork.has(id)));
 
+    // **A Registrar account's record is found by the Admin's search alone** (owner, 2026-11-18,
+    // decision 0499): a Network Admin, a Senior Pastor and every picker leave it out, in the
+    // query so a page is never short. The Admin's rows say which records they are.
+    const equipping = await this.read.equippingAccountPersons();
+    const isAdmin = (await this.authorization.authorityFor(actor.accountId)).roles.includes(
+      'ADMIN',
+    );
     const { rows, nextCursor } = await this.read.searchByName(
       query.q ?? null,
       query.limit ?? (query.church_wide ? CHURCH_WIDE_PAGE_LIMIT : 50),
@@ -797,7 +839,7 @@ export class PeopleController {
       restrictTo,
       // A Member ID matches only inside the searcher's own scope: church-wide, a prefix
       // such as `M-00` would page the directory the minimum exists to protect.
-      { memberId: !query.church_wide },
+      { memberId: !query.church_wide, ...(isAdmin ? {} : { exclude: equipping }) },
     );
 
     // **The page is answered in a fixed number of queries** (checklist row
@@ -814,23 +856,28 @@ export class PeopleController {
         rows.filter((person) => !inView(person.id)).map((person) => person.id),
       ),
     ]);
+    const labelled = (row: Record<string, unknown>, id: string) =>
+      isAdmin && equipping.has(canonicalId(id)) ? { ...row, equipping_account: true } : row;
     const data = rows.map((person) =>
-      inView(person.id)
-        ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
-          // People list's leader column (decision 0259).
-          // A list row's name has the middle name's initial (decision 0375); the person's own
-          // record, `GET /people/{id}`, keeps it whole.
-          {
-            // Without birthday, civil status and mobile number (decision 0414).
-            ...listedProfile(person),
-            full_name: composeName(person),
-            direct_leader_name: leaderNames.get(person.id) ?? null,
-          }
-        : this.read.identityOnly(
-            person,
-            networks.get(person.id) ?? null,
-            leaderNames.get(person.id) ?? null,
-          ),
+      labelled(
+        inView(person.id)
+          ? // The pastoral leader's name, as an out-of-scope row already carries it, for the
+            // People list's leader column (decision 0259).
+            // A list row's name has the middle name's initial (decision 0375); the person's own
+            // record, `GET /people/{id}`, keeps it whole.
+            {
+              // Without birthday, civil status and mobile number (decision 0414).
+              ...listedProfile(person),
+              full_name: composeName(person),
+              direct_leader_name: leaderNames.get(person.id) ?? null,
+            }
+          : this.read.identityOnly(
+              person,
+              networks.get(person.id) ?? null,
+              leaderNames.get(person.id) ?? null,
+            ),
+        person.id,
+      ),
     );
 
     if (query.church_wide) {
@@ -870,6 +917,7 @@ export class PeopleController {
       claim,
       // The same scope test creation uses, so a refusal discloses nothing a read may not.
       (candidateId) => this.read.isWithinViewScope(actor, candidateId),
+      await this.hiddenFromDuplicateCheck(actor),
     );
   }
 

@@ -57,6 +57,14 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/session(\/|$)/)) {
     return true;
   }
+  // Equipping opens for a holder of `equipping.manage` at Whole Church, the Admin and an
+  // Registrar (decision 0499), and a Registrar's screens are Equipping and nothing else.
+  if (at(/^\/equipping(\/|$)/)) {
+    return holdsWholeChurch(me, 'equipping.manage');
+  }
+  if (me.screens === 'EQUIPPING') {
+    return false;
+  }
   // Record, and a Sunday's checklist from it, are every account's but the Senior Pastors', whose
   // menu holds no Record (decision 0488): the Admin keeps the records for both Networks.
   if (at(/^\/(dashboard|dcc)(\/|$)/)) {

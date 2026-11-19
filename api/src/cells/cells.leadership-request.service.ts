@@ -1090,10 +1090,10 @@ export class CellsLeadershipRequestService {
       );
     }
 
-    await this.authorization.assertNoNetworkAdminWithin(
+    await this.authorization.assertOutsideTreeAccountWithin(
       trx,
       [request.prospective_leader_id],
-      'That person is a Network Admin, who leads no Cell (SKILL.md section 7).',
+      'That person holds a Network Admin or Registrar account, which leads no Cell (SKILL.md sections 7 and 29).',
     );
 
     if (person.isArchived) {
@@ -1912,7 +1912,7 @@ export class CellsLeadershipRequestService {
         );
       }
 
-      await this.authorization.assertNoNetworkAdminWithin(
+      await this.authorization.assertOutsideTreeAccountWithin(
         trx,
         [personId],
         // A backstop: a requester's scope refuses such a member first, as nobody's subtree

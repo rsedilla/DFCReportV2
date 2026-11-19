@@ -136,6 +136,11 @@ export class PeopleService {
      * else, is not yet in it; their leader is.
      */
     canSeeReasons: (personId: string, leaderId: string | null) => Promise<boolean>,
+    /**
+     * Candidates this check leaves out altogether: a Registrar account's record, for anybody
+     * but the Admin (owner, 2026-11-18, decision 0499). Neither shown nor gated on.
+     */
+    hidden: ReadonlySet<string> = new Set(),
   ): Promise<Record<string, unknown>> {
     // **Only the Admin gives a title** (decision 0374): `people.set_title`, at Whole Church.
     // A blank one is no title, so a form that sends an empty box is not refused.
@@ -200,7 +205,11 @@ export class PeopleService {
       // leader outside that branch, and is caught by the leader who holds them.
       let gated = false;
       for (const match of matches) {
-        if (match.tier !== 1 || acknowledged.has(canonicalId(match.candidate.id))) {
+        if (
+          match.tier !== 1 ||
+          acknowledged.has(canonicalId(match.candidate.id)) ||
+          hidden.has(canonicalId(match.candidate.id))
+        ) {
           continue;
         }
 
@@ -231,6 +240,7 @@ export class PeopleService {
               (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
               APPLICATION_RULES,
               trx,
+              hidden,
             )
           ).map((row) => row.body),
         );
@@ -251,10 +261,10 @@ export class PeopleService {
         // Section 4 gives a new Person's Network its effect on the date they are
         // encoded, so there is no earlier instant for this edge to be checked at.
         await assertLeaderIsAssignable(trx, pastoralLeaderId, network, new Date(), this.networks);
-        await this.authorization.assertNoNetworkAdminWithin(
+        await this.authorization.assertOutsideTreeAccountWithin(
           trx,
           [pastoralLeaderId],
-          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+          'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
         );
       }
 
@@ -393,6 +403,8 @@ export class PeopleService {
     claim: CurrentClaim,
     /** Whether the actor may see why a candidate matched, as on create. */
     canSeeReasons: (personId: string) => Promise<boolean>,
+    /** Left out of the check altogether, as on create (decision 0499). */
+    hidden: ReadonlySet<string> = new Set(),
   ): Promise<Record<string, unknown>> {
     const checked = await this.db
       .selectFrom('persons')
@@ -416,6 +428,7 @@ export class PeopleService {
       changes,
       personId,
       canSeeReasons,
+      hidden,
     );
 
     return this.db.transaction().execute(async (trx) => {
@@ -589,6 +602,7 @@ export class PeopleService {
     },
     personId: string,
     canSeeReasons: (personId: string) => Promise<boolean>,
+    hidden: ReadonlySet<string>,
   ): Promise<string[]> {
     const subject: Subject = {
       firstName: changes.firstName?.trim() ?? before.first_name,
@@ -624,7 +638,12 @@ export class PeopleService {
     const passedOver: string[] = [];
     for (const match of await this.duplicates.findDuplicates(subject, APPLICATION_RULES)) {
       const candidateId = canonicalId(match.candidate.id);
-      if (match.tier !== 1 || candidateId === self || !(await canSeeReasons(match.candidate.id))) {
+      if (
+        match.tier !== 1 ||
+        candidateId === self ||
+        hidden.has(candidateId) ||
+        !(await canSeeReasons(match.candidate.id))
+      ) {
         continue;
       }
       if (acknowledged.has(candidateId)) {
@@ -642,6 +661,8 @@ export class PeopleService {
             canSeeReasons,
             (match) => match.tier === 1 && owed(match.candidateId),
             APPLICATION_RULES,
+            undefined,
+            hidden,
           )
         ).map((row) => row.body),
       );
@@ -651,7 +672,8 @@ export class PeopleService {
   }
 
   /**
-   * The Person a Network Admin account is created with (section 7, decision 0469): a current
+   * The Person a Network Admin account (section 7, decision 0469) or a Registrar account
+   * (section 29, decision 0499) is created with: a current
    * Person in the Network their sex sets, with no pastoral leader and no assignment row, under
    * section 3's duplicate rules. The caller creates the account in the same transaction. Its
    * route needs `accounts.manage` at Whole Church, and every candidate is shown to it.

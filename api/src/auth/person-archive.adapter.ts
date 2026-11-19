@@ -23,7 +23,11 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
   async accountOfWithin(
     executor: Transaction<Database>,
     personId: string,
-  ): Promise<{ id: string; status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED' } | null> {
+  ): Promise<{
+    id: string;
+    status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
+    registrar: boolean;
+  } | null> {
     // Locked, so a re-enable racing an archive or a merge waits for it and then sees the
     // Person it belongs to as that left it (decision 0408): a re-enable locks this same row
     // before checking the Person, so whichever comes second decides on what the first wrote.
@@ -34,7 +38,31 @@ export class PersonArchiveAccountsAdapter implements ArchiveAccountsPort {
       .forNoKeyUpdate()
       .executeTakeFirst();
 
-    return account ?? null;
+    if (account === undefined) {
+      return null;
+    }
+
+    const registrar = await executor
+      .selectFrom('account_roles')
+      .select('id')
+      .where('account_id', '=', account.id)
+      .where('role', '=', 'REGISTRAR')
+      .where('revoked_at', 'is', null)
+      .executeTakeFirst();
+
+    return { ...account, registrar: registrar !== undefined };
+  }
+
+  async holdsRegistrarWithin(executor: Transaction<Database>, personId: string): Promise<boolean> {
+    const held = await executor
+      .selectFrom('accounts')
+      .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
+      .select('account_roles.id')
+      .where('accounts.person_id', '=', personId)
+      .where('account_roles.role', '=', 'REGISTRAR')
+      .where('account_roles.revoked_at', 'is', null)
+      .executeTakeFirst();
+    return held !== undefined;
   }
 
   async disableWithin(

@@ -277,6 +277,10 @@ function PersonName({ person }: { person: PersonRow }) {
       >
         {person.full_name}
       </Link>
+      {/* The Admin alone finds these, and is told which record it is (decision 0499). */}
+      {person.equipping_account ? (
+        <span className="text-muted block text-xs">Registrar account</span>
+      ) : null}
       {person.scope === 'IDENTITY_ONLY' ? (
         <span className="text-muted flex items-center gap-1.5 text-xs">
           {/* Decorative: the words beside it carry the meaning (1.4.1). */}

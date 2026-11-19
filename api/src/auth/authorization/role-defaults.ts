@@ -117,6 +117,8 @@ const ADMIN: RoleDefaults = {
   [Capability.RolesManage]: ScopeType.WholeChurch,
   [Capability.PeopleMerge]: ScopeType.WholeChurch,
   ...growthAt(ScopeType.WholeChurch, true),
+  // The Admin sees and does everything, Equipping included (decision 0499, point 3).
+  [Capability.EquippingManage]: ScopeType.WholeChurch,
 };
 
 const LEADER: RoleDefaults = {
@@ -232,9 +234,19 @@ const NETWORK_ADMIN: RoleDefaults = {
   [Capability.TrainingConfirmOnBehalf]: ScopeType.Network,
 };
 
+/**
+ * The Registrar (SKILL.md section 7, decision 0499): runs the church's school, Whole Church,
+ * and nothing else. The checks a registration reads are made by the equipping module through
+ * each owning module's service, so the role needs no read capability of its own to make them.
+ */
+const REGISTRAR: RoleDefaults = {
+  [Capability.EquippingManage]: ScopeType.WholeChurch,
+};
+
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
   SENIOR_PASTOR: SENIOR_PASTOR,
   ADMIN: ADMIN,
   NETWORK_ADMIN: NETWORK_ADMIN,
   LEADER: LEADER,
+  REGISTRAR: REGISTRAR,
 };

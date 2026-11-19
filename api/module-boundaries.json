@@ -66,7 +66,10 @@
     "encounter_seasons": "training",
     "report_month_versions": "reporting",
     "report_snapshots": "reporting",
-    "conquest_confirmations": "conquest"
+    "conquest_confirmations": "conquest",
+    "equipping_classes": "equipping",
+    "equipping_registrations": "equipping",
+    "equipping_enrollments": "equipping"
   },
   "infrastructure": [
     "database"

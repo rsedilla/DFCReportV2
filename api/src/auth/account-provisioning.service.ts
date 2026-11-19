@@ -49,6 +49,8 @@ const ACTIVATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
  * exceptions to the *qualification* rather than to the workflow: each still gets an
  * account, an activation email, and a password the holder sets.
  */
+// `REGISTRAR` is not given here: a Registrar account comes with a Person record of its own,
+// outside the tree (decision 0499), from `provisionOutsideTree`, as `NETWORK_ADMIN` does.
 const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
 
 export interface ProvisionAccountInput {
@@ -123,6 +125,11 @@ export class AccountProvisioningService {
       moves_people: boolean;
       /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
       privacy_notice_acknowledged_at: string | null;
+      /**
+       * Archiving the record disables this account with nobody asked (a Registrar account,
+       * decision 0499), so the archive offers no choice about it.
+       */
+      disabled_with_record: boolean;
     } | null;
   }> {
     const person = await this.people.forDecision(personId);
@@ -171,6 +178,7 @@ export class AccountProvisioningService {
         approves_cells: account.approves_cells,
         moves_people: account.moves_people,
         privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
+        disabled_with_record: roles.some((row) => row.role === 'REGISTRAR'),
       },
     };
   }
@@ -408,6 +416,28 @@ export class AccountProvisioningService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    return this.provisionOutsideTree('NETWORK_ADMIN', input, actor, claim);
+  }
+
+  /**
+   * Creates a Person and their `REGISTRAR` account together (section 29, decision 0499): an
+   * Registrar account is a Person record of its own, outside the tree and in no count of
+   * people, so a leader who also runs the school keeps their own record apart from it.
+   */
+  async provisionRegistrar(
+    input: Omit<CreatePersonInput, 'placement'> & { email: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.provisionOutsideTree('REGISTRAR', input, actor, claim);
+  }
+
+  private async provisionOutsideTree(
+    role: 'NETWORK_ADMIN' | 'REGISTRAR',
+    input: Omit<CreatePersonInput, 'placement'> & { email: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
     const outcome = await this.db.transaction().execute(async (trx) => {
       const takenEmail = await trx
         .selectFrom('accounts')
@@ -439,7 +469,7 @@ export class AccountProvisioningService {
         .insertInto('account_roles')
         .values({
           account_id: account.id,
-          role: 'NETWORK_ADMIN',
+          role,
           senior_pastor_slot: null,
           granted_by: actor.accountId,
         })
@@ -464,7 +494,7 @@ export class AccountProvisioningService {
         action: 'role.granted',
         targetType: 'account',
         targetId: account.id,
-        after: { role: 'NETWORK_ADMIN', network: person.network },
+        after: { role, network: person.network },
       });
 
       const body = {
@@ -473,7 +503,7 @@ export class AccountProvisioningService {
         member_id: person.memberId,
         email: account.email,
         status: account.status,
-        role: 'NETWORK_ADMIN',
+        role,
         network: person.network,
       };
 

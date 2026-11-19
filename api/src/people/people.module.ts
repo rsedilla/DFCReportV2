@@ -101,6 +101,8 @@ import { PersonViewsService } from './person-views.service';
     PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
+    // Registrar records each person its Registrar opens, as GET /people/{id} does (decision 0499).
+    PersonViewsService,
   ],
 })
 export class PeopleModule {}

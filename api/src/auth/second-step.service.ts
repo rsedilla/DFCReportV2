@@ -332,7 +332,11 @@ export class SecondStepService {
           { account_id: accountId },
         );
       }
-      if (!roles.includes('SENIOR_PASTOR') && !roles.includes('NETWORK_ADMIN')) {
+      if (
+        !roles.includes('SENIOR_PASTOR') &&
+        !roles.includes('NETWORK_ADMIN') &&
+        !roles.includes('REGISTRAR')
+      ) {
         throw new InvariantViolationError('This account signs in without a second step.', {
           account_id: accountId,
         });

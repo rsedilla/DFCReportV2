@@ -24,6 +24,8 @@ import { IsStorableText } from '../../common/text/is-storable-text';
  * with `INVARIANT_VIOLATION` and says so, which is the answer an administrator can
  * act on.
  */
+// `REGISTRAR` is not here: a Registrar account is created with a Person record of its own
+// (decision 0499), by `CreateOutsideTreeAccountDto`, never given to a Person who already has one.
 const ROLES: AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
 
 export class ProvisionAccountDto {
@@ -47,7 +49,11 @@ export class ProvisionAccountDto {
   role!: AccountRole;
 }
 
-/** The one form giving a Network Admin account (section 7, decision 0469). */
+/**
+ * The one form giving a Network Admin account (section 7, decision 0469), and the one giving
+ * a Registrar account (section 29, decision 0499): a Person record of its own, outside the
+ * tree, created with its account.
+ */
 export class CreateNetworkAdminDto extends PersonFieldsDto {
   @IsEmailAddress()
   @MaxLength(320)

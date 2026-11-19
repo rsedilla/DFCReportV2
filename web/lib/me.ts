@@ -52,9 +52,10 @@ export interface SessionDescription {
   capabilities: GrantSummary[];
 }
 
-export type Screens = 'FULL' | 'SENIOR_PASTOR' | 'RECORDING';
+/** `EQUIPPING`: a Registrar's, Registration and Enrollment alone (decision 0499). */
+export type Screens = 'FULL' | 'SENIOR_PASTOR' | 'RECORDING' | 'EQUIPPING';
 
-export type AccountRole = 'ADMIN' | 'NETWORK_ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
+export type AccountRole = 'ADMIN' | 'NETWORK_ADMIN' | 'SENIOR_PASTOR' | 'LEADER' | 'REGISTRAR';
 
 /** Section 7's roles, in the words a leader would use for them. */
 export function roleLabel(role: AccountRole): string {
@@ -67,6 +68,8 @@ export function roleLabel(role: AccountRole): string {
       return 'Senior Pastor';
     case 'LEADER':
       return 'Leader';
+    case 'REGISTRAR':
+      return 'Registrar';
     default:
       return role;
   }

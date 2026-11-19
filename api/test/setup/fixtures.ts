@@ -276,7 +276,11 @@ export async function createAccount(
   }
 
   const owesSecondStep = options.roles.some(
-    (role) => role === 'ADMIN' || role === 'SENIOR_PASTOR' || role === 'NETWORK_ADMIN',
+    (role) =>
+      role === 'ADMIN' ||
+      role === 'SENIOR_PASTOR' ||
+      role === 'NETWORK_ADMIN' ||
+      role === 'REGISTRAR',
   );
   if (owesSecondStep && options.secondStep !== false) {
     await db

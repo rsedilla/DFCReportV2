@@ -335,10 +335,10 @@ export class PeopleSexCorrectionService {
           effectiveAt,
           this.networks,
         );
-        await this.authorization.assertNoNetworkAdminWithin(
+        await this.authorization.assertOutsideTreeAccountWithin(
           trx,
           [input.pastoralLeaderId],
-          'That person is a Network Admin, who has no place in the pastoral tree (SKILL.md section 7).',
+          'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
         );
 
         ({ previousLeaderId } = await this.hierarchy.reassignWithin(trx, {

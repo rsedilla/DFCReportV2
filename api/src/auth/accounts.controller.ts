@@ -110,6 +110,36 @@ export class AccountsController {
   }
 
   /**
+   * Creates a Person and a `REGISTRAR` account together (section 29, decision 0499): an
+   * Registrar account is a record of its own, outside the tree and in no count of people. A
+   * church target, so only a Whole Church holder of `accounts.manage` reaches it.
+   */
+  @Post('registrar')
+  @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
+  async provisionRegistrar(
+    @Body() body: CreateNetworkAdminDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.provisioning.provisionRegistrar(
+      {
+        title: body.title ?? null,
+        firstName: body.first_name,
+        middleName: body.middle_name ?? null,
+        lastName: body.last_name,
+        birthDate: body.birth_date_not_given === true ? null : (body.birth_date ?? null),
+        sex: body.sex,
+        civilStatus: body.civil_status,
+        mobileNumber: body.mobile_number_not_given === true ? null : (body.mobile_number ?? null),
+        acknowledgedDuplicateIds: body.acknowledged_duplicate_ids ?? [],
+        email: body.email,
+      },
+      actor,
+      claim,
+    );
+  }
+
+  /**
    * Every account, for the Admin area's Accounts tab (sections 19 and 22, decision 0419).
    *
    * Every account for a Whole Church holder of `accounts.manage`. A Network Admin reads the

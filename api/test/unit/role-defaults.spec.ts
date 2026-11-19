@@ -17,7 +17,9 @@ import type { AccountRole } from '../../src/database/schema';
  * absences have their own cases below, because each of them looks like an
  * oversight, each would be convenient to widen, and each is load-bearing.
  */
-const TABLE: Record<Capability, Record<Exclude<AccountRole, 'NETWORK_ADMIN'>, string | null>> = {
+type TableRole = Exclude<AccountRole, 'NETWORK_ADMIN' | 'REGISTRAR'>;
+
+const TABLE: Record<Capability, Record<TableRole, string | null>> = {
   'people.view_subtree': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
@@ -160,9 +162,17 @@ const TABLE: Record<Capability, Record<Exclude<AccountRole, 'NETWORK_ADMIN'>, st
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
+  // Section 29 (decision 0499): the Admin and the Registrar, nobody else.
+  'equipping.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
 };
 
-const ROLES: Exclude<AccountRole, 'NETWORK_ADMIN'>[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
+const ROLES: TableRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
+
+describe('the Registrar (SKILL.md section 7, decision 0499)', () => {
+  it('holds equipping.manage at Whole Church and nothing else', () => {
+    expect(ROLE_DEFAULTS.REGISTRAR).toEqual({ 'equipping.manage': 'WHOLE_CHURCH' });
+  });
+});
 
 describe('the role catalog (SKILL.md section 7)', () => {
   it.each(ROLES)('%s carries exactly the defaults the specification gives it', (role) => {
