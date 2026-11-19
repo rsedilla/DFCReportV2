@@ -279,7 +279,7 @@ function PersonName({ person }: { person: PersonRow }) {
       </Link>
       {/* The Admin alone finds these, and is told which record it is (decision 0499). */}
       {person.equipping_account ? (
-        <span className="text-muted block text-xs">Equipping account</span>
+        <span className="text-muted block text-xs">Registrar account</span>
       ) : null}
       {person.scope === 'IDENTITY_ONLY' ? (
         <span className="text-muted flex items-center gap-1.5 text-xs">

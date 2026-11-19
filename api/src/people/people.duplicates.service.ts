@@ -113,7 +113,7 @@ export class PeopleDuplicatesService {
     /** An add reads inside its own transaction, after its lock (decision 0401). */
     executor: Db = this.db,
     /**
-     * Left out altogether, neither shown nor withheld: an Equipping account's record for
+     * Left out altogether, neither shown nor withheld: a Registrar account's record for
      * anybody but the Admin (owner, 2026-11-18, decision 0499). It is a second record of one
      * person on purpose, so it is never the duplicate this check exists to catch.
      */

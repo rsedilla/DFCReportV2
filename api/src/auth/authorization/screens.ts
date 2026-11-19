@@ -9,7 +9,7 @@ import type { AccountRole } from '../../database/schema';
  *   with Full view.
  * - `SENIOR_PASTOR`: an honoured `SENIOR_PASTOR` without `ADMIN` (decision 0325).
  * - `RECORDING`: a `LEADER` without Full view, and an account holding no honoured role.
- * - `EQUIPPING`: an `EQUIPPER`, who holds no other role (decision 0499): Registration and
+ * - `EQUIPPING`: a `REGISTRAR`, who holds no other role (decision 0499): Registration and
  *   Enrollment, and nothing else.
  *
  * Read from the honoured roles, so a `SENIOR_PASTOR` row this system refuses to honour
@@ -22,7 +22,7 @@ export function screensFor(roles: readonly AccountRole[], fullView: boolean): Sc
     return 'FULL';
   }
 
-  if (roles.includes('EQUIPPER')) {
+  if (roles.includes('REGISTRAR')) {
     return 'EQUIPPING';
   }
 

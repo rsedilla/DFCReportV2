@@ -158,7 +158,7 @@ const SENIOR_PASTOR_ITEMS: Record<ReportSection, NavEntry> = {
   services: { href: '/reports/dcc', label: 'Services', icon: Church, matches: ['/reports/dcc'] },
 };
 /**
- * **An Equipper's two items, the school's first two steps** (decision 0499, point 4), and the
+ * **A Registrar's two items, the school's first two steps** (decision 0499, point 4), and the
  * Admin's one `Equipping` item over both, whose tabs they are.
  */
 const REGISTRATION: NavEntry = {
@@ -314,7 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
         ...conquest,
-        // The Admin's Equipping, after Conquest (decision 0499); an Equipper has its steps above.
+        // The Admin's Equipping, after Conquest (decision 0499); a Registrar has its steps above.
         ...(me.data !== undefined &&
         me.data.screens !== 'EQUIPPING' &&
         holdsWholeChurch(me.data, 'equipping.manage')
@@ -624,9 +624,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                       {me.data.first_name}
                     </span>
                   ) : null}
-                  {/* An Equipping account reads so under the real name (decision 0499). */}
+                  {/* A Registrar account reads so under the real name (decision 0499). */}
                   <span className="text-[0.8125rem]">
-                    {me.data?.screens === 'EQUIPPING' ? 'Equipping account' : ACCOUNT.label}
+                    {me.data?.screens === 'EQUIPPING' ? 'Registrar account' : ACCOUNT.label}
                   </span>
                 </span>
               </Link>

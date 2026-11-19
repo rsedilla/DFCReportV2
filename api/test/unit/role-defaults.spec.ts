@@ -17,7 +17,7 @@ import type { AccountRole } from '../../src/database/schema';
  * absences have their own cases below, because each of them looks like an
  * oversight, each would be convenient to widen, and each is load-bearing.
  */
-type TableRole = Exclude<AccountRole, 'NETWORK_ADMIN' | 'EQUIPPER'>;
+type TableRole = Exclude<AccountRole, 'NETWORK_ADMIN' | 'REGISTRAR'>;
 
 const TABLE: Record<Capability, Record<TableRole, string | null>> = {
   'people.view_subtree': {
@@ -162,15 +162,15 @@ const TABLE: Record<Capability, Record<TableRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
-  // Section 29 (decision 0499): the Admin and the Equipper, nobody else.
+  // Section 29 (decision 0499): the Admin and the Registrar, nobody else.
   'equipping.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
 };
 
 const ROLES: TableRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
 
-describe('the Equipper (SKILL.md section 7, decision 0499)', () => {
+describe('the Registrar (SKILL.md section 7, decision 0499)', () => {
   it('holds equipping.manage at Whole Church and nothing else', () => {
-    expect(ROLE_DEFAULTS.EQUIPPER).toEqual({ 'equipping.manage': 'WHOLE_CHURCH' });
+    expect(ROLE_DEFAULTS.REGISTRAR).toEqual({ 'equipping.manage': 'WHOLE_CHURCH' });
   });
 });
 

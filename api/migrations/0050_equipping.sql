@@ -5,7 +5,7 @@
 -- decision 0499).
 --
 -- Additive: three new tables owned by the `equipping` module, and four indexes on
--- `account_roles` that refuse nothing existing, since nobody holds EQUIPPER when
+-- `account_roles` that refuse nothing existing, since nobody holds REGISTRAR when
 -- this runs. Nothing existing is read or rewritten.
 --
 -- No row of these tables is ever deleted (decision 0499, point 9): a registration
@@ -14,20 +14,20 @@
 -- DELETE on all three, as `audit_log`'s does.
 -- ---------------------------------------------------------------------------
 
--- An account holding EQUIPPER holds no other role (decision 0499, point 3), paired
+-- An account holding REGISTRAR holds no other role (decision 0499, point 3), paired
 -- with each of the others as migration 0046 pairs NETWORK_ADMIN.
-CREATE UNIQUE INDEX account_roles_equipper_not_with_leader
+CREATE UNIQUE INDEX account_roles_registrar_not_with_leader
   ON account_roles (account_id)
-  WHERE revoked_at IS NULL AND role IN ('EQUIPPER', 'LEADER');
-CREATE UNIQUE INDEX account_roles_equipper_not_with_admin
+  WHERE revoked_at IS NULL AND role IN ('REGISTRAR', 'LEADER');
+CREATE UNIQUE INDEX account_roles_registrar_not_with_admin
   ON account_roles (account_id)
-  WHERE revoked_at IS NULL AND role IN ('EQUIPPER', 'ADMIN');
-CREATE UNIQUE INDEX account_roles_equipper_not_with_senior_pastor
+  WHERE revoked_at IS NULL AND role IN ('REGISTRAR', 'ADMIN');
+CREATE UNIQUE INDEX account_roles_registrar_not_with_senior_pastor
   ON account_roles (account_id)
-  WHERE revoked_at IS NULL AND role IN ('EQUIPPER', 'SENIOR_PASTOR');
-CREATE UNIQUE INDEX account_roles_equipper_not_with_network_admin
+  WHERE revoked_at IS NULL AND role IN ('REGISTRAR', 'SENIOR_PASTOR');
+CREATE UNIQUE INDEX account_roles_registrar_not_with_network_admin
   ON account_roles (account_id)
-  WHERE revoked_at IS NULL AND role IN ('EQUIPPER', 'NETWORK_ADMIN');
+  WHERE revoked_at IS NULL AND role IN ('REGISTRAR', 'NETWORK_ADMIN');
 
 -- A class of one level in one term (point 10). `level` is text with a CHECK rather
 -- than an enum so that adding SOL 1 to 3 later replaces a constraint instead of
@@ -260,7 +260,7 @@ DROP FUNCTION assert_enrollment_matches_class();
 DROP TABLE equipping_enrollments;
 DROP TABLE equipping_registrations;
 DROP TABLE equipping_classes;
-DROP INDEX account_roles_equipper_not_with_network_admin;
-DROP INDEX account_roles_equipper_not_with_senior_pastor;
-DROP INDEX account_roles_equipper_not_with_admin;
-DROP INDEX account_roles_equipper_not_with_leader;
+DROP INDEX account_roles_registrar_not_with_network_admin;
+DROP INDEX account_roles_registrar_not_with_senior_pastor;
+DROP INDEX account_roles_registrar_not_with_admin;
+DROP INDEX account_roles_registrar_not_with_leader;

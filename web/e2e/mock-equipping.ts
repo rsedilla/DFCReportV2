@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 /**
- * Equipping as the browser tests see it (SKILL.md section 29, decision 0499): an Equipper's
+ * Equipping as the browser tests see it (SKILL.md section 29, decision 0499): a Registrar's
  * account, and one term's registrations and classes. Names are invented (CLAUDE.md, Secrets).
  */
 
@@ -11,16 +11,16 @@ function json(body: unknown, status = 200) {
 
 const CLASS_ID = '3f1b7c6e-0000-4000-8000-00000000e001';
 
-/** The signed-in account as an Equipper: `EQUIPPING` screens and `equipping.manage` alone. */
-export async function mockEquipper(page: Page): Promise<void> {
+/** The signed-in account as a Registrar: `EQUIPPING` screens and `equipping.manage` alone. */
+export async function mockRegistrar(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill(
       json({
         account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
         person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
-        email: 'equipper@example.invalid',
+        email: 'registrar@example.invalid',
         first_name: 'Teresita',
-        roles: ['EQUIPPER'],
+        roles: ['REGISTRAR'],
         screens: 'EQUIPPING',
         people_i_oversee: false,
         privacy_notice: { version: '2026-11-16', acknowledged_at: '2026-11-16T01:00:00.000Z' },

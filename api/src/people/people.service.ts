@@ -137,7 +137,7 @@ export class PeopleService {
      */
     canSeeReasons: (personId: string, leaderId: string | null) => Promise<boolean>,
     /**
-     * Candidates this check leaves out altogether: an Equipping account's record, for anybody
+     * Candidates this check leaves out altogether: a Registrar account's record, for anybody
      * but the Admin (owner, 2026-11-18, decision 0499). Neither shown nor gated on.
      */
     hidden: ReadonlySet<string> = new Set(),
@@ -264,7 +264,7 @@ export class PeopleService {
         await this.authorization.assertOutsideTreeAccountWithin(
           trx,
           [pastoralLeaderId],
-          'That person holds a Network Admin or Equipping account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
+          'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
         );
       }
 
@@ -672,7 +672,7 @@ export class PeopleService {
   }
 
   /**
-   * The Person a Network Admin account (section 7, decision 0469) or an Equipping account
+   * The Person a Network Admin account (section 7, decision 0469) or a Registrar account
    * (section 29, decision 0499) is created with: a current
    * Person in the Network their sex sets, with no pastoral leader and no assignment row, under
    * section 3's duplicate rules. The caller creates the account in the same transaction. Its

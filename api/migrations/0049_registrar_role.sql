@@ -1,7 +1,7 @@
 -- migrate:up
 
 -- ---------------------------------------------------------------------------
--- The Equipper role and its capability (SKILL.md sections 7 and 29, decision 0499).
+-- The Registrar role and its capability (SKILL.md sections 7 and 29, decision 0499).
 --
 -- Alone in this migration because PostgreSQL refuses to use a value added to an
 -- enum inside the transaction that added it, and the next migration names both:
@@ -11,7 +11,7 @@
 -- `IF NOT EXISTS` so that reverting the next migration and re-applying it works.
 -- ---------------------------------------------------------------------------
 
-ALTER TYPE account_role ADD VALUE IF NOT EXISTS 'EQUIPPER';
+ALTER TYPE account_role ADD VALUE IF NOT EXISTS 'REGISTRAR';
 ALTER TYPE capability ADD VALUE IF NOT EXISTS 'equipping.manage';
 
 -- migrate:down

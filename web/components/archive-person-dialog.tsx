@@ -45,7 +45,7 @@ export function ArchivePersonDialog({
     queryFn: ({ signal }) => getAccountForPerson(person.id, signal),
     enabled: open,
   });
-  // An Equipping account is disabled with its record (decision 0499): the server says so, and
+  // A Registrar account is disabled with its record (decision 0499): the server says so, and
   // no choice is offered.
   const asksAboutAccess =
     account.data?.account != null &&

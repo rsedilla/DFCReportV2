@@ -575,7 +575,7 @@ type ReadyRow = ClassDetail['ready'][number];
 
 /**
  * Why a person cannot be enrolled, said as what is missing. The API's reason is the source;
- * this only words it for the Equipper (owner, 2026-11-18). It names nobody to ask: who may
+ * this only words it for the Registrar (owner, 2026-11-18). It names nobody to ask: who may
  * add a birthday depends on capabilities this screen does not read (sections 3 and 7).
  */
 function blockedText(blocked: string): string {

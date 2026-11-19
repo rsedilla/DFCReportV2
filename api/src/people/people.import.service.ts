@@ -183,7 +183,7 @@ export class PeopleImportService {
       await this.authorization.assertOutsideTreeAccountWithin(
         transaction,
         [input.placement.pastoralLeaderId],
-        'That person holds a Network Admin or Equipping account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
+        'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
       );
     }
 
@@ -486,7 +486,7 @@ export class PeopleImportService {
       input.placement.kind === 'UNDER'
         ? [input.personId, input.placement.pastoralLeaderId]
         : [input.personId],
-      'That person holds a Network Admin or Equipping account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
+      'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
     );
 
     await this.hierarchy.openAssignmentWithin(

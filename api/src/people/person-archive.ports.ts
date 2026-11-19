@@ -92,16 +92,16 @@ export interface ArchiveAccountsPort {
   ): Promise<{
     id: string;
     status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DISABLED';
-    /** Holds a live `EQUIPPER` role: archiving the record disables it (decision 0499). */
-    equipper: boolean;
+    /** Holds a live `REGISTRAR` role: archiving the record disables it (decision 0499). */
+    registrar: boolean;
   } | null>;
 
   /**
-   * Whether the Person holds a live `EQUIPPER` role, read **without a lock**, for the merge
+   * Whether the Person holds a live `REGISTRAR` role, read **without a lock**, for the merge
    * refusal (decision 0499). A preview takes no person lock first, so locking two account rows
    * in the order the request names them would let two previews deadlock (section 24).
    */
-  holdsEquipperWithin(executor: Transaction<Database>, personId: string): Promise<boolean>;
+  holdsRegistrarWithin(executor: Transaction<Database>, personId: string): Promise<boolean>;
 
   /**
    * Disables the account inside the caller's transaction: every session and every link ends

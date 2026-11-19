@@ -49,7 +49,7 @@ const ACTIVATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
  * exceptions to the *qualification* rather than to the workflow: each still gets an
  * account, an activation email, and a password the holder sets.
  */
-// `EQUIPPER` is not given here: an Equipping account comes with a Person record of its own,
+// `REGISTRAR` is not given here: a Registrar account comes with a Person record of its own,
 // outside the tree (decision 0499), from `provisionOutsideTree`, as `NETWORK_ADMIN` does.
 const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
 
@@ -126,7 +126,7 @@ export class AccountProvisioningService {
       /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
       privacy_notice_acknowledged_at: string | null;
       /**
-       * Archiving the record disables this account with nobody asked (an Equipping account,
+       * Archiving the record disables this account with nobody asked (a Registrar account,
        * decision 0499), so the archive offers no choice about it.
        */
       disabled_with_record: boolean;
@@ -178,7 +178,7 @@ export class AccountProvisioningService {
         approves_cells: account.approves_cells,
         moves_people: account.moves_people,
         privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
-        disabled_with_record: roles.some((row) => row.role === 'EQUIPPER'),
+        disabled_with_record: roles.some((row) => row.role === 'REGISTRAR'),
       },
     };
   }
@@ -420,20 +420,20 @@ export class AccountProvisioningService {
   }
 
   /**
-   * Creates a Person and their `EQUIPPER` account together (section 29, decision 0499): an
-   * Equipping account is a Person record of its own, outside the tree and in no count of
+   * Creates a Person and their `REGISTRAR` account together (section 29, decision 0499): an
+   * Registrar account is a Person record of its own, outside the tree and in no count of
    * people, so a leader who also runs the school keeps their own record apart from it.
    */
-  async provisionEquipper(
+  async provisionRegistrar(
     input: Omit<CreatePersonInput, 'placement'> & { email: string },
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return this.provisionOutsideTree('EQUIPPER', input, actor, claim);
+    return this.provisionOutsideTree('REGISTRAR', input, actor, claim);
   }
 
   private async provisionOutsideTree(
-    role: 'NETWORK_ADMIN' | 'EQUIPPER',
+    role: 'NETWORK_ADMIN' | 'REGISTRAR',
     input: Omit<CreatePersonInput, 'placement'> & { email: string },
     actor: Actor,
     claim: CurrentClaim,

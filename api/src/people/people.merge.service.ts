@@ -426,22 +426,22 @@ export class PeopleMergeService {
       });
     }
 
-    // **An Equipping account's record is a second record of one person on purpose** (owner,
+    // **A Registrar account's record is a second record of one person on purpose** (owner,
     // 2026-11-18, decision 0499): never merged, in either direction.
     const { accounts } = this.ports();
     for (const record of [kept, duplicate]) {
       // Unlocked: a preview locks nobody first, and two previews naming the pair in opposite
       // orders must not wait on each other's account rows (section 24).
-      if (await accounts.holdsEquipperWithin(executor, record.id)) {
+      if (await accounts.holdsRegistrarWithin(executor, record.id)) {
         refusals.push({
           code: 'EQUIPPING_ACCOUNT',
-          message: `${composeName(record)} (${record.member_id}) is an Equipping account, a record of its own on purpose. It is never merged into a person's own record, or the other way.`,
+          message: `${composeName(record)} (${record.member_id}) is a Registrar account, a record of its own on purpose. It is never merged into a person's own record, or the other way.`,
         });
       }
     }
 
     // Section 29 (decision 0499): a duplicate holding an open registration is not absorbed,
-    // or one human could hold two places in one level and term. The Equipper cancels it first.
+    // or one human could hold two places in one level and term. The Registrar cancels it first.
     const { equipping } = this.ports();
     if ((await equipping.openRegistrationsOfWithin(executor, duplicate.id)) > 0) {
       refusals.push({

@@ -223,7 +223,7 @@ export class EquippingService {
    * 10), in SQL so a page is never spent on rows about to be dropped.
    */
   async search(term: string, limit: number, teachers = false): Promise<Record<string, unknown>[]> {
-    // An Equipping record is never somebody signed up for a class, for the Admin too (decision
+    // A Registrar record is never somebody signed up for a class, for the Admin too (decision
     // 0499, point 13); `candidate` and `register` refuse it the same way.
     const restrictTo = teachers ? await this.mayTeachWithin(this.db, null) : null;
     const { rows } = await this.people.searchByName(term, limit, null, restrictTo, {
@@ -478,7 +478,7 @@ export class EquippingService {
       );
     }
 
-    // Before the transaction, so it holds one pool connection (section 24). An Equipping record
+    // Before the transaction, so it holds one pool connection (section 24). A Registrar record
     // is made with its account and never becomes one later, so there is nothing to race.
     if (await this.isEquippingRecord(personId)) {
       throw new NotFoundError('No such person.');
@@ -1010,7 +1010,7 @@ export class EquippingService {
   }
 
   /**
-   * **An Equipping record does not exist to the school, for the Admin too** (decision 0499,
+   * **A Registrar record does not exist to the school, for the Admin too** (decision 0499,
    * point 13): it is an account's record, never somebody signed up for a class. The picker
    * leaves it out, and the form and registering answer `NOT_FOUND`, as the picker's silence does.
    */
@@ -1023,7 +1023,7 @@ export class EquippingService {
    * owner 2026-11-18: "a teacher must be a cell leader in the tree structure"). A current
    * Cell Leader holds an open leadership of an `ACTIVE` Cell (section 11), and being in the
    * tree is holding an open pastoral assignment, a Network root's included (section 5). An
-   * Equipping record and a Network Admin lead no Cell; an administrator outside the tree may
+   * Registrar record and a Network Admin lead no Cell; an administrator outside the tree may
    * lead one and holds no assignment. None of them qualifies. `null` asks of the whole
    * church, for the Teacher search.
    */

@@ -58,7 +58,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     return true;
   }
   // Equipping opens for a holder of `equipping.manage` at Whole Church, the Admin and an
-  // Equipper (decision 0499), and an Equipper's screens are Equipping and nothing else.
+  // Registrar (decision 0499), and a Registrar's screens are Equipping and nothing else.
   if (at(/^\/equipping(\/|$)/)) {
     return holdsWholeChurch(me, 'equipping.manage');
   }

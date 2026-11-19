@@ -36,7 +36,7 @@ import {
   mockSignedIn,
   mockWholeChurchReader,
 } from './mock-api';
-import { mockEquipper, mockEquipping } from './mock-equipping';
+import { mockRegistrar, mockEquipping } from './mock-equipping';
 import {
   mockCellMeetings,
   mockMeetingsAwaiting,
@@ -1507,13 +1507,13 @@ const SCANS = [
       await expect(page.getByText('You are in no Network, so no Encounter God Weekend is shown.')).toBeVisible();
     },
   },
-  // Equipping (section 29, decision 0499), as an Equipper sees it.
+  // Equipping (section 29, decision 0499), as a Registrar sees it.
   {
     name: 'equipping registration',
     route: '/equipping/registration',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockEquipper(page);
+      await mockRegistrar(page);
       await mockEquipping(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -1525,7 +1525,7 @@ const SCANS = [
     route: '/equipping/enrollment',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockEquipper(page);
+      await mockRegistrar(page);
       await mockEquipping(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -2299,12 +2299,12 @@ const TARGET_SWEEP = [
   },
   {
     // The term, Register a person, and one Cancel for the one row not yet in a class:
-    // **three**. An Equipper's, whose `/auth/me` stays for the entries after it.
+    // **three**. A Registrar's, whose `/auth/me` stays for the entries after it.
     name: 'equipping registration',
     route: '/equipping/registration',
     settle: 'Register a person',
     minimum: 3,
-    equipper: true,
+    registrar: true,
   },
   {
     // The term, the class, Open a class, one tick for the one person who can be enrolled,
@@ -2313,7 +2313,7 @@ const TARGET_SWEEP = [
     route: '/equipping/enrollment',
     settle: 'Open a class',
     minimum: 6,
-    equipper: true,
+    registrar: true,
   },
   {
     // In place of every screen until the notice is ticked (decision 0496): the box, the
@@ -2767,8 +2767,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAdminArea(page);
       await mockAuditLog(page);
     }
-    if ('equipper' in entry && entry.equipper) {
-      await mockEquipper(page);
+    if ('registrar' in entry && entry.registrar) {
+      await mockRegistrar(page);
       await mockEquipping(page);
     }
     if ('privacyUnread' in entry && entry.privacyUnread) {

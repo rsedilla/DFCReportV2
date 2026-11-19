@@ -37,7 +37,7 @@ import { EquippingService } from './equipping.service';
  * Life Class.
  *
  * **Every route is `equipping.manage` against the church**, which only a Whole Church grant
- * covers (section 7): the Admin and the Equipper hold it, and nobody else by default. The
+ * covers (section 7): the Admin and the Registrar hold it, and nobody else by default. The
  * people it reads it reads through `people`, `hierarchy`, `cells`, `attendance`, `suynl` and
  * `training`, so the role holds no read capability of those modules.
  */
@@ -101,7 +101,7 @@ export class EquippingController {
     return candidate;
   }
 
-  /** The seasons a class names, read here so an Equipper needs no SUYNL capability. */
+  /** The seasons a class names, read here so a Registrar needs no SUYNL capability. */
   @Get('encounter-seasons')
   @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
   async encounterSeasons(): Promise<Record<string, unknown>> {

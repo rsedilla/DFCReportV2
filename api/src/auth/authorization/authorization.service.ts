@@ -381,7 +381,7 @@ export class AuthorizationService {
       .selectFrom('accounts')
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.person_id')
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'REGISTRAR'])
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
@@ -443,7 +443,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.id')
       .where('accounts.person_id', '=', personId)
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'REGISTRAR'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 
@@ -479,7 +479,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.id')
       .where('accounts.person_id', '=', personId)
-      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
+      .where('account_roles.role', 'in', ['SENIOR_PASTOR', 'ADMIN', 'NETWORK_ADMIN', 'REGISTRAR'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 
@@ -489,7 +489,7 @@ export class AuthorizationService {
   }
 
   /**
-   * Refuses a Person holding `NETWORK_ADMIN` (section 7, decision 0469) or `EQUIPPER` (section
+   * Refuses a Person holding `NETWORK_ADMIN` (section 7, decision 0469) or `REGISTRAR` (section
    * 29, decision 0499) a place in the tree or a Cell: each such account sits on a Person record
    * of its own, outside the tree. `message` says what was being done, since the callers differ.
    */
@@ -509,7 +509,7 @@ export class AuthorizationService {
       .innerJoin('account_roles', 'account_roles.account_id', 'accounts.id')
       .select('accounts.person_id')
       .where('accounts.person_id', 'in', [...personIds])
-      .where('account_roles.role', 'in', ['NETWORK_ADMIN', 'EQUIPPER'])
+      .where('account_roles.role', 'in', ['NETWORK_ADMIN', 'REGISTRAR'])
       .where('account_roles.revoked_at', 'is', null)
       .executeTakeFirst();
 

@@ -110,18 +110,18 @@ export class AccountsController {
   }
 
   /**
-   * Creates a Person and an `EQUIPPER` account together (section 29, decision 0499): an
-   * Equipping account is a record of its own, outside the tree and in no count of people. A
+   * Creates a Person and a `REGISTRAR` account together (section 29, decision 0499): an
+   * Registrar account is a record of its own, outside the tree and in no count of people. A
    * church target, so only a Whole Church holder of `accounts.manage` reaches it.
    */
-  @Post('equipper')
+  @Post('registrar')
   @RequiresCapability(Capability.AccountsManage, { kind: 'church' })
-  async provisionEquipper(
+  async provisionRegistrar(
     @Body() body: CreateNetworkAdminDto,
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return this.provisioning.provisionEquipper(
+    return this.provisioning.provisionRegistrar(
       {
         title: body.title ?? null,
         firstName: body.first_name,

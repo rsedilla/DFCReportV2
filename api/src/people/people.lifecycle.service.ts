@@ -203,15 +203,17 @@ export class PeopleLifecycleService {
       }
 
       const account = await accounts.accountOfWithin(trx, personId);
-      // **An Equipping account is disabled with its record** (decision 0499): it is a record of
+      // **A Registrar account is disabled with its record** (decision 0499): it is a record of
       // its own, so archiving it means the account stops, and nobody is asked.
-      const equipperAccount = account !== null && account.equipper && account.status !== 'DISABLED';
-      const asksAboutAccess = account !== null && account.status !== 'DISABLED' && !equipperAccount;
+      const registrarAccount =
+        account !== null && account.registrar && account.status !== 'DISABLED';
+      const asksAboutAccess =
+        account !== null && account.status !== 'DISABLED' && !registrarAccount;
 
       // Offered no choice, so a choice sent is refused rather than silently overridden.
-      if (equipperAccount && input.accountAccess === 'KEEP') {
+      if (registrarAccount && input.accountAccess === 'KEEP') {
         throw new ValidationFailedError(
-          'An Equipping account is disabled with its record, so it cannot be kept (decision 0499).',
+          'A Registrar account is disabled with its record, so it cannot be kept (decision 0499).',
           { field: 'account_access' },
         );
       }
@@ -251,7 +253,7 @@ export class PeopleLifecycleService {
       const membership = await cells.endMembershipWithin(trx, personId, at, actor.accountId);
       // Their open place in the school closes with them (section 29, decision 0499).
       await equipping.closeOpenWithin(trx, personId, actor.accountId);
-      const accountAccess = equipperAccount
+      const accountAccess = registrarAccount
         ? 'DISABLE'
         : asksAboutAccess
           ? (input.accountAccess ?? null)

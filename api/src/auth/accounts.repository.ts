@@ -100,7 +100,7 @@ export class AccountsRepository {
               'ADMIN',
               'NETWORK_ADMIN',
               'SENIOR_PASTOR',
-              'EQUIPPER',
+              'REGISTRAR',
             ])
             .where('account_roles.revoked_at', 'is', null),
         )
@@ -168,20 +168,20 @@ export class AccountsRepository {
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
       .where('account.person_id', 'in', [...personIds])
-      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'REGISTRAR'])
       .where('role.revoked_at', 'is', null)
       .execute();
 
     return new Set(rows.map((row) => row.person_id));
   }
 
-  /** `AdminAccountsPort`. Every Person holding a live `EQUIPPER` role (decision 0499). */
+  /** `AdminAccountsPort`. Every Person holding a live `REGISTRAR` role (decision 0499). */
   async equippingAccountPersonsWithin(executor: Db | Transaction<Database>): Promise<Set<string>> {
     const rows = await executor
       .selectFrom('accounts as account')
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
-      .where('role.role', '=', 'EQUIPPER')
+      .where('role.role', '=', 'REGISTRAR')
       .where('role.revoked_at', 'is', null)
       .execute();
 
@@ -205,7 +205,7 @@ export class AccountsRepository {
   }
 
   /**
-   * `AdminAccountsPort`. Every Person holding an `ADMIN`, `NETWORK_ADMIN` or `EQUIPPER` role at `at`
+   * `AdminAccountsPort`. Every Person holding an `ADMIN`, `NETWORK_ADMIN` or `REGISTRAR` role at `at`
    * (decisions 0339, 0469 and 0499).
    */
   async personsHoldingAdminAtWithin(
@@ -216,7 +216,7 @@ export class AccountsRepository {
       .selectFrom('accounts as account')
       .innerJoin('account_roles as role', 'role.account_id', 'account.id')
       .select('account.person_id as person_id')
-      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'EQUIPPER'])
+      .where('role.role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'REGISTRAR'])
       .where('role.granted_at', '<=', at)
       .where((eb) => eb.or([eb('role.revoked_at', 'is', null), eb('role.revoked_at', '>', at)]))
       .execute();

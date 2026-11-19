@@ -488,8 +488,8 @@ function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
             Add a Network Admin
           </Link>
           {/* Its own record, outside the tree (decision 0499). */}
-          <Link href="/people/new?as=equipper" className={buttonClasses('secondary')}>
-            Add an Equipping account
+          <Link href="/people/new?as=registrar" className={buttonClasses('secondary')}>
+            Add a Registrar account
           </Link>
         </p>
       ) : null}

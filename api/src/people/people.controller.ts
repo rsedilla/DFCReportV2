@@ -193,7 +193,7 @@ export class PeopleController {
   }
 
   /**
-   * **An Equipping account's record opens for the Admin alone** (owner, 2026-11-18, decision
+   * **A Registrar account's record opens for the Admin alone** (owner, 2026-11-18, decision
    * 0499), as the Admin's search alone finds it: its page and its pastoral path tell anybody
    * else it does not exist.
    */
@@ -207,7 +207,7 @@ export class PeopleController {
   }
 
   /**
-   * **An Equipping account's record is left out of the duplicate check for anybody but the
+   * **A Registrar account's record is left out of the duplicate check for anybody but the
    * Admin** (owner, 2026-11-18, decision 0499): neither shown nor withheld, and never gated on.
    * It is a second record of one person on purpose, so a person's own record beside it is no
    * duplicate, and that own record still catches a real one.
@@ -825,7 +825,7 @@ export class PeopleController {
           ? inNetwork
           : new Set([...scoped].filter((id) => inNetwork.has(id)));
 
-    // **An Equipping account's record is found by the Admin's search alone** (owner, 2026-11-18,
+    // **A Registrar account's record is found by the Admin's search alone** (owner, 2026-11-18,
     // decision 0499): a Network Admin, a Senior Pastor and every picker leave it out, in the
     // query so a page is never short. The Admin's rows say which records they are.
     const equipping = await this.read.equippingAccountPersons();

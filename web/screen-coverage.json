@@ -254,7 +254,7 @@
       "screen": "web/app/(app)/people/new/page.tsx"
     },
     {
-      "route": "POST /api/v1/accounts/equipper",
+      "route": "POST /api/v1/accounts/registrar",
       "screen": "web/app/(app)/people/new/page.tsx"
     },
     {

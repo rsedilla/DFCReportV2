@@ -1093,7 +1093,7 @@ export class CellsLeadershipRequestService {
     await this.authorization.assertOutsideTreeAccountWithin(
       trx,
       [request.prospective_leader_id],
-      'That person holds a Network Admin or Equipping account, which leads no Cell (SKILL.md sections 7 and 29).',
+      'That person holds a Network Admin or Registrar account, which leads no Cell (SKILL.md sections 7 and 29).',
     );
 
     if (person.isArchived) {

@@ -32,7 +32,7 @@ import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
  * Class this term, and the form that signs somebody up.
  *
  * **Seven requirements.** Four are read from the records when the person is picked; the
- * Equipper ticks three after asking the person's leader. A record not met asks why they are
+ * Registrar ticks three after asking the person's leader. A record not met asks why they are
  * registered anyway, and they are registered with exception (point 7). Nothing records money.
  */
 export default function RegistrationPage() {

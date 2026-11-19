@@ -101,7 +101,7 @@ import { PersonViewsService } from './person-views.service';
     PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
-    // Equipping records each person its Equipper opens, as GET /people/{id} does (decision 0499).
+    // Registrar records each person its Registrar opens, as GET /people/{id} does (decision 0499).
     PersonViewsService,
   ],
 })

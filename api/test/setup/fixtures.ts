@@ -280,7 +280,7 @@ export async function createAccount(
       role === 'ADMIN' ||
       role === 'SENIOR_PASTOR' ||
       role === 'NETWORK_ADMIN' ||
-      role === 'EQUIPPER',
+      role === 'REGISTRAR',
   );
   if (owesSecondStep && options.secondStep !== false) {
     await db

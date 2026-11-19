@@ -150,7 +150,7 @@ export class CellsService {
       await this.authorization.assertOutsideTreeAccountWithin(
         trx,
         [input.cellLeaderId],
-        'That person holds a Network Admin or Equipping account, which leads no Cell (SKILL.md sections 7 and 29).',
+        'That person holds a Network Admin or Registrar account, which leads no Cell (SKILL.md sections 7 and 29).',
       );
 
       // One leader's Cells start at least two hours apart, Admin included (section 10,

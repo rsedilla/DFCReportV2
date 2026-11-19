@@ -235,11 +235,11 @@ const NETWORK_ADMIN: RoleDefaults = {
 };
 
 /**
- * The Equipper (SKILL.md section 7, decision 0499): runs the church's school, Whole Church,
+ * The Registrar (SKILL.md section 7, decision 0499): runs the church's school, Whole Church,
  * and nothing else. The checks a registration reads are made by the equipping module through
  * each owning module's service, so the role needs no read capability of its own to make them.
  */
-const EQUIPPER: RoleDefaults = {
+const REGISTRAR: RoleDefaults = {
   [Capability.EquippingManage]: ScopeType.WholeChurch,
 };
 
@@ -248,5 +248,5 @@ export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
   ADMIN: ADMIN,
   NETWORK_ADMIN: NETWORK_ADMIN,
   LEADER: LEADER,
-  EQUIPPER: EQUIPPER,
+  REGISTRAR: REGISTRAR,
 };

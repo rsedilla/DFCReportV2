@@ -30,7 +30,7 @@ export const REPORTS_PATH = '/reports/dcc';
  */
 export const SERVICES_PATH = '/reports/dcc';
 
-/** An Equipper starts on Registration, the first of their steps (decision 0499). */
+/** A Registrar starts on Registration, the first of their steps (decision 0499). */
 export const EQUIPPING_PATH = '/equipping/registration';
 
 /** The Admin area's Home (decision 0419). */

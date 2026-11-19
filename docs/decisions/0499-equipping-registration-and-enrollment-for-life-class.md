@@ -19,17 +19,18 @@ enrolment and lessons to "an enrolment application planned elsewhere". That appl
 this module. Training's graduations are unchanged by this ruling: nothing here files one, and
 a graduation from a posted final grade is a later ruling.
 
-**3. The Equipper.** A new role, `EQUIPPER`, given by the Admin (point 3a says how),
+**3. The Registrar.** A new role, `REGISTRAR`, given by the Admin (point 3a says how),
 holds `equipping.manage` at Whole Church (the owner chose "Equipper Admin" and "Equipper";
-this ruling builds the Equipper; the owner dropped the Equipper Admin on 2026-11-19, the Equipper
-posting results and the Admin reviewing exceptions, as a university's registrar and dean do). The
-Admin holds it too, by default ("the admin sees everything"). It is held alone, as
-`NETWORK_ADMIN` is. The account shows the person's real name with "Equipping account" under
+this ruling builds the Equipper; the owner named it the **Registrar** on 2026-11-18, built here on
+2026-11-20 before this branch merged, so the role is `REGISTRAR` throughout; the owner dropped the
+Equipper Admin on 2026-11-19, the Registrar posting results and the Admin reviewing exceptions).
+The Admin holds it too, by default ("the admin sees everything"). It is held alone, as
+`NETWORK_ADMIN` is. The account shows the person's real name with "Registrar account" under
 it, never a second name. It signs in with the second step ("the Equipping account gets the
 second sign-in step", 2026-11-17) and its session ends seven days after sign-in, as an
 Admin's does ("7 days", 2026-11-18).
 
-**3a. The Equipping account is a Person record of its own, in no count of people** (owner,
+**3a. The Registrar account is a Person record of its own, in no count of people** (owner,
 2026-11-18: "can we decide two different person instead so it will not be confusing?" and
 "the equipping account is not count of people"). This replaces the choice of 2026-11-17, two
 emails tied to the same Person, which Section 6's one account per Person forbade. The Admin
@@ -37,10 +38,10 @@ creates the record and the account together, by its own form, as a Network Admin
 (decision 0469). Like a Network Admin's record it is outside the pastoral tree and the Cells,
 has no disciples and no DCC line, and is in no count of people (decision 0339). Only the Admin
 reads it (point 13); to a Network Admin it answers `NOT_FOUND`, as to anybody else. A leader who also runs the school therefore has two records;
-the duplicate check names one to the other when the Equipping record is made. What archiving
-does to the Equipping account is in point 12, not in the owner's words.
+the duplicate check names one to the other when the Registrar record is made. What archiving
+does to the Registrar account is in point 12, not in the owner's words.
 
-**4. Its screens are the steps, in the sidebar.** An Equipper's sidebar is `Registration` and
+**4. Its screens are the steps, in the sidebar.** A Registrar's sidebar is `Registration` and
 `Enrollment`, the six steps' first two in their order, and nothing else. The Admin has one
 `Equipping` item whose tabs are the same two. A phone shows them in the bottom tab bar, as
 every account's items are (owner, 2026-11-18, choosing from screenshots of both; a switch at
@@ -52,7 +53,7 @@ registration per person, level and term; a second is refused. Nothing records mo
 are paid by bank transfer outside the app".
 
 **6. Life Class has six requirements.** Four are read from the records when the person is
-picked, and two are ticked by the Equipper after asking the person's leader. The owner first
+picked, and two are ticked by the Registrar after asking the person's leader. The owner first
 chose three ticks ("i will stick to three tickbox") and withdrew *consistent in devotion* on
 2026-11-18 ("remove the tick of consistent in devotion"):
 
@@ -62,8 +63,8 @@ chose three ticks ("i will stick to three tickbox") and withdrew *consistent in 
 | Regular in a Cell Group | Cell classification, `Regular` being five or more meetings attended (Section 12) |
 | Regular in DCC | DCC classification, five or more Sundays (Section 9) |
 | SUYNL: lessons 1 to 4 | a current SUYNL row for each of lessons 1, 2, 3 and 4, whatever else is recorded ("must have SUYNL lesson 1 - 4 ticked regardless he or she is ticked 5 7 8 9", 2026-11-18, replacing "at least 5 lessons ... regardless of lesson") |
-| Has a physical Bible | ticked by the Equipper |
-| Has the Life Class Manual | ticked by the Equipper |
+| Has a physical Bible | ticked by the Registrar |
+| Has the Life Class Manual | ticked by the Registrar |
 
 Each tick is saved with who ticked it and when. The two ticks are always required.
 
@@ -82,7 +83,7 @@ different shape: lessons 1 to 4 by number, at Life Class rather than at the Enco
 warning rather than a refusal.
 
 **9. A registration is never deleted.** Its status is *Registered*, *Registered with
-exception*, *Enrolled* while it is in a class, or *Cancelled*, with a reason, by an Equipper.
+exception*, *Enrolled* while it is in a class, or *Cancelled*, with a reason, by a Registrar.
 
 **10. A class belongs to a level and a term, and somebody runs it.** It carries a name, a day
 and time, a place, the day of its first lesson, its Teacher (a Person), and its Encounter
@@ -96,13 +97,13 @@ the Stop Condition `architecture-guardian`'s fifth review raised, that opening a
 by its identifier a Teacher the picker never offered): an open leadership of an `ACTIVE` Cell
 (Section 11) and an open pastoral assignment, a Network root's included (Section 5). Opening a
 class refuses anybody else as `INVARIANT_VIOLATION`, and the Teacher search lists only them. A
-Network Admin and the Equipping record lead no Cell, and an administrator outside the tree holds
-no assignment, so none of them may teach; the Equipping record answers `NOT_FOUND`, as below.
+Network Admin and the Registrar record lead no Cell, and an administrator outside the tree holds
+no assignment, so none of them may teach; the Registrar record answers `NOT_FOUND`, as below.
 **The rule binds when a class is opened, not after** (owner, 2026-11-18, "Proceed A", settling
 the Stop Condition `architecture-guardian`'s seventh review raised): a Teacher who stops leading
 a Cell, or whose assignment ends, keeps teaching the class they were named to until it ends,
 and is not offered for the next one. **The Teacher search showing only Cell Leaders is
-accepted** (owner, 2026-11-18, "yes"), though it lets the Equipper tell from it whether a named
+accepted** (owner, 2026-11-18, "yes"), though it lets the Registrar tell from it whether a named
 person leads a Cell, which Section 8's church-wide fields do not publish.
 
 **11. Enrolling takes several registered people into one class at once**, and checks two
@@ -152,20 +153,20 @@ from screenshots of both). Nothing in what either does changed.
 otherwise, these would follow the recommendation shown, and answered the session question
 alone; they are recorded here as that recommendation, and the owner may still change them.
 Archiving a Person ends their open class place (`ARCHIVED`) and cancels their registration
-with the reason "Archived", keeping both. Archiving the Equipping record disables its account and
+with the reason "Archived", keeping both. Archiving the Registrar record disables its account and
 does not offer keeping it; archiving the person's own record does not touch it. Enrolling and moving refuse an archived or merged
 Person. A merge is refused while the duplicate holds an open registration. Each person the
-Equipper opens on the registration form is recorded for the Admin as a full-record read is
+Registrar opens on the registration form is recorded for the Admin as a full-record read is
 (decision 0414).
 
-**13. The Equipping record is the one exception to one record per person** (owner, 2026-11-18,
+**13. The Registrar record is the one exception to one record per person** (owner, 2026-11-18,
 "ok" to the proposal shown from screenshots of two records of one person). Section 1's first
-principle names it. A merge is refused while either record holds an Equipping account, in
+principle names it. A merge is refused while either record holds a Registrar account, in
 either direction. Only the Admin finds it: "only the accounts of equipping is visible in super
 admin search". Every people search and picker leaves it out for anybody not holding `ADMIN`, a
 Network Admin included, and its page and pastoral path answer `NOT_FOUND` to them where their
 scope would otherwise admit it (a reader outside it is refused as for anybody else); the Admin's
-search marks it *Equipping account*. To the school it does not exist for the Admin either, being
+search marks it *Registrar account*. To the school it does not exist for the Admin either, being
 an account's record and never somebody signed up for a class: the Equipping picker leaves it
 out, and the registration form, registering and naming it a class's Teacher answer `NOT_FOUND` (owner, 2026-11-18, taking the
 recommendation shown, "ok go with your recommendation", on the Stop Condition the fourth review
@@ -190,6 +191,6 @@ drift apart.
 - What "Regular" means beyond Sections 9 and 12, and whether to add "attended recently".
 - The Encounter as its own registration after Life Class, which would replace decision 0295.
 - Whether a student may join a class a Primary runs for other people, and whether a Primary
-  acts as their own class's Equipper.
+  acts as their own class's Registrar.
 
 Previous: [2026-11-17 — *# of People* counts Cell Members, Cell Leaders and those Not in a Cell](0498-number-of-people-counts-cell-members-cell-leaders-and-those-not-in-a-cell.md)

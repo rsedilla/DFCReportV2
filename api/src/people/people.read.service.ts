@@ -293,13 +293,13 @@ export class PeopleReadService {
   }
 
   /**
-   * Every Person holding an Equipping account (decision 0499), whom only the Admin's search
+   * Every Person holding a Registrar account (decision 0499), whom only the Admin's search
    * finds. Refuses when the port is unbound, rather than showing them to everybody.
    */
   async equippingAccountPersons(): Promise<Set<string>> {
     if (!this.adminAccounts) {
       throw new Error(
-        'Cannot say who holds an Equipping account: ADMIN_ACCOUNTS_PORT is not bound. ' +
+        'Cannot say who holds a Registrar account: ADMIN_ACCOUNTS_PORT is not bound. ' +
           'This is a deployment fault.',
       );
     }

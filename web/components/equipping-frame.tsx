@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 /**
  * What the two Equipping pages share (SKILL.md section 29, decision 0499).
  *
- * **An Equipper has the steps in the sidebar, so no tab row** (decision 0499, point 4); the
+ * **A Registrar has the steps in the sidebar, so no tab row** (decision 0499, point 4); the
  * Admin has one `Equipping` item, and the two steps are its tabs.
  */
 const STEPS = [

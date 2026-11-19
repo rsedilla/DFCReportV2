@@ -6,7 +6,7 @@ import { authenticatedRequest } from './session';
  * email. All three need `accounts.manage`, which the API checks.
  */
 
-export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER' | 'EQUIPPER';
+export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER' | 'REGISTRAR';
 
 export interface PersonAccount {
   id: string;

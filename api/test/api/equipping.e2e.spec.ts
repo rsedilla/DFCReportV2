@@ -23,7 +23,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * What is pinned, each from the ruling rather than from the service:
  *
- *   - only the Admin and an Equipper reach these routes, and a Leader is refused;
+ *   - only the Admin and a Registrar reach these routes, and a Leader is refused;
  *   - the two ticks (a physical Bible, the Life Class Manual) are always required;
  *   - a record requirement not met asks for a reason, and with one the person is registered
  *     with exception, the requirements not met kept on the row;
@@ -36,14 +36,14 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  *   Ramon (Men's root) -> Mario -> Ben, Carlo, Dino
  *   Mario leads a Cell, so he may teach (point 10)
- *   Ada: an administrator outside the tree; Eva: an Equipper
+ *   Ada: an administrator outside the tree; Eva: a Registrar
  */
 describe('Equipping (section 29, decision 0499)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 
   let admin: TestAccount;
-  let equipper: TestAccount;
+  let registrar: TestAccount;
   let leader: TestAccount;
   let mario: TestPerson;
   let ben: TestPerson;
@@ -79,7 +79,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     const ada = await createPerson(db, { firstName: 'Ada', network: 'WOMENS' });
     admin = await createAccount(app, db, { person: ada, roles: ['ADMIN'] });
     const eva = await createPerson(db, { firstName: 'Eva', network: 'WOMENS' });
-    equipper = await createAccount(app, db, { person: eva, roles: ['EQUIPPER'] });
+    registrar = await createAccount(app, db, { person: eva, roles: ['REGISTRAR'] });
     leader = await createAccount(app, db, { person: mario, roles: ['LEADER'] });
 
     seasonId = (
@@ -116,7 +116,7 @@ describe('Equipping (section 29, decision 0499)', () => {
 
   const ticks = { bible_confirmed: true, manual_confirmed: true };
 
-  const register = (person: TestPerson, extra: object = {}, as: TestAccount = equipper) =>
+  const register = (person: TestPerson, extra: object = {}, as: TestAccount = registrar) =>
     post(as, 'registrations', {
       ...TERM,
       person_id: person.id,
@@ -126,7 +126,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     });
 
   const openClass = (name = 'Life Class A', teacherId: string = mario.id) =>
-    post(equipper, 'classes', {
+    post(registrar, 'classes', {
       ...TERM,
       name,
       day_of_week: 2,
@@ -162,21 +162,21 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(await refusal(ada.person_id)).toEqual({ status: 409, code: 'INVARIANT_VIOLATION' });
     });
 
-    it('answers NOT_FOUND for an Equipping record, as registering does', async () => {
-      expect(await refusal(equipper.personId)).toEqual({ status: 404, code: 'NOT_FOUND' });
+    it('answers NOT_FOUND for a Registrar record, as registering does', async () => {
+      expect(await refusal(registrar.personId)).toEqual({ status: 404, code: 'NOT_FOUND' });
     });
 
     it('offers only current Cell Leaders in the tree when the picker asks for Teachers', async () => {
-      const all = (await get(equipper, 'people?q=Mar').expect(200)).body as {
+      const all = (await get(registrar, 'people?q=Mar').expect(200)).body as {
         data: { id: string }[];
       };
-      const teachers = (await get(equipper, 'people?q=Mar&teachers=true').expect(200)).body as {
+      const teachers = (await get(registrar, 'people?q=Mar&teachers=true').expect(200)).body as {
         data: { id: string }[];
       };
       expect(all.data.map((row) => row.id)).toContain(mario.id);
       expect(teachers.data.map((row) => row.id)).toEqual([mario.id]);
 
-      const noLeader = (await get(equipper, 'people?q=Ben&teachers=true').expect(200)).body as {
+      const noLeader = (await get(registrar, 'people?q=Ben&teachers=true').expect(200)).body as {
         data: unknown[];
       };
       expect(noLeader.data).toEqual([]);
@@ -184,9 +184,9 @@ describe('Equipping (section 29, decision 0499)', () => {
   });
 
   describe('who may', () => {
-    it('lets the Equipper and the Admin read the classes, and refuses a Leader', async () => {
+    it('lets the Registrar and the Admin read the classes, and refuses a Leader', async () => {
       const query = `classes?level=LIFE_CLASS&term_year=2027&term_number=1`;
-      await get(equipper, query).expect(200);
+      await get(registrar, query).expect(200);
       await get(admin, query).expect(200);
       const refused = await get(leader, query);
       expect({ status: refused.status, code: refused.body.error?.code }).toEqual({
@@ -201,10 +201,10 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(await db.selectFrom('equipping_registrations').selectAll().execute()).toHaveLength(0);
     });
 
-    it('gives an Equipper the Equipping screens', async () => {
+    it('gives a Registrar the Equipping screens', async () => {
       const me = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${equipper.accessToken}`)
+        .set('Authorization', `Bearer ${registrar.accessToken}`)
         .expect(200);
       expect(me.body.screens).toBe('EQUIPPING');
     });
@@ -221,7 +221,7 @@ describe('Equipping (section 29, decision 0499)', () => {
         }
       };
       const read = async () =>
-        (await get(equipper, `people/${ben.id}`).expect(200)).body as {
+        (await get(registrar, `people/${ben.id}`).expect(200)).body as {
           requirements: { code: string; met: boolean; detail: string }[];
           birth_date: string | null;
         };
@@ -272,7 +272,7 @@ describe('Equipping (section 29, decision 0499)', () => {
         .executeTakeFirstOrThrow();
       expect(row.unmet).toEqual(['CELL_REGULAR', 'DCC_REGULAR', 'SUYNL_LESSONS_1_TO_4']);
       expect(row.exception_reason).toBe('Their leader confirms they attend every week.');
-      expect(row.registered_by).toBe(equipper.id);
+      expect(row.registered_by).toBe(registrar.id);
 
       const audit = await db
         .selectFrom('audit_log')
@@ -297,12 +297,12 @@ describe('Equipping (section 29, decision 0499)', () => {
       const cls = (await openClass().expect(201)).body as { id: string };
       const reg = (await register(ben).expect(201)).body as { id: string };
 
-      await post(equipper, `classes/${cls.id}/enrollments`, { registration_ids: [reg.id] }).expect(
+      await post(registrar, `classes/${cls.id}/enrollments`, { registration_ids: [reg.id] }).expect(
         201,
       );
 
       const list = (
-        await get(equipper, 'registrations?level=LIFE_CLASS&term_year=2027&term_number=1').expect(
+        await get(registrar, 'registrations?level=LIFE_CLASS&term_year=2027&term_number=1').expect(
           200,
         )
       ).body as { data: { status: string; class: { name: string } | null }[] };
@@ -318,7 +318,7 @@ describe('Equipping (section 29, decision 0499)', () => {
         ids.push(((await register(person).expect(201)).body as { id: string }).id);
       }
 
-      const response = await post(equipper, `classes/${cls.id}/enrollments`, {
+      const response = await post(registrar, `classes/${cls.id}/enrollments`, {
         registration_ids: ids,
       });
       expect(response.status).toBe(409);
@@ -344,7 +344,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       await assignTo(db, eli.id, mario.id);
       const cls = (await openClass().expect(201)).body as { id: string };
       const reg = (await register(eli).expect(201)).body as { id: string };
-      await post(equipper, `classes/${cls.id}/enrollments`, { registration_ids: [reg.id] }).expect(
+      await post(registrar, `classes/${cls.id}/enrollments`, { registration_ids: [reg.id] }).expect(
         201,
       );
     });
@@ -354,24 +354,24 @@ describe('Equipping (section 29, decision 0499)', () => {
       const b = (await openClass('Life Class B').expect(201)).body as { id: string };
       const reg = (await register(ben).expect(201)).body as { id: string };
       const enrolled = (
-        await post(equipper, `classes/${a.id}/enrollments`, { registration_ids: [reg.id] }).expect(
+        await post(registrar, `classes/${a.id}/enrollments`, { registration_ids: [reg.id] }).expect(
           201,
         )
       ).body as { enrolled: { enrollment_id: string }[] };
 
       const moved = (
-        await post(equipper, `enrollments/${enrolled.enrolled[0].enrollment_id}/move`, {
+        await post(registrar, `enrollments/${enrolled.enrolled[0].enrollment_id}/move`, {
           class_id: b.id,
         }).expect(200)
       ).body as { enrollment_id: string };
 
       // Cancelling is refused while they are in a class.
-      const cancel = await post(equipper, `registrations/${reg.id}/cancel`, {
+      const cancel = await post(registrar, `registrations/${reg.id}/cancel`, {
         reason: 'Moved away',
       });
       expect(cancel.status).toBe(409);
 
-      await post(equipper, `enrollments/${moved.enrollment_id}/withdraw`, {
+      await post(registrar, `enrollments/${moved.enrollment_id}/withdraw`, {
         reason: 'Works on Tuesdays now',
       }).expect(200);
 
@@ -385,7 +385,7 @@ describe('Equipping (section 29, decision 0499)', () => {
         { class_id: b.id, end_reason: 'WITHDRAWN' },
       ]);
 
-      await post(equipper, `registrations/${reg.id}/cancel`, { reason: 'Moved away' }).expect(200);
+      await post(registrar, `registrations/${reg.id}/cancel`, { reason: 'Moved away' }).expect(200);
     });
   });
 
@@ -397,16 +397,16 @@ describe('Equipping (section 29, decision 0499)', () => {
       );
     });
 
-    it('refuses an Equipper account also holding LEADER', async () => {
+    it('refuses a Registrar account also holding LEADER', async () => {
       await expect(
         db
           .insertInto('account_roles')
-          .values({ account_id: equipper.id, role: 'LEADER' })
+          .values({ account_id: registrar.id, role: 'LEADER' })
           .execute(),
-      ).rejects.toThrow(/account_roles_equipper_not_with_leader/);
+      ).rejects.toThrow(/account_roles_registrar_not_with_leader/);
     });
   });
-  describe('the Equipping account and the rest of the church (decision 0499, 18 Nov)', () => {
+  describe('the Registrar account and the rest of the church (decision 0499, 18 Nov)', () => {
     const form = (overrides: Record<string, unknown> = {}) => ({
       first_name: 'Elena',
       last_name: 'Fixtureson',
@@ -418,16 +418,16 @@ describe('Equipping (section 29, decision 0499)', () => {
       ...overrides,
     });
 
-    const createEquipper = (as: TestAccount, body: object) =>
+    const createRegistrar = (as: TestAccount, body: object) =>
       request(app.getHttpServer())
-        .post('/api/v1/accounts/equipper')
+        .post('/api/v1/accounts/registrar')
         .set('Authorization', `Bearer ${as.accessToken}`)
         .set('Idempotency-Key', randomUUID())
         .send(body);
 
-    it('gives an Equipping account only with a record of its own, outside the tree', async () => {
-      const made = await createEquipper(admin, form()).expect(201);
-      expect(made.body.role).toBe('EQUIPPER');
+    it('gives a Registrar account only with a record of its own, outside the tree', async () => {
+      const made = await createRegistrar(admin, form()).expect(201);
+      expect(made.body.role).toBe('REGISTRAR');
 
       // In no count of people: outside the tree, as a Network Admin's record is.
       const outside = await app
@@ -440,22 +440,22 @@ describe('Equipping (section 29, decision 0499)', () => {
         .post('/api/v1/accounts')
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ person_id: ben.id, email: 'ben.equipping@example.test', role: 'EQUIPPER' })
+        .send({ person_id: ben.id, email: 'ben.equipping@example.test', role: 'REGISTRAR' })
         .expect(422);
     });
 
-    it('refuses a Network Admin the school and the Equipping account', async () => {
+    it('refuses a Network Admin the school and the Registrar account', async () => {
       const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
       const networkAdmin = await createAccount(app, db, { person: nora, roles: ['NETWORK_ADMIN'] });
 
       await get(networkAdmin, 'classes?level=LIFE_CLASS&term_year=2027&term_number=1').expect(403);
-      await createEquipper(networkAdmin, form()).expect(403);
+      await createRegistrar(networkAdmin, form()).expect(403);
     });
 
     it("closes an archived person's registration and class place, keeping both", async () => {
       const registered = await register(ben).expect(201);
       const cls = await openClass().expect(201);
-      await post(equipper, `classes/${cls.body.id}/enrollments`, {
+      await post(registrar, `classes/${cls.body.id}/enrollments`, {
         registration_ids: [registered.body.id],
       }).expect(201);
 
@@ -492,8 +492,8 @@ describe('Equipping (section 29, decision 0499)', () => {
       ).toContain('IN_THE_SCHOOL');
     });
 
-    it('records each person the Equipper opens, as a full-record read is', async () => {
-      await get(equipper, `people/${ben.id}`).expect(200);
+    it('records each person the Registrar opens, as a full-record read is', async () => {
+      await get(registrar, `people/${ben.id}`).expect(200);
 
       const views = await db
         .selectFrom('person_views')
@@ -505,14 +505,14 @@ describe('Equipping (section 29, decision 0499)', () => {
 
     it('refuses a reason of spaces at the edge rather than at the column', async () => {
       const registered = await register(ben).expect(201);
-      const refused = await post(equipper, `registrations/${registered.body.id}/cancel`, {
+      const refused = await post(registrar, `registrations/${registered.body.id}/cancel`, {
         reason: '   ',
       }).expect(422);
       expect(refused.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
-  describe('the Equipping record and its history (decision 0499, second review)', () => {
-    it('keeps the Equipping record out of the tree and its Cells', async () => {
+  describe('the Registrar record and its history (decision 0499, second review)', () => {
+    it('keeps the Registrar record out of the tree and its Cells', async () => {
       const wilma = await createPerson(db, { firstName: 'Wilma', network: 'WOMENS' });
       await assignTo(db, wilma.id, null);
       const wren = await createPerson(db, { firstName: 'Wren', network: 'WOMENS' });
@@ -522,24 +522,24 @@ describe('Equipping (section 29, decision 0499)', () => {
         .put(`/api/v1/people/${wren.id}/pastoral-leader`)
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ pastoral_leader_id: equipper.personId });
+        .send({ pastoral_leader_id: registrar.personId });
       expect(asLeader.status).toBe(409);
-      expect(JSON.stringify(asLeader.body)).toContain('Equipping account');
+      expect(JSON.stringify(asLeader.body)).toContain('Registrar account');
 
       const cell = await createCell(db, { leader: wilma });
       const asMember = await request(app.getHttpServer())
         .post(`/api/v1/cells/${cell.id}/members`)
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .set('Idempotency-Key', randomUUID())
-        .send({ person_id: equipper.personId });
+        .send({ person_id: registrar.personId });
       expect(asMember.status).toBe(409);
-      expect(JSON.stringify(asMember.body)).toContain('Equipping account');
+      expect(JSON.stringify(asMember.body)).toContain('Registrar account');
     });
 
-    it('disables an Equipping account with its record, and refuses keeping it', async () => {
+    it('disables a Registrar account with its record, and refuses keeping it', async () => {
       const archive = (body: object) =>
         request(app.getHttpServer())
-          .post(`/api/v1/people/${equipper.personId}/archive`)
+          .post(`/api/v1/people/${registrar.personId}/archive`)
           .set('Authorization', `Bearer ${admin.accessToken}`)
           .set('Idempotency-Key', randomUUID())
           .send(body);
@@ -553,7 +553,7 @@ describe('Equipping (section 29, decision 0499)', () => {
       const account = await db
         .selectFrom('accounts')
         .select('status')
-        .where('id', '=', equipper.id)
+        .where('id', '=', registrar.id)
         .executeTakeFirstOrThrow();
       expect(account.status).toBe('DISABLED');
     });
@@ -570,7 +570,7 @@ describe('Equipping (section 29, decision 0499)', () => {
           .execute(),
       ).rejects.toThrow(/keeps the person, level and term/);
 
-      await post(equipper, `registrations/${registered.id}/cancel`, {
+      await post(registrar, `registrations/${registered.id}/cancel`, {
         reason: 'Moved to another church.',
       }).expect(200);
 
@@ -585,58 +585,58 @@ describe('Equipping (section 29, decision 0499)', () => {
       await expect(
         db
           .insertInto('equipping_enrollments')
-          .values({ registration_id: registered.id, class_id: cls.id, started_by: equipper.id })
+          .values({ registration_id: registered.id, class_id: cls.id, started_by: registrar.id })
           .execute(),
       ).rejects.toThrow(/cancelled registration/);
     });
   });
-  describe('the Equipping record, found and merged (owner, 2026-11-18)', () => {
+  describe('the Registrar record, found and merged (owner, 2026-11-18)', () => {
     const search = (as: TestAccount, q: string, extra = '') =>
       request(app.getHttpServer())
         .get(`/api/v1/people?q=${encodeURIComponent(q)}${extra}`)
         .set('Authorization', `Bearer ${as.accessToken}`);
 
-    it("finds an Equipping record in the Admin's search alone, labelled", async () => {
+    it("finds a Registrar record in the Admin's search alone, labelled", async () => {
       const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
       const networkAdmin = await createAccount(app, db, { person: nora, roles: ['NETWORK_ADMIN'] });
 
       const byAdmin = (await search(admin, 'Eva', '&church_wide=true').expect(200)).body as {
         data: { id: string; equipping_account?: boolean }[];
       };
-      expect(byAdmin.data.find((row) => row.id === equipper.personId)).toMatchObject({
+      expect(byAdmin.data.find((row) => row.id === registrar.personId)).toMatchObject({
         equipping_account: true,
       });
 
       const byNetworkAdmin = (await search(networkAdmin, 'Eva').expect(200)).body as {
         data: { id: string }[];
       };
-      expect(byNetworkAdmin.data.map((row) => row.id)).not.toContain(equipper.personId);
+      expect(byNetworkAdmin.data.map((row) => row.id)).not.toContain(registrar.personId);
 
       await request(app.getHttpServer())
-        .get(`/api/v1/people/${equipper.personId}`)
+        .get(`/api/v1/people/${registrar.personId}`)
         .set('Authorization', `Bearer ${networkAdmin.accessToken}`)
         .expect(404);
 
-      // Nor does the Equipper's own picker offer an Equipping record to sign up.
-      const picker = (await get(equipper, 'people?q=Eva').expect(200)).body as {
+      // Nor does the Registrar's own picker offer a Registrar record to sign up.
+      const picker = (await get(registrar, 'people?q=Eva').expect(200)).body as {
         data: { id: string }[];
       };
-      expect(picker.data.map((row) => row.id)).not.toContain(equipper.personId);
+      expect(picker.data.map((row) => row.id)).not.toContain(registrar.personId);
 
       // Nor its pastoral path, which would name it (third review).
       await request(app.getHttpServer())
-        .get(`/api/v1/people/${equipper.personId}/pastoral-path`)
+        .get(`/api/v1/people/${registrar.personId}/pastoral-path`)
         .set('Authorization', `Bearer ${networkAdmin.accessToken}`)
         .expect(404);
     });
 
-    it('treats an Equipping record as nobody in the school, for the Admin too', async () => {
+    it('treats a Registrar record as nobody in the school, for the Admin too', async () => {
       // Third review: the picker left it out and the form and register did not.
-      await get(admin, `people/${equipper.personId}`).expect(404);
-      await register({ id: equipper.personId } as TestPerson, {}, admin).expect(404);
+      await get(admin, `people/${registrar.personId}`).expect(404);
+      await register({ id: registrar.personId } as TestPerson, {}, admin).expect(404);
     });
 
-    it("leaves an Equipping record out of everyone's duplicate check but the Admin's", async () => {
+    it("leaves a Registrar record out of everyone's duplicate check but the Admin's", async () => {
       // Owner, 2026-11-18: neither shown nor withheld, and never gated on. Eva's Equipping
       // record is Eva Testfixture, born 1985-06-15, so the same three are a Tier 1 match.
       const nora = await createPerson(db, { firstName: 'Nora', network: 'WOMENS' });
@@ -652,11 +652,11 @@ describe('Equipping (section 29, decision 0499)', () => {
           .set('Authorization', `Bearer ${as.accessToken}`)
           .expect(200);
 
-      expect(JSON.stringify((await check(admin)).body.data)).toContain(equipper.personId);
+      expect(JSON.stringify((await check(admin)).body.data)).toContain(registrar.personId);
       // Not a withheld line either: a covering Network Admin sees her named nowhere, and a
       // Leader, outside whose scope she sits, is shown no "possible match" line for her.
       expect(JSON.stringify((await check(networkAdmin)).body.data)).not.toContain(
-        equipper.personId,
+        registrar.personId,
       );
       const byLeader = (await check(leader)).body.data as { possible_match?: true }[];
       expect(byLeader.filter((row) => row.possible_match)).toEqual([]);
@@ -677,15 +677,15 @@ describe('Equipping (section 29, decision 0499)', () => {
           });
       // The Admin is asked about it; a Network Admin adds her own record without being asked.
       const asked = await add(admin).expect(409);
-      expect(JSON.stringify(asked.body)).toContain(equipper.personId);
+      expect(JSON.stringify(asked.body)).toContain(registrar.personId);
       await add(networkAdmin).expect(201);
     });
 
-    it('refuses merging an Equipping record, in either direction', async () => {
+    it('refuses merging a Registrar record, in either direction', async () => {
       const evaAgain = await createPerson(db, { firstName: 'Eva', network: 'WOMENS' });
       for (const [kept, duplicate] of [
-        [evaAgain.id, equipper.personId],
-        [equipper.personId, evaAgain.id],
+        [evaAgain.id, registrar.personId],
+        [registrar.personId, evaAgain.id],
       ]) {
         const preview = await request(app.getHttpServer())
           .get(`/api/v1/people/${kept}/merge-preview?duplicate_id=${duplicate}`)

@@ -286,7 +286,7 @@ export class PeopleReassignmentService {
       await this.authorization.assertOutsideTreeAccountWithin(
         trx,
         [personId, input.leaderId],
-        'That person holds a Network Admin or Equipping account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
+        'That person holds a Network Admin or Registrar account, which has no place in the pastoral tree (SKILL.md sections 7 and 29).',
       );
 
       // **The same method as the Network correction, and deliberately not the same

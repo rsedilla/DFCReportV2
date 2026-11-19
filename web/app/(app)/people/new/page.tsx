@@ -29,7 +29,7 @@ import {
   EARLIEST_BIRTHDAY,
   CIVIL_STATUS_OPTIONS,
   SEX_OPTIONS,
-  createEquipper,
+  createRegistrar,
   createNetworkAdmin,
   createPerson,
   getPerson,
@@ -131,10 +131,10 @@ function NewPersonForm() {
   const search = useSearchParams();
   const asked = search.get('as');
   const mayGiveAccounts = holdsWholeChurch(me.data, 'accounts.manage');
-  // **And the one that gives an Equipping account** (decision 0499): the same form, its own
+  // **And the one that gives a Registrar account** (decision 0499): the same form, its own
   // record outside the tree, in no count of people, kept apart from any record the person has.
-  const forEquipper = asked === 'equipper' && mayGiveAccounts;
-  const forNetworkAdmin = (asked === 'network-admin' && mayGiveAccounts) || forEquipper;
+  const forRegistrar = asked === 'registrar' && mayGiveAccounts;
+  const forNetworkAdmin = (asked === 'network-admin' && mayGiveAccounts) || forRegistrar;
   const [email, setEmail] = useState('');
   const myPath = useQuery({
     queryKey: ['pastoral-path', me.data?.person_id],
@@ -274,7 +274,7 @@ function NewPersonForm() {
         acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
       };
       if (forNetworkAdmin) {
-        const made = await (forEquipper ? createEquipper : createNetworkAdmin)(
+        const made = await (forRegistrar ? createRegistrar : createNetworkAdmin)(
           { ...fields, email: email.trim() },
           key,
         );
@@ -437,10 +437,10 @@ function NewPersonForm() {
         )}
       </p>
       <h1 className="mt-4 text-xl font-semibold tracking-tight">
-        {forEquipper ? 'Add an Equipping account' : forNetworkAdmin ? 'Add a Network Admin' : 'Add a person'}
+        {forRegistrar ? 'Add a Registrar account' : forNetworkAdmin ? 'Add a Network Admin' : 'Add a person'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        {forEquipper
+        {forRegistrar
           ? 'A record of its own, under their real name, kept apart from any record they already have. It has no leader and no Cell, and is in no count of people. The match check below will find their own record: that is expected.'
           : forNetworkAdmin
           ? 'Their Network is set from their sex. They have no leader and no Cell, and are in no count of people.'

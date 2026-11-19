@@ -166,7 +166,7 @@ export class TokensService {
       .select('id')
       .where('account_id', '=', accountId)
       .where('revoked_at', 'is', null)
-      .where('role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'SENIOR_PASTOR', 'EQUIPPER'])
+      .where('role', 'in', ['ADMIN', 'NETWORK_ADMIN', 'SENIOR_PASTOR', 'REGISTRAR'])
       .executeTakeFirst();
     return elevated === undefined ? SESSION_DAYS : ELEVATED_SESSION_DAYS;
   }
