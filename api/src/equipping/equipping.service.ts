@@ -407,8 +407,8 @@ export class EquippingService {
    * Whether a class fits a person's week (decision 0501, point 2): a clash with a Cell they
    * lead now under the two-hour rule (decision 0392). **It warns and never refuses** (owner,
    * 2026-11-20): the Coordinator knows whether that Cell has moved or has another facilitator.
-   * The day and time it names are the owner's choice from the screenshot of 2026-11-19, of a
-   * piece with the Cell leader shown on a class's pages.
+   * It names that Cell's day and time (decision 0501, point 2, owner 2026-11-20), an accepted
+   * disclosure of a piece with the Cell leader shown on a class's pages.
    */
   async teacherClash(
     personId: string,
