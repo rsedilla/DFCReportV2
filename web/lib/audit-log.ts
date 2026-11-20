@@ -106,6 +106,7 @@ const WHAT: Record<string, string> = {
   'second_step.recovery_code_used': 'Recovery code used',
   'second_step.paused': 'Second step paused after wrong codes',
   'directory.searched': 'Searched the whole church',
+  'equipping_class.clash_checked': 'Checked a Teacher’s week',
   'directory.matched': 'Possible duplicate shown outside the searcher’s care',
   'password.reset': 'Password reset',
   'password.changed': 'Password changed',

@@ -61,6 +61,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'second_step.recovery_code_used': 'ACCOUNTS',
   'second_step.paused': 'ACCOUNTS',
   'directory.searched': 'LOOKUPS',
+  'equipping_class.clash_checked': 'LOOKUPS',
   'directory.matched': 'LOOKUPS',
   'password.reset': 'ACCOUNTS',
   'password.changed': 'ACCOUNTS',

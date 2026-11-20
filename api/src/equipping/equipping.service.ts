@@ -415,7 +415,11 @@ export class EquippingService {
    * and a free day and time would let a Coordinator read any leader's whole week, a probe at a
    * time. Somebody who may not teach is answered with no clash, as the search never offers them.
    */
-  async teacherClash(classId: string, personId: string): Promise<Record<string, unknown>> {
+  async teacherClash(
+    actor: Actor,
+    classId: string,
+    personId: string,
+  ): Promise<Record<string, unknown>> {
     const cls = await this.db
       .selectFrom('equipping_classes')
       .select(['day_of_week', 'time_of_day'])
@@ -426,10 +430,20 @@ export class EquippingService {
     }
     const id = canonicalId(personId);
     const mayTeach = await this.mayTeachWithin(this.db, [id]);
-    if (!mayTeach.has(id)) {
-      return { clash: null };
-    }
-    return { clash: await this.clashOf(id, cls.day_of_week, String(cls.time_of_day)) };
+    const clash = mayTeach.has(id)
+      ? await this.clashOf(id, cls.day_of_week, String(cls.time_of_day))
+      : null;
+    // Every check is recorded, a clash or not, so the log shows who was asked about.
+    await this.db.transaction().execute((trx) =>
+      this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_class.clash_checked',
+        targetType: 'equipping_class',
+        targetId: classId,
+        after: { person_id: id, clash: clash !== null },
+      }),
+    );
+    return { clash };
   }
 
   private async clashOf(

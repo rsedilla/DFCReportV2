@@ -208,8 +208,23 @@ export class EquippingController {
   async teacherClash(
     @Param('id', new UuidParamPipe('id')) id: string,
     @Query() query: TeacherClashDto,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.equipping.teacherClash(id, query.person_id);
+    // **Recorded and limited as a church-wide search is** (owner, 2026-11-20, decision 0501):
+    // each answer can name when a Cell outside the Coordinator's scope meets, so a check is
+    // written under the Audit Log's Lookups and held to thirty a minute per account.
+    const key = `teacher-clash:${actor.accountId}`;
+    const spent = await this.throttle.increment(
+      key,
+      60_000,
+      CHURCH_WIDE_SEARCHES_PER_MINUTE,
+      60_000,
+      key,
+    );
+    if (spent.isBlocked) {
+      throw new ThrottlerException();
+    }
+    return this.equipping.teacherClash(actor, id, query.person_id);
   }
 
   /** Names or changes a class's Teacher (decision 0501, point 2). */

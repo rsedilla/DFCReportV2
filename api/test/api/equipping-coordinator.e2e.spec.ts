@@ -275,6 +275,15 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
       ).expect(200);
       expect(clear.body).toEqual({ clash: null });
 
+      // Every check is recorded under Lookups, a clash or not (owner, 2026-11-20).
+      const checks = await db
+        .selectFrom('audit_log')
+        .select(['after'])
+        .where('actor_id', '=', coordinator.id)
+        .where('action', '=', 'equipping_class.clash_checked')
+        .execute();
+      expect(checks.length).toBeGreaterThanOrEqual(2);
+
       // Asked of somebody who may not teach, it says nothing of their week.
       const notATeacher = await get(
         coordinator,

@@ -356,6 +356,7 @@ export type AuditAction =
   // Section 21 lists a church-wide people search (decision 0303). It targets the
   // searching account; the noun is the directory the search reached.
   | 'directory.searched'
+  | 'equipping_class.clash_checked'
   // Section 21 lists a duplicate check that shows a Person outside the searcher's scope
   // (decision 0304), targeting the searching account.
   | 'directory.matched'
