@@ -147,10 +147,20 @@ export class SetTeacherDto {
   teacher_person_id!: string;
 }
 
-/** Whose week a class is checked against (decision 0501, point 2). */
+/** Whose week, and which day and time, a class is checked against (decision 0501, point 2). */
 export class TeacherClashDto {
   @IsUUID()
   person_id!: string;
+
+  /** ISO 8601: 1 is Monday, 7 is Sunday. */
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? Number(value) : value))
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  day_of_week!: number;
+
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'time_of_day must be HH:MM, 24-hour' })
+  time_of_day!: string;
 }
 
 /** Enrolling several registered people in one class at once (point 11). */
@@ -175,10 +185,4 @@ export class EquippingSearchDto {
   @IsStorableText()
   @MaxLength(100)
   q!: string;
-
-  /** Only who may teach a class: a current Cell Leader in the tree (decision 0499, point 10). */
-  @IsOptional()
-  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
-  @IsBoolean()
-  teachers?: boolean;
 }

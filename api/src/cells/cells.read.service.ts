@@ -1348,16 +1348,6 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
-   * Everyone who is a current Cell Leader now (SKILL.md section 11, decision 0025): an
-   * open leadership of an `ACTIVE` Cell, the same conjunction
-   * {@link isCurrentCellLeaderWithin} states for one person.
-   *
-   * For the Network screen's *Cell Leaders beneath* (decision 0252), asked of the branch's
-   * people only (checklist row perf-network-cell-figures). `null` is everyone, for the
-   * Equipping Teacher search (decision 0499, point 10), which picks among every current
-   * Cell Leader of the church; an empty array is nobody, as everywhere else.
-   */
-  /**
    * The weekly start of every `ACTIVE` Cell this person leads now, as its schedule in force
    * holds it (section 10), for the school's check of a Teacher's week (section 29, decision
    * 0501). A schedule waiting for next month is not read: the class runs now.
@@ -1380,6 +1370,16 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     return rows.map((row) => ({ dayOfWeek: row.day_of_week, timeOfDay: String(row.time_of_day) }));
   }
 
+  /**
+   * Everyone who is a current Cell Leader now (SKILL.md section 11, decision 0025): an
+   * open leadership of an `ACTIVE` Cell, the same conjunction
+   * {@link isCurrentCellLeaderWithin} states for one person.
+   *
+   * For the Network screen's *Cell Leaders beneath* (decision 0252), asked of the branch's
+   * people only (checklist row perf-network-cell-figures). `null` is everyone, for the
+   * Equipping Teacher search (decision 0499, point 10), which picks among every current
+   * Cell Leader of the church; an empty array is nobody, as everywhere else.
+   */
   async currentCellLeaderIds(
     among: readonly string[] | null,
     executor: Db | Transaction<Database> = this.db,

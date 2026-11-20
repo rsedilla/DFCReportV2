@@ -233,6 +233,12 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
   const [teacher, setTeacherChoice] = useState<FoundPerson | null>(null);
   const [writeKey, renewWriteKey] = useWriteKey();
   const [showErrors, setShowErrors] = useState(false);
+  // A Teacher named on opening is checked against their week as on Edit (decision 0501).
+  const clash = useQuery({
+    queryKey: ['equipping', 'clash', teacher?.id, day, time],
+    queryFn: ({ signal }) => teacherClash(teacher!.id, Number(day), time, signal),
+    enabled: open && teacher !== null && /^\d{2}:\d{2}/.test(time),
+  });
 
   const save = useMutation({
     mutationFn: () => {
@@ -293,6 +299,15 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
                 Change
               </Button>
             </div>
+            {clash.data?.clash ? (
+              <p role="status" className="text-field-invalid mt-2 text-sm font-semibold">
+                {clashLine(teacher.full_name, clash.data.clash)}
+              </p>
+            ) : clash.data ? (
+              <p role="status" className="mt-2 text-sm">
+                ✓ Fits their week
+              </p>
+            ) : null}
           </div>
         )}
         <SelectField label="Encounter weekend" value={season} onChange={(event) => setSeason(event.target.value)} required>
@@ -330,7 +345,7 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
   const [writeKey, renewWriteKey] = useWriteKey();
   const clash = useQuery({
     queryKey: ['equipping', 'clash', cls?.id, chosen?.id],
-    queryFn: ({ signal }) => teacherClash(cls!.id, chosen!.id, signal),
+    queryFn: ({ signal }) => teacherClash(chosen!.id, cls!.day_of_week, cls!.time_of_day, signal),
     enabled: cls !== null && chosen !== null,
   });
   const save = useMutation({

@@ -81,11 +81,7 @@ export class EquippingController {
     if (spent.isBlocked) {
       throw new ThrottlerException();
     }
-    const data = await this.equipping.search(
-      query.q,
-      CHURCH_WIDE_PAGE_LIMIT,
-      query.teachers === true,
-    );
+    const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT);
     await this.people.recordDirectorySearch(actor.accountId, query.q, data.length);
     return { data };
   }
@@ -134,13 +130,6 @@ export class EquippingController {
       await this.views.record(id, actor.personId);
     }
     return candidate;
-  }
-
-  /** The seasons a class names, read here so a Registrar needs no SUYNL capability. */
-  @Get('encounter-seasons')
-  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
-  async encounterSeasons(): Promise<Record<string, unknown>> {
-    return this.equipping.encounterSeasons();
   }
 
   @Get('registrations')
@@ -210,14 +199,14 @@ export class EquippingController {
     return this.equipping.coordinatorClassStudents(id);
   }
 
-  /** Whether the class fits a person's week, before they are named its Teacher. */
-  @Get('coordinate/classes/:id/clash')
+  /**
+   * Whether a day and time fit a person's week, before they are named a class's Teacher, when
+   * opening one or editing it (decision 0501, point 2).
+   */
+  @Get('coordinate/clash')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
-  async teacherClash(
-    @Param('id', new UuidParamPipe('id')) id: string,
-    @Query() query: TeacherClashDto,
-  ): Promise<Record<string, unknown>> {
-    return this.equipping.teacherClash(id, query.person_id);
+  async teacherClash(@Query() query: TeacherClashDto): Promise<Record<string, unknown>> {
+    return this.equipping.teacherClash(query.person_id, query.day_of_week, query.time_of_day);
   }
 
   /** Names or changes a class's Teacher (decision 0501, point 2). */

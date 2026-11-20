@@ -523,10 +523,6 @@
       "screen": "web/app/(app)/equipping/registration/page.tsx"
     },
     {
-      "route": "GET /api/v1/equipping/encounter-seasons",
-      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
-    },
-    {
       "route": "GET /api/v1/equipping/registrations",
       "screen": "web/app/(app)/equipping/registration/page.tsx"
     },
@@ -544,7 +540,7 @@
     },
     {
       "route": "POST /api/v1/equipping/classes",
-      "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
       "route": "GET /api/v1/equipping/classes/:id",
@@ -567,7 +563,7 @@
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
-      "route": "GET /api/v1/equipping/coordinate/classes/:id/clash",
+      "route": "GET /api/v1/equipping/coordinate/clash",
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {

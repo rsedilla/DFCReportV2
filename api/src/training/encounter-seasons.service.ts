@@ -116,8 +116,9 @@ export class EncounterSeasonsService {
    * Every season with both halves, in the order of its earlier weekend, for `equipping`
    * (SKILL.md section 29, decision 0499): a class names its season, and a student's age is
    * checked against the weekend of their own Network. Authorization is the caller's: its
-   * routes are Whole Church `equipping.manage`, which shows both halves as a Whole Church
-   * reader of this list is shown them.
+   * routes are Whole Church `equipping.manage`, or `equipping.coordinate` for a Coordinator
+   * opening a class (decision 0501), which show both halves as a Whole Church reader of this
+   * list is shown them.
    */
   async allSeasons(executor: Db = this.db): Promise<(SeasonDates & { id: string })[]> {
     const rows = await executor

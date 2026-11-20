@@ -240,14 +240,17 @@ export async function searchTeachers(term: string, signal?: AbortSignal): Promis
 }
 
 export async function teacherClash(
-  classId: string,
   personId: string,
+  dayOfWeek: number,
+  timeOfDay: string,
   signal?: AbortSignal,
 ): Promise<{ clash: CellClash | null }> {
-  return authenticatedRequest(
-    `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/clash?person_id=${encodeURIComponent(personId)}`,
-    { signal },
-  );
+  const query = new URLSearchParams({
+    person_id: personId,
+    day_of_week: String(dayOfWeek),
+    time_of_day: timeOfDay.slice(0, 5),
+  });
+  return authenticatedRequest(`/api/v1/equipping/coordinate/clash?${query.toString()}`, { signal });
 }
 
 export async function setTeacher(
@@ -302,10 +305,6 @@ export interface EncounterSeasonChoice {
   id: string;
   mens_encounter_on: string;
   womens_encounter_on: string;
-}
-
-export async function listSeasons(signal?: AbortSignal): Promise<{ data: EncounterSeasonChoice[] }> {
-  return authenticatedRequest('/api/v1/equipping/encounter-seasons', { signal });
 }
 
 /** The term a screen opens on: the year now, Term 1 to 3 by the month (Jan to Apr, May to Aug, Sep to Dec). */

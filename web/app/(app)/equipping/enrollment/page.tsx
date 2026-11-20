@@ -7,7 +7,6 @@ import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equippin
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { Field, SearchField } from '@/components/ui/field';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { SelectField } from '@/components/ui/select-field';
 import { timeLabel } from '@/lib/cells';
@@ -18,15 +17,11 @@ import {
   enroll,
   getClass,
   listClasses,
-  listSeasons,
   moveEnrollment,
-  openClass,
-  searchPeople,
   termLabel,
   withdrawEnrollment,
   type ClassDetail,
   type EquippingClass,
-  type FoundPerson,
   type Term,
 } from '@/lib/equipping';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -46,8 +41,7 @@ import { cn } from '@/lib/utils';
 export default function EnrollmentPage() {
   const [term, setTerm] = useState<Term>(() => currentTerm());
   const [chosen, setChosen] = useState<string | null>(null);
-  const [opening, setOpening] = useState(false);
-  // Opening a class is the Coordinator's and the Admin's (decision 0501); a Registrar enrolls.
+  // Opening a class is the Coordinator's, under Classes (decision 0501); here people are enrolled.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const opens = holdsWholeChurch(me.data, 'equipping.coordinate');
 
@@ -87,26 +81,13 @@ export default function EnrollmentPage() {
             </Button>
           ))}
         </div>
-        {opens ? (
-          <div className="lg:ml-auto">
-            <Button type="button" variant="secondary" onClick={() => setOpening(true)}>
-              Open a class
-            </Button>
-          </div>
-        ) : null}
       </div>
       <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
       {classes.data && classes.data.data.length === 0 ? (
         <p className="text-muted mt-4 text-sm">No Life Class is open in {termLabel(term)} yet.{' '}
-          {opens ? 'Open one first.' : 'The Life Class Coordinator opens it.'}</p>
+          {opens ? 'Open one under Classes.' : 'The Life Class Coordinator opens it.'}</p>
       ) : null}
       {classId ? <ClassView key={classId} classId={classId} classes={classes.data?.data ?? []} /> : null}
-      <OpenClassDialog
-        term={term}
-        open={opening}
-        onClose={() => setOpening(false)}
-        onOpened={(id) => setChosen(id)}
-      />
     </EquippingFrame>
   );
 }
@@ -421,170 +402,8 @@ function WithdrawDialog({
   );
 }
 
-function OpenClassDialog({
-  term,
-  open,
-  onClose,
-  onOpened,
-}: {
-  term: Term;
-  open: boolean;
-  onClose: () => void;
-  onOpened: (id: string) => void;
-}) {
-  const queryClient = useQueryClient();
-  const seasons = useQuery({
-    queryKey: ['equipping', 'seasons'],
-    queryFn: ({ signal }) => listSeasons(signal),
-    enabled: open,
-  });
-  const [name, setName] = useState('');
-  const [day, setDay] = useState('2');
-  const [time, setTime] = useState('19:00');
-  const [place, setPlace] = useState('');
-  const [firstLesson, setFirstLesson] = useState('');
-  const [season, setSeason] = useState('');
-  const [teacherQuery, setTeacherQuery] = useState('');
-  const [searched, setSearched] = useState<string | null>(null);
-  const [teacher, setTeacher] = useState<FoundPerson | null>(null);
-  const [writeKey, renewWriteKey] = useWriteKey();
-  const [showErrors, setShowErrors] = useState(false);
-
-  const found = useQuery({
-    queryKey: ['equipping', 'search', 'teachers', searched],
-    queryFn: ({ signal }) => searchPeople(searched!, signal, true),
-    enabled: searched !== null,
-  });
-  const save = useMutation({
-    mutationFn: () => {
-      const body = {
-        ...term,
-        name: name.trim(),
-        day_of_week: Number(day),
-        time_of_day: time,
-        ...(place.trim() ? { place: place.trim() } : {}),
-        first_lesson_on: firstLesson,
-        teacher_person_id: teacher!.id,
-        encounter_season_id: season,
-      };
-      return openClass(body, idempotencyKeyFor('equipping-open-class', writeKey, body));
-    },
-    onSuccess: async (created) => {
-      renewWriteKey();
-      await queryClient.invalidateQueries({ queryKey: ['equipping', 'classes'] });
-      onOpened(created.id);
-      onClose();
-    },
-  });
-  const complete = name.trim() !== '' && firstLesson !== '' && season !== '' && teacher !== null;
-
-  return (
-    <Dialog open={open} onClose={onClose} title="Open a class">
-      <p className="text-muted text-sm">
-        Life Class, {termLabel(term)}. You add the other faculty on the Faculty page.
-      </p>
-      <form
-        className="mt-4 flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setShowErrors(true);
-          if (complete) {
-            save.mutate();
-          }
-        }}
-      >
-        <p className="text-sm">
-          <span className="field-label">Run by</span>
-          <br />
-          The church (Equipping). Later, a Primary can run classes for the people in their care.
-        </p>
-        <Field label="Class name" autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField label="Day" value={day} onChange={(event) => setDay(event.target.value)}>
-            {DAY_NAMES.map((each, index) => (
-              <option key={each} value={String(index + 1)}>
-                {each}
-              </option>
-            ))}
-          </SelectField>
-          <Field label="Time" type="time" autoComplete="off" value={time} onChange={(event) => setTime(event.target.value)} required />
-        </div>
-        <Field label="Place" autoComplete="off" value={place} onChange={(event) => setPlace(event.target.value)} maxLength={80} />
-        <Field label="First lesson" type="date" autoComplete="off" value={firstLesson} onChange={(event) => setFirstLesson(event.target.value)} required />
-        {teacher === null ? (
-          <div>
-            <SearchField
-              label="Teacher"
-              description="A current Cell Leader. At least three letters of their name."
-              autoComplete="off"
-              value={teacherQuery}
-              onChange={(event) => setTeacherQuery(event.target.value)}
-              action={
-                <Button type="button" variant="secondary" onClick={() => setSearched(teacherQuery.trim())}>
-                  Search
-                </Button>
-              }
-            />
-            <FailureNotice failure={found.isError ? describeFailure(found.error) : null} />
-            {found.isSuccess && found.data.data.length === 0 ? (
-              <p className="text-muted mt-2 text-sm">No current Cell Leader with that name.</p>
-            ) : null}
-            <ul className="mt-2 flex flex-col gap-1">
-              {(found.data?.data ?? []).map((each) => (
-                <li key={each.id}>
-                  <Button type="button" variant="quiet" className="w-full justify-start" onClick={() => setTeacher(each)}>
-                    {each.full_name} · {each.member_id}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <div>
-            <p className="field-label">Teacher</p>
-            <div className="border-edge mt-1.5 flex items-center justify-between rounded-md border px-3 py-1">
-              <span className="font-semibold">{teacher.full_name}</span>
-              <Button type="button" variant="quiet" onClick={() => setTeacher(null)}>
-                Change
-              </Button>
-            </div>
-            <p className="text-muted mt-1 text-sm">
-              Later, {teacher.full_name} types this class&rsquo;s weekly grades from their own account.
-            </p>
-          </div>
-        )}
-        <SelectField label="Encounter weekend" value={season} onChange={(event) => setSeason(event.target.value)} required>
-          <option value="">Choose a season</option>
-          {(seasons.data?.data ?? []).map((each) => (
-            <option key={each.id} value={each.id}>
-              Men {each.mens_encounter_on} · Women {each.womens_encounter_on}
-            </option>
-          ))}
-        </SelectField>
-        {showErrors && !complete ? (
-          <p className="text-field-invalid text-sm">Fill in the name, first lesson, Teacher and Encounter weekend.</p>
-        ) : null}
-        <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <Button type="submit" disabled={save.isPending}>
-            Open class
-          </Button>
-          <Button type="button" variant="quiet" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
-
 type ReadyRow = ClassDetail['ready'][number];
 
-/**
- * Why a person cannot be enrolled, said as what is missing. The API's reason is the source;
- * this only words it for the Registrar (owner, 2026-11-18). It names nobody to ask: who may
- * add a birthday depends on capabilities this screen does not read (sections 3 and 7).
- */
 function blockedText(blocked: string): string {
   const age = /^(\d+) on (\S+), under (\d+) for the Encounter$/.exec(blocked);
   if (age) {

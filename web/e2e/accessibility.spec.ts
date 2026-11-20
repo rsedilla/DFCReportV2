@@ -2312,6 +2312,16 @@ const TARGET_SWEEP = [
     admin: true,
   },
   {
+    // The Coordinator's Classes (decision 0501): the term, the status, Open a class, and Edit
+    // and Students for each of the two classes: **seven**. A Coordinator's `/auth/me`, which
+    // the Registrar's below replaces.
+    name: 'equipping classes',
+    route: '/equipping/classes',
+    settle: 'Open a class',
+    minimum: 7,
+    coordinator: true,
+  },
+  {
     // The term, Register a person, and one Cancel for the one row not yet in a class:
     // **three**. A Registrar's, whose `/auth/me` stays for the entries after it.
     name: 'equipping registration',
@@ -2780,6 +2790,10 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
       await mockAuditLog(page);
+    }
+    if ('coordinator' in entry && entry.coordinator) {
+      await mockCoordinator(page);
+      await mockCoordinatedClasses(page);
     }
     if ('registrar' in entry && entry.registrar) {
       await mockRegistrar(page);

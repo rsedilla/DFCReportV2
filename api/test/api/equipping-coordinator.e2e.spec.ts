@@ -165,6 +165,43 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
     });
   });
 
+  describe('every Coordinator route at the API', () => {
+    it('refuses a plain Leader and the Registrar, and admits the ticked Leader and the Admin', async () => {
+      await tick(coordinator, true).expect(200);
+      const id = ((await openClass(coordinator).expect(201)).body as { id: string }).id;
+      const reads = [
+        'equipping/teachers?q=Mar',
+        'equipping/coordinate/encounter-seasons',
+        `equipping/coordinate/classes/${id}/students`,
+        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=19:00`,
+      ];
+      for (const path of reads) {
+        await get(plainLeader, path).expect(403);
+        await get(registrar, path).expect(403);
+        await get(coordinator, path).expect(200);
+        await get(admin, path).expect(200);
+      }
+      for (const as of [plainLeader, registrar]) {
+        await post(as, `equipping/classes/${id}/teacher`, { teacher_person_id: mario.id }).expect(
+          403,
+        );
+      }
+    });
+
+    it('records the Teacher search as a church-wide search is (decision 0303)', async () => {
+      await tick(coordinator, true).expect(200);
+      await get(coordinator, 'equipping/teachers?q=Mar').expect(200);
+      const searches = await db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('actor_id', '=', coordinator.id)
+        .where('action', '=', 'directory.searched')
+        .execute();
+      expect(searches).toHaveLength(1);
+      await get(coordinator, 'equipping/teachers?q=Ma').expect(422);
+    });
+  });
+
   describe('opening a class and naming its Teacher', () => {
     it('is the ticked Leader’s, and not a plain Leader’s or the Registrar’s', async () => {
       await openClass(coordinator).expect(403);
@@ -216,7 +253,7 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
 
       const asked = await get(
         coordinator,
-        `equipping/coordinate/classes/${id}/clash?person_id=${mario.id}`,
+        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=19:00`,
       ).expect(200);
       expect(asked.body).toEqual({ clash: { day_of_week: 2, time_of_day: '19:30' } });
 
@@ -228,16 +265,21 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         time_of_day: '19:30',
       });
 
-      const later = await openClass(coordinator, {
-        name: 'Life Class B',
-        day_of_week: 2,
-        time_of_day: '21:30',
-      }).expect(201);
       const clear = await get(
         coordinator,
-        `equipping/coordinate/classes/${(later.body as { id: string }).id}/clash?person_id=${mario.id}`,
+        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=21:30`,
       ).expect(200);
       expect(clear.body).toEqual({ clash: null });
+
+      // Named on opening, the Teacher is checked the same way.
+      const opened = await openClass(coordinator, {
+        name: 'Life Class B',
+        teacher_person_id: mario.id,
+      }).expect(201);
+      expect((opened.body as { clash: unknown }).clash).toEqual({
+        day_of_week: 2,
+        time_of_day: '19:30',
+      });
     });
   });
 });

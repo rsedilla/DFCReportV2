@@ -98,8 +98,9 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
  * The church's school: registration and enrollment for Life Class (SKILL.md section 29,
  * decision 0499).
  *
- * **Every route is Whole Church `equipping.manage`**, decided by the guard before this runs,
- * so nothing here narrows by scope. What it reads of other modules it reads through their
+ * **Every route is Whole Church `equipping.manage`, or `equipping.coordinate` for the
+ * Coordinator's** (decision 0501), decided by the guard before this runs, so nothing here
+ * narrows by scope. What it reads of other modules it reads through their
  * services (section 2): a person and their birthday from `people`, their leader from
  * `hierarchy`, their Cell from `cells`, their attendance from `attendance`, their SUYNL
  * lessons from `suynl`, and the Encounter seasons from `training`. It writes only its own
@@ -409,16 +410,12 @@ export class EquippingService {
    * The day and time it names are the owner's choice from the screenshot of 2026-11-19, of a
    * piece with the Cell leader shown on a class's pages.
    */
-  async teacherClash(classId: string, personId: string): Promise<Record<string, unknown>> {
-    const cls = await this.db
-      .selectFrom('equipping_classes')
-      .select(['day_of_week', 'time_of_day'])
-      .where('id', '=', classId)
-      .executeTakeFirst();
-    if (cls === undefined) {
-      throw new NotFoundError('No such class.');
-    }
-    return { clash: await this.clashOf(personId, cls.day_of_week, String(cls.time_of_day)) };
+  async teacherClash(
+    personId: string,
+    dayOfWeek: number,
+    timeOfDay: string,
+  ): Promise<Record<string, unknown>> {
+    return { clash: await this.clashOf(personId, dayOfWeek, timeOfDay) };
   }
 
   private async clashOf(
@@ -748,6 +745,11 @@ export class EquippingService {
         teacher:
           teacher === null ? null : { id: row.teacher_person_id, full_name: teacher.fullName },
         enrolled: 0,
+        // A Teacher named on opening is checked against their week as on Edit (decision 0501).
+        clash:
+          teacher === null
+            ? null
+            : await this.clashOf(canonicalId(teacher.id), row.day_of_week, String(row.time_of_day)),
       };
 
       await this.audit.writeWithin(trx, {

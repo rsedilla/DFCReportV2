@@ -142,21 +142,7 @@ export async function mockEquipping(page: Page): Promise<void> {
       }),
     ),
   );
-  await page.route('**/api/v1/equipping/encounter-seasons', (route) =>
-    route.fulfill(
-      json({
-        data: [
-          {
-            id: '3f1b7c6e-0000-4000-8000-00000000e401',
-            mens_lc_party_on: '2026-10-30',
-            mens_encounter_on: '2026-12-04',
-            womens_lc_party_on: '2026-11-06',
-            womens_encounter_on: '2026-12-11',
-          },
-        ],
-      }),
-    ),
-  );
+
 }
 
 /** The Coordinator's *Classes* (decision 0501): one class with a Teacher, one not named yet. */
