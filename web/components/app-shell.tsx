@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import {
+  CalendarDays,
   ChartColumn,
   Church,
   CircleUserRound,
@@ -29,7 +30,7 @@ import { SessionHaltBanner } from '@/components/session-halt-banner';
 import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
-import { getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
+import { coordinatesOnly, getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
 import {
   noReportSection,
   reportSection,
@@ -51,6 +52,10 @@ interface NavEntry {
   label: string;
   icon: LucideIcon;
   matches: readonly (string | RegExp)[];
+  /** Drawn in the sidebar only, never in a phone's tab bar (decision 0501). */
+  wideOnly?: boolean;
+  /** The label in a phone's tab bar, where it differs (decision 0501). */
+  narrowLabel?: string;
 }
 
 /**
@@ -178,6 +183,22 @@ const EQUIPPING: NavEntry = {
   label: 'Equipping',
   icon: GraduationCap,
   matches: ['/equipping'],
+};
+/**
+ * A Coordinator's *Classes* (decision 0501, point 22): its own item on a laptop. On a phone the
+ * bottom bar keeps five items, so it is a tab beside SUYNL instead and this item is not drawn.
+ */
+const CLASSES: NavEntry = {
+  href: '/equipping/classes',
+  label: 'Classes',
+  icon: CalendarDays,
+  matches: ['/equipping/classes'],
+  wideOnly: true,
+};
+/** A Coordinator's SUYNL item, named *Growth* on a phone, where it holds *Classes* too. */
+const SUYNL_WITH_CLASSES: NavEntry = {
+  ...SUYNL,
+  narrowLabel: 'Growth',
 };
 /** The Admin area (decision 0419): set apart from the items above, never one of them. */
 const ADMIN: NavEntry = { href: '/admin', label: 'Admin', icon: ShieldCheck, matches: ['/admin'] };
@@ -311,7 +332,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           : me.data?.screens === 'SENIOR_PASTOR'
             ? [SENIOR_PASTOR_ITEMS.people, SENIOR_PASTOR_ITEMS.cells, SENIOR_PASTOR_ITEMS.services]
             : isBranchReader(me.data)
-              ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
+              ? coordinatesOnly(me.data)
+                ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL_WITH_CLASSES, CLASSES]
+                : [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
         ...conquest,
         // The Admin's Equipping, after Conquest (decision 0499); a Registrar has its steps above.
@@ -381,6 +404,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   function renderItem(link: NavEntry) {
     const active = link.href === current?.href;
+    // On a phone a Coordinator's *Classes* is not drawn, so the item holding it, *Growth*, reads
+    // as the current one there (decision 0501).
+    const activeNarrow = !active && link.narrowLabel !== undefined && current?.wideOnly === true;
     const Icon = link.icon;
 
     return (
@@ -392,6 +418,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         // information (1.4.1).
         aria-current={active ? 'page' : undefined}
         className={cn(
+          link.wideOnly && 'max-lg:hidden',
           // On the light tab bar, the current item's dark green; on the emerald sidebar, white,
           // as the current item is there: the accent all but vanishes on emerald.
           'focus-visible:outline-tabbar-current-ink lg:focus-visible:outline-sidebar-current-ink',
@@ -425,6 +452,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           active
             ? 'text-tabbar-current-ink font-extrabold lg:bg-sidebar-current lg:text-sidebar-current-ink lg:font-semibold lg:shadow-[inset_3px_0_0_var(--sidebar-current-ink)]'
             : 'text-tabbar-ink lg:text-sidebar-ink lg:hover:bg-sidebar-current',
+          activeNarrow && 'max-lg:text-tabbar-current-ink max-lg:font-extrabold',
         )}
       >
         {/* 24px, the size both phone platforms give a tab icon, and the current one on its pill
@@ -436,13 +464,21 @@ export function AppShell({ children }: { children: ReactNode }) {
             'flex h-8 w-full max-w-16 shrink-0 items-center justify-center rounded-full',
             'lg:size-5 lg:max-w-none lg:rounded-none',
             active && 'bg-tabbar-pill lg:bg-transparent',
+            activeNarrow && 'max-lg:bg-tabbar-pill',
           )}
         >
           <Icon strokeWidth={1.5} className="size-6 lg:size-5" />
         </span>
-        <span data-tab-label className="max-w-full truncate">
-          {link.label}
-        </span>
+        {link.narrowLabel ? (
+          <span data-tab-label className="max-w-full truncate">
+            <span className="lg:hidden">{link.narrowLabel}</span>
+            <span className="max-lg:hidden">{link.label}</span>
+          </span>
+        ) : (
+          <span data-tab-label className="max-w-full truncate">
+            {link.label}
+          </span>
+        )}
       </Link>
     );
   }

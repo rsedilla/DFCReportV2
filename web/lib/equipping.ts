@@ -86,8 +86,20 @@ export interface EquippingClass {
   first_lesson_on: string;
   encounter_season_id: string;
   run_by: 'CHURCH';
-  teacher: { id: string; full_name: string | null };
+  /** Null until the Coordinator names one (decision 0501). */
+  teacher: { id: string; full_name: string | null } | null;
   enrolled: number;
+}
+
+/** A class as the Coordinator's *Classes* lists it (decision 0501, point 22). */
+export interface CoordinatedClass extends EquippingClass {
+  status: 'NOT_STARTED' | 'RUNNING';
+}
+
+/** A clash with a Cell the person leads, under the two-hour rule (decision 0392). */
+export interface CellClash {
+  day_of_week: number;
+  time_of_day: string;
 }
 
 export interface ClassDetail {
@@ -186,7 +198,7 @@ export async function openClass(
     time_of_day: string;
     place?: string;
     first_lesson_on: string;
-    teacher_person_id: string;
+    teacher_person_id?: string;
     encounter_season_id: string;
   },
   idempotencyKey: string,
@@ -194,6 +206,58 @@ export async function openClass(
   return authenticatedRequest('/api/v1/equipping/classes', {
     method: 'POST',
     body: input,
+    idempotencyKey,
+  });
+}
+
+/** The Coordinator's *Classes* (decision 0501). */
+export async function listCoordinatedClasses(
+  term: Term,
+  signal?: AbortSignal,
+): Promise<{ data: CoordinatedClass[] }> {
+  return authenticatedRequest(`/api/v1/equipping/coordinate/classes?${termQuery(term)}`, { signal });
+}
+
+export async function listCoordinatorSeasons(
+  signal?: AbortSignal,
+): Promise<{ data: EncounterSeasonChoice[] }> {
+  return authenticatedRequest('/api/v1/equipping/coordinate/encounter-seasons', { signal });
+}
+
+export async function listClassStudents(
+  classId: string,
+  signal?: AbortSignal,
+): Promise<{ class: { id: string; name: string }; data: { person: { id: string; full_name: string | null } }[] }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/students`,
+    { signal },
+  );
+}
+
+/** The Coordinator's Teacher search: current Cell Leaders in the tree only. */
+export async function searchTeachers(term: string, signal?: AbortSignal): Promise<{ data: FoundPerson[] }> {
+  return authenticatedRequest(`/api/v1/equipping/teachers?q=${encodeURIComponent(term)}`, { signal });
+}
+
+export async function teacherClash(
+  classId: string,
+  personId: string,
+  signal?: AbortSignal,
+): Promise<{ clash: CellClash | null }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/clash?person_id=${encodeURIComponent(personId)}`,
+    { signal },
+  );
+}
+
+export async function setTeacher(
+  classId: string,
+  teacherPersonId: string,
+  idempotencyKey: string,
+): Promise<{ id: string; teacher: { id: string; full_name: string }; clash: CellClash | null }> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/teacher`, {
+    method: 'POST',
+    body: { teacher_person_id: teacherPersonId },
     idempotencyKey,
   });
 }

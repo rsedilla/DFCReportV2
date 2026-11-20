@@ -54,6 +54,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'account.full_view_changed': 'ACCOUNTS',
   'account.approves_cells_changed': 'ACCOUNTS',
   'account.moves_people_changed': 'ACCOUNTS',
+  'account.coordinates_life_class_changed': 'ACCOUNTS',
   'account.username_set': 'ACCOUNTS',
   'second_step.set_up': 'ACCOUNTS',
   'second_step.reset': 'ACCOUNTS',
@@ -99,6 +100,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'equipping_registration.created': 'GROWTH',
   'equipping_registration.cancelled': 'GROWTH',
   'equipping_class.created': 'GROWTH',
+  'equipping_class.teacher_named': 'GROWTH',
   'equipping_enrollment.created': 'GROWTH',
   'equipping_enrollment.ended': 'GROWTH',
 };

@@ -123,6 +123,7 @@ export class AccountProvisioningService {
       approves_cells: boolean;
       /** Moves people (decision 0356). */
       moves_people: boolean;
+      coordinates_life_class: boolean;
       /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
       privacy_notice_acknowledged_at: string | null;
       /**
@@ -149,6 +150,7 @@ export class AccountProvisioningService {
         'full_view',
         'approves_cells',
         'moves_people',
+        'coordinates_life_class',
       ])
       .where('person_id', '=', personId)
       .executeTakeFirst();
@@ -177,6 +179,7 @@ export class AccountProvisioningService {
         full_view: account.full_view,
         approves_cells: account.approves_cells,
         moves_people: account.moves_people,
+        coordinates_life_class: account.coordinates_life_class,
         privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
         disabled_with_record: roles.some((row) => row.role === 'REGISTRAR'),
       },

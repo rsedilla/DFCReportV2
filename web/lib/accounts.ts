@@ -26,6 +26,8 @@ export interface PersonAccount {
   approves_cells: boolean;
   /** Moves people (decision 0356); meaningful on a Leader account only. */
   moves_people: boolean;
+  /** Life Class Coordinator (decision 0501); meaningful on a Leader account only. */
+  coordinates_life_class?: boolean;
   /**
    * When the holder ticked the Privacy Notice in force, or null where they have not (decision
    * 0496). Absent from a server that predates it.
@@ -158,6 +160,18 @@ export async function setMovesPeople(
   });
 }
 
+/** Ticks or clears Life Class Coordinator on a Leader account (decision 0501). Needs `roles.manage`. */
+export async function setCoordinatesLifeClass(
+  accountId: string,
+  coordinates: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; coordinates_life_class: boolean }> {
+  return authenticatedRequest(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/coordinates-life-class`,
+    { method: 'POST', body: { coordinates_life_class: coordinates }, idempotencyKey },
+  );
+}
+
 export function accountStatusLabel(status: PersonAccount['status']): string {
   return status === 'PENDING_ACTIVATION'
     ? 'Waiting for activation'
@@ -194,6 +208,7 @@ export interface AccountListRow {
   full_view: boolean;
   approves_cells: boolean;
   moves_people: boolean;
+  coordinates_life_class?: boolean;
 }
 
 export async function listAccounts(

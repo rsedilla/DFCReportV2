@@ -119,6 +119,8 @@ const ADMIN: RoleDefaults = {
   ...growthAt(ScopeType.WholeChurch, true),
   // The Admin sees and does everything, Equipping included (decision 0499, point 3).
   [Capability.EquippingManage]: ScopeType.WholeChurch,
+  // And every Coordinator's step (decision 0501, point 2).
+  [Capability.EquippingCoordinate]: ScopeType.WholeChurch,
 };
 
 const LEADER: RoleDefaults = {
@@ -165,6 +167,16 @@ export const LEADER_FULL_VIEW_ONLY: ReadonlySet<Capability> = new Set([
  */
 export const LEADER_APPROVES_CELLS: RoleDefaults = {
   [Capability.CellApproveLeadership]: ScopeType.SubtreeExclSelf,
+};
+
+/**
+ * What a Leader account holds only as the Life Class Coordinator (sections 7 and 29, decision
+ * 0501): opening Life Class's classes and naming their Teachers, for the whole church, Life
+ * Class being split by no Network. Like Approves Cells, it adds only to what the Leader role
+ * gives, and only with Full view.
+ */
+export const LEADER_COORDINATES_LIFE_CLASS: RoleDefaults = {
+  [Capability.EquippingCoordinate]: ScopeType.WholeChurch,
 };
 
 /**

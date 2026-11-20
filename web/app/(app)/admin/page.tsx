@@ -451,6 +451,7 @@ function detailsOf(row: AccountListRow): string {
     row.full_view ? 'Full view' : null,
     row.approves_cells ? 'Approves Cells' : null,
     row.moves_people ? 'Moves people' : null,
+    row.coordinates_life_class ? 'Life Class Coordinator' : null,
   ].filter((tick): tick is string => tick !== null);
   return ticks.length > 0 ? ticks.join(', ') : 'Recording only';
 }

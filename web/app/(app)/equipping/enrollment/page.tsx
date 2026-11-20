@@ -29,6 +29,7 @@ import {
   type FoundPerson,
   type Term,
 } from '@/lib/equipping';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,9 @@ export default function EnrollmentPage() {
   const [term, setTerm] = useState<Term>(() => currentTerm());
   const [chosen, setChosen] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  // Opening a class is the Coordinator's and the Admin's (decision 0501); a Registrar enrolls.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const opens = holdsWholeChurch(me.data, 'equipping.coordinate');
 
   const classes = useQuery({
     queryKey: ['equipping', 'classes', term],
@@ -83,15 +87,18 @@ export default function EnrollmentPage() {
             </Button>
           ))}
         </div>
-        <div className="lg:ml-auto">
-          <Button type="button" variant="secondary" onClick={() => setOpening(true)}>
-            Open a class
-          </Button>
-        </div>
+        {opens ? (
+          <div className="lg:ml-auto">
+            <Button type="button" variant="secondary" onClick={() => setOpening(true)}>
+              Open a class
+            </Button>
+          </div>
+        ) : null}
       </div>
       <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
       {classes.data && classes.data.data.length === 0 ? (
-        <p className="text-muted mt-4 text-sm">No Life Class is open in {termLabel(term)} yet. Open one first.</p>
+        <p className="text-muted mt-4 text-sm">No Life Class is open in {termLabel(term)} yet.{' '}
+          {opens ? 'Open one first.' : 'The Life Class Coordinator opens it.'}</p>
       ) : null}
       {classId ? <ClassView key={classId} classId={classId} classes={classes.data?.data ?? []} /> : null}
       <OpenClassDialog
@@ -162,7 +169,7 @@ function ClassView({
         <h2 className="text-lg font-semibold">{cls.name}</h2>
         <p className="text-muted mt-1 text-sm">
           {DAY_NAMES[cls.day_of_week - 1]}s, {timeLabel(cls.time_of_day)}
-          {cls.place ? ` · ${cls.place}` : ''} · Teacher: {cls.teacher.full_name} · Starts {cls.first_lesson_on}
+          {cls.place ? ` · ${cls.place}` : ''} · Teacher: {cls.teacher?.full_name ?? 'not named yet'} · Starts {cls.first_lesson_on}
           {' · '}Encounter weekend: men {cls.encounter_weekends.mens}, women {cls.encounter_weekends.womens}
         </p>
         <p className="text-muted mt-1 text-sm">Run by: the church (Equipping)</p>

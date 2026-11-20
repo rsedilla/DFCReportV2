@@ -92,6 +92,11 @@ export class SetMovesPeopleDto {
   moves_people!: boolean;
 }
 
+export class SetCoordinatesLifeClassDto {
+  @IsBoolean()
+  coordinates_life_class!: boolean;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)

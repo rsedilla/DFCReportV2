@@ -7,18 +7,23 @@ import { useId, type ReactNode } from 'react';
 import { PAGE_WIDTH } from '@/components/app-shell';
 import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { termLabel, type Term } from '@/lib/equipping';
-import { getMe } from '@/lib/me';
+import { CoordinatorPhoneTabs } from '@/components/growth-controls';
+import { coordinatesOnly, getMe } from '@/lib/me';
+import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
 
 /**
  * What the two Equipping pages share (SKILL.md section 29, decision 0499).
  *
  * **A Registrar has the steps in the sidebar, so no tab row** (decision 0499, point 4); the
- * Admin has one `Equipping` item, and the two steps are its tabs.
+ * Admin has one `Equipping` item, and the steps are its tabs, *Classes* among them (decision
+ * 0501). A Coordinator reaches *Classes* alone, so they see no tab row either: a tab is drawn
+ * only for a page the account is offered, and a row of one is no row.
  */
 const STEPS = [
   { href: '/equipping/registration', label: 'Registration' },
   { href: '/equipping/enrollment', label: 'Enrollment' },
+  { href: '/equipping/classes', label: 'Classes' },
 ] as const;
 
 export function EquippingFrame({
@@ -34,7 +39,11 @@ export function EquippingFrame({
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   // No tabs until the server names the screens, so they never flash (owner, 2026-10-11).
-  const tabbed = me.data !== undefined && me.data.screens !== 'EQUIPPING';
+  const steps =
+    me.data === undefined || me.data.screens === 'EQUIPPING'
+      ? []
+      : STEPS.filter((step) => pageIsOffered(me.data!, step.href));
+  const tabbed = steps.length > 1;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -42,9 +51,12 @@ export function EquippingFrame({
         <h1 className="text-2xl font-semibold tracking-tight">{tabbed ? 'Equipping' : title}</h1>
         <p className="text-muted text-sm">{lead}</p>
       </div>
+      {current === '/equipping/classes' && coordinatesOnly(me.data) ? (
+        <CoordinatorPhoneTabs current="/equipping/classes" />
+      ) : null}
       {tabbed ? (
         <nav aria-label="Equipping" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
-          {STEPS.map((step) => (
+          {steps.map((step) => (
             <Link
               key={step.href}
               href={step.href}

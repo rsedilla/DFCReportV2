@@ -294,6 +294,10 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/coordinates-life-class",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "GET /api/v1/reports/recording-status",
       "screen": "web/components/recording-status.tsx"
     },
@@ -545,6 +549,30 @@
     {
       "route": "GET /api/v1/equipping/classes/:id",
       "screen": "web/app/(app)/equipping/enrollment/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/teachers",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/classes",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/encounter-seasons",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/classes/:id/students",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/classes/:id/clash",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/teacher",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
       "route": "POST /api/v1/equipping/classes/:id/enrollments",

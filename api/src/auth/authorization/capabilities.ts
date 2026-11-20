@@ -52,6 +52,9 @@ export const Capability = {
   TrainingConfirmOnBehalf: 'training.confirm_on_behalf',
   // Section 29 (decision 0499): registering, opening classes and enrolling.
   EquippingManage: 'equipping.manage',
+  // Section 29 (decision 0501): opening a level's classes and naming their Teachers, held by
+  // the Admin and by a Leader ticked a level's Coordinator.
+  EquippingCoordinate: 'equipping.coordinate',
 } as const;
 
 export type Capability = (typeof Capability)[keyof typeof Capability];

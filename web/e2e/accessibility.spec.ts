@@ -35,8 +35,9 @@ import {
   SECOND_STEP_CODE,
   mockSignedIn,
   mockWholeChurchReader,
+  mockCoordinator,
 } from './mock-api';
-import { mockRegistrar, mockEquipping } from './mock-equipping';
+import { mockCoordinatedClasses, mockRegistrar, mockEquipping } from './mock-equipping';
 import {
   mockCellMeetings,
   mockMeetingsAwaiting,
@@ -1535,6 +1536,19 @@ const SCANS = [
     },
   },
   {
+    // The Coordinator's Classes (decision 0501): a table from `lg`, a card each below it.
+    name: 'equipping classes',
+    route: '/equipping/classes',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCoordinator(page);
+      await mockCoordinatedClasses(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.locator('text=Not named yet >> visible=true').first()).toBeVisible();
+    },
+  },
+  {
     // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
     // half, and the sentence saying who may change it.
     name: 'encounter seasons',
@@ -2307,12 +2321,12 @@ const TARGET_SWEEP = [
     registrar: true,
   },
   {
-    // The term, the class, Open a class, one tick for the one person who can be enrolled,
-    // Enroll, and Withdraw for the one enrolled: **six**.
+    // The term, the class, one tick for the one person who can be enrolled, Enroll, and
+    // Withdraw for the one enrolled: **five**. A Registrar does not open a class (decision 0501).
     name: 'equipping enrollment',
     route: '/equipping/enrollment',
-    settle: 'Open a class',
-    minimum: 6,
+    settle: 'Withdraw',
+    minimum: 5,
     registrar: true,
   },
   {

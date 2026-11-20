@@ -126,7 +126,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     });
 
   const openClass = (name = 'Life Class A', teacherId: string = mario.id) =>
-    post(registrar, 'classes', {
+    post(admin, 'classes', {
       ...TERM,
       name,
       day_of_week: 2,
