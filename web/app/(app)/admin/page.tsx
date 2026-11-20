@@ -8,7 +8,7 @@ import { Suspense, useState } from 'react';
 import { PAGE_WIDTH } from '@/components/app-shell';
 import { EncounterSeasonsFrame } from '@/components/encounter-seasons-frame';
 import { Button, buttonClasses } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { CursorPager } from '@/components/ui/cursor-pager';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { SearchField } from '@/components/ui/field';
@@ -1164,14 +1164,14 @@ function Settings() {
         <div className="mt-3">
           <FailureNotice failure={close.isError ? describeFailure(close.error) : null} />
         </div>
-        <div className="mt-4 flex flex-wrap gap-3">
+        <DialogActions>
           <Button onClick={() => close.mutate()} disabled={close.isPending}>
             {close.isPending ? 'Closing…' : 'Close Encoding'}
           </Button>
           <Button variant="secondary" onClick={() => setConfirming(false)}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </Dialog>
     </>
   );

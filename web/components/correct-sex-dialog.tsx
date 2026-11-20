@@ -6,7 +6,7 @@ import { useId, useState } from 'react';
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { LoadingBlocks } from '@/components/ui/loading-blocks';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
@@ -228,24 +228,16 @@ export function CorrectSexDialog({
             </ul>
           ) : null}
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+          <DialogActions className="lg:flex-wrap">
             <Button type="submit" disabled={!ready || save.isPending}>
               {save.isPending ? 'Correcting…' : `Correct to ${sexLabel(to)}`}
             </Button>
             <Button variant="secondary" onClick={close}>
               Cancel
             </Button>
-          </div>
+          </DialogActions>
         </form>
       )}
-
-      {blocked ? (
-        <div className="mt-4">
-          <Button variant="secondary" onClick={close}>
-            Close
-          </Button>
-        </div>
-      ) : null}
     </Dialog>
   );
 }

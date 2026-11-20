@@ -14,7 +14,7 @@ import {
   type ChosenMember,
 } from '@/components/three-members';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -196,7 +196,7 @@ export default function RequestNewCellPage() {
         title="Discard this request?"
       >
         <p className="text-sm leading-relaxed">What you have filled in is not sent.</p>
-        <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <DialogActions className="lg:flex-wrap">
           <Button variant="secondary" data-autofocus onClick={() => setLeaving(null)}>
             Keep editing
           </Button>
@@ -211,7 +211,7 @@ export default function RequestNewCellPage() {
           >
             Discard
           </Button>
-        </div>
+        </DialogActions>
       </Dialog>
     </main>
   );

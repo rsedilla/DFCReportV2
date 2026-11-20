@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { SearchField } from '@/components/ui/field';
 import { CONTROL_BAR } from '@/components/ui/frame';
@@ -188,14 +188,14 @@ function CancelDialog({
       >
         <TextBox label="Why" value={reason} onChange={setReason} required />
         <FailureNotice failure={cancel.isError ? describeFailure(cancel.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
+        <DialogActions>
           <Button type="submit" disabled={cancel.isPending}>
             Cancel registration
           </Button>
-          <Button type="button" variant="quiet" onClick={onClose} data-autofocus>
+          <Button type="button" variant="secondary" onClick={onClose} data-autofocus>
             Keep it
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );
@@ -281,7 +281,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
       title="Register for Life Class"
     >
       <p className="text-muted text-sm">
-        {termLabel(term)}. Fees and the manual are paid outside DREAMS.
+        {termLabel(term)} &middot; fees and the manual are paid outside DREAMS
       </p>
 
       {person === null ? (
@@ -342,19 +342,34 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             void submit(false);
           }}
         >
-          <div className="border-edge flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-            <p>
-              <span className="font-semibold">{person.full_name}</span>
-              <span className="text-muted"> · {person.member_id}</span>
-            </p>
-            <Button type="button" variant="quiet" onClick={() => setPerson(null)}>
+          {/* The name on its own line, so a narrow screen never splits it from the Member ID
+              (decision 0500). */}
+          <div className="border-edge flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
+            <div className="min-w-0">
+              <p className="font-semibold">{person.full_name}</p>
+              <p className="text-muted text-sm">
+                <span className="whitespace-nowrap">{person.member_id}</span>
+                {person.direct_leader_name ? <> &middot; Leader {person.direct_leader_name}</> : null}
+              </p>
+            </div>
+            <Button type="button" variant="secondary" className="w-auto shrink-0" onClick={() => setPerson(null)}>
               Change
             </Button>
           </div>
 
           <section aria-labelledby="requirements-heading">
-            <h3 id="requirements-heading" className="field-label">
-              Life Class requirements
+            <h3 id="requirements-heading" className="font-semibold">
+              Requirements
+              {candidate.data ? (
+                unmet.length > 0 ? (
+                  <span className="text-field-invalid text-sm">
+                    {' '}
+                    &middot; {unmet.length} of {candidate.data.requirements.length} not met
+                  </span>
+                ) : (
+                  <span className="text-muted text-sm font-normal"> &middot; all met</span>
+                )
+              ) : null}
             </h3>
             {candidate.isPending ? (
               <p className="text-muted mt-2 text-sm">Reading their records&hellip;</p>
@@ -367,9 +382,9 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
                     </span>
                     <span>
                       <span className="font-semibold">{REQUIREMENT_LABELS[each.code]}</span>
-                      <span className="sr-only">{each.met ? ', met' : ', not met'}</span>
+                      {each.met ? <span className="sr-only">, met</span> : null}
                       <span className={each.met ? 'text-muted block text-sm' : 'text-field-invalid block text-sm'}>
-                        {each.detail}
+                        {each.met ? each.detail : <>Not met &middot; {each.detail}</>}
                       </span>
                     </span>
                   </li>
@@ -379,25 +394,30 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
               <FailureNotice failure={describeFailure(candidate.error)} />
             )}
             {candidate.data && candidate.data.birth_date === null ? (
-              <p className="mt-2 text-sm">
-                Birthday not recorded yet. Enrollment will need it, so ask{' '}
-                {candidate.data.leader_name ?? 'their leader'} to add it.
+              <p className="border-line mt-3 flex gap-3 rounded-lg border border-l-4 px-4 py-3 text-sm">
+                <span aria-hidden="true" className="font-bold">
+                  !
+                </span>
+                <span>
+                  <strong>Birthday missing.</strong> Enrollment needs it. Ask{' '}
+                  {candidate.data.leader_name ?? 'their leader'} to add it.
+                </span>
               </p>
             ) : null}
           </section>
 
-          <fieldset className="flex flex-col">
-            <legend className="field-label">
-              Ticked by you, after asking {candidate.data?.leader_name ?? 'their leader'}
-            </legend>
-            <Tick checked={bible} onChange={setBible}>
-              Has a physical Bible
-            </Tick>
-            <Tick checked={manual} onChange={setManual}>
-              Has the Life Class Manual
-            </Tick>
+          <fieldset>
+            <legend className="font-semibold">Ask {candidate.data?.leader_name ?? 'their leader'}, then tick</legend>
+            <div className="mt-2 grid gap-2 lg:grid-cols-2">
+              <Tick boxed checked={bible} onChange={setBible}>
+                Has a physical Bible
+              </Tick>
+              <Tick boxed checked={manual} onChange={setManual}>
+                Has the Life Class Manual
+              </Tick>
+            </div>
             {showErrors && !ticked ? (
-              <p className="text-field-invalid text-sm">All three are ticked before registering.</p>
+              <p className="text-field-invalid mt-2 text-sm">Both are ticked before registering.</p>
             ) : null}
           </fieldset>
 
@@ -414,16 +434,18 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
           <TextBox label="Note" value={note} onChange={setNote} />
 
           <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-          <div className="flex flex-col gap-3 lg:flex-row">
+          <DialogActions>
             <Button type="submit" disabled={save.isPending}>
               Register
             </Button>
             <Button type="button" variant="secondary" disabled={save.isPending} onClick={() => void submit(true)}>
               Register and add another
             </Button>
+            {/* On a phone the title bar's close button is the way out (decision 0500). */}
             <Button
               type="button"
-              variant="quiet"
+              variant="secondary"
+              className="max-lg:hidden"
               onClick={() => {
                 reset();
                 onClose();
@@ -431,7 +453,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             >
               Cancel
             </Button>
-          </div>
+          </DialogActions>
         </form>
       )}
     </Dialog>

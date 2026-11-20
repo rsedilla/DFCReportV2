@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
@@ -111,7 +111,7 @@ export function CellCategoryDialog({
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
 
         {/* A column below `lg`, so each button is full width in the sheet. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <DialogActions className="lg:flex-wrap">
           <Button type="submit" disabled={category === '' || save.isPending}>
             {save.isPending
               ? 'Saving…'
@@ -122,7 +122,7 @@ export function CellCategoryDialog({
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

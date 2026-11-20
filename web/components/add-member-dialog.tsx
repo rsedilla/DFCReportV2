@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { addCellMember, membershipFailure } from '@/lib/cells';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
@@ -124,14 +124,14 @@ export function AddMemberDialog({
         />
 
         {/* A column below `lg`, so each button is full width in the sheet. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <DialogActions className="lg:flex-wrap">
           <Button type="submit" disabled={!chosen || add.isPending}>
             {add.isPending ? 'Adding…' : 'Add'}
           </Button>
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

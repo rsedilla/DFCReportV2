@@ -409,7 +409,8 @@ test.describe('a recorded Cell meeting', () => {
     // hides about 208px at this size, which is the gap that left focus under it.
     await page.getByRole('radio', { name: 'Absent' }).nth(5).scrollIntoViewIfNeeded();
     const clear = await page.evaluate(() => {
-      const bar = document.querySelector<HTMLElement>('div.sticky');
+      // The page's own bar, not a closed dialog's title bar, which is sticky too (decision 0500).
+      const bar = document.querySelector<HTMLElement>('main div.sticky');
       return {
         padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
         hidden: bar ? window.innerHeight - bar.getBoundingClientRect().top : 0,
