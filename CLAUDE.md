@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-20, the trigger being decision 0502: of 501 files, 500 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0502 each moved the first two and
+2026-11-20, the trigger being decision 0503: of 502 files, 501 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0503 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-20 and triggered by 0502, and was left stale by 0503 the same day. The one before that was dated
 2026-11-20 and triggered by 0501 meeting 0500 on `main`, and was left stale by 0502 the same day. The one before that was dated
 2026-11-20 and triggered by 0500, and was left stale by 0501 arriving from PR #543 the same day; 0501's own
 recount on its branch, dated 2026-11-20, set 0500 aside and never reached `main`. The one before that was dated
@@ -1050,6 +1051,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-20 — [Every dialog has a close button and keeps its buttons in view](docs/decisions/0500-every-dialog-has-a-close-button-and-keeps-its-buttons-in-view.md)
 - 2026-11-20 — [Equipping: the school from the class to the final grade, and SOL 1 to 3](docs/decisions/0501-equipping-the-school-from-the-class-to-the-final-grade-and-sol-1-to-3.md)
 - 2026-11-20 — [A Guide pairing ends with the enrollment, and an archived Guide takes no new students](docs/decisions/0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)
+- 2026-11-20 — [A lesson is dated weekly from the first, and the Teacher may change the date](docs/decisions/0503-a-lesson-is-dated-weekly-from-the-first-and-the-teacher-may-change-the-date.md)
 
 ### Open — awaiting a ruling
 
