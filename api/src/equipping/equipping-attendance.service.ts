@@ -81,6 +81,21 @@ interface ClassRow {
   teacher_person_id: string | null;
 }
 
+/** One lesson of one student's register, wherever it was marked (decision 0503). */
+interface RegisterEntry {
+  lesson: number;
+  /** The lesson and enrollment a make-up of it is recorded against. */
+  lessonId: string;
+  enrollmentId: string;
+  came: boolean;
+  heldOn: string;
+  madeUpOn: string | null;
+  /** Held by this class before the student joined, with no mark for it anywhere: no absence. */
+  beforeJoining: boolean;
+  /** The earlier class it was marked in, for a student moved since; null for this class. */
+  fromClass: { id: string; name: string } | null;
+}
+
 interface Standing {
   /** The class's Teacher, who records it (decision 0501, point 3). */
   teaches: boolean;
@@ -179,6 +194,8 @@ export class EquippingAttendanceService {
       .leftJoin('equipping_class_guides as g', 'g.id', 'gs.guide_id')
       .select([
         'e.id as enrollment_id',
+        'e.registration_id',
+        'e.started_at',
         'r.person_id',
         'g.id as guide_id',
         'g.person_id as guide_person_id',
@@ -195,27 +212,7 @@ export class EquippingAttendanceService {
       .select(['id', 'lesson', 'held_on', 'version'])
       .where('class_id', '=', classId)
       .execute();
-    const lessonIds = lessons.map((row) => row.id);
-    const enrollmentIds = enrolled.map((row) => row.enrollment_id);
-    const [marks, makeUps] =
-      lessonIds.length === 0 || enrollmentIds.length === 0
-        ? [[], []]
-        : await Promise.all([
-            this.db
-              .selectFrom('equipping_marks')
-              .select(['lesson_id', 'enrollment_id', 'came'])
-              .where('lesson_id', 'in', lessonIds)
-              .where('enrollment_id', 'in', enrollmentIds)
-              .where('superseded_at', 'is', null)
-              .execute(),
-            this.db
-              .selectFrom('equipping_make_ups')
-              .select(['lesson_id', 'enrollment_id', 'made_up_on'])
-              .where('lesson_id', 'in', lessonIds)
-              .where('enrollment_id', 'in', enrollmentIds)
-              .where('superseded_at', 'is', null)
-              .execute(),
-          ]);
+    const registers = await this.registersOf(this.db, classId, enrolled);
 
     const personIds = enrolled.map((row) => row.person_id);
     const cellsOf = await this.cells.currentCellsOfMany(personIds);
@@ -230,7 +227,6 @@ export class EquippingAttendanceService {
 
     const now = await databaseNow(this.db);
     const byNumber = new Map(lessons.map((row) => [row.lesson, row]));
-    const numberOf = new Map(lessons.map((row) => [row.id, row.lesson]));
     const lessonRow = CLASS_LESSONS.map((n) => {
       const saved = byNumber.get(n);
       const expected = expectedOn(cls.first_lesson_on, n);
@@ -246,18 +242,10 @@ export class EquippingAttendanceService {
       };
     });
 
-    const markOf = new Map(
-      marks.map((row) => [`${row.enrollment_id}:${numberOf.get(row.lesson_id)}`, row.came]),
-    );
-    const madeUpOf = new Map(
-      makeUps.map((row) => [
-        `${row.enrollment_id}:${numberOf.get(row.lesson_id)}`,
-        String(row.made_up_on),
-      ]),
-    );
     const students = enrolled
       .map((row) => {
         const leaderId = cellsOf.get(row.person_id)?.membership?.leaderId ?? null;
+        const register = registers.get(row.enrollment_id)!;
         return {
           enrollment_id: row.enrollment_id,
           person: { id: row.person_id, full_name: nameOf(row.person_id) },
@@ -265,14 +253,21 @@ export class EquippingAttendanceService {
           guide: row.guide_person_id
             ? { id: row.guide_person_id, full_name: nameOf(row.guide_person_id) }
             : null,
+          joined_on: manilaDayOf(row.started_at),
           marks: CLASS_LESSONS.flatMap((n) => {
-            const came = markOf.get(`${row.enrollment_id}:${n}`);
-            if (came === undefined) {
-              return [];
-            }
-            return [
-              { lesson: n, came, made_up_on: madeUpOf.get(`${row.enrollment_id}:${n}`) ?? null },
-            ];
+            const entry = register.get(n);
+            return entry
+              ? [
+                  {
+                    lesson: n,
+                    came: entry.came,
+                    made_up_on: entry.madeUpOn,
+                    held_on: entry.heldOn,
+                    before_joining: entry.beforeJoining,
+                    from_class: entry.fromClass,
+                  },
+                ]
+              : [];
           }),
         };
       })
@@ -287,7 +282,8 @@ export class EquippingAttendanceService {
           person: student.person,
           cell_leader: student.cell_leader,
           lesson: mark.lesson,
-          held_on: lessonRow.find((l) => l.lesson === mark.lesson)!.held_on,
+          held_on: mark.held_on,
+          before_joining: mark.before_joining,
         })),
     );
 
@@ -437,10 +433,13 @@ export class EquippingAttendanceService {
       const enrolled = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'r.person_id'])
+        .select(['e.id', 'r.person_id', 'e.started_at'])
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
         .execute();
+      // Joined after the day the lesson was held: not saved Absent, and owed it as a make-up
+      // rather than an absence (decision 0503, owner ruling of 2026-11-20).
+      const joinedAfter = (row: { started_at: Date }) => manilaDayOf(row.started_at) > body.held_on;
       const enrolledIds = new Set(enrolled.map((row) => canonicalId(row.id)));
       const came = new Set(body.came.map((id) => canonicalId(id)));
       for (const id of came) {
@@ -500,9 +499,20 @@ export class EquippingAttendanceService {
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
       const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
+      const marked: typeof enrolled = [];
       for (const row of enrolled) {
         const want = came.has(canonicalId(row.id));
         const was = currentOf.get(canonicalId(row.id));
+        if (!was && joinedAfter(row)) {
+          if (want) {
+            throw new ValidationFailedError(
+              'Somebody ticked joined the class after this lesson; they make it up instead.',
+              { field: 'came' },
+            );
+          }
+          continue;
+        }
+        marked.push(row);
         if (was && was.came === want) {
           continue;
         }
@@ -614,8 +624,8 @@ export class EquippingAttendanceService {
         lesson,
         held_on: body.held_on,
         version,
-        came: enrolled.filter((row) => came.has(canonicalId(row.id))).length,
-        absent: enrolled.filter((row) => !came.has(canonicalId(row.id))).length,
+        came: marked.filter((row) => came.has(canonicalId(row.id))).length,
+        absent: marked.filter((row) => !came.has(canonicalId(row.id))).length,
       };
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
       return response;
@@ -641,19 +651,10 @@ export class EquippingAttendanceService {
           'Only the class’s Teacher records a make-up (SKILL.md section 29).',
         );
       }
-      const lesson = await trx
-        .selectFrom('equipping_lessons')
-        .select(['id', 'held_on'])
-        .where('class_id', '=', classId)
-        .where('lesson', '=', body.lesson)
-        .executeTakeFirst();
-      if (!lesson) {
-        throw new NotFoundError('That lesson has not been recorded yet.', { field: 'lesson' });
-      }
       const student = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'r.person_id'])
+        .select(['e.id', 'e.registration_id', 'e.started_at', 'r.person_id'])
         .where('e.id', '=', body.enrollment_id)
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
@@ -661,29 +662,37 @@ export class EquippingAttendanceService {
       if (!student) {
         throw new NotFoundError('No such student in this class.', { field: 'enrollment_id' });
       }
-      const mark = await trx
-        .selectFrom('equipping_marks')
-        .select('came')
-        .where('lesson_id', '=', lesson.id)
-        .where('enrollment_id', '=', student.id)
-        .where('superseded_at', 'is', null)
-        .executeTakeFirst();
-      if (!mark || mark.came) {
+      // The lesson as the student's register reads it: missed here, missed in a class they moved
+      // from, or held here before they joined (decision 0503). The make-up is recorded against
+      // the lesson and enrollment it was missed under.
+      const registers = await this.registersOf(trx, classId, [
+        {
+          enrollment_id: student.id,
+          registration_id: student.registration_id,
+          started_at: student.started_at,
+        },
+      ]);
+      const target = registers.get(student.id)!.get(body.lesson);
+      if (!target) {
+        throw new NotFoundError('That lesson has not been recorded yet.', { field: 'lesson' });
+      }
+      if (target.came) {
         throw new InvariantViolationError('A make-up is of a lesson the student missed.', {
           field: 'lesson',
         });
       }
       const today = manilaDayOf(await databaseNow(trx));
-      if (body.made_up_on > today || body.made_up_on < String(lesson.held_on)) {
+      if (body.made_up_on > today || body.made_up_on < target.heldOn) {
         throw new ValidationFailedError('A make-up falls between the missed lesson and today.', {
           field: 'made_up_on',
         });
       }
+      const lesson = { id: target.lessonId };
       const was = await trx
         .selectFrom('equipping_make_ups')
         .select(['id', 'made_up_on'])
-        .where('lesson_id', '=', lesson.id)
-        .where('enrollment_id', '=', student.id)
+        .where('lesson_id', '=', target.lessonId)
+        .where('enrollment_id', '=', target.enrollmentId)
         .where('superseded_at', 'is', null)
         .forUpdate()
         .executeTakeFirst();
@@ -699,20 +708,27 @@ export class EquippingAttendanceService {
           .insertInto('equipping_make_ups')
           .values({
             lesson_id: lesson.id,
-            enrollment_id: student.id,
+            enrollment_id: target.enrollmentId,
             made_up_on: body.made_up_on,
             recorded_by: actor.accountId,
           })
           .execute();
+        // The class the lesson was missed in, which is an earlier one for a moved student.
+        const missedIn = target.fromClass?.id ?? classId;
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
           action: 'equipping_make_up.recorded',
           targetType: 'person',
           targetId: student.person_id,
           before: was
-            ? { class_id: classId, lesson: body.lesson, made_up_on: String(was.made_up_on) }
+            ? { class_id: missedIn, lesson: body.lesson, made_up_on: String(was.made_up_on) }
             : null,
-          after: { class_id: classId, lesson: body.lesson, made_up_on: body.made_up_on },
+          after: {
+            class_id: missedIn,
+            lesson: body.lesson,
+            made_up_on: body.made_up_on,
+            ...(target.beforeJoining ? { before_joining: true } : {}),
+          },
         });
       }
       const response = {
@@ -729,6 +745,117 @@ export class EquippingAttendanceService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * **Each student's register, lesson by lesson** (decision 0503, owner rulings of 2026-11-20).
+   * A mark hangs on the enrollment it was saved under, and a move opens a new enrollment on the
+   * same registration, so a moved student's marks are read from every class the registration
+   * has been in, this class's first (section 29: what is recorded carries with a move). A lesson
+   * this class held before the student joined, with no mark for it anywhere, is *before
+   * joining*: owed as a make-up and not an absence. Keyed by enrollment, then lesson number.
+   */
+  private async registersOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+    rows: readonly { enrollment_id: string; registration_id: string; started_at: Date }[],
+  ): Promise<Map<string, Map<number, RegisterEntry>>> {
+    const result = new Map<string, Map<number, RegisterEntry>>();
+    if (rows.length === 0) {
+      return result;
+    }
+    const all = await executor
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+      .select(['e.id', 'e.registration_id', 'e.class_id', 'c.name'])
+      .where(
+        'e.registration_id',
+        'in',
+        rows.map((row) => row.registration_id),
+      )
+      .execute();
+    const classIds = [...new Set(all.map((row) => row.class_id))];
+    const enrollmentIds = all.map((row) => row.id);
+    const [lessons, marks, makeUps] = await Promise.all([
+      executor
+        .selectFrom('equipping_lessons')
+        .select(['id', 'class_id', 'lesson', 'held_on'])
+        .where('class_id', 'in', classIds)
+        .execute(),
+      executor
+        .selectFrom('equipping_marks')
+        .select(['lesson_id', 'enrollment_id', 'came'])
+        .where('enrollment_id', 'in', enrollmentIds)
+        .where('superseded_at', 'is', null)
+        .execute(),
+      executor
+        .selectFrom('equipping_make_ups')
+        .select(['lesson_id', 'enrollment_id', 'made_up_on'])
+        .where('enrollment_id', 'in', enrollmentIds)
+        .where('superseded_at', 'is', null)
+        .execute(),
+    ]);
+    const lessonById = new Map(lessons.map((row) => [row.id, row]));
+    const madeUpOf = new Map(
+      makeUps.map((row) => [`${row.lesson_id}:${row.enrollment_id}`, String(row.made_up_on)]),
+    );
+    const enrollmentById = new Map(all.map((row) => [row.id, row]));
+
+    for (const row of rows) {
+      const joinedOn = manilaDayOf(row.started_at);
+      const register = new Map<number, RegisterEntry>();
+      const here: RegisterEntry[] = [];
+      const elsewhere: RegisterEntry[] = [];
+      for (const mark of marks) {
+        const enrollment = enrollmentById.get(mark.enrollment_id)!;
+        if (enrollment.registration_id !== row.registration_id) {
+          continue;
+        }
+        const lesson = lessonById.get(mark.lesson_id)!;
+        const entry: RegisterEntry = {
+          lesson: lesson.lesson,
+          lessonId: lesson.id,
+          enrollmentId: mark.enrollment_id,
+          came: mark.came,
+          heldOn: String(lesson.held_on),
+          madeUpOn: madeUpOf.get(`${lesson.id}:${mark.enrollment_id}`) ?? null,
+          beforeJoining: false,
+          fromClass:
+            enrollment.class_id === classId
+              ? null
+              : { id: enrollment.class_id, name: enrollment.name },
+        };
+        (enrollment.class_id === classId ? here : elsewhere).push(entry);
+      }
+      // The latest class first among the others, so a lesson marked in two earlier classes reads
+      // the later one.
+      elsewhere.sort((a, b) => b.heldOn.localeCompare(a.heldOn));
+      for (const entry of [...here, ...elsewhere]) {
+        if (!register.has(entry.lesson)) {
+          register.set(entry.lesson, entry);
+        }
+      }
+      for (const lesson of lessons) {
+        if (
+          lesson.class_id === classId &&
+          !register.has(lesson.lesson) &&
+          String(lesson.held_on) < joinedOn
+        ) {
+          register.set(lesson.lesson, {
+            lesson: lesson.lesson,
+            lessonId: lesson.id,
+            enrollmentId: row.enrollment_id,
+            came: false,
+            heldOn: String(lesson.held_on),
+            madeUpOn: madeUpOf.get(`${lesson.id}:${row.enrollment_id}`) ?? null,
+            beforeJoining: true,
+            fromClass: null,
+          });
+        }
+      }
+      result.set(row.enrollment_id, register);
+    }
+    return result;
+  }
 
   private async classOf(executor: Db | Transaction<Database>, classId: string): Promise<ClassRow> {
     const cls = await executor

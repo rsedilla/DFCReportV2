@@ -349,7 +349,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           : me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(teaches ? [TEACH] : [])]
           : me.data?.screens === 'SENIOR_PASTOR'
-            ? [SENIOR_PASTOR_ITEMS.people, SENIOR_PASTOR_ITEMS.cells, SENIOR_PASTOR_ITEMS.services]
+            ? [
+                SENIOR_PASTOR_ITEMS.people,
+                SENIOR_PASTOR_ITEMS.cells,
+                SENIOR_PASTOR_ITEMS.services,
+                // A Network root named a class's Teacher records it here (decision 0503).
+                ...(teaches ? [TEACH] : []),
+              ]
             : isBranchReader(me.data)
               ? coordinatesOnly(me.data)
                 ? [

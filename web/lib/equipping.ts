@@ -224,7 +224,13 @@ export async function openClass(
     encounter_season_id: string;
   },
   idempotencyKey: string,
-): Promise<EquippingClass & { clash?: CellClash | null }> {
+): Promise<
+  EquippingClass & {
+    clash?: CellClash | null;
+    /** Whether the Teacher named can record the class (decision 0503). */
+    account?: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null;
+  }
+> {
   return authenticatedRequest('/api/v1/equipping/classes', {
     method: 'POST',
     body: input,
@@ -293,7 +299,11 @@ export async function teacherClash(
   classId: string,
   personId: string,
   signal?: AbortSignal,
-): Promise<{ clash: CellClash | null }> {
+): Promise<{
+  clash: CellClash | null;
+  /** Whether they can record the class (decision 0503): their account's state, or NONE. */
+  account?: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null;
+}> {
   return authenticatedRequest(
     `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/clash?person_id=${encodeURIComponent(personId)}`,
     { signal },
@@ -400,7 +410,18 @@ export interface AttendanceStudent {
   person: { id: string; full_name: string | null };
   cell_leader: { id: string; full_name: string | null } | null;
   guide: { id: string; full_name: string | null } | null;
-  marks: { lesson: number; came: boolean; made_up_on: string | null }[];
+  /** The day they joined this class (decision 0503). */
+  joined_on: string;
+  marks: {
+    lesson: number;
+    came: boolean;
+    made_up_on: string | null;
+    held_on: string;
+    /** Held here before they joined: owed as a make-up, not an absence (decision 0503). */
+    before_joining: boolean;
+    /** The class it was marked in, for a student moved since; null for this class. */
+    from_class: { id: string; name: string } | null;
+  }[];
 }
 
 export interface ClassAttendance {
@@ -423,6 +444,7 @@ export interface ClassAttendance {
     cell_leader: { id: string; full_name: string | null } | null;
     lesson: number;
     held_on: string | null;
+    before_joining: boolean;
   }[];
 }
 

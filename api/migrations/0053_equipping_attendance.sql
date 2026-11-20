@@ -138,14 +138,25 @@ CREATE TRIGGER equipping_make_ups_history_kept
   BEFORE INSERT OR UPDATE ON equipping_make_ups
   FOR EACH ROW EXECUTE FUNCTION assert_mark_history_kept();
 
--- A make-up is of a lesson the student is currently marked absent from.
+-- A make-up is of a lesson the student is currently marked absent from, or of one their class
+-- held before they joined it, which carries no mark at all (decision 0503, owner ruling of
+-- 2026-11-20: owed as a make-up, not counted as an absence).
 CREATE FUNCTION assert_make_up_of_an_absence() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.superseded_at IS NULL AND NOT EXISTS (
        SELECT 1 FROM equipping_marks m
         WHERE m.lesson_id = NEW.lesson_id AND m.enrollment_id = NEW.enrollment_id
-          AND m.superseded_at IS NULL AND NOT m.came) THEN
+          AND m.superseded_at IS NULL AND NOT m.came)
+     AND NOT (
+       NOT EXISTS (
+         SELECT 1 FROM equipping_marks m
+          WHERE m.lesson_id = NEW.lesson_id AND m.enrollment_id = NEW.enrollment_id
+            AND m.superseded_at IS NULL)
+       AND EXISTS (
+         SELECT 1 FROM equipping_enrollments e JOIN equipping_lessons l ON l.id = NEW.lesson_id
+          WHERE e.id = NEW.enrollment_id
+            AND (e.started_at AT TIME ZONE 'Asia/Manila')::date > l.held_on)) THEN
     RAISE EXCEPTION 'a make-up is of a lesson the student missed (SKILL.md section 29)'
       USING ERRCODE = 'check_violation';
   END IF;

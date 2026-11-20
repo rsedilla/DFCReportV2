@@ -144,6 +144,17 @@ function markFor(student: AttendanceStudent, lesson: number) {
   return student.marks.find((m) => m.lesson === lesson) ?? null;
 }
 
+/** The student's mark for a lesson as this class saved it, not one carried from elsewhere. */
+function markHere(student: AttendanceStudent, lesson: number) {
+  const mark = markFor(student, lesson);
+  return mark && mark.from_class === null && !mark.before_joining ? mark : null;
+}
+
+/** Joined after the lesson's day with no mark for it here: not ticked, made up (decision 0503). */
+function joinedAfter(student: AttendanceStudent, lesson: number, heldOn: string): boolean {
+  return markHere(student, lesson) === null && heldOn !== '' && student.joined_on > heldOn;
+}
+
 /**
  * **Tick who came; anyone not ticked is saved Absent** (decision 0501, point 10), with *Tick all*
  * and, above Save, a line naming who will be saved absent and their Cell leaders.
@@ -152,7 +163,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
   const queryClient = useQueryClient();
   const [heldOn, setHeldOn] = useState(lesson.held_on ?? lesson.expected_on);
   const [came, setCame] = useState<Set<string>>(
-    () => new Set(data.students.filter((s) => markFor(s, lesson.lesson)?.came).map((s) => s.enrollment_id)),
+    () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.came).map((s) => s.enrollment_id)),
   );
   const [reason, setReason] = useState('');
   const [writeKey, renewWriteKey] = useWriteKey();
@@ -161,7 +172,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
     mutationFn: () => {
       const body = {
         held_on: heldOn,
-        came: [...came],
+        came: [...came].filter((id) => ticking.some((s) => s.enrollment_id === id)),
         ...(lesson.version !== null ? { version: lesson.version } : {}),
         ...(closed ? { correction_reason: reason.trim() } : {}),
       };
@@ -177,7 +188,11 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
     },
   });
-  const absent = data.students.filter((s) => !came.has(s.enrollment_id));
+  // Those who had joined by the lesson's day are ticked; anyone who joined later makes it up.
+  const ticking = data.students.filter((s) => !joinedAfter(s, lesson.lesson, heldOn));
+  const later = data.students.filter((s) => joinedAfter(s, lesson.lesson, heldOn));
+  const absent = ticking.filter((s) => !came.has(s.enrollment_id));
+  const cameCount = ticking.length - absent.length;
   const toggle = (enrollmentId: string, on: boolean) =>
     setCame((was) => {
       const next = new Set(was);
@@ -216,7 +231,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
           type="button"
           variant="secondary"
           className="w-auto"
-          onClick={() => setCame(new Set(data.students.map((s) => s.enrollment_id)))}
+          onClick={() => setCame(new Set(ticking.map((s) => s.enrollment_id)))}
         >
           Tick all
         </Button>
@@ -238,7 +253,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
       ) : (
         <>
           <ul className="mt-4 flex flex-col gap-2 lg:hidden">
-            {data.students.map((s) => (
+            {ticking.map((s) => (
               <li key={s.enrollment_id}>
                 <label className="border-line flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
                   <input
@@ -267,7 +282,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
               </tr>
             </thead>
             <tbody>
-              {data.students.map((s) => (
+              {ticking.map((s) => (
                 <tr key={s.enrollment_id} className={rowClasses}>
                   <td className="px-3 py-2">
                     <input
@@ -287,9 +302,15 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
               ))}
             </tbody>
           </Table>
+          {later.length > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Joined after this lesson, so not marked and making it up instead:{' '}
+              {later.map((s) => s.person.full_name ?? 'Somebody').join(', ')}.
+            </p>
+          ) : null}
           <p className="mt-4 text-sm" role="status">
             <span className="font-semibold">
-              {came.size} came · {absent.length} absent
+              {cameCount} came · {absent.length} absent
               {absent.length > 0 ? ':' : '.'}
             </span>{' '}
             {absent
@@ -342,7 +363,15 @@ function LessonRead({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
               <li key={s.enrollment_id} className="border-line flex justify-between gap-3 border-t py-2 text-sm">
                 <span className="font-semibold">{s.person.full_name}</span>
                 <span className={mark && !mark.came && !mark.made_up_on ? 'text-field-invalid font-semibold' : ''}>
-                  {mark === null ? 'Not marked' : mark.came ? 'Came' : mark.made_up_on ? 'Made up' : 'Absent'}
+                  {mark === null
+                    ? 'Not marked'
+                    : mark.before_joining
+                      ? mark.made_up_on
+                        ? 'Made up, joined after it'
+                        : 'Joined after it, to make up'
+                      : `${mark.came ? 'Came' : mark.made_up_on ? 'Made up' : 'Absent'}${
+                          mark.from_class ? `, in ${mark.from_class.name}` : ''
+                        }`}
                 </span>
               </li>
             );
@@ -379,8 +408,15 @@ function Owed({ data }: { data: ClassAttendance }) {
           >
             <span>
               <span className="font-semibold">{each.person.full_name}</span> · L{each.lesson}
-              {each.held_on ? `, missed ${longDay(each.held_on)}` : ''}
-              <span className="text-muted block text-xs">Cell leader {each.cell_leader?.full_name ?? 'none'}</span>
+              {each.before_joining
+                ? ', held before they joined'
+                : each.held_on
+                  ? `, missed ${longDay(each.held_on)}`
+                  : ''}
+              <span className="text-muted block text-xs">
+                Cell leader {each.cell_leader?.full_name ?? 'none'}
+                {each.before_joining ? ' · not counted as an absence' : ''}
+              </span>
             </span>
             {data.may_record ? (
               <Button type="button" variant="secondary" className="w-auto" onClick={() => setMaking(each)}>
@@ -463,13 +499,12 @@ function MakeUpDialog({
  * came, ✗ absent, M made up, – not yet, and a total, never colour alone.
  */
 function Register({ data }: { data: ClassAttendance }) {
-  const saved = data.lessons.filter((l) => l.state === 'SAVED').length;
   return (
     <section aria-labelledby="register-heading" className="border-line bg-surface rounded-xl border p-4">
       <h2 id="register-heading" className="font-semibold">
         Attendance so far
       </h2>
-      <p className="text-muted text-sm">✓ came · ✗ absent · M made up · – not yet</p>
+      <p className="text-muted text-sm">✓ came · ✗ absent · M made up · – not yet · ○ before they joined</p>
       {data.students.length === 0 ? (
         <p className="text-muted mt-3 text-sm">Nobody is enrolled yet.</p>
       ) : (
@@ -496,14 +531,36 @@ function Register({ data }: { data: ClassAttendance }) {
             <tbody>
               {data.students.map((s) => {
                 const kept = s.marks.filter((m) => m.came || m.made_up_on !== null).length;
+                // A lesson held before they joined and not yet made up is not counted against
+                // them (decision 0503).
+                const counted = s.marks.filter((m) => !(m.before_joining && m.made_up_on === null)).length;
+                const moved = s.marks.filter((m) => m.from_class !== null);
+                const joinedLater = s.marks.some((m) => m.before_joining);
                 return (
                   <tr key={s.enrollment_id} className="border-line border-t">
                     <th scope="row" className="px-2 py-2 text-left font-semibold whitespace-nowrap">
                       {s.person.full_name}
+                      {moved.length > 0 ? (
+                        <span className="text-muted block text-xs font-normal">
+                          Moved from {moved[0].from_class!.name} · {moved.map((m) => `L${m.lesson}`).join(', ')} there
+                        </span>
+                      ) : null}
+                      {joinedLater ? (
+                        <span className="text-muted block text-xs font-normal">Joined {longDay(s.joined_on)}</span>
+                      ) : null}
                     </th>
                     {COLUMNS.map((n) => {
                       const mark = n === 5 ? null : markFor(s, n);
-                      const sign = mark === null ? '–' : mark.came ? '✓' : mark.made_up_on ? 'M' : '✗';
+                      const sign =
+                        mark === null
+                          ? '–'
+                          : mark.came
+                            ? '✓'
+                            : mark.made_up_on
+                              ? 'M'
+                              : mark.before_joining
+                                ? '○'
+                                : '✗';
                       return (
                         <td
                           key={n}
@@ -511,13 +568,21 @@ function Register({ data }: { data: ClassAttendance }) {
                         >
                           <span aria-hidden="true">{sign}</span>
                           <span className="sr-only">
-                            {sign === '–' ? 'not yet' : sign === '✓' ? 'came' : sign === 'M' ? 'made up' : 'absent'}
+                            {sign === '–'
+                              ? 'not yet'
+                              : sign === '✓'
+                                ? 'came'
+                                : sign === 'M'
+                                  ? 'made up'
+                                  : sign === '○'
+                                    ? 'before they joined'
+                                    : 'absent'}
                           </span>
                         </td>
                       );
                     })}
                     <td className="px-2 py-2 whitespace-nowrap">
-                      {kept} of {saved}
+                      {kept} of {counted}
                     </td>
                   </tr>
                 );

@@ -77,6 +77,10 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.ConquestViewSubtree]: ScopeType.WholeChurch,
   [Capability.SuynlViewSubtree]: ScopeType.WholeChurch,
   [Capability.TrainingViewSubtree]: ScopeType.WholeChurch,
+  // A Network root may be named a class's Teacher, and records it as any Teacher does: over
+  // themselves alone, narrowed by the school to the class they teach or guide (decision 0503,
+  // owner ruling of 2026-11-20).
+  [Capability.EquippingClass]: ScopeType.OwnSubtree,
 };
 
 const ADMIN: RoleDefaults = {

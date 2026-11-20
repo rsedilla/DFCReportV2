@@ -26,7 +26,7 @@ import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
-import type { AccountRole, NetworkName } from '../../database/schema';
+import type { AccountRole, AccountStatus, NetworkName } from '../../database/schema';
 
 export interface Actor {
   accountId: string;
@@ -292,6 +292,20 @@ export class AuthorizationService {
       .executeTakeFirst();
 
     return holder !== undefined;
+  }
+
+  /**
+   * The state of the account a Person holds, or null for none: whether a class's Teacher can
+   * record its attendance, said when the Coordinator names them (section 29, decision 0503).
+   * Here because `auth` owns `accounts` (section 2).
+   */
+  async accountStatusOf(personId: string): Promise<AccountStatus | null> {
+    const row = await this.db
+      .selectFrom('accounts')
+      .select('status')
+      .where('person_id', '=', personId)
+      .executeTakeFirst();
+    return row?.status ?? null;
   }
   /**
    * How wide a capability reaches: null for the whole church, one Network for a Network

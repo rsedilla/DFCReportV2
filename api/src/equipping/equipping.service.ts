@@ -4,7 +4,7 @@ import { sql, type Transaction } from 'kysely';
 import { AttendanceStandingService } from '../attendance/attendance-standing.service';
 import { AuditService } from '../audit/audit.service';
 import { EquippingAttendanceService } from './equipping-attendance.service';
-import { type Actor } from '../auth/authorization/authorization.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { CellsReadService } from '../cells/cells.read.service';
 import { slotsClash } from '../cells/schedule-clash';
 import {
@@ -140,6 +140,7 @@ export class EquippingService {
     private readonly training: TrainingService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly authorization: AuthorizationService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -525,6 +526,12 @@ export class EquippingService {
     const clash = mayTeach.has(id)
       ? await this.clashOf(id, cls.day_of_week, String(cls.time_of_day))
       : null;
+    // Whether they can record the class's attendance (decision 0503, owner ruling of
+    // 2026-11-20): a Teacher with no working account cannot, which the Coordinator is warned of
+    // and is free to save past.
+    const account = mayTeach.has(id)
+      ? ((await this.authorization.accountStatusOf(id)) ?? 'NONE')
+      : null;
     // Every check is recorded, a clash or not, so the log shows who was asked about.
     await this.db.transaction().execute((trx) =>
       this.audit.writeWithin(trx, {
@@ -535,7 +542,7 @@ export class EquippingService {
         after: { person_id: id, clash: clash !== null },
       }),
     );
-    return { clash };
+    return { clash, account };
   }
 
   private async clashOf(
@@ -870,6 +877,11 @@ export class EquippingService {
           teacher === null
             ? null
             : await this.clashOf(canonicalId(teacher.id), row.day_of_week, String(row.time_of_day)),
+        // And whether they can record it, as on Edit (decision 0503).
+        account:
+          teacher === null
+            ? null
+            : ((await this.authorization.accountStatusOf(canonicalId(teacher.id))) ?? 'NONE'),
       };
 
       await this.audit.writeWithin(trx, {

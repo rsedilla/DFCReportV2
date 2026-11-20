@@ -339,7 +339,11 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
   const [showErrors, setShowErrors] = useState(false);
   // A Teacher named on opening is checked against their week by the opening itself, which
   // answers with any clash (decision 0501); the dialog then says so rather than closing.
-  const [openedClash, setOpenedClash] = useState<{ name: string; clash: CellClash } | null>(null);
+  const [openedClash, setOpenedClash] = useState<{
+    name: string;
+    clash: CellClash | null;
+    account: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null | undefined;
+  } | null>(null);
 
   const save = useMutation({
     mutationFn: () => {
@@ -358,8 +362,9 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
     onSuccess: async (opened) => {
       renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
-      if (opened.clash && teacher) {
-        setOpenedClash({ name: teacher.full_name, clash: opened.clash });
+      const cannotRecord = opened.account !== undefined && opened.account !== null && opened.account !== 'ACTIVE';
+      if ((opened.clash || cannotRecord) && teacher) {
+        setOpenedClash({ name: teacher.full_name, clash: opened.clash ?? null, account: opened.account });
         return;
       }
       onClose();
@@ -374,10 +379,19 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
   if (openedClash) {
     return (
       <Dialog open={open} onClose={close} title="Class opened">
-        <p role="status" className="text-field-invalid text-sm font-semibold">
-          {clashLine(openedClash.name, openedClash.clash, '')}
+        <div role="status">
+          {openedClash.clash ? (
+            <p className="text-field-invalid text-sm font-semibold">
+              {clashLine(openedClash.name, openedClash.clash, '')}
+            </p>
+          ) : null}
+          <AccountWarning name={openedClash.name} account={openedClash.account} />
+        </div>
+        <p className="text-muted mt-2 text-sm">
+          {openedClash.clash
+            ? 'Change the Teacher under Edit if they cannot teach at this time.'
+            : 'You may change the Teacher under Edit.'}
         </p>
-        <p className="text-muted mt-2 text-sm">Change the Teacher under Edit if they cannot teach at this time.</p>
         <DialogActions>
           <Button type="button" onClick={close}>
             Done
@@ -456,6 +470,36 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
  * Edit names the Teacher (decision 0501, point 2), showing whether the class fits their week.
  * A clash with their own Cell warns and the Coordinator may still save (owner, 2026-11-20).
  */
+/**
+ * **A Teacher who cannot record is said so when named** (decision 0503, owner ruling of
+ * 2026-11-20): with no account, one not yet activated, or one disabled, they cannot tick a
+ * lesson. A warning only; the Coordinator may save, and the Admin gives or restores the account.
+ */
+function AccountWarning({
+  name,
+  account,
+}: {
+  name: string;
+  account: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null | undefined;
+}) {
+  const why =
+    account === 'NONE'
+      ? 'has no account yet'
+      : account === 'PENDING_ACTIVATION'
+        ? 'has not activated their account yet'
+        : account === 'DISABLED'
+          ? 'has a disabled account'
+          : null;
+  if (why === null) {
+    return null;
+  }
+  return (
+    <p className="text-field-invalid mt-2 text-sm font-semibold">
+      {name} {why}, so they cannot record attendance. Ask the Admin.
+    </p>
+  );
+}
+
 function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<FoundPerson | null>(null);
@@ -508,6 +552,7 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
                 ✓ Fits their week
               </p>
             ) : null}
+            {clash.data ? <AccountWarning name={chosen.full_name} account={clash.data.account} /> : null}
           </div>
         )}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />

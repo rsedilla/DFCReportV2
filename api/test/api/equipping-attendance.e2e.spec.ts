@@ -203,6 +203,13 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       ).body as { id: string }
     ).id;
     await enrol(['Ben', 'Carlo', 'Dino']);
+    // Enrolled before the first lesson, as a class's students are: a student who joined after a
+    // lesson is not marked for it (decision 0503), which the case below that enrols Eli pins.
+    await sql`
+      UPDATE equipping_enrollments
+         SET started_at = (${firstLesson}::date - 1)::timestamp AT TIME ZONE 'Asia/Manila'`.execute(
+      db,
+    );
   });
 
   it('expects one lesson a week from the first, the Encounter taking lesson 5', () => {
@@ -451,6 +458,145 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       })
       .catch(() => undefined);
     expect(String(refusal)).toMatch(/not also attended/);
+  });
+
+  /** A day relative to lesson 8's expected day, which is a week ago and whose week is open. */
+  const nearLesson8 = (offset: number) => {
+    const d = new Date(`${expectedOn(firstLesson, 8)}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  it('does not save Absent somebody who joined after a lesson, and owes it as a make-up', async () => {
+    let ids = await idsByName();
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben')],
+    }).expect(200);
+    // Eli joins today, after lesson 8 was held (owner ruling of 2026-11-20).
+    await enrol(['Eli']);
+    ids = await idsByName();
+    let r = await read(teacher);
+    const eli = () => r.students.find((s) => s.enrollment_id === ids.get('Eli'))!;
+    expect(eli().marks).toEqual([
+      expect.objectContaining({ lesson: 8, came: false, made_up_on: null, before_joining: true }),
+    ]);
+    expect(r.owed).toContainEqual(
+      expect.objectContaining({ enrollment_id: ids.get('Eli'), lesson: 8, before_joining: true }),
+    );
+    // A correction of lesson 8 leaves Eli unmarked, and refuses ticking him.
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Carlo')],
+      version: 1,
+    }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Eli')],
+      version: 2,
+    }).expect(422);
+    const eliMarks = await db
+      .selectFrom('equipping_marks')
+      .select('id')
+      .where('enrollment_id', '=', ids.get('Eli')!)
+      .execute();
+    expect(eliMarks).toEqual([]);
+    // Made up, with no absence behind it: the database admits it for a lesson before joining.
+    await post(teacher, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: ids.get('Eli'),
+      lesson: 8,
+      made_up_on: today,
+    }).expect(201);
+    r = await read(teacher);
+    expect(eli().marks).toEqual([
+      expect.objectContaining({ lesson: 8, made_up_on: today, before_joining: true }),
+    ]);
+  });
+
+  it('carries a moved student’s marks, and makes up in the new class a lesson missed in the old', async () => {
+    const ids = await idsByName();
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Carlo')],
+    }).expect(200);
+    const classB = (
+      (
+        await post(coordinator, 'equipping/classes', {
+          ...TERM,
+          name: 'Life Class B',
+          day_of_week: 4,
+          time_of_day: '19:00',
+          first_lesson_on: firstLesson,
+          encounter_season_id: seasonId,
+          teacher_person_id: mario.id,
+        }).expect(201)
+      ).body as { id: string }
+    ).id;
+    // Carlo came to lesson 8 in A; Dino missed it. Both move to B.
+    const moved = new Map<string, string>();
+    for (const name of ['Carlo', 'Dino']) {
+      const res = await post(registrar, `equipping/enrollments/${ids.get(name)}/move`, {
+        class_id: classB,
+      }).expect(200);
+      moved.set(
+        name,
+        (res.body as { enrollment_id?: string; id?: string }).enrollment_id ??
+          (res.body as { id: string }).id,
+      );
+    }
+    const inB = (await get(teacher, `equipping/classes/${classB}/attendance`).expect(200))
+      .body as Read & {
+      students: {
+        person: { full_name: string };
+        enrollment_id: string;
+        marks: { from_class: { name: string } | null }[];
+      }[];
+    };
+    const carlo = inB.students.find((s) => s.person.full_name.startsWith('Carlo'))!;
+    const dino = inB.students.find((s) => s.person.full_name.startsWith('Dino'))!;
+    expect(carlo.marks).toEqual([
+      expect.objectContaining({
+        lesson: 8,
+        came: true,
+        from_class: expect.objectContaining({ name: 'Life Class A' }),
+      }),
+    ]);
+    expect(dino.marks).toEqual([
+      expect.objectContaining({
+        lesson: 8,
+        came: false,
+        from_class: expect.objectContaining({ name: 'Life Class A' }),
+      }),
+    ]);
+    await post(teacher, `equipping/classes/${classB}/make-ups`, {
+      enrollment_id: dino.enrollment_id,
+      lesson: 8,
+      made_up_on: today,
+    }).expect(201);
+    // Recorded against lesson 8 in A, where it was missed.
+    const makeUp = await db
+      .selectFrom('equipping_make_ups as u')
+      .innerJoin('equipping_lessons as l', 'l.id', 'u.lesson_id')
+      .select('l.class_id')
+      .where('u.superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    expect(makeUp.class_id).toBe(classId);
+  });
+
+  it('tells the Coordinator when a Teacher has no account to record with', async () => {
+    const rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+    await assignTo(db, rico.id, ramon.id);
+    await createCell(db, { leader: rico });
+    const none = await get(
+      coordinator,
+      `equipping/coordinate/classes/${classId}/clash?person_id=${rico.id}`,
+    ).expect(200);
+    expect(none.body).toMatchObject({ account: 'NONE' });
+    const active = await get(
+      coordinator,
+      `equipping/coordinate/classes/${classId}/clash?person_id=${mario.id}`,
+    ).expect(200);
+    expect(active.body).toMatchObject({ account: 'ACTIVE' });
   });
 
   it('records a make-up of a missed lesson, and a lesson later marked as came drops it', async () => {
