@@ -392,7 +392,7 @@ function Owed({ data }: { data: ClassAttendance }) {
       </ul>
       {/* Keyed by the absence, so each opens on today's date. */}
       <MakeUpDialog
-        key={making ? `:` : 'none'}
+        key={making ? `${making.enrollment_id}:${making.lesson}` : 'none'}
         classId={data.class.id}
         owed={making}
         onClose={() => setMaking(null)}
@@ -473,7 +473,9 @@ function Register({ data }: { data: ClassAttendance }) {
       {data.students.length === 0 ? (
         <p className="text-muted mt-3 text-sm">Nobody is enrolled yet.</p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
+        // Positioned, so the sr-only words in each cell, which are absolute, scroll inside it rather
+        // than widening the page at 320px.
+        <div className="relative mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">Attendance so far, lesson by lesson</caption>
             <thead>

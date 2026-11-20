@@ -43,6 +43,10 @@ import {
   mockRegistrar,
   mockEquipping,
   mockRegistrationSearch,
+  mockTeacher,
+  mockMyClasses,
+  mockClassAttendance,
+  ATTENDANCE_IDS,
 } from './mock-equipping';
 import {
   mockCellMeetings,
@@ -1611,6 +1615,51 @@ const SCANS = [
       await state.then(page);
     },
   })),
+  // A Teacher's Equipping (decision 0503): their classes grouped Classes you teach and Classes
+  // you guide, on the recording screens.
+  {
+    name: 'equipping teach',
+    route: '/equipping/teach',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTeacher(page, 'RECORDING');
+      await mockMyClasses(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: 'Classes you guide' })).toBeVisible();
+    },
+  },
+  // A class's attendance and its make-up dialog: the lesson row, the ticks, Make-ups still owed
+  // and the register (decision 0503).
+  ...(
+    [
+      {
+        name: 'equipping teach, a class',
+        async then(page: import('@playwright/test').Page) {
+          await expect(page.getByRole('heading', { name: /Make-ups still owed/ })).toBeVisible();
+        },
+      },
+      {
+        name: 'equipping teach, recording a make-up',
+        async then(page: import('@playwright/test').Page) {
+          await page.getByRole('button', { name: 'Record make-up' }).click();
+          await expect(page.getByRole('dialog', { name: /Make-up for/ })).toBeVisible();
+        },
+      },
+    ] as const
+  ).map((state) => ({
+    name: state.name,
+    route: `/equipping/teach/${ATTENDANCE_IDS.classId}`,
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTeacher(page, 'RECORDING');
+      await mockMyClasses(page);
+      await mockClassAttendance(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await state.then(page);
+    },
+  })),
   {
     // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
     // half, and the sentence saying who may change it.
@@ -2375,6 +2424,26 @@ const TARGET_SWEEP = [
     admin: true,
   },
   {
+    // A Teacher's Equipping (decision 0503): one link for the class they teach and one for the
+    // class they guide: **two**. A Teacher's `/auth/me`, which the Coordinator's below replaces.
+    name: 'equipping teach',
+    route: '/equipping/teach',
+    settleRole: 'link' as const,
+    settle: 'Life Class C',
+    minimum: 2,
+    teacher: true,
+  },
+  {
+    // A class's attendance: eight lesson buttons, Tick all, Held on, a tick for each of the two
+    // students, Save lesson 3 and one Record make-up: **fourteen**. The phone's list of ticks is
+    // hidden at this width and is not counted.
+    name: 'equipping teach, a class',
+    route: `/equipping/teach/${ATTENDANCE_IDS.classId}`,
+    settle: 'Tick all',
+    minimum: 14,
+    teacher: true,
+  },
+  {
     // The Coordinator's Classes (decision 0501): the term, the status, Open a class, and Edit
     // and Students for each of the two classes: **seven**. A Coordinator's `/auth/me`, which
     // the Registrar's below replaces.
@@ -2429,6 +2498,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Opens a dialog over the measured "equipping classes". Its controls are Buttons, a ' +
       'SearchField and SelectFields, the primitives measured on every screen.',
   })),
+  {
+    name: 'equipping teach, recording a make-up',
+    why:
+      'Opens the make-up dialog over the measured "equipping teach, a class". Its controls are a ' +
+      'date Field and two Buttons in DialogActions, the primitives measured on every screen.',
+  },
   {
     name: 'equipping registration, searching',
     why:
@@ -2866,6 +2941,11 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       await mockAccountsAdministrator(page);
       await mockAdminArea(page);
       await mockAuditLog(page);
+    }
+    if ('teacher' in entry && entry.teacher) {
+      await mockTeacher(page, 'RECORDING');
+      await mockMyClasses(page);
+      await mockClassAttendance(page);
     }
     if ('coordinator' in entry && entry.coordinator) {
       await mockCoordinator(page);
