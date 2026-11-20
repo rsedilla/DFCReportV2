@@ -26,7 +26,11 @@ moves to the Coordinator; the Admin keeps every Registrar and Coordinator step. 
 Teacher shows whether the class fits that person's week, naming a clash with their own Cell
 meeting under the two-hour rule (decision 0392). **The clash warns and the Coordinator may
 save** (owner, 2026-11-20, option A), unlike 0392's refusal of one leader's two Cells, because
-the Coordinator knows whether the Cell has moved or has another facilitator that night.
+the Coordinator knows whether the Cell has moved or has another facilitator that night. **The warning names
+that Cell's day and time** (owner, 2026-11-20, "Yes, day and time", confirming the screenshot of
+2026-11-19: *leads a Cell on Tuesdays at 7:30 pm, less than two hours from this class*), which
+discloses to the Coordinator when a Cell outside their scope meets, accepted as the Cell leader
+shown on a class's pages is (point 10), so the Coordinator can see why it clashes.
 
 **3. The Teacher records attendance and make-ups, and nothing else** (owner, 2026-11-19,
 dropping weekly grades: the result is Passed or Not passed from attendance, and in SOL from the
