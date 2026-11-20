@@ -418,7 +418,7 @@ export class EquippingService {
     const today = await this.manilaToday();
     const staffing = await this.staffingOf(listed.data.map((row) => String(row.id)));
     // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
-    const late = await this.attendance.lateLessonsOf(
+    const problems = await this.attendance.lessonProblemsOf(
       listed.data.map((row) => ({
         id: String(row.id),
         first_lesson_on: String(row.first_lesson_on),
@@ -429,7 +429,7 @@ export class EquippingService {
         ...row,
         status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
         guides: staffing.get(String(row.id)) ?? { named: 0, short_men: 0, short_women: 0 },
-        late_lessons: late.get(String(row.id)) ?? [],
+        lessons: problems.get(String(row.id)) ?? { late: [], not_recorded: [] },
       })),
     };
   }

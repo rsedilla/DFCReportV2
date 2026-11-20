@@ -12,6 +12,7 @@ import { Field, SearchField } from '@/components/ui/field';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { SelectField } from '@/components/ui/select-field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { TextLink } from '@/components/ui/text-link';
 import { timeLabel } from '@/lib/cells';
 import {
   DAY_NAMES,
@@ -112,6 +113,10 @@ export default function ClassesPage() {
                   <span className="text-muted">Guides </span>
                   <GuidesLine each={each} />
                 </p>
+                <p className="text-sm">
+                  <span className="text-muted">Attendance </span>
+                  <AttendanceLine each={each} />
+                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
                     Edit
@@ -131,6 +136,7 @@ export default function ClassesPage() {
                 <HeaderCell>Teacher</HeaderCell>
                 <HeaderCell>Guides</HeaderCell>
                 <HeaderCell>Students</HeaderCell>
+                <HeaderCell>Attendance</HeaderCell>
                 <HeaderCell>Status</HeaderCell>
                 <HeaderCell>Action</HeaderCell>
               </tr>
@@ -149,6 +155,9 @@ export default function ClassesPage() {
                     <GuidesLine each={each} />
                   </td>
                   <td className="px-3 py-3">{each.enrolled}</td>
+                  <td className="px-3 py-3">
+                    <AttendanceLine each={each} />
+                  </td>
                   <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
                   <td className="px-3 py-1">
                     {/* Stacked below 1536px, so a 1024px laptop or a sideways iPad keeps the table
@@ -185,6 +194,28 @@ function TeacherName({ each }: { each: CoordinatedClass }) {
     <span className="text-field-invalid font-semibold">Not named yet</span>
   ) : (
     <span>{each.teacher.full_name}</span>
+  );
+}
+
+/**
+ * The class's attendance in words (decision 0501, point 22): the lessons late, or *Up to date*,
+ * opening the class's lessons and register (decision 0503).
+ */
+function AttendanceLine({ each }: { each: CoordinatedClass }) {
+  const late = each.lessons?.late ?? [];
+  const missing = each.lessons?.not_recorded ?? [];
+  const said = [
+    missing.length > 0 ? `${missing.map((n) => `L${n}`).join(', ')} not recorded` : null,
+    late.length > 0 ? `${late.map((n) => `L${n}`).join(', ')} late` : null,
+  ].filter((part): part is string => part !== null);
+  return (
+    <TextLink href={`/equipping/teach/${each.id}`}>
+      {said.length > 0 ? (
+        <span className="text-field-invalid font-semibold">{said.join(' · ')}</span>
+      ) : (
+        'Up to date'
+      )}
+    </TextLink>
   );
 }
 

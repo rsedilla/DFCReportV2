@@ -10,6 +10,7 @@ import { FilterChip } from '@/components/ui/filter-chip';
 import { isBranchReader } from '@/components/reports-tabs';
 import { CONTROL_BAR, TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { coordinatesOnly, getMe } from '@/lib/me';
+import { useMyClasses } from '@/lib/my-classes';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,45 @@ export function CoordinatorPhoneTabs({ current }: { current: '/growth/suynl' | '
   );
 }
 
+/**
+ * **A Full view leader's *Growth* while they teach or guide** (decision 0501, points 21 and 22):
+ * their SUYNL item, then named *Growth*, holds *SUYNL* and *Equipping*, and a Coordinator's
+ * *Classes* as a third tab on a phone, where it is not an item of its own.
+ */
+export function GrowthEquippingTabs({
+  current,
+}: {
+  current: '/growth/suynl' | '/equipping/teach' | '/equipping/classes';
+}) {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const tabs = [
+    { href: '/growth/suynl', label: 'SUYNL', phoneOnly: false },
+    { href: '/equipping/teach', label: 'Equipping', phoneOnly: false },
+    ...(coordinatesOnly(me.data) ? [{ href: '/equipping/classes', label: 'Classes', phoneOnly: true }] : []),
+  ];
+  return (
+    <nav aria-label="Growth" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
+      {tabs.map((tab) => (
+        <Link
+          key={tab.href}
+          href={tab.href}
+          aria-current={tab.href === current ? 'page' : undefined}
+          className={cn(tabClasses(tab.href === current), tab.phoneOnly && 'lg:hidden')}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** Whether the reader's *Growth* carries *Equipping*: a Full view leader who teaches or guides. */
+export function useGrowthCarriesEquipping(): boolean {
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const { teaches } = useMyClasses();
+  return teaches && isBranchReader(me.data);
+}
+
 export function GrowthTabs({
   current,
   children,
@@ -80,10 +120,13 @@ export function GrowthTabs({
   // **A row holding one tab is not drawn** (ruling of 2026-11-02, decision 0420): it offers no
   // choice. The pane keeps its frame, closed along the top.
   const row = tabbed && tabs.length > 1;
+  // A teaching Full view leader's SUYNL carries *Equipping* beside it (decision 0501, point 21).
+  const equipping = useGrowthCarriesEquipping() && !row && current === '/growth/suynl';
   // A Coordinator's SUYNL carries *Classes* beside it on a phone (decision 0501).
-  const coordinator = !row && current === '/growth/suynl' && coordinatesOnly(me.data);
+  const coordinator = !row && !equipping && current === '/growth/suynl' && coordinatesOnly(me.data);
   return (
     <>
+      {equipping ? <GrowthEquippingTabs current="/growth/suynl" /> : null}
       {coordinator ? <CoordinatorPhoneTabs current="/growth/suynl" /> : null}
       {row ? (
         <nav aria-label="Growth" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
@@ -108,7 +151,14 @@ export function GrowthTabs({
           row
             ? TAB_PANE
             : tabbed
-              ? cn(TAB_PANE, coordinator ? 'max-lg:mt-0 max-lg:border-t-0 lg:mt-6 lg:border-t-2' : 'mt-6 border-t-2')
+              ? cn(
+                  TAB_PANE,
+                  equipping
+                    ? ''
+                    : coordinator
+                      ? 'max-lg:mt-0 max-lg:border-t-0 lg:mt-6 lg:border-t-2'
+                      : 'mt-6 border-t-2',
+                )
               : 'mt-6'
         }
       >

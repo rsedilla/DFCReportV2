@@ -316,13 +316,13 @@ export class EquippingAttendanceService {
   }
 
   /**
-   * Which unrecorded lessons of each class are late, for the Coordinator's *Attendance* column
-   * (decision 0501, point 22): *L3 late*.
+   * Which unrecorded lessons of each class are late, and which closed with nothing recorded, for
+   * the Coordinator's *Attendance* column (decision 0501, point 22): *L1 not recorded · L3 late*.
    */
-  async lateLessonsOf(
+  async lessonProblemsOf(
     classes: readonly { id: string; first_lesson_on: string }[],
-  ): Promise<Map<string, number[]>> {
-    const result = new Map<string, number[]>();
+  ): Promise<Map<string, { late: number[]; not_recorded: number[] }>> {
+    const result = new Map<string, { late: number[]; not_recorded: number[] }>();
     if (classes.length === 0) {
       return result;
     }
@@ -338,14 +338,14 @@ export class EquippingAttendanceService {
     const done = new Set(saved.map((row) => `${row.class_id}:${row.lesson}`));
     const now = await databaseNow(this.db);
     for (const cls of classes) {
-      result.set(
-        cls.id,
-        CLASS_LESSONS.filter(
-          (n) =>
-            !done.has(`${cls.id}:${n}`) &&
-            unrecordedState(expectedOn(cls.first_lesson_on, n), now) === 'LATE',
-        ),
-      );
+      const states = CLASS_LESSONS.filter((n) => !done.has(`${cls.id}:${n}`)).map((n) => ({
+        n,
+        state: unrecordedState(expectedOn(cls.first_lesson_on, n), now),
+      }));
+      result.set(cls.id, {
+        late: states.filter((s) => s.state === 'LATE').map((s) => s.n),
+        not_recorded: states.filter((s) => s.state === 'NOT_RECORDED').map((s) => s.n),
+      });
     }
     return result;
   }
