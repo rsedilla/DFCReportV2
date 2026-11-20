@@ -74,7 +74,8 @@
     "equipping_guide_students": "equipping",
     "equipping_lessons": "equipping",
     "equipping_marks": "equipping",
-    "equipping_make_ups": "equipping"
+    "equipping_make_ups": "equipping",
+    "equipping_lesson_date_changes": "equipping"
   },
   "infrastructure": [
     "database"

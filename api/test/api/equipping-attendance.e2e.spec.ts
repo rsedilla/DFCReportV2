@@ -136,9 +136,10 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
         db,
       )
     ).rows[0].d;
-    // Twenty weeks ago, so lesson 1's week (and lesson 9's) closed long since.
+    // Eight weeks ago, so lesson 9 is expected today and its week is open, while lesson 1's
+    // week closed long since (decision 0503: a lesson's week is first its expected date's).
     const back = new Date(`${today}T00:00:00Z`);
-    back.setUTCDate(back.getUTCDate() - 140);
+    back.setUTCDate(back.getUTCDate() - 56);
     firstLesson = back.toISOString().slice(0, 10);
 
     ramon = await createPerson(db, { firstName: 'Ramon', network: 'MENS' });
@@ -331,6 +332,125 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       came: [],
       correction_reason: 'Not needed.',
     }).expect(409);
+  });
+
+  it('does not reopen a closed week by dating a never-recorded lesson today, and keeps the Admin’s reason', async () => {
+    const ids = await idsByName();
+    // Lesson 1 was never recorded and its expected week has closed (decision 0503, point 1).
+    const reopened = await post(teacher, `equipping/classes/${classId}/lessons/1`, {
+      held_on: today,
+      came: [ids.get('Ben')],
+    }).expect(409);
+    expect((reopened.body as { error: { code: string } }).error.code).toBe('PERIOD_CLOSED');
+
+    const reason = 'Recorded on paper; the Teacher had no phone that week.';
+    await post(admin, `equipping/classes/${classId}/lessons/1`, {
+      held_on: expectedOn(firstLesson, 1),
+      came: [ids.get('Ben')],
+      correction_reason: reason,
+    }).expect(200);
+    // The reason is kept on every mark the first save wrote, and in its audit entry.
+    const marks = await db
+      .selectFrom('equipping_marks')
+      .select('correction_reason')
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(marks).toHaveLength(3);
+    expect(marks.every((m) => m.correction_reason === reason)).toBe(true);
+    const entry = await db
+      .selectFrom('audit_log')
+      .select('after')
+      .where('action', '=', 'equipping_lesson.recorded')
+      .executeTakeFirstOrThrow();
+    expect(entry.after).toMatchObject({ lesson: 1, reason });
+  });
+
+  it('keeps a changed date, and refuses moving a lesson past a make-up already recorded', async () => {
+    const ids = await idsByName();
+    const day = (offset: number) => {
+      const d = new Date(`${expectedOn(firstLesson, 8)}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: day(0),
+      came: [ids.get('Ben')],
+    }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: ids.get('Carlo'),
+      lesson: 8,
+      made_up_on: day(1),
+    }).expect(201);
+    const past = await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: day(2),
+      came: [ids.get('Ben')],
+      version: 1,
+    }).expect(409);
+    expect((past.body as { error: { details: { field: string } } }).error.details.field).toBe(
+      'held_on',
+    );
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: day(1),
+      came: [ids.get('Ben')],
+      version: 1,
+    }).expect(200);
+    const changes = await db
+      .selectFrom('equipping_lesson_date_changes')
+      .select(['held_on_before', 'held_on_after', 'reason'])
+      .execute();
+    expect(
+      changes.map((c) => [String(c.held_on_before), String(c.held_on_after), c.reason]),
+    ).toEqual([[day(0), day(1), null]]);
+    await expect(sql`DELETE FROM equipping_lesson_date_changes`.execute(db)).rejects.toThrow(
+      /kept as written/,
+    );
+  });
+
+  it('refuses at the database a mark saying the student came while a make-up of it stands', async () => {
+    const ids = await idsByName();
+    await post(teacher, `equipping/classes/${classId}/lessons/9`, {
+      held_on: today,
+      came: [ids.get('Ben')],
+    }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: ids.get('Carlo'),
+      lesson: 9,
+      made_up_on: today,
+    }).expect(201);
+    const absent = await db
+      .selectFrom('equipping_marks')
+      .select(['id', 'lesson_id'])
+      .where('enrollment_id', '=', ids.get('Carlo')!)
+      .where('superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    // Recorded outside the transaction, so a database that admits the row fails the case rather
+    // than having the failure swallowed with the rollback.
+    let refusal: unknown = null;
+    await db
+      .transaction()
+      .execute(async (trx) => {
+        await trx
+          .updateTable('equipping_marks')
+          .set({ superseded_at: new Date(), superseded_by: teacher.id })
+          .where('id', '=', absent.id)
+          .execute();
+        try {
+          await trx
+            .insertInto('equipping_marks')
+            .values({
+              lesson_id: absent.lesson_id,
+              enrollment_id: ids.get('Carlo')!,
+              came: true,
+              recorded_by: teacher.id,
+            })
+            .execute();
+        } catch (error) {
+          refusal = error;
+          throw error;
+        }
+      })
+      .catch(() => undefined);
+    expect(String(refusal)).toMatch(/not also attended/);
   });
 
   it('records a make-up of a missed lesson, and a lesson later marked as came drops it', async () => {

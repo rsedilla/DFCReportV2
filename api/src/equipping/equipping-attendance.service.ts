@@ -409,9 +409,12 @@ export class EquippingAttendanceService {
         );
       }
 
-      // Both weeks open, the one it stood in and the one it moves to (decision 0501, point 11).
+      // Both weeks open, the one it stood in and the one it moves to (decision 0503, point 1). A
+      // lesson never recorded stands in its expected date's week, so dating it today does not
+      // reopen a week that has closed.
       const open = (day: string) => now.getTime() < recordClosesAt(day).getTime();
-      const weeksOpen = open(body.held_on) && (!existing || open(String(existing.held_on)));
+      const stoodIn = existing ? String(existing.held_on) : expectedOn(cls.first_lesson_on, lesson);
+      const weeksOpen = open(body.held_on) && open(stoodIn);
       if (!weeksOpen && !standing.wide) {
         throw new ApiError(
           ApiErrorCode.PERIOD_CLOSED,
@@ -448,6 +451,25 @@ export class EquippingAttendanceService {
         }
       }
 
+      // A make-up falls after the lesson it makes up (decision 0503, point 2), so a date may not
+      // move past one already recorded.
+      const dateMoved = existing !== undefined && String(existing.held_on) !== body.held_on;
+      if (existing && dateMoved) {
+        const earlier = await trx
+          .selectFrom('equipping_make_ups')
+          .select('made_up_on')
+          .where('lesson_id', '=', existing.id)
+          .where('superseded_at', 'is', null)
+          .where('made_up_on', '<', body.held_on)
+          .executeTakeFirst();
+        if (earlier) {
+          throw new InvariantViolationError(
+            'A make-up of this lesson is dated before that day. Correct the make-up first.',
+            { field: 'held_on' },
+          );
+        }
+      }
+
       let lessonId: string;
       let version: number;
       if (!existing) {
@@ -476,6 +498,8 @@ export class EquippingAttendanceService {
         .execute();
       const currentOf = new Map(current.map((row) => [canonicalId(row.enrollment_id), row]));
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
+      // Make-ups closed because the student is now marked as having come, kept for the audit entry.
+      const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
       for (const row of enrolled) {
         const want = came.has(canonicalId(row.id));
         const was = currentOf.get(canonicalId(row.id));
@@ -490,13 +514,20 @@ export class EquippingAttendanceService {
             .execute();
           // Marked as having come after all: a make-up of the absence no longer stands.
           if (want) {
-            await trx
+            const closedMakeUps = await trx
               .updateTable('equipping_make_ups')
               .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
               .where('lesson_id', '=', lessonId)
               .where('enrollment_id', '=', row.id)
               .where('superseded_at', 'is', null)
+              .returning('made_up_on')
               .execute();
+            for (const closedMakeUp of closedMakeUps) {
+              makeUpsClosed.push({
+                person_id: row.person_id,
+                made_up_on: String(closedMakeUp.made_up_on),
+              });
+            }
           }
         }
         await trx
@@ -506,13 +537,27 @@ export class EquippingAttendanceService {
             enrollment_id: row.id,
             came: want,
             recorded_by: actor.accountId,
-            correction_reason: was ? (body.correction_reason ?? null) : null,
+            // The Admin's reason for a closed week, kept on every mark it writes, a first one
+            // included (principle 12).
+            correction_reason: body.correction_reason ?? null,
           })
           .execute();
         changed.push({ person_id: row.person_id, came: want, before: was ? was.came : null });
       }
 
-      const dateMoved = existing !== undefined && String(existing.held_on) !== body.held_on;
+      // A date changed keeps the date it changed, as a mark keeps the mark (principle 12).
+      if (existing && dateMoved) {
+        await trx
+          .insertInto('equipping_lesson_date_changes')
+          .values({
+            lesson_id: lessonId,
+            held_on_before: String(existing.held_on),
+            held_on_after: body.held_on,
+            changed_by: actor.accountId,
+            reason: body.correction_reason ?? null,
+          })
+          .execute();
+      }
       if (existing && (dateMoved || changed.length > 0)) {
         const updated = await trx
           .updateTable('equipping_lessons')
@@ -540,6 +585,7 @@ export class EquippingAttendanceService {
             held_on: body.held_on,
             came: changed.filter((c) => c.came).map((c) => c.person_id),
             absent: changed.filter((c) => !c.came).map((c) => c.person_id),
+            ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
         });
       } else if (dateMoved || changed.length > 0) {
@@ -557,6 +603,7 @@ export class EquippingAttendanceService {
             lesson,
             held_on: body.held_on,
             marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
+            ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
         });

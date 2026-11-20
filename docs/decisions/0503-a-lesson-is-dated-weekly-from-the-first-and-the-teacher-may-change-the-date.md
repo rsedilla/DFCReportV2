@@ -14,7 +14,9 @@ point 11; decisions 0387 and 0434). Saving it, the Teacher may give the day the 
 met; that day must fall on or after the first lesson and on or before today, and from then on
 the lesson's week is the week of that day. **Both weeks must be open**, the one the lesson
 stood in and the one it moves to, or the save is the Admin's, with a reason, as any change to
-a closed week is. A changed date is written to the audit log with its before and after. The
+a closed week is; a lesson never recorded stands in its expected date's week, so dating it
+today does not reopen a week that has closed. A changed date is kept with the date it changed
+from (principle 12), and written to the audit log with its before and after. The
 other answer was a date the Teacher typed for every lesson, which would leave nothing to say a
 lesson was late until somebody typed one.
 
@@ -45,11 +47,14 @@ and after.
 
 ## What holds it
 
-Migration 0053 adds `equipping_lessons`, `equipping_marks` and `equipping_make_ups`. A lesson
-is one per class and number, lesson 5 never; a mark or make-up is corrected by closing it and
-opening another, and a closed one stays closed; a current one names a student of the lesson's
-class; a make-up is of a lesson the student is currently marked absent from; nothing is
-deleted from any of the three. A save carries the lesson's version, and a stale one is refused
+Migration 0053 adds `equipping_lessons`, `equipping_marks`, `equipping_make_ups` and
+`equipping_lesson_date_changes`. A lesson is one per class and number, lesson 5 never; a mark
+or make-up is corrected by closing it and opening another, and a closed one stays closed; a
+current one names a student of the lesson's class; a make-up is of a lesson the student is
+currently marked absent from, and a mark saying they came is refused while one is current; a
+date change is kept as written; nothing is deleted from any of the four. The Admin's reason
+for a closed week is kept on every mark the save writes, a first one included, and in the
+audit entry. A lesson's date may not move past a make-up already recorded for it. A save carries the lesson's version, and a stale one is refused
 `VERSION_CONFLICT`. The dates in point 1 and the open weeks are the service's, read against the
 database's clock.
 

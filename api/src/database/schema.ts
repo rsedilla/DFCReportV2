@@ -1057,6 +1057,17 @@ export interface EquippingMakeUpsTable {
   superseded_by: string | null;
 }
 
+/** A lesson's date changed, keeping the date it changed from (decision 0503). */
+export interface EquippingLessonDateChangesTable {
+  id: Generated<string>;
+  lesson_id: string;
+  held_on_before: DateOnly;
+  held_on_after: DateOnly;
+  changed_by: string;
+  changed_at: ServerTimestamp;
+  reason: string | null;
+}
+
 export interface EncounterSeasonsTable {
   id: Generated<string>;
   mens_lc_party_on: DateOnly;
@@ -1159,6 +1170,7 @@ export interface Database {
   equipping_lessons: EquippingLessonsTable;
   equipping_marks: EquippingMarksTable;
   equipping_make_ups: EquippingMakeUpsTable;
+  equipping_lesson_date_changes: EquippingLessonDateChangesTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;
