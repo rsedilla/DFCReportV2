@@ -55,6 +55,7 @@ describe('the capability enumeration the application declares', () => {
     'training.confirm',
     'training.confirm_on_behalf',
     'equipping.manage',
+    'equipping.coordinate',
   ];
 
   it('is exactly the capabilities the application declares', () => {
@@ -69,7 +70,7 @@ describe('the capability enumeration the application declares', () => {
   // alone. The three Growth reads arrived with their modules; the counts are
   // written out rather than derived, because a count computed from the list it is
   // checking agrees with it whatever the list says.
-  it('divides into eight reads and thirty-one writes', () => {
+  it('divides into eight reads and thirty-two writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
@@ -82,7 +83,7 @@ describe('the capability enumeration the application declares', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(31);
+    expect(writes).toHaveLength(32);
   });
 });
 

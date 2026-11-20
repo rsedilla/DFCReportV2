@@ -164,6 +164,8 @@ const TABLE: Record<Capability, Record<TableRole, string | null>> = {
   },
   // Section 29 (decision 0499): the Admin and the Registrar, nobody else.
   'equipping.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  // Section 29 (decision 0501): the Admin; a Leader only through the Coordinator's tick.
+  'equipping.coordinate': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
 };
 
 const ROLES: TableRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];

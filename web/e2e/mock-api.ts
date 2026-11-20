@@ -144,6 +144,28 @@ export async function mockWholeChurchReader(page: Page): Promise<void> {
 }
 
 /**
+ * The same account as a Full view Leader of their own branch ticked *Life Class Coordinator*
+ * (decision 0501): reports over their own subtree, and `equipping.coordinate` at Whole Church.
+ */
+export async function mockCoordinator(page: Page): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES.map((grant) =>
+      grant.capability === 'reports.view_subtree'
+        ? { ...grant, scope_type: 'OWN_SUBTREE', scope_network: null }
+        : grant,
+    ),
+    {
+      capability: 'equipping.coordinate',
+      scope_type: 'WHOLE_CHURCH',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
+/**
  * The same account reading people across the whole church, as the Admin and the Senior Pastors
  * do, whose pickers ask for the church-wide directory (decision 0389). Only that grant is widened.
  */

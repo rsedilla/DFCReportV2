@@ -1348,6 +1348,29 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The weekly start of every `ACTIVE` Cell this person leads now, as its schedule in force
+   * holds it (section 10), for the school's check of a Teacher's week (section 29, decision
+   * 0501). A schedule waiting for next month is not read: the class runs now.
+   */
+  async slotsLedBy(
+    personId: string,
+    executor: Db | Transaction<Database> = this.db,
+  ): Promise<{ dayOfWeek: number; timeOfDay: string }[]> {
+    const rows = await executor
+      .selectFrom('cell_leaderships as l')
+      .innerJoin('cells as c', 'c.id', 'l.cell_id')
+      .innerJoin('cell_schedules as s', 's.cell_id', 'c.id')
+      .select(['s.day_of_week', 's.time_of_day'])
+      .where('l.person_id', '=', personId)
+      .where('l.ended_at', 'is', null)
+      .where('c.state', '=', 'ACTIVE')
+      .where('s.started_at', '<=', sql<Date>`now()`)
+      .where((eb) => eb.or([eb('s.ended_at', 'is', null), eb('s.ended_at', '>', sql<Date>`now()`)]))
+      .execute();
+    return rows.map((row) => ({ dayOfWeek: row.day_of_week, timeOfDay: String(row.time_of_day) }));
+  }
+
+  /**
    * Everyone who is a current Cell Leader now (SKILL.md section 11, decision 0025): an
    * open leadership of an `ACTIVE` Cell, the same conjunction
    * {@link isCurrentCellLeaderWithin} states for one person.

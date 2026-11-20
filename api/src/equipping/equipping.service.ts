@@ -5,6 +5,7 @@ import { AttendanceStandingService } from '../attendance/attendance-standing.ser
 import { AuditService } from '../audit/audit.service';
 import { type Actor } from '../auth/authorization/authorization.service';
 import { CellsReadService } from '../cells/cells.read.service';
+import { slotsClash } from '../cells/schedule-clash';
 import {
   InvariantViolationError,
   NotFoundError,
@@ -97,8 +98,9 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
  * The church's school: registration and enrollment for Life Class (SKILL.md section 29,
  * decision 0499).
  *
- * **Every route is Whole Church `equipping.manage`**, decided by the guard before this runs,
- * so nothing here narrows by scope. What it reads of other modules it reads through their
+ * **Every route is Whole Church `equipping.manage`, or `equipping.coordinate` for the
+ * Coordinator's** (decision 0501), decided by the guard before this runs, so nothing here
+ * narrows by scope. What it reads of other modules it reads through their
  * services (section 2): a person and their birthday from `people`, their leader from
  * `hierarchy`, their Cell from `cells`, their attendance from `attendance`, their SUYNL
  * lessons from `suynl`, and the Encounter seasons from `training`. It writes only its own
@@ -339,17 +341,127 @@ export class EquippingService {
       .orderBy(sql`lower(c.name)`)
       .execute();
 
-    const teachers = await this.people.forDecisions(rows.map((row) => row.teacher_person_id));
+    const teachers = await this.people.forDecisions(
+      rows.flatMap((row) => (row.teacher_person_id === null ? [] : [row.teacher_person_id])),
+    );
     return {
       data: rows.map((row) => ({
         ...this.classShape(row),
-        teacher: {
-          id: row.teacher_person_id,
-          full_name: teachers.get(row.teacher_person_id)?.fullName ?? null,
-        },
+        teacher:
+          row.teacher_person_id === null
+            ? null
+            : {
+                id: row.teacher_person_id,
+                full_name: teachers.get(row.teacher_person_id)?.fullName ?? null,
+              },
         enrolled: Number(row.enrolled ?? 0),
       })),
     };
+  }
+
+  /**
+   * A level's classes in a term as the Coordinator's *Classes* lists them (decision 0501,
+   * point 22): each with its Teacher, or none yet, how many are enrolled, and whether it has
+   * started. Guides and attendance join it with the steps that build them.
+   */
+  async coordinatorClasses(query: EquippingTermDto): Promise<Record<string, unknown>> {
+    const listed = (await this.classes(query)) as { data: Record<string, unknown>[] };
+    const today = await this.manilaToday();
+    return {
+      data: listed.data.map((row) => ({
+        ...row,
+        status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
+      })),
+    };
+  }
+
+  /** Who is enrolled in one class, for the Coordinator's *Students* (decision 0501, point 22). */
+  async coordinatorClassStudents(classId: string): Promise<Record<string, unknown>> {
+    const cls = await this.db
+      .selectFrom('equipping_classes')
+      .select(['id', 'name'])
+      .where('id', '=', classId)
+      .executeTakeFirst();
+    if (cls === undefined) {
+      throw new NotFoundError('No such class.');
+    }
+    const enrolled = await this.db
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+      .select('r.person_id')
+      .where('e.class_id', '=', classId)
+      .where('e.ended_at', 'is', null)
+      .execute();
+    const ids = enrolled.map((row) => row.person_id);
+    // Names only: the Cell leader beside each joins with the Guides (decision 0501, point 10).
+    const people = await this.people.forDecisions(ids);
+    return {
+      class: { id: cls.id, name: cls.name },
+      data: ids
+        .map((id) => ({ person: { id, full_name: people.get(id)?.fullName ?? null } }))
+        .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
+    };
+  }
+
+  /**
+   * Whether a class fits a person's week (decision 0501, point 2): a clash with a Cell they
+   * lead now under the two-hour rule (decision 0392). **It warns and never refuses** (owner,
+   * 2026-11-20): the Coordinator knows whether that Cell has moved or has another facilitator.
+   * It names that Cell's day and time (decision 0501, point 2, owner 2026-11-20), an accepted
+   * disclosure of a piece with the Cell leader shown on a class's pages.
+   *
+   * **Asked of a class that exists and of somebody who may teach it**, never of a day and time
+   * the caller chooses: the accepted disclosure is why a chosen Teacher clashes with a class,
+   * and a free day and time would let a Coordinator read any leader's whole week, a probe at a
+   * time. Somebody who may not teach is answered with no clash, as the search never offers them.
+   */
+  async teacherClash(
+    actor: Actor,
+    classId: string,
+    personId: string,
+  ): Promise<Record<string, unknown>> {
+    const cls = await this.db
+      .selectFrom('equipping_classes')
+      .select(['day_of_week', 'time_of_day'])
+      .where('id', '=', classId)
+      .executeTakeFirst();
+    if (cls === undefined) {
+      throw new NotFoundError('No such class.');
+    }
+    const id = canonicalId(personId);
+    const mayTeach = await this.mayTeachWithin(this.db, [id]);
+    const clash = mayTeach.has(id)
+      ? await this.clashOf(id, cls.day_of_week, String(cls.time_of_day))
+      : null;
+    // Every check is recorded, a clash or not, so the log shows who was asked about.
+    await this.db.transaction().execute((trx) =>
+      this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_class.clash_checked',
+        targetType: 'equipping_class',
+        targetId: classId,
+        after: { person_id: id, clash: clash !== null },
+      }),
+    );
+    return { clash };
+  }
+
+  private async clashOf(
+    personId: string,
+    dayOfWeek: number,
+    timeOfDay: string,
+  ): Promise<{ day_of_week: number; time_of_day: string } | null> {
+    const slots = await this.cells.slotsLedBy(personId);
+    const hit = slots.find((slot) => slotsClash(slot, { dayOfWeek, timeOfDay }));
+    return hit === undefined
+      ? null
+      : { day_of_week: hit.dayOfWeek, time_of_day: hit.timeOfDay.slice(0, 5) };
+  }
+
+  private async manilaToday(): Promise<string> {
+    const row = await sql<{ d: string }>`
+      SELECT to_char((now() AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD') AS d`.execute(this.db);
+    return row.rows[0].d;
   }
 
   /**
@@ -397,7 +509,9 @@ export class EquippingService {
 
     const ids = [...enrolled.map((row) => row.person_id), ...ready.map((row) => row.person_id)];
     const [people, leaderNames, eligibility] = await Promise.all([
-      this.people.forDecisions([...ids, cls.teacher_person_id]),
+      this.people.forDecisions(
+        cls.teacher_person_id === null ? ids : [...ids, cls.teacher_person_id],
+      ),
       this.people.directLeaderNamesOf(ids),
       this.eligibilityOf(
         ready.map((row) => row.person_id),
@@ -412,7 +526,10 @@ export class EquippingService {
         level: cls.level,
         term_year: cls.term_year,
         term_number: cls.term_number,
-        teacher: { id: cls.teacher_person_id, full_name: nameOf(cls.teacher_person_id) },
+        teacher:
+          cls.teacher_person_id === null
+            ? null
+            : { id: cls.teacher_person_id, full_name: nameOf(cls.teacher_person_id) },
         encounter_weekends: eligibility.weekends,
       },
       enrolled: enrolled
@@ -619,31 +736,16 @@ export class EquippingService {
     body: OpenClassDto,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    const teacher = await this.people.forDecision(body.teacher_person_id);
-    if (
-      !teacher ||
-      teacher.mergedIntoId !== null ||
-      (await this.isEquippingRecord(body.teacher_person_id))
-    ) {
-      throw new NotFoundError('No such person to be the Teacher.');
-    }
-    if (teacher.isArchived) {
-      throw new InvariantViolationError('That person is archived, so cannot teach a class.', {
-        field: 'teacher_person_id',
-      });
-    }
+    const teacher =
+      body.teacher_person_id === undefined ? null : await this.teacherOf(body.teacher_person_id);
     const seasons = await this.seasons.allSeasons();
     if (!seasons.some((season) => season.id === body.encounter_season_id)) {
       throw new NotFoundError('No such Encounter season.');
     }
 
     return this.write(async (trx) => {
-      const mayTeach = await this.mayTeachWithin(trx, [canonicalId(teacher.id)]);
-      if (!mayTeach.has(canonicalId(teacher.id))) {
-        throw new InvariantViolationError(
-          'Only a current Cell Leader in the tree may teach a class.',
-          { field: 'teacher_person_id' },
-        );
+      if (teacher !== null) {
+        await this.assertMayTeachWithin(trx, teacher.id);
       }
       const row = await trx
         .insertInto('equipping_classes')
@@ -656,7 +758,7 @@ export class EquippingService {
           time_of_day: body.time_of_day,
           place: body.place?.trim() || null,
           first_lesson_on: body.first_lesson_on,
-          teacher_person_id: canonicalId(teacher.id),
+          teacher_person_id: teacher === null ? null : canonicalId(teacher.id),
           encounter_season_id: body.encounter_season_id,
           created_by: actor.accountId,
         })
@@ -668,8 +770,14 @@ export class EquippingService {
         level: row.level,
         term_year: row.term_year,
         term_number: row.term_number,
-        teacher: { id: row.teacher_person_id, full_name: teacher.fullName },
+        teacher:
+          teacher === null ? null : { id: row.teacher_person_id, full_name: teacher.fullName },
         enrolled: 0,
+        // A Teacher named on opening is checked against their week as on Edit (decision 0501).
+        clash:
+          teacher === null
+            ? null
+            : await this.clashOf(canonicalId(teacher.id), row.day_of_week, String(row.time_of_day)),
       };
 
       await this.audit.writeWithin(trx, {
@@ -689,6 +797,82 @@ export class EquippingService {
       await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
       return response;
     });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/teacher` (decision 0501, point 2): the Coordinator names or
+   * changes a class's Teacher, who must be a current Cell Leader in the tree when named
+   * (decision 0499, point 10). A clash with their own Cell is answered as a warning beside the
+   * saved class, never a refusal (owner, 2026-11-20).
+   */
+  async setTeacher(
+    actor: Actor,
+    classId: string,
+    teacherPersonId: string,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const teacher = await this.teacherOf(teacherPersonId);
+    return this.write(async (trx) => {
+      const cls = await trx
+        .selectFrom('equipping_classes')
+        .selectAll()
+        .where('id', '=', classId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (cls === undefined) {
+        throw new NotFoundError('No such class.');
+      }
+      await this.assertMayTeachWithin(trx, teacher.id);
+      const id = canonicalId(teacher.id);
+      if (cls.teacher_person_id !== id) {
+        await trx
+          .updateTable('equipping_classes')
+          .set({ teacher_person_id: id })
+          .where('id', '=', classId)
+          .execute();
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_class.teacher_named',
+          targetType: 'equipping_class',
+          targetId: classId,
+          before: { teacher_person_id: cls.teacher_person_id },
+          after: { teacher_person_id: id },
+        });
+      }
+      const response = {
+        id: classId,
+        teacher: { id, full_name: teacher.fullName },
+        clash: await this.clashOf(id, cls.day_of_week, String(cls.time_of_day)),
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /** The Teacher a request names: a current Person, never the Registrar record (point 13). */
+  private async teacherOf(personId: string): Promise<{ id: string; fullName: string }> {
+    const teacher = await this.people.forDecision(personId);
+    if (!teacher || teacher.mergedIntoId !== null || (await this.isEquippingRecord(personId))) {
+      throw new NotFoundError('No such person to be the Teacher.');
+    }
+    if (teacher.isArchived) {
+      throw new InvariantViolationError('That person is archived, so cannot teach a class.', {
+        field: 'teacher_person_id',
+      });
+    }
+    return { id: teacher.id, fullName: teacher.fullName };
+  }
+
+  private async assertMayTeachWithin(trx: Transaction<Database>, personId: string): Promise<void> {
+    const mayTeach = await this.mayTeachWithin(trx, [canonicalId(personId)]);
+    if (!mayTeach.has(canonicalId(personId))) {
+      throw new InvariantViolationError(
+        'Only a current Cell Leader in the tree may teach a class.',
+        {
+          field: 'teacher_person_id',
+        },
+      );
+    }
   }
 
   /**

@@ -132,11 +132,25 @@ export class OpenClassDto extends EquippingTermDto {
   @IsManilaCalendarDate({ message: 'first_lesson_on must be a real calendar date, YYYY-MM-DD' })
   first_lesson_on!: string;
 
+  /** Optional: a class may be opened before its Teacher is named (decision 0501). */
+  @IsOptional()
   @IsUUID()
-  teacher_person_id!: string;
+  teacher_person_id?: string;
 
   @IsUUID()
   encounter_season_id!: string;
+}
+
+/** Naming or changing a class's Teacher (decision 0501, point 2). */
+export class SetTeacherDto {
+  @IsUUID()
+  teacher_person_id!: string;
+}
+
+/** Whose week a class is checked against (decision 0501, point 2). */
+export class TeacherClashDto {
+  @IsUUID()
+  person_id!: string;
 }
 
 /** Enrolling several registered people in one class at once (point 11). */
@@ -161,10 +175,4 @@ export class EquippingSearchDto {
   @IsStorableText()
   @MaxLength(100)
   q!: string;
-
-  /** Only who may teach a class: a current Cell Leader in the tree (decision 0499, point 10). */
-  @IsOptional()
-  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
-  @IsBoolean()
-  teachers?: boolean;
 }

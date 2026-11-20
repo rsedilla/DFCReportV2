@@ -9,7 +9,7 @@ import { SearchField } from '@/components/ui/field';
 import { FilterChip } from '@/components/ui/filter-chip';
 import { isBranchReader } from '@/components/reports-tabs';
 import { CONTROL_BAR, TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
-import { getMe } from '@/lib/me';
+import { coordinatesOnly, getMe } from '@/lib/me';
 import { usePinnedBarPadding } from '@/lib/pinned-bar';
 import { useSearchTerm } from '@/lib/search-term';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,33 @@ const TABS = [
  * The tabs, as links: each is its own address, so Back and a reload keep the tab. The chosen
  * tab opens into the pane that holds everything of it (owner's choice of 2026-10-05).
  */
+/**
+ * **A Coordinator's phone tabs, SUYNL and Classes** (decision 0501, points 21 and 22): on a phone
+ * the bottom bar keeps five items, so the Coordinator's *Classes* is a tab beside SUYNL under the
+ * item then named *Growth*. Not drawn from `lg`, where *Classes* is an item of its own.
+ */
+export function CoordinatorPhoneTabs({ current }: { current: '/growth/suynl' | '/equipping/classes' }) {
+  return (
+    <nav aria-label="Growth" className={cn('mt-6 lg:hidden', TAB_GRID, TAB_ROW)}>
+      {(
+        [
+          { href: '/growth/suynl', label: 'SUYNL' },
+          { href: '/equipping/classes', label: 'Classes' },
+        ] as const
+      ).map((tab) => (
+        <Link
+          key={tab.href}
+          href={tab.href}
+          aria-current={tab.href === current ? 'page' : undefined}
+          className={tabClasses(tab.href === current)}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export function GrowthTabs({
   current,
   children,
@@ -53,8 +80,11 @@ export function GrowthTabs({
   // **A row holding one tab is not drawn** (ruling of 2026-11-02, decision 0420): it offers no
   // choice. The pane keeps its frame, closed along the top.
   const row = tabbed && tabs.length > 1;
+  // A Coordinator's SUYNL carries *Classes* beside it on a phone (decision 0501).
+  const coordinator = !row && current === '/growth/suynl' && coordinatesOnly(me.data);
   return (
     <>
+      {coordinator ? <CoordinatorPhoneTabs current="/growth/suynl" /> : null}
       {row ? (
         <nav aria-label="Growth" className={cn('mt-6', TAB_GRID, TAB_ROW)}>
           {tabs.map((tab) => {
@@ -73,7 +103,15 @@ export function GrowthTabs({
           })}
         </nav>
       ) : null}
-      <div className={row ? TAB_PANE : tabbed ? cn(TAB_PANE, 'mt-6 border-t-2') : 'mt-6'}>
+      <div
+        className={
+          row
+            ? TAB_PANE
+            : tabbed
+              ? cn(TAB_PANE, coordinator ? 'max-lg:mt-0 max-lg:border-t-0 lg:mt-6 lg:border-t-2' : 'mt-6 border-t-2')
+              : 'mt-6'
+        }
+      >
         {children}
       </div>
     </>

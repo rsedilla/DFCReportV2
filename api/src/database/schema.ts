@@ -127,6 +127,7 @@ export interface AccountsTable {
    * `roles.manage`, and only with Full view.
    */
   moves_people: Generated<boolean>;
+  coordinates_life_class: Generated<boolean>;
   /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
@@ -343,6 +344,7 @@ export type AuditAction =
   // Moves people ticked or cleared (sections 5 and 7, decision 0356), with its previous and
   // new value, by an administrator. Targets the account.
   | 'account.moves_people_changed'
+  | 'account.coordinates_life_class_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
@@ -354,6 +356,7 @@ export type AuditAction =
   // Section 21 lists a church-wide people search (decision 0303). It targets the
   // searching account; the noun is the directory the search reached.
   | 'directory.searched'
+  | 'equipping_class.clash_checked'
   // Section 21 lists a duplicate check that shows a Person outside the searcher's scope
   // (decision 0304), targeting the searching account.
   | 'directory.matched'
@@ -417,6 +420,7 @@ export type AuditAction =
   | 'equipping_registration.created'
   | 'equipping_registration.cancelled'
   | 'equipping_class.created'
+  | 'equipping_class.teacher_named'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
@@ -949,7 +953,7 @@ export interface EquippingClassesTable {
   time_of_day: string;
   place: string | null;
   first_lesson_on: DateOnly;
-  teacher_person_id: string;
+  teacher_person_id: string | null;
   encounter_season_id: string;
   run_by: Generated<'CHURCH'>;
   created_by: string;

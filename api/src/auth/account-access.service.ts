@@ -43,19 +43,30 @@ export type MovesPeopleBody = {
   moves_people: boolean;
 };
 
-type LeaderTick = 'full_view' | 'approves_cells' | 'moves_people';
+/** What setting Life Class Coordinator answers: the account's value after the change. */
+export type CoordinatesLifeClassBody = {
+  id: string;
+  coordinates_life_class: boolean;
+};
+
+type LeaderTick = 'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class';
 
 /** Each tick's name in a refusal and its audit action (decisions 0323, 0352 and 0356). */
 const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
   full_view: { label: 'Full view', action: 'account.full_view_changed' },
   approves_cells: { label: 'Approves Cells', action: 'account.approves_cells_changed' },
   moves_people: { label: 'Moves people', action: 'account.moves_people_changed' },
+  coordinates_life_class: {
+    label: 'Life Class Coordinator',
+    action: 'account.coordinates_life_class_changed',
+  },
 };
 
-/** The ticks offered only with Full view, and cleared with it (decisions 0352 and 0356). */
-const NEEDS_FULL_VIEW: readonly ('approves_cells' | 'moves_people')[] = [
+/** The ticks offered only with Full view, and cleared with it (decisions 0352, 0356, 0501). */
+const NEEDS_FULL_VIEW: readonly ('approves_cells' | 'moves_people' | 'coordinates_life_class')[] = [
   'approves_cells',
   'moves_people',
+  'coordinates_life_class',
 ];
 
 /**
@@ -364,7 +375,27 @@ export class AccountAccessService {
     )) as unknown as MovesPeopleBody;
   }
 
-  /** The one write the three ticks share: lock, check the role, write and audit a change. */
+  /**
+   * Ticks or clears Life Class Coordinator on a Leader account (sections 7 and 29, decision
+   * 0501), exactly as Moves people is ticked: refused on an account holding no `LEADER` role or
+   * without Full view, and audited only when the value changes.
+   */
+  async setCoordinatesLifeClass(
+    accountId: string,
+    coordinates: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<CoordinatesLifeClassBody> {
+    return (await this.setLeaderTick(
+      'coordinates_life_class',
+      accountId,
+      coordinates,
+      actor,
+      claim,
+    )) as unknown as CoordinatesLifeClassBody;
+  }
+
+  /** The one write the ticks share: lock, check the role, write and audit a change. */
   private async setLeaderTick(
     column: LeaderTick,
     accountId: string,
@@ -378,7 +409,7 @@ export class AccountAccessService {
     return this.db.transaction().execute(async (trx) => {
       const account = await trx
         .selectFrom('accounts')
-        .select(['id', 'full_view', 'approves_cells', 'moves_people'])
+        .select(['id', 'full_view', 'approves_cells', 'moves_people', 'coordinates_life_class'])
         .where('id', '=', accountId)
         .forNoKeyUpdate()
         .executeTakeFirst();

@@ -126,7 +126,7 @@ describe('Equipping (section 29, decision 0499)', () => {
     });
 
   const openClass = (name = 'Life Class A', teacherId: string = mario.id) =>
-    post(registrar, 'classes', {
+    post(admin, 'classes', {
       ...TERM,
       name,
       day_of_week: 2,
@@ -166,20 +166,22 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(await refusal(registrar.personId)).toEqual({ status: 404, code: 'NOT_FOUND' });
     });
 
-    it('offers only current Cell Leaders in the tree when the picker asks for Teachers', async () => {
+    it('offers only current Cell Leaders in the tree in the Teacher search (decision 0501)', async () => {
       const all = (await get(registrar, 'people?q=Mar').expect(200)).body as {
         data: { id: string }[];
       };
-      const teachers = (await get(registrar, 'people?q=Mar&teachers=true').expect(200)).body as {
+      const teachers = (await get(admin, 'teachers?q=Mar').expect(200)).body as {
         data: { id: string }[];
       };
       expect(all.data.map((row) => row.id)).toContain(mario.id);
       expect(teachers.data.map((row) => row.id)).toEqual([mario.id]);
 
-      const noLeader = (await get(registrar, 'people?q=Ben&teachers=true').expect(200)).body as {
+      const noLeader = (await get(admin, 'teachers?q=Ben').expect(200)).body as {
         data: unknown[];
       };
       expect(noLeader.data).toEqual([]);
+      // The Registrar opens no class, so is not offered the Teacher search (decision 0501).
+      await get(registrar, 'teachers?q=Mar').expect(403);
     });
   });
 
