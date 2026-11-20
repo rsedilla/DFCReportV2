@@ -28,8 +28,10 @@ import {
   MoveEnrollmentDto,
   OpenClassDto,
   ReasonDto,
+  NameGuideDto,
   RegisterDto,
   SetTeacherDto,
+  SwapGuideDto,
   TeacherClashDto,
 } from './dto/equipping.dto';
 import { EquippingService } from './equipping.service';
@@ -112,6 +114,35 @@ export class EquippingController {
       throw new ThrottlerException();
     }
     const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT, true);
+    await this.people.recordDirectorySearch(actor.accountId, query.q, data.length);
+    return { data };
+  }
+
+  /**
+   * The Coordinator's Guide search (decision 0501, point 4): only who may guide Life Class, a pass
+   * of SOL 1 or beyond and in the tree, bounded and recorded as a church-wide search is.
+   */
+  @Get('guides')
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async guides(
+    @Query() query: EquippingSearchDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[] }> {
+    if (normalizeName(query.q).replace(/\s+/g, '').length < CHURCH_WIDE_SEARCH_MINIMUM) {
+      throw new ValidationFailedError('Enter at least three letters of a name.', { field: 'q' });
+    }
+    const key = `church-wide-search:${actor.accountId}`;
+    const spent = await this.throttle.increment(
+      key,
+      60_000,
+      CHURCH_WIDE_SEARCHES_PER_MINUTE,
+      60_000,
+      key,
+    );
+    if (spent.isBlocked) {
+      throw new ThrottlerException();
+    }
+    const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT, 'guides');
     await this.people.recordDirectorySearch(actor.accountId, query.q, data.length);
     return { data };
   }
@@ -238,6 +269,44 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.equipping.setTeacher(actor, id, body.teacher_person_id, claim);
+  }
+
+  /** Names a Guide of the class, and shares out the students with no Guide (decision 0501). */
+  @Post('classes/:id/guides')
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async nameGuide(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: NameGuideDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.nameGuide(actor, id, body.person_id, claim);
+  }
+
+  /** Removes a Guide from the class; their students are shared out again. */
+  @Post('classes/:id/guides/:guideId/remove')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async removeGuide(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Param('guideId', new UuidParamPipe('guideId')) guideId: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.removeGuide(actor, id, guideId, claim);
+  }
+
+  /** *Swap Guide* for one student (decision 0501, point 8). */
+  @Post('enrollments/:id/guide')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async swapGuide(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: SwapGuideDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.swapGuide(actor, id, body.guide_id, claim);
   }
 
   @Get('classes/:id')

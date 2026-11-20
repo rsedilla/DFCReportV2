@@ -412,6 +412,37 @@ export class TrainingService {
     return new Set(rows.map((row) => canonicalId(resolve(row.person_id))));
   }
 
+  /**
+   * Who holds a current graduation of any of these programs, for who may guide a level of the
+   * school, a Guide being one level ahead (section 29, decision 0501). A pass from before the
+   * school is such a row too. `null` asks of the whole church, for the Guide search.
+   */
+  async holdersOfAny(
+    personIds: readonly string[] | null,
+    programs: readonly TrainingProgram[],
+  ): Promise<Set<string>> {
+    if ((personIds !== null && personIds.length === 0) || programs.length === 0) {
+      return new Set();
+    }
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    let query = this.db
+      .selectFrom('training_graduations')
+      .select('person_id')
+      .distinct()
+      .where('program', 'in', [...programs])
+      .where('superseded_at', 'is', null);
+    if (personIds !== null) {
+      const wanted = new Set(personIds.map((id) => canonicalId(id)));
+      const absorbed = pairs.absorbed.filter((_, index) =>
+        wanted.has(canonicalId(pairs.kept[index])),
+      );
+      query = query.where('person_id', 'in', [...personIds, ...absorbed]);
+    }
+    const rows = await query.execute();
+    return new Set(rows.map((row) => canonicalId(resolve(row.person_id))));
+  }
+
   /** The programs each current person holds a current graduation for. */
   private async currentPrograms(
     population: ReadonlySet<string> | null,

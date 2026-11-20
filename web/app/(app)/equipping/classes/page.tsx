@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
+import { SearchResults } from '@/components/search-results';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field, SearchField } from '@/components/ui/field';
@@ -16,6 +17,10 @@ import {
   DAY_NAMES,
   currentTerm,
   listClassStudents,
+  nameGuide,
+  removeGuide,
+  searchGuides,
+  swapGuide,
   listCoordinatedClasses,
   listCoordinatorSeasons,
   openClass,
@@ -24,6 +29,8 @@ import {
   teacherClash,
   termLabel,
   type CellClash,
+  type ClassGuide,
+  type ClassStudent,
   type CoordinatedClass,
   type FoundPerson,
   type Term,
@@ -101,6 +108,10 @@ export default function ClassesPage() {
                   <span className="text-muted">Teacher </span>
                   <TeacherName each={each} />
                 </p>
+                <p className="text-sm">
+                  <span className="text-muted">Guides </span>
+                  <GuidesLine each={each} />
+                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
                     Edit
@@ -118,6 +129,7 @@ export default function ClassesPage() {
                 <HeaderCell>Class</HeaderCell>
                 <HeaderCell>Day and time</HeaderCell>
                 <HeaderCell>Teacher</HeaderCell>
+                <HeaderCell>Guides</HeaderCell>
                 <HeaderCell>Students</HeaderCell>
                 <HeaderCell>Status</HeaderCell>
                 <HeaderCell>Action</HeaderCell>
@@ -133,10 +145,15 @@ export default function ClassesPage() {
                   <td className="px-3 py-3">
                     <TeacherName each={each} />
                   </td>
+                  <td className="px-3 py-3">
+                    <GuidesLine each={each} />
+                  </td>
                   <td className="px-3 py-3">{each.enrolled}</td>
                   <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
                   <td className="px-3 py-1">
-                    <div className="flex gap-2">
+                    {/* Stacked below 1536px, so a 1024px laptop or a sideways iPad keeps the table
+                        on screen with the Guides column (decision 0501, point 22). */}
+                    <div className="flex flex-col gap-2 2xl:flex-row">
                       <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
                         Edit
                       </Button>
@@ -171,6 +188,26 @@ function TeacherName({ each }: { each: CoordinatedClass }) {
   );
 }
 
+/** How many Guides, and how many more are needed, said in words (decision 0501, point 8). */
+function GuidesLine({ each }: { each: CoordinatedClass }) {
+  const named = each.guides?.named ?? 0;
+  const men = each.guides?.short_men ?? 0;
+  const women = each.guides?.short_women ?? 0;
+  // Each sex said apart, a man guiding men and a woman women (section 29).
+  const needed = [
+    men > 0 ? `${men} more for men` : null,
+    women > 0 ? `${women} more for women` : null,
+  ].filter((part): part is string => part !== null);
+  return (
+    <span>
+      {named}
+      {needed.length > 0 ? (
+        <span className="text-field-invalid font-semibold"> · {needed.join(' · ')}</span>
+      ) : null}
+    </span>
+  );
+}
+
 function clashLine(name: string, clash: CellClash, tail = ' You may still save.'): string {
   return `Clash: ${name} leads a Cell on ${DAY_NAMES[clash.day_of_week - 1]}s at ${timeLabel(
     clash.time_of_day,
@@ -179,21 +216,58 @@ function clashLine(name: string, clash: CellClash, tail = ' You may still save.'
 
 /** Search for a current Cell Leader in the tree (decision 0499, point 10). */
 function TeacherSearch({ onChoose }: { onChoose: (person: FoundPerson) => void }) {
+  return (
+    <PersonSearch
+      label="Teacher"
+      description="A current Cell Leader. At least three letters of their name."
+      empty="No current Cell Leader with that name."
+      purpose="name as Teacher"
+      search={searchTeachers}
+      onChoose={onChoose}
+    />
+  );
+}
+
+/** A church-wide picker of the school's, bounded and recorded on the server (decision 0303). */
+function PersonSearch({
+  label,
+  description,
+  empty,
+  purpose,
+  search,
+  onChoose,
+}: {
+  label: string;
+  description: string;
+  empty: string;
+  /** What choosing does, finishing "Choose the person to …". */
+  purpose: string;
+  search: (term: string, signal?: AbortSignal) => Promise<{ data: FoundPerson[] }>;
+  onChoose: (person: FoundPerson) => void;
+}) {
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
   const found = useQuery({
-    queryKey: ['equipping', 'teachers', searched],
-    queryFn: ({ signal }) => searchTeachers(searched!, signal),
+    queryKey: ['equipping', 'search', label, searched],
+    queryFn: ({ signal }) => search(searched!, signal),
     enabled: searched !== null,
   });
   return (
     <div>
       <SearchField
-        label="Teacher"
-        description="A current Cell Leader. At least three letters of their name."
+        label={label}
+        description={description}
         autoComplete="off"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        // Enter searches, as the Search button does; this sits inside another form, so it
+        // cannot be a form of its own.
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            setSearched(query.trim());
+          }
+        }}
         action={
           <Button type="button" variant="secondary" onClick={() => setSearched(query.trim())}>
             Search
@@ -202,17 +276,16 @@ function TeacherSearch({ onChoose }: { onChoose: (person: FoundPerson) => void }
       />
       <FailureNotice failure={found.isError ? describeFailure(found.error) : null} />
       {found.isSuccess && found.data.data.length === 0 ? (
-        <p className="text-muted mt-2 text-sm">No current Cell Leader with that name.</p>
+        <p className="text-muted mt-2 text-sm">{empty}</p>
       ) : null}
-      <ul className="mt-2 flex flex-col gap-1">
-        {(found.data?.data ?? []).map((each) => (
-          <li key={each.id}>
-            <Button type="button" variant="secondary" className="w-full justify-start" onClick={() => onChoose(each)}>
-              {each.full_name} · {each.member_id}
-            </Button>
-          </li>
-        ))}
-      </ul>
+      {found.data && found.data.data.length > 0 ? (
+        <SearchResults
+          people={found.data.data}
+          purpose={purpose}
+          detail={(each) => each.qualifies ?? null}
+          onChoose={onChoose}
+        />
+      ) : null}
     </div>
   );
 }
@@ -407,16 +480,94 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
           </div>
         )}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
+        {cls ? <GuidesSection classId={cls.id} /> : null}
         <DialogActions>
           <Button type="button" disabled={chosen === null || save.isPending} onClick={() => save.mutate()}>
-            Save
+            Save Teacher
           </Button>
           <Button type="button" variant="secondary" onClick={close}>
-            Cancel
+            Close
           </Button>
         </DialogActions>
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * A class's Guides (decision 0501, points 4 and 8): each with Remove, and *Add a Guide*, which
+ * finds only who may guide. Each change is saved at once, and DREAMS shares out the students
+ * with no Guide, men to men and women to women, the Guide with the fewest first.
+ */
+function GuidesSection({ classId }: { classId: string }) {
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  // One key per body until a save lands (decision 0127), so a retry replays rather than repeats.
+  const [writeKey, renewWriteKey] = useWriteKey();
+  const read = useQuery({
+    queryKey: ['equipping', 'coordinate', 'students', classId],
+    queryFn: ({ signal }) => listClassStudents(classId, signal),
+  });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['equipping'] });
+  const add = useMutation({
+    mutationFn: (personId: string) =>
+      nameGuide(classId, personId, idempotencyKeyFor('equipping-name-guide', writeKey, { classId, personId })),
+    onSuccess: async () => {
+      renewWriteKey();
+      setAdding(false);
+      await refresh();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (guideId: string) =>
+      removeGuide(classId, guideId, idempotencyKeyFor('equipping-remove-guide', writeKey, { classId, guideId })),
+    onSuccess: async () => {
+      renewWriteKey();
+      await refresh();
+    },
+  });
+  const guides = read.data?.guides ?? [];
+  const bySex = (sex: 'MALE' | 'FEMALE') => (read.data?.data ?? []).filter((s) => s.sex === sex).length;
+
+  return (
+    <section className="border-line border-t pt-4" aria-label="Guides">
+      <h3 className="font-semibold">Guides</h3>
+      <p className="text-muted text-sm">
+        {bySex('MALE')} {bySex('MALE') === 1 ? 'man' : 'men'} and {bySex('FEMALE')}{' '}
+        {bySex('FEMALE') === 1 ? 'woman' : 'women'} enrolled. A Guide follows up students of their own sex,
+        3 or 4 each, and DREAMS shares them out.
+      </p>
+      <ul className="mt-2 flex flex-col">
+        {guides.map((g) => (
+          <li key={g.id} className="border-line flex min-h-11 items-center justify-between gap-3 border-b text-sm">
+            <span>
+              {g.person.full_name} <span className="text-muted">· {g.sex === 'FEMALE' ? 'women' : 'men'}</span>
+              {g.archived ? <span className="text-muted"> · archived, takes no new students</span> : null}
+            </span>
+            <Button type="button" variant="secondary" disabled={remove.isPending} onClick={() => remove.mutate(g.id)}>
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <FailureNotice failure={add.isError ? describeFailure(add.error) : remove.isError ? describeFailure(remove.error) : null} />
+      {adding ? (
+        <div className="mt-2">
+          <PersonSearch
+            label="Add a Guide"
+            description="Somebody who has passed SOL 1. At least three letters of their name."
+            empty="Nobody who may guide has that name."
+            purpose="add as a Guide"
+            search={searchGuides}
+            onChoose={(person) => add.mutate(person.id)}
+          />
+        </div>
+      ) : (
+        <Button type="button" variant="secondary" className="mt-2" onClick={() => setAdding(true)}>
+          Add a Guide
+        </Button>
+      )}
+    </section>
   );
 }
 
@@ -434,9 +585,11 @@ function StudentsDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClos
       ) : null}
       <ul className="flex flex-col">
         {(students.data?.data ?? []).map((each) => (
-          <li key={each.person.id} className="border-line border-b py-2 text-sm last:border-b-0">
-            <span className="font-semibold">{each.person.full_name}</span>
-          </li>
+          <StudentRow
+            key={each.person.id}
+            each={each}
+            guides={students.data?.guides ?? []}
+          />
         ))}
       </ul>
       <DialogActions>
@@ -445,5 +598,65 @@ function StudentsDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClos
         </Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+/**
+ * One student: their Cell leader, shown for every student whatever branch (owner, 2026-11-20),
+ * their Guide, and *Swap Guide* among the class's Guides of their sex (decision 0501, point 8).
+ */
+function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[] }) {
+  const queryClient = useQueryClient();
+  const [writeKey, renewWriteKey] = useWriteKey();
+  const swap = useMutation({
+    mutationFn: (guideId: string) =>
+      swapGuide(
+        each.enrollment_id,
+        guideId,
+        idempotencyKeyFor('equipping-swap-guide', writeKey, { enrollment: each.enrollment_id, guideId }),
+      ),
+    onSuccess: async () => {
+      renewWriteKey();
+      await queryClient.invalidateQueries({ queryKey: ['equipping'] });
+    },
+  });
+  // Swap offers the Guides of the student's sex who take new students (decision 0502).
+  const others = guides.filter((g) => g.id !== each.guide?.id && g.sex === each.sex && !g.archived);
+  // A sex corrected after pairing leaves the pairing for the Coordinator to swap (decision 0502).
+  const current = guides.find((g) => g.id === each.guide?.id);
+  const otherSex = current !== undefined && each.sex !== null && current.sex !== each.sex;
+  return (
+    <li className="border-line border-b py-2 text-sm last:border-b-0">
+      <p className="font-semibold">{each.person.full_name}</p>
+      <p className="text-muted">
+        Cell leader: {each.cell_leader?.full_name ?? 'none'} · Guide:{' '}
+        {each.guide ? each.guide.full_name : <span className="text-field-invalid font-semibold">No Guide yet</span>}
+      </p>
+      {otherSex ? (
+        <p className="text-field-invalid text-sm font-semibold">Their Guide is not the same sex. Swap to a Guide of theirs.</p>
+      ) : null}
+      {others.length > 0 ? (
+        <div className="mt-1">
+          <SelectField
+            label={`Swap Guide for ${each.person.full_name ?? 'this student'}`}
+            value=""
+            disabled={swap.isPending}
+            onChange={(event) => {
+              if (event.target.value) {
+                swap.mutate(event.target.value);
+              }
+            }}
+          >
+            <option value="">Keep {each.guide?.full_name ?? 'no Guide'}</option>
+            {others.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.person.full_name}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      ) : null}
+      <FailureNotice failure={swap.isError ? describeFailure(swap.error) : null} />
+    </li>
   );
 }

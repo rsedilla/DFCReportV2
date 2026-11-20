@@ -37,7 +37,13 @@ import {
   mockWholeChurchReader,
   mockCoordinator,
 } from './mock-api';
-import { mockCoordinatedClasses, mockRegistrar, mockEquipping, mockRegistrationSearch } from './mock-equipping';
+import {
+  mockClassGuides,
+  mockCoordinatedClasses,
+  mockRegistrar,
+  mockEquipping,
+  mockRegistrationSearch,
+} from './mock-equipping';
 import {
   mockCellMeetings,
   mockMeetingsAwaiting,
@@ -1567,6 +1573,44 @@ const SCANS = [
       await expect(page.locator('text=Not named yet >> visible=true').first()).toBeVisible();
     },
   },
+  ...(
+    [
+      // A class's Edit with its Guides, a search for one answered with a Choose button
+      // (decision 0501, point 8).
+      {
+        name: 'equipping classes, editing a class',
+        open: 'Edit',
+        async then(page: import('@playwright/test').Page) {
+          const guides = page.getByRole('dialog').getByRole('region', { name: 'Guides' });
+          await guides.getByRole('button', { name: 'Add a Guide' }).click();
+          await guides.getByLabel('Add a Guide').fill('Jose');
+          await guides.getByLabel('Add a Guide').press('Enter');
+          await expect(guides.getByRole('button', { name: 'Choose Josefina Uy' })).toBeVisible();
+        },
+      },
+      // A class's students, each with their Cell leader, Guide and Swap Guide.
+      {
+        name: "equipping classes, a class's students",
+        open: 'Students',
+        async then(page: import('@playwright/test').Page) {
+          await expect(page.getByRole('dialog').getByText('No Guide yet')).toBeVisible();
+        },
+      },
+    ] as const
+  ).map((state) => ({
+    name: state.name,
+    route: '/equipping/classes',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCoordinator(page);
+      await mockCoordinatedClasses(page);
+      await mockClassGuides(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.locator(`button:has-text("${state.open}") >> visible=true`).first().click();
+      await state.then(page);
+    },
+  })),
   {
     // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
     // half, and the sentence saying who may change it.
@@ -2379,6 +2423,12 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  ...['equipping classes, editing a class', "equipping classes, a class's students"].map((name) => ({
+    name,
+    why:
+      'Opens a dialog over the measured "equipping classes". Its controls are Buttons, a ' +
+      'SearchField and SelectFields, the primitives measured on every screen.',
+  })),
   {
     name: 'equipping registration, searching',
     why:

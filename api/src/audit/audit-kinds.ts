@@ -102,6 +102,9 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'equipping_registration.cancelled': 'GROWTH',
   'equipping_class.created': 'GROWTH',
   'equipping_class.teacher_named': 'GROWTH',
+  'equipping_class.guide_named': 'GROWTH',
+  'equipping_class.guide_removed': 'GROWTH',
+  'equipping_enrollment.guide_changed': 'GROWTH',
   'equipping_enrollment.created': 'GROWTH',
   'equipping_enrollment.ended': 'GROWTH',
 };

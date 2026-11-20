@@ -163,8 +163,9 @@ export async function mockCoordinatedClasses(page: Page): Promise<void> {
             time_of_day: '19:00',
             first_lesson_on: '2026-12-01',
             teacher: { id: '3f1b7c6e-0000-4000-8000-00000000e401', full_name: 'Aurora Reyes' },
-            enrolled: 2,
+            enrolled: 3,
             status: 'NOT_STARTED',
+            guides: { named: 1, short_men: 0, short_women: 1 },
           },
           {
             ...base,
@@ -176,6 +177,7 @@ export async function mockCoordinatedClasses(page: Page): Promise<void> {
             teacher: null,
             enrolled: 0,
             status: 'NOT_STARTED',
+            guides: { named: 0, short_men: 0, short_women: 0 },
           },
         ],
       }),
@@ -205,4 +207,78 @@ export async function mockRegistrationSearch(page: Page): Promise<void> {
       }),
     ),
   );
+}
+
+const GUIDE_BENJIE = '3f1b7c6e-0000-4000-8000-00000000a101';
+const GUIDE_DANILO = '3f1b7c6e-0000-4000-8000-00000000a102';
+
+/**
+ * Life Class A's Guides and students (decision 0501, point 8): two men and a woman enrolled,
+ * one man Guide named and one woman with no Guide yet. Records what each write sent.
+ */
+export async function mockClassGuides(page: Page): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const guides = [
+    { id: GUIDE_BENJIE, person: { id: '3f1b7c6e-0000-4000-8000-00000000a201', full_name: 'Benjie Lacson' }, sex: 'MALE' },
+    { id: GUIDE_DANILO, person: { id: '3f1b7c6e-0000-4000-8000-00000000a202', full_name: 'Danilo Pineda' }, sex: 'MALE' },
+    // Archived since being named: keeps any students, takes no new ones (decision 0502).
+    {
+      id: '3f1b7c6e-0000-4000-8000-00000000a103',
+      person: { id: '3f1b7c6e-0000-4000-8000-00000000a203', full_name: 'Rogelio Santos' },
+      sex: 'MALE',
+      archived: true,
+    },
+  ];
+  await page.route(`**/api/v1/equipping/coordinate/classes/${CLASS_ID}/students`, (route) =>
+    route.fulfill(
+      json({
+        class: { id: CLASS_ID, name: 'Life Class A' },
+        guides,
+        data: [
+          {
+            enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a301',
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a401', full_name: 'Efren Quiambao' },
+            sex: 'MALE',
+            cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000a501', full_name: 'Gilbert Manalo' },
+            guide: { id: GUIDE_BENJIE, full_name: 'Benjie Lacson' },
+          },
+          {
+            enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a302',
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a402', full_name: 'Hernan Ocampo' },
+            sex: 'MALE',
+            cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000a501', full_name: 'Gilbert Manalo' },
+            guide: { id: GUIDE_BENJIE, full_name: 'Benjie Lacson' },
+          },
+          {
+            enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a303',
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a403', full_name: 'Imelda Tolentino' },
+            sex: 'FEMALE',
+            cell_leader: null,
+            guide: null,
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route('**/api/v1/equipping/guides?*', (route) =>
+    route.fulfill(
+      json({
+        data: [{
+            id: '3f1b7c6e-0000-4000-8000-00000000a601',
+            full_name: 'Josefina Uy',
+            member_id: 'M-000733',
+            direct_leader_name: null,
+            qualifies: 'Passed SOL 1',
+          },],
+      }),
+    ),
+  );
+  const record = (status: number) => (route: import('@playwright/test').Route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }, status));
+  };
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/guides`, record(201));
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/guides/*/remove`, record(201));
+  await page.route('**/api/v1/equipping/enrollments/*/guide', record(201));
+  return { sent };
 }
