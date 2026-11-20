@@ -16,15 +16,17 @@ the pastoral tree, on their own Leader account, looking after the classes of the
 only. Life Class and the schools are not split by Network, so one Coordinator opens every class
 of their level, and a class holds men and women together. The Admin makes somebody a
 Coordinator by ticking the level on their Leader account, as *Approves Cells* and *Moves
-people* are ticked (Section 7); nobody gets a second login. Only the Life Class Coordinator is
+people* are ticked (Section 7); nobody gets a second login. **The tick is offered only on a
+Full view account**, as those two are (owner, 2026-11-20, option A). Only the Life Class Coordinator is
 needed until SOL 1 is added to the school.
 
 **2. The Coordinator opens the class and names its Teacher and Guides**, not the Registrar
 (owner, 2026-11-18, and again 2026-11-20). Opening a class, built for the Registrar in 0499,
 moves to the Coordinator; the Admin keeps every Registrar and Coordinator step. Naming a
 Teacher shows whether the class fits that person's week, naming a clash with their own Cell
-meeting under the two-hour rule (decision 0392); whether that clash refuses, as 0392 refuses
-one leader's two Cells, or only warns, is open.
+meeting under the two-hour rule (decision 0392). **The clash warns and the Coordinator may
+save** (owner, 2026-11-20, option A), unlike 0392's refusal of one leader's two Cells, because
+the Coordinator knows whether the Cell has moved or has another facilitator that night.
 
 **3. The Teacher records attendance and make-ups, and nothing else** (owner, 2026-11-19,
 dropping weekly grades: the result is Passed or Not passed from attendance, and in SOL from the
@@ -48,7 +50,9 @@ checklist in point 17). The Teacher stays a current Cell Leader in the tree when
   of their own direct disciples each leading an `ACTIVE` Cell now, not anyone further down their
   tree (owner, 2026-11-20, option A). A pass recorded before the school counts
   (point 19). It is checked when the Coordinator names the Guide, and a Guide keeps the class if
-  it stops holding, as a Teacher does.
+  it stops holding, as a Teacher does. **The Guide search lists only those who qualify, each
+  saying why, and naming anybody else is refused** (owner, 2026-11-20, option A), as naming a
+  Teacher is (decision 0499, point 10).
 - is any member of the tree who meets those, with no approval first (owner, 2026-11-18).
 
 **5. The student's own leader sees their people in the school** (owner, 2026-11-20). A leader
@@ -80,8 +84,9 @@ stops enrolling.
   over each joining a different group, so groups never differ by more than one: 6 is 3, 3; 7 is
   4, 3; 11 is 4, 4, 3. Two cases fall outside that arithmetic and the owner gave each: 1 or 2
   students have one Guide with 1 or 2, and 5 have two Guides, with 3 and 2, never one Guide with
-  5. The Admin may set 4 instead of 3 in Settings (owner, 2026-11-19); how the groups are formed
-  then is open.
+  5. **It is fixed at 3 for now** (owner, 2026-11-20, option A): the owner's "the Admin may
+  change it to 4 in Settings; 3 for now" of 2026-11-19 waits until a table for 4 is decided
+  from screenshots, and no setting is built until then.
 - **SOL 1 to 3: up to 5 a Guide** (owner, 2026-11-20): as few Guides as possible, never more
   than 5 each, the groups as even as they can be. 1 to 5 of one sex have one Guide; 6 is 3, 3;
   11 is 4, 4, 3; 17 is 5, 4, 4, 4.
@@ -219,19 +224,15 @@ level ahead and the same sex, a leader follows up their people, and nothing reco
 
 ## What it does not settle
 
-Each is a bullet of `CLAUDE.md`'s open list, the first two and the sixth Stop Conditions. What each step keeps of a change, the original and corrected values and who made it (Principle 12), and what it writes to the audit log (Section 21), are stated with that step when it is built.
+Each is a bullet of `CLAUDE.md`'s open list, the first two and the fourth Stop Conditions. What each step keeps of a change, the original and corrected values and who made it (Principle 12), and what it writes to the audit log (Section 21), are stated with that step when it is built.
 
 - The capabilities and checks that carry points 1 to 5 and 21, which are written into
   Section 7 when the first of them is built.
 - What a Senior Pastor and a Network Admin see of the school.
-- Whether a Teacher's clash with their Cell meeting blocks saving or only warns.
-- Whether a Coordinator needs Full view.
 - Whether a Guide who is the student's own leader is allowed or avoided.
 - Who files a graduation the school posts, and what Section 28's `confirmed_by` holds for it.
 - Whether the Coordinator's own disciple means a direct disciple, and how the Admin's check of
   those students combines with the class's *Mark as checked*.
 - Whether a *Before the school* tick can still be corrected.
-- Whether naming a Guide who is not one level ahead is refused or warned.
-- How Life Class's Guide groups are formed when the Admin sets 4 a Guide.
 
 Previous: [2026-11-20 — Every dialog has a close button and keeps its buttons in view](0500-every-dialog-has-a-close-button-and-keeps-its-buttons-in-view.md)
