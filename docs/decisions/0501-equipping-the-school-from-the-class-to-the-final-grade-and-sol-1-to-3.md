@@ -30,7 +30,11 @@ the Coordinator knows whether the Cell has moved or has another facilitator that
 that Cell's day and time** (owner, 2026-11-20, "Yes, day and time", confirming the screenshot of
 2026-11-19: *leads a Cell on Tuesdays at 7:30 pm, less than two hours from this class*), which
 discloses to the Coordinator when a Cell outside their scope meets, accepted as the Cell leader
-shown on a class's pages is (point 10), so the Coordinator can see why it clashes.
+shown on a class's pages is (point 10), so the Coordinator can see why it clashes. **Each check is
+recorded and limited as a church-wide search is** (owner, 2026-11-20, "Record and limit it"):
+written to the Audit Log under *Lookups*, a clash or not, with the class and who was asked about,
+and held to thirty a minute per account (decision 0303), because a Coordinator could otherwise ask
+about every Cell Leader in turn and learn when their Cells meet, with nothing recording it.
 
 **3. The Teacher records attendance and make-ups, and nothing else** (owner, 2026-11-19,
 dropping weekly grades: the result is Passed or Not passed from attendance, and in SOL from the
