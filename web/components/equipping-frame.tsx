@@ -73,26 +73,45 @@ export function EquippingFrame({
   );
 }
 
-/** A labelled tick box, 24px, as the Privacy Notice's is. */
+/**
+ * A labelled tick box, 24px, as the Privacy Notice's is. `boxed` draws it as a bordered box
+ * that answers a tap anywhere on it (decision 0500), where two ticks stand as one question.
+ */
 export function Tick({
   checked,
   onChange,
+  boxed = false,
   children,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
+  boxed?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
+  const input = (
+    <input
+      id={id}
+      type="checkbox"
+      className="accent-accent size-6 shrink-0"
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+    />
+  );
+  if (boxed) {
+    return (
+      <label
+        htmlFor={id}
+        className="border-line bg-surface hover:bg-raised flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-4 py-2 text-sm font-semibold"
+      >
+        {input}
+        <span>{children}</span>
+      </label>
+    );
+  }
   return (
     <div className="flex min-h-11 items-center gap-3">
-      <input
-        id={id}
-        type="checkbox"
-        className="accent-accent size-6 shrink-0"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
+      {input}
       <label htmlFor={id} className="text-sm font-semibold">
         {children}
       </label>

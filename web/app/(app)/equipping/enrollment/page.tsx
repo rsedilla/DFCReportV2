@@ -5,7 +5,7 @@ import { useId, useState } from 'react';
 
 import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { SelectField } from '@/components/ui/select-field';
@@ -322,14 +322,14 @@ function MoveDialog({
           ))}
         </SelectField>
         <FailureNotice failure={move.isError ? describeFailure(move.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
+        <DialogActions>
           <Button type="submit" disabled={move.isPending}>
             Move
           </Button>
-          <Button type="button" variant="quiet" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );
@@ -389,14 +389,14 @@ function WithdrawDialog({
           placeholder="For example: moved to another city"
         />
         <FailureNotice failure={withdraw.isError ? describeFailure(withdraw.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
+        <DialogActions>
           <Button type="submit" disabled={withdraw.isPending}>
             Withdraw {enrolled?.person.full_name ?? ''}
           </Button>
-          <Button type="button" variant="quiet" onClick={onClose} data-autofocus>
+          <Button type="button" variant="secondary" onClick={onClose} data-autofocus>
             Keep them
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

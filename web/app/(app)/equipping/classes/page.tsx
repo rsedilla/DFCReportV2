@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field, SearchField } from '@/components/ui/field';
 import { CONTROL_BAR } from '@/components/ui/frame';
@@ -274,11 +274,11 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
           {clashLine(openedClash.name, openedClash.clash, '')}
         </p>
         <p className="text-muted mt-2 text-sm">Change the Teacher under Edit if they cannot teach at this time.</p>
-        <div className="mt-4">
+        <DialogActions>
           <Button type="button" onClick={close}>
             Done
           </Button>
-        </div>
+        </DialogActions>
       </Dialog>
     );
   }
@@ -335,14 +335,14 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
           <p className="text-field-invalid text-sm">Fill in the name, first lesson and Encounter weekend.</p>
         ) : null}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
+        <DialogActions>
           <Button type="submit" disabled={save.isPending}>
             Open the class
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );
@@ -407,14 +407,14 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
           </div>
         )}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-        <div className="flex flex-col gap-3 lg:flex-row">
+        <DialogActions>
           <Button type="button" disabled={chosen === null || save.isPending} onClick={() => save.mutate()}>
             Save
           </Button>
           <Button type="button" variant="secondary" onClick={close}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </div>
     </Dialog>
   );
@@ -439,11 +439,11 @@ function StudentsDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClos
           </li>
         ))}
       </ul>
-      <div className="mt-4">
+      <DialogActions>
         <Button type="button" variant="secondary" onClick={onClose}>
           Close
         </Button>
-      </div>
+      </DialogActions>
     </Dialog>
   );
 }

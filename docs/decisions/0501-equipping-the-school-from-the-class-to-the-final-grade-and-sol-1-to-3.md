@@ -84,7 +84,12 @@ Banner's bulk add): several people ticked and enrolled into the class shown, as 
 **8. DREAMS shares the students out among the Guides, by sex**, and the Coordinator may swap one
 to another Guide of the same sex (owner, 2026-11-18 and 2026-11-20). The class's Edit says how
 many Guides each sex needs (*6 men need 2 Guides · 5 women need 2*), and a short class never
-stops enrolling.
+stops enrolling. **A student enrolled after the students were shared out joins the Guide of their sex
+who has the fewest** (owner, 2026-11-20, "Fewest students, same sex"); with no Guide of their sex
+named yet they read *No Guide yet*, and the Coordinator may still swap them. **Naming a Guide
+takes nobody from another Guide** (owner, 2026-11-20, "No, swap by hand"): only students with no
+Guide are shared out, so a Guide named late starts with none, and the Coordinator moves students
+to them with *Swap*.
 
 - **Life Class: 3 or 4 a Guide, except with 1, 2 or 5 students** (owner, 2026-11-18, from a
   table of class sizes). Guides are
