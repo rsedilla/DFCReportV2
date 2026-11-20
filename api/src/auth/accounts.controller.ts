@@ -23,6 +23,7 @@ import {
   SetApprovesCellsDto,
   SetFullViewDto,
   SetMovesPeopleDto,
+  SetCoordinatesLifeClassDto,
 } from './dto/credentials.dto';
 import { AccountsListDto } from './dto/accounts-list.dto';
 
@@ -354,5 +355,24 @@ export class AccountsController {
   ): Promise<Record<string, unknown>> {
     await this.assertTicksAtWholeChurch(actor);
     return { ...(await this.access.setMovesPeople(id, body.moves_people, actor, claim)) };
+  }
+
+  /**
+   * Ticks or clears Life Class Coordinator on a Leader account (sections 7 and 29, decision
+   * 0501), under `roles.manage` against the Account, as Moves people is, and only by the Admin.
+   */
+  @Post(':id/coordinates-life-class')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setCoordinatesLifeClass(
+    @Param('id') id: string,
+    @Body() body: SetCoordinatesLifeClassDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    await this.assertTicksAtWholeChurch(actor);
+    return {
+      ...(await this.access.setCoordinatesLifeClass(id, body.coordinates_life_class, actor, claim)),
+    };
   }
 }

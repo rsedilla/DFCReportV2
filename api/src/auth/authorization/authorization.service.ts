@@ -16,6 +16,7 @@ import { isGrantMaking } from './grant-making';
 import { MERGED_PERSONS_PORT, type MergedPersonsPort } from './merged-persons.port';
 import {
   LEADER_APPROVES_CELLS,
+  LEADER_COORDINATES_LIFE_CLASS,
   LEADER_FULL_VIEW_ONLY,
   LEADER_MOVES_PEOPLE,
   ROLE_DEFAULTS,
@@ -64,6 +65,8 @@ interface ActiveRoles {
   approvesCells: boolean;
   /** Moves people (sections 5 and 7, decision 0356), read on the same row. */
   movesPeople: boolean;
+  /** Life Class Coordinator (sections 7 and 29, decision 0501), read on the same row. */
+  coordinatesLifeClass: boolean;
 }
 
 /**
@@ -173,6 +176,7 @@ export class AuthorizationService {
         'accounts.full_view',
         'accounts.approves_cells',
         'accounts.moves_people',
+        'accounts.coordinates_life_class',
       ])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
@@ -183,6 +187,7 @@ export class AuthorizationService {
       fullView: rows.some((row) => row.full_view),
       approvesCells: rows.some((row) => row.approves_cells),
       movesPeople: rows.some((row) => row.moves_people),
+      coordinatesLifeClass: rows.some((row) => row.coordinates_life_class),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -598,6 +603,7 @@ export class AuthorizationService {
         ...ROLE_DEFAULTS[role],
         ...(ticked && roles.approvesCells ? LEADER_APPROVES_CELLS : {}),
         ...(ticked && roles.movesPeople ? LEADER_MOVES_PEOPLE : {}),
+        ...(ticked && roles.coordinatesLifeClass ? LEADER_COORDINATES_LIFE_CLASS : {}),
       };
 
       // The ticks add to what the Leader role gives, as Full view withholds from it; none

@@ -1,12 +1,20 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-import { mockSignedIn } from './mock-api';
-import { mockEquipping, mockRegistrar } from './mock-equipping';
+import { mockCoordinator, mockSignedIn } from './mock-api';
+import { mockCoordinatedClasses, mockEquipping, mockRegistrar } from './mock-equipping';
 
 /**
  * Every dialog has a close button and keeps its buttons in view (decision 0500), shown on the
- * Withdraw dialog of Enrollment, which every dialog shares through `Dialog`.
+ * Withdraw dialog of Enrollment and the Coordinator's *Open a class*, which every dialog shares
+ * through `Dialog`.
  */
+async function openTheOpenClassDialog(page: Page) {
+  await mockCoordinator(page);
+  await mockCoordinatedClasses(page);
+  await page.goto('/equipping/classes');
+  await page.getByRole('button', { name: 'Open a class' }).click();
+}
+
 test.describe('a dialog (decision 0500)', () => {
   test.beforeEach(async ({ page }) => {
     await mockSignedIn(page);
@@ -42,8 +50,7 @@ test.describe('a dialog (decision 0500)', () => {
   });
 
   test('without a marked control, the first field takes the first focus, not the ×', async ({ page }) => {
-    await page.goto('/equipping/enrollment');
-    await page.getByRole('button', { name: 'Open a class' }).click();
+    await openTheOpenClassDialog(page);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByLabel('Class name')).toBeFocused();
   });
@@ -52,8 +59,7 @@ test.describe('a dialog (decision 0500)', () => {
   // entirely hidden under the title bar or the button bar.
   test('keeps every focused control clear of both bars on a 320px phone', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
-    await page.goto('/equipping/enrollment');
-    await page.getByRole('button', { name: 'Open a class' }).click();
+    await openTheOpenClassDialog(page);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByLabel('Class name')).toBeFocused();
     for (let i = 0; i < 12; i++) {

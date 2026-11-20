@@ -35,6 +35,7 @@ export interface AccountListRow {
   full_view: boolean;
   approves_cells: boolean;
   moves_people: boolean;
+  coordinates_life_class: boolean;
 }
 
 type Eb = ExpressionBuilder<Database, 'accounts'>;
@@ -84,6 +85,7 @@ export class AccountsListService {
         'accounts.full_view as full_view',
         'accounts.approves_cells as approves_cells',
         'accounts.moves_people as moves_people',
+        'accounts.coordinates_life_class as coordinates_life_class',
         'persons.member_id as member_id',
         'persons.title as title',
         'persons.first_name as first_name',
@@ -186,6 +188,7 @@ export class AccountsListService {
         full_view: row.full_view,
         approves_cells: row.approves_cells,
         moves_people: row.moves_people,
+        coordinates_life_class: row.coordinates_life_class,
       })),
       nextCursor:
         found.length > limit && last !== undefined

@@ -142,16 +142,40 @@ export async function mockEquipping(page: Page): Promise<void> {
       }),
     ),
   );
-  await page.route('**/api/v1/equipping/encounter-seasons', (route) =>
+}
+
+/** The Coordinator's *Classes* (decision 0501): one class with a Teacher, one not named yet. */
+export async function mockCoordinatedClasses(page: Page): Promise<void> {
+  const base = {
+    place: 'Room 2',
+    encounter_season_id: '3f1b7c6e-0000-4000-8000-00000000e301',
+    run_by: 'CHURCH',
+  };
+  await page.route('**/api/v1/equipping/coordinate/classes?*', (route) =>
     route.fulfill(
       json({
         data: [
           {
-            id: '3f1b7c6e-0000-4000-8000-00000000e401',
-            mens_lc_party_on: '2026-10-30',
-            mens_encounter_on: '2026-12-04',
-            womens_lc_party_on: '2026-11-06',
-            womens_encounter_on: '2026-12-11',
+            ...base,
+            id: CLASS_ID,
+            name: 'Life Class A',
+            day_of_week: 2,
+            time_of_day: '19:00',
+            first_lesson_on: '2026-12-01',
+            teacher: { id: '3f1b7c6e-0000-4000-8000-00000000e401', full_name: 'Aurora Reyes' },
+            enrolled: 2,
+            status: 'NOT_STARTED',
+          },
+          {
+            ...base,
+            id: '3f1b7c6e-0000-4000-8000-00000000e002',
+            name: 'Life Class C',
+            day_of_week: 6,
+            time_of_day: '15:00',
+            first_lesson_on: '2026-12-05',
+            teacher: null,
+            enrolled: 0,
+            status: 'NOT_STARTED',
           },
         ],
       }),

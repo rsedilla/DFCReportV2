@@ -87,6 +87,15 @@ export async function getMe(signal?: AbortSignal): Promise<SessionDescription> {
  * since decision 0263, and it is still not what this asks: a role says which defaults
  * an account started with, and a grant says what it holds now.
  */
+/**
+ * A Leader ticked a level's Coordinator (decision 0501): `equipping.coordinate` at Whole Church
+ * without `equipping.manage`, which the Admin holds beside it. Their *Classes* is a sidebar item
+ * on a laptop and, on a phone, a tab beside SUYNL under an item then named *Growth*.
+ */
+export function coordinatesOnly(me: SessionDescription | undefined): boolean {
+  return holdsWholeChurch(me, 'equipping.coordinate') && !holdsWholeChurch(me, 'equipping.manage');
+}
+
 export function holdsWholeChurch(me: SessionDescription | undefined, capability: string): boolean {
   return (me?.capabilities ?? []).some(
     (grant) => grant.capability === capability && grant.scope_type === 'WHOLE_CHURCH',

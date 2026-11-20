@@ -22,6 +22,7 @@ import {
   setAccountAccess,
   setApprovesCells,
   setMovesPeople,
+  setCoordinatesLifeClass,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -119,6 +120,7 @@ export function PersonAccount({
     ? [
         current.approves_cells ? 'Approves Cells' : null,
         current.moves_people ? 'Moves people' : null,
+        current.coordinates_life_class ? 'Life Class Coordinator' : null,
       ].filter((tick): tick is string => tick !== null)
     : [];
 
@@ -338,6 +340,19 @@ export function PersonAccount({
                       shown
                         ? `${firstName} moves anyone in their care to another leader at once. A move outside their care is made by the Admin.`
                         : `${firstName} does not move people to another leader.`
+                    }
+                  />
+                  {/* Also offered only with Full view (decision 0501). */}
+                  <LeaderTickRow
+                    personId={personId}
+                    field="coordinates_life_class"
+                    label="Life Class Coordinator"
+                    value={current.coordinates_life_class === true}
+                    save={(next) => setCoordinatesLifeClass(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} opens the church's Life Class classes and names their Teachers, under Classes.`
+                        : `${firstName} does not coordinate Life Class.`
                     }
                   />
                 </>
@@ -698,7 +713,7 @@ function LeaderTickRow({
   locked,
 }: {
   personId: string;
-  field: 'full_view' | 'approves_cells' | 'moves_people';
+  field: 'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class';
   label: string;
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;

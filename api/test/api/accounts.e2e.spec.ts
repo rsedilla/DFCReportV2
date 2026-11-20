@@ -112,6 +112,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         approves_cells: false,
         // Nor Moves people (decision 0356).
         moves_people: false,
+        coordinates_life_class: false,
         // Nor has its holder ticked the Privacy Notice (decision 0496).
         privacy_notice_acknowledged_at: null,
         // A Leader account is not disabled with its record unasked (decision 0499).

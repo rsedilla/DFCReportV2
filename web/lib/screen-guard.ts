@@ -57,6 +57,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   if (at(/^\/session(\/|$)/)) {
     return true;
   }
+  // The Coordinator's Classes opens for a holder of `equipping.coordinate` at Whole Church: the
+  // Admin, and a Full view Leader ticked Life Class Coordinator (decision 0501).
+  if (at(/^\/equipping\/classes(\/|$)/)) {
+    return holdsWholeChurch(me, 'equipping.coordinate');
+  }
   // Equipping opens for a holder of `equipping.manage` at Whole Church, the Admin and an
   // Registrar (decision 0499), and a Registrar's screens are Equipping and nothing else.
   if (at(/^\/equipping(\/|$)/)) {
