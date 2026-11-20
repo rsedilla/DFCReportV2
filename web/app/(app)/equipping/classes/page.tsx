@@ -151,9 +151,9 @@ export default function ClassesPage() {
                   <td className="px-3 py-3">{each.enrolled}</td>
                   <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
                   <td className="px-3 py-1">
-                    {/* Stacked below 1280px, so a 1024px laptop or a sideways iPad keeps the table
+                    {/* Stacked below 1536px, so a 1024px laptop or a sideways iPad keeps the table
                         on screen with the Guides column (decision 0501, point 22). */}
-                    <div className="flex flex-col gap-2 xl:flex-row">
+                    <div className="flex flex-col gap-2 2xl:flex-row">
                       <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
                         Edit
                       </Button>
