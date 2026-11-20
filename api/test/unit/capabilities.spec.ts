@@ -56,6 +56,7 @@ describe('the capability enumeration the application declares', () => {
     'training.confirm_on_behalf',
     'equipping.manage',
     'equipping.coordinate',
+    'equipping.class',
   ];
 
   it('is exactly the capabilities the application declares', () => {

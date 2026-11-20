@@ -3,6 +3,7 @@ import { sql, type Transaction } from 'kysely';
 
 import { AttendanceStandingService } from '../attendance/attendance-standing.service';
 import { AuditService } from '../audit/audit.service';
+import { EquippingAttendanceService } from './equipping-attendance.service';
 import { type Actor } from '../auth/authorization/authorization.service';
 import { CellsReadService } from '../cells/cells.read.service';
 import { slotsClash } from '../cells/schedule-clash';
@@ -132,7 +133,8 @@ export class EquippingService {
     private readonly people: PeopleReadService,
     private readonly hierarchy: HierarchyService,
     private readonly cells: CellsReadService,
-    private readonly attendance: AttendanceStandingService,
+    private readonly attendance: EquippingAttendanceService,
+    private readonly standing: AttendanceStandingService,
     private readonly suynl: SuynlService,
     private readonly seasons: EncounterSeasonsService,
     private readonly training: TrainingService,
@@ -150,7 +152,7 @@ export class EquippingService {
     const [leaders, leaderNames, standing, lessons] = await Promise.all([
       this.hierarchy.directLeaderIdsOf(ids),
       this.people.directLeaderNamesOf(ids),
-      this.attendance.standingOf(ids),
+      this.standing.standingOf(ids),
       this.suynl.currentLessonsOf(ids),
     ]);
 
@@ -415,11 +417,19 @@ export class EquippingService {
     const listed = (await this.classes(query)) as { data: Record<string, unknown>[] };
     const today = await this.manilaToday();
     const staffing = await this.staffingOf(listed.data.map((row) => String(row.id)));
+    // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
+    const late = await this.attendance.lateLessonsOf(
+      listed.data.map((row) => ({
+        id: String(row.id),
+        first_lesson_on: String(row.first_lesson_on),
+      })),
+    );
     return {
       data: listed.data.map((row) => ({
         ...row,
         status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
         guides: staffing.get(String(row.id)) ?? { named: 0, short_men: 0, short_women: 0 },
+        late_lessons: late.get(String(row.id)) ?? [],
       })),
     };
   }

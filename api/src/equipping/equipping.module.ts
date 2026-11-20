@@ -11,6 +11,7 @@ import { SuynlModule } from '../suynl/suynl.module';
 import { TrainingModule } from '../training/training.module';
 
 import { EquippingController } from './equipping.controller';
+import { EquippingAttendanceService } from './equipping-attendance.service';
 import { EquippingService } from './equipping.service';
 import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
 
@@ -32,7 +33,7 @@ import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
     AuditModule,
   ],
   controllers: [EquippingController],
-  providers: [EquippingService, PersonArchiveEquippingAdapter],
+  providers: [EquippingService, EquippingAttendanceService, PersonArchiveEquippingAdapter],
   exports: [PersonArchiveEquippingAdapter],
 })
 export class EquippingModule {}

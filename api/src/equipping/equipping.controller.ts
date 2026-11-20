@@ -29,11 +29,14 @@ import {
   OpenClassDto,
   ReasonDto,
   NameGuideDto,
+  RecordMakeUpDto,
+  SaveLessonDto,
   RegisterDto,
   SetTeacherDto,
   SwapGuideDto,
   TeacherClashDto,
 } from './dto/equipping.dto';
+import { EquippingAttendanceService } from './equipping-attendance.service';
 import { EquippingService } from './equipping.service';
 
 /**
@@ -52,6 +55,7 @@ import { EquippingService } from './equipping.service';
 export class EquippingController {
   constructor(
     private readonly equipping: EquippingService,
+    private readonly attendance: EquippingAttendanceService,
     private readonly people: PeopleService,
     private readonly views: PersonViewsService,
     @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
@@ -294,6 +298,60 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.equipping.removeGuide(actor, id, guideId, claim);
+  }
+
+  /**
+   * The classes the actor teaches or guides (decision 0501, point 21), which decide whether
+   * their *Equipping* item is drawn. **`equipping.class` against the actor**, which every
+   * Leader holds over themselves; the school narrows it (decision 0503).
+   */
+  @Get('my-classes')
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async myClasses(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    return this.attendance.myClasses(actor);
+  }
+
+  /**
+   * A class's lessons, register and make-ups owed (decision 0501, points 10 to 12): the whole
+   * class to its Teacher, the Coordinator and the Admin, and a Guide's own students to a Guide.
+   */
+  @Get('classes/:id/attendance')
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async classAttendance(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.classAttendance(actor, id);
+  }
+
+  /** Who came to one lesson, saved by the class's Teacher (decision 0501, point 10). */
+  @Post('classes/:id/lessons/:lesson')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async saveLesson(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Param('lesson') lesson: string,
+    @Body() body: SaveLessonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    if (!/^[1-9]$/.test(lesson)) {
+      throw new ValidationFailedError('A lesson is a number from 1 to 9.', { field: 'lesson' });
+    }
+    return this.attendance.saveLesson(actor, id, Number(lesson), body, claim);
+  }
+
+  /** A make-up of a missed lesson, recorded as M with its date (decision 0501, point 12). */
+  @Post('classes/:id/make-ups')
+  @HttpCode(201)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async recordMakeUp(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: RecordMakeUpDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.recordMakeUp(actor, id, body, claim);
   }
 
   /** *Swap Guide* for one student (decision 0501, point 8). */

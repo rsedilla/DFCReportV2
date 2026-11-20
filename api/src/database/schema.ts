@@ -424,6 +424,9 @@ export type AuditAction =
   | 'equipping_class.guide_named'
   | 'equipping_class.guide_removed'
   | 'equipping_enrollment.guide_changed'
+  | 'equipping_lesson.recorded'
+  | 'equipping_lesson.corrected'
+  | 'equipping_make_up.recorded'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
@@ -1015,7 +1018,43 @@ export interface EquippingGuideStudentsTable {
   started_at: ServerTimestamp;
   ended_at: Date | null;
   ended_by: string | null;
-  end_reason: 'SWAPPED' | 'GUIDE_REMOVED' | null;
+  end_reason: 'SWAPPED' | 'GUIDE_REMOVED' | 'ENROLLMENT_ENDED' | null;
+}
+
+/** One recorded lesson of a class (section 29, decision 0503). Lesson 5 is the Encounter's. */
+export interface EquippingLessonsTable {
+  id: Generated<string>;
+  class_id: string;
+  lesson: number;
+  held_on: DateOnly;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  version: Generated<number>;
+}
+
+/** Whether a student came to a lesson; a correction closes the row and opens another. */
+export interface EquippingMarksTable {
+  id: Generated<string>;
+  lesson_id: string;
+  enrollment_id: string;
+  came: boolean;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+  correction_reason: string | null;
+}
+
+/** A make-up of a missed lesson, recorded as M with its date (decision 0501, point 12). */
+export interface EquippingMakeUpsTable {
+  id: Generated<string>;
+  lesson_id: string;
+  enrollment_id: string;
+  made_up_on: DateOnly;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
 }
 
 export interface EncounterSeasonsTable {
@@ -1117,6 +1156,9 @@ export interface Database {
   equipping_enrollments: EquippingEnrollmentsTable;
   equipping_class_guides: EquippingClassGuidesTable;
   equipping_guide_students: EquippingGuideStudentsTable;
+  equipping_lessons: EquippingLessonsTable;
+  equipping_marks: EquippingMarksTable;
+  equipping_make_ups: EquippingMakeUpsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;

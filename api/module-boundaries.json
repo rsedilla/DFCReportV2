@@ -71,7 +71,10 @@
     "equipping_registrations": "equipping",
     "equipping_enrollments": "equipping",
     "equipping_class_guides": "equipping",
-    "equipping_guide_students": "equipping"
+    "equipping_guide_students": "equipping",
+    "equipping_lessons": "equipping",
+    "equipping_marks": "equipping",
+    "equipping_make_ups": "equipping"
   },
   "infrastructure": [
     "database"
