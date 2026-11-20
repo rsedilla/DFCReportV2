@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -145,7 +145,7 @@ export function CellScheduleDialog({
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
 
         {/* A column below `lg`, so each button is full width in the sheet. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <DialogActions className="lg:flex-wrap">
           <Button type="submit" disabled={!ready || save.isPending}>
             {save.isPending
               ? 'Saving…'
@@ -154,7 +154,7 @@ export function CellScheduleDialog({
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

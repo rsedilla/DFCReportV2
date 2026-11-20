@@ -5,7 +5,7 @@ import { useId, useState } from 'react';
 
 import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { ApiRequestError } from '@/lib/api-client';
 import { reassignPastoralLeader } from '@/lib/hierarchy';
@@ -145,14 +145,14 @@ export function MoveLeaderDialog({
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+      <DialogActions className="lg:flex-wrap">
         <Button onClick={() => move.mutate()} disabled={chosen === null || move.isPending}>
           {move.isPending ? 'Moving…' : chosen ? `Move under ${chosen.full_name}` : 'Move'}
         </Button>
         <Button variant="secondary" onClick={close}>
           Cancel
         </Button>
-      </div>
+      </DialogActions>
     </Dialog>
   );
 }

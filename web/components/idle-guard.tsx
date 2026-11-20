@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogActions } from '@/components/ui/dialog';
 import {
   IDLE_SIGN_OUT_MS,
   IDLE_WARNING_MS,
@@ -172,7 +172,7 @@ export function IdleGuard() {
           </p>
         </div>
         {/* A column below `lg`, so each button is full width in the sheet. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:justify-end">
+        <DialogActions className="lg:justify-end">
           <Button
             variant="secondary"
             onClick={() => {
@@ -185,7 +185,7 @@ export function IdleGuard() {
           <Button onClick={stay} data-autofocus>
             Stay signed in
           </Button>
-        </div>
+        </DialogActions>
       </div>
     </Dialog>
   );
