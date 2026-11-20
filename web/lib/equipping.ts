@@ -129,13 +129,9 @@ const termQuery = (term: Term) =>
     term_number: String(term.term_number),
   }).toString();
 
-/** `teachers` lists only who may teach a class, a current Cell Leader in the tree (decision 0499). */
-export async function searchPeople(
-  q: string,
-  signal?: AbortSignal,
-  teachers = false,
-): Promise<{ data: FoundPerson[] }> {
-  const params = new URLSearchParams(teachers ? { q, teachers: 'true' } : { q });
+/** The Registrar's person picker. A Teacher is found with `searchTeachers` (decision 0501). */
+export async function searchPeople(q: string, signal?: AbortSignal): Promise<{ data: FoundPerson[] }> {
+  const params = new URLSearchParams({ q });
   return authenticatedRequest(`/api/v1/equipping/people?${params.toString()}`, {
     signal,
   });
@@ -202,7 +198,7 @@ export async function openClass(
     encounter_season_id: string;
   },
   idempotencyKey: string,
-): Promise<EquippingClass> {
+): Promise<EquippingClass & { clash?: CellClash | null }> {
   return authenticatedRequest('/api/v1/equipping/classes', {
     method: 'POST',
     body: input,
@@ -240,17 +236,14 @@ export async function searchTeachers(term: string, signal?: AbortSignal): Promis
 }
 
 export async function teacherClash(
+  classId: string,
   personId: string,
-  dayOfWeek: number,
-  timeOfDay: string,
   signal?: AbortSignal,
 ): Promise<{ clash: CellClash | null }> {
-  const query = new URLSearchParams({
-    person_id: personId,
-    day_of_week: String(dayOfWeek),
-    time_of_day: timeOfDay.slice(0, 5),
-  });
-  return authenticatedRequest(`/api/v1/equipping/coordinate/clash?${query.toString()}`, { signal });
+  return authenticatedRequest(
+    `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/clash?person_id=${encodeURIComponent(personId)}`,
+    { signal },
+  );
 }
 
 export async function setTeacher(

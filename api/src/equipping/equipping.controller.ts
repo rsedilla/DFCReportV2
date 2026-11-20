@@ -200,13 +200,16 @@ export class EquippingController {
   }
 
   /**
-   * Whether a day and time fit a person's week, before they are named a class's Teacher, when
-   * opening one or editing it (decision 0501, point 2).
+   * Whether a class fits a person's week, before they are named its Teacher (decision 0501,
+   * point 2). A Teacher named when the class is opened is checked by the opening itself.
    */
-  @Get('coordinate/clash')
+  @Get('coordinate/classes/:id/clash')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
-  async teacherClash(@Query() query: TeacherClashDto): Promise<Record<string, unknown>> {
-    return this.equipping.teacherClash(query.person_id, query.day_of_week, query.time_of_day);
+  async teacherClash(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Query() query: TeacherClashDto,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.teacherClash(id, query.person_id);
   }
 
   /** Names or changes a class's Teacher (decision 0501, point 2). */

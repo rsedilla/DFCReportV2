@@ -409,13 +409,27 @@ export class EquippingService {
    * 2026-11-20): the Coordinator knows whether that Cell has moved or has another facilitator.
    * It names that Cell's day and time (decision 0501, point 2, owner 2026-11-20), an accepted
    * disclosure of a piece with the Cell leader shown on a class's pages.
+   *
+   * **Asked of a class that exists and of somebody who may teach it**, never of a day and time
+   * the caller chooses: the accepted disclosure is why a chosen Teacher clashes with a class,
+   * and a free day and time would let a Coordinator read any leader's whole week, a probe at a
+   * time. Somebody who may not teach is answered with no clash, as the search never offers them.
    */
-  async teacherClash(
-    personId: string,
-    dayOfWeek: number,
-    timeOfDay: string,
-  ): Promise<Record<string, unknown>> {
-    return { clash: await this.clashOf(personId, dayOfWeek, timeOfDay) };
+  async teacherClash(classId: string, personId: string): Promise<Record<string, unknown>> {
+    const cls = await this.db
+      .selectFrom('equipping_classes')
+      .select(['day_of_week', 'time_of_day'])
+      .where('id', '=', classId)
+      .executeTakeFirst();
+    if (cls === undefined) {
+      throw new NotFoundError('No such class.');
+    }
+    const id = canonicalId(personId);
+    const mayTeach = await this.mayTeachWithin(this.db, [id]);
+    if (!mayTeach.has(id)) {
+      return { clash: null };
+    }
+    return { clash: await this.clashOf(id, cls.day_of_week, String(cls.time_of_day)) };
   }
 
   private async clashOf(

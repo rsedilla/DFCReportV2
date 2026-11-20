@@ -171,10 +171,10 @@ function TeacherName({ each }: { each: CoordinatedClass }) {
   );
 }
 
-function clashLine(name: string, clash: CellClash): string {
+function clashLine(name: string, clash: CellClash, tail = ' You may still save.'): string {
   return `Clash: ${name} leads a Cell on ${DAY_NAMES[clash.day_of_week - 1]}s at ${timeLabel(
     clash.time_of_day,
-  )}, less than two hours from this class. You may still save.`;
+  )}, less than two hours from this class.${tail}`;
 }
 
 /** Search for a current Cell Leader in the tree (decision 0499, point 10). */
@@ -233,12 +233,9 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
   const [teacher, setTeacherChoice] = useState<FoundPerson | null>(null);
   const [writeKey, renewWriteKey] = useWriteKey();
   const [showErrors, setShowErrors] = useState(false);
-  // A Teacher named on opening is checked against their week as on Edit (decision 0501).
-  const clash = useQuery({
-    queryKey: ['equipping', 'clash', teacher?.id, day, time],
-    queryFn: ({ signal }) => teacherClash(teacher!.id, Number(day), time, signal),
-    enabled: open && teacher !== null && /^\d{2}:\d{2}/.test(time),
-  });
+  // A Teacher named on opening is checked against their week by the opening itself, which
+  // answers with any clash (decision 0501); the dialog then says so rather than closing.
+  const [openedClash, setOpenedClash] = useState<{ name: string; clash: CellClash } | null>(null);
 
   const save = useMutation({
     mutationFn: () => {
@@ -254,13 +251,37 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
       };
       return openClass(body, idempotencyKeyFor('equipping-coordinator-open-class', writeKey, body));
     },
-    onSuccess: async () => {
+    onSuccess: async (opened) => {
       renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
+      if (opened.clash && teacher) {
+        setOpenedClash({ name: teacher.full_name, clash: opened.clash });
+        return;
+      }
       onClose();
     },
   });
   const complete = name.trim() !== '' && firstLesson !== '' && season !== '';
+  const close = () => {
+    setOpenedClash(null);
+    onClose();
+  };
+
+  if (openedClash) {
+    return (
+      <Dialog open={open} onClose={close} title="Class opened">
+        <p role="status" className="text-field-invalid text-sm font-semibold">
+          {clashLine(openedClash.name, openedClash.clash, '')}
+        </p>
+        <p className="text-muted mt-2 text-sm">Change the Teacher under Edit if they cannot teach at this time.</p>
+        <div className="mt-4">
+          <Button type="button" onClick={close}>
+            Done
+          </Button>
+        </div>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onClose={onClose} title="Open a class">
@@ -299,15 +320,7 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
                 Change
               </Button>
             </div>
-            {clash.data?.clash ? (
-              <p role="status" className="text-field-invalid mt-2 text-sm font-semibold">
-                {clashLine(teacher.full_name, clash.data.clash)}
-              </p>
-            ) : clash.data ? (
-              <p role="status" className="mt-2 text-sm">
-                ✓ Fits their week
-              </p>
-            ) : null}
+            <p className="text-muted mt-1 text-sm">Their week is checked when the class is opened.</p>
           </div>
         )}
         <SelectField label="Encounter weekend" value={season} onChange={(event) => setSeason(event.target.value)} required>
@@ -345,7 +358,7 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
   const [writeKey, renewWriteKey] = useWriteKey();
   const clash = useQuery({
     queryKey: ['equipping', 'clash', cls?.id, chosen?.id],
-    queryFn: ({ signal }) => teacherClash(chosen!.id, cls!.day_of_week, cls!.time_of_day, signal),
+    queryFn: ({ signal }) => teacherClash(cls!.id, chosen!.id, signal),
     enabled: cls !== null && chosen !== null,
   });
   const save = useMutation({

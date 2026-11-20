@@ -142,7 +142,6 @@ export async function mockEquipping(page: Page): Promise<void> {
       }),
     ),
   );
-
 }
 
 /** The Coordinator's *Classes* (decision 0501): one class with a Teacher, one not named yet. */

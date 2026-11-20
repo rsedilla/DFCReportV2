@@ -173,7 +173,7 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         'equipping/teachers?q=Mar',
         'equipping/coordinate/encounter-seasons',
         `equipping/coordinate/classes/${id}/students`,
-        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=19:00`,
+        `equipping/coordinate/classes/${id}/clash?person_id=${mario.id}`,
       ];
       for (const path of reads) {
         await get(plainLeader, path).expect(403);
@@ -253,7 +253,7 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
 
       const asked = await get(
         coordinator,
-        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=19:00`,
+        `equipping/coordinate/classes/${id}/clash?person_id=${mario.id}`,
       ).expect(200);
       expect(asked.body).toEqual({ clash: { day_of_week: 2, time_of_day: '19:30' } });
 
@@ -265,11 +265,22 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         time_of_day: '19:30',
       });
 
+      const later = await openClass(coordinator, {
+        name: 'Life Class C',
+        time_of_day: '21:30',
+      }).expect(201);
       const clear = await get(
         coordinator,
-        `equipping/coordinate/clash?person_id=${mario.id}&day_of_week=2&time_of_day=21:30`,
+        `equipping/coordinate/classes/${(later.body as { id: string }).id}/clash?person_id=${mario.id}`,
       ).expect(200);
       expect(clear.body).toEqual({ clash: null });
+
+      // Asked of somebody who may not teach, it says nothing of their week.
+      const notATeacher = await get(
+        coordinator,
+        `equipping/coordinate/classes/${id}/clash?person_id=${nico.id}`,
+      ).expect(200);
+      expect(notATeacher.body).toEqual({ clash: null });
 
       // Named on opening, the Teacher is checked the same way.
       const opened = await openClass(coordinator, {
