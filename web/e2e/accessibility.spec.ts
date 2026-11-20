@@ -37,7 +37,7 @@ import {
   mockWholeChurchReader,
   mockCoordinator,
 } from './mock-api';
-import { mockCoordinatedClasses, mockRegistrar, mockEquipping } from './mock-equipping';
+import { mockCoordinatedClasses, mockRegistrar, mockEquipping, mockRegistrationSearch } from './mock-equipping';
 import {
   mockCellMeetings,
   mockMeetingsAwaiting,
@@ -1522,6 +1522,25 @@ const SCANS = [
     },
   },
   {
+    // The Register dialog searched, with a Choose button on each person found (owner,
+    // 2026-11-20, option B).
+    name: 'equipping registration, searching',
+    route: '/equipping/registration',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockEquipping(page);
+      await mockRegistrationSearch(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Register a person' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Register for Life Class' });
+      await dialog.getByLabel('Person').fill('wil');
+      await dialog.getByRole('button', { name: 'Search' }).click();
+      await expect(dialog.getByRole('button', { name: 'Choose Wilma Santos' })).toBeVisible();
+    },
+  },
+  {
     name: 'equipping enrollment',
     route: '/equipping/enrollment',
     async before(page: import('@playwright/test').Page) {
@@ -2360,6 +2379,13 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'equipping registration, searching',
+    why:
+      'Opens the Register dialog over the measured "equipping registration". Its controls are a ' +
+      'SearchField, its Search Button and a Choose Button per person, the primitives measured on ' +
+      'every screen; equipping-registration-search.spec.ts measures the Choose buttons too.',
+  },
   ...['/growth/conquest', '/reports/conquest'].map((route) => ({
     name: `conquest, old address ${route}`,
     why: 'Forwards to /conquest, measured as "growth conquest"; it renders nothing of its own.',

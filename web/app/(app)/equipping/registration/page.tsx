@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
+import { SearchResults } from '@/components/search-results';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -310,26 +311,12 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             found.data.data.length === 0 ? (
               <p className="text-muted mt-3 text-sm">Nobody by that name.</p>
             ) : (
-              <ul className="mt-3 flex flex-col gap-1">
-                {found.data.data.map((each) => (
-                  <li key={each.id}>
-                    <Button
-                      type="button"
-                      variant="quiet"
-                      className="w-full justify-start text-left"
-                      onClick={() => setPerson(each)}
-                    >
-                      <span>
-                        <span className="font-semibold">{each.full_name}</span>
-                        <span className="text-muted"> · {each.member_id}</span>
-                        {each.direct_leader_name ? (
-                          <span className="text-muted block text-sm">Leader: {each.direct_leader_name}</span>
-                        ) : null}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <SearchResults
+                people={found.data.data}
+                purpose="register"
+                detail={(each) => (each.direct_leader_name ? `Leader: ${each.direct_leader_name}` : null)}
+                onChoose={setPerson}
+              />
             )
           ) : null}
           {showErrors ? <p className="text-field-invalid mt-2 text-sm">Choose a person first.</p> : null}
