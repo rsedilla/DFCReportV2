@@ -166,6 +166,8 @@ describe('stored closed months (section 20, decision 0320)', () => {
       ['equipping_classes', 'the school (section 29), not attendance'],
       ['equipping_registrations', 'the school (section 29), not attendance'],
       ['equipping_enrollments', 'the school (section 29), not attendance'],
+      ['equipping_class_guides', 'the school (section 29), not attendance'],
+      ['equipping_guide_students', 'the school (section 29), not attendance'],
     ]);
 
     it('fails on a table in neither list, and on a table in both', async () => {

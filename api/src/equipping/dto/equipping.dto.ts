@@ -147,6 +147,18 @@ export class SetTeacherDto {
   teacher_person_id!: string;
 }
 
+/** Naming a class's Guide (decision 0501, point 4). */
+export class NameGuideDto {
+  @IsUUID()
+  person_id!: string;
+}
+
+/** *Swap Guide*: the class's Guide a student moves to (decision 0501, point 8). */
+export class SwapGuideDto {
+  @IsUUID()
+  guide_id!: string;
+}
+
 /** Whose week a class is checked against (decision 0501, point 2). */
 export class TeacherClashDto {
   @IsUUID()

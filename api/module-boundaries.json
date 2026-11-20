@@ -69,7 +69,9 @@
     "conquest_confirmations": "conquest",
     "equipping_classes": "equipping",
     "equipping_registrations": "equipping",
-    "equipping_enrollments": "equipping"
+    "equipping_enrollments": "equipping",
+    "equipping_class_guides": "equipping",
+    "equipping_guide_students": "equipping"
   },
   "infrastructure": [
     "database"

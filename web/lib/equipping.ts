@@ -50,6 +50,8 @@ export interface FoundPerson {
   member_id: string;
   full_name: string;
   direct_leader_name: string | null;
+  /** The Guide search's reason they may guide, e.g. "Passed SOL 1" (decision 0501, point 4). */
+  qualifies?: string | null;
 }
 
 export interface Candidate {
@@ -94,6 +96,25 @@ export interface EquippingClass {
 /** A class as the Coordinator's *Classes* lists it (decision 0501, point 22). */
 export interface CoordinatedClass extends EquippingClass {
   status: 'NOT_STARTED' | 'RUNNING';
+  /** How many Guides are named, and how many more the students of each sex need (decision 0501). */
+  guides?: { named: number; short_men: number; short_women: number };
+}
+
+/** One enrolled student as the Coordinator's *Students* shows them (decision 0501). */
+export interface ClassStudent {
+  enrollment_id: string;
+  person: { id: string; full_name: string | null };
+  sex: 'MALE' | 'FEMALE' | null;
+  cell_leader: { id: string; full_name: string | null } | null;
+  guide: { id: string; full_name: string | null } | null;
+}
+
+export interface ClassGuide {
+  id: string;
+  person: { id: string; full_name: string | null };
+  sex: 'MALE' | 'FEMALE' | null;
+  /** Archived since being named: keeps their students and takes no new ones (decision 0502). */
+  archived?: boolean;
 }
 
 /** A clash with a Cell the person leads, under the two-hour rule (decision 0392). */
@@ -223,11 +244,39 @@ export async function listCoordinatorSeasons(
 export async function listClassStudents(
   classId: string,
   signal?: AbortSignal,
-): Promise<{ class: { id: string; name: string }; data: { person: { id: string; full_name: string | null } }[] }> {
+): Promise<{ class: { id: string; name: string }; guides: ClassGuide[]; data: ClassStudent[] }> {
   return authenticatedRequest(
     `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/students`,
     { signal },
   );
+}
+
+/** The Coordinator's Guide search: who may guide Life Class, SOL 1 passed and in the tree. */
+export async function searchGuides(term: string, signal?: AbortSignal): Promise<{ data: FoundPerson[] }> {
+  return authenticatedRequest(`/api/v1/equipping/guides?q=${encodeURIComponent(term)}`, { signal });
+}
+
+export async function nameGuide(classId: string, personId: string, idempotencyKey: string): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/guides`, {
+    method: 'POST',
+    body: { person_id: personId },
+    idempotencyKey,
+  });
+}
+
+export async function removeGuide(classId: string, guideId: string, idempotencyKey: string): Promise<unknown> {
+  return authenticatedRequest(
+    `/api/v1/equipping/classes/${encodeURIComponent(classId)}/guides/${encodeURIComponent(guideId)}/remove`,
+    { method: 'POST', body: {}, idempotencyKey },
+  );
+}
+
+export async function swapGuide(enrollmentId: string, guideId: string, idempotencyKey: string): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/enrollments/${encodeURIComponent(enrollmentId)}/guide`, {
+    method: 'POST',
+    body: { guide_id: guideId },
+    idempotencyKey,
+  });
 }
 
 /** The Coordinator's Teacher search: current Cell Leaders in the tree only. */

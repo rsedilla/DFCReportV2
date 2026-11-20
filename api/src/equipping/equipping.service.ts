@@ -20,6 +20,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 import { SuynlService } from '../suynl/suynl.service';
 import { EncounterSeasonsService } from '../training/encounter-seasons.service';
+import { TrainingService } from '../training/training.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel, EquippingRequirement } from '../database/schema';
@@ -95,6 +96,24 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
 }
 
 /**
+ * How many Guides a Life Class needs for this many students of one sex (decision 0501, point 8):
+ * the students divided by 3, the remainder dropped, at least one; the owner gave 1 or 2 students
+ * one Guide and 5 two (3 and 2), never one Guide with 5.
+ */
+export function lifeClassGuidesFor(students: number): number {
+  if (students <= 0) {
+    return 0;
+  }
+  if (students <= 2) {
+    return 1;
+  }
+  if (students === 5) {
+    return 2;
+  }
+  return Math.floor(students / 3);
+}
+
+/**
  * The church's school: registration and enrollment for Life Class (SKILL.md section 29,
  * decision 0499).
  *
@@ -116,6 +135,7 @@ export class EquippingService {
     private readonly attendance: AttendanceStandingService,
     private readonly suynl: SuynlService,
     private readonly seasons: EncounterSeasonsService,
+    private readonly training: TrainingService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -224,22 +244,49 @@ export class EquippingService {
    * `teachers` narrows it to who may teach a class, a current Cell Leader in the tree (point
    * 10), in SQL so a page is never spent on rows about to be dropped.
    */
-  async search(term: string, limit: number, teachers = false): Promise<Record<string, unknown>[]> {
+  async search(
+    term: string,
+    limit: number,
+    who: boolean | 'teachers' | 'guides' = false,
+  ): Promise<Record<string, unknown>[]> {
     // A Registrar record is never somebody signed up for a class, for the Admin too (decision
     // 0499, point 13); `candidate` and `register` refuse it the same way.
-    const restrictTo = teachers ? await this.mayTeachWithin(this.db, null) : null;
+    const restrictTo =
+      who === true || who === 'teachers'
+        ? await this.mayTeachWithin(this.db, null)
+        : who === 'guides'
+          ? await this.mayGuideWithin(this.db, null, 'LIFE_CLASS')
+          : null;
     const { rows } = await this.people.searchByName(term, limit, null, restrictTo, {
       currentOnly: true,
       exclude: await this.people.equippingAccountPersons(),
     });
-    const names = await this.people.directLeaderNamesOf(rows.map((row) => row.id));
-    const decided = await this.people.forDecisions(rows.map((row) => row.id));
-    return rows.map((row) => ({
-      id: row.id,
-      member_id: row.member_id,
-      full_name: decided.get(row.id)?.fullName ?? `${row.first_name} ${row.last_name}`,
-      direct_leader_name: names.get(row.id) ?? null,
-    }));
+    const ids = rows.map((row) => row.id);
+    const names = await this.people.directLeaderNamesOf(ids);
+    const decided = await this.people.forDecisions(ids);
+    // The Guide search says why each person qualifies (decision 0501, point 4): the highest
+    // level they have passed.
+    const passed =
+      who === 'guides'
+        ? await Promise.all(
+            (['SOL_3', 'SOL_2', 'SOL_1'] as const).map(async (level) => ({
+              level,
+              holders: await this.training.holdersOfAny(ids, [level]),
+            })),
+          )
+        : [];
+    return rows.map((row) => {
+      const highest = passed.find((each) => each.holders.has(canonicalId(row.id)));
+      return {
+        id: row.id,
+        member_id: row.member_id,
+        full_name: decided.get(row.id)?.fullName ?? `${row.first_name} ${row.last_name}`,
+        direct_leader_name: names.get(row.id) ?? null,
+        ...(who === 'guides'
+          ? { qualifies: highest ? `Passed ${highest.level.replace('_', ' ')}` : null }
+          : {}),
+      };
+    });
   }
 
   /** A term's registrations, newest first, a page at a time (section 22). */
@@ -367,10 +414,12 @@ export class EquippingService {
   async coordinatorClasses(query: EquippingTermDto): Promise<Record<string, unknown>> {
     const listed = (await this.classes(query)) as { data: Record<string, unknown>[] };
     const today = await this.manilaToday();
+    const staffing = await this.staffingOf(listed.data.map((row) => String(row.id)));
     return {
       data: listed.data.map((row) => ({
         ...row,
         status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
+        guides: staffing.get(String(row.id)) ?? { named: 0, short_men: 0, short_women: 0 },
       })),
     };
   }
@@ -388,17 +437,50 @@ export class EquippingService {
     const enrolled = await this.db
       .selectFrom('equipping_enrollments as e')
       .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-      .select('r.person_id')
+      .select(['r.person_id', 'e.id as enrollment_id'])
       .where('e.class_id', '=', classId)
       .where('e.ended_at', 'is', null)
       .execute();
     const ids = enrolled.map((row) => row.person_id);
-    // Names only: the Cell leader beside each joins with the Guides (decision 0501, point 10).
-    const people = await this.people.forDecisions(ids);
+    const guides = await this.openGuidesOf(this.db, classId);
+    const pairings = await this.openPairingsOf(this.db, classId);
+    const cells = await this.cells.currentCellsOfMany(ids);
+    const leaderIds = [...cells.values()].flatMap((c) =>
+      c.membership?.leaderId ? [c.membership.leaderId] : [],
+    );
+    const [people, sexes] = await Promise.all([
+      this.people.forDecisions([...ids, ...guides.map((g) => g.person_id), ...leaderIds]),
+      this.people.sexesOf(ids),
+    ]);
+    const nameOf = (id: string) => people.get(id)?.fullName ?? null;
+    const guideById = new Map(guides.map((g) => [g.id, g]));
+    const enrollmentOf = new Map(
+      enrolled.map((row) => [canonicalId(row.person_id), row.enrollment_id]),
+    );
     return {
       class: { id: cls.id, name: cls.name },
+      // The class's Guides, for *Swap Guide*, each with the sex of the students they follow up.
+      guides: guides.map((g) => ({
+        id: g.id,
+        person: { id: g.person_id, full_name: nameOf(g.person_id) },
+        sex: g.sex,
+        // Archived since being named: keeps their students, takes no new ones (decision 0502).
+        archived: g.archived,
+      })),
       data: ids
-        .map((id) => ({ person: { id, full_name: people.get(id)?.fullName ?? null } }))
+        .map((id) => {
+          const enrollmentId = enrollmentOf.get(canonicalId(id))!;
+          const guide = guideById.get(pairings.get(enrollmentId) ?? '');
+          const leaderId = cells.get(id)?.membership?.leaderId ?? null;
+          return {
+            enrollment_id: enrollmentId,
+            person: { id, full_name: nameOf(id) },
+            sex: sexes.get(canonicalId(id)) ?? null,
+            // Shown to the Coordinator for every student, whatever branch (owner, 2026-11-20).
+            cell_leader: leaderId === null ? null : { id: leaderId, full_name: nameOf(leaderId) },
+            guide: guide ? { id: guide.id, full_name: nameOf(guide.person_id) } : null,
+          };
+        })
         .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
     };
   }
@@ -875,6 +957,450 @@ export class EquippingService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Guides (decision 0501, points 4 and 8)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST /equipping/classes/{id}/guides`: the Coordinator names a Guide, who must be one level
+   * ahead and a member of the tree when named (owner, 2026-11-20, refused otherwise), and DREAMS
+   * shares out the students who have no Guide yet.
+   */
+  async nameGuide(
+    actor: Actor,
+    classId: string,
+    personId: string,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const person = await this.people.forDecision(personId);
+    if (!person || person.mergedIntoId !== null || (await this.isEquippingRecord(personId))) {
+      throw new NotFoundError('No such person to be a Guide.');
+    }
+    if (person.isArchived) {
+      throw new InvariantViolationError('That person is archived, so cannot guide a class.', {
+        field: 'person_id',
+      });
+    }
+    return this.write(async (trx) => {
+      const cls = await this.lockClassWithin(trx, classId);
+      const id = canonicalId(person.id);
+      const may = await this.mayGuideWithin(trx, [id], cls.level);
+      if (!may.has(id)) {
+        throw new InvariantViolationError(
+          'A Life Class Guide has passed SOL 1 and is in the tree (SKILL.md section 29).',
+          { field: 'person_id' },
+        );
+      }
+      const already = await trx
+        .selectFrom('equipping_class_guides')
+        .select('id')
+        .where('class_id', '=', classId)
+        .where('person_id', '=', id)
+        .where('removed_at', 'is', null)
+        .executeTakeFirst();
+      if (already) {
+        throw new InvariantViolationError('They are already a Guide of this class.', {
+          field: 'person_id',
+        });
+      }
+      const guide = await trx
+        .insertInto('equipping_class_guides')
+        .values({ class_id: classId, person_id: id, named_by: actor.accountId })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_class.guide_named',
+        targetType: 'equipping_class',
+        targetId: classId,
+        before: null,
+        after: { guide_person_id: id },
+      });
+      await this.shareOutWithin(trx, actor, classId);
+      const response = {
+        class_id: classId,
+        guide_id: guide.id,
+        person: { id, full_name: person.fullName },
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/guides/{guideId}/remove`: the Guide leaves the class, their
+   * row kept, and their students are shared out among those left.
+   */
+  async removeGuide(
+    actor: Actor,
+    classId: string,
+    guideId: string,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.write(async (trx) => {
+      await this.lockClassWithin(trx, classId);
+      const guide = await trx
+        .selectFrom('equipping_class_guides')
+        .select(['id', 'person_id'])
+        .where('id', '=', guideId)
+        .where('class_id', '=', classId)
+        .where('removed_at', 'is', null)
+        .executeTakeFirst();
+      if (!guide) {
+        throw new NotFoundError('No such Guide in this class.');
+      }
+      // **The students' enrollments are locked before their pairings**, the order a withdrawal,
+      // a move or an archive takes (the enrollment, then its pairing by the trigger that ends
+      // it), so a removal beside one of them waits rather than deadlocking. A pairing ended
+      // meanwhile is then skipped by the update below.
+      await trx
+        .selectFrom('equipping_enrollments')
+        .select('id')
+        .where(
+          'id',
+          'in',
+          trx
+            .selectFrom('equipping_guide_students')
+            .select('enrollment_id')
+            .where('guide_id', '=', guideId)
+            .where('ended_at', 'is', null),
+        )
+        .orderBy('id')
+        .forShare()
+        .execute();
+      await trx
+        .updateTable('equipping_guide_students')
+        .set({ ended_at: sql<Date>`now()`, ended_by: actor.accountId, end_reason: 'GUIDE_REMOVED' })
+        .where('guide_id', '=', guideId)
+        .where('ended_at', 'is', null)
+        .execute();
+      await trx
+        .updateTable('equipping_class_guides')
+        .set({ removed_at: sql<Date>`now()`, removed_by: actor.accountId })
+        .where('id', '=', guideId)
+        .execute();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_class.guide_removed',
+        targetType: 'equipping_class',
+        targetId: classId,
+        before: { guide_person_id: guide.person_id },
+        after: null,
+      });
+      await this.shareOutWithin(trx, actor, classId);
+      const response = { class_id: classId, removed: guideId };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/enrollments/{id}/guide`: *Swap Guide*, to another Guide of the same class
+   * who follows up students of the student's sex (decision 0501, point 8).
+   */
+  async swapGuide(
+    actor: Actor,
+    enrollmentId: string,
+    guideId: string,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.write(async (trx) => {
+      // **The class is locked before the enrollment**, the order naming and removing a Guide and
+      // enrolling take (they lock the class, then sharing out reads each enrollment), so a swap
+      // run beside one of them waits rather than deadlocking. An enrollment's class never
+      // changes, so reading it before the lock is safe.
+      const placed = await trx
+        .selectFrom('equipping_enrollments')
+        .select('class_id')
+        .where('id', '=', enrollmentId)
+        .executeTakeFirst();
+      if (placed) {
+        await this.lockClassWithin(trx, placed.class_id);
+      }
+      const enrollment = await this.openEnrollmentWithin(trx, enrollmentId);
+      const guide = await trx
+        .selectFrom('equipping_class_guides')
+        .select(['id', 'person_id'])
+        .where('id', '=', guideId)
+        .where('class_id', '=', enrollment.class_id)
+        .where('removed_at', 'is', null)
+        .executeTakeFirst();
+      if (!guide) {
+        throw new NotFoundError('No such Guide in this class.');
+      }
+      const archived = await this.people.archivedAtWithin(trx, [guide.person_id], new Date());
+      if (archived.size > 0) {
+        throw new InvariantViolationError(
+          'An archived Guide takes no new students (decision 0502).',
+          { field: 'guide_id' },
+        );
+      }
+      const sexes = await this.people.sexesOf([enrollment.person_id, guide.person_id]);
+      if (
+        sexes.get(canonicalId(enrollment.person_id)) !== sexes.get(canonicalId(guide.person_id))
+      ) {
+        throw new InvariantViolationError(
+          'A Guide follows up students of their own sex (SKILL.md section 29).',
+          { field: 'guide_id' },
+        );
+      }
+      const current = await trx
+        .selectFrom('equipping_guide_students as gs')
+        .innerJoin('equipping_class_guides as g', 'g.id', 'gs.guide_id')
+        .select(['gs.id', 'gs.guide_id', 'g.person_id'])
+        .where('gs.enrollment_id', '=', enrollmentId)
+        .where('gs.ended_at', 'is', null)
+        .executeTakeFirst();
+      if (current?.guide_id !== guideId) {
+        if (current) {
+          await trx
+            .updateTable('equipping_guide_students')
+            .set({ ended_at: sql<Date>`now()`, ended_by: actor.accountId, end_reason: 'SWAPPED' })
+            .where('id', '=', current.id)
+            .execute();
+        }
+        await trx
+          .insertInto('equipping_guide_students')
+          .values({ enrollment_id: enrollmentId, guide_id: guideId, started_by: actor.accountId })
+          .execute();
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_enrollment.guide_changed',
+          targetType: 'person',
+          targetId: enrollment.person_id,
+          // The Guides' Persons, as the naming and removal entries carry (section 21).
+          before: { guide_person_id: current?.person_id ?? null },
+          after: { guide_person_id: guide.person_id },
+        });
+      }
+      const response = { enrollment_id: enrollmentId, guide_id: guideId };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * **Who may guide a level: one level ahead, in the tree** (owner, 2026-11-20): for Life Class,
+   * a pass of SOL 1 or beyond, a pass from before the school included, and an open pastoral
+   * assignment. `null` asks of the whole church, for the Guide search.
+   */
+  private async mayGuideWithin(
+    executor: Db | Transaction<Database>,
+    among: readonly string[] | null,
+    level: EquippingLevel,
+  ): Promise<Set<string>> {
+    const programs = level === 'LIFE_CLASS' ? (['SOL_1', 'SOL_2', 'SOL_3'] as const) : [];
+    const passed = await this.training.holdersOfAny(among, programs);
+    const inTree = await this.hierarchy.withOpenAssignment([...passed], executor);
+    const records = await this.people.equippingAccountPersons();
+    return new Set([...inTree].filter((id) => !records.has(canonicalId(id))));
+  }
+
+  /** The class row, locked, so two writes sharing its students out never interleave. */
+  private async lockClassWithin(
+    trx: Transaction<Database>,
+    classId: string,
+  ): Promise<{ id: string; level: EquippingLevel }> {
+    // FOR NO KEY UPDATE, not FOR UPDATE: it still serialises every write that shares students
+    // out, but does not conflict with the KEY SHARE an enrollment's foreign-key check takes on
+    // the class, so two enrollments into one class wait for each other rather than deadlocking.
+    const cls = await trx
+      .selectFrom('equipping_classes')
+      .select(['id', 'level'])
+      .where('id', '=', classId)
+      .forNoKeyUpdate()
+      .executeTakeFirst();
+    if (cls === undefined) {
+      throw new NotFoundError('No such class.');
+    }
+    return cls;
+  }
+
+  /** A class's open Guides, each with their sex, in the order they were named. */
+  private async openGuidesOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+  ): Promise<{ id: string; person_id: string; sex: string | null; archived: boolean }[]> {
+    const rows = await executor
+      .selectFrom('equipping_class_guides')
+      .select(['id', 'person_id'])
+      .where('class_id', '=', classId)
+      .where('removed_at', 'is', null)
+      .orderBy('named_at')
+      .orderBy('id')
+      .execute();
+    const ids = rows.map((row) => row.person_id);
+    const [sexes, archived] = await Promise.all([
+      this.people.sexesOf(ids),
+      this.people.archivedAtWithin(executor, ids, new Date()),
+    ]);
+    return rows.map((row) => ({
+      ...row,
+      sex: sexes.get(canonicalId(row.person_id)) ?? null,
+      archived: archived.has(row.person_id),
+    }));
+  }
+
+  /** Each open enrollment of the class mapped to its open Guide's row. */
+  private async openPairingsOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+  ): Promise<Map<string, string>> {
+    const rows = await executor
+      .selectFrom('equipping_guide_students as gs')
+      .innerJoin('equipping_enrollments as e', 'e.id', 'gs.enrollment_id')
+      .select(['gs.enrollment_id', 'gs.guide_id'])
+      .where('e.class_id', '=', classId)
+      .where('e.ended_at', 'is', null)
+      .where('gs.ended_at', 'is', null)
+      .execute();
+    return new Map(rows.map((row) => [row.enrollment_id, row.guide_id]));
+  }
+
+  /**
+   * **DREAMS shares the students out among the Guides, by sex** (decision 0501, point 8): each
+   * student with no Guide, in name order, joins the Guide of their sex who has the fewest, ties
+   * going to the one named first. Naming a Guide takes nobody from another Guide (decision
+   * 0501), so groups are even only among students shared out together; the Coordinator evens
+   * the rest with *Swap*. An archived Guide takes no new students (decision 0502), and a student
+   * with no Guide of their sex to take them stays without one.
+   */
+  private async shareOutWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    classId: string,
+  ): Promise<void> {
+    await this.lockClassWithin(trx, classId);
+    const guides = await this.openGuidesOf(trx, classId);
+    if (guides.length === 0) {
+      return;
+    }
+    const enrolled = await trx
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+      .select(['e.id as enrollment_id', 'r.person_id'])
+      .where('e.class_id', '=', classId)
+      .where('e.ended_at', 'is', null)
+      .execute();
+    const pairings = await this.openPairingsOf(trx, classId);
+    const load = new Map(guides.map((g) => [g.id, 0]));
+    for (const guideId of pairings.values()) {
+      load.set(guideId, (load.get(guideId) ?? 0) + 1);
+    }
+    const unpaired = enrolled.filter((row) => !pairings.has(row.enrollment_id));
+    if (unpaired.length === 0) {
+      return;
+    }
+    // Only the enrollments about to be paired are locked, FOR SHARE and in id order, so one being
+    // ended at this moment (a move or a withdrawal, which do not lock this class) is waited for
+    // and then left out, and two moves in opposite directions do not lock each other's whole
+    // class. The WHERE is re-checked on the row as committed.
+    const stillOpen = new Set(
+      (
+        await trx
+          .selectFrom('equipping_enrollments')
+          .select('id')
+          .where(
+            'id',
+            'in',
+            unpaired.map((row) => row.enrollment_id),
+          )
+          .where('ended_at', 'is', null)
+          .orderBy('id')
+          .forShare()
+          .execute()
+      ).map((row) => row.id),
+    );
+    const waiting = unpaired.filter((row) => stillOpen.has(row.enrollment_id));
+    if (waiting.length === 0) {
+      return;
+    }
+    const [people, sexes] = await Promise.all([
+      this.people.forDecisions(waiting.map((row) => row.person_id)),
+      this.people.sexesOf(waiting.map((row) => row.person_id)),
+    ]);
+    waiting.sort((a, b) =>
+      (people.get(a.person_id)?.fullName ?? '').localeCompare(
+        people.get(b.person_id)?.fullName ?? '',
+      ),
+    );
+    for (const row of waiting) {
+      const sex = sexes.get(canonicalId(row.person_id));
+      const choices = guides.filter((g) => g.sex === sex && !g.archived);
+      if (choices.length === 0) {
+        continue;
+      }
+      const chosen = choices.reduce((best, g) =>
+        (load.get(g.id) ?? 0) < (load.get(best.id) ?? 0) ? g : best,
+      );
+      await trx
+        .insertInto('equipping_guide_students')
+        .values({
+          enrollment_id: row.enrollment_id,
+          guide_id: chosen.id,
+          started_by: actor.accountId,
+        })
+        .execute();
+      load.set(chosen.id, (load.get(chosen.id) ?? 0) + 1);
+    }
+  }
+
+  /**
+   * How many Guides each class has and how many more each sex needs (decision 0501, point 8):
+   * Life Class's 3 or 4 a Guide, counted for each sex apart, 1 or 2 students needing one and 5
+   * two. An archived Guide is named and counts toward no more, taking no new students (decision
+   * 0502). Read in four queries for the whole page rather than per class.
+   */
+  private async staffingOf(
+    classIds: readonly string[],
+  ): Promise<Map<string, { named: number; short_men: number; short_women: number }>> {
+    const result = new Map<string, { named: number; short_men: number; short_women: number }>();
+    if (classIds.length === 0) {
+      return result;
+    }
+    const [guides, enrolled] = await Promise.all([
+      this.db
+        .selectFrom('equipping_class_guides')
+        .select(['class_id', 'person_id'])
+        .where('class_id', 'in', [...classIds])
+        .where('removed_at', 'is', null)
+        .execute(),
+      this.db
+        .selectFrom('equipping_enrollments as e')
+        .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+        .select(['e.class_id', 'r.person_id'])
+        .where('e.class_id', 'in', [...classIds])
+        .where('e.ended_at', 'is', null)
+        .execute(),
+    ]);
+    const everyone = [...new Set([...guides, ...enrolled].map((row) => row.person_id))];
+    const [sexes, archived] = await Promise.all([
+      this.people.sexesOf(everyone),
+      this.people.archivedAtWithin(
+        this.db,
+        guides.map((row) => row.person_id),
+        new Date(),
+      ),
+    ]);
+    const sexOf = (id: string) => sexes.get(canonicalId(id));
+    for (const classId of classIds) {
+      const ours = guides.filter((g) => g.class_id === classId);
+      const students = enrolled.filter((e) => e.class_id === classId);
+      const shortFor = (sex: string) =>
+        Math.max(
+          0,
+          lifeClassGuidesFor(students.filter((e) => sexOf(e.person_id) === sex).length) -
+            ours.filter((g) => sexOf(g.person_id) === sex && !archived.has(g.person_id)).length,
+        );
+      result.set(classId, {
+        named: ours.length,
+        short_men: shortFor('MALE'),
+        short_women: shortFor('FEMALE'),
+      });
+    }
+    return result;
+  }
+
   /**
    * `POST /equipping/classes/{id}/enrollments` (point 11): all of them or none. Each must be
    * registered for the class's level and term, not cancelled, in no class, with a birthday,
@@ -951,6 +1477,10 @@ export class EquippingService {
         .returning(['id', 'registration_id'])
         .execute();
 
+      // A student enrolled after the class's Guides were named joins the Guide of their sex who
+      // has the fewest (owner, 2026-11-20).
+      await this.shareOutWithin(trx, actor, classId);
+
       for (const reg of regs) {
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
@@ -1023,6 +1553,8 @@ export class EquippingService {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
+      // Paired afresh in the class they move to (owner, 2026-11-20).
+      await this.shareOutWithin(trx, actor, toClassId);
 
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,

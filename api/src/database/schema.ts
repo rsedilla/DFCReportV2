@@ -421,6 +421,9 @@ export type AuditAction =
   | 'equipping_registration.cancelled'
   | 'equipping_class.created'
   | 'equipping_class.teacher_named'
+  | 'equipping_class.guide_named'
+  | 'equipping_class.guide_removed'
+  | 'equipping_enrollment.guide_changed'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
@@ -992,6 +995,29 @@ export interface EquippingEnrollmentsTable {
   withdraw_note: string | null;
 }
 
+/** A Person named a Guide of one class (section 29, decision 0501). */
+export interface EquippingClassGuidesTable {
+  id: Generated<string>;
+  class_id: string;
+  person_id: string;
+  named_by: string;
+  named_at: ServerTimestamp;
+  removed_at: Date | null;
+  removed_by: string | null;
+}
+
+/** A student's Guide in the class they are enrolled in (section 29, decision 0501). */
+export interface EquippingGuideStudentsTable {
+  id: Generated<string>;
+  enrollment_id: string;
+  guide_id: string;
+  started_by: string;
+  started_at: ServerTimestamp;
+  ended_at: Date | null;
+  ended_by: string | null;
+  end_reason: 'SWAPPED' | 'GUIDE_REMOVED' | null;
+}
+
 export interface EncounterSeasonsTable {
   id: Generated<string>;
   mens_lc_party_on: DateOnly;
@@ -1089,6 +1115,8 @@ export interface Database {
   equipping_classes: EquippingClassesTable;
   equipping_registrations: EquippingRegistrationsTable;
   equipping_enrollments: EquippingEnrollmentsTable;
+  equipping_class_guides: EquippingClassGuidesTable;
+  equipping_guide_students: EquippingGuideStudentsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;

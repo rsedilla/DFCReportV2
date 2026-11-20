@@ -571,6 +571,22 @@
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/guides",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/guides",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/guides/:guideId/remove",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/enrollments/:id/guide",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
       "route": "POST /api/v1/equipping/classes/:id/enrollments",
       "screen": "web/app/(app)/equipping/enrollment/page.tsx"
     },

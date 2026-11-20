@@ -11,7 +11,7 @@ import { type RosterCursor } from '../common/roster-cursor';
 import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
 import { databaseNow } from '../common/time/submission-window';
-import type { Database, NetworkName } from '../database/schema';
+import type { Database, NetworkName, Sex } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
 import { composeName, escapeLike, type PersonRecord, type SearchCursor } from './people.shared';
@@ -304,6 +304,23 @@ export class PeopleReadService {
       );
     }
     return this.adminAccounts.equippingAccountPersonsWithin(this.db);
+  }
+
+  /**
+   * Each Person's sex, for the school's Guides, a Guide following up students of their own sex
+   * (section 29, decision 0501). Keyed canonically; a merged-away record is left out.
+   */
+  async sexesOf(personIds: readonly string[]): Promise<Map<string, Sex>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.db
+      .selectFrom('persons')
+      .select(['id', 'sex'])
+      .where('id', 'in', [...personIds])
+      .where('merged_into_id', 'is', null)
+      .execute();
+    return new Map(rows.map((row) => [canonicalId(row.id), row.sex]));
   }
 
   /** {@link forDecisionsWithin} on the pooled connection, for a caller holding no transaction. */
