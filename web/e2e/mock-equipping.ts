@@ -158,3 +158,27 @@ export async function mockEquipping(page: Page): Promise<void> {
     ),
   );
 }
+
+/** The Register dialog's person search (decision 0499): two invented people, each with a leader. */
+export async function mockRegistrationSearch(page: Page): Promise<void> {
+  await page.route('**/api/v1/equipping/people?*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-00000000f001',
+            full_name: 'Wilma Santos',
+            member_id: 'M-000412',
+            direct_leader_name: 'Teodoro L. Cruz',
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-00000000f002',
+            full_name: 'Wilfredo Sanchez',
+            member_id: 'M-000519',
+            direct_leader_name: 'Marites D. Ramos',
+          },
+        ],
+      }),
+    ),
+  );
+}
