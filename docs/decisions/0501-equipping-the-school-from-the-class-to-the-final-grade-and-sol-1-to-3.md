@@ -89,7 +89,8 @@ who has the fewest** (owner, 2026-11-20, "Fewest students, same sex"); with no G
 named yet they read *No Guide yet*, and the Coordinator may still swap them. **Naming a Guide
 takes nobody from another Guide** (owner, 2026-11-20, "No, swap by hand"): only students with no
 Guide are shared out, so a Guide named late starts with none, and the Coordinator moves students
-to them with *Swap*.
+to them with *Swap*. **A student's own Cell leader may be their Guide** (owner, 2026-11-20,
+"yes"): nothing in sharing out or in *Swap* keeps them apart.
 
 - **Life Class: 3 or 4 a Guide, except with 1, 2 or 5 students** (owner, 2026-11-18, from a
   table of class sizes). Guides are
