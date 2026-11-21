@@ -264,7 +264,9 @@ export class EquippingAttendanceService {
     const person = (id: string | null) =>
       id === null ? null : { id, full_name: names.get(id)?.fullName ?? null };
 
-    // First name, surname, then Member ID, the title never compared (decisions 0359 and 0271).
+    // Grouped as the screen shows them, the twelve first, then each of the twelve's people under
+    // that leader, the leaders in order, then anyone else; inside each, first name, surname, then
+    // Member ID, the title never compared (decisions 0359 and 0271).
     const keyOf = (personId: string) => {
       const identity = names.get(personId);
       return {
@@ -275,7 +277,17 @@ export class EquippingAttendanceService {
     };
     return {
       data: [...placed]
-        .sort((a, b) => compareRosterKeys(keyOf(a.row.person_id), keyOf(b.row.person_id)))
+        .sort((a, b) => {
+          const rank = (p: (typeof placed)[number]) => (p.inBranch ? (p.top === null ? 0 : 1) : 2);
+          return (
+            rank(a) - rank(b) ||
+            (a.top !== null && b.top !== null
+              ? compareRosterKeys(keyOf(a.top), keyOf(b.top))
+              : 0) ||
+            (a.top ?? '').localeCompare(b.top ?? '') ||
+            compareRosterKeys(keyOf(a.row.person_id), keyOf(b.row.person_id))
+          );
+        })
         .map(({ row, inBranch, top }) => {
           const register = registers.get(row.enrollment_id) ?? new Map<number, RegisterEntry>();
           return {

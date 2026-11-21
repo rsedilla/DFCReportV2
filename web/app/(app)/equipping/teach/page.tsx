@@ -110,9 +110,8 @@ function PeopleGroup({ level, people, nothingElse }: { level: string; people: My
   }
   const groups = [
     ...(twelve.length > 0 ? [{ key: 'twelve', title: 'Your 12', people: twelve }] : []),
-    ...[...throughs.entries()]
-      .sort((a, b) => a[1].name.localeCompare(b[1].name))
-      .map(([id, group]) => ({ key: id, title: `${group.name}’s people`, people: group.people })),
+    // In the order the server gives, which orders the leaders by first name (decision 0504).
+    ...[...throughs.entries()].map(([id, group]) => ({ key: id, title: `${group.name}’s people`, people: group.people })),
     ...(others.length > 0 ? [{ key: 'others', title: 'Others', people: others }] : []),
   ];
   return (
