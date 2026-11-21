@@ -281,7 +281,10 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
               </li>
             ))}
           </ul>
-          <Table caption={`Who came to lesson ${lesson.lesson}`} className="mt-4 hidden lg:block">
+          <Table
+            caption={`Who came to lesson ${lesson.lesson}`}
+            className={cn('mt-4 hidden', ticking.length > 0 && 'lg:block')}
+          >
             <thead>
               <tr>
                 <HeaderCell className="w-20">Came</HeaderCell>

@@ -28,5 +28,10 @@ export function useMyClasses() {
     enabled: mayHoldAClass(me.data),
     staleTime: 60_000,
   });
-  return { classes: classes.data?.data ?? [], teaches: (classes.data?.data.length ?? 0) > 0 };
+  return {
+    classes: classes.data?.data ?? [],
+    teaches: (classes.data?.data.length ?? 0) > 0,
+    // Not yet answered: a page says nothing rather than "you teach no class" while it loads.
+    loading: classes.data === undefined && !classes.isError,
+  };
 }

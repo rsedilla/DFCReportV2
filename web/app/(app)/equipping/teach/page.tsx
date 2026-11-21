@@ -14,13 +14,15 @@ import { useMyClasses } from '@/lib/my-classes';
  * The item is drawn only while there is one.
  */
 export default function TeachPage() {
-  const { classes: unsorted } = useMyClasses();
+  const { classes: unsorted, loading } = useMyClasses();
   const classes = [...unsorted].sort((a, b) => a.name.localeCompare(b.name));
   const teaching = classes.filter((each) => each.role === 'TEACHER');
   const guiding = classes.filter((each) => each.role === 'GUIDE');
   return (
     <TeachFrame title="Equipping" lead="The classes you teach or guide.">
-      {classes.length === 0 ? (
+      {loading ? (
+        <p className="text-muted text-sm">Loading…</p>
+      ) : classes.length === 0 ? (
         <p className="text-muted text-sm">You do not teach or guide a class this term.</p>
       ) : (
         <div className="flex flex-col gap-6">
