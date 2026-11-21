@@ -430,9 +430,10 @@ export class EquippingAttendanceService {
         );
       }
 
-      // The students' registrations, locked as a move locks them and in one order, so a move
-      // cannot slip between reading who is enrolled here, and what an earlier class marked them,
-      // and writing; a save in another class waits here for this one (decision 0158).
+      // The students' registrations, locked as a move locks them and in one order, so a move out
+      // of this class cannot slip between reading who is enrolled here, and what an earlier class
+      // marked them, and writing (decision 0158). A move or enrollment into this class is held
+      // off by the class lock above, which their sharing out takes first.
       await trx
         .selectFrom('equipping_registrations as r')
         .select('r.id')
@@ -455,6 +456,8 @@ export class EquippingAttendanceService {
         .select(['e.id', 'r.person_id', 'e.started_at'])
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
+        // One order, so a body refused for two reasons is always refused for the same one.
+        .orderBy('e.id')
         .execute();
       // Joined after the day the lesson was held: not saved Absent, and owed it as a make-up
       // rather than an absence (decision 0503, owner ruling of 2026-11-20).
