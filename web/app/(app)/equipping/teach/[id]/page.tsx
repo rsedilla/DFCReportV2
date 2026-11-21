@@ -150,9 +150,17 @@ function markHere(student: AttendanceStudent, lesson: number) {
   return mark && mark.from_class === null && !mark.before_joining ? mark : null;
 }
 
-/** Joined after the lesson's day with no mark for it here: not ticked, made up (decision 0503). */
-function joinedAfter(student: AttendanceStudent, lesson: number, heldOn: string): boolean {
-  return markHere(student, lesson) === null && heldOn !== '' && student.joined_on > heldOn;
+/** Joined after the lesson's day: not ticked, made up (decision 0503). */
+function joinedAfter(student: AttendanceStudent, heldOn: string): boolean {
+  return heldOn !== '' && student.joined_on > heldOn;
+}
+
+/** Marked for this lesson in the class they moved from: that mark stands (decision 0503). */
+function markedElsewhere(student: AttendanceStudent, lesson: number): string | null {
+  if (markHere(student, lesson) !== null) {
+    return null;
+  }
+  return markFor(student, lesson)?.from_class?.name ?? null;
 }
 
 /**
@@ -189,8 +197,9 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
     },
   });
   // Those who had joined by the lesson's day are ticked; anyone who joined later makes it up.
-  const ticking = data.students.filter((s) => !joinedAfter(s, lesson.lesson, heldOn));
-  const later = data.students.filter((s) => joinedAfter(s, lesson.lesson, heldOn));
+  const later = data.students.filter((s) => joinedAfter(s, heldOn));
+  const elsewhere = data.students.filter((s) => !joinedAfter(s, heldOn) && markedElsewhere(s, lesson.lesson) !== null);
+  const ticking = data.students.filter((s) => !later.includes(s) && !elsewhere.includes(s));
   const absent = ticking.filter((s) => !came.has(s.enrollment_id));
   const cameCount = ticking.length - absent.length;
   const toggle = (enrollmentId: string, on: boolean) =>
@@ -306,6 +315,15 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             <p className="text-muted mt-3 text-sm">
               Joined after this lesson, so not marked and making it up instead:{' '}
               {later.map((s) => s.person.full_name ?? 'Somebody').join(', ')}.
+            </p>
+          ) : null}
+          {elsewhere.length > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Already marked for this lesson in the class they moved from:{' '}
+              {elsewhere
+                .map((s) => `${s.person.full_name ?? 'Somebody'} (${markedElsewhere(s, lesson.lesson)})`)
+                .join(', ')}
+              .
             </p>
           ) : null}
           <p className="mt-4 text-sm" role="status">
@@ -542,7 +560,8 @@ function Register({ data }: { data: ClassAttendance }) {
                       {s.person.full_name}
                       {moved.length > 0 ? (
                         <span className="text-muted block text-xs font-normal">
-                          Moved from {moved[0].from_class!.name} · {moved.map((m) => `L${m.lesson}`).join(', ')} there
+                          Moved from {[...new Set(moved.map((m) => m.from_class!.name))].join(', ')} ·{' '}
+                          {moved.map((m) => `L${m.lesson}`).join(', ')} there
                         </span>
                       ) : null}
                       {joinedLater ? (

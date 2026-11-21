@@ -194,6 +194,9 @@ test('a moved student keeps the ticks of the class they came from', async ({ pag
   await openClass(page, { joiners: true });
   const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
   const tomas = register.getByRole('row', { name: /Tomas Aquino/ });
-  await expect(tomas).toContainText('Moved from Life Class B · L1, L2 there');
-  await expect(tomas).toContainText('2 of 2');
+  await expect(tomas).toContainText('Moved from Life Class B · L1, L2, L3 there');
+  await expect(tomas).toContainText('3 of 3');
+  // Lesson 3, still to record here, was marked in Life Class B: he is named apart, not ticked.
+  await expect(page.getByRole('checkbox', { name: 'Tomas Aquino came' })).toHaveCount(0);
+  await expect(page.getByText(/Already marked for this lesson.*Tomas Aquino \(Life Class B\)/)).toBeVisible();
 });

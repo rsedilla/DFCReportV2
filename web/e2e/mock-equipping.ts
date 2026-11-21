@@ -397,7 +397,12 @@ export async function mockClassAttendance(
     cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
     guide: null,
     joined_on: '2026-11-15',
-    marks: [mark(1, true, null, { from_class: classB }), mark(2, true, null, { from_class: classB })],
+    // Lesson 3 too: Life Class B held it on the Monday before he moved, so A does not mark him.
+    marks: [
+      mark(1, true, null, { from_class: classB }),
+      mark(2, true, null, { from_class: classB }),
+      mark(3, true, null, { from_class: classB }),
+    ],
   };
   const lesson = (n: number, expected: string, extra: Record<string, unknown>) => ({
     lesson: n,

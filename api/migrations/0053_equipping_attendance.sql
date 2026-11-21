@@ -5,12 +5,12 @@
 --
 -- The Teacher ticks who came to each lesson, anyone not ticked saved Absent, and records a
 -- make-up as M with its date. Additive: an enum value nothing holds yet (it is not used in
--- this migration, so adding it inside its transaction is allowed), and three new tables owned
+-- this migration, so adding it inside its transaction is allowed), and four new tables owned
 -- by `equipping`. Nothing existing is read or rewritten, and no effective date is set.
 --
 -- **Nothing is deleted, and a correction keeps the value it corrects** (principle 12): a mark
 -- or a make-up changed is closed, with who and when, and a new row opened; a lesson's date
--- changed is written to the audit log with its before and after.
+-- changed is kept in `equipping_lesson_date_changes`, which a trigger requires.
 -- ---------------------------------------------------------------------------
 
 ALTER TYPE capability ADD VALUE IF NOT EXISTS 'equipping.class';
@@ -97,6 +97,24 @@ BEGIN
     RAISE EXCEPTION 'a lesson keeps its class and number (SKILL.md section 29)'
       USING ERRCODE = 'check_violation';
   END IF;
+  IF NEW.held_on <> OLD.held_on THEN
+    -- A date changed keeps the date it changed from, written in the same transaction
+    -- (decision 0503, principle 12).
+    IF NOT EXISTS (
+         SELECT 1 FROM equipping_lesson_date_changes c
+          WHERE c.lesson_id = NEW.id AND c.held_on_before = OLD.held_on
+            AND c.held_on_after = NEW.held_on AND c.changed_at = now()) THEN
+      RAISE EXCEPTION 'a lesson''s date changes with a record of the date it changed from (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- And may not move past a make-up of it already recorded.
+    IF EXISTS (
+         SELECT 1 FROM equipping_make_ups u
+          WHERE u.lesson_id = NEW.id AND u.superseded_at IS NULL AND u.made_up_on < NEW.held_on) THEN
+      RAISE EXCEPTION 'a lesson''s date may not move past a make-up of it (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -143,7 +161,18 @@ CREATE TRIGGER equipping_make_ups_history_kept
 -- 2026-11-20: owed as a make-up, not counted as an absence).
 CREATE FUNCTION assert_make_up_of_an_absence() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE
+  lesson_day date;
 BEGIN
+  IF NEW.superseded_at IS NULL THEN
+    -- The lesson's row held FOR SHARE, so its date cannot move under this make-up, and a make-up
+    -- falls on or after the lesson it makes up (decision 0503).
+    SELECT l.held_on INTO lesson_day FROM equipping_lessons l WHERE l.id = NEW.lesson_id FOR SHARE;
+    IF NEW.made_up_on < lesson_day THEN
+      RAISE EXCEPTION 'a make-up falls on or after the lesson it makes up (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
   IF NEW.superseded_at IS NULL AND NOT EXISTS (
        SELECT 1 FROM equipping_marks m
         WHERE m.lesson_id = NEW.lesson_id AND m.enrollment_id = NEW.enrollment_id

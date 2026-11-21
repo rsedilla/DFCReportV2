@@ -523,12 +523,41 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     expect(eli().marks).toEqual([
       expect.objectContaining({ lesson: 8, made_up_on: today, before_joining: true }),
     ]);
+
+    // The class actually met today, the day he joined: he is ticked as having come, and the
+    // make-up he no longer owes is closed rather than blocking the save.
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: today,
+      came: [ids.get('Ben'), ids.get('Carlo'), ids.get('Eli')],
+      version: 2,
+    }).expect(200);
+    r = await read(teacher);
+    expect(eli().marks).toEqual([
+      expect.objectContaining({ lesson: 8, came: true, made_up_on: null, before_joining: false }),
+    ]);
+
+    // Moved back to before he joined: his mark is closed and the lesson is before joining again,
+    // not an absence.
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Carlo')],
+      version: 3,
+    }).expect(200);
+    r = await read(teacher);
+    expect(eli().marks).toEqual([
+      expect.objectContaining({ lesson: 8, came: false, made_up_on: null, before_joining: true }),
+    ]);
   });
 
   it('carries a moved student’s marks, and makes up in the new class a lesson missed in the old', async () => {
     const ids = await idsByName();
     await post(teacher, `equipping/classes/${classId}/lessons/8`, {
       held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Carlo')],
+    }).expect(200);
+    // Lesson 9 today in A, before the move, which Carlo came to.
+    await post(teacher, `equipping/classes/${classId}/lessons/9`, {
+      held_on: today,
       came: [ids.get('Ben'), ids.get('Carlo')],
     }).expect(200);
     const classB = (
@@ -566,20 +595,24 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     };
     const carlo = inB.students.find((s) => s.person.full_name.startsWith('Carlo'))!;
     const dino = inB.students.find((s) => s.person.full_name.startsWith('Dino'))!;
-    expect(carlo.marks).toEqual([
-      expect.objectContaining({
-        lesson: 8,
-        came: true,
-        from_class: expect.objectContaining({ name: 'Life Class A' }),
-      }),
-    ]);
-    expect(dino.marks).toEqual([
-      expect.objectContaining({
-        lesson: 8,
-        came: false,
-        from_class: expect.objectContaining({ name: 'Life Class A' }),
-      }),
-    ]);
+    expect(carlo.marks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lesson: 8,
+          came: true,
+          from_class: expect.objectContaining({ name: 'Life Class A' }),
+        }),
+      ]),
+    );
+    expect(dino.marks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lesson: 8,
+          came: false,
+          from_class: expect.objectContaining({ name: 'Life Class A' }),
+        }),
+      ]),
+    );
     await post(teacher, `equipping/classes/${classB}/make-ups`, {
       enrollment_id: dino.enrollment_id,
       lesson: 8,
@@ -593,6 +626,31 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       .where('u.superseded_at', 'is', null)
       .executeTakeFirstOrThrow();
     expect(makeUp.class_id).toBe(classId);
+
+    // B holds lesson 9 later the same day, after they joined. Carlo's mark from A stands, so B
+    // neither marks him absent nor lets him be ticked again.
+    const saved = await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: today,
+      came: [],
+    }).expect(200);
+    expect(saved.body).toMatchObject({ came: 0 });
+    const carloInB = (await get(teacher, `equipping/classes/${classB}/attendance`).expect(200))
+      .body as Read & {
+      students: {
+        person: { full_name: string };
+        marks: { lesson: number; came: boolean; from_class: { name: string } | null }[];
+      }[];
+    };
+    expect(
+      carloInB.students
+        .find((s) => s.person.full_name.startsWith('Carlo'))!
+        .marks.find((m) => m.lesson === 9),
+    ).toMatchObject({ came: true, from_class: { name: 'Life Class A' } });
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: today,
+      came: [carlo.enrollment_id],
+      version: 1,
+    }).expect(422);
   });
 
   it('tells the Coordinator when a Teacher has no account to record with', async () => {
@@ -689,5 +747,27 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     await expect(sql`UPDATE equipping_lessons SET lesson = 8`.execute(db)).rejects.toThrow(
       /keeps its class and number/,
     );
+    // A date changed with no record of the date it changed from is refused (decision 0503).
+    await expect(
+      sql`UPDATE equipping_lessons SET held_on = held_on - 1`.execute(db),
+    ).rejects.toThrow(/record of the date it changed from/);
+    // And a make-up dated before its lesson.
+    const absent = await db
+      .selectFrom('equipping_marks')
+      .select(['lesson_id', 'enrollment_id'])
+      .where('came', '=', false)
+      .where('superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    await expect(
+      db
+        .insertInto('equipping_make_ups')
+        .values({
+          lesson_id: absent.lesson_id,
+          enrollment_id: absent.enrollment_id,
+          made_up_on: '2020-01-01',
+          recorded_by: teacher.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/on or after the lesson/);
   });
 });

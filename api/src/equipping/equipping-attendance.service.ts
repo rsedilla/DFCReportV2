@@ -496,19 +496,60 @@ export class EquippingAttendanceService {
         .where('superseded_at', 'is', null)
         .execute();
       const currentOf = new Map(current.map((row) => [canonicalId(row.enrollment_id), row]));
+      // Marked for this lesson in a class they moved from: that mark stands and this class does
+      // not mark them again (decision 0503, point 5: a moved student keeps their marks).
+      const carried = new Set(
+        enrolled.length === 0
+          ? []
+          : (
+              await trx
+                .selectFrom('equipping_enrollments as here')
+                .innerJoin('equipping_enrollments as before', (join) =>
+                  join
+                    .onRef('before.registration_id', '=', 'here.registration_id')
+                    .onRef('before.id', '<>', 'here.id'),
+                )
+                .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
+                .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
+                .select('here.id')
+                .where(
+                  'here.id',
+                  'in',
+                  enrolled.map((row) => row.id),
+                )
+                .where('m.superseded_at', 'is', null)
+                .where('l.lesson', '=', lesson)
+                .execute()
+            ).map((row) => canonicalId(row.id)),
+      );
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
+      // Marks closed because the lesson's day now falls before the student joined.
+      const unmarked: { person_id: string; came: boolean }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
       const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
       const marked: typeof enrolled = [];
       for (const row of enrolled) {
         const want = came.has(canonicalId(row.id));
         const was = currentOf.get(canonicalId(row.id));
-        if (!was && joinedAfter(row)) {
+        const elsewhere = !was && carried.has(canonicalId(row.id));
+        if (joinedAfter(row) || elsewhere) {
           if (want) {
             throw new ValidationFailedError(
-              'Somebody ticked joined the class after this lesson; they make it up instead.',
+              elsewhere
+                ? 'Somebody ticked was marked for this lesson in the class they moved from.'
+                : 'Somebody ticked joined the class after this lesson; they make it up instead.',
               { field: 'came' },
             );
+          }
+          // A date moved to before they joined: the lesson becomes one held before joining, owed
+          // as a make-up and not counted as an absence, so its mark is closed and none replaces it.
+          if (was) {
+            await trx
+              .updateTable('equipping_marks')
+              .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+              .where('id', '=', was.id)
+              .execute();
+            unmarked.push({ person_id: row.person_id, came: was.came });
           }
           continue;
         }
@@ -522,22 +563,23 @@ export class EquippingAttendanceService {
             .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
             .where('id', '=', was.id)
             .execute();
-          // Marked as having come after all: a make-up of the absence no longer stands.
-          if (want) {
-            const closedMakeUps = await trx
-              .updateTable('equipping_make_ups')
-              .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
-              .where('lesson_id', '=', lessonId)
-              .where('enrollment_id', '=', row.id)
-              .where('superseded_at', 'is', null)
-              .returning('made_up_on')
-              .execute();
-            for (const closedMakeUp of closedMakeUps) {
-              makeUpsClosed.push({
-                person_id: row.person_id,
-                made_up_on: String(closedMakeUp.made_up_on),
-              });
-            }
+        }
+        // Marked as having come: a make-up of the lesson no longer stands, whether it made up an
+        // absence or a lesson the date had placed before they joined.
+        if (want) {
+          const closedMakeUps = await trx
+            .updateTable('equipping_make_ups')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('lesson_id', '=', lessonId)
+            .where('enrollment_id', '=', row.id)
+            .where('superseded_at', 'is', null)
+            .returning('made_up_on')
+            .execute();
+          for (const closedMakeUp of closedMakeUps) {
+            makeUpsClosed.push({
+              person_id: row.person_id,
+              made_up_on: String(closedMakeUp.made_up_on),
+            });
           }
         }
         await trx
@@ -568,7 +610,8 @@ export class EquippingAttendanceService {
           })
           .execute();
       }
-      if (existing && (dateMoved || changed.length > 0)) {
+      const corrected = dateMoved || changed.length > 0 || unmarked.length > 0;
+      if (existing && corrected) {
         const updated = await trx
           .updateTable('equipping_lessons')
           .set({
@@ -598,7 +641,7 @@ export class EquippingAttendanceService {
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
         });
-      } else if (dateMoved || changed.length > 0) {
+      } else if (corrected) {
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
           action: 'equipping_lesson.corrected',
@@ -613,6 +656,8 @@ export class EquippingAttendanceService {
             lesson,
             held_on: body.held_on,
             marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
+            // Marks closed because the lesson's day now falls before the student joined.
+            ...(unmarked.length > 0 ? { marks_removed: unmarked } : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },

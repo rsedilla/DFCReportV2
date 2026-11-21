@@ -5,7 +5,9 @@ Owner choices of 2026-11-20, made from screenshots while the attendance step of 
 questions `architecture-guardian` raised in its review of that build ("yes all three"). Points
 1, 5 and 6 are rules; point 2 is a layout carrying three rules the owner confirmed; point 3 is
 presentation. Point 4 records what carries the step: a capability and three audit actions,
-none of which 0501 named.
+none of which 0501 named. **Point 4 is the implementer's shape, not an owner ruling**, built
+because 0501 left the capabilities to its first build step; it awaits the owner's
+confirmation, except its Senior Pastor half, which is point 6.
 
 **1. A lesson's date is weekly from the class's first lesson, and the Teacher may change it
 when saving** (owner, 2026-11-20). Lesson *n* is expected *n* − 1 weeks after the first
@@ -78,8 +80,10 @@ currently marked absent from, or of one held before they joined that carries no 
 mark saying they came is refused while one is current; a
 date change is kept as written; nothing is deleted from any of the four. The Admin's reason
 for a closed week is kept on every mark the save writes, a first one included, and in the
-audit entry. A lesson's date may not move past a make-up already recorded for it. A save carries the lesson's version, and a stale one is refused
-`VERSION_CONFLICT`. The dates in point 1 and the open weeks are the service's, read against the
-database's clock.
+audit entry. A lesson's date changes only with its date-change row, written in the same
+transaction, and may not move past a make-up already recorded for it; a make-up falls on or
+after its lesson's day, the lesson's row held while it is written. A save carries the lesson's
+version, and a stale one is refused `VERSION_CONFLICT`. Which week is open, and whether a
+student joined after a lesson, are the service's, read against the database's clock.
 
 Previous: [2026-11-20 — A Guide pairing ends with the enrollment, and an archived Guide takes no new students](0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)
