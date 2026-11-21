@@ -651,6 +651,24 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       came: [carlo.enrollment_id],
       version: 1,
     }).expect(422);
+    // And the database refuses the second mark outright (one per student per lesson number).
+    const bLesson9 = await db
+      .selectFrom('equipping_lessons')
+      .select('id')
+      .where('class_id', '=', classB)
+      .where('lesson', '=', 9)
+      .executeTakeFirstOrThrow();
+    await expect(
+      db
+        .insertInto('equipping_marks')
+        .values({
+          lesson_id: bLesson9.id,
+          enrollment_id: carlo.enrollment_id,
+          came: false,
+          recorded_by: teacher.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/one mark for a lesson/);
   });
 
   it('tells the Coordinator when a Teacher has no account to record with', async () => {

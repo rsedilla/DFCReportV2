@@ -83,7 +83,11 @@ for a closed week is kept on every mark the save writes, a first one included, a
 audit entry. A lesson's date changes only with its date-change row, written in the same
 transaction, and may not move past a make-up already recorded for it; a make-up falls on or
 after its lesson's day, the lesson's row held while it is written. A save carries the lesson's
-version, and a stale one is refused `VERSION_CONFLICT`. Which week is open, and whether a
-student joined after a lesson, are the service's, read against the database's clock.
+version, and a stale one is refused `VERSION_CONFLICT`. A student holds one current mark for
+a lesson number across the classes they have been in. Which week is open, and refusing a tick
+or a mark for a student who joined after the lesson's day, are the service's, read against the
+database's clock; the database works out the same join comparison only to admit a make-up of
+a lesson held before joining. A mark closed because a moved date put the lesson before the
+student joined is in the correction's audit entry with its old value under *before*.
 
 Previous: [2026-11-20 — A Guide pairing ends with the enrollment, and an archived Guide takes no new students](0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)

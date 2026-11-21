@@ -650,14 +650,18 @@ export class EquippingAttendanceService {
           before: {
             lesson,
             held_on: String(existing.held_on),
-            marks: changed.map((c) => ({ person_id: c.person_id, came: c.before })),
+            marks: [
+              ...changed.map((c) => ({ person_id: c.person_id, came: c.before })),
+              ...unmarked,
+            ],
           },
           after: {
             lesson,
             held_on: body.held_on,
             marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
-            // Marks closed because the lesson's day now falls before the student joined.
-            ...(unmarked.length > 0 ? { marks_removed: unmarked } : {}),
+            // Marks closed because the lesson's day now falls before the student joined: their
+            // values are in `before`, and none replaces them.
+            ...(unmarked.length > 0 ? { marks_removed: unmarked.map((u) => u.person_id) } : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
@@ -726,8 +730,18 @@ export class EquippingAttendanceService {
           field: 'lesson',
         });
       }
+      // The lesson missed, held FOR SHARE before its date is checked: for a moved student it is
+      // another class's, whose lock this save does not hold, so its date could otherwise move
+      // under the check and reach the trigger as a 500 (decision 0158).
+      const missed = await trx
+        .selectFrom('equipping_lessons')
+        .select('held_on')
+        .where('id', '=', target.lessonId)
+        .forShare()
+        .executeTakeFirstOrThrow();
+      const missedOn = String(missed.held_on);
       const today = manilaDayOf(await databaseNow(trx));
-      if (body.made_up_on > today || body.made_up_on < target.heldOn) {
+      if (body.made_up_on > today || body.made_up_on < missedOn) {
         throw new ValidationFailedError('A make-up falls between the missed lesson and today.', {
           field: 'made_up_on',
         });
