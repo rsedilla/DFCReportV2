@@ -205,11 +205,21 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     await enrol(['Ben', 'Carlo', 'Dino']);
     // Enrolled before the first lesson, as a class's students are: a student who joined after a
     // lesson is not marked for it (decision 0503), which the case below that enrols Eli pins.
-    await sql`
-      UPDATE equipping_enrollments
-         SET started_at = (${firstLesson}::date - 1)::timestamp AT TIME ZONE 'Asia/Manila'`.execute(
-      db,
-    );
+    // No route backdates an enrollment and the history trigger refuses it, so the fixture lifts
+    // the trigger inside one transaction, which restores it whatever happens.
+    await db.transaction().execute(async (trx) => {
+      await sql`ALTER TABLE equipping_enrollments DISABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+      await sql`
+        UPDATE equipping_enrollments
+           SET started_at = (${firstLesson}::date - 1)::timestamp AT TIME ZONE 'Asia/Manila'`.execute(
+        trx,
+      );
+      await sql`ALTER TABLE equipping_enrollments ENABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+    });
   });
 
   it('expects one lesson a week from the first, the Encounter taking lesson 5', () => {
@@ -234,7 +244,9 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     expect(r.role).toBe('TEACHER');
     expect(r.may_record).toBe(true);
     const carlo = r.students.find((s) => s.person.full_name.startsWith('Carlo'))!;
-    expect(carlo.marks).toEqual([{ lesson: 9, came: false, made_up_on: null }]);
+    expect(carlo.marks).toEqual([
+      expect.objectContaining({ lesson: 9, came: false, made_up_on: null }),
+    ]);
     expect(r.owed).toEqual([
       expect.objectContaining({ enrollment_id: carlo.enrollment_id, lesson: 9 }),
     ]);
@@ -624,7 +636,7 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     }).expect(201);
     let r = await read(teacher);
     expect(r.students.find((s) => s.enrollment_id === ids.get('Carlo'))!.marks).toEqual([
-      { lesson: 9, came: false, made_up_on: today },
+      expect.objectContaining({ lesson: 9, came: false, made_up_on: today }),
     ]);
     expect(r.owed.map((o) => o.enrollment_id)).toEqual([ids.get('Dino')]);
 
@@ -635,7 +647,7 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     }).expect(200);
     r = await read(teacher);
     expect(r.students.find((s) => s.enrollment_id === ids.get('Carlo'))!.marks).toEqual([
-      { lesson: 9, came: true, made_up_on: null },
+      expect.objectContaining({ lesson: 9, came: true, made_up_on: null }),
     ]);
   });
 

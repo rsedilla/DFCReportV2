@@ -1,9 +1,11 @@
 # 2026-11-20 — A lesson is dated weekly from the first, and the Teacher may change the date
 
 Owner choices of 2026-11-20, made from screenshots while the attendance step of decision 0501
-(points 10 to 12 and 21) was being built. Point 1 is a rule; points 2 and 3 are presentation,
-recorded here because they were decided in the same sitting. Point 4 records what carries the
-step: a capability and three audit actions, none of which 0501 named.
+(points 10 to 12 and 21) was being built, and owner answers of the same day to three
+questions `architecture-guardian` raised in its review of that build ("yes all three"). Points
+1, 5 and 6 are rules; point 2 is a layout carrying three rules the owner confirmed; point 3 is
+presentation. Point 4 records what carries the step: a capability and three audit actions,
+none of which 0501 named.
 
 **1. A lesson's date is weekly from the class's first lesson, and the Teacher may change it
 when saving** (owner, 2026-11-20). Lesson *n* is expected *n* − 1 weeks after the first
@@ -25,7 +27,8 @@ of three screenshots): one row an absence not yet made up, with the student's Ce
 lesson and its date, and *Record make-up*, which asks the date. The date falls between the
 missed lesson's and today; a later date given for the same make-up corrects it, the earlier
 kept. **A student later marked as having come after all no longer owes the lesson**, and a
-make-up recorded for it is closed with that save.
+make-up recorded for it is closed with that save. The layout was chosen from screenshots; the
+owner confirmed these three rules separately, on review (2026-11-20).
 
 **3. A leader's *Equipping* is grouped *Classes you teach*, then *Classes you guide***
 (owner, 2026-11-20, after Google Classroom and Canvas), each group saying what its reader
@@ -36,8 +39,8 @@ class. Their people in the school, the rest of point 21, are a later step.
 
 **4. `equipping.class`, and three audit actions.** Every route of the step takes the actor as
 its target under a new capability, `equipping.class`: every Leader holds it at
-`OWN_SUBTREE`, with or without Full view, and the school narrows it to the class they teach or
-guide; the Admin holds it at Whole Church, which reaches any class and alone changes a closed
+`OWN_SUBTREE`, with or without Full view, and so does a Senior Pastor (point 6), and the school
+narrows it to the class they teach or guide; the Admin holds it at Whole Church, which reaches any class and alone changes a closed
 week. A Coordinator reads a class's register by `equipping.coordinate` at Whole Church and
 records nothing; a Guide reads their own students alone. **Section 21 gains
 `equipping_lesson.recorded` and `.corrected`, targeting the class**, with who came and who was
@@ -45,13 +48,34 @@ absent, or the marks changed and the date before and after and the reason, **and
 `equipping_make_up.recorded`, targeting the student's Person**, with the make-up date before
 and after.
 
+**5. A student who joined after a lesson is not saved Absent for it, and makes it up; a moved
+student keeps their marks** (owner, 2026-11-20, from screenshots). A lesson the class held
+before the student joined, with no mark for it in an earlier class, is shown ○ *before they
+joined*, listed under *Make-ups still owed* as held before they joined, and **not counted as an
+absence**; the student is not ticked for it, and ticking them is refused. A student moved from
+another class of the same level and term keeps the marks that class saved, lesson by lesson,
+shown with the class's name, since a move keeps what was recorded (Section 29); a lesson missed
+there is made up from the new class and recorded against the lesson where it was missed. The
+other answer was to save such a student Absent like anybody else, which would count against
+them lessons they could not have attended. Raised by `architecture-guardian` as a Stop
+Condition, the Cell counterpart being decision 0391.
+
+**6. A Senior Pastor who teaches records their class, and naming a Teacher who cannot record
+warns** (owner, 2026-11-20). A Network root may be named a Teacher, being a current Cell Leader
+in the tree, and the Senior Pastor role now holds `equipping.class` over themselves, as a
+Leader does. Naming a Teacher who has no account, or one not yet activated or disabled, says
+so in the Coordinator's *Edit* and *Open a class* boxes; it warns and never refuses, the
+Admin giving or restoring the account as now. Raised by `architecture-guardian` as a Stop
+Condition.
+
 ## What holds it
 
 Migration 0053 adds `equipping_lessons`, `equipping_marks`, `equipping_make_ups` and
 `equipping_lesson_date_changes`. A lesson is one per class and number, lesson 5 never; a mark
 or make-up is corrected by closing it and opening another, and a closed one stays closed; a
 current one names a student of the lesson's class; a make-up is of a lesson the student is
-currently marked absent from, and a mark saying they came is refused while one is current; a
+currently marked absent from, or of one held before they joined that carries no mark, and a
+mark saying they came is refused while one is current; a
 date change is kept as written; nothing is deleted from any of the four. The Admin's reason
 for a closed week is kept on every mark the save writes, a first one included, and in the
 audit entry. A lesson's date may not move past a make-up already recorded for it. A save carries the lesson's version, and a stale one is refused

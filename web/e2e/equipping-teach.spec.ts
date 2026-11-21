@@ -165,3 +165,35 @@ test('a Teacher reads a closed week and is told only the Admin corrects it', asy
   await expect(page.getByText('Its week has closed; only the Admin corrects it.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save lesson 3' })).toHaveCount(0);
 });
+
+test('a student who joined later reads ○, is owed the lessons, and is not ticked for them', async ({ page }) => {
+  const { sent } = await openClass(page, { joiners: true });
+  const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
+  const rosa = register.getByRole('row', { name: /Rosa Villanueva/ });
+  await expect(rosa).toContainText('before they joined');
+  await expect(rosa).toContainText('Joined');
+  // Neither lesson counts against her until it is made up.
+  await expect(rosa).toContainText('0 of 0');
+
+  const owed = page.getByRole('region', { name: /Make-ups still owed/ });
+  const rosaOwed = owed.getByRole('listitem').filter({ hasText: 'Rosa Villanueva' });
+  await expect(rosaOwed).toHaveCount(2);
+  await expect(rosaOwed.first()).toContainText('held before they joined');
+  await expect(rosaOwed.first()).toContainText('not counted as an absence');
+
+  // Lesson 2 was held before she joined: she is named apart and has no tick.
+  await page.getByRole('button', { name: /L2\s*Saved/ }).click();
+  await expect(page.getByRole('checkbox', { name: 'Rosa Villanueva came' })).toHaveCount(0);
+  await expect(page.getByText(/Joined after this lesson.*Rosa Villanueva/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save lesson 2' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect((sent[0].body as { came: string[] }).came).not.toContain(ATTENDANCE_IDS.rosa);
+});
+
+test('a moved student keeps the ticks of the class they came from', async ({ page }) => {
+  await openClass(page, { joiners: true });
+  const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
+  const tomas = register.getByRole('row', { name: /Tomas Aquino/ });
+  await expect(tomas).toContainText('Moved from Life Class B · L1, L2 there');
+  await expect(tomas).toContainText('2 of 2');
+});

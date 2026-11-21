@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { mockCoordinator, mockSignedIn } from './mock-api';
-import { mockClassGuides, mockCoordinatedClasses } from './mock-equipping';
+import { mockClassGuides, mockCoordinatedClasses, mockTeacherCheck } from './mock-equipping';
 
 /**
  * The Coordinator's *Classes* (SKILL.md section 29, decision 0501). `accessibility.spec.ts`
@@ -103,4 +103,19 @@ test('Students shows each Cell leader and Guide, says No Guide yet, and swaps a 
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0].url).toMatch(/\/enrollments\/3f1b7c6e-0000-4000-8000-00000000a302\/guide$/);
   expect(sent[0].body).toEqual({ guide_id: '3f1b7c6e-0000-4000-8000-00000000a102' });
+});
+
+test('naming a Teacher with no account warns that they cannot record, and still saves', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockClassGuides(page);
+  await mockTeacherCheck(page, 'NONE');
+  await openClasses(page);
+  await page.getByRole('row', { name: /Life Class C/ }).getByRole('button', { name: 'Edit' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit Life Class C' });
+  await dialog.getByLabel('Teacher').fill('Marcel');
+  await dialog.getByLabel('Teacher').press('Enter');
+  await dialog.getByRole('button', { name: /Choose Marcelino Dizon/ }).click();
+  // Decision 0503, point 6: a warning, never a refusal.
+  await expect(dialog.getByText('Marcelino Dizon has no account yet, so they cannot record attendance. Ask the Admin.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save Teacher' })).toBeEnabled();
 });
