@@ -22,6 +22,7 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow, recordClosesAt, recordDueAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
@@ -127,6 +128,7 @@ export class EquippingAttendanceService {
     private readonly people: PeopleReadService,
     private readonly cells: CellsReadService,
     private readonly authorization: AuthorizationService,
+    private readonly hierarchy: HierarchyService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -173,6 +175,128 @@ export class EquippingAttendanceService {
             ? 'TEACHER'
             : 'GUIDE',
       })),
+    };
+  }
+
+  /**
+   * `GET /equipping/my-people`: **the reader's people in the school** (decision 0501, points 5
+   * and 21; decision 0504), each enrolled person their People access reaches, the reader
+   * themself left out, with their class, Teacher, Guide and register, read only. Each is placed
+   * under the one of the reader's twelve they are reached through, or marked one of the twelve;
+   * a person the reader's branch does not reach, which only a grant wider than the branch can
+   * give, is placed under nobody. Enrolled means an enrollment that has not ended.
+   */
+  async myPeople(actor: Actor): Promise<Record<string, unknown>> {
+    const scope = await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
+    const enrolled = (
+      await this.db
+        .selectFrom('equipping_enrollments as e')
+        .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+        .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+        .leftJoin('equipping_guide_students as gs', (join) =>
+          join.onRef('gs.enrollment_id', '=', 'e.id').on('gs.ended_at', 'is', null),
+        )
+        .leftJoin('equipping_class_guides as g', 'g.id', 'gs.guide_id')
+        .select([
+          'e.id as enrollment_id',
+          'e.registration_id',
+          'e.started_at',
+          'r.person_id',
+          'c.id as class_id',
+          'c.name as class_name',
+          'c.level',
+          'c.teacher_person_id',
+          'g.person_id as guide_person_id',
+        ])
+        .where('e.ended_at', 'is', null)
+        .execute()
+    ).filter(
+      (row) =>
+        canonicalId(row.person_id) !== canonicalId(actor.personId) &&
+        (scope.kind === 'WHOLE_CHURCH' || scope.personIds.has(canonicalId(row.person_id))),
+    );
+    if (enrolled.length === 0) {
+      return { data: [] };
+    }
+
+    // Who each person is reached through: walking up the reader's own branch to the one of
+    // their twelve it passes.
+    const leaderOf = new Map(
+      (await this.hierarchy.subtreeEdgesOf(actor.personId)).map(
+        (edge) => [canonicalId(edge.personId), canonicalId(edge.leaderId)] as const,
+      ),
+    );
+    const me = canonicalId(actor.personId);
+    const throughOf = (personId: string): { inBranch: boolean; top: string | null } => {
+      let at = canonicalId(personId);
+      for (let step = 0; step <= leaderOf.size; step++) {
+        const leader = leaderOf.get(at);
+        if (leader === undefined) {
+          return { inBranch: false, top: null };
+        }
+        if (leader === me) {
+          return { inBranch: true, top: at === canonicalId(personId) ? null : at };
+        }
+        at = leader;
+      }
+      return { inBranch: false, top: null };
+    };
+
+    const byClass = new Map<string, typeof enrolled>();
+    for (const row of enrolled) {
+      byClass.set(row.class_id, [...(byClass.get(row.class_id) ?? []), row]);
+    }
+    const registers = new Map<string, Map<number, RegisterEntry>>();
+    for (const [classId, rows] of byClass) {
+      for (const [id, register] of await this.registersOf(this.db, classId, rows)) {
+        registers.set(id, register);
+      }
+    }
+
+    const placed = enrolled.map((row) => ({ row, ...throughOf(row.person_id) }));
+    const names = await this.people.forDecisions([
+      ...enrolled.map((row) => row.person_id),
+      ...enrolled.flatMap((row) => (row.teacher_person_id ? [row.teacher_person_id] : [])),
+      ...enrolled.flatMap((row) => (row.guide_person_id ? [row.guide_person_id] : [])),
+      ...placed.flatMap((p) => (p.top ? [p.top] : [])),
+    ]);
+    const person = (id: string | null) =>
+      id === null ? null : { id, full_name: names.get(id)?.fullName ?? null };
+
+    return {
+      data: placed
+        .map(({ row, inBranch, top }) => {
+          const register = registers.get(row.enrollment_id) ?? new Map<number, RegisterEntry>();
+          return {
+            enrollment_id: row.enrollment_id,
+            person: person(row.person_id),
+            level: row.level,
+            // One of the reader's twelve; or reached through one of them, named; or neither.
+            twelve: inBranch && top === null,
+            through: top === null ? null : person(top),
+            class: { id: row.class_id, name: row.class_name },
+            teacher: person(row.teacher_person_id),
+            guide: person(row.guide_person_id),
+            joined_on: manilaDayOf(row.started_at),
+            marks: CLASS_LESSONS.flatMap((n) => {
+              const entry = register.get(n);
+              return entry
+                ? [
+                    {
+                      lesson: n,
+                      came: entry.came,
+                      made_up_on: entry.madeUpOn,
+                      held_on: entry.heldOn,
+                      before_joining: entry.beforeJoining,
+                      from_class: entry.fromClass,
+                    },
+                  ]
+                : [];
+            }),
+          };
+        })
+        // First-name order, as every list of people (decision 0359).
+        .sort((a, b) => (a.person?.full_name ?? '').localeCompare(b.person?.full_name ?? '')),
     };
   }
 

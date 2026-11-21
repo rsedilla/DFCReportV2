@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn } from './mock-api';
-import { ATTENDANCE_IDS, mockClassAttendance, mockMyClasses, mockTeacher } from './mock-equipping';
+import { ATTENDANCE_IDS, mockClassAttendance, mockMyClasses, mockSchoolPeople, mockTeacher } from './mock-equipping';
 
 /**
  * A Teacher's and a Guide's *Equipping* (SKILL.md section 29, decisions 0501 and 0503).
@@ -14,7 +14,9 @@ import { ATTENDANCE_IDS, mockClassAttendance, mockMyClasses, mockTeacher } from 
  *   - a lesson is ticked, anyone not ticked saved Absent and named above Save, and the day the
  *     class met may be changed (point 1);
  *   - make-ups are recorded from *Make-ups still owed* (point 2), and the register says M;
- *   - a Guide records nothing, and a closed week asks the Admin for a reason.
+ *   - a Guide records nothing, and a closed week asks the Admin for a reason;
+ *   - a leader who teaches nothing still has *Equipping* while one of their people is enrolled,
+ *     and reads their people one level at a time, their 12 first (decision 0504).
  */
 async function signIn(page: Page, screens: 'RECORDING' | 'FULL') {
   await mockSignedIn(page);
@@ -50,6 +52,47 @@ test('on the recording screens Equipping is an item, and the classes are grouped
   const guide = page.getByRole('region', { name: 'Classes you guide' });
   await expect(guide).toContainText('You see your own students. You record nothing.');
   await expect(guide.getByRole('link', { name: /Life Class C/ })).toBeVisible();
+});
+
+test('a leader who teaches nothing reads their people in the school, their 12 first (decision 0504)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockSignedIn(page);
+  await mockTeacher(page, 'RECORDING');
+  await mockSchoolPeople(page, true);
+  await page.route('**/api/v1/equipping/my-classes', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }),
+  );
+  await page.goto('/equipping/teach');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Equipping' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('region', { name: 'Classes you teach' })).toHaveCount(0);
+
+  const mine = page.getByRole('region', { name: 'Your people in Life Class' });
+  await expect(mine.getByRole('heading', { name: 'Your people in Life Class · 2' })).toBeVisible();
+  const headings = mine.getByRole('heading', { level: 3 });
+  await expect(headings).toHaveText(['Your 12 · 1', 'Gilbert Manalo’s people · 1']);
+  const lorna = mine.getByRole('listitem').filter({ hasText: 'Lorna Bautista' });
+  await expect(lorna).toContainText('Life Class A · Teacher Aurora Dizon');
+  await expect(lorna).toContainText('Guide: No Guide yet');
+  await expect(lorna).toContainText('1 of 2 came · L2 not made up yet');
+  await expect(mine.getByRole('listitem').filter({ hasText: 'Rosa Villanueva' })).toContainText('2 of 2 came');
+
+  await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: 'SOL 1' }).click();
+  await expect(page.getByText('None of your people are in SOL 1 this term.')).toBeVisible();
+});
+
+test('a leader with no class and nobody enrolled has no Equipping', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockSignedIn(page);
+  await mockTeacher(page, 'RECORDING');
+  await mockSchoolPeople(page);
+  await page.route('**/api/v1/equipping/my-classes', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }),
+  );
+  await page.goto('/dashboard');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'SUYNL' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Equipping' })).toHaveCount(0);
 });
 
 test('for a Full view leader on a phone Equipping is a tab of Growth, and the bar keeps five', async ({

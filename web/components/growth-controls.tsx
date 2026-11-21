@@ -90,11 +90,11 @@ export function GrowthEquippingTabs({
   );
 }
 
-/** Whether the reader's *Growth* carries *Equipping*: a Full view leader who teaches or guides. */
+/** Whether the reader's *Growth* carries *Equipping*: a Full view leader who teaches or guides, or one of whose people is enrolled. */
 export function useGrowthCarriesEquipping(): boolean {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
-  const { teaches } = useMyClasses();
-  return teaches && isBranchReader(me.data);
+  const { shows } = useMyClasses();
+  return shows && isBranchReader(me.data);
 }
 
 export function GrowthTabs({

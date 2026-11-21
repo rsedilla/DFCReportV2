@@ -45,6 +45,7 @@ import {
   mockRegistrationSearch,
   mockTeacher,
   mockMyClasses,
+  mockSchoolPeople,
   mockClassAttendance,
   ATTENDANCE_IDS,
 } from './mock-equipping';
@@ -1627,6 +1628,20 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('region', { name: 'Classes you guide' })).toBeVisible();
+    },
+  },
+  // A leader's people in the school, a card each with its register (decision 0504).
+  {
+    name: 'equipping teach, your people',
+    route: '/equipping/teach',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTeacher(page, 'RECORDING');
+      await mockMyClasses(page);
+      await mockSchoolPeople(page, true);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: 'Your people in Life Class' })).toBeVisible();
     },
   },
   // A class's attendance and its make-up dialog: the lesson row, the ticks, Make-ups still owed
