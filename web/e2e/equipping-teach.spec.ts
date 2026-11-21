@@ -210,6 +210,30 @@ test('a Guide reads the class and records nothing', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Record make-up' })).toHaveCount(0);
 });
 
+test('a Guide is told who missed the last two lessons, and a make-up takes them off it', async ({ page }) => {
+  await openClass(page, { role: 'GUIDE', missedTwice: true, joiners: true });
+  const box = page.getByRole('region', { name: /Missed the last two lessons/ });
+  await expect(box.getByRole('heading', { level: 2 })).toHaveText('Missed the last two lessons · 1');
+  await expect(box.getByRole('listitem')).toHaveCount(1);
+  await expect(box.getByRole('listitem')).toHaveText('Efren Quiambao · L2 and L3 · Cell leader Gilbert Manalo');
+  // Imelda made lesson 2 up, and Rosa joined after lessons 1 and 2: neither is named.
+  await expect(box).not.toContainText('Imelda Tolentino');
+  await expect(box).not.toContainText('Rosa Villanueva');
+});
+
+test('the missed-twice line is not drawn for a Teacher', async ({ page }) => {
+  await openClass(page, { missedTwice: true });
+  await expect(page.getByRole('heading', { name: 'Attendance so far', level: 2 })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Missed the last two lessons/ })).toHaveCount(0);
+});
+
+test('the missed-twice line is not drawn while nobody has missed two in a row', async ({ page }) => {
+  // Lesson 3 is not saved yet, so Efren has missed one lesson, not two.
+  await openClass(page, { role: 'GUIDE' });
+  await expect(page.getByRole('heading', { name: 'Attendance so far', level: 2 })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Missed the last two lessons/ })).toHaveCount(0);
+});
+
 test('a closed week is the Admin’s, and asks a reason before it saves', async ({ page }) => {
   const { sent } = await openClass(page, { role: 'ADMIN', closedThree: true });
   await expect(page.getByRole('button', { name: /L3\s*Not recorded/ })).toBeVisible();
