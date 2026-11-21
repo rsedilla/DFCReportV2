@@ -536,16 +536,19 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       expect.objectContaining({ lesson: 8, came: true, made_up_on: null, before_joining: false }),
     ]);
 
-    // Moved back to before he joined: his mark is closed and the lesson is before joining again,
-    // not an absence.
-    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+    // Moving it back to before he joined is refused: his mark, and any absence it replaced in an
+    // earlier class, would be lost with nothing saying so (architecture-guardian, fourth review).
+    const back = await post(teacher, `equipping/classes/${classId}/lessons/8`, {
       held_on: nearLesson8(0),
       came: [ids.get('Ben'), ids.get('Carlo')],
       version: 3,
-    }).expect(200);
+    }).expect(409);
+    expect((back.body as { error: { details: { field: string } } }).error.details.field).toBe(
+      'held_on',
+    );
     r = await read(teacher);
     expect(eli().marks).toEqual([
-      expect.objectContaining({ lesson: 8, came: false, made_up_on: null, before_joining: true }),
+      expect.objectContaining({ lesson: 8, came: true, before_joining: false }),
     ]);
   });
 

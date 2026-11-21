@@ -430,6 +430,25 @@ export class EquippingAttendanceService {
         );
       }
 
+      // The students' registrations, locked as a move locks them and in one order, so a move
+      // cannot slip between reading who is enrolled here, and what an earlier class marked them,
+      // and writing; a save in another class waits here for this one (decision 0158).
+      await trx
+        .selectFrom('equipping_registrations as r')
+        .select('r.id')
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('equipping_enrollments as e')
+              .select('e.id')
+              .whereRef('e.registration_id', '=', 'r.id')
+              .where('e.class_id', '=', classId)
+              .where('e.ended_at', 'is', null),
+          ),
+        )
+        .orderBy('r.id')
+        .forNoKeyUpdate()
+        .execute();
       const enrolled = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
@@ -512,7 +531,14 @@ export class EquippingAttendanceService {
               )
               .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
               .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-              .select(['here.id', 'm.id as mark_id', 'm.came', 'm.lesson_id', 'm.enrollment_id'])
+              .select([
+                'here.id',
+                'm.id as mark_id',
+                'm.came',
+                'm.lesson_id',
+                'm.enrollment_id',
+                'before.class_id',
+              ])
               .where(
                 'here.id',
                 'in',
@@ -524,10 +550,8 @@ export class EquippingAttendanceService {
         ).map((row) => [canonicalId(row.id), row] as const),
       );
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
-      // Marks closed because the lesson's day now falls before the student joined.
-      const unmarked: { person_id: string; came: boolean }[] = [];
       // Absences in an earlier class replaced by coming to this one's lesson.
-      const replacedElsewhere: { person_id: string; mark_id: string }[] = [];
+      const replacedElsewhere: { person_id: string; class_id: string; lesson: number }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
       const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
       const marked: typeof enrolled = [];
@@ -537,6 +561,15 @@ export class EquippingAttendanceService {
         const fromBefore = was ? undefined : carried.get(canonicalId(row.id));
         // Came there, or absent there and not ticked here: the earlier mark stands.
         const elsewhere = fromBefore !== undefined && (fromBefore.came || !want);
+        // A date may not move to before the day a student marked for the lesson joined: their
+        // mark, and any absence it replaced in an earlier class, would be lost with nothing
+        // saying so (architecture-guardian, fourth review). The Teacher keeps the date.
+        if (was && joinedAfter(row)) {
+          throw new InvariantViolationError(
+            'Somebody marked for this lesson joined the class after that day. Keep the date on or after the day they joined.',
+            { field: 'held_on' },
+          );
+        }
         if (joinedAfter(row) || elsewhere) {
           if (want) {
             throw new ValidationFailedError(
@@ -545,16 +578,6 @@ export class EquippingAttendanceService {
                 : 'Somebody ticked joined the class after this lesson; they make it up instead.',
               { field: 'came' },
             );
-          }
-          // A date moved to before they joined: the lesson becomes one held before joining, owed
-          // as a make-up and not counted as an absence, so its mark is closed and none replaces it.
-          if (was) {
-            await trx
-              .updateTable('equipping_marks')
-              .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
-              .where('id', '=', was.id)
-              .execute();
-            unmarked.push({ person_id: row.person_id, came: was.came });
           }
           continue;
         }
@@ -570,7 +593,18 @@ export class EquippingAttendanceService {
             .updateTable('equipping_marks')
             .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
             .where('id', '=', fromBefore.mark_id)
-            .execute();
+            .where('superseded_at', 'is', null)
+            .executeTakeFirst()
+            .then((result) => {
+              // Read under the registration lock, so it is still current; nothing matching means
+              // the premise moved and the save answers RESOURCE_BUSY rather than a 500.
+              if (result.numUpdatedRows === 0n) {
+                throw new ApiError(
+                  ApiErrorCode.RESOURCE_BUSY,
+                  'A mark of this student changed while saving. Try again.',
+                );
+              }
+            });
           const replacedMakeUps = await trx
             .updateTable('equipping_make_ups')
             .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
@@ -585,7 +619,11 @@ export class EquippingAttendanceService {
               made_up_on: String(replaced.made_up_on),
             });
           }
-          replacedElsewhere.push({ person_id: row.person_id, mark_id: fromBefore.mark_id });
+          replacedElsewhere.push({
+            person_id: row.person_id,
+            class_id: fromBefore.class_id,
+            lesson,
+          });
         }
         if (was) {
           await trx
@@ -645,7 +683,7 @@ export class EquippingAttendanceService {
           })
           .execute();
       }
-      const corrected = dateMoved || changed.length > 0 || unmarked.length > 0;
+      const corrected = dateMoved || changed.length > 0;
       if (existing && corrected) {
         const updated = await trx
           .updateTable('equipping_lessons')
@@ -674,7 +712,7 @@ export class EquippingAttendanceService {
             came: changed.filter((c) => c.came).map((c) => c.person_id),
             absent: changed.filter((c) => !c.came).map((c) => c.person_id),
             ...(replacedElsewhere.length > 0
-              ? { replaced_absences_elsewhere: replacedElsewhere.map((r) => r.person_id) }
+              ? { replaced_absences_elsewhere: replacedElsewhere }
               : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
@@ -689,20 +727,14 @@ export class EquippingAttendanceService {
           before: {
             lesson,
             held_on: String(existing.held_on),
-            marks: [
-              ...changed.map((c) => ({ person_id: c.person_id, came: c.before })),
-              ...unmarked,
-            ],
+            marks: changed.map((c) => ({ person_id: c.person_id, came: c.before })),
           },
           after: {
             lesson,
             held_on: body.held_on,
             marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
-            // Marks closed because the lesson's day now falls before the student joined: their
-            // values are in `before`, and none replaces them.
-            ...(unmarked.length > 0 ? { marks_removed: unmarked.map((u) => u.person_id) } : {}),
             ...(replacedElsewhere.length > 0
-              ? { replaced_absences_elsewhere: replacedElsewhere.map((r) => r.person_id) }
+              ? { replaced_absences_elsewhere: replacedElsewhere }
               : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),

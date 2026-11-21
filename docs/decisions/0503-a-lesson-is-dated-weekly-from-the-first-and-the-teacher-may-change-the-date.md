@@ -62,12 +62,15 @@ lesson the student missed in the earlier class and came to in the new one counts
 (owner, 2026-11-21, "Yes, replace it"): the new class's Teacher ticks them, the earlier absence
 and any make-up of it are closed and kept, and the new class's mark replaces them; left
 unticked, the earlier absence stands, and a lesson they came to in the earlier class is never
-marked again. The other answer was to refuse the tick until a make-up was recorded, so that a
-student who sat the lesson live still owed its recording; raised by `architecture-guardian` as
-a Stop Condition on its third review of the build. The
-other answer was to save such a student Absent like anybody else, which would count against
-them lessons they could not have attended. Raised by `architecture-guardian` as a Stop
-Condition, the Cell counterpart being decision 0391.
+marked again. For the joined-after rule, the other answer was to save such a student Absent
+like anybody else, which would count against them lessons they could not have attended; raised
+by `architecture-guardian` as a Stop Condition, the Cell counterpart being decision 0391. For
+the replacement, the other answer was to refuse the tick until a make-up was recorded, so that
+a student who sat the lesson live still owed its recording; raised by `architecture-guardian`
+as a Stop Condition on its third review of the build. **A lesson's date may not move to before
+the day a student marked for it joined**: their mark, and any absence it replaced, would be
+lost with nothing saying so, so the Teacher keeps the date (`architecture-guardian`, fourth
+review).
 
 **6. A Senior Pastor who teaches records their class, and naming a Teacher who cannot record
 warns** (owner, 2026-11-20). A Network root may be named a Teacher, being a current Cell Leader
@@ -90,11 +93,12 @@ for a closed week is kept on every mark the save writes, a first one included, a
 audit entry. A lesson's date changes only with its date-change row, written in the same
 transaction, and may not move past a make-up already recorded for it; a make-up falls on or
 after its lesson's day, the lesson's row held while it is written. A save carries the lesson's
-version, and a stale one is refused `VERSION_CONFLICT`. A student holds one current mark for
-a lesson number across the classes they have been in. Which week is open, and refusing a tick
-or a mark for a student who joined after the lesson's day, are the service's, read against the
+version, and a stale one is refused `VERSION_CONFLICT`. A second current mark for one student
+and lesson number across classes is refused by a trigger, and a save locks its students'
+registrations, as a move does, so two classes' saves and a move cannot race past it. Which
+week is open, refusing a tick or a mark for a student who joined after the lesson's day, and
+refusing a date before such a student's join date, are the service's, read against the
 database's clock; the database works out the same join comparison only to admit a make-up of
-a lesson held before joining. A mark closed because a moved date put the lesson before the
-student joined is in the correction's audit entry with its old value under *before*.
+a lesson held before joining.
 
 Previous: [2026-11-20 — A Guide pairing ends with the enrollment, and an archived Guide takes no new students](0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)
