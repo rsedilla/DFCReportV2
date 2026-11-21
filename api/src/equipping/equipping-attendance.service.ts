@@ -433,7 +433,7 @@ export class EquippingAttendanceService {
       const enrolled = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'r.person_id', 'e.started_at'])
+        .select(['e.id', 'e.registration_id', 'r.person_id', 'e.started_at'])
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
         // One order, so a body refused for two reasons is always refused for the same one.
@@ -503,31 +503,26 @@ export class EquippingAttendanceService {
       // the class they moved from only where this class has none (`registersOf`), so what an
       // earlier class recorded is never closed or reopened from here.
       //
-      // Marked for this lesson in a class they moved from: came there, that mark stands and is not
-      // repeated here; absent there, it stands unless they are ticked here, whose mark then reads
-      // first (decision 0503, point 5).
+      // Recorded for this lesson in a class they moved from: came there, that mark stands and is
+      // not repeated here; absent there, or made up there as a lesson held before they joined, it
+      // stands unless they are ticked here, whose mark then reads first (decision 0503, point 5).
+      // Read from the register, so the save and the screen take the same earlier class.
+      const registers = await this.registersOf(
+        trx,
+        classId,
+        enrolled.map((row) => ({
+          enrollment_id: row.id,
+          registration_id: row.registration_id,
+          started_at: row.started_at,
+        })),
+      );
       const carried = new Map(
-        (enrolled.length === 0
-          ? []
-          : await trx
-              .selectFrom('equipping_enrollments as here')
-              .innerJoin('equipping_enrollments as before', (join) =>
-                join
-                  .onRef('before.registration_id', '=', 'here.registration_id')
-                  .onRef('before.id', '<>', 'here.id'),
-              )
-              .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
-              .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-              .select(['here.id', 'm.came'])
-              .where(
-                'here.id',
-                'in',
-                enrolled.map((row) => row.id),
-              )
-              .where('m.superseded_at', 'is', null)
-              .where('l.lesson', '=', lesson)
-              .execute()
-        ).map((row) => [canonicalId(row.id), row] as const),
+        enrolled.flatMap((row) => {
+          const entry = registers.get(row.id)?.get(lesson);
+          return entry && entry.enrollmentId !== row.id
+            ? [[canonicalId(row.id), entry] as const]
+            : [];
+        }),
       );
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
       // Marks a date corrected to before the student joined removed (owner, 2026-11-21).
@@ -820,7 +815,9 @@ export class EquippingAttendanceService {
    * **Each student's register, lesson by lesson** (decision 0503, owner rulings of 2026-11-20).
    * A mark hangs on the enrollment it was saved under, and a move opens a new enrollment on the
    * same registration, so a moved student's marks are read from every class the registration
-   * has been in, this class's first (section 29: what is recorded carries with a move). A lesson
+   * has been in, the enrollment they are in now first and then the earlier ones latest first
+   * (section 29: what is recorded carries with a move), a make-up of a lesson held before they
+   * joined an earlier class carried with them as well (owner, 2026-11-21). A lesson
    * this class held before the student joined, with no mark for it anywhere, is *before
    * joining*: owed as a make-up and not an absence. Keyed by enrollment, then lesson number.
    */
@@ -836,7 +833,7 @@ export class EquippingAttendanceService {
     const all = await executor
       .selectFrom('equipping_enrollments as e')
       .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
-      .select(['e.id', 'e.registration_id', 'e.class_id', 'c.name'])
+      .select(['e.id', 'e.registration_id', 'e.class_id', 'e.started_at', 'c.name'])
       .where(
         'e.registration_id',
         'in',
@@ -870,18 +867,40 @@ export class EquippingAttendanceService {
     );
     const enrollmentById = new Map(all.map((row) => [row.id, row]));
 
+    const markKeys = new Set(marks.map((row) => `${row.lesson_id}:${row.enrollment_id}`));
+
     for (const row of rows) {
       const joinedOn = manilaDayOf(row.started_at);
       const register = new Map<number, RegisterEntry>();
       const here: RegisterEntry[] = [];
-      const elsewhere: RegisterEntry[] = [];
+      const elsewhere: { entry: RegisterEntry; startedAt: number; enrollmentId: string }[] = [];
+      // Only the enrollment the student is in now is *here*. An earlier enrollment is earlier
+      // even when it was in this same class, a student back in a class they left included.
+      const place = (enrollmentId: string, entry: RegisterEntry) => {
+        const enrollment = enrollmentById.get(enrollmentId)!;
+        if (enrollmentId === row.enrollment_id) {
+          here.push(entry);
+        } else {
+          elsewhere.push({
+            entry,
+            startedAt: enrollment.started_at.getTime(),
+            enrollmentId,
+          });
+        }
+      };
+      const fromClassOf = (enrollmentId: string) => {
+        const enrollment = enrollmentById.get(enrollmentId)!;
+        return enrollment.class_id === classId
+          ? null
+          : { id: enrollment.class_id, name: enrollment.name };
+      };
       for (const mark of marks) {
         const enrollment = enrollmentById.get(mark.enrollment_id)!;
         if (enrollment.registration_id !== row.registration_id) {
           continue;
         }
         const lesson = lessonById.get(mark.lesson_id)!;
-        const entry: RegisterEntry = {
+        place(mark.enrollment_id, {
           lesson: lesson.lesson,
           lessonId: lesson.id,
           enrollmentId: mark.enrollment_id,
@@ -889,17 +908,39 @@ export class EquippingAttendanceService {
           heldOn: String(lesson.held_on),
           madeUpOn: madeUpOf.get(`${lesson.id}:${mark.enrollment_id}`) ?? null,
           beforeJoining: false,
-          fromClass:
-            enrollment.class_id === classId
-              ? null
-              : { id: enrollment.class_id, name: enrollment.name },
-        };
-        (enrollment.class_id === classId ? here : elsewhere).push(entry);
+          fromClass: fromClassOf(mark.enrollment_id),
+        });
       }
-      // The latest class first among the others, so a lesson marked in two earlier classes reads
-      // the later one.
-      elsewhere.sort((a, b) => b.heldOn.localeCompare(a.heldOn));
-      for (const entry of [...here, ...elsewhere]) {
+      // **A make-up of a lesson held before they joined carries with a move** (owner,
+      // 2026-11-21): recorded in an earlier class with no mark behind it, it reads in the new
+      // class as made up, and is not owed again.
+      for (const makeUp of makeUps) {
+        const enrollment = enrollmentById.get(makeUp.enrollment_id)!;
+        if (
+          enrollment.registration_id !== row.registration_id ||
+          makeUp.enrollment_id === row.enrollment_id ||
+          markKeys.has(`${makeUp.lesson_id}:${makeUp.enrollment_id}`)
+        ) {
+          continue;
+        }
+        const lesson = lessonById.get(makeUp.lesson_id)!;
+        place(makeUp.enrollment_id, {
+          lesson: lesson.lesson,
+          lessonId: lesson.id,
+          enrollmentId: makeUp.enrollment_id,
+          came: false,
+          heldOn: String(lesson.held_on),
+          madeUpOn: String(makeUp.made_up_on),
+          beforeJoining: true,
+          fromClass: fromClassOf(makeUp.enrollment_id),
+        });
+      }
+      // The latest enrollment first among the earlier ones, so a lesson recorded in two earlier
+      // classes reads the one they moved from last. The same order as the save reads it.
+      elsewhere.sort(
+        (a, b) => b.startedAt - a.startedAt || a.enrollmentId.localeCompare(b.enrollmentId),
+      );
+      for (const entry of [...here, ...elsewhere.map((e) => e.entry)]) {
         if (!register.has(entry.lesson)) {
           register.set(entry.lesson, entry);
         }

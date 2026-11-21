@@ -725,6 +725,157 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     });
   });
 
+  it('carries a make-up of a lesson held before they joined, and reads the class moved from last', async () => {
+    type Register = Read & {
+      students: {
+        person: { full_name: string };
+        enrollment_id: string;
+        marks: {
+          lesson: number;
+          came: boolean;
+          made_up_on: string | null;
+          before_joining: boolean;
+          from_class: { name: string } | null;
+        }[];
+      }[];
+    };
+    const yesterdayDate = new Date(`${today}T00:00:00Z`);
+    yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    let ids = await idsByName();
+    // A holds lessons 8 and 9 before Eli joins it. Dino misses lesson 9 there.
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [ids.get('Ben'), ids.get('Carlo'), ids.get('Dino')],
+    }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/lessons/9`, {
+      held_on: yesterday,
+      came: [ids.get('Ben'), ids.get('Carlo')],
+    }).expect(200);
+    await enrol(['Eli']);
+    ids = await idsByName();
+    for (const lesson of [8, 9]) {
+      await post(teacher, `equipping/classes/${classId}/make-ups`, {
+        enrollment_id: ids.get('Eli'),
+        lesson,
+        made_up_on: today,
+      }).expect(201);
+    }
+    const newClass = async (name: string) =>
+      (
+        (
+          await post(coordinator, 'equipping/classes', {
+            ...TERM,
+            name,
+            day_of_week: 4,
+            time_of_day: '19:00',
+            first_lesson_on: firstLesson,
+            encounter_season_id: seasonId,
+            teacher_person_id: mario.id,
+          }).expect(201)
+        ).body as { id: string }
+      ).id;
+    const classB = await newClass('Life Class B');
+    const classA2 = await newClass('Life Class A2');
+    // B holds lesson 8 before Eli joins it.
+    await post(teacher, `equipping/classes/${classB}/lessons/8`, {
+      held_on: nearLesson8(0),
+      came: [],
+    }).expect(200);
+    const move = async (enrollmentId: string, to: string) => {
+      const res = await post(registrar, `equipping/enrollments/${enrollmentId}/move`, {
+        class_id: to,
+      }).expect(200);
+      return (
+        (res.body as { enrollment_id?: string; id?: string }).enrollment_id ??
+        (res.body as { id: string }).id
+      );
+    };
+    const eliInB = await move(ids.get('Eli')!, classB);
+    const registerOf = async (cls: string, enrollmentId: string) => {
+      const r = (await get(teacher, `equipping/classes/${cls}/attendance`).expect(200))
+        .body as Register;
+      return { r, student: r.students.find((s) => s.enrollment_id === enrollmentId)! };
+    };
+
+    // **The make-up carries** (owner, 2026-11-21): lesson 8 reads made up from A, not owed again.
+    let { r, student } = await registerOf(classB, eliInB);
+    expect(student.marks.find((m) => m.lesson === 8)).toMatchObject({
+      came: false,
+      made_up_on: today,
+      before_joining: true,
+      from_class: { name: 'Life Class A' },
+    });
+    expect(r.owed.filter((o) => o.enrollment_id === eliInB)).toEqual([]);
+    // Recorded again from B, it corrects the one made in A rather than adding a second.
+    await post(teacher, `equipping/classes/${classB}/make-ups`, {
+      enrollment_id: eliInB,
+      lesson: 8,
+      made_up_on: today,
+    }).expect(201);
+    const eliReg = (
+      await db
+        .selectFrom('equipping_enrollments')
+        .select('registration_id')
+        .where('id', '=', eliInB)
+        .executeTakeFirstOrThrow()
+    ).registration_id;
+    const currentMakeUps = await db
+      .selectFrom('equipping_make_ups as u')
+      .innerJoin('equipping_enrollments as e', 'e.id', 'u.enrollment_id')
+      .select('u.id')
+      .where('e.registration_id', '=', eliReg)
+      .where('u.superseded_at', 'is', null)
+      .execute();
+    expect(currentMakeUps).toHaveLength(2);
+
+    // B holds lesson 9 today, after he joined, and does not tick him: he is not saved Absent,
+    // and A's make-up reads.
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: today,
+      came: [],
+    }).expect(200);
+    const eliMarksInB = await db
+      .selectFrom('equipping_marks')
+      .select('id')
+      .where('enrollment_id', '=', eliInB)
+      .execute();
+    expect(eliMarksInB).toEqual([]);
+    ({ student } = await registerOf(classB, eliInB));
+    expect(student.marks.find((m) => m.lesson === 9)).toMatchObject({
+      made_up_on: today,
+      from_class: { name: 'Life Class A' },
+    });
+
+    // Back in A, the class he left: his earlier enrollment there is earlier, and its make-ups read.
+    const eliBackInA = await move(eliInB, classId);
+    ({ r, student } = await registerOf(classId, eliBackInA));
+    expect(student.marks.find((m) => m.lesson === 8)).toMatchObject({
+      made_up_on: today,
+      before_joining: true,
+    });
+    expect(r.owed.filter((o) => o.enrollment_id === eliBackInA)).toEqual([]);
+
+    // Moved twice: Dino missed lesson 9 in A and came to it in A2, then moves to B. B reads A2,
+    // the class he moved from last, and the save takes the same one and refuses ticking him.
+    const dinoInA2 = await move(ids.get('Dino')!, classA2);
+    await post(teacher, `equipping/classes/${classA2}/lessons/9`, {
+      held_on: today,
+      came: [dinoInA2],
+    }).expect(200);
+    const dinoInB = await move(dinoInA2, classB);
+    ({ student } = await registerOf(classB, dinoInB));
+    expect(student.marks.find((m) => m.lesson === 9)).toMatchObject({
+      came: true,
+      from_class: { name: 'Life Class A2' },
+    });
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: today,
+      came: [dinoInB],
+      version: 1,
+    }).expect(422);
+  });
+
   it('tells the Coordinator when a Teacher has no account to record with', async () => {
     const rico = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
     await assignTo(db, rico.id, ramon.id);

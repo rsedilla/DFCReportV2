@@ -52,7 +52,7 @@ and after.
 
 **5. A student who joined after a lesson is not saved Absent for it, and makes it up; a moved
 student keeps their marks** (owner, 2026-11-20, from screenshots). A lesson the class held
-before the student joined, with no mark for it in an earlier class, is shown ○ *before they
+before the student joined, with nothing recorded for it in an earlier class, is shown ○ *before they
 joined*, listed under *Make-ups still owed* as held before they joined, and **not counted as an
 absence**; the student is not ticked for it, and ticking them is refused. A student moved from
 another class of the same level and term keeps the marks that class saved, lesson by lesson,
@@ -79,6 +79,18 @@ where the current class has none. So:
   mark for that lesson from the class they moved from, that mark reads again, with its make-up.
   This applies to the students in the class; a mark in a class a student has since left is left
   as that class recorded it.
+- **A make-up of a lesson held before they joined carries with a move** (owner, 2026-11-21,
+  "Yes, it carries", from screenshots of the running app). A make-up recorded in the earlier
+  class for a lesson that class held before the student joined it has no mark behind it, and it
+  reads in the new class as an earlier mark does: made up, with the earlier class's name, not
+  owed again, and recorded again from the new class it corrects that make-up rather than adding
+  a second. Left unticked in the new class's lesson, nothing is written there and the make-up
+  reads; ticked, the new mark reads. The other answer was that the student owed it again, which
+  asked them to make up a lesson twice. Raised by `architecture-guardian` as a Stop Condition on
+  the one-class-at-a-time build, whose read and save carried an earlier class's marks only.
+- **The class moved from last is the earlier class**: a student moved twice reads, and is saved
+  against, the most recent earlier enrollment that recorded the lesson, and an enrollment in the
+  same class they left and came back to counts as earlier, not as the one they are in now.
 
 For the joined-after rule, the other answer was to save such a student Absent like anybody
 else, which would count against them lessons they could not have attended; raised by
