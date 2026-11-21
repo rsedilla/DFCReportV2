@@ -899,6 +899,14 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       from_class: { name: 'Life Class A' },
     });
     expect(r.owed.filter((o) => o.enrollment_id === eliBackInA)).toEqual([]);
+    // His earlier stint's make-up of lesson 8, whose date A has since moved past the day he first
+    // joined, stands here too, and is not changed from his enrollment now.
+    expect(student.marks.find((m) => m.lesson === 8)).toMatchObject({ made_up_on: today });
+    await post(teacher, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: eliBackInA,
+      lesson: 8,
+      made_up_on: yesterday,
+    }).expect(409);
 
     // Moved twice: Dino missed lesson 9 in A and came to it in A2, then moves to B. B reads A2,
     // the class he moved from last, and the save takes the same one and refuses ticking him.

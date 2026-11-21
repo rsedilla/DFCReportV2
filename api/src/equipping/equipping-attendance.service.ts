@@ -777,8 +777,8 @@ export class EquippingAttendanceService {
             .executeTakeFirstOrThrow();
           if (missedOn >= manilaDayOf(earlier.started_at)) {
             throw new InvariantViolationError(
-              'This make-up stands as the class it was recorded in left it: that class has since moved the lesson to after the student joined it, so it is not changed from here.',
-              { field: 'made_up_on' },
+              'This make-up stands as the class it was recorded in left it: that class has since moved the lesson to on or after the day the student joined it, so it is not changed from here.',
+              { field: 'lesson' },
             );
           }
         }
