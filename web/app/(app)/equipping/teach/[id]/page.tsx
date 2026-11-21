@@ -142,8 +142,9 @@ function ClassBody({ data }: { data: ClassAttendance }) {
 }
 
 /**
- * The two lessons a student missed in a row, or null (decision 0505): the last two lessons the
- * class has saved since they joined, absent at both and neither made up yet.
+ * The two lessons a student missed in a row, or null (decision 0505): the class's last two saved
+ * lessons in lesson order, any marked before they joined and the Encounter left out, absent at
+ * both and neither made up yet. A saved lesson with no mark for them is no absence.
  */
 function missedLastTwo(student: AttendanceStudent, lessons: ClassLesson[]): [number, number] | null {
   const lastTwo = lessons

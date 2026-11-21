@@ -7,13 +7,14 @@ particular what a make-up does to it.
 
 **1. A student is named when they were absent at the class's last two saved lessons since they
 joined, and neither is made up yet** (owner, 2026-11-22, "No, as shown"). The lessons are the
-class's saved ones, in order, leaving out any held before the student joined (decision 0503)
-and the Encounter, lesson 5, which the Registrar fills and this page does not record. A make-up
-recorded for either lesson takes the student off the line: the owner chose this over counting a
-made-up absence still, so the line names only who needs following up now. *The last two* is
+class's saved ones in lesson order, leaving out any the student's register marks before they
+joined (decision 0503) and the Encounter, lesson 5, which the Registrar fills and this page
+does not record. A make-up recorded for either lesson takes the student off the line: the owner
+chose this over counting a made-up absence still, so the line names only who needs following up now. *The last two* is
 what makes it a line about now rather than a history: a student who missed two early in the
 term and has come since is not named. A mark carried from the class a student moved from counts
-as their mark for that lesson, as the register shows it.
+as their mark for that lesson, as the register shows it, and a saved lesson with no mark for
+the student counts as no absence.
 
 **2. The line is the Guide's** (decision 0501, point 4). It sits above the lesson row on the
 class's page, headed *Missed the last two lessons* with a count, with the words *Absent at both
