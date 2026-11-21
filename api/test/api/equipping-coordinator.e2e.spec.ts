@@ -255,7 +255,11 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         coordinator,
         `equipping/coordinate/classes/${id}/clash?person_id=${mario.id}`,
       ).expect(200);
-      expect(asked.body).toEqual({ clash: { day_of_week: 2, time_of_day: '19:30' } });
+      // Mario holds no account here, which the same answer says (decision 0503, point 6).
+      expect(asked.body).toEqual({
+        clash: { day_of_week: 2, time_of_day: '19:30' },
+        account: 'NONE',
+      });
 
       const named = await post(coordinator, `equipping/classes/${id}/teacher`, {
         teacher_person_id: mario.id,
@@ -273,7 +277,7 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         coordinator,
         `equipping/coordinate/classes/${(later.body as { id: string }).id}/clash?person_id=${mario.id}`,
       ).expect(200);
-      expect(clear.body).toEqual({ clash: null });
+      expect(clear.body).toEqual({ clash: null, account: 'NONE' });
 
       // Every check is recorded under Lookups, a clash or not (owner, 2026-11-20).
       const checks = await db
@@ -289,7 +293,8 @@ describe('The Life Class Coordinator (section 29, decision 0501)', () => {
         coordinator,
         `equipping/coordinate/classes/${id}/clash?person_id=${nico.id}`,
       ).expect(200);
-      expect(notATeacher.body).toEqual({ clash: null });
+      // Somebody who may not teach is told nothing, their account included.
+      expect(notATeacher.body).toEqual({ clash: null, account: null });
 
       // Named on opening, the Teacher is checked the same way.
       const opened = await openClass(coordinator, {

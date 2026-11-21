@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { getMe, holdsWholeChurch, holdsWide, type SessionDescription } from './me';
+import { mayHoldAClass } from './my-classes';
 
 /**
  * Whether a link may be drawn: a page that does not open for this account is not offered as a
@@ -56,6 +57,11 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
   // Every account has its own Account page.
   if (at(/^\/session(\/|$)/)) {
     return true;
+  }
+  // A class's attendance opens for whoever may hold one: equipping.class at any scope, every
+  // Leader and the Admin (decision 0503). The API decides which classes each may read.
+  if (at(/^\/equipping\/teach(\/|$)/)) {
+    return mayHoldAClass(me);
   }
   // The Coordinator's Classes opens for a holder of `equipping.coordinate` at Whole Church: the
   // Admin, and a Full view Leader ticked Life Class Coordinator (decision 0501).

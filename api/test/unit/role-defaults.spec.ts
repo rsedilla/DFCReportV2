@@ -166,6 +166,8 @@ const TABLE: Record<Capability, Record<TableRole, string | null>> = {
   'equipping.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   // Section 29 (decision 0501): the Admin; a Leader only through the Coordinator's tick.
   'equipping.coordinate': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  // Section 29 (decision 0503): every Teacher records their own class, a Network root included.
+  'equipping.class': { SENIOR_PASTOR: 'OWN_SUBTREE', ADMIN: 'WHOLE_CHURCH', LEADER: 'OWN_SUBTREE' },
 };
 
 const ROLES: TableRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];
@@ -238,7 +240,8 @@ describe('the role catalog (SKILL.md section 7)', () => {
 
     it('keeps the Senior Pastors to reading, recording and reassigning (decision 0326)', () => {
       // They read the church and delegate the work: every write capability but recording
-      // what they owe and reassigning is an administrator's.
+      // what they owe and reassigning is an administrator's. Recording a class they teach is what
+      // they owe there (decision 0503, owner ruling of 2026-11-20).
       const writes = Object.keys(ROLE_DEFAULTS.SENIOR_PASTOR).filter(
         (capability) => !capability.endsWith('.view_subtree') && capability !== 'audit.view',
       );
@@ -246,6 +249,7 @@ describe('the role catalog (SKILL.md section 7)', () => {
         'cell.request_leadership',
         'cell.take_attendance',
         'dcc.take_attendance',
+        'equipping.class',
         'people.manage_pastoral_assignment',
       ]);
     });

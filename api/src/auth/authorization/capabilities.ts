@@ -55,6 +55,10 @@ export const Capability = {
   // Section 29 (decision 0501): opening a level's classes and naming their Teachers, held by
   // the Admin and by a Leader ticked a level's Coordinator.
   EquippingCoordinate: 'equipping.coordinate',
+  // Section 29 (decision 0503): a class's attendance and make-ups. Every Leader holds it over
+  // themselves and the school narrows it to the class they teach or guide; the Admin holds it
+  // at Whole Church, and corrects a week that has closed.
+  EquippingClass: 'equipping.class',
 } as const;
 
 export type Capability = (typeof Capability)[keyof typeof Capability];

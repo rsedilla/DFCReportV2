@@ -188,3 +188,48 @@ export class EquippingSearchDto {
   @MaxLength(100)
   q!: string;
 }
+
+/**
+ * A lesson saved by its Teacher (decisions 0501 and 0503): the day the class met, and who came.
+ * Anyone enrolled and not listed is saved Absent.
+ */
+export class SaveLessonDto {
+  @IsManilaCalendarDate({ message: 'held_on must be a real calendar date, YYYY-MM-DD' })
+  held_on!: string;
+
+  @IsArray()
+  // A class holds 30, more with a reason (decision 0501, point 6); 200 bounds the body.
+  @ArrayMaxSize(200)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  came!: string[];
+
+  /** The lesson's version when the page read it; required once the lesson has been saved. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  version?: number;
+
+  /** Required of the Admin correcting a lesson whose week has closed, and refused otherwise. */
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsStorableText()
+  @MinLength(1)
+  @MaxLength(500)
+  correction_reason?: string;
+}
+
+/** A make-up of a missed lesson, recorded as M with its date (decision 0501, point 12). */
+export class RecordMakeUpDto {
+  @IsUUID()
+  enrollment_id!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  lesson!: number;
+
+  @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
+  made_up_on!: string;
+}

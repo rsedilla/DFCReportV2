@@ -7,7 +7,11 @@ import { useId, type ReactNode } from 'react';
 import { PAGE_WIDTH } from '@/components/app-shell';
 import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
 import { termLabel, type Term } from '@/lib/equipping';
-import { CoordinatorPhoneTabs } from '@/components/growth-controls';
+import {
+  CoordinatorPhoneTabs,
+  GrowthEquippingTabs,
+  useGrowthCarriesEquipping,
+} from '@/components/growth-controls';
 import { coordinatesOnly, getMe } from '@/lib/me';
 import { pageIsOffered } from '@/lib/screen-guard';
 import { cn } from '@/lib/utils';
@@ -38,6 +42,7 @@ export function EquippingFrame({
   children: ReactNode;
 }) {
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const carriesEquipping = useGrowthCarriesEquipping();
   // No tabs until the server names the screens, so they never flash (owner, 2026-10-11).
   const steps =
     me.data === undefined || me.data.screens === 'EQUIPPING'
@@ -52,7 +57,13 @@ export function EquippingFrame({
         <p className="text-muted text-sm">{lead}</p>
       </div>
       {current === '/equipping/classes' && coordinatesOnly(me.data) ? (
-        <CoordinatorPhoneTabs current="/equipping/classes" />
+        carriesEquipping ? (
+          <div className="lg:hidden">
+            <GrowthEquippingTabs current="/equipping/classes" />
+          </div>
+        ) : (
+          <CoordinatorPhoneTabs current="/equipping/classes" />
+        )
       ) : null}
       {tabbed ? (
         <nav aria-label="Equipping" className={cn('mt-6', TAB_GRID, TAB_ROW)}>

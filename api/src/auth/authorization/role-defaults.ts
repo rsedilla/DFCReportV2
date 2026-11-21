@@ -77,6 +77,10 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.ConquestViewSubtree]: ScopeType.WholeChurch,
   [Capability.SuynlViewSubtree]: ScopeType.WholeChurch,
   [Capability.TrainingViewSubtree]: ScopeType.WholeChurch,
+  // A Network root may be named a class's Teacher, and records it as any Teacher does: over
+  // themselves alone, narrowed by the school to the class they teach or guide (decision 0503,
+  // owner ruling of 2026-11-20).
+  [Capability.EquippingClass]: ScopeType.OwnSubtree,
 };
 
 const ADMIN: RoleDefaults = {
@@ -121,6 +125,8 @@ const ADMIN: RoleDefaults = {
   [Capability.EquippingManage]: ScopeType.WholeChurch,
   // And every Coordinator's step (decision 0501, point 2).
   [Capability.EquippingCoordinate]: ScopeType.WholeChurch,
+  // Any class's attendance, and a week the Teacher can no longer change (decision 0501, point 11).
+  [Capability.EquippingClass]: ScopeType.WholeChurch,
 };
 
 const LEADER: RoleDefaults = {
@@ -140,6 +146,10 @@ const LEADER: RoleDefaults = {
   [Capability.CellManageLifecycle]: ScopeType.OwnSubtree,
   [Capability.ReportsViewSubtree]: ScopeType.OwnSubtree,
   ...growthAt(ScopeType.OwnSubtree, false),
+  // Over themselves alone in effect: every route of it takes the actor as its target, and the
+  // school narrows it to the class the actor teaches or guides (decision 0503). Held with or
+  // without Full view, since a Teacher records whatever their screens.
+  [Capability.EquippingClass]: ScopeType.OwnSubtree,
 };
 
 /**

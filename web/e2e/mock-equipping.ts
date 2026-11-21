@@ -282,3 +282,253 @@ export async function mockClassGuides(page: Page): Promise<{ sent: { url: string
   await page.route('**/api/v1/equipping/enrollments/*/guide', record(201));
   return { sent };
 }
+
+const TEACHER_PERSON = '3f1b7c6e-0000-4000-8000-00000000b001';
+const STUDENT_EFREN = '3f1b7c6e-0000-4000-8000-00000000b301';
+const STUDENT_IMELDA = '3f1b7c6e-0000-4000-8000-00000000b302';
+
+/**
+ * The signed-in account as a Leader who teaches (decision 0503): `equipping.class` over their
+ * own subtree, as every Leader holds it. `RECORDING` screens, or a Full view leader's.
+ */
+export async function mockTeacher(page: Page, screens: 'RECORDING' | 'FULL'): Promise<void> {
+  const grant = (capability: string, scope_type = 'OWN_SUBTREE') => ({
+    capability,
+    scope_type,
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({
+        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0e',
+        person_id: TEACHER_PERSON,
+        email: 'teacher@example.invalid',
+        first_name: 'Aurora',
+        roles: ['LEADER'],
+        screens,
+        people_i_oversee: false,
+        privacy_notice: { version: '2026-11-16', acknowledged_at: '2026-11-16T01:00:00.000Z' },
+        capabilities: [
+          grant('people.view_subtree'),
+          grant('suynl.view_subtree'),
+          grant('suynl.confirm'),
+          grant('equipping.class'),
+          ...(screens === 'FULL' ? [grant('reports.view_subtree')] : []),
+        ],
+      }),
+    ),
+  );
+}
+
+/** The classes the reader teaches or guides: one of each (decision 0503, point 3). */
+export async function mockMyClasses(page: Page): Promise<void> {
+  await page.route('**/api/v1/equipping/my-classes', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: CLASS_ID,
+            name: 'Life Class A',
+            day_of_week: 2,
+            time_of_day: '19:00',
+            first_lesson_on: '2026-11-03',
+            role: 'TEACHER',
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-00000000e002',
+            name: 'Life Class C',
+            day_of_week: 6,
+            time_of_day: '15:00',
+            first_lesson_on: '2026-11-07',
+            role: 'GUIDE',
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+type AttendanceRole = 'TEACHER' | 'GUIDE' | 'ADMIN';
+
+/**
+ * Life Class A's attendance (decisions 0501 and 0503): lessons 1 and 2 saved, lesson 3 late and
+ * still open, the rest not yet. Two students: Efren missed lesson 2 and owes its make-up, Imelda
+ * missed it and made it up. `closedThree` closes lesson 3's week, which only the Admin corrects.
+ * `joiners` adds Rosa, who joined on 15 November after lessons 1 and 2, and Tomas, moved from
+ * Life Class B where he came to both (decision 0503, points 5). Records what each write sent.
+ */
+export async function mockClassAttendance(
+  page: Page,
+  {
+    role = 'TEACHER',
+    closedThree = false,
+    joiners = false,
+  }: { role?: AttendanceRole; closedThree?: boolean; joiners?: boolean } = {},
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const mark = (
+    lesson: number,
+    came: boolean,
+    madeUpOn: string | null,
+    extra: { before_joining?: boolean; from_class?: { id: string; name: string } | null } = {},
+  ) => ({
+    lesson,
+    came,
+    made_up_on: madeUpOn,
+    held_on: lesson === 1 ? '2026-11-03' : '2026-11-10',
+    before_joining: false,
+    from_class: null,
+    ...extra,
+  });
+  const classB = { id: '3f1b7c6e-0000-4000-8000-00000000e003', name: 'Life Class B' };
+  // Moved from Life Class B too, where he missed lesson 3: ticked here only if he came here.
+  const paz = {
+    enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b305',
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b405', full_name: 'Paz Ocampo' },
+    cell_leader: null,
+    guide: null,
+    joined_on: '2026-11-15',
+    marks: [mark(3, false, null, { from_class: classB })],
+  };
+  const rosa = {
+    enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b303',
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b403', full_name: 'Rosa Villanueva' },
+    cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b502', full_name: 'Lorna Bautista' },
+    guide: null,
+    joined_on: '2026-11-15',
+    marks: [mark(1, false, null, { before_joining: true }), mark(2, false, null, { before_joining: true })],
+  };
+  const tomas = {
+    enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b304',
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b404', full_name: 'Tomas Aquino' },
+    cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
+    guide: null,
+    joined_on: '2026-11-15',
+    // Lesson 3 too: Life Class B held it on the Monday before he moved, so A does not mark him.
+    marks: [
+      mark(1, true, null, { from_class: classB }),
+      mark(2, true, null, { from_class: classB }),
+      mark(3, true, null, { from_class: classB }),
+    ],
+  };
+  const lesson = (n: number, expected: string, extra: Record<string, unknown>) => ({
+    lesson: n,
+    expected_on: expected,
+    held_on: null,
+    version: null,
+    state: 'NOT_YET',
+    open: true,
+    closes_at: '2026-12-31T16:00:00.000Z',
+    ...extra,
+  });
+  const body = {
+    class: {
+      id: CLASS_ID,
+      name: 'Life Class A',
+      day_of_week: 2,
+      time_of_day: '19:00',
+      place: 'Room 2',
+      first_lesson_on: '2026-11-03',
+    },
+    role,
+    may_record: role !== 'GUIDE',
+    may_correct_closed: role === 'ADMIN',
+    lessons: [
+      lesson(1, '2026-11-03', { held_on: '2026-11-03', version: 1, state: 'SAVED', open: false }),
+      lesson(2, '2026-11-10', { held_on: '2026-11-10', version: 1, state: 'SAVED' }),
+      lesson(3, '2026-11-17', closedThree ? { state: 'NOT_RECORDED', open: false } : { state: 'LATE' }),
+      lesson(4, '2026-11-24', {}),
+      lesson(6, '2026-12-08', {}),
+      lesson(7, '2026-12-15', {}),
+      lesson(8, '2026-12-22', {}),
+      lesson(9, '2026-12-29', {}),
+    ],
+    students: [
+      {
+        enrollment_id: STUDENT_EFREN,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao' },
+        cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
+        guide: { id: '3f1b7c6e-0000-4000-8000-00000000b601', full_name: 'Benjie Lacson' },
+        joined_on: '2026-11-01',
+        marks: [mark(1, true, null), mark(2, false, null)],
+      },
+      {
+        enrollment_id: STUDENT_IMELDA,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b402', full_name: 'Imelda Tolentino' },
+        cell_leader: null,
+        guide: null,
+        joined_on: '2026-11-01',
+        marks: [mark(1, true, null), mark(2, false, '2026-11-12')],
+      },
+      ...(joiners ? [rosa, tomas, paz] : []),
+    ],
+    owed: [
+      {
+        enrollment_id: STUDENT_EFREN,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao' },
+        cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
+        lesson: 2,
+        held_on: '2026-11-10',
+        before_joining: false,
+      },
+      ...(joiners
+        ? [1, 2].map((n) => ({
+            enrollment_id: rosa.enrollment_id,
+            person: rosa.person,
+            cell_leader: rosa.cell_leader,
+            lesson: n,
+            held_on: n === 1 ? '2026-11-03' : '2026-11-10',
+            before_joining: true,
+          }))
+        : []),
+    ],
+  };
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/attendance`, (route) =>
+    route.fulfill(json(body)),
+  );
+  const record = (status: number) => (route: import('@playwright/test').Route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }, status));
+  };
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/lessons/*`, record(200));
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/make-ups`, record(201));
+  return { sent };
+}
+
+/** Life Class A's id and its students' enrollments, for cases that assert what was sent. */
+export const ATTENDANCE_IDS = {
+  classId: CLASS_ID,
+  efren: STUDENT_EFREN,
+  imelda: STUDENT_IMELDA,
+  rosa: '3f1b7c6e-0000-4000-8000-00000000b303',
+  tomas: '3f1b7c6e-0000-4000-8000-00000000b304',
+};
+
+/**
+ * The Teacher search and the week check for Edit (decisions 0501 and 0503): Marcelino leads a
+ * Cell that does not clash and holds `account`, `NONE` by default.
+ */
+export async function mockTeacherCheck(
+  page: Page,
+  account: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' = 'NONE',
+): Promise<void> {
+  await page.route('**/api/v1/equipping/teachers?*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-00000000c001',
+            full_name: 'Marcelino Dizon',
+            member_id: 'M-000881',
+            direct_leader_name: 'Aurelio Castro',
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route('**/api/v1/equipping/coordinate/classes/*/clash?*', (route) =>
+    route.fulfill(json({ clash: null, account })),
+  );
+}

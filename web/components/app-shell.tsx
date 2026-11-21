@@ -31,6 +31,7 @@ import { buttonClasses } from '@/components/ui/button';
 import { APPLICATION_FULL_NAME, APPLICATION_NAME, LOGO_PATH } from '@/lib/brand';
 import { RECORD_PATH, REPORTS_PATH, landingPath } from '@/lib/landing';
 import { coordinatesOnly, getMe, holdsNetwork, holdsWholeChurch, holdsWide } from '@/lib/me';
+import { useMyClasses } from '@/lib/my-classes';
 import {
   noReportSection,
   reportSection,
@@ -195,6 +196,22 @@ const CLASSES: NavEntry = {
   matches: ['/equipping/classes'],
   wideOnly: true,
 };
+/**
+ * **A Teacher's or Guide's *Equipping*** (decision 0501, point 21): its own item on the recording
+ * screens, drawn only while they teach or guide a class.
+ */
+const TEACH: NavEntry = {
+  href: '/equipping/teach',
+  label: 'Equipping',
+  icon: GraduationCap,
+  matches: ['/equipping/teach'],
+};
+/** A Full view leader's SUYNL while they teach or guide: named *Growth*, holding *Equipping* too. */
+const SUYNL_AS_GROWTH: NavEntry = {
+  ...SUYNL,
+  label: 'Growth',
+  matches: ['/growth', '/equipping/teach'],
+};
 /** A Coordinator's SUYNL item, named *Growth* on a phone, where it holds *Classes* too. */
 const SUYNL_WITH_CLASSES: NavEntry = {
   ...SUYNL,
@@ -312,6 +329,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // **`Conquest` follows its capability rather than the screens** (decision 0407, by owner
   // ruling): it is the last item of any account holding `conquest.view_subtree` at Whole Church,
   // which today is the Admin and the two Senior Pastors.
+  // A Teacher's or Guide's Equipping, drawn while they teach or guide a class (decision 0501).
+  const { teaches } = useMyClasses();
   const conquest =
     me.data !== undefined &&
     (holdsWholeChurch(me.data, 'conquest.view_subtree') ||
@@ -328,13 +347,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         ...(me.data?.screens === 'EQUIPPING'
           ? [REGISTRATION, ENROLLMENT]
           : me.data?.screens === 'RECORDING'
-          ? [RECORD, PEOPLE, MY_CELL, SUYNL]
+          ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(teaches ? [TEACH] : [])]
           : me.data?.screens === 'SENIOR_PASTOR'
-            ? [SENIOR_PASTOR_ITEMS.people, SENIOR_PASTOR_ITEMS.cells, SENIOR_PASTOR_ITEMS.services]
+            ? [
+                SENIOR_PASTOR_ITEMS.people,
+                SENIOR_PASTOR_ITEMS.cells,
+                SENIOR_PASTOR_ITEMS.services,
+                // A Network root named a class's Teacher records it here (decision 0503).
+                ...(teaches ? [TEACH] : []),
+              ]
             : isBranchReader(me.data)
               ? coordinatesOnly(me.data)
-                ? [RECORD, REPORTS, PEOPLE, CELLS, SUYNL_WITH_CLASSES, CLASSES]
-                : [RECORD, REPORTS, PEOPLE, CELLS, SUYNL]
+                ? [
+                    RECORD,
+                    REPORTS,
+                    PEOPLE,
+                    CELLS,
+                    teaches ? SUYNL_AS_GROWTH : SUYNL_WITH_CLASSES,
+                    CLASSES,
+                  ]
+                : [RECORD, REPORTS, PEOPLE, CELLS, teaches ? SUYNL_AS_GROWTH : SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
         ...conquest,
         // The Admin's Equipping, after Conquest (decision 0499); a Registrar has its steps above.

@@ -98,6 +98,11 @@ export interface CoordinatedClass extends EquippingClass {
   status: 'NOT_STARTED' | 'RUNNING';
   /** How many Guides are named, and how many more the students of each sex need (decision 0501). */
   guides?: { named: number; short_men: number; short_women: number };
+  /**
+   * Lessons late, and lessons whose week closed with nothing recorded, said in words: *L1 not
+   * recorded · L3 late* (decision 0501, point 22).
+   */
+  lessons?: { late: number[]; not_recorded: number[] };
 }
 
 /** One enrolled student as the Coordinator's *Students* shows them (decision 0501). */
@@ -219,7 +224,13 @@ export async function openClass(
     encounter_season_id: string;
   },
   idempotencyKey: string,
-): Promise<EquippingClass & { clash?: CellClash | null }> {
+): Promise<
+  EquippingClass & {
+    clash?: CellClash | null;
+    /** Whether the Teacher named can record the class (decision 0503). */
+    account?: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null;
+  }
+> {
   return authenticatedRequest('/api/v1/equipping/classes', {
     method: 'POST',
     body: input,
@@ -288,7 +299,11 @@ export async function teacherClash(
   classId: string,
   personId: string,
   signal?: AbortSignal,
-): Promise<{ clash: CellClash | null }> {
+): Promise<{
+  clash: CellClash | null;
+  /** Whether they can record the class (decision 0503): their account's state, or NONE. */
+  account?: 'ACTIVE' | 'PENDING_ACTIVATION' | 'DISABLED' | 'NONE' | null;
+}> {
   return authenticatedRequest(
     `/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/clash?person_id=${encodeURIComponent(personId)}`,
     { signal },
@@ -361,4 +376,102 @@ export function currentTerm(today: Date = new Date()): Term {
 
 export function termLabel(term: Pick<Term, 'term_year' | 'term_number'>): string {
   return `Term ${term.term_number}, ${term.term_year}`;
+}
+
+/** A class the reader teaches or guides (decision 0501, point 21). */
+export interface MyClass {
+  id: string;
+  name: string;
+  day_of_week: number;
+  time_of_day: string;
+  first_lesson_on: string;
+  role: 'TEACHER' | 'GUIDE';
+}
+
+export async function listMyClasses(signal?: AbortSignal): Promise<{ data: MyClass[] }> {
+  return authenticatedRequest('/api/v1/equipping/my-classes', { signal });
+}
+
+/** Where a lesson stands (decision 0503). */
+export type LessonState = 'SAVED' | 'NOT_YET' | 'TODAY' | 'TO_RECORD' | 'LATE' | 'NOT_RECORDED';
+
+export interface ClassLesson {
+  lesson: number;
+  expected_on: string;
+  held_on: string | null;
+  version: number | null;
+  state: LessonState;
+  open: boolean;
+  closes_at: string;
+}
+
+export interface AttendanceStudent {
+  enrollment_id: string;
+  person: { id: string; full_name: string | null };
+  cell_leader: { id: string; full_name: string | null } | null;
+  guide: { id: string; full_name: string | null } | null;
+  /** The day they joined this class (decision 0503). */
+  joined_on: string;
+  marks: {
+    lesson: number;
+    came: boolean;
+    made_up_on: string | null;
+    held_on: string;
+    /** Held here before they joined: owed as a make-up, not an absence (decision 0503). */
+    before_joining: boolean;
+    /** The class it was marked in, for a student moved since; null for this class. */
+    from_class: { id: string; name: string } | null;
+  }[];
+}
+
+export interface ClassAttendance {
+  class: {
+    id: string;
+    name: string;
+    day_of_week: number;
+    time_of_day: string;
+    place: string | null;
+    first_lesson_on: string;
+  };
+  role: 'TEACHER' | 'GUIDE' | 'COORDINATOR' | 'ADMIN';
+  may_record: boolean;
+  may_correct_closed: boolean;
+  lessons: ClassLesson[];
+  students: AttendanceStudent[];
+  owed: {
+    enrollment_id: string;
+    person: { id: string; full_name: string | null };
+    cell_leader: { id: string; full_name: string | null } | null;
+    lesson: number;
+    held_on: string | null;
+    before_joining: boolean;
+  }[];
+}
+
+export async function getClassAttendance(classId: string, signal?: AbortSignal): Promise<ClassAttendance> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/attendance`, { signal });
+}
+
+export async function saveLesson(
+  classId: string,
+  lesson: number,
+  body: { held_on: string; came: string[]; version?: number; correction_reason?: string },
+  idempotencyKey: string,
+): Promise<{ lesson: number; version: number; came: number; absent: number }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/classes/${encodeURIComponent(classId)}/lessons/${lesson}`,
+    { method: 'POST', body, idempotencyKey },
+  );
+}
+
+export async function recordMakeUp(
+  classId: string,
+  body: { enrollment_id: string; lesson: number; made_up_on: string },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/make-ups`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
 }

@@ -571,6 +571,22 @@
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/my-classes",
+      "screen": "web/app/(app)/equipping/teach/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/classes/:id/attendance",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/lessons/:lesson",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/make-ups",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
       "route": "GET /api/v1/equipping/guides",
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },

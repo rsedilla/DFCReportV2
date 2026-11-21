@@ -1,0 +1,137 @@
+# 2026-11-20 — A lesson is dated weekly from the first, and the Teacher may change the date
+
+Owner choices of 2026-11-20, made from screenshots while the attendance step of decision 0501
+(points 10 to 12 and 21) was being built, and owner answers of the same day to three
+questions `architecture-guardian` raised in its review of that build ("yes all three"). Points
+1, 5 and 6 are rules; point 2 is a layout carrying three rules the owner confirmed; point 3 is
+presentation. Point 4 records what carries the step: a capability and three audit actions,
+none of which 0501 named. **Point 4 was the implementer's shape**, built because 0501 left the
+capabilities to its first build step, and **the owner confirmed it on 2026-11-21** from the
+running screens ("yes point 4 is right"); its Senior Pastor half is point 6.
+
+**1. A lesson's date is weekly from the class's first lesson, and the Teacher may change it
+when saving** (owner, 2026-11-20). Lesson *n* is expected *n* − 1 weeks after the first
+lesson, **the Encounter taking lesson 5's week**, so lesson 6 falls five weeks after the
+first. A lesson not yet recorded is placed by its expected date: *Not yet*, *Today*, *To
+record*, *Late*, or *Not recorded* once its week has closed, on Cell attendance's timing (0501
+point 11; decisions 0387 and 0434). Saving it, the Teacher may give the day the class actually
+met; that day must fall on or after the first lesson and on or before today, and from then on
+the lesson's week is the week of that day. **Both weeks must be open**, the one the lesson
+stood in and the one it moves to, or the save is the Admin's, with a reason, as any change to
+a closed week is; a lesson never recorded stands in its expected date's week, so dating it
+today does not reopen a week that has closed. A changed date is kept with the date it changed
+from (principle 12), and written to the audit log with its before and after. The
+other answer was a date the Teacher typed for every lesson, which would leave nothing to say a
+lesson was late until somebody typed one.
+
+**2. Make-ups are recorded from a *Make-ups still owed* list** (owner, 2026-11-20, option M2
+of three screenshots): one row an absence not yet made up, with the student's Cell leader, the
+lesson and its date, and *Record make-up*, which asks the date. The date falls between the
+missed lesson's and today; a later date given for the same make-up corrects it, the earlier
+kept. **A student later marked as having come after all no longer owes the lesson**, and a
+make-up recorded for it is closed with that save. The layout was chosen from screenshots; the
+owner confirmed these three rules separately, on review (2026-11-20).
+
+**3. A leader's *Equipping* is grouped *Classes you teach*, then *Classes you guide***
+(owner, 2026-11-20, after Google Classroom and Canvas), each group saying what its reader
+does: records each lesson and its make-ups, or sees their own students and records nothing.
+On the recording screens it is an item of its own; for a Full view leader it is the
+*Equipping* tab of `Growth` (0501 point 21). It is drawn while the leader teaches or guides a
+class. Their people in the school, the rest of point 21, are a later step.
+
+**4. `equipping.class`, and three audit actions.** Every route of the step takes the actor as
+its target under a new capability, `equipping.class`: every Leader holds it at
+`OWN_SUBTREE`, with or without Full view, and so does a Senior Pastor (point 6), and the school
+narrows it to the class they teach or guide; the Admin holds it at Whole Church, which reaches any class and alone changes a closed
+week. A Coordinator reads a class's register by `equipping.coordinate` at Whole Church and
+records nothing; a Guide reads their own students alone. **Section 21 gains
+`equipping_lesson.recorded` and `.corrected`, targeting the class**, with who came and who was
+absent, or the marks changed and the date before and after and the reason, **and
+`equipping_make_up.recorded`, targeting the student's Person**, with the make-up date before
+and after.
+
+**5. A student who joined after a lesson is not saved Absent for it, and makes it up; a moved
+student keeps their marks** (owner, 2026-11-20, from screenshots). A lesson the class held
+before the student joined, with nothing recorded for it in an earlier class, is shown ○ *before they
+joined*, listed under *Make-ups still owed* as held before they joined, and **not counted as an
+absence**; the student is not ticked for it, and ticking them is refused. A student moved from
+another class of the same level and term keeps the marks that class saved, lesson by lesson,
+shown with the class's name, since a move keeps what was recorded (Section 29); a lesson missed
+there is made up from the new class and recorded against the lesson where it was missed.
+
+**One class at a time** (owner, 2026-11-21, "Yes, simplify", from screenshots of the running
+app). A save writes marks in its own class and nowhere else. A moved student's register reads
+each lesson from their current class's mark first, and from the class they moved from only
+where the current class has none. So:
+
+- **A lesson missed in the earlier class and come to in the new one counts as attended**
+  (owner, 2026-11-21, "Yes, replace it"): the new class's Teacher ticks them, and the new mark
+  reads; the earlier absence and any make-up of it stay recorded as they were and are not
+  counted. Left unticked, nothing is written in the new class and the earlier absence reads. A
+  lesson they came to in the earlier class is not marked again.
+- **This needs no Admin where the earlier class's week has closed** (owner, 2026-11-21, "Yes,
+  both"): nothing of the earlier class is changed.
+- **Unticking in the new class makes them absent there** (owner, 2026-11-21): the new class's
+  absence reads, the earlier make-up does not count, and the lesson is owed again.
+- **A lesson's date corrected to before the day a student joined removes their mark for it**
+  (owner, 2026-11-21, "Remove it"): the mark is closed and kept, and the lesson becomes one held
+  before they joined, owed as a make-up and not counted as an absence; where the student has a
+  mark for that lesson from the class they moved from, that mark reads again, with its make-up.
+  This applies to the students in the class; a mark in a class a student has since left is left
+  as that class recorded it.
+- **A make-up of a lesson held before they joined carries with a move** (owner, 2026-11-21,
+  "Yes, it carries", from screenshots of the running app). A make-up recorded in the earlier
+  class for a lesson that class held before the student joined it has no mark behind it, and it
+  reads in the new class as an earlier mark does: made up, with the earlier class's name, not
+  owed again, and recorded again from the new class it corrects that make-up rather than adding
+  a second. Left unticked in the new class's lesson, nothing is written there and the make-up
+  reads; ticked, the new mark reads. **It stands as its class recorded it** (owner, 2026-11-21,
+  "Yes, keep the M", from screenshots): where the earlier class later moves that lesson to on or
+  after the day the student joined it, the make-up still reads as made up, and changing it from
+  the new class is refused, since it is no longer a lesson held before they joined and the
+  database admits no make-up of it without an absence. The other answer was that the student owed it again, which
+  asked them to make up a lesson twice. Raised by `architecture-guardian` as a Stop Condition on
+  the one-class-at-a-time build, whose read and save carried an earlier class's marks only.
+- **The class moved from last is the earlier class**: a student moved twice reads, and is saved
+  against, the most recent earlier enrollment that recorded the lesson, and an enrollment in the
+  same class they left and came back to counts as earlier, not as the one they are in now.
+
+For the joined-after rule, the other answer was to save such a student Absent like anybody
+else, which would count against them lessons they could not have attended; raised by
+`architecture-guardian` as a Stop Condition, the Cell counterpart being decision 0391. For the
+replacement, the other answer was to refuse the tick until a make-up was recorded; for the
+corrected date, to refuse the date, which left an absence nobody could correct once a date had
+been mistyped. **The first build closed and reopened another class's marks** to carry these
+answers out; four `architecture-guardian` reviews each found new defects in that machinery
+(lost make-ups, a hole in a register, races ending in a 500), and the owner chose reading the
+current class first instead, which needs no write outside the class saving.
+
+**6. A Senior Pastor who teaches records their class, and naming a Teacher who cannot record
+warns** (owner, 2026-11-20). A Network root may be named a Teacher, being a current Cell Leader
+in the tree, and the Senior Pastor role now holds `equipping.class` over themselves, as a
+Leader does. Naming a Teacher who has no account, or one not yet activated or disabled, says
+so in the Coordinator's *Edit* and *Open a class* boxes; it warns and never refuses, the
+Admin giving or restoring the account as now. Raised by `architecture-guardian` as a Stop
+Condition.
+
+## What holds it
+
+Migration 0053 adds `equipping_lessons`, `equipping_marks`, `equipping_make_ups` and
+`equipping_lesson_date_changes`. A lesson is one per class and number, lesson 5 never; a mark
+or make-up is corrected by closing it and opening another, and a closed one stays closed; a
+current one names a student of the lesson's class; a make-up is of a lesson the student is
+currently marked absent from, or of one held before they joined that carries no mark, and a
+mark saying they came is refused while one is current; a
+date change is kept as written; nothing is deleted from any of the four. The Admin's reason
+for a closed week is kept on every mark the save writes, a first one included, and in the
+audit entry. A lesson's date changes only with its date-change row, written in the same
+transaction, and may not move past a make-up already recorded for it; a make-up falls on or
+after its lesson's day, the lesson's row held while it is written. A save carries the lesson's
+version, and a stale one is refused `VERSION_CONFLICT`. Which week is open, refusing a tick or
+a mark for a student who joined after the lesson's day, removing marks when a date is corrected
+to before a student joined, and reading a moved student's current class first, are the
+service's, read against the database's clock; the database works out the same join comparison
+only to admit a make-up of a lesson held before joining. A save writes only its own class's
+marks and make-ups.
+
+Previous: [2026-11-20 — A Guide pairing ends with the enrollment, and an archived Guide takes no new students](0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)

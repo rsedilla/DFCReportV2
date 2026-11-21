@@ -3,7 +3,8 @@ import { sql, type Transaction } from 'kysely';
 
 import { AttendanceStandingService } from '../attendance/attendance-standing.service';
 import { AuditService } from '../audit/audit.service';
-import { type Actor } from '../auth/authorization/authorization.service';
+import { EquippingAttendanceService } from './equipping-attendance.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { CellsReadService } from '../cells/cells.read.service';
 import { slotsClash } from '../cells/schedule-clash';
 import {
@@ -132,12 +133,14 @@ export class EquippingService {
     private readonly people: PeopleReadService,
     private readonly hierarchy: HierarchyService,
     private readonly cells: CellsReadService,
-    private readonly attendance: AttendanceStandingService,
+    private readonly attendance: EquippingAttendanceService,
+    private readonly standing: AttendanceStandingService,
     private readonly suynl: SuynlService,
     private readonly seasons: EncounterSeasonsService,
     private readonly training: TrainingService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly authorization: AuthorizationService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -150,7 +153,7 @@ export class EquippingService {
     const [leaders, leaderNames, standing, lessons] = await Promise.all([
       this.hierarchy.directLeaderIdsOf(ids),
       this.people.directLeaderNamesOf(ids),
-      this.attendance.standingOf(ids),
+      this.standing.standingOf(ids),
       this.suynl.currentLessonsOf(ids),
     ]);
 
@@ -415,11 +418,19 @@ export class EquippingService {
     const listed = (await this.classes(query)) as { data: Record<string, unknown>[] };
     const today = await this.manilaToday();
     const staffing = await this.staffingOf(listed.data.map((row) => String(row.id)));
+    // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
+    const problems = await this.attendance.lessonProblemsOf(
+      listed.data.map((row) => ({
+        id: String(row.id),
+        first_lesson_on: String(row.first_lesson_on),
+      })),
+    );
     return {
       data: listed.data.map((row) => ({
         ...row,
         status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
         guides: staffing.get(String(row.id)) ?? { named: 0, short_men: 0, short_women: 0 },
+        lessons: problems.get(String(row.id)) ?? { late: [], not_recorded: [] },
       })),
     };
   }
@@ -515,6 +526,12 @@ export class EquippingService {
     const clash = mayTeach.has(id)
       ? await this.clashOf(id, cls.day_of_week, String(cls.time_of_day))
       : null;
+    // Whether they can record the class's attendance (decision 0503, owner ruling of
+    // 2026-11-20): a Teacher with no working account cannot, which the Coordinator is warned of
+    // and is free to save past.
+    const account = mayTeach.has(id)
+      ? ((await this.authorization.accountStatusOf(id)) ?? 'NONE')
+      : null;
     // Every check is recorded, a clash or not, so the log shows who was asked about.
     await this.db.transaction().execute((trx) =>
       this.audit.writeWithin(trx, {
@@ -525,7 +542,7 @@ export class EquippingService {
         after: { person_id: id, clash: clash !== null },
       }),
     );
-    return { clash };
+    return { clash, account };
   }
 
   private async clashOf(
@@ -860,6 +877,11 @@ export class EquippingService {
           teacher === null
             ? null
             : await this.clashOf(canonicalId(teacher.id), row.day_of_week, String(row.time_of_day)),
+        // And whether they can record it, as on Edit (decision 0503).
+        account:
+          teacher === null
+            ? null
+            : ((await this.authorization.accountStatusOf(canonicalId(teacher.id))) ?? 'NONE'),
       };
 
       await this.audit.writeWithin(trx, {
