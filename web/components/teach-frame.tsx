@@ -27,7 +27,9 @@ export function TeachFrame({
         <p className="text-muted text-sm">{lead}</p>
       </div>
       {tabbed ? <GrowthEquippingTabs current="/equipping/teach" /> : null}
-      <div className={tabbed ? TAB_PANE : 'mt-6'}>{children}</div>
+      {/* The pane has no top padding of its own (its first child brings a margin), so the
+          lesson buttons and class lists here get the same room above as the pane's bottom. */}
+      <div className={tabbed ? `${TAB_PANE} pt-5` : 'mt-6'}>{children}</div>
     </main>
   );
 }

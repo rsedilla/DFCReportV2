@@ -5,9 +5,9 @@ Owner choices of 2026-11-20, made from screenshots while the attendance step of 
 questions `architecture-guardian` raised in its review of that build ("yes all three"). Points
 1, 5 and 6 are rules; point 2 is a layout carrying three rules the owner confirmed; point 3 is
 presentation. Point 4 records what carries the step: a capability and three audit actions,
-none of which 0501 named. **Point 4 is the implementer's shape, not an owner ruling**, built
-because 0501 left the capabilities to its first build step; it awaits the owner's
-confirmation, except its Senior Pastor half, which is point 6.
+none of which 0501 named. **Point 4 was the implementer's shape**, built because 0501 left the
+capabilities to its first build step, and **the owner confirmed it on 2026-11-21** from the
+running screens ("yes point 4 is right"); its Senior Pastor half is point 6.
 
 **1. A lesson's date is weekly from the class's first lesson, and the Teacher may change it
 when saving** (owner, 2026-11-20). Lesson *n* is expected *n* − 1 weeks after the first

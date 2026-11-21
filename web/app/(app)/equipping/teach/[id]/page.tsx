@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { longDay } from '@/components/growth-controls';
 import { TeachFrame } from '@/components/teach-frame';
@@ -236,14 +236,6 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
               : ''}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-auto"
-          onClick={() => setCame(new Set(ticking.map((s) => s.enrollment_id)))}
-        >
-          Tick all
-        </Button>
       </div>
       <div className="mt-3 max-w-xs">
         <Field
@@ -262,6 +254,14 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
       ) : (
         <>
           <ul className="mt-4 flex flex-col gap-2 lg:hidden">
+            {ticking.length > 1 ? (
+              <li>
+                <label className="border-line bg-raised flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
+                  <EveryoneCame ticking={ticking} came={came} setCame={setCame} />
+                  <span className="font-semibold">Everyone came</span>
+                </label>
+              </li>
+            ) : null}
             {ticking.map((s) => (
               <li key={s.enrollment_id}>
                 <label className="border-line flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
@@ -287,7 +287,12 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
           >
             <thead>
               <tr>
-                <HeaderCell className="w-20">Came</HeaderCell>
+                <HeaderCell className="w-20">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                    <EveryoneCame ticking={ticking} came={came} setCame={setCame} />
+                    Came
+                  </label>
+                </HeaderCell>
                 <HeaderCell>Name</HeaderCell>
                 <HeaderCell>Cell leader</HeaderCell>
                 <HeaderCell>Guide</HeaderCell>
@@ -296,14 +301,17 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             <tbody>
               {ticking.map((s) => (
                 <tr key={s.enrollment_id} className={rowClasses}>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      aria-label={`${s.person.full_name ?? 'This student'} came`}
-                      className="accent-accent size-6"
-                      checked={came.has(s.enrollment_id)}
-                      onChange={(event) => toggle(s.enrollment_id, event.target.checked)}
-                    />
+                  <td className="px-1 py-0">
+                    {/* The whole cell is the target, not the 24px box alone (Material's 48px). */}
+                    <label className="flex min-h-12 min-w-12 cursor-pointer items-center justify-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`${s.person.full_name ?? 'This student'} came`}
+                        className="accent-accent size-6"
+                        checked={came.has(s.enrollment_id)}
+                        onChange={(event) => toggle(s.enrollment_id, event.target.checked)}
+                      />
+                    </label>
                   </td>
                   <th scope="row" className="px-3 py-2 text-left font-semibold">
                     {s.person.full_name}
@@ -355,12 +363,54 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
         </div>
       ) : null}
       <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-      <div className="mt-4">
+      {/* On a phone Save stays in reach above the tab bar while the list scrolls; on a laptop it
+          sits under the list. */}
+      <div className="border-line bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-4 flex items-center justify-between gap-3 border-t px-4 py-3 lg:static lg:mx-0 lg:justify-start lg:border-t-0 lg:p-0">
+        <span className="text-sm lg:hidden" aria-hidden="true">
+          {cameCount} came · {absent.length} absent
+        </span>
         <Button type="submit" className="w-auto" disabled={!canSave}>
           Save lesson {lesson.lesson}
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * **Everyone came**, the parent of the ticks (Material Design's parent checkbox, and Canvas Roll
+ * Call's Mark All Present with Unmark All): ticked when everybody is, empty when nobody is, and
+ * shown part-ticked in between. Ticking it ticks all; unticking it clears all.
+ */
+function EveryoneCame({
+  ticking,
+  came,
+  setCame,
+}: {
+  ticking: AttendanceStudent[];
+  came: Set<string>;
+  setCame: (next: Set<string>) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const ticked = ticking.filter((s) => came.has(s.enrollment_id)).length;
+  const all = ticking.length > 0 && ticked === ticking.length;
+  const some = ticked > 0 && !all;
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = some;
+    }
+  }, [some]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label="Everyone came"
+      className="accent-accent size-6 shrink-0"
+      checked={all}
+      onChange={(event) =>
+        setCame(event.target.checked ? new Set(ticking.map((s) => s.enrollment_id)) : new Set())
+      }
+    />
   );
 }
 

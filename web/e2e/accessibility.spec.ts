@@ -2434,12 +2434,12 @@ const TARGET_SWEEP = [
     teacher: true,
   },
   {
-    // A class's attendance: eight lesson buttons, Tick all, Held on, a tick for each of the two
-    // students, Save lesson 3 and one Record make-up: **fourteen**. The phone's list of ticks is
-    // hidden at this width and is not counted.
+    // A class's attendance: eight lesson buttons, Held on, Everyone came, a tick for each of the
+    // two students, Save lesson 3 and one Record make-up: **fourteen** visible. The phone's list
+    // of ticks is hidden at this width and is not measured.
     name: 'equipping teach, a class',
     route: `/equipping/teach/${ATTENDANCE_IDS.classId}`,
-    settle: 'Tick all',
+    settle: 'Save lesson 3',
     minimum: 14,
     teacher: true,
   },

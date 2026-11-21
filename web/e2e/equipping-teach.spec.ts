@@ -91,13 +91,38 @@ test('a lesson opens on the one still to record, names who will be saved absent,
 test('the Teacher may give another day the class met (decision 0503, point 1)', async ({ page }) => {
   const { sent } = await openClass(page);
   await page.getByLabel('Held on').fill('2026-11-18');
-  await page.getByRole('button', { name: 'Tick all' }).click();
+  await page.getByRole('checkbox', { name: 'Everyone came' }).check();
   await page.getByRole('button', { name: 'Save lesson 3' }).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0].body).toEqual({
     held_on: '2026-11-18',
     came: [ATTENDANCE_IDS.efren, ATTENDANCE_IDS.imelda],
   });
+});
+
+test('Everyone came ticks and clears everybody, and reads part-ticked in between', async ({ page }) => {
+  await openClass(page);
+  const everyone = page.getByRole('checkbox', { name: 'Everyone came' });
+  await everyone.check();
+  await expect(page.getByRole('checkbox', { name: 'Efren Quiambao came' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Imelda Tolentino came' })).toBeChecked();
+  await page.getByRole('checkbox', { name: 'Imelda Tolentino came' }).uncheck();
+  // Material Design's parent checkbox: part-ticked when only some are.
+  expect(await everyone.evaluate((box) => (box as HTMLInputElement).indeterminate)).toBe(true);
+  await everyone.check();
+  await everyone.uncheck();
+  await expect(page.getByRole('checkbox', { name: 'Efren Quiambao came' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Imelda Tolentino came' })).not.toBeChecked();
+});
+
+test('on a phone Save stays in reach above the tab bar', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page, 'RECORDING');
+  await mockClassAttendance(page);
+  await page.goto(`/equipping/teach/${ATTENDANCE_IDS.classId}`);
+  const save = page.getByRole('button', { name: 'Save lesson 3' });
+  await expect(save).toBeVisible();
+  await expect(save).toBeInViewport();
 });
 
 test('a saved lesson is corrected with its version', async ({ page }) => {
