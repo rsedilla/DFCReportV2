@@ -67,7 +67,13 @@ like anybody else, which would count against them lessons they could not have at
 by `architecture-guardian` as a Stop Condition, the Cell counterpart being decision 0391. For
 the replacement, the other answer was to refuse the tick until a make-up was recorded, so that
 a student who sat the lesson live still owed its recording; raised by `architecture-guardian`
-as a Stop Condition on its third review of the build. **A lesson's date may not move to before
+as a Stop Condition on its third review of the build. **The replacement is the new class's
+Teacher's to make even where the earlier class's week has closed** (owner, 2026-11-21, "Yes,
+both"): it records what happened in the new class this week rather than correcting the earlier
+class's record, which is kept and named in the audit entry. **Unticking after a replacement
+leaves the student absent in the new class**, and a make-up the replacement closed stays
+closed, the lesson being owed again (owner, 2026-11-21); nothing is reopened. Both raised by
+`architecture-guardian` as Stop Conditions on its fourth review. **A lesson's date may not move to before
 the day a student marked for it joined**: their mark, and any absence it replaced, would be
 lost with nothing saying so, so the Teacher keeps the date (`architecture-guardian`, fourth
 review).
