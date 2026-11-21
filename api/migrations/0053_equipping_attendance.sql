@@ -44,7 +44,11 @@ CREATE TABLE equipping_marks (
   correction_reason text CONSTRAINT equipping_marks_reason CHECK (
     correction_reason IS NULL OR (btrim(correction_reason) <> '' AND char_length(correction_reason) <= 500)
   ),
-  CONSTRAINT equipping_marks_superseded_whole CHECK ((superseded_at IS NULL) = (superseded_by IS NULL))
+  CONSTRAINT equipping_marks_superseded_whole CHECK ((superseded_at IS NULL) = (superseded_by IS NULL)),
+  -- The earlier class's absence this mark replaced, for a moved student who came to the lesson
+  -- here; carried through corrections, so a date later corrected to before they joined opens
+  -- that absence again (decision 0503, owner rulings of 2026-11-21).
+  replaces_mark_id uuid REFERENCES equipping_marks (id)
 );
 
 CREATE UNIQUE INDEX equipping_marks_one_current

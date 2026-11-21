@@ -536,20 +536,24 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       expect.objectContaining({ lesson: 8, came: true, made_up_on: null, before_joining: false }),
     ]);
 
-    // Moving it back to before he joined is refused: his mark, and any absence it replaced in an
-    // earlier class, would be lost with nothing saying so (architecture-guardian, fourth review).
-    const back = await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+    // Corrected back to before he joined: his mark is removed (closed and kept), and the lesson is
+    // before joining again, not an absence (owner, 2026-11-21).
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
       held_on: nearLesson8(0),
       came: [ids.get('Ben'), ids.get('Carlo')],
       version: 3,
-    }).expect(409);
-    expect((back.body as { error: { details: { field: string } } }).error.details.field).toBe(
-      'held_on',
-    );
+    }).expect(200);
     r = await read(teacher);
     expect(eli().marks).toEqual([
-      expect.objectContaining({ lesson: 8, came: true, before_joining: false }),
+      expect.objectContaining({ lesson: 8, came: false, made_up_on: null, before_joining: true }),
     ]);
+    const removed = await db
+      .selectFrom('audit_log')
+      .select('after')
+      .where('action', '=', 'equipping_lesson.corrected')
+      .orderBy('occurred_at', 'desc')
+      .executeTakeFirstOrThrow();
+    expect(removed.after).toMatchObject({ marks_removed: [expect.any(String)] });
   });
 
   it('carries a moved student’s marks, and makes up in the new class a lesson missed in the old', async () => {
@@ -715,6 +719,33 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       expect.objectContaining({ class_id: classB, came: true }),
     ]);
     expect(dinoNine).toContainEqual(expect.objectContaining({ class_id: classId, came: false }));
+
+    // B's lesson 9 corrected to yesterday, before Dino joined B: B's mark is removed, and the
+    // absence it had replaced in A is opened again, so nothing real is lost (owner, 2026-11-21).
+    const yesterday = new Date(`${today}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: yesterday.toISOString().slice(0, 10),
+      came: [],
+      version: 2,
+    }).expect(200);
+    const dinoReg = (
+      await db
+        .selectFrom('equipping_enrollments')
+        .select('registration_id')
+        .where('id', '=', dino.enrollment_id)
+        .executeTakeFirstOrThrow()
+    ).registration_id;
+    const currentNine = await db
+      .selectFrom('equipping_marks as m')
+      .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
+      .innerJoin('equipping_enrollments as e', 'e.id', 'm.enrollment_id')
+      .select(['l.class_id', 'm.came'])
+      .where('l.lesson', '=', 9)
+      .where('e.registration_id', '=', dinoReg)
+      .where('m.superseded_at', 'is', null)
+      .execute();
+    expect(currentNine).toEqual([expect.objectContaining({ class_id: classId, came: false })]);
   });
 
   it('tells the Coordinator when a Teacher has no account to record with', async () => {

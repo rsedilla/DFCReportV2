@@ -73,10 +73,14 @@ both"): it records what happened in the new class this week rather than correcti
 class's record, which is kept and named in the audit entry. **Unticking after a replacement
 leaves the student absent in the new class**, and a make-up the replacement closed stays
 closed, the lesson being owed again (owner, 2026-11-21); nothing is reopened. Both raised by
-`architecture-guardian` as Stop Conditions on its fourth review. **A lesson's date may not move to before
-the day a student marked for it joined**: their mark, and any absence it replaced, would be
-lost with nothing saying so, so the Teacher keeps the date (`architecture-guardian`, fourth
-review).
+`architecture-guardian` as Stop Conditions on its fourth review. **A lesson's date corrected to
+before the day a student joined removes their mark for it** (owner, 2026-11-21, "Remove it"),
+whether they are still in the class or have left it: the mark is closed and kept, and the
+lesson becomes one held before they joined, owed as a make-up and not counted as an absence.
+If that mark had replaced an absence from an earlier class, the absence is opened again, so
+nothing real is lost. The other answer was to refuse such a date, which left a student with
+an absence nobody could correct when a date had been mistyped; raised by
+`architecture-guardian` as a Stop Condition on its final review.
 
 **6. A Senior Pastor who teaches records their class, and naming a Teacher who cannot record
 warns** (owner, 2026-11-20). A Network root may be named a Teacher, being a current Cell Leader
@@ -101,10 +105,11 @@ transaction, and may not move past a make-up already recorded for it; a make-up 
 after its lesson's day, the lesson's row held while it is written. A save carries the lesson's
 version, and a stale one is refused `VERSION_CONFLICT`. A second current mark for one student
 and lesson number across classes is refused by a trigger, and a save locks its students'
-registrations, as a move does, so two classes' saves and a move cannot race past it. Which
-week is open, refusing a tick or a mark for a student who joined after the lesson's day, and
-refusing a date before such a student's join date, are the service's, read against the
-database's clock; the database works out the same join comparison only to admit a make-up of
-a lesson held before joining.
+registrations, as a move does, so a move cannot race past it. A mark that replaced an earlier
+class's absence names it, through corrections, so removing it can open that absence again.
+Which week is open, refusing a tick or a mark for a student who joined after the lesson's day,
+and removing marks when a date is corrected to before a student joined, are the service's,
+read against the database's clock; the database works out the same join comparison only to
+admit a make-up of a lesson held before joining.
 
 Previous: [2026-11-20 — A Guide pairing ends with the enrollment, and an archived Guide takes no new students](0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)
