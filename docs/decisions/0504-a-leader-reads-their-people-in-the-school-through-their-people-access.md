@@ -8,7 +8,11 @@ view leader and for a leader without Full view alike ("Yes, build this").
 **1. A leader reads their people in the school through `people.view_subtree`** (owner,
 2026-11-22, "Their People access"). `GET /api/v1/equipping/my-people` declares that capability
 against the actor, so a leader sees in Equipping exactly the people their People access
-reaches, narrowed to those enrolled: an enrollment that has not ended. The reader themself is
+reaches, narrowed to those enrolled. **Enrolled is read as an enrollment that has not ended**,
+which is this step's reading and not the owner's words: Section 29 says *enrolled this term*, and
+the two agree only while no term's final grades have been posted, since nothing yet ends an
+enrollment when a term does. The step that posts final grades owes it, by ending those
+enrollments or by this read filtering by term. The reader themself is
 left out, being nobody's student here. Every Leader holds the capability over their own branch,
 with or without Full view, so no new capability is added and none is granted. Each person comes
 with their class, its Teacher, their Guide and their register, read the way the class's own

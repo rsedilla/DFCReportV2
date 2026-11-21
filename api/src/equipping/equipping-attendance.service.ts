@@ -18,6 +18,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
+import { compareRosterKeys } from '../common/roster-cursor';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow, recordClosesAt, recordDueAt } from '../common/time/submission-window';
@@ -263,8 +264,18 @@ export class EquippingAttendanceService {
     const person = (id: string | null) =>
       id === null ? null : { id, full_name: names.get(id)?.fullName ?? null };
 
+    // First name, surname, then Member ID, the title never compared (decisions 0359 and 0271).
+    const keyOf = (personId: string) => {
+      const identity = names.get(personId);
+      return {
+        firstName: identity?.firstName ?? '',
+        lastName: identity?.lastName ?? '',
+        memberId: identity?.memberId ?? '',
+      };
+    };
     return {
-      data: placed
+      data: [...placed]
+        .sort((a, b) => compareRosterKeys(keyOf(a.row.person_id), keyOf(b.row.person_id)))
         .map(({ row, inBranch, top }) => {
           const register = registers.get(row.enrollment_id) ?? new Map<number, RegisterEntry>();
           return {
@@ -294,9 +305,7 @@ export class EquippingAttendanceService {
                 : [];
             }),
           };
-        })
-        // First-name order, as every list of people (decision 0359).
-        .sort((a, b) => (a.person?.full_name ?? '').localeCompare(b.person?.full_name ?? '')),
+        }),
     };
   }
 
