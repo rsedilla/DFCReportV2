@@ -2515,6 +2515,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'SearchField and SelectFields, the primitives measured on every screen.',
   })),
   {
+    name: 'equipping teach, your people',
+    why:
+      'The same screen as the measured "equipping teach", whose level ViewSwitch and class links ' +
+      'are its only controls; the cards of the reader\x27s people are read only and add none.',
+  },
+  {
     name: 'equipping teach, recording a make-up',
     why:
       'Opens the make-up dialog over the measured "equipping teach, a class". Its controls are a ' +
