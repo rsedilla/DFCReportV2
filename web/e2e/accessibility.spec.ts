@@ -1650,6 +1650,7 @@ const SCANS = [
   ).map((state) => ({
     name: state.name,
     route: `/equipping/teach/${ATTENDANCE_IDS.classId}`,
+    pattern: '/equipping/teach/[id]',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockTeacher(page, 'RECORDING');
