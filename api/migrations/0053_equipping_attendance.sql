@@ -44,11 +44,7 @@ CREATE TABLE equipping_marks (
   correction_reason text CONSTRAINT equipping_marks_reason CHECK (
     correction_reason IS NULL OR (btrim(correction_reason) <> '' AND char_length(correction_reason) <= 500)
   ),
-  CONSTRAINT equipping_marks_superseded_whole CHECK ((superseded_at IS NULL) = (superseded_by IS NULL)),
-  -- The earlier class's absence this mark replaced, for a moved student who came to the lesson
-  -- here; carried through corrections, so a date later corrected to before they joined opens
-  -- that absence again (decision 0503, owner rulings of 2026-11-21).
-  replaces_mark_id uuid REFERENCES equipping_marks (id)
+  CONSTRAINT equipping_marks_superseded_whole CHECK ((superseded_at IS NULL) = (superseded_by IS NULL))
 );
 
 CREATE UNIQUE INDEX equipping_marks_one_current
@@ -221,32 +217,6 @@ CREATE TRIGGER equipping_marks_no_make_up_when_attended
   BEFORE INSERT ON equipping_marks
   FOR EACH ROW EXECUTE FUNCTION assert_no_make_up_of_a_lesson_attended();
 
--- One current mark per student per lesson number across the classes they have been in: a moved
--- student keeps the mark the earlier class saved, and the new class does not mark that lesson
--- again (decision 0503, point 5).
-CREATE FUNCTION assert_one_mark_per_lesson_number() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.superseded_at IS NULL AND EXISTS (
-       SELECT 1
-         FROM equipping_enrollments mine
-         JOIN equipping_lessons this_lesson ON this_lesson.id = NEW.lesson_id
-         JOIN equipping_enrollments other ON other.registration_id = mine.registration_id
-                                         AND other.id <> mine.id
-         JOIN equipping_marks m ON m.enrollment_id = other.id AND m.superseded_at IS NULL
-         JOIN equipping_lessons l ON l.id = m.lesson_id AND l.lesson = this_lesson.lesson
-        WHERE mine.id = NEW.enrollment_id) THEN
-    RAISE EXCEPTION 'a student holds one mark for a lesson, in whichever class saved it (SKILL.md section 29)'
-      USING ERRCODE = 'check_violation';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER equipping_marks_one_per_lesson_number
-  BEFORE INSERT ON equipping_marks
-  FOR EACH ROW EXECUTE FUNCTION assert_one_mark_per_lesson_number();
-
 -- A date change is kept as written.
 CREATE FUNCTION refuse_lesson_date_change_rewrite() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -283,8 +253,6 @@ CREATE TRIGGER equipping_make_ups_no_delete BEFORE DELETE ON equipping_make_ups
 
 DROP TRIGGER equipping_lesson_date_changes_kept ON equipping_lesson_date_changes;
 DROP FUNCTION refuse_lesson_date_change_rewrite();
-DROP TRIGGER equipping_marks_one_per_lesson_number ON equipping_marks;
-DROP FUNCTION assert_one_mark_per_lesson_number();
 DROP TRIGGER equipping_marks_no_make_up_when_attended ON equipping_marks;
 DROP FUNCTION assert_no_make_up_of_a_lesson_attended();
 

@@ -430,26 +430,6 @@ export class EquippingAttendanceService {
         );
       }
 
-      // The students' registrations, locked as a move locks them and in one order, so a move out
-      // of this class cannot slip between reading who is enrolled here, and what an earlier class
-      // marked them, and writing (decision 0158). A move or enrollment into this class is held
-      // off by the class lock above, which their sharing out takes first.
-      await trx
-        .selectFrom('equipping_registrations as r')
-        .select('r.id')
-        .where((eb) =>
-          eb.exists(
-            eb
-              .selectFrom('equipping_enrollments as e')
-              .select('e.id')
-              .whereRef('e.registration_id', '=', 'r.id')
-              .where('e.class_id', '=', classId)
-              .where('e.ended_at', 'is', null),
-          ),
-        )
-        .orderBy('r.id')
-        .forNoKeyUpdate()
-        .execute();
       const enrolled = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
@@ -513,75 +493,19 @@ export class EquippingAttendanceService {
 
       const current = await trx
         .selectFrom('equipping_marks')
-        .select(['id', 'enrollment_id', 'came', 'replaces_mark_id'])
+        .select(['id', 'enrollment_id', 'came'])
         .where('lesson_id', '=', lessonId)
         .where('superseded_at', 'is', null)
         .execute();
       const currentOf = new Map(current.map((row) => [canonicalId(row.enrollment_id), row]));
-
-      // **A date corrected to before a student joined removes their mark** (owner, 2026-11-21):
-      // the lesson becomes one held before they joined, owed as a make-up and not counted as an
-      // absence. The mark is closed and kept; if it had replaced an absence from an earlier class,
-      // that absence is opened again, so nothing real is lost.
-      const unmarked: { person_id: string; came: boolean }[] = [];
-      const restored: { person_id: string; class_id: string; lesson: number }[] = [];
-      const removeForDate = async (
-        mark: { id: string; came: boolean; replaces_mark_id: string | null },
-        personId: string,
-      ) => {
-        await trx
-          .updateTable('equipping_marks')
-          .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
-          .where('id', '=', mark.id)
-          .execute();
-        unmarked.push({ person_id: personId, came: mark.came });
-        if (mark.replaces_mark_id !== null) {
-          const replaced = await trx
-            .selectFrom('equipping_marks as m')
-            .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-            .select(['m.lesson_id', 'm.enrollment_id', 'm.came', 'l.class_id'])
-            .where('m.id', '=', mark.replaces_mark_id)
-            .executeTakeFirstOrThrow();
-          await trx
-            .insertInto('equipping_marks')
-            .values({
-              lesson_id: replaced.lesson_id,
-              enrollment_id: replaced.enrollment_id,
-              came: replaced.came,
-              recorded_by: actor.accountId,
-              correction_reason: body.correction_reason ?? null,
-            })
-            .execute();
-          restored.push({ person_id: personId, class_id: replaced.class_id, lesson });
-        }
-      };
-      // Students who have since left this class keep marks on this lesson; a date corrected to
-      // before they joined it removes those too.
-      const enrolledHere = new Set(enrolled.map((row) => canonicalId(row.id)));
-      const leftMarks = current.filter((row) => !enrolledHere.has(canonicalId(row.enrollment_id)));
-      if (leftMarks.length > 0) {
-        const left = await trx
-          .selectFrom('equipping_enrollments as e')
-          .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-          .select(['e.id', 'e.started_at', 'r.person_id'])
-          .where(
-            'e.id',
-            'in',
-            leftMarks.map((row) => row.enrollment_id),
-          )
-          .execute();
-        const leftOf = new Map(left.map((row) => [canonicalId(row.id), row]));
-        for (const mark of leftMarks) {
-          const enrollment = leftOf.get(canonicalId(mark.enrollment_id))!;
-          if (joinedAfter(enrollment)) {
-            await removeForDate(mark, enrollment.person_id);
-          }
-        }
-      }
-      // Marked for this lesson in a class they moved from (decision 0503, point 5: a moved
-      // student keeps their marks). Came there: that mark stands and is not repeated here. Absent
-      // there: it stands unless they come to this class's lesson, which replaces it (owner,
-      // 2026-11-21).
+      // **One class at a time** (owner, 2026-11-21): a save writes marks in its own class and
+      // nowhere else. A moved student's register reads this class's mark for a lesson first and
+      // the class they moved from only where this class has none (`registersOf`), so what an
+      // earlier class recorded is never closed or reopened from here.
+      //
+      // Marked for this lesson in a class they moved from: came there, that mark stands and is not
+      // repeated here; absent there, it stands unless they are ticked here, whose mark then reads
+      // first (decision 0503, point 5).
       const carried = new Map(
         (enrolled.length === 0
           ? []
@@ -594,14 +518,7 @@ export class EquippingAttendanceService {
               )
               .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
               .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-              .select([
-                'here.id',
-                'm.id as mark_id',
-                'm.came',
-                'm.lesson_id',
-                'm.enrollment_id',
-                'before.class_id',
-              ])
+              .select(['here.id', 'm.came'])
               .where(
                 'here.id',
                 'in',
@@ -613,8 +530,8 @@ export class EquippingAttendanceService {
         ).map((row) => [canonicalId(row.id), row] as const),
       );
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
-      // Absences in an earlier class replaced by coming to this one's lesson.
-      const replacedElsewhere: { person_id: string; class_id: string; lesson: number }[] = [];
+      // Marks a date corrected to before the student joined removed (owner, 2026-11-21).
+      const unmarked: { person_id: string; came: boolean }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
       const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
       const marked: typeof enrolled = [];
@@ -624,8 +541,16 @@ export class EquippingAttendanceService {
         const fromBefore = was ? undefined : carried.get(canonicalId(row.id));
         // Came there, or absent there and not ticked here: the earlier mark stands.
         const elsewhere = fromBefore !== undefined && (fromBefore.came || !want);
+        // **A date corrected to before a student joined removes their mark here**: closed and
+        // kept, the lesson is one held before they joined, and any earlier class's mark for it
+        // reads again (owner, 2026-11-21).
         if (was && joinedAfter(row) && !want) {
-          await removeForDate(was, row.person_id);
+          await trx
+            .updateTable('equipping_marks')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('id', '=', was.id)
+            .execute();
+          unmarked.push({ person_id: row.person_id, came: was.came });
           continue;
         }
         if (joinedAfter(row) || elsewhere) {
@@ -643,46 +568,6 @@ export class EquippingAttendanceService {
         if (was && was.came === want) {
           continue;
         }
-        // Absent in the earlier class and came to this one's lesson: the earlier absence, and any
-        // make-up of it, are closed and kept, and this class's mark replaces them (owner,
-        // 2026-11-21). Only a came mark reaches here, by `elsewhere` above.
-        if (fromBefore !== undefined) {
-          await trx
-            .updateTable('equipping_marks')
-            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
-            .where('id', '=', fromBefore.mark_id)
-            .where('superseded_at', 'is', null)
-            .executeTakeFirst()
-            .then((result) => {
-              // Read under the registration lock, so it is still current; nothing matching means
-              // the premise moved and the save answers RESOURCE_BUSY rather than a 500.
-              if (result.numUpdatedRows === 0n) {
-                throw new ApiError(
-                  ApiErrorCode.RESOURCE_BUSY,
-                  'A mark of this student changed while saving. Try again.',
-                );
-              }
-            });
-          const replacedMakeUps = await trx
-            .updateTable('equipping_make_ups')
-            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
-            .where('lesson_id', '=', fromBefore.lesson_id)
-            .where('enrollment_id', '=', fromBefore.enrollment_id)
-            .where('superseded_at', 'is', null)
-            .returning('made_up_on')
-            .execute();
-          for (const replaced of replacedMakeUps) {
-            makeUpsClosed.push({
-              person_id: row.person_id,
-              made_up_on: String(replaced.made_up_on),
-            });
-          }
-          replacedElsewhere.push({
-            person_id: row.person_id,
-            class_id: fromBefore.class_id,
-            lesson,
-          });
-        }
         if (was) {
           await trx
             .updateTable('equipping_marks')
@@ -690,8 +575,8 @@ export class EquippingAttendanceService {
             .where('id', '=', was.id)
             .execute();
         }
-        // Marked as having come: a make-up of the lesson no longer stands, whether it made up an
-        // absence or a lesson the date had placed before they joined.
+        // Marked as having come: a make-up of this lesson here no longer stands, whether it made
+        // up an absence or a lesson the date had placed before they joined.
         if (want) {
           const closedMakeUps = await trx
             .updateTable('equipping_make_ups')
@@ -718,17 +603,9 @@ export class EquippingAttendanceService {
             // The Admin's reason for a closed week, kept on every mark it writes, a first one
             // included (principle 12).
             correction_reason: body.correction_reason ?? null,
-            // The earlier class's absence this mark replaced, carried through corrections, so a
-            // date later corrected to before they joined can open it again.
-            replaces_mark_id: fromBefore ? fromBefore.mark_id : (was?.replaces_mark_id ?? null),
           })
           .execute();
-        changed.push({
-          person_id: row.person_id,
-          came: want,
-          // An absence replaced from an earlier class reads as absent before.
-          before: was ? was.came : fromBefore !== undefined ? fromBefore.came : null,
-        });
+        changed.push({ person_id: row.person_id, came: want, before: was ? was.came : null });
       }
 
       // A date changed keeps the date it changed, as a mark keeps the mark (principle 12).
@@ -772,9 +649,6 @@ export class EquippingAttendanceService {
             held_on: body.held_on,
             came: changed.filter((c) => c.came).map((c) => c.person_id),
             absent: changed.filter((c) => !c.came).map((c) => c.person_id),
-            ...(replacedElsewhere.length > 0
-              ? { replaced_absences_elsewhere: replacedElsewhere }
-              : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
@@ -799,11 +673,6 @@ export class EquippingAttendanceService {
             held_on: body.held_on,
             marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
             ...(unmarked.length > 0 ? { marks_removed: unmarked.map((u) => u.person_id) } : {}),
-            // Earlier-class absences opened again because the mark that replaced them was removed.
-            ...(restored.length > 0 ? { absences_restored_elsewhere: restored } : {}),
-            ...(replacedElsewhere.length > 0
-              ? { replaced_absences_elsewhere: replacedElsewhere }
-              : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },

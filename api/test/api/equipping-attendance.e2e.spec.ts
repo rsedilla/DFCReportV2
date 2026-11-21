@@ -658,77 +658,38 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       came: [carlo.enrollment_id],
       version: 1,
     }).expect(422);
-    // And the database refuses the second mark outright (one per student per lesson number).
-    const bLesson9 = await db
-      .selectFrom('equipping_lessons')
-      .select('id')
-      .where('class_id', '=', classB)
-      .where('lesson', '=', 9)
-      .executeTakeFirstOrThrow();
-    await expect(
-      db
-        .insertInto('equipping_marks')
-        .values({
-          lesson_id: bLesson9.id,
-          enrollment_id: carlo.enrollment_id,
-          came: false,
-          recorded_by: teacher.id,
-        })
-        .execute(),
-    ).rejects.toThrow(/one mark for a lesson/);
 
-    // Dino missed lesson 9 in A and was not ticked in B, so A's absence stood. He came to B's
-    // lesson 9 after all: that replaces A's absence, which is closed and kept (owner, 2026-11-21).
+    // One class at a time (owner, 2026-11-21). Dino missed lesson 9 in A and was not ticked in B,
+    // so B wrote nothing for him and A's absence reads. He makes it up from B, against A's lesson.
+    await post(teacher, `equipping/classes/${classB}/make-ups`, {
+      enrollment_id: dino.enrollment_id,
+      lesson: 9,
+      made_up_on: today,
+    }).expect(201);
+    // He came to B's lesson 9 after all: B's mark reads first, and A's records are left as they were.
     await post(teacher, `equipping/classes/${classB}/lessons/9`, {
       held_on: today,
       came: [dino.enrollment_id],
       version: 1,
     }).expect(200);
-    const after = (await get(teacher, `equipping/classes/${classB}/attendance`).expect(200))
-      .body as Read & {
+    type Register = {
       students: {
         person: { full_name: string };
-        marks: { lesson: number; came: boolean; from_class: { name: string } | null }[];
+        marks: {
+          lesson: number;
+          came: boolean;
+          made_up_on: string | null;
+          from_class: { name: string } | null;
+        }[];
       }[];
     };
-    expect(
-      after.students
+    const dinoNine = async () =>
+      (
+        (await get(teacher, `equipping/classes/${classB}/attendance`).expect(200)).body as Register
+      ).students
         .find((s) => s.person.full_name.startsWith('Dino'))!
-        .marks.find((m) => m.lesson === 9),
-    ).toMatchObject({ came: true, from_class: null });
-    const dinoNine = await db
-      .selectFrom('equipping_marks as m')
-      .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-      .innerJoin('equipping_enrollments as e', 'e.id', 'm.enrollment_id')
-      .select(['l.class_id', 'm.came', 'm.superseded_at'])
-      .where('l.lesson', '=', 9)
-      .where(
-        'e.registration_id',
-        '=',
-        (
-          await db
-            .selectFrom('equipping_enrollments')
-            .select('registration_id')
-            .where('id', '=', dino.enrollment_id)
-            .executeTakeFirstOrThrow()
-        ).registration_id,
-      )
-      .execute();
-    // A's absence kept, closed; B's came current.
-    expect(dinoNine.filter((m) => m.superseded_at === null)).toEqual([
-      expect.objectContaining({ class_id: classB, came: true }),
-    ]);
-    expect(dinoNine).toContainEqual(expect.objectContaining({ class_id: classId, came: false }));
-
-    // B's lesson 9 corrected to yesterday, before Dino joined B: B's mark is removed, and the
-    // absence it had replaced in A is opened again, so nothing real is lost (owner, 2026-11-21).
-    const yesterday = new Date(`${today}T00:00:00Z`);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
-      held_on: yesterday.toISOString().slice(0, 10),
-      came: [],
-      version: 2,
-    }).expect(200);
+        .marks.find((m) => m.lesson === 9);
+    expect(await dinoNine()).toMatchObject({ came: true, from_class: null });
     const dinoReg = (
       await db
         .selectFrom('equipping_enrollments')
@@ -736,16 +697,32 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
         .where('id', '=', dino.enrollment_id)
         .executeTakeFirstOrThrow()
     ).registration_id;
-    const currentNine = await db
+    const currentInA = await db
       .selectFrom('equipping_marks as m')
       .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
       .innerJoin('equipping_enrollments as e', 'e.id', 'm.enrollment_id')
-      .select(['l.class_id', 'm.came'])
+      .select(['m.came'])
       .where('l.lesson', '=', 9)
+      .where('l.class_id', '=', classId)
       .where('e.registration_id', '=', dinoReg)
       .where('m.superseded_at', 'is', null)
       .execute();
-    expect(currentNine).toEqual([expect.objectContaining({ class_id: classId, came: false })]);
+    expect(currentInA).toEqual([{ came: false }]);
+
+    // B's lesson 9 corrected to yesterday, before Dino joined B: B's mark is removed, and A's
+    // lesson 9 reads again with the make-up he did, so nothing he did is lost.
+    const yesterday = new Date(`${today}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: yesterday.toISOString().slice(0, 10),
+      came: [],
+      version: 2,
+    }).expect(200);
+    expect(await dinoNine()).toMatchObject({
+      came: false,
+      made_up_on: today,
+      from_class: { name: 'Life Class A' },
+    });
   });
 
   it('tells the Coordinator when a Teacher has no account to record with', async () => {

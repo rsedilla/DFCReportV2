@@ -1043,8 +1043,6 @@ export interface EquippingMarksTable {
   superseded_at: Date | null;
   superseded_by: string | null;
   correction_reason: string | null;
-  /** The earlier class's absence this mark replaced (decision 0503). */
-  replaces_mark_id: ColumnType<string | null, string | null | undefined, never>;
 }
 
 /** A make-up of a missed lesson, recorded as M with its date (decision 0501, point 12). */
