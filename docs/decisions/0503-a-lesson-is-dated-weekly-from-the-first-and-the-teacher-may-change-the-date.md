@@ -85,7 +85,11 @@ where the current class has none. So:
   reads in the new class as an earlier mark does: made up, with the earlier class's name, not
   owed again, and recorded again from the new class it corrects that make-up rather than adding
   a second. Left unticked in the new class's lesson, nothing is written there and the make-up
-  reads; ticked, the new mark reads. The other answer was that the student owed it again, which
+  reads; ticked, the new mark reads. **It stands as its class recorded it** (owner, 2026-11-21,
+  "Yes, keep the M", from screenshots): where the earlier class later moves that lesson to on or
+  after the day the student joined it, the make-up still reads as made up, and changing it from
+  the new class is refused, since it is no longer a lesson held before they joined and the
+  database admits no make-up of it without an absence. The other answer was that the student owed it again, which
   asked them to make up a lesson twice. Raised by `architecture-guardian` as a Stop Condition on
   the one-class-at-a-time build, whose read and save carried an earlier class's marks only.
 - **The class moved from last is the earlier class**: a student moved twice reads, and is saved

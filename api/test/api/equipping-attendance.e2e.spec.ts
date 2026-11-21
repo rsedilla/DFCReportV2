@@ -749,11 +749,25 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       came: [ids.get('Ben'), ids.get('Carlo'), ids.get('Dino')],
     }).expect(200);
     await post(teacher, `equipping/classes/${classId}/lessons/9`, {
-      held_on: yesterday,
+      held_on: nearLesson8(1),
       came: [ids.get('Ben'), ids.get('Carlo')],
     }).expect(200);
     await enrol(['Eli']);
     ids = await idsByName();
+    // Eli joined A after both lessons, three days after lesson 8. No route backdates an
+    // enrollment, so the fixture lifts the history trigger as `beforeEach` does.
+    await db.transaction().execute(async (trx) => {
+      await sql`ALTER TABLE equipping_enrollments DISABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+      await sql`
+        UPDATE equipping_enrollments
+           SET started_at = ${nearLesson8(3)}::date::timestamp AT TIME ZONE 'Asia/Manila'
+         WHERE id = ${ids.get('Eli')!}`.execute(trx);
+      await sql`ALTER TABLE equipping_enrollments ENABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+    });
     for (const lesson of [8, 9]) {
       await post(teacher, `equipping/classes/${classId}/make-ups`, {
         enrollment_id: ids.get('Eli'),
@@ -807,12 +821,23 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       from_class: { name: 'Life Class A' },
     });
     expect(r.owed.filter((o) => o.enrollment_id === eliInB)).toEqual([]);
-    // Recorded again from B, it corrects the one made in A rather than adding a second.
-    await post(teacher, `equipping/classes/${classB}/make-ups`, {
-      enrollment_id: eliInB,
-      lesson: 8,
-      made_up_on: today,
-    }).expect(201);
+    // Recorded again from B with another date, it corrects the one made in A rather than adding
+    // a second, and the database admits the replacement; then back to today.
+    for (const madeUpOn of [yesterday, today]) {
+      await post(teacher, `equipping/classes/${classB}/make-ups`, {
+        enrollment_id: eliInB,
+        lesson: 8,
+        made_up_on: madeUpOn,
+      }).expect(201);
+    }
+    const corrected = await db
+      .selectFrom('audit_log')
+      .select(['before', 'after'])
+      .where('action', '=', 'equipping_make_up.recorded')
+      .orderBy('occurred_at', 'desc')
+      .executeTakeFirstOrThrow();
+    expect(corrected.before).toMatchObject({ class_id: classId, lesson: 8, made_up_on: yesterday });
+    expect(corrected.after).toMatchObject({ made_up_on: today, before_joining: true });
     const eliReg = (
       await db
         .selectFrom('equipping_enrollments')
@@ -847,12 +872,31 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
       from_class: { name: 'Life Class A' },
     });
 
-    // Back in A, the class he left: his earlier enrollment there is earlier, and its make-ups read.
+    // A moves its lesson 8 to after the day Eli joined A. **The make-up stands as A recorded it**
+    // (owner, 2026-11-21): B still reads it as made up, and changing it from B is refused cleanly
+    // where the database would refuse the replacement.
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: nearLesson8(4),
+      came: [ids.get('Ben'), ids.get('Carlo'), ids.get('Dino')],
+      version: 1,
+    }).expect(200);
+    ({ student } = await registerOf(classB, eliInB));
+    expect(student.marks.find((m) => m.lesson === 8)).toMatchObject({ made_up_on: today });
+    const refused = await post(teacher, `equipping/classes/${classB}/make-ups`, {
+      enrollment_id: eliInB,
+      lesson: 8,
+      made_up_on: yesterday,
+    }).expect(409);
+    expect(refused.body).toMatchObject({ error: { code: 'INVARIANT_VIOLATION' } });
+
+    // Back in A, the class he left: his earlier enrollment there is earlier, its make-ups read,
+    // and it is named, so the screen does not take it for one saved under his enrollment now.
     const eliBackInA = await move(eliInB, classId);
     ({ r, student } = await registerOf(classId, eliBackInA));
-    expect(student.marks.find((m) => m.lesson === 8)).toMatchObject({
+    expect(student.marks.find((m) => m.lesson === 9)).toMatchObject({
       made_up_on: today,
       before_joining: true,
+      from_class: { name: 'Life Class A' },
     });
     expect(r.owed.filter((o) => o.enrollment_id === eliBackInA)).toEqual([]);
 

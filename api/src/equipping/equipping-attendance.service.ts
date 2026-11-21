@@ -92,7 +92,10 @@ interface RegisterEntry {
   madeUpOn: string | null;
   /** Held by this class before the student joined, with no mark for it anywhere: no absence. */
   beforeJoining: boolean;
-  /** The earlier class it was marked in, for a student moved since; null for this class. */
+  /**
+   * The class of the earlier enrollment it was recorded under, for a student moved since, this
+   * same class for one who left it and came back; null for the enrollment they are in now.
+   */
   fromClass: { id: string; name: string } | null;
 }
 
@@ -552,7 +555,7 @@ export class EquippingAttendanceService {
           if (want) {
             throw new ValidationFailedError(
               elsewhere
-                ? 'Somebody ticked already came to this lesson in the class they moved from.'
+                ? 'Somebody ticked already came to this lesson in a class they were in before.'
                 : 'Somebody ticked joined the class after this lesson; they make it up instead.',
               { field: 'came' },
             );
@@ -762,6 +765,23 @@ export class EquippingAttendanceService {
         .forUpdate()
         .executeTakeFirst();
       if (!was || String(was.made_up_on) !== body.made_up_on) {
+        // **A carried make-up stands as its class recorded it** (owner, 2026-11-21). One made in
+        // an earlier class for a lesson held before the student joined it keeps reading as made up
+        // even after that class moves the lesson to on or after the day they joined; it is then no
+        // longer a lesson held before they joined, so it is not changed from here.
+        if (target.beforeJoining && target.enrollmentId !== student.id) {
+          const earlier = await trx
+            .selectFrom('equipping_enrollments')
+            .select('started_at')
+            .where('id', '=', target.enrollmentId)
+            .executeTakeFirstOrThrow();
+          if (missedOn >= manilaDayOf(earlier.started_at)) {
+            throw new InvariantViolationError(
+              'This make-up stands as the class it was recorded in left it: that class has since moved the lesson to after the student joined it, so it is not changed from here.',
+              { field: 'made_up_on' },
+            );
+          }
+        }
         if (was) {
           await trx
             .updateTable('equipping_make_ups')
@@ -888,11 +908,12 @@ export class EquippingAttendanceService {
           });
         }
       };
+      // Named for every earlier enrollment, this same class included, so the screen never takes
+      // a record from a stint the student has left for one saved under the enrollment they are
+      // in now.
       const fromClassOf = (enrollmentId: string) => {
         const enrollment = enrollmentById.get(enrollmentId)!;
-        return enrollment.class_id === classId
-          ? null
-          : { id: enrollment.class_id, name: enrollment.name };
+        return { id: enrollment.class_id, name: enrollment.name };
       };
       for (const mark of marks) {
         const enrollment = enrollmentById.get(mark.enrollment_id)!;
@@ -908,7 +929,8 @@ export class EquippingAttendanceService {
           heldOn: String(lesson.held_on),
           madeUpOn: madeUpOf.get(`${lesson.id}:${mark.enrollment_id}`) ?? null,
           beforeJoining: false,
-          fromClass: fromClassOf(mark.enrollment_id),
+          fromClass:
+            mark.enrollment_id === row.enrollment_id ? null : fromClassOf(mark.enrollment_id),
         });
       }
       // **A make-up of a lesson held before they joined carries with a move** (owner,
