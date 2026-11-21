@@ -383,6 +383,15 @@ export async function mockClassAttendance(
     ...extra,
   });
   const classB = { id: '3f1b7c6e-0000-4000-8000-00000000e003', name: 'Life Class B' };
+  // Moved from Life Class B too, where he missed lesson 3: ticked here only if he came here.
+  const paz = {
+    enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b305',
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b405', full_name: 'Paz Ocampo' },
+    cell_leader: null,
+    guide: null,
+    joined_on: '2026-11-15',
+    marks: [mark(3, false, null, { from_class: classB })],
+  };
   const rosa = {
     enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b303',
     person: { id: '3f1b7c6e-0000-4000-8000-00000000b403', full_name: 'Rosa Villanueva' },
@@ -453,7 +462,7 @@ export async function mockClassAttendance(
         joined_on: '2026-11-01',
         marks: [mark(1, true, null), mark(2, false, '2026-11-12')],
       },
-      ...(joiners ? [rosa, tomas] : []),
+      ...(joiners ? [rosa, tomas, paz] : []),
     ],
     owed: [
       {

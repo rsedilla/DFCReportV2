@@ -223,5 +223,15 @@ test('a moved student keeps the ticks of the class they came from', async ({ pag
   await expect(tomas).toContainText('3 of 3');
   // Lesson 3, still to record here, was marked in Life Class B: he is named apart, not ticked.
   await expect(page.getByRole('checkbox', { name: 'Tomas Aquino came' })).toHaveCount(0);
-  await expect(page.getByText(/Already marked for this lesson.*Tomas Aquino \(Life Class B\)/)).toBeVisible();
+  await expect(page.getByText(/Already came to this lesson.*Tomas Aquino \(Life Class B\)/)).toBeVisible();
+});
+
+test('a moved student who missed a lesson there is ticked here if they came, with a note', async ({ page }) => {
+  const { sent } = await openClass(page, { joiners: true });
+  // Lesson 3 is still to record here; Paz missed it in Life Class B (owner, 2026-11-21).
+  await expect(page.getByText('Missed it in Life Class B; tick if they came here').filter({ visible: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Paz Ocampo came' }).check();
+  await page.getByRole('button', { name: 'Save lesson 3' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect((sent[0].body as { came: string[] }).came).toContain('3f1b7c6e-0000-4000-8000-00000000b305');
 });

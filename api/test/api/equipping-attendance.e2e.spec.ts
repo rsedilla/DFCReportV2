@@ -669,6 +669,49 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
         })
         .execute(),
     ).rejects.toThrow(/one mark for a lesson/);
+
+    // Dino missed lesson 9 in A and was not ticked in B, so A's absence stood. He came to B's
+    // lesson 9 after all: that replaces A's absence, which is closed and kept (owner, 2026-11-21).
+    await post(teacher, `equipping/classes/${classB}/lessons/9`, {
+      held_on: today,
+      came: [dino.enrollment_id],
+      version: 1,
+    }).expect(200);
+    const after = (await get(teacher, `equipping/classes/${classB}/attendance`).expect(200))
+      .body as Read & {
+      students: {
+        person: { full_name: string };
+        marks: { lesson: number; came: boolean; from_class: { name: string } | null }[];
+      }[];
+    };
+    expect(
+      after.students
+        .find((s) => s.person.full_name.startsWith('Dino'))!
+        .marks.find((m) => m.lesson === 9),
+    ).toMatchObject({ came: true, from_class: null });
+    const dinoNine = await db
+      .selectFrom('equipping_marks as m')
+      .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
+      .innerJoin('equipping_enrollments as e', 'e.id', 'm.enrollment_id')
+      .select(['l.class_id', 'm.came', 'm.superseded_at'])
+      .where('l.lesson', '=', 9)
+      .where(
+        'e.registration_id',
+        '=',
+        (
+          await db
+            .selectFrom('equipping_enrollments')
+            .select('registration_id')
+            .where('id', '=', dino.enrollment_id)
+            .executeTakeFirstOrThrow()
+        ).registration_id,
+      )
+      .execute();
+    // A's absence kept, closed; B's came current.
+    expect(dinoNine.filter((m) => m.superseded_at === null)).toEqual([
+      expect.objectContaining({ class_id: classB, came: true }),
+    ]);
+    expect(dinoNine).toContainEqual(expect.objectContaining({ class_id: classId, came: false }));
   });
 
   it('tells the Coordinator when a Teacher has no account to record with', async () => {

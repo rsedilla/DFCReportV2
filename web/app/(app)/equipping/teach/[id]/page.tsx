@@ -160,7 +160,20 @@ function markedElsewhere(student: AttendanceStudent, lesson: number): string | n
   if (markHere(student, lesson) !== null) {
     return null;
   }
-  return markFor(student, lesson)?.from_class?.name ?? null;
+  const mark = markFor(student, lesson);
+  return mark?.came ? (mark.from_class?.name ?? null) : null;
+}
+
+/**
+ * Missed this lesson in the class they moved from: ticked here only if they came here, which
+ * replaces that absence; left unticked, it stands (owner, 2026-11-21).
+ */
+function missedElsewhere(student: AttendanceStudent, lesson: number): string | null {
+  if (markHere(student, lesson) !== null) {
+    return null;
+  }
+  const mark = markFor(student, lesson);
+  return mark && !mark.came && mark.from_class ? mark.from_class.name : null;
 }
 
 /**
@@ -276,6 +289,11 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                     <span className="text-muted block text-xs">
                       Cell leader {s.cell_leader?.full_name ?? 'none'} · Guide {s.guide?.full_name ?? 'none yet'}
                     </span>
+                    {missedElsewhere(s, lesson.lesson) ? (
+                      <span className="text-muted block text-xs">
+                        Missed it in {missedElsewhere(s, lesson.lesson)}; tick if they came here
+                      </span>
+                    ) : null}
                   </span>
                 </label>
               </li>
@@ -315,6 +333,11 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                   </td>
                   <th scope="row" className="px-3 py-2 text-left font-semibold">
                     {s.person.full_name}
+                    {missedElsewhere(s, lesson.lesson) ? (
+                      <span className="text-muted block text-xs font-normal">
+                        Missed it in {missedElsewhere(s, lesson.lesson)}; tick if they came here
+                      </span>
+                    ) : null}
                   </th>
                   <td className="px-3 py-2">{s.cell_leader?.full_name ?? 'none'}</td>
                   <td className="px-3 py-2">{s.guide?.full_name ?? 'none yet'}</td>
@@ -330,7 +353,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
           ) : null}
           {elsewhere.length > 0 ? (
             <p className="text-muted mt-3 text-sm">
-              Already marked for this lesson in the class they moved from:{' '}
+              Already came to this lesson in the class they moved from:{' '}
               {elsewhere
                 .map((s) => `${s.person.full_name ?? 'Somebody'} (${markedElsewhere(s, lesson.lesson)})`)
                 .join(', ')}

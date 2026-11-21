@@ -57,7 +57,14 @@ joined*, listed under *Make-ups still owed* as held before they joined, and **no
 absence**; the student is not ticked for it, and ticking them is refused. A student moved from
 another class of the same level and term keeps the marks that class saved, lesson by lesson,
 shown with the class's name, since a move keeps what was recorded (Section 29); a lesson missed
-there is made up from the new class and recorded against the lesson where it was missed. The
+there is made up from the new class and recorded against the lesson where it was missed. **A
+lesson the student missed in the earlier class and came to in the new one counts as attended**
+(owner, 2026-11-21, "Yes, replace it"): the new class's Teacher ticks them, the earlier absence
+and any make-up of it are closed and kept, and the new class's mark replaces them; left
+unticked, the earlier absence stands, and a lesson they came to in the earlier class is never
+marked again. The other answer was to refuse the tick until a make-up was recorded, so that a
+student who sat the lesson live still owed its recording; raised by `architecture-guardian` as
+a Stop Condition on its third review of the build. The
 other answer was to save such a student Absent like anybody else, which would count against
 them lessons they could not have attended. Raised by `architecture-guardian` as a Stop
 Condition, the Cell counterpart being decision 0391.

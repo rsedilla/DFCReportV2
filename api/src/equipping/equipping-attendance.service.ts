@@ -496,47 +496,52 @@ export class EquippingAttendanceService {
         .where('superseded_at', 'is', null)
         .execute();
       const currentOf = new Map(current.map((row) => [canonicalId(row.enrollment_id), row]));
-      // Marked for this lesson in a class they moved from: that mark stands and this class does
-      // not mark them again (decision 0503, point 5: a moved student keeps their marks).
-      const carried = new Set(
-        enrolled.length === 0
+      // Marked for this lesson in a class they moved from (decision 0503, point 5: a moved
+      // student keeps their marks). Came there: that mark stands and is not repeated here. Absent
+      // there: it stands unless they come to this class's lesson, which replaces it (owner,
+      // 2026-11-21).
+      const carried = new Map(
+        (enrolled.length === 0
           ? []
-          : (
-              await trx
-                .selectFrom('equipping_enrollments as here')
-                .innerJoin('equipping_enrollments as before', (join) =>
-                  join
-                    .onRef('before.registration_id', '=', 'here.registration_id')
-                    .onRef('before.id', '<>', 'here.id'),
-                )
-                .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
-                .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
-                .select('here.id')
-                .where(
-                  'here.id',
-                  'in',
-                  enrolled.map((row) => row.id),
-                )
-                .where('m.superseded_at', 'is', null)
-                .where('l.lesson', '=', lesson)
-                .execute()
-            ).map((row) => canonicalId(row.id)),
+          : await trx
+              .selectFrom('equipping_enrollments as here')
+              .innerJoin('equipping_enrollments as before', (join) =>
+                join
+                  .onRef('before.registration_id', '=', 'here.registration_id')
+                  .onRef('before.id', '<>', 'here.id'),
+              )
+              .innerJoin('equipping_marks as m', 'm.enrollment_id', 'before.id')
+              .innerJoin('equipping_lessons as l', 'l.id', 'm.lesson_id')
+              .select(['here.id', 'm.id as mark_id', 'm.came', 'm.lesson_id', 'm.enrollment_id'])
+              .where(
+                'here.id',
+                'in',
+                enrolled.map((row) => row.id),
+              )
+              .where('m.superseded_at', 'is', null)
+              .where('l.lesson', '=', lesson)
+              .execute()
+        ).map((row) => [canonicalId(row.id), row] as const),
       );
       const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
       // Marks closed because the lesson's day now falls before the student joined.
       const unmarked: { person_id: string; came: boolean }[] = [];
+      // Absences in an earlier class replaced by coming to this one's lesson.
+      const replacedElsewhere: { person_id: string; mark_id: string }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
       const makeUpsClosed: { person_id: string; made_up_on: string }[] = [];
       const marked: typeof enrolled = [];
       for (const row of enrolled) {
         const want = came.has(canonicalId(row.id));
         const was = currentOf.get(canonicalId(row.id));
-        const elsewhere = !was && carried.has(canonicalId(row.id));
+        const fromBefore = was ? undefined : carried.get(canonicalId(row.id));
+        // Came there, or absent there and not ticked here: the earlier mark stands.
+        const elsewhere = fromBefore !== undefined && (fromBefore.came || !want);
         if (joinedAfter(row) || elsewhere) {
           if (want) {
             throw new ValidationFailedError(
               elsewhere
-                ? 'Somebody ticked was marked for this lesson in the class they moved from.'
+                ? 'Somebody ticked already came to this lesson in the class they moved from.'
                 : 'Somebody ticked joined the class after this lesson; they make it up instead.',
               { field: 'came' },
             );
@@ -556,6 +561,31 @@ export class EquippingAttendanceService {
         marked.push(row);
         if (was && was.came === want) {
           continue;
+        }
+        // Absent in the earlier class and came to this one's lesson: the earlier absence, and any
+        // make-up of it, are closed and kept, and this class's mark replaces them (owner,
+        // 2026-11-21). Only a came mark reaches here, by `elsewhere` above.
+        if (fromBefore !== undefined) {
+          await trx
+            .updateTable('equipping_marks')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('id', '=', fromBefore.mark_id)
+            .execute();
+          const replacedMakeUps = await trx
+            .updateTable('equipping_make_ups')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('lesson_id', '=', fromBefore.lesson_id)
+            .where('enrollment_id', '=', fromBefore.enrollment_id)
+            .where('superseded_at', 'is', null)
+            .returning('made_up_on')
+            .execute();
+          for (const replaced of replacedMakeUps) {
+            makeUpsClosed.push({
+              person_id: row.person_id,
+              made_up_on: String(replaced.made_up_on),
+            });
+          }
+          replacedElsewhere.push({ person_id: row.person_id, mark_id: fromBefore.mark_id });
         }
         if (was) {
           await trx
@@ -594,7 +624,12 @@ export class EquippingAttendanceService {
             correction_reason: body.correction_reason ?? null,
           })
           .execute();
-        changed.push({ person_id: row.person_id, came: want, before: was ? was.came : null });
+        changed.push({
+          person_id: row.person_id,
+          came: want,
+          // An absence replaced from an earlier class reads as absent before.
+          before: was ? was.came : fromBefore !== undefined ? fromBefore.came : null,
+        });
       }
 
       // A date changed keeps the date it changed, as a mark keeps the mark (principle 12).
@@ -638,6 +673,10 @@ export class EquippingAttendanceService {
             held_on: body.held_on,
             came: changed.filter((c) => c.came).map((c) => c.person_id),
             absent: changed.filter((c) => !c.came).map((c) => c.person_id),
+            ...(replacedElsewhere.length > 0
+              ? { replaced_absences_elsewhere: replacedElsewhere.map((r) => r.person_id) }
+              : {}),
+            ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
         });
@@ -662,6 +701,9 @@ export class EquippingAttendanceService {
             // Marks closed because the lesson's day now falls before the student joined: their
             // values are in `before`, and none replaces them.
             ...(unmarked.length > 0 ? { marks_removed: unmarked.map((u) => u.person_id) } : {}),
+            ...(replacedElsewhere.length > 0
+              ? { replaced_absences_elsewhere: replacedElsewhere.map((r) => r.person_id) }
+              : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
