@@ -421,6 +421,8 @@ export type AuditAction =
   | 'equipping_registration.cancelled'
   | 'equipping_class.created'
   | 'equipping_class.teacher_named'
+  | 'equipping_class.corrected'
+  | 'equipping_class.cancelled'
   | 'equipping_class.guide_named'
   | 'equipping_class.guide_removed'
   | 'equipping_enrollment.guide_changed'
@@ -972,6 +974,10 @@ export interface EquippingClassesTable {
   run_by: Generated<'CHURCH'>;
   created_by: string;
   created_at: ServerTimestamp;
+  /** Cancelled while it had no students and no lesson saved (decision 0510); final. */
+  cancelled_at: Date | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
 }
 
 /** A person signed up for a level in a term (section 29, migration 0050). Never deleted. */
@@ -1131,6 +1137,22 @@ export interface EquippingLessonDateChangesTable {
   reason: string | null;
 }
 
+/** A class's day, time, place and first lesson corrected (decision 0510), kept as written. */
+export interface EquippingClassCorrectionsTable {
+  id: Generated<string>;
+  class_id: string;
+  day_of_week_before: number;
+  day_of_week_after: number;
+  time_of_day_before: string;
+  time_of_day_after: string;
+  place_before: string | null;
+  place_after: string | null;
+  first_lesson_on_before: DateOnly;
+  first_lesson_on_after: DateOnly;
+  corrected_by: string;
+  corrected_at: ServerTimestamp;
+}
+
 export interface EncounterSeasonsTable {
   id: Generated<string>;
   mens_lc_party_on: DateOnly;
@@ -1239,6 +1261,7 @@ export interface Database {
   equipping_class_postings: EquippingClassPostingsTable;
   equipping_final_grades: EquippingFinalGradesTable;
   equipping_lesson_date_changes: EquippingLessonDateChangesTable;
+  equipping_class_corrections: EquippingClassCorrectionsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;

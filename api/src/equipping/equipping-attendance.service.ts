@@ -160,6 +160,8 @@ export class EquippingAttendanceService {
       .where((eb) =>
         eb.or([eb('c.teacher_person_id', '=', actor.personId), eb('g.id', 'is not', null)]),
       )
+      // A cancelled class is listed only on the Coordinator's *Cancelled* (decision 0510).
+      .where('c.cancelled_at', 'is', null)
       .orderBy('c.first_lesson_on', 'desc')
       .orderBy('c.name')
       .execute();
@@ -1217,12 +1219,19 @@ export class EquippingAttendanceService {
         'place',
         'first_lesson_on',
         'teacher_person_id',
+        'cancelled_at',
       ])
       .where('id', '=', classId)
       .forNoKeyUpdate()
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
+    }
+    // A cancelled class records nothing (decision 0510, point 5); it never had a lesson.
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled; nothing on it changes.`, {
+        field: 'class_id',
+      });
     }
     return {
       ...cls,

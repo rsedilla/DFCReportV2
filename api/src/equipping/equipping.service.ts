@@ -20,6 +20,7 @@ import {
   violatedConstraint,
 } from '../common/errors/postgres-errors';
 import { canonicalId, isUuid } from '../common/identifiers';
+import { manilaDayOf } from '../common/time/manila';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -32,6 +33,7 @@ import { TrainingService } from '../training/training.service';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel, EquippingRequirement } from '../database/schema';
 import type {
+  CorrectClassDto,
   EquippingTermDto,
   ListRegistrationsDto,
   OpenClassDto,
@@ -370,9 +372,17 @@ export class EquippingService {
     };
   }
 
-  /** A term's classes, each with how many are enrolled. Not paged: a handful a term. */
+  /**
+   * A term's classes, each with how many are enrolled. Not paged: a handful a term. A cancelled
+   * class is left out (decision 0510, point 6): only the Coordinator's *Cancelled* lists one.
+   */
   async classes(query: EquippingTermDto): Promise<Record<string, unknown>> {
-    const rows = await this.db
+    const rows = await this.classRows(query, false);
+    return { data: await this.withTeachers(rows) };
+  }
+
+  private async classRows(query: EquippingTermDto, withCancelled: boolean) {
+    return this.db
       .selectFrom('equipping_classes as c')
       .select((eb) => [
         'c.id',
@@ -390,29 +400,42 @@ export class EquippingService {
           .whereRef('e.class_id', '=', 'c.id')
           .where('e.ended_at', 'is', null)
           .as('enrolled'),
+        'c.cancelled_at',
+        'c.cancel_reason',
+        eb
+          .exists(
+            eb
+              .selectFrom('equipping_lessons as l')
+              .select('l.id')
+              .whereRef('l.class_id', '=', 'c.id'),
+          )
+          .as('lesson_saved'),
       ])
       .where('c.level', '=', query.level)
       .where('c.term_year', '=', query.term_year)
       .where('c.term_number', '=', query.term_number)
+      .$if(!withCancelled, (qb) => qb.where('c.cancelled_at', 'is', null))
       .orderBy(sql`lower(c.name)`)
       .execute();
+  }
 
+  private async withTeachers(
+    rows: Awaited<ReturnType<EquippingService['classRows']>>,
+  ): Promise<Record<string, unknown>[]> {
     const teachers = await this.people.forDecisions(
       rows.flatMap((row) => (row.teacher_person_id === null ? [] : [row.teacher_person_id])),
     );
-    return {
-      data: rows.map((row) => ({
-        ...this.classShape(row),
-        teacher:
-          row.teacher_person_id === null
-            ? null
-            : {
-                id: row.teacher_person_id,
-                full_name: teachers.get(row.teacher_person_id)?.fullName ?? null,
-              },
-        enrolled: Number(row.enrolled ?? 0),
-      })),
-    };
+    return rows.map((row) => ({
+      ...this.classShape(row),
+      teacher:
+        row.teacher_person_id === null
+          ? null
+          : {
+              id: row.teacher_person_id,
+              full_name: teachers.get(row.teacher_person_id)?.fullName ?? null,
+            },
+      enrolled: Number(row.enrolled ?? 0),
+    }));
   }
 
   /**
@@ -421,23 +444,37 @@ export class EquippingService {
    * started. Guides and attendance join it with the steps that build them.
    */
   async coordinatorClasses(query: EquippingTermDto): Promise<Record<string, unknown>> {
-    const listed = (await this.classes(query)) as { data: Record<string, unknown>[] };
+    const rows = await this.classRows(query, true);
+    const shaped = await this.withTeachers(rows);
+    const live = rows.filter((row) => row.cancelled_at === null);
     const today = await this.manilaToday();
-    const staffing = await this.staffingOf(listed.data.map((row) => String(row.id)));
+    const staffing = await this.staffingOf(live.map((row) => row.id));
     // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
     const problems = await this.attendance.lessonProblemsOf(
-      listed.data.map((row) => ({
-        id: String(row.id),
-        first_lesson_on: String(row.first_lesson_on),
-      })),
+      live.map((row) => ({ id: row.id, first_lesson_on: String(row.first_lesson_on) })),
     );
     return {
-      data: listed.data.map((row) => ({
-        ...row,
-        status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
-        guides: staffing.get(String(row.id)) ?? { named: 0, short_men: 0, short_women: 0 },
-        lessons: problems.get(String(row.id)) ?? { late: [], not_recorded: [] },
-      })),
+      data: rows.map((row, index) => {
+        const base = {
+          ...shaped[index],
+          // Whether *When and where* and *Cancel class* are still offered (decision 0510).
+          lesson_saved: Boolean(row.lesson_saved),
+        };
+        if (row.cancelled_at !== null) {
+          return {
+            ...base,
+            status: 'CANCELLED',
+            cancelled_on: manilaDayOf(row.cancelled_at),
+            cancel_reason: row.cancel_reason,
+          };
+        }
+        return {
+          ...base,
+          status: String(row.first_lesson_on) > today ? 'NOT_STARTED' : 'RUNNING',
+          guides: staffing.get(row.id) ?? { named: 0, short_men: 0, short_women: 0 },
+          lessons: problems.get(row.id) ?? { late: [], not_recorded: [] },
+        };
+      }),
     };
   }
 
@@ -932,6 +969,7 @@ export class EquippingService {
       if (cls === undefined) {
         throw new NotFoundError('No such class.');
       }
+      this.assertNotCancelled(cls);
       await this.assertMayTeachWithin(trx, teacher.id);
       const id = canonicalId(teacher.id);
       if (cls.teacher_person_id !== id) {
@@ -957,6 +995,194 @@ export class EquippingService {
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
       return response;
     });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/correction` (decision 0510, points 1 and 2): the Coordinator
+   * corrects a class's day, time, place and first lesson until a lesson of it is saved. The
+   * correction keeps the values it replaced, a save that changes nothing writes nothing, and the
+   * Teacher's week is checked again, a clash warning and never refusing.
+   */
+  async correctClass(
+    actor: Actor,
+    classId: string,
+    body: CorrectClassDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.write(async (trx) => {
+      const cls = await trx
+        .selectFrom('equipping_classes')
+        .selectAll()
+        .where('id', '=', classId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+      if (cls === undefined) {
+        throw new NotFoundError('No such class.');
+      }
+      this.assertNotCancelled(cls);
+      await this.assertNoLessonWithin(
+        trx,
+        cls,
+        'so its day, time, place and first lesson no longer change',
+      );
+
+      const before = {
+        day_of_week: cls.day_of_week,
+        time_of_day: String(cls.time_of_day).slice(0, 5),
+        place: cls.place,
+        first_lesson_on: String(cls.first_lesson_on),
+      };
+      const after = {
+        day_of_week: body.day_of_week,
+        time_of_day: body.time_of_day,
+        place: body.place?.trim() || null,
+        first_lesson_on: body.first_lesson_on,
+      };
+      const changed =
+        before.day_of_week !== after.day_of_week ||
+        before.time_of_day !== after.time_of_day ||
+        before.place !== after.place ||
+        before.first_lesson_on !== after.first_lesson_on;
+
+      if (changed) {
+        // The record first: the database refuses the change without it (migration 0057).
+        await trx
+          .insertInto('equipping_class_corrections')
+          .values({
+            class_id: classId,
+            day_of_week_before: before.day_of_week,
+            day_of_week_after: after.day_of_week,
+            time_of_day_before: before.time_of_day,
+            time_of_day_after: after.time_of_day,
+            place_before: before.place,
+            place_after: after.place,
+            first_lesson_on_before: before.first_lesson_on,
+            first_lesson_on_after: after.first_lesson_on,
+            corrected_by: actor.accountId,
+          })
+          .execute();
+        await trx.updateTable('equipping_classes').set(after).where('id', '=', classId).execute();
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_class.corrected',
+          targetType: 'equipping_class',
+          targetId: classId,
+          before,
+          after,
+        });
+      }
+
+      const response = {
+        ...this.classShape({ ...cls, ...after }),
+        corrected: changed,
+        clash:
+          cls.teacher_person_id === null
+            ? null
+            : await this.clashOf(cls.teacher_person_id, after.day_of_week, after.time_of_day),
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/cancel` (decision 0510, points 3 to 5): a class is cancelled,
+   * never deleted, and only while nobody is enrolled and no lesson is saved. It is final.
+   */
+  async cancelClass(
+    actor: Actor,
+    classId: string,
+    reason: string,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.write(async (trx) => {
+      // FOR NO KEY UPDATE, the mode an enrollment, a lesson save and a Guide take on the class,
+      // so each waits behind this or this behind it, and the reads below see what it committed.
+      const cls = await trx
+        .selectFrom('equipping_classes')
+        .select(['id', 'name', 'cancelled_at'])
+        .where('id', '=', classId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+      if (cls === undefined) {
+        throw new NotFoundError('No such class.');
+      }
+      if (cls.cancelled_at !== null) {
+        throw new InvariantViolationError(`${cls.name} is already cancelled.`, {
+          field: 'class_id',
+        });
+      }
+      const enrolled = await trx
+        .selectFrom('equipping_enrollments')
+        .select(sql<number>`count(*)::int`.as('n'))
+        .where('class_id', '=', classId)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      const n = Number(enrolled.n);
+      if (n > 0) {
+        throw new InvariantViolationError(
+          `${n} ${n === 1 ? 'student is' : 'students are'} enrolled in ${cls.name}. A class is cancelled only while it has no students.`,
+          { field: 'class_id' },
+        );
+      }
+      await this.assertNoLessonWithin(trx, cls, 'so it can no longer be cancelled');
+
+      const row = await trx
+        .updateTable('equipping_classes')
+        .set({
+          cancelled_at: sql<Date>`now()`,
+          cancelled_by: actor.accountId,
+          cancel_reason: reason.trim(),
+        })
+        .where('id', '=', classId)
+        .returning('cancelled_at')
+        .executeTakeFirstOrThrow();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_class.cancelled',
+        targetType: 'equipping_class',
+        targetId: classId,
+        before: { status: 'OPEN' },
+        after: { status: 'CANCELLED', reason: reason.trim() },
+      });
+
+      const response = {
+        id: classId,
+        status: 'CANCELLED',
+        cancelled_on: manilaDayOf(row.cancelled_at as Date),
+        cancel_reason: reason.trim(),
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /** A cancelled class is final (decision 0510, point 5). */
+  private assertNotCancelled(cls: { name: string; cancelled_at: Date | null }): void {
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled; nothing on it changes.`, {
+        field: 'class_id',
+      });
+    }
+  }
+
+  private async assertNoLessonWithin(
+    trx: Transaction<Database>,
+    cls: { id: string; name: string },
+    consequence: string,
+  ): Promise<void> {
+    const lesson = await trx
+      .selectFrom('equipping_lessons')
+      .select('lesson')
+      .where('class_id', '=', cls.id)
+      .orderBy('lesson')
+      .executeTakeFirst();
+    if (lesson !== undefined) {
+      throw new InvariantViolationError(
+        `Lesson ${lesson.lesson} of ${cls.name} is saved, ${consequence}.`,
+        { field: 'class_id' },
+      );
+    }
   }
 
   /** The Teacher a request names: a current Person, never the Registrar record (point 13). */
@@ -1234,14 +1460,15 @@ export class EquippingService {
     // the class, so two enrollments into one class wait for each other rather than deadlocking.
     const cls = await trx
       .selectFrom('equipping_classes')
-      .select(['id', 'level'])
+      .select(['id', 'name', 'level', 'cancelled_at'])
       .where('id', '=', classId)
       .forNoKeyUpdate()
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
     }
-    return cls;
+    this.assertNotCancelled(cls);
+    return { id: cls.id, level: cls.level };
   }
 
   /** A class's open Guides, each with their sex, in the order they were named. */
@@ -1770,13 +1997,22 @@ export class EquippingService {
     // enrollment changing (decision 0508).
     const cls = await trx
       .selectFrom('equipping_classes')
-      .select(['id', 'name', 'level', 'term_year', 'term_number', 'encounter_season_id'])
+      .select([
+        'id',
+        'name',
+        'level',
+        'term_year',
+        'term_number',
+        'encounter_season_id',
+        'cancelled_at',
+      ])
       .where('id', '=', classId)
       .forNoKeyUpdate()
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
     }
+    this.assertNotCancelled(cls);
     const posted = await trx
       .selectFrom('equipping_class_postings')
       .select('id')
@@ -1799,7 +2035,14 @@ export class EquippingService {
         );
       }
     }
-    return cls;
+    return {
+      id: cls.id,
+      name: cls.name,
+      level: cls.level,
+      term_year: cls.term_year,
+      term_number: cls.term_number,
+      encounter_season_id: cls.encounter_season_id,
+    };
   }
 
   /**
@@ -1899,6 +2142,22 @@ export class EquippingService {
             field: 'registration_ids',
           });
         }
+      }
+      // The database's own refusals of decision 0510, reached only past the checks above.
+      const refused = violatedConstraint(error);
+      if (refused === 'equipping_class_cancelled') {
+        throw new InvariantViolationError('That class was cancelled; nothing on it changes.', {
+          field: 'class_id',
+        });
+      }
+      if (
+        refused === 'equipping_class_has_students' ||
+        refused === 'equipping_class_lesson_saved'
+      ) {
+        throw new InvariantViolationError(
+          'That class has a student or a saved lesson now, so this is no longer allowed.',
+          { field: 'class_id' },
+        );
       }
       throw error;
     }
