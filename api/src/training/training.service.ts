@@ -3,11 +3,16 @@ import { sql, type Transaction } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
 import { AccountsRepository } from '../auth/accounts.repository';
-import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import {
+  AuthorizationService,
+  holdsWholeChurch,
+  type Actor,
+} from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import {
   ApiError,
   InvariantViolationError,
+  ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { GrowthConflictError, nameOfAccount, nameOfPerson } from '../common/growth/growth-conflict';
@@ -63,6 +68,8 @@ interface Graduation {
   recordedBy: string;
   /** Whose statement the row is, which a correction is attributed to (section 28). */
   confirmedBy: string | null;
+  /** Filed by the school rather than ticked (decision 0509). */
+  fromSchool: boolean;
 }
 
 type Outcome = 'UNCHANGED' | 'CREATE' | 'REPLACE' | 'RETRACT' | 'STALE';
@@ -71,6 +78,9 @@ const CAPABILITIES = {
   confirm: Capability.TrainingConfirm,
   onBehalf: Capability.TrainingConfirmOnBehalf,
 };
+
+/** The two the school files (decision 0509): only the Admin ticks either. */
+const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 const LABELS: Record<TrainingProgram, string> = {
   ENCOUNTER: 'the Encounter',
@@ -205,9 +215,13 @@ export class TrainingService {
             id: graduation.id,
             program: graduation.program,
             graduated_on: graduation.graduatedOn,
+            from_school: graduation.fromSchool,
           })),
         may_file: mayFile.has(row.id),
       })),
+      // **Only the Admin ticks the Encounter and Life Class** (owner, 2026-11-22, decision 0509):
+      // the school files them, and a tick is for somebody who finished before it.
+      school_may_tick: holdsWholeChurch(authority, CAPABILITIES.confirm),
       next_cursor: nextCursor,
     };
   }
@@ -261,6 +275,26 @@ export class TrainingService {
           lock: true,
         });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
+
+        // **The Encounter and Life Class are the school's** (decision 0509): only the Admin ticks
+        // one, for somebody who finished before the school, and nobody changes the school's.
+        for (const [index, change] of changes.entries()) {
+          if (!SCHOOL_PROGRAMS.has(change.program) || outcomes[index] === 'UNCHANGED') {
+            continue;
+          }
+          if (!holdsWholeChurch(authority, CAPABILITIES.confirm)) {
+            throw new ScopeDeniedError(
+              `${LABELS[change.program]} is recorded by the school; only the Admin ticks it for somebody who finished before the school.`,
+              { person_id: change.person_id, program: change.program },
+            );
+          }
+          if (stored.get(keyOf(change.person_id, change.program))?.fromSchool) {
+            throw new InvariantViolationError(
+              `${LABELS[change.program]} was recorded by the school, and is changed there.`,
+              { person_id: change.person_id, program: change.program },
+            );
+          }
+        }
 
         const staleAt = outcomes.indexOf('STALE');
         if (staleAt !== -1) {
@@ -380,6 +414,94 @@ export class TrainingService {
           'with the same key.',
       );
     }
+  }
+
+  /**
+   * **Files a graduation from the school** (decision 0509): a posted *Passed* files Life Class,
+   * the Encounter attended files the Encounter. Inside the school's own transaction. A person
+   * who already holds a current graduation of the program keeps it, the school's being added
+   * only where there is none. Answers whether it filed.
+   */
+  async fileFromSchoolWithin(
+    trx: Transaction<Database>,
+    input: { personId: string; program: TrainingProgram; graduatedOn: string; accountId: string },
+  ): Promise<boolean> {
+    const held = await trx
+      .selectFrom('training_graduations')
+      .select('id')
+      .where('person_id', '=', input.personId)
+      .where('program', '=', input.program)
+      .where('superseded_at', 'is', null)
+      .forUpdate()
+      .executeTakeFirst();
+    if (held !== undefined) {
+      return false;
+    }
+    await trx
+      .insertInto('training_graduations')
+      .values({
+        person_id: input.personId,
+        program: input.program,
+        graduated_on: input.graduatedOn,
+        confirmed_by: null,
+        recorded_by: input.accountId,
+        from_school: true,
+      })
+      .execute();
+    await this.audit.writeWithin(trx, {
+      actorId: input.accountId,
+      action: 'training_graduation.confirmed',
+      targetType: 'person',
+      targetId: input.personId,
+      after: { program: input.program, graduated_on: input.graduatedOn, from_school: true },
+    });
+    return true;
+  }
+
+  /**
+   * **Withdraws a graduation the school filed** (decision 0509), when what it rested on is
+   * corrected: the Encounter's when who came is corrected to not attended. A tick from before
+   * the school is left alone. Answers whether it withdrew one.
+   */
+  async withdrawFromSchoolWithin(
+    trx: Transaction<Database>,
+    input: { personId: string; program: TrainingProgram; accountId: string; reason: string },
+  ): Promise<boolean> {
+    const row = await trx
+      .selectFrom('training_graduations')
+      .select(['id', 'graduated_on'])
+      .where('person_id', '=', input.personId)
+      .where('program', '=', input.program)
+      .where('superseded_at', 'is', null)
+      .where('from_school', '=', true)
+      .forUpdate()
+      .executeTakeFirst();
+    if (row === undefined) {
+      return false;
+    }
+    await trx
+      .updateTable('training_graduations')
+      .set({
+        superseded_at: sql<Date>`now()`,
+        corrected_by: input.accountId,
+        correction_reason: input.reason,
+      })
+      .where('id', '=', row.id)
+      .execute();
+    await this.audit.writeWithin(trx, {
+      actorId: input.accountId,
+      action: 'training_graduation.corrected',
+      targetType: 'person',
+      targetId: input.personId,
+      before: {
+        program: input.program,
+        graduated_on: row.graduated_on === null ? null : String(row.graduated_on),
+        from_school: true,
+      },
+      after: { program: input.program, withdrawn: true, from_school: true },
+      reason: input.reason,
+    });
+    return true;
   }
 
   /**
@@ -552,6 +674,7 @@ export class TrainingService {
         'confirmed_at',
         'recorded_by',
         'confirmed_by',
+        'from_school',
       ])
       .where('person_id', 'in', [...personIds])
       .where('superseded_at', 'is', null)
@@ -567,6 +690,7 @@ export class TrainingService {
       confirmedAt: row.confirmed_at,
       recordedBy: row.recorded_by,
       confirmedBy: row.confirmed_by,
+      fromSchool: row.from_school,
     }));
   }
 

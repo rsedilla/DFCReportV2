@@ -930,6 +930,8 @@ export interface TrainingGraduationsTable extends GrowthStatement {
   program: TrainingProgram;
   /** Null where the leader does not know it (section 28). */
   graduated_on: DateOnly | null;
+  /** Filed by the school, a posted pass or the Encounter attended (decision 0509). */
+  from_school: Generated<boolean>;
 }
 
 export interface ConquestConfirmationsTable extends GrowthStatement {
@@ -1090,6 +1092,8 @@ export interface EquippingFinalGradesTable {
   reason: string;
   lessons_kept: number;
   lessons_made_up: number;
+  passed_later_at: Date | null;
+  passed_later_by: string | null;
 }
 
 /** A student enrolled in one season's Encounter weekend (decision 0507). */
