@@ -276,22 +276,30 @@ export class TrainingService {
         });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
 
+        // **Only the Admin ticks the Encounter and Life Class** (decision 0509), refused before the
+        // stale check: a line nobody else may make is never answered "reload and decide again".
+        if (!holdsWholeChurch(authority, CAPABILITIES.confirm)) {
+          const school = changes.find(
+            (change, index) =>
+              SCHOOL_PROGRAMS.has(change.program) && outcomes[index] !== 'UNCHANGED',
+          );
+          if (school !== undefined) {
+            throw new ScopeDeniedError(
+              `${LABELS[school.program]} is recorded by the school; only the Admin ticks it for somebody who finished before the school.`,
+              { person_id: school.person_id, program: school.program },
+            );
+          }
+        }
+
         const staleAt = outcomes.indexOf('STALE');
         if (staleAt !== -1) {
           throw await this.conflictFor(trx, actor, changes[staleAt], stored);
         }
-        // **The Encounter and Life Class are the school's** (decision 0509): only the Admin ticks
-        // one, for somebody who finished before the school, and nobody changes the school's.
-        // After the stale check, so a line made against an older page gets 0282's conflict.
+        // **Nobody changes the school's** (decision 0509), the Admin included. After the stale
+        // check, so the Admin's line made against an older page gets 0282's conflict.
         for (const [index, change] of changes.entries()) {
           if (!SCHOOL_PROGRAMS.has(change.program) || outcomes[index] === 'UNCHANGED') {
             continue;
-          }
-          if (!holdsWholeChurch(authority, CAPABILITIES.confirm)) {
-            throw new ScopeDeniedError(
-              `${LABELS[change.program]} is recorded by the school; only the Admin ticks it for somebody who finished before the school.`,
-              { person_id: change.person_id, program: change.program },
-            );
           }
           // On any record of the person (decision 0408): a correction withdraws them all.
           if (
@@ -701,7 +709,6 @@ export class TrainingService {
       ])
       .where('person_id', 'in', [...personIds])
       .where('superseded_at', 'is', null)
-      // Locked in person order, the order the school files in (section 24).
       .$if(options.lock === true, (qb) => qb.orderBy('person_id').orderBy('id').forUpdate())
       .execute();
 

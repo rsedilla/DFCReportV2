@@ -24,9 +24,8 @@ school is never withdrawn by the school.
 object), which builds decision 0508's *passes after a later one*. When the Registrar records them
 as having come: their enrollment ends `COMPLETED`, Life Class is filed from the school, and their
 posted grade records when and by whom they passed, in `passed_later_at` and `passed_later_by`,
-the grade itself still reading *Not yet* as posted. **Correcting them back to not attended is not
-offered**: passing ends their enrollment, which takes them off every weekend's list, as a posted
-*Passed* is taken off, so the save cannot reach them.
+the grade itself still reading *Not yet* as posted. **Correcting them back to not attended is
+refused** (owner), the Life Class it filed resting on it.
 
 **5. Older ticks read *Before the school*, and the school's *From the school*** (owner), as small
 outlined labels in words under the date in the Encounter and Life Class columns. Above the table one
@@ -55,14 +54,15 @@ What the owner ruled is points 1 to 7. These are this step's readings:
   it was recorded, the Encounter being the step they were waiting on. **"A later Encounter"
   includes their own class's weekend recorded after the class was posted**, whose date then falls
   before the posting day; it is the same *Not yet* passing on the same evidence.
-- **The posted grade is found through the student's open Life Class enrollment**, not the one their
-  weekend row was made from, which a move between classes has since ended.
+- **The posted grade is found through the weekend row's own registration**, on its open
+  enrollment: a move keeps the registration, so a student moved since is found, and a Life Class
+  of another term is not.
 - **Only a correction from came withdraws, and only the Encounter this weekend filed.** A first
   record of not attended files and withdraws nothing, so a weekend can never take back the
   Encounter another weekend filed.
-- **A stale Admin tick is answered with decision 0282's conflict** before the school's refusal, so
-  a line made against an older page is told what changed, and a correction is refused while any
-  record of the person, a merged one included, holds the school's row of that program.
+- **A stale line of the Admin's is answered with decision 0282's conflict** before the school's
+  refusal, and a correction is refused while any record of the person, a merged one included,
+  holds the school's row of that program. Anybody else's line for either is refused first.
 - **Nobody changes a graduation the school filed on the Training tab**, the Admin included,
   refused `INVARIANT_VIOLATION`; it is changed where the school recorded it.
 - **"The Admin" is read as `training.confirm` at Whole Church**, which only the Admin holds by
@@ -83,8 +83,7 @@ false so every existing row reads as before the school; `equipping_final_grades.
 and `passed_later_by`, the trigger keeping a posted grade as written but for setting those two
 once on a *Not yet*; a school row confirms as nobody, and whether a row is the school's never
 changes, both held by the database), `TrainingService.fileFromSchoolWithin` and `withdrawFromSchoolWithin`,
-called inside the posting's and the Encounter save's own transactions, in person order as a
-Training save locks its rows (Section 24), the list's
+called inside the posting's and the Encounter save's own transactions, the list's
 `school_may_tick` and each graduation's `from_school`, and the Training tab. Audited as
 `training_graduation.confirmed` or `.corrected` with `from_school`, and
 `equipping_final_grade.passed_later` on the student's **Person**.

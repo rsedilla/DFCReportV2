@@ -644,7 +644,7 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     await expect(dalisay.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
     await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
     // The key says once what each label means.
-    await expect(page.getByText('recorded by the Registrar or a posted Passed')).toBeVisible();
+    await expect(page.getByText('recorded by the school: the Encounter attended, or a posted Passed')).toBeVisible();
   });
 
   test('the Admin ticks the two for one who finished before the school, never the school’s', async ({

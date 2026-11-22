@@ -384,6 +384,74 @@ describe('Training (section 28)', () => {
       expect(await currentCount(timothy.id, 'ENCOUNTER')).toBe(1);
     });
 
+    const beforeTheSchool = (personId: string, program: TrainingProgram) =>
+      db
+        .insertInto('training_graduations')
+        .values({
+          person_id: personId,
+          program,
+          graduated_on: '2019-03-10',
+          confirmed_by: null,
+          recorded_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+    it('lets the Admin alone withdraw a tick from before the school, with a reason (point 7)', async () => {
+      const row = await beforeTheSchool(timothy.id, 'LIFE_CLASS');
+      const withdraw = {
+        person_id: timothy.id,
+        program: 'LIFE_CLASS' as const,
+        graduated: false,
+        seen_id: row.id,
+        reason: 'Never finished it.',
+      };
+
+      const byLeader = await submit(markAccount, [withdraw]);
+      expect(byLeader.status).toBe(403);
+      expect(byLeader.body.error.code).toBe('SCOPE_DENIED');
+      expect(await currentCount(timothy.id, 'LIFE_CLASS')).toBe(1);
+
+      expect((await submit(admin, [withdraw])).status).toBe(201);
+      expect(await currentCount(timothy.id, 'LIFE_CLASS')).toBe(0);
+    });
+
+    it('answers the Admin’s stale line with the conflict, and a leader’s with the refusal', async () => {
+      await fromSchool(timothy.id, 'ENCOUNTER');
+
+      const stale = await submit(admin, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
+      expect(stale.status).toBe(409);
+      expect(stale.body.error.code).toBe('VERSION_CONFLICT');
+
+      const leader = await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
+      expect(leader.status).toBe(403);
+      expect(leader.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    it('holds in the database that the school confirms as nobody and stays the school’s', async () => {
+      await expect(
+        db
+          .insertInto('training_graduations')
+          .values({
+            person_id: timothy.id,
+            program: 'ENCOUNTER',
+            confirmed_by: mark.id,
+            recorded_by: admin.id,
+            from_school: true,
+          })
+          .execute(),
+      ).rejects.toThrow(/training_graduations_school_confirms_nobody/);
+
+      const row = await beforeTheSchool(timothy.id, 'ENCOUNTER');
+      await expect(
+        db
+          .updateTable('training_graduations')
+          .set({ from_school: true })
+          .where('id', '=', row.id)
+          .execute(),
+      ).rejects.toThrow(/kept as filed/);
+    });
+
     it('says which rows are the school’s, and whether the reader may tick the two', async () => {
       await fromSchool(timothy.id, 'ENCOUNTER');
 

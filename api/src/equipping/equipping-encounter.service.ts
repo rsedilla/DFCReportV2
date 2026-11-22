@@ -362,32 +362,54 @@ export class EquippingEncounterService {
         }
       }
       // **A posted Not yet passes at a later Encounter** (decision 0509): the posted grade on the
-      // person's open Life Class enrollment, locked. That enrollment, not the one the weekend row
-      // was made from, which a move between classes has since ended. One who has passed since is
-      // not here to correct: passing ended their enrollment, which takes them off every
-      // weekend's list, as a posted Passed is taken off.
+      // weekend row's own registration, through its open enrollment, locked. A move keeps the
+      // registration and opens a new enrollment on it, so a student moved since is still found,
+      // and a Life Class of another term, on another registration, never is. A grade found here
+      // is passed, or was passed, at most once.
       const notYet = enrolled.length
         ? await trx
-            .selectFrom('equipping_final_grades as g')
-            .innerJoin('equipping_enrollments as e', 'e.id', 'g.enrollment_id')
-            .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-            .select(['g.id', 'g.enrollment_id', 'g.passed_later_at', 'r.person_id'])
+            .selectFrom('equipping_encounter_enrollments as ee')
+            .innerJoin('equipping_enrollments as made', 'made.id', 'ee.enrollment_id')
+            .innerJoin('equipping_enrollments as e', 'e.registration_id', 'made.registration_id')
+            .innerJoin('equipping_final_grades as g', 'g.enrollment_id', 'e.id')
+            .select([
+              'ee.id as encounter_enrollment_id',
+              'g.id',
+              'g.enrollment_id',
+              'g.passed_later_at',
+            ])
             .where(
-              'r.person_id',
+              'ee.id',
               'in',
-              enrolled.map((row) => row.person_id),
+              enrolled.map((row) => row.id),
             )
-            .where('r.level', '=', 'LIFE_CLASS')
-            .where('e.ended_at', 'is', null)
             .where('g.grade', '=', 'NOT_YET')
             .orderBy('g.id')
             .forUpdate(['g'])
             .execute()
         : [];
-      const notYetOf = new Map(notYet.map((row) => [canonicalId(row.person_id), row]));
-      // Training's graduations are filed after the attendance, in person order, as a Training
-      // save locks them, so the two never wait on each other the other way round (section 24).
-      const toFile: { personId: string; came: boolean }[] = [];
+      const notYetOf = new Map(
+        notYet.map((row) => [canonicalId(row.encounter_enrollment_id), row]),
+      );
+      // One who passed at this weekend is not recorded as not attended: the Life Class it filed
+      // rests on it (owner, 2026-11-22).
+      const undone = enrolled.filter(
+        (row) =>
+          !came.has(canonicalId(row.id)) &&
+          currentOf.get(canonicalId(row.id))?.came === true &&
+          notYetOf.get(canonicalId(row.id))?.passed_later_at != null,
+      );
+      if (undone.length > 0) {
+        const names = await this.people.forDecisions(undone.map((row) => row.person_id));
+        throw new InvariantViolationError(
+          `Passed Life Class at this Encounter, so cannot be recorded as not attended: ${undone
+            .map((row) => names.get(row.person_id)?.fullName ?? 'somebody')
+            .join(', ')}.`,
+          { field: 'came' },
+        );
+      }
+      // Training's graduations are filed after the attendance, in person order.
+      const toFile: { personId: string; encounterEnrollmentId: string; came: boolean }[] = [];
       let changed = 0;
       for (const row of enrolled) {
         const wants = came.has(canonicalId(row.id));
@@ -418,7 +440,7 @@ export class EquippingEncounterService {
         // A first record of not attended files and withdraws nothing: only a correction from came
         // withdraws, and only what this weekend filed.
         if (wants || was?.came === true) {
-          toFile.push({ personId: row.person_id, came: wants });
+          toFile.push({ personId: row.person_id, encounterEnrollmentId: row.id, came: wants });
         }
       }
       // **The Encounter attended is filed from the school** (decision 0509), dated the weekend,
@@ -441,7 +463,7 @@ export class EquippingEncounterService {
           graduatedOn: weekend.on,
           accountId: actor.accountId,
         });
-        const grade = notYetOf.get(canonicalId(each.personId));
+        const grade = notYetOf.get(canonicalId(each.encounterEnrollmentId));
         if (grade === undefined || grade.passed_later_at !== null) {
           continue;
         }

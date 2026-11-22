@@ -566,6 +566,92 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     expect(open.end_reason).toBe('COMPLETED');
   });
 
+  it('refuses recording as not attended one who passed at that Encounter (decision 0509)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    const today = await manilaToday();
+    const later = (
+      await db
+        .insertInto('encounter_seasons')
+        .values({
+          mens_lc_party_on: plusDays(today, -35),
+          mens_encounter_on: today,
+          womens_lc_party_on: plusDays(today, -28),
+          womens_encounter_on: plusDays(today, 7),
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    // Also in a later term's class, which keeps them on the weekend's list after passing.
+    const nextTerm = { ...TERM, term_number: 4 };
+    const nextClass = (
+      await db
+        .insertInto('equipping_classes')
+        .values({
+          ...nextTerm,
+          name: 'Life Class C',
+          day_of_week: 4,
+          time_of_day: '19:00',
+          first_lesson_on: firstLesson,
+          teacher_person_id: lito.id,
+          encounter_season_id: later,
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const nextRegistration = (
+      await db
+        .insertInto('equipping_registrations')
+        .values({
+          ...nextTerm,
+          person_id: personOf.get('Dino')!,
+          bible_confirmed: true,
+          manual_confirmed: true,
+          registered_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('equipping_enrollments')
+      .values({ registration_id: nextRegistration, class_id: nextClass, started_by: registrar.id })
+      .execute();
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: enrollmentOf.get('Dino')!,
+          person_id: personOf.get('Dino')!,
+          encounter_season_id: later,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [ee],
+    }).expect(200);
+    expect(await lifeClassOf('Dino')).toHaveLength(1);
+
+    const undo = await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [],
+    }).expect(409);
+    expect(undo.body.error.code).toBe('INVARIANT_VIOLATION');
+    expect(await lifeClassOf('Dino')).toEqual([
+      { graduated_on: today, from_school: true, superseded_at: null },
+    ]);
+  });
+
   it('waits for the Admin when a student is the Coordinator’s own disciple', async () => {
     await term();
     await db

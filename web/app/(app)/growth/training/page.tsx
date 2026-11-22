@@ -222,11 +222,11 @@ function TrainingTab() {
             <dt className="text-ink font-semibold">Key</dt>
             <dd className="flex flex-wrap items-center gap-1.5">
               <SourceLabel>From the school</SourceLabel>
-              recorded by the Registrar or a posted Passed
+              recorded by the school: the Encounter attended, or a posted Passed
             </dd>
             <dd className="flex flex-wrap items-center gap-1.5">
               <SourceLabel>Before the school</SourceLabel>
-              ticked by the Admin, finished before the school
+              ticked for someone who finished before the school
             </dd>
           </dl>
           <Table
