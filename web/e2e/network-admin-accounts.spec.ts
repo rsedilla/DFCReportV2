@@ -202,6 +202,22 @@ test.describe('a Network Admin on a person’s Account view', () => {
     await expect(page.getByText('Moves people is on. Only the Admin changes this.')).toBeVisible();
   });
 
+  test('is not shown Life Class Coordinator, and the Admin alone clears Full view', async ({ page }) => {
+    await open(page, leaderAccount({ coordinates_life_class: true }));
+
+    await expect(page.getByRole('checkbox', { name: /^Full view/ })).toBeDisabled();
+    await expect(page.getByText('Only the Admin clears this.')).toBeVisible();
+    await expect(page.getByText(/Life Class Coordinator/)).toHaveCount(0);
+  });
+
+  test('is shown Moves people and not Life Class Coordinator when both are on', async ({ page }) => {
+    await open(page, leaderAccount({ moves_people: true, coordinates_life_class: true }));
+
+    await expect(page.getByText('Only the Admin clears this while Moves people is on.')).toBeVisible();
+    await expect(page.getByText('Moves people is on. Only the Admin changes this.')).toBeVisible();
+    await expect(page.getByText(/Life Class Coordinator/)).toHaveCount(0);
+  });
+
   test('gives a Leader account without asking for a role', async ({ page }) => {
     await open(page, null);
     const sent: Record<string, unknown>[] = [];
