@@ -134,7 +134,7 @@ describe('Full view (decision 0323)', () => {
           .post('/api/v1/training/submit')
           .set('Authorization', `Bearer ${token}`)
           .set('Idempotency-Key', randomUUID())
-          .send({ changes: [{ person_id: disciple, program: 'LIFE_CLASS', graduated: true }] }),
+          .send({ changes: [{ person_id: disciple, program: 'SOL_1', graduated: true }] }),
       'GET /conquest/branches': get('conquest/branches'),
       'GET /conquest/counts': get('conquest/counts'),
       'GET /conquest/people': get('conquest/people'),

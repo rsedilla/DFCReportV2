@@ -269,7 +269,7 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
         changes: [
           {
             person_id: person.id,
-            program: 'LIFE_CLASS',
+            program: 'SOL_1',
             graduated: true,
             graduated_on: '2019-03-10',
             ...extra,
@@ -282,7 +282,7 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
         .selectFrom('training_graduations')
         .selectAll()
         .where('person_id', '=', person.id)
-        .where('program', '=', 'LIFE_CLASS')
+        .where('program', '=', 'SOL_1')
         .where('superseded_at', 'is', null)
         .executeTakeFirst();
 
@@ -370,7 +370,7 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
     }).expect(201);
     await post(networkAdmin, '/training/submit', {
       changes: [
-        { person_id: wynn.id, program: 'LIFE_CLASS', graduated: true, graduated_on: '2019-03-10' },
+        { person_id: wynn.id, program: 'SOL_1', graduated: true, graduated_on: '2019-03-10' },
       ],
     }).expect(201);
 
