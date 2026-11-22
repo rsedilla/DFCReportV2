@@ -444,6 +444,60 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     expect(await current('Carlo')).toEqual([]);
   });
 
+  it('files Life Class from what a record merged into the person holds (decision 0509, point 8)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    // Ben was posted Passed, and is then merged into a record kept that holds an old tick.
+    const kept = await createPerson(db, { firstName: 'Benjie', network: 'MENS' });
+    await assignTo(db, kept.id, ramon.id);
+    await db
+      .updateTable('training_graduations')
+      .set({ superseded_at: new Date(), corrected_by: admin.id, correction_reason: 'Setup' })
+      .where('person_id', '=', personOf.get('Ben')!)
+      .execute();
+    const tick = await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: kept.id,
+        program: 'LIFE_CLASS',
+        graduated_on: '2018-06-01',
+        confirmed_by: null,
+        recorded_by: admin.id,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: kept.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+      .where('id', '=', personOf.get('Ben')!)
+      .execute();
+
+    await post(admin, 'training/submit', {
+      changes: [
+        {
+          person_id: kept.id,
+          program: 'LIFE_CLASS',
+          graduated: false,
+          seen_id: tick.id,
+          reason: 'Ticked in error.',
+        },
+      ],
+    }).expect(201);
+
+    const current = await db
+      .selectFrom('training_graduations')
+      .select(['person_id', 'graduated_on', 'from_school'])
+      .where('person_id', 'in', [kept.id, personOf.get('Ben')!])
+      .where('program', '=', 'LIFE_CLASS')
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(current).toEqual([
+      { person_id: kept.id, graduated_on: await manilaToday(), from_school: true },
+    ]);
+  });
+
   it('files Life Class dated the weekend a Not yet passed at, when the Admin withdraws a tick (decision 0509, point 8)', async () => {
     await term();
     const tick = await db
@@ -498,6 +552,23 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     expect(await lifeClassOf('Dino')).toEqual([
       { graduated_on: null, from_school: false, superseded_at: null },
     ]);
+    // Ben, posted Passed today, is merged into Dino: the school then holds two dates for him,
+    // and the earlier, the weekend, is the one filed. The Life Class the posting filed on Ben is
+    // set aside first, so only the school's records speak, not a row already filed.
+    await db
+      .updateTable('training_graduations')
+      .set({ superseded_at: new Date(), corrected_by: admin.id, correction_reason: 'Setup' })
+      .where('person_id', '=', personOf.get('Ben')!)
+      .execute();
+    await db
+      .updateTable('persons')
+      .set({
+        merged_into_id: personOf.get('Dino')!,
+        merged_at: new Date(),
+        merge_reason: 'Recorded twice',
+      })
+      .where('id', '=', personOf.get('Ben')!)
+      .execute();
 
     await post(admin, 'training/submit', {
       changes: [

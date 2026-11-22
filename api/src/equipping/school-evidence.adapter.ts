@@ -6,7 +6,9 @@ import type { SchoolEvidence, SchoolEvidencePort } from '../training/school-evid
 
 /**
  * `equipping`'s answer to what the school recorded for a person (decision 0509, point 8), behind
- * `training`'s `SCHOOL_EVIDENCE_PORT`. The same evidence the school files from:
+ * `training`'s `SCHOOL_EVIDENCE_PORT`. The kinds of record the school files from, as they stand
+ * now (a grade posted while the student was archived, when the school filed nothing, counts too,
+ * the ruling's words being that the school has passed them):
  *
  * - **the Encounter**: a current record of having come, dated that weekend;
  * - **Life Class**: a posted *Passed*, dated the posting day, or a posted *Not yet* that passed

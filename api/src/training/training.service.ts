@@ -408,8 +408,8 @@ export class TrainingService {
           }
 
           // **The school's takes the place of a tick the Admin withdraws** (decision 0509,
-          // point 8): one the school already passed is filed from the school, as it would have
-          // been had the tick never been there.
+          // point 8): one whose school records show them passed is filed from the school, from
+          // those records as they stand now.
           if (outcome === 'RETRACT' && SCHOOL_PROGRAMS.has(change.program)) {
             await this.fileWhatTheSchoolHoldsWithin(trx, change.person_id, change.program, actor);
           }
@@ -577,6 +577,11 @@ export class TrainingService {
       reason: string;
     },
   ): Promise<boolean> {
+    // **Every current row of the person and program first, merged records included**, so a
+    // Training save withdrawing a tick from before the school (point 8), which holds that tick
+    // and may be about to file the school's in its place, finishes before this decides. The
+    // read below is then a new statement and sees what that save filed.
+    await this.storedOfKept(trx, [input.personId], { lock: true });
     const row = await trx
       .selectFrom('training_graduations')
       .select(['id', 'graduated_on'])
