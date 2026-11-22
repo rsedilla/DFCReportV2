@@ -568,3 +568,78 @@ export async function saveEncounterAttendance(
     idempotencyKey,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Final grades (decision 0501, points 15 and 16; decision 0508)
+// ---------------------------------------------------------------------------
+
+export type FinalGrade = 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
+export type GradesPhase = 'NOT_READY' | 'WAITING_COORDINATOR' | 'WAITING_ADMIN' | 'READY' | 'POSTED';
+
+/** Where a class stands: lessons recorded, checked, posted. */
+export interface GradesStatus {
+  phase: GradesPhase;
+  missing_lessons: number[];
+  counts: { passed: number; not_passed: number; not_yet: number };
+  coordinator_check: { by: string | null; at: string } | null;
+  admin_check: { by: string | null; at: string } | null;
+  disciples_for_admin: number;
+  posted: { at: string } | null;
+}
+
+export interface ClassGrades {
+  class: { id: string; name: string; day_of_week: number; time_of_day: string; place: string | null };
+  status: GradesStatus;
+  may_check: boolean;
+  checks_as: 'ADMIN' | 'COORDINATOR';
+  fingerprint: string;
+  students: {
+    enrollment_id: string;
+    person: { id: string; full_name: string | null };
+    grade: FinalGrade;
+    reason: string;
+    lessons_kept: number;
+    lessons_made_up: number;
+    lessons: EncounterSign[];
+    your_disciple: boolean;
+  }[];
+}
+
+export async function listFinalGradeClasses(
+  term: Term,
+  signal?: AbortSignal,
+): Promise<{ data: { id: string; name: string; day_of_week: number; time_of_day: string; status: GradesStatus }[] }> {
+  return authenticatedRequest(`/api/v1/equipping/final-grades?${termQuery(term)}`, { signal });
+}
+
+export async function getFinalGrades(classId: string, signal?: AbortSignal): Promise<ClassGrades> {
+  return authenticatedRequest(`/api/v1/equipping/final-grades/classes/${encodeURIComponent(classId)}`, {
+    signal,
+  });
+}
+
+export async function getCoordinatorGrades(classId: string, signal?: AbortSignal): Promise<ClassGrades> {
+  return authenticatedRequest(`/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/grades`, {
+    signal,
+  });
+}
+
+export async function checkClassGrades(
+  classId: string,
+  fingerprint: string,
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/coordinate/classes/${encodeURIComponent(classId)}/check`, {
+    method: 'POST',
+    body: { fingerprint },
+    idempotencyKey,
+  });
+}
+
+export async function postClassGrades(classId: string, idempotencyKey: string): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/final-grades/classes/${encodeURIComponent(classId)}/post`, {
+    method: 'POST',
+    body: {},
+    idempotencyKey,
+  });
+}

@@ -8,6 +8,7 @@ import {
   CircleUserRound,
   ClipboardCheck,
   ClipboardList,
+  FileCheck2,
   GraduationCap,
   LayoutGrid,
   type LucideIcon,
@@ -187,6 +188,13 @@ const ENCOUNTER: NavEntry = {
   icon: Tent,
   matches: ['/equipping/encounter'],
 };
+/** Final Grades, the Registrar's fourth step (decision 0501, point 20; decision 0508). */
+const FINAL_GRADES: NavEntry = {
+  href: '/equipping/final-grades',
+  label: 'Final Grades',
+  icon: FileCheck2,
+  matches: ['/equipping/final-grades'],
+};
 const EQUIPPING: NavEntry = {
   href: '/equipping/registration',
   label: 'Equipping',
@@ -354,7 +362,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? []
     : [
         ...(me.data?.screens === 'EQUIPPING'
-          ? [REGISTRATION, ENROLLMENT, ENCOUNTER]
+          ? [REGISTRATION, ENROLLMENT, ENCOUNTER, FINAL_GRADES]
           : me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(shows ? [TEACH] : [])]
           : me.data?.screens === 'SENIOR_PASTOR'

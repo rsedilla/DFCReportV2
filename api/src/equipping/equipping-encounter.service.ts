@@ -246,6 +246,31 @@ export class EquippingEncounterService {
     return this.write(async (trx) => {
       const all = await this.seasons.allSeasons(trx);
       const weekend = this.weekendOf(all, body.season_id, body.network);
+      // The classes of those enrolled, locked first as a lesson save and a posting lock them, so
+      // a class is not checked or posted beside a change to who came (decision 0508).
+      const classes = await trx
+        .selectFrom('equipping_encounter_enrollments as ee')
+        .innerJoin('equipping_registrations as r', 'r.person_id', 'ee.person_id')
+        .innerJoin('equipping_enrollments as e', 'e.registration_id', 'r.id')
+        .select('e.class_id')
+        .distinct()
+        .where('ee.encounter_season_id', '=', weekend.season.id)
+        .where('ee.network', '=', body.network)
+        .where('e.ended_at', 'is', null)
+        .execute();
+      if (classes.length > 0) {
+        await trx
+          .selectFrom('equipping_classes')
+          .select('id')
+          .where(
+            'id',
+            'in',
+            classes.map((row) => row.class_id),
+          )
+          .orderBy('id')
+          .forNoKeyUpdate()
+          .execute();
+      }
       const locked = await trx
         .selectFrom('equipping_encounter_enrollments')
         .select(['id', 'person_id'])

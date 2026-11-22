@@ -1,10 +1,11 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { SearchResults } from '@/components/search-results';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -117,13 +118,14 @@ export default function ClassesPage() {
                   <span className="text-muted">Attendance </span>
                   <AttendanceLine each={each} />
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
                     Edit
                   </Button>
                   <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                     Students
                   </Button>
+                  <GradesLink each={each} />
                 </div>
               </li>
             ))}
@@ -169,6 +171,7 @@ export default function ClassesPage() {
                       <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                         Students
                       </Button>
+                      <GradesLink each={each} />
                     </div>
                   </td>
                 </tr>
@@ -734,5 +737,18 @@ function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[]
       ) : null}
       <FailureNotice failure={swap.isError ? describeFailure(swap.error) : null} />
     </li>
+  );
+}
+
+/** A class's final grades, for the Coordinator to check (decision 0508). */
+function GradesLink({ each }: { each: { id: string; name: string } }) {
+  return (
+    <Link
+      href={`/equipping/classes/${each.id}/grades`}
+      aria-label={`Grades of ${each.name}`}
+      className={buttonClasses('secondary')}
+    >
+      Grades
+    </Link>
   );
 }

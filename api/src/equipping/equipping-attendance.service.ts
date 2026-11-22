@@ -526,6 +526,7 @@ export class EquippingAttendanceService {
     }
     return this.db.transaction().execute(async (trx) => {
       const cls = await this.lockClassWithin(trx, classId);
+      await this.refusePostedWithin(trx, cls);
       const standing = await this.standingOf(trx, actor, cls);
       if (!standing.teaches && !standing.wide) {
         throw new ScopeDeniedError(
@@ -845,7 +846,7 @@ export class EquippingAttendanceService {
   /**
    * `POST /equipping/classes/{id}/make-ups`: a missed lesson made up, recorded as M with its date
    * (decision 0501, point 12). The Teacher may record one at any time until the term's final
-   * grades are posted, which nothing posts yet; a later date for the same make-up corrects it.
+   * grades are posted (decision 0508); a later date for the same make-up corrects it.
    */
   async recordMakeUp(
     actor: Actor,
@@ -855,6 +856,7 @@ export class EquippingAttendanceService {
   ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
       const cls = await this.lockClassWithin(trx, classId);
+      await this.refusePostedWithin(trx, cls);
       const standing = await this.standingOf(trx, actor, cls);
       if (!standing.teaches && !standing.wide) {
         throw new ScopeDeniedError(
@@ -1227,6 +1229,25 @@ export class EquippingAttendanceService {
       first_lesson_on: String(cls.first_lesson_on),
       time_of_day: String(cls.time_of_day),
     };
+  }
+
+  /**
+   * **A posted class's register is final** (decision 0508): no lesson is saved and no make-up
+   * recorded once its grades are posted. A change after posting is the Admin's, with a reason
+   * (decision 0501, point 16), which is a later step.
+   */
+  private async refusePostedWithin(trx: Transaction<Database>, cls: ClassRow): Promise<void> {
+    const posted = await trx
+      .selectFrom('equipping_class_postings')
+      .select('id')
+      .where('class_id', '=', cls.id)
+      .executeTakeFirst();
+    if (posted !== undefined) {
+      throw new InvariantViolationError(
+        `${cls.name}'s grades have been posted, so its register is final.`,
+        { field: 'id' },
+      );
+    }
   }
 
   private async standingOf(

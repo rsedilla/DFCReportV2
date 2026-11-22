@@ -280,3 +280,10 @@ export class EncounterAttendanceDto {
   @IsUUID('all', { each: true })
   came!: string[];
 }
+
+/** *Mark as checked*, naming the grades it read (decision 0508). */
+export class CheckGradesDto {
+  @IsString()
+  @Matches(/^[0-9a-f]{64}$/)
+  fingerprint!: string;
+}
