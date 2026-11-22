@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
@@ -41,6 +41,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { composeName } from '../people/people.shared';
 
 import { TRAINING_PROGRAMS, type TrainingListDto, type TrainingStep } from './dto/training.dto';
+import { SCHOOL_EVIDENCE_PORT, type SchoolEvidencePort } from './school-evidence.port';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, TrainingProgram } from '../database/schema';
@@ -109,6 +110,10 @@ export class TrainingService {
     private readonly authorization: AuthorizationService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    /** Optional and refusing (ruling of 2026-09-01); bound in `SchoolEvidenceBindingModule`. */
+    @Optional()
+    @Inject(SCHOOL_EVIDENCE_PORT)
+    private readonly schoolEvidence?: SchoolEvidencePort,
   ) {}
 
   /** What the shared Growth helpers read through, each the module owning its table. */
@@ -401,6 +406,13 @@ export class TrainingService {
             }
             corrected += 1;
           }
+
+          // **The school's takes the place of a tick the Admin withdraws** (decision 0509,
+          // point 8): one the school already passed is filed from the school, as it would have
+          // been had the tick never been there.
+          if (outcome === 'RETRACT' && SCHOOL_PROGRAMS.has(change.program)) {
+            await this.fileWhatTheSchoolHoldsWithin(trx, change.person_id, change.program, actor);
+          }
         }
 
         const response = {
@@ -480,6 +492,73 @@ export class TrainingService {
       after: { program: input.program, graduated_on: input.graduatedOn, from_school: true },
     });
     return true;
+  }
+
+  /**
+   * Files the graduation the school's own records support, where there is one (decision 0509,
+   * point 8): the earliest of what it holds for the person and every record merged into them,
+   * dated as the school dates it.
+   */
+  private async fileWhatTheSchoolHoldsWithin(
+    trx: Transaction<Database>,
+    personId: string,
+    program: TrainingProgram,
+    actor: Actor,
+  ): Promise<void> {
+    if (this.schoolEvidence === undefined) {
+      throw new InvariantViolationError(
+        'This deployment cannot withdraw a tick of the Encounter or Life Class: a port it needs is not bound.',
+        {},
+      );
+    }
+    const pairs = await this.people.mergedPairsWithin(trx);
+    const records = [
+      personId,
+      ...pairs.absorbed.filter(
+        (_, index) => canonicalId(pairs.kept[index]) === canonicalId(personId),
+      ),
+    ];
+    const evidence = await this.schoolEvidence.evidenceWithin(
+      trx,
+      records,
+      program as 'ENCOUNTER' | 'LIFE_CLASS',
+    );
+    const seasonIds = uniqueIds(
+      evidence.flatMap((each) => (each.kind === 'WEEKEND' ? [each.seasonId] : [])),
+    );
+    const seasons =
+      seasonIds.length === 0
+        ? []
+        : await trx
+            .selectFrom('encounter_seasons')
+            .select(['id', 'mens_encounter_on', 'womens_encounter_on'])
+            .where('id', 'in', seasonIds)
+            .execute();
+    const dates = evidence.map((each) => {
+      if (each.kind === 'POSTED') {
+        return manilaDayOf(each.postedAt);
+      }
+      const season = seasons.find((row) => canonicalId(row.id) === canonicalId(each.seasonId));
+      if (season === undefined) {
+        return null;
+      }
+      return String(
+        each.network === 'MENS' ? season.mens_encounter_on : season.womens_encounter_on,
+      );
+    });
+    const earliest = dates
+      .filter((date): date is string => date !== null)
+      .sort()
+      .at(0);
+    if (earliest === undefined) {
+      return;
+    }
+    await this.fileFromSchoolWithin(trx, {
+      personId,
+      program,
+      graduatedOn: earliest,
+      accountId: actor.accountId,
+    });
   }
 
   /**

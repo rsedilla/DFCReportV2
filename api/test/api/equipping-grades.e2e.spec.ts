@@ -396,6 +396,131 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     ]);
   });
 
+  it('files the school’s Life Class when the Admin withdraws a tick from before it (decision 0509, point 8)', async () => {
+    await term();
+    const tickOf = async (name: string) =>
+      (
+        await db
+          .insertInto('training_graduations')
+          .values({
+            person_id: personOf.get(name)!,
+            program: 'LIFE_CLASS',
+            graduated_on: null,
+            confirmed_by: null,
+            recorded_by: admin.id,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const ben = await tickOf('Ben');
+    const carlo = await tickOf('Carlo');
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    const withdraw = (name: string, seen: string) => ({
+      person_id: personOf.get(name)!,
+      program: 'LIFE_CLASS',
+      graduated: false,
+      seen_id: seen,
+      reason: 'Ticked in error.',
+    });
+    await post(admin, 'training/submit', {
+      changes: [withdraw('Ben', ben), withdraw('Carlo', carlo)],
+    }).expect(201);
+
+    // Ben was posted Passed: the school's takes the tick's place, dated the posting day.
+    // Carlo was not, so nothing takes it.
+    const current = (name: string) =>
+      db
+        .selectFrom('training_graduations')
+        .select(['graduated_on', 'from_school'])
+        .where('person_id', '=', personOf.get(name)!)
+        .where('program', '=', 'LIFE_CLASS')
+        .where('superseded_at', 'is', null)
+        .execute();
+    expect(await current('Ben')).toEqual([
+      { graduated_on: await manilaToday(), from_school: true },
+    ]);
+    expect(await current('Carlo')).toEqual([]);
+  });
+
+  it('files Life Class dated the weekend a Not yet passed at, when the Admin withdraws a tick (decision 0509, point 8)', async () => {
+    await term();
+    const tick = await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: personOf.get('Dino')!,
+        program: 'LIFE_CLASS',
+        graduated_on: null,
+        confirmed_by: null,
+        recorded_by: admin.id,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    // A weekend three days back, so its date is not the posting day.
+    const today = await manilaToday();
+    const weekend = plusDays(today, -3);
+    const later = (
+      await db
+        .insertInto('encounter_seasons')
+        .values({
+          mens_lc_party_on: plusDays(today, -38),
+          mens_encounter_on: weekend,
+          womens_lc_party_on: plusDays(today, -28),
+          womens_encounter_on: plusDays(today, 7),
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: enrollmentOf.get('Dino')!,
+          person_id: personOf.get('Dino')!,
+          encounter_season_id: later,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [ee],
+    }).expect(200);
+    // Passed, but the tick held Life Class, so the school added nothing.
+    expect(await lifeClassOf('Dino')).toEqual([
+      { graduated_on: null, from_school: false, superseded_at: null },
+    ]);
+
+    await post(admin, 'training/submit', {
+      changes: [
+        {
+          person_id: personOf.get('Dino')!,
+          program: 'LIFE_CLASS',
+          graduated: false,
+          seen_id: tick.id,
+          reason: 'Ticked in error.',
+        },
+      ],
+    }).expect(201);
+
+    const current = await db
+      .selectFrom('training_graduations')
+      .select(['graduated_on', 'from_school'])
+      .where('person_id', '=', personOf.get('Dino')!)
+      .where('program', '=', 'LIFE_CLASS')
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(current).toEqual([{ graduated_on: weekend, from_school: true }]);
+  });
+
   it('passes a posted Not yet at a later Encounter, and a later save leaves it so (decision 0509)', async () => {
     await term();
     await check(coordinator);

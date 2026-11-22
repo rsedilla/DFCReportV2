@@ -498,6 +498,119 @@ describe('The Encounter (section 29, decisions 0501 and 0507)', () => {
     expect(rows).toEqual([{ graduated_on: '2019-03-10', from_school: false, superseded_at: null }]);
   });
 
+  it('files the school’s Encounter when the Admin withdraws a tick from before it (decision 0509, point 8)', async () => {
+    await fourLessons();
+    await post(registrar, 'equipping/encounter/enrollments', {
+      season_id: seasonId,
+      network: 'MENS',
+      enrollment_ids: [enrollmentOf.get('Ben')],
+    }).expect(201);
+    await weekendOn(seasonId, today);
+    const id = (await list()).enrolled[0].encounter_enrollment_id;
+    const ben = (
+      await db
+        .selectFrom('equipping_encounter_enrollments')
+        .select('person_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+    ).person_id;
+    const tick = await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: ben,
+        program: 'ENCOUNTER',
+        graduated_on: '2019-03-10',
+        confirmed_by: null,
+        recorded_by: admin.id,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: seasonId,
+      network: 'MENS',
+      came: [id],
+    }).expect(200);
+
+    await post(admin, 'training/submit', {
+      changes: [
+        {
+          person_id: ben,
+          program: 'ENCOUNTER',
+          graduated: false,
+          seen_id: tick.id,
+          reason: 'Ticked in error.',
+        },
+      ],
+    }).expect(201);
+
+    const current = await db
+      .selectFrom('training_graduations')
+      .select(['graduated_on', 'from_school', 'confirmed_by', 'recorded_by'])
+      .where('person_id', '=', ben)
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(current).toEqual([
+      { graduated_on: today, from_school: true, confirmed_by: null, recorded_by: admin.id },
+    ]);
+  });
+
+  it('files nothing in its place where the school holds no record of having come (decision 0509, point 8)', async () => {
+    await fourLessons();
+    await post(registrar, 'equipping/encounter/enrollments', {
+      season_id: seasonId,
+      network: 'MENS',
+      enrollment_ids: [enrollmentOf.get('Ben')],
+    }).expect(201);
+    await weekendOn(seasonId, today);
+    const id = (await list()).enrolled[0].encounter_enrollment_id;
+    const ben = (
+      await db
+        .selectFrom('equipping_encounter_enrollments')
+        .select('person_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+    ).person_id;
+    const tick = await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: ben,
+        program: 'ENCOUNTER',
+        graduated_on: '2019-03-10',
+        confirmed_by: null,
+        recorded_by: admin.id,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    // Came, then corrected to not attended: nothing current to file from.
+    for (const came of [[id], []]) {
+      await post(registrar, 'equipping/encounter/attendance', {
+        season_id: seasonId,
+        network: 'MENS',
+        came,
+      }).expect(200);
+    }
+
+    await post(admin, 'training/submit', {
+      changes: [
+        {
+          person_id: ben,
+          program: 'ENCOUNTER',
+          graduated: false,
+          seen_id: tick.id,
+          reason: 'Ticked in error.',
+        },
+      ],
+    }).expect(201);
+
+    const current = await db
+      .selectFrom('training_graduations')
+      .select('id')
+      .where('person_id', '=', ben)
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(current).toEqual([]);
+  });
+
   it('saves only the students it lists, and leaves one withdrawn since as recorded', async () => {
     await fourLessons();
     await post(registrar, 'equipping/encounter/enrollments', {

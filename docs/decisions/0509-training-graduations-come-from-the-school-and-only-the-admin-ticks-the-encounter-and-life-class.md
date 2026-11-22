@@ -48,7 +48,25 @@ posts.
 SOL 1 without Life Class. This amends decision 0501 point 19's "no longer editable", and settles
 the question 0501 left open on whether such a tick can still be corrected.
 
-What the owner ruled is points 1 to 7. These are this step's readings:
+**8. Where the Admin withdraws a *Before the school* tick from somebody the school has already
+passed, the school's graduation takes its place** (owner, 2026-11-23, "yes", from screenshots of the
+Training tab today and as proposed): a posted *Passed* files Life Class dated the posting day, a
+*Not yet* passed later files it dated the weekend it passed at, and the Encounter attended files
+the Encounter dated that weekend, the earliest where the school holds more than one, on the person
+or any record merged into them. It is filed as point 6 says, `recorded_by` being the Admin's account
+whose withdrawal filed it. Otherwise the person would read as never having done what the school
+recorded them doing, with nothing able to refile it. Where the school holds nothing, the withdrawal
+leaves the program empty, as before.
+
+**9. A graduation the school files is not filing about oneself** (owner, 2026-11-23, "no", from the
+same screenshots): decision 0280 refuses a write naming the actor's own Person, and the school's
+filing of an Encounter or Life Class for somebody who is also a student is not one of
+those, even where the account whose action files it is the student's own (an Admin recording
+the Encounter they attended). The school's record is the evidence, not the actor's say, and
+refusing it would leave such a student's graduation empty with nobody able to fill it. Nothing
+was refused before this ruling either; it settles that nothing should be.
+
+What the owner ruled is points 1 to 9. These are this step's readings:
 
 - **The Life Class date for a student who passes later is the weekend they attended**, not the day
   it was recorded, the Encounter being the step they were waiting on. **"A later Encounter"
@@ -83,8 +101,11 @@ false so every existing row reads as before the school; `equipping_final_grades.
 and `passed_later_by`, the trigger keeping a posted grade as written but for setting those two
 once on a *Not yet*; a school row confirms as nobody, and whether a row is the school's never
 changes, both held by the database), `TrainingService.fileFromSchoolWithin` and `withdrawFromSchoolWithin`,
-called inside the posting's and the Encounter save's own transactions, the list's
-`school_may_tick` and each graduation's `from_school`, and the Training tab. Audited as
+called inside the posting's and the Encounter save's own transactions, and for point 8 inside the
+Training save, which asks `equipping` what the school holds through `SCHOOL_EVIDENCE_PORT`
+(`training` cannot import `equipping`, which imports it; bound in `SchoolEvidenceBindingModule`), the list's
+`school_may_tick` and each graduation's `from_school` and `school_held` (whether any record of the
+person holds the school's row, which is what refuses a correction), and the Training tab. Audited as
 `training_graduation.confirmed` or `.corrected` with `from_school`, and
 `equipping_final_grade.passed_later` on the student's **Person**.
 
