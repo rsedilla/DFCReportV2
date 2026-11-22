@@ -567,6 +567,14 @@
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
     {
+      "route": "POST /api/v1/equipping/classes/:id/correction",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/cancel",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
       "route": "POST /api/v1/equipping/classes/:id/teacher",
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },

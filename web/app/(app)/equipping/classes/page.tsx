@@ -17,6 +17,8 @@ import { TextLink } from '@/components/ui/text-link';
 import { timeLabel } from '@/lib/cells';
 import {
   DAY_NAMES,
+  cancelClass,
+  correctClass,
   currentTerm,
   listClassStudents,
   nameGuide,
@@ -38,6 +40,7 @@ import {
   type Term,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
+import { shortDate } from '@/lib/lifecycle';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -51,7 +54,18 @@ type StatusFilter = 'ALL' | CoordinatedClass['status'];
 const STATUS_LABELS: Record<CoordinatedClass['status'], string> = {
   NOT_STARTED: 'Not started',
   RUNNING: 'Running',
+  CANCELLED: 'Cancelled',
 };
+
+/** *All* is the classes not started and running; a cancelled one only under *Cancelled* (0510). */
+function listedUnder(status: StatusFilter, each: CoordinatedClass): boolean {
+  return status === 'ALL' ? each.status !== 'CANCELLED' : each.status === status;
+}
+
+/** *Cancelled 23 Nov 2026*, the status a cancelled class reads (decision 0510). */
+function cancelledLabel(each: CoordinatedClass): string {
+  return each.cancelled_on ? `Cancelled ${shortDate(each.cancelled_on)}` : 'Cancelled';
+}
 
 export default function ClassesPage() {
   const [term, setTerm] = useState<Term>(() => currentTerm());
@@ -59,12 +73,15 @@ export default function ClassesPage() {
   const [opening, setOpening] = useState(false);
   const [editing, setEditing] = useState<CoordinatedClass | null>(null);
   const [viewing, setViewing] = useState<CoordinatedClass | null>(null);
+  const [cancelling, setCancelling] = useState<CoordinatedClass | null>(null);
 
   const classes = useQuery({
     queryKey: ['equipping', 'coordinate', 'classes', term],
     queryFn: ({ signal }) => listCoordinatedClasses(term, signal),
   });
-  const shown = (classes.data?.data ?? []).filter((each) => status === 'ALL' || each.status === status);
+  const shown = (classes.data?.data ?? []).filter((each) => listedUnder(status, each));
+  // The open dialog reads the class as last listed, so a correction shows at once.
+  const editingNow = (editing && classes.data?.data.find((each) => each.id === editing.id)) ?? editing;
 
   return (
     <EquippingFrame current="/equipping/classes" title="Classes" lead="Life Class, which you coordinate.">
@@ -78,6 +95,7 @@ export default function ClassesPage() {
           <option value="ALL">All</option>
           <option value="NOT_STARTED">Not started</option>
           <option value="RUNNING">Running</option>
+          <option value="CANCELLED">Cancelled</option>
         </SelectField>
         <div className="lg:ml-auto">
           <Button type="button" onClick={() => setOpening(true)}>
@@ -88,7 +106,7 @@ export default function ClassesPage() {
       <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
       {classes.data && shown.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
-          {classes.data.data.length === 0
+          {!classes.data.data.some((each) => listedUnder('ALL', each)) && status === 'ALL'
             ? `No Life Class is open in ${termLabel(term)} yet.`
             : 'No class has that status.'}
         </p>
@@ -101,32 +119,46 @@ export default function ClassesPage() {
               <li key={each.id} className="border-line bg-surface rounded-xl border p-4 shadow-sm">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="font-semibold">{each.name}</h2>
-                  <span className="text-muted text-sm">{STATUS_LABELS[each.status]}</span>
+                  <span className="text-muted text-sm">
+                    {each.status === 'CANCELLED' ? cancelledLabel(each) : STATUS_LABELS[each.status]}
+                  </span>
                 </div>
-                <p className="text-muted text-sm">
-                  {when(each)} · {each.enrolled} {each.enrolled === 1 ? 'student' : 'students'}
-                </p>
-                <p className="mt-2 text-sm">
-                  <span className="text-muted">Teacher </span>
-                  <TeacherName each={each} />
-                </p>
-                <p className="text-sm">
-                  <span className="text-muted">Guides </span>
-                  <GuidesLine each={each} />
-                </p>
-                <p className="text-sm">
-                  <span className="text-muted">Attendance </span>
-                  <AttendanceLine each={each} />
-                </p>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
-                    Edit
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
-                    Students
-                  </Button>
-                  <GradesLink each={each} />
-                </div>
+                {each.status === 'CANCELLED' ? (
+                  <>
+                    <p className="text-muted text-sm">{when(each)}</p>
+                    <p className="mt-2 text-sm">
+                      <span className="text-muted">Reason </span>
+                      {each.cancel_reason}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-muted text-sm">
+                      {when(each)} · {each.enrolled} {each.enrolled === 1 ? 'student' : 'students'}
+                    </p>
+                    <p className="mt-2 text-sm">
+                      <span className="text-muted">Teacher </span>
+                      <TeacherName each={each} />
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-muted">Guides </span>
+                      <GuidesLine each={each} />
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-muted">Attendance </span>
+                      <AttendanceLine each={each} />
+                    </p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
+                        Edit
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
+                        Students
+                      </Button>
+                      <GradesLink each={each} />
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -144,46 +176,81 @@ export default function ClassesPage() {
               </tr>
             </thead>
             <tbody>
-              {shown.map((each) => (
-                <tr key={each.id} className={rowClasses}>
-                  <th scope="row" className="px-3 py-3 text-left font-semibold">
-                    {each.name}
-                  </th>
-                  <td className="px-3 py-3">{when(each)}</td>
-                  <td className="px-3 py-3">
-                    <TeacherName each={each} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <GuidesLine each={each} />
-                  </td>
-                  <td className="px-3 py-3">{each.enrolled}</td>
-                  <td className="px-3 py-3">
-                    <AttendanceLine each={each} />
-                  </td>
-                  <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
-                  <td className="px-3 py-1">
-                    {/* Stacked below 1536px, so a 1024px laptop or a sideways iPad keeps the table
-                        on screen with the Guides column (decision 0501, point 22). */}
-                    <div className="flex flex-col gap-2 2xl:flex-row">
-                      <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
-                        Edit
-                      </Button>
-                      <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
-                        Students
-                      </Button>
-                      <GradesLink each={each} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {shown.map((each) =>
+                each.status === 'CANCELLED' ? (
+                  <CancelledRow key={each.id} each={each} />
+                ) : (
+                  <tr key={each.id} className={rowClasses}>
+                    <th scope="row" className="px-3 py-3 text-left font-semibold">
+                      {each.name}
+                    </th>
+                    <td className="px-3 py-3">{when(each)}</td>
+                    <td className="px-3 py-3">
+                      <TeacherName each={each} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <GuidesLine each={each} />
+                    </td>
+                    <td className="px-3 py-3">{each.enrolled}</td>
+                    <td className="px-3 py-3">
+                      <AttendanceLine each={each} />
+                    </td>
+                    <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
+                    <td className="px-3 py-1">
+                      {/* Stacked below 1536px, so a 1024px laptop or a sideways iPad keeps the table
+                          on screen with the Guides column (decision 0501, point 22). */}
+                      <div className="flex flex-col gap-2 2xl:flex-row">
+                        <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
+                          Edit
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
+                          Students
+                        </Button>
+                        <GradesLink each={each} />
+                      </div>
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </Table>
         </>
       ) : null}
       <OpenClassDialog term={term} open={opening} onClose={() => setOpening(false)} />
-      <TeacherDialog cls={editing} onClose={() => setEditing(null)} />
+      <TeacherDialog
+        cls={editingNow}
+        onClose={() => setEditing(null)}
+        onCancelClass={(each) => {
+          setEditing(null);
+          setCancelling(each);
+        }}
+      />
+      <CancelClassDialog cls={cancelling} onClose={() => setCancelling(null)} />
       <StudentsDialog cls={viewing} onClose={() => setViewing(null)} />
     </EquippingFrame>
+  );
+}
+
+/** A cancelled class's row: its date and reason, dashes, and no action (decision 0510). */
+function CancelledRow({ each }: { each: CoordinatedClass }) {
+  const dash = <span className="text-muted">—</span>;
+  return (
+    <tr className={rowClasses}>
+      <th scope="row" className="px-3 py-3 text-left font-semibold">
+        {each.name}
+      </th>
+      <td className="px-3 py-3">{when(each)}</td>
+      <td className="px-3 py-3">{dash}</td>
+      <td className="px-3 py-3">{dash}</td>
+      <td className="px-3 py-3">{each.enrolled}</td>
+      <td className="px-3 py-3">{dash}</td>
+      <td className="px-3 py-3">
+        {cancelledLabel(each)}
+        <br />
+        <span className="text-muted text-sm">{each.cancel_reason}</span>
+      </td>
+      <td className="text-muted px-3 py-3 text-sm">No action</td>
+    </tr>
   );
 }
 
@@ -470,6 +537,197 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
 }
 
 /**
+ * *When and where* on Edit (decision 0510, points 1 and 2): the day, time, place and first lesson
+ * are corrected until a lesson is saved, then the box says why they no longer change. A clash
+ * with the Teacher's own Cell is said after saving and never stops it.
+ */
+function WhenAndWhere({ cls }: { cls: CoordinatedClass }) {
+  const queryClient = useQueryClient();
+  const [day, setDay] = useState(String(cls.day_of_week));
+  const [time, setTime] = useState(cls.time_of_day.slice(0, 5));
+  const [place, setPlace] = useState(cls.place ?? '');
+  const [firstLesson, setFirstLesson] = useState(cls.first_lesson_on);
+  const [writeKey, renewWriteKey] = useWriteKey();
+  const save = useMutation({
+    mutationFn: () => {
+      const body = {
+        day_of_week: Number(day),
+        time_of_day: time,
+        place: place.trim() || null,
+        first_lesson_on: firstLesson,
+      };
+      return correctClass(cls.id, body, idempotencyKeyFor('equipping-correct-class', writeKey, { id: cls.id, ...body }));
+    },
+    onSuccess: async () => {
+      renewWriteKey();
+      await queryClient.invalidateQueries({ queryKey: ['equipping'] });
+    },
+  });
+
+  return (
+    <section aria-labelledby={`when-${cls.id}`} className="border-line rounded-lg border p-4">
+      <h3 id={`when-${cls.id}`} className="font-semibold">
+        When and where
+      </h3>
+      {cls.lesson_saved ? (
+        <p className="text-muted mt-1 text-sm">
+          A lesson is saved, so the day, time, place and first lesson can no longer change.
+        </p>
+      ) : (
+        <form
+          className="mt-1 flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (time && firstLesson) {
+              save.mutate();
+            }
+          }}
+        >
+          <p className="text-muted text-sm">May be corrected until the first lesson is saved.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField label="Day" value={day} onChange={(event) => setDay(event.target.value)}>
+              {DAY_NAMES.map((each, index) => (
+                <option key={each} value={String(index + 1)}>
+                  {each}
+                </option>
+              ))}
+            </SelectField>
+            <Field label="Time" type="time" autoComplete="off" value={time} onChange={(event) => setTime(event.target.value)} required />
+          </div>
+          <Field label="Place" autoComplete="off" value={place} onChange={(event) => setPlace(event.target.value)} maxLength={80} />
+          <Field label="First lesson" type="date" autoComplete="off" value={firstLesson} onChange={(event) => setFirstLesson(event.target.value)} required />
+          <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
+          {save.data ? (
+            <p role="status" className={save.data.clash ? 'text-field-invalid text-sm font-semibold' : 'text-sm'}>
+              {save.data.corrected ? 'Saved.' : 'Nothing changed.'}
+              {save.data.clash && cls.teacher?.full_name
+                ? ` ${clashLine(cls.teacher.full_name, save.data.clash, '')}`
+                : ''}
+            </p>
+          ) : null}
+          <div>
+            <Button type="submit" disabled={save.isPending}>
+              Save when and where
+            </Button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
+/**
+ * *Cancel class* at the foot of Edit (decision 0510, point 3): offered only while nobody is
+ * enrolled and no lesson is saved, and otherwise saying why not.
+ */
+function CancelSection({ cls, onCancelClass }: { cls: CoordinatedClass; onCancelClass: () => void }) {
+  const why =
+    cls.enrolled > 0
+      ? `${cls.enrolled} ${cls.enrolled === 1 ? 'student is' : 'students are'} enrolled`
+      : cls.lesson_saved
+        ? 'a lesson is saved'
+        : null;
+  return (
+    <section aria-labelledby={`cancel-${cls.id}`} className="border-line rounded-lg border p-4">
+      <h3 id={`cancel-${cls.id}`} className="font-semibold">
+        Cancel class
+      </h3>
+      {why === null ? (
+        <>
+          <p className="text-muted mt-1 text-sm">
+            No students and no lesson saved. The class is kept as cancelled and leaves this list; it is never deleted.
+          </p>
+          <div className="mt-3">
+            <Button type="button" variant="secondary" onClick={onCancelClass}>
+              Cancel class…
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-muted mt-1 text-sm">
+          Not offered: {why}. A class may be cancelled only while it has no students and no lesson saved.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The confirm step (decision 0510, point 4): names the class, says what happens, takes a reason,
+ * and offers *Keep the class* beside *Cancel the class*, neither chosen first.
+ */
+function CancelClassDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
+  const [writeKey, renewWriteKey] = useWriteKey();
+  const save = useMutation({
+    mutationFn: () =>
+      cancelClass(cls!.id, reason.trim(), idempotencyKeyFor('equipping-cancel-class', writeKey, { id: cls!.id, reason: reason.trim() })),
+    onSuccess: async () => {
+      renewWriteKey();
+      await queryClient.invalidateQueries({ queryKey: ['equipping'] });
+      close();
+    },
+  });
+  const close = () => {
+    setReason('');
+    setShowErrors(false);
+    save.reset();
+    onClose();
+  };
+  const missing = reason.trim() === '';
+
+  return (
+    <Dialog open={cls !== null} onClose={close} title={`Cancel ${cls?.name ?? ''}?`}>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setShowErrors(true);
+          if (!missing) {
+            save.mutate();
+          }
+        }}
+      >
+        <div className="flex flex-col gap-3 text-sm">
+          <p>
+            <strong>{cls?.name}</strong>
+            {cls
+              ? ` · ${DAY_NAMES[cls.day_of_week - 1]}s ${timeLabel(cls.time_of_day)}${cls.place ? ` · ${cls.place}` : ''} · first lesson ${shortDate(cls.first_lesson_on)}`
+              : ''}
+          </p>
+          <p>
+            No students are enrolled and no lesson is saved. The class leaves the list of classes and is kept under{' '}
+            <strong>Status: Cancelled</strong>. It cannot be reopened; open a new class instead.
+          </p>
+        </div>
+        <Field
+          label="Reason"
+          autoComplete="off"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          maxLength={500}
+          aria-required="true"
+          description="Required. Shown beside the class under Cancelled."
+          descriptionBelow
+          error={showErrors && missing ? 'Give the reason the class is cancelled.' : undefined}
+        />
+        <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
+        <DialogActions>
+          <Button type="submit" disabled={save.isPending}>
+            Cancel the class
+          </Button>
+          <Button type="button" variant="secondary" onClick={close}>
+            Keep the class
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+/**
  * Edit names the Teacher (decision 0501, point 2), showing whether the class fits their week.
  * A clash with their own Cell warns and the Coordinator may still save (owner, 2026-11-20).
  */
@@ -503,7 +761,15 @@ function AccountWarning({
   );
 }
 
-function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose: () => void }) {
+function TeacherDialog({
+  cls,
+  onClose,
+  onCancelClass,
+}: {
+  cls: CoordinatedClass | null;
+  onClose: () => void;
+  onCancelClass: (cls: CoordinatedClass) => void;
+}) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<FoundPerson | null>(null);
   const [writeKey, renewWriteKey] = useWriteKey();
@@ -535,6 +801,7 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
         {cls?.teacher ? ` · Teacher now: ${cls.teacher.full_name}` : ' · No Teacher named yet'}
       </p>
       <div className="mt-4 flex flex-col gap-4">
+        {cls ? <WhenAndWhere key={cls.id} cls={cls} /> : null}
         {chosen === null ? (
           <TeacherSearch onChoose={setChosen} />
         ) : (
@@ -560,6 +827,7 @@ function TeacherDialog({ cls, onClose }: { cls: CoordinatedClass | null; onClose
         )}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
         {cls ? <GuidesSection classId={cls.id} /> : null}
+        {cls ? <CancelSection cls={cls} onCancelClass={() => onCancelClass(cls)} /> : null}
         <DialogActions>
           <Button type="button" disabled={chosen === null || save.isPending} onClick={() => save.mutate()}>
             Save Teacher
