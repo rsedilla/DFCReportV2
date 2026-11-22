@@ -237,14 +237,14 @@ function TrainingTab() {
             <thead>
               <tr>
                 <HeaderCell>Person</HeaderCell>
-                {/* The five are alike, so one width each, wide enough for the longer label with
-                    room between columns, rather than each sized to its own content. */}
+                {/* The five are alike, so one width each, rather than each sized to its own
+                    content: a share of the table, so the name keeps its room on a narrow laptop. */}
                 {TRAINING_PROGRAMS.map((program) => (
-                  <HeaderCell key={program} className="w-32 px-1 text-center">
+                  <HeaderCell key={program} className="w-[14%] px-1 text-center">
                     {PROGRAM_LABELS[program]}
                   </HeaderCell>
                 ))}
-                <HeaderCell className="w-20 text-right">Done</HeaderCell>
+                <HeaderCell className="w-[8%] text-right">Done</HeaderCell>
               </tr>
             </thead>
             <tbody>
