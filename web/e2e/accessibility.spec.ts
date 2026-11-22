@@ -1677,6 +1677,22 @@ const SCANS = [
     },
   })),
   {
+    // A Guide's class (decision 0505): read only, with the line naming who missed the last two
+    // lessons.
+    name: "equipping teach, a Guide's class",
+    route: `/equipping/teach/${ATTENDANCE_IDS.classId}`,
+    pattern: '/equipping/teach/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTeacher(page, 'RECORDING');
+      await mockMyClasses(page);
+      await mockClassAttendance(page, { role: 'GUIDE', missedTwice: true });
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('region', { name: /Missed the last two lessons/ })).toBeVisible();
+    },
+  },
+  {
     // The Encounter seasons list (decision 0296) as a leader reads it: their own Network's
     // half, and the sentence saying who may change it.
     name: 'encounter seasons',
@@ -2519,6 +2535,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'The same screen as the measured "equipping teach", whose level ViewSwitch and class links ' +
       'are its only controls; the cards of the reader\x27s people are read only and add none.',
+  },
+  {
+    name: "equipping teach, a Guide's class",
+    why:
+      'The measured "equipping teach, a class" read as a Guide: the same lesson buttons and no ' +
+      'other control, the missed-twice line and the register being read only.',
   },
   {
     name: 'equipping teach, recording a make-up',

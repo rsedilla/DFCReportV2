@@ -410,7 +410,8 @@ export async function mockClassAttendance(
     role = 'TEACHER',
     closedThree = false,
     joiners = false,
-  }: { role?: AttendanceRole; closedThree?: boolean; joiners?: boolean } = {},
+    missedTwice = false,
+  }: { role?: AttendanceRole; closedThree?: boolean; joiners?: boolean; missedTwice?: boolean } = {},
 ): Promise<{ sent: { url: string; body: unknown }[] }> {
   const sent: { url: string; body: unknown }[] = [];
   const mark = (
@@ -422,7 +423,7 @@ export async function mockClassAttendance(
     lesson,
     came,
     made_up_on: madeUpOn,
-    held_on: lesson === 1 ? '2026-11-03' : '2026-11-10',
+    held_on: lesson === 1 ? '2026-11-03' : lesson === 2 ? '2026-11-10' : '2026-11-17',
     before_joining: false,
     from_class: null,
     ...extra,
@@ -443,7 +444,12 @@ export async function mockClassAttendance(
     cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b502', full_name: 'Lorna Bautista' },
     guide: null,
     joined_on: '2026-11-15',
-    marks: [mark(1, false, null, { before_joining: true }), mark(2, false, null, { before_joining: true })],
+    // With missedTwice, absent at lesson 3 as well: one absence since she joined, not two.
+    marks: [
+      mark(1, false, null, { before_joining: true }),
+      mark(2, false, null, { before_joining: true }),
+      ...(missedTwice ? [mark(3, false, null)] : []),
+    ],
   };
   const tomas = {
     enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b304',
@@ -483,7 +489,15 @@ export async function mockClassAttendance(
     lessons: [
       lesson(1, '2026-11-03', { held_on: '2026-11-03', version: 1, state: 'SAVED', open: false }),
       lesson(2, '2026-11-10', { held_on: '2026-11-10', version: 1, state: 'SAVED' }),
-      lesson(3, '2026-11-17', closedThree ? { state: 'NOT_RECORDED', open: false } : { state: 'LATE' }),
+      lesson(
+        3,
+        '2026-11-17',
+        missedTwice
+          ? { held_on: '2026-11-17', version: 1, state: 'SAVED' }
+          : closedThree
+            ? { state: 'NOT_RECORDED', open: false }
+            : { state: 'LATE' },
+      ),
       lesson(4, '2026-11-24', {}),
       lesson(6, '2026-12-08', {}),
       lesson(7, '2026-12-15', {}),
@@ -497,7 +511,8 @@ export async function mockClassAttendance(
         cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
         guide: { id: '3f1b7c6e-0000-4000-8000-00000000b601', full_name: 'Benjie Lacson' },
         joined_on: '2026-11-01',
-        marks: [mark(1, true, null), mark(2, false, null)],
+        // With missedTwice, absent at lesson 3 too: the last two lessons missed, neither made up.
+        marks: [mark(1, true, null), mark(2, false, null), ...(missedTwice ? [mark(3, false, null)] : [])],
       },
       {
         enrollment_id: STUDENT_IMELDA,
@@ -505,7 +520,8 @@ export async function mockClassAttendance(
         cell_leader: null,
         guide: null,
         joined_on: '2026-11-01',
-        marks: [mark(1, true, null), mark(2, false, '2026-11-12')],
+        // With missedTwice, absent at lesson 3 too, but lesson 2 is made up (decision 0505).
+        marks: [mark(1, true, null), mark(2, false, '2026-11-12'), ...(missedTwice ? [mark(3, false, null)] : [])],
       },
       ...(joiners ? [rosa, tomas, paz] : []),
     ],

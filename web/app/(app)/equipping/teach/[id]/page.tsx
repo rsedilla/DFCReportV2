@@ -94,6 +94,7 @@ function ClassBody({ data }: { data: ClassAttendance }) {
   const lesson = data.lessons.find((l) => l.lesson === chosen) ?? data.lessons[0];
   return (
     <div className="flex flex-col gap-6">
+      {data.role === 'GUIDE' ? <MissedTwice data={data} /> : null}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Choose a lesson">
         {COLUMNS.map((n) => {
           if (n === 5) {
@@ -137,6 +138,57 @@ function ClassBody({ data }: { data: ClassAttendance }) {
       <Owed data={data} />
       <Register data={data} />
     </div>
+  );
+}
+
+/**
+ * The two lessons a student missed in a row, or null (decision 0505): the class's last two saved
+ * lessons in lesson order, any the register marks before they joined and the Encounter left out,
+ * absent at both and neither made up yet. A saved lesson with no mark for them is no absence.
+ */
+function missedLastTwo(student: AttendanceStudent, lessons: ClassLesson[]): [number, number] | null {
+  const lastTwo = lessons
+    .filter((l) => l.lesson !== 5 && l.state === 'SAVED' && !markFor(student, l.lesson)?.before_joining)
+    .map((l) => l.lesson)
+    .sort((a, b) => a - b)
+    .slice(-2);
+  if (lastTwo.length < 2) {
+    return null;
+  }
+  const missed = lastTwo.every((n) => {
+    const mark = markFor(student, n);
+    return mark !== null && !mark.came && mark.made_up_on === null;
+  });
+  return missed ? [lastTwo[0], lastTwo[1]] : null;
+}
+
+/**
+ * **Missed the last two lessons** (decision 0501, point 4; decision 0505): for a Guide, a line
+ * naming any of their students absent at the class's last two saved lessons and not made up, with
+ * their Cell leader. Drawn only when somebody is on it.
+ */
+function MissedTwice({ data }: { data: ClassAttendance }) {
+  const missing = data.students
+    .map((s) => ({ student: s, lessons: missedLastTwo(s, data.lessons) }))
+    .filter((each): each is { student: AttendanceStudent; lessons: [number, number] } => each.lessons !== null);
+  if (missing.length === 0) {
+    return null;
+  }
+  return (
+    <section aria-labelledby="missed-heading" className="border-line bg-surface rounded-xl border p-4">
+      <h2 id="missed-heading" className="font-semibold">
+        Missed the last two lessons · {missing.length}
+      </h2>
+      <p className="text-muted text-sm">Absent at both and not made up yet. Follow them up and tell the Teacher.</p>
+      <ul className="mt-2 flex flex-col gap-1 text-sm">
+        {missing.map(({ student, lessons }) => (
+          <li key={student.enrollment_id}>
+            <span className="font-semibold">{student.person.full_name}</span> · L{lessons[0]} and L{lessons[1]} ·
+            Cell leader {student.cell_leader?.full_name ?? 'none'}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
