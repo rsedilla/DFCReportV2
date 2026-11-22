@@ -466,6 +466,32 @@ describe('Training (section 28)', () => {
 
       expect((await get(admin, 'people?limit=200')).body.school_may_tick).toBe(true);
     });
+
+    it('marks the school’s as held where only a record merged into the person holds it', async () => {
+      // Timothy's own record keeps an earlier tick; a duplicate merged into him holds the
+      // school's row, and a correction is refused while any record holds it (0408, 0509).
+      await beforeTheSchool(timothy.id, 'ENCOUNTER');
+      const duplicate = await createPerson(db, { firstName: 'Timotheo', network: 'MENS' });
+      await fromSchool(duplicate.id, 'ENCOUNTER');
+      await db
+        .updateTable('persons')
+        .set({ merged_into_id: timothy.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+        .where('id', '=', duplicate.id)
+        .execute();
+
+      const list = await get(admin, 'people?limit=200');
+      const row = list.body.data.find(
+        (each: { person_id: string }) => each.person_id === timothy.id,
+      );
+      expect(row.graduations).toEqual([
+        expect.objectContaining({
+          program: 'ENCOUNTER',
+          graduated_on: '2019-03-10',
+          from_school: false,
+          school_held: true,
+        }),
+      ]);
+    });
   });
 
   // ---------------------------------------------------------------------------

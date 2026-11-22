@@ -586,7 +586,7 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
         .executeTakeFirstOrThrow()
     ).id;
     // Also in a later term's class, which keeps them on the weekend's list after passing.
-    const nextTerm = { ...TERM, term_number: 4 };
+    const nextTerm = { ...TERM, term_year: 2027, term_number: 1 };
     const nextClass = (
       await db
         .insertInto('equipping_classes')
@@ -796,5 +796,26 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     await expect(db.deleteFrom('equipping_class_postings').execute()).rejects.toThrow(
       /kept as written/,
     );
+  });
+
+  it('holds in the database that only a Not yet passes later, saying when and by whom (decision 0509)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    await expect(
+      db
+        .updateTable('equipping_final_grades')
+        .set({ passed_later_at: new Date(), passed_later_by: registrar.id })
+        .where('grade', '=', 'PASSED')
+        .execute(),
+    ).rejects.toThrow(/equipping_final_grades_passed_later/);
+    await expect(
+      db
+        .updateTable('equipping_final_grades')
+        .set({ passed_later_at: new Date() })
+        .where('grade', '=', 'NOT_YET')
+        .execute(),
+    ).rejects.toThrow(/equipping_final_grades_passed_later/);
   });
 });

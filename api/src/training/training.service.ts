@@ -216,6 +216,7 @@ export class TrainingService {
             program: graduation.program,
             graduated_on: graduation.graduatedOn,
             from_school: graduation.fromSchool,
+            school_held: graduation.schoolHeld,
           })),
         may_file: mayFile.has(row.id),
       })),
@@ -649,8 +650,16 @@ export class TrainingService {
    * (decision 0408): a program held on both is shown once, the earlier graduation date kept
    * (an unknown date counting as later), which is the row a save decides against.
    */
-  private async graduationsOfKept(ids: readonly string[]): Promise<Graduation[]> {
-    return [...(await this.storedOfKept(this.db, ids)).shown.values()];
+  private async graduationsOfKept(
+    ids: readonly string[],
+  ): Promise<(Graduation & { schoolHeld: boolean })[]> {
+    const { shown, all } = await this.storedOfKept(this.db, ids);
+    // A correction is refused while any record of the person holds the school's row (decision
+    // 0509), so the screen offers none where only a merged record holds it.
+    return [...shown.entries()].map(([key, graduation]) => ({
+      ...graduation,
+      schoolHeld: (all.get(key) ?? []).some((row) => row.fromSchool),
+    }));
   }
 
   /**

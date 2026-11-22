@@ -200,6 +200,8 @@ export interface TrainingGraduation {
   graduated_on: string | null;
   /** Filed by the school, a posted Passed or the Encounter attended (decision 0509). */
   from_school: boolean;
+  /** Whether any record of the person, a merged one included, holds the school's row. */
+  school_held: boolean;
 }
 
 export interface TrainingPerson {

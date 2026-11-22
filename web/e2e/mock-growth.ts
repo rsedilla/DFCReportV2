@@ -95,8 +95,8 @@ export const TRAINING_TWO = {
   member_id: 'M-004101',
   full_name: 'Dalisay Soriano',
   graduations: [
-    { id: '7c000000-0000-4000-8000-000000000001', program: 'ENCOUNTER', graduated_on: '2026-03-08', from_school: false },
-    { id: '7c000000-0000-4000-8000-000000000002', program: 'LIFE_CLASS', graduated_on: null, from_school: false },
+    { id: '7c000000-0000-4000-8000-000000000001', program: 'ENCOUNTER', graduated_on: '2026-03-08', from_school: false, school_held: false },
+    { id: '7c000000-0000-4000-8000-000000000002', program: 'LIFE_CLASS', graduated_on: null, from_school: false, school_held: false },
   ],
   may_file: true,
 };
@@ -117,7 +117,7 @@ export const TRAINING_ALL = {
     id: `7c000000-0000-4000-8000-00000000001${index}`,
     program,
     graduated_on: `2025-0${index + 1}-15`,
-    from_school: false,
+    from_school: false, school_held: false,
   })),
   may_file: true,
 };
@@ -127,7 +127,7 @@ export const TRAINING_NOT_MINE = {
   member_id: 'M-004104',
   full_name: 'Bayani Castillo',
   graduations: [
-    { id: '7c000000-0000-4000-8000-000000000021', program: 'ENCOUNTER', graduated_on: '2026-02-01', from_school: false },
+    { id: '7c000000-0000-4000-8000-000000000021', program: 'ENCOUNTER', graduated_on: '2026-02-01', from_school: false, school_held: false },
   ],
   may_file: false,
 };

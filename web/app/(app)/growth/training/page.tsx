@@ -346,8 +346,8 @@ function SchoolCell({
   const tag = source ? <SourceLabel>{source}</SourceLabel> : null;
 
   // Read-only where the reader may not file for them, where only the Admin ticks it, or where
-  // the school filed it, which is changed there.
-  if (!row.may_file || (school && (!schoolMayTick || stored?.from_school))) {
+  // the school filed it on any record of the person, which is changed there.
+  if (!row.may_file || (school && (!schoolMayTick || stored?.school_held))) {
     return (
       <span className="inline-flex flex-col items-center text-sm">
         <span aria-hidden="true">{graduated ? '✓' : '–'}</span>

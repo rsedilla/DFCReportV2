@@ -613,6 +613,7 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
         program: 'ENCOUNTER',
         graduated_on: '2026-12-04',
         from_school: true,
+        school_held: true,
       },
     ],
   };
@@ -667,6 +668,28 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     await expect(ernani.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
     await expect(ernani.getByText('From the school', { exact: true })).toBeVisible();
     await expect(ernani.getByRole('checkbox', { name: 'Life Class, Ernani Pascual' })).toBeVisible();
+  });
+
+  test('the Admin is offered no tick where only a merged record holds the school’s', async ({
+    page,
+  }) => {
+    // Her own record keeps an earlier tick; a record merged into her holds the school's row,
+    // and a correction is refused while any record holds it (decisions 0408 and 0509).
+    const MERGED = {
+      ...TRAINING_TWO,
+      graduations: TRAINING_TWO.graduations.map((graduation) =>
+        graduation.program === 'ENCOUNTER' ? { ...graduation, school_held: true } : graduation,
+      ),
+    };
+    await mockSignedIn(page);
+    await mockWholeChurchReader(page);
+    await mockTraining(page, 'accepted', { rows: [MERGED], schoolMayTick: true });
+    await page.goto('/growth/training?all=1');
+
+    const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
+    await expect(dalisay.getByRole('checkbox', { name: /^Life Class,/ })).toBeVisible();
+    await expect(dalisay.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
+    await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
   });
 });
 
