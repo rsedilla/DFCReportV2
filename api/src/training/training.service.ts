@@ -577,7 +577,7 @@ export class TrainingService {
       reason: string;
     },
   ): Promise<boolean> {
-    // **Every current row of the person and program first, merged records included**, so a
+    // **Every current row of the person first, every program, merged records included**, so a
     // Training save withdrawing a tick from before the school (point 8), which holds that tick
     // and may be about to file the school's in its place, finishes before this decides. The
     // read below is then a new statement and sees what that save filed.
