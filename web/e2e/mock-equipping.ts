@@ -322,8 +322,53 @@ export async function mockTeacher(page: Page, screens: 'RECORDING' | 'FULL'): Pr
   );
 }
 
+/**
+ * The reader's people in the school (decision 0504): by default nobody, so a page that does not
+ * ask about them stays as it was. `withPeople` gives one of the reader's 12, Lorna, who missed
+ * lesson 2, and Gilbert's Rosa, who came to both, in Life Class A.
+ */
+export async function mockSchoolPeople(page: Page, withPeople = false): Promise<void> {
+  const person = (
+    id: string,
+    name: string,
+    twelve: boolean,
+    through: { id: string; full_name: string } | null,
+    marks: { lesson: number; came: boolean; made_up_on: string | null }[],
+  ) => ({
+    enrollment_id: `3f1b7c6e-0000-4000-8000-00000000c${id}`,
+    person: { id: `3f1b7c6e-0000-4000-8000-00000000d${id}`, full_name: name },
+    level: 'LIFE_CLASS',
+    twelve,
+    through,
+    class: { id: CLASS_ID, name: 'Life Class A' },
+    teacher: { id: TEACHER_PERSON, full_name: 'Aurora Dizon' },
+    guide: null,
+    joined_on: '2026-11-01',
+    marks: marks.map((m) => ({ ...m, held_on: m.lesson === 1 ? '2026-11-03' : '2026-11-10', before_joining: false, from_class: null })),
+  });
+  await page.route('**/api/v1/equipping/my-people', (route) =>
+    route.fulfill(
+      json({
+        data: withPeople
+          ? [
+              person('001', 'Lorna Bautista', true, null, [
+                { lesson: 1, came: true, made_up_on: null },
+                { lesson: 2, came: false, made_up_on: null },
+              ]),
+              person('002', 'Rosa Villanueva', false, { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' }, [
+                { lesson: 1, came: true, made_up_on: null },
+                { lesson: 2, came: true, made_up_on: null },
+              ]),
+            ]
+          : [],
+      }),
+    ),
+  );
+}
+
 /** The classes the reader teaches or guides: one of each (decision 0503, point 3). */
 export async function mockMyClasses(page: Page): Promise<void> {
+  await mockSchoolPeople(page);
   await page.route('**/api/v1/equipping/my-classes', (route) =>
     route.fulfill(
       json({

@@ -312,6 +312,17 @@ export class EquippingController {
   }
 
   /**
+   * The reader's people in the school (decision 0501, points 5 and 21): **`people.view_subtree`
+   * against the actor** (decision 0504), the People access every Leader holds over their own
+   * branch, narrowed to those enrolled. Read only.
+   */
+  @Get('my-people')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async myPeople(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    return this.attendance.myPeople(actor);
+  }
+
+  /**
    * A class's lessons, register and make-ups owed (decision 0501, points 10 to 12): the whole
    * class to its Teacher, the Coordinator and the Admin, and a Guide's own students to a Guide.
    */

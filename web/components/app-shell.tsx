@@ -329,8 +329,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // **`Conquest` follows its capability rather than the screens** (decision 0407, by owner
   // ruling): it is the last item of any account holding `conquest.view_subtree` at Whole Church,
   // which today is the Admin and the two Senior Pastors.
-  // A Teacher's or Guide's Equipping, drawn while they teach or guide a class (decision 0501).
-  const { teaches } = useMyClasses();
+  // A leader's Equipping, drawn while they teach or guide a class or one of their people is
+  // enrolled (decision 0501, point 21); a Senior Pastor's while they teach one (decision 0503).
+  const { teaches, shows } = useMyClasses();
   const conquest =
     me.data !== undefined &&
     (holdsWholeChurch(me.data, 'conquest.view_subtree') ||
@@ -347,7 +348,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ...(me.data?.screens === 'EQUIPPING'
           ? [REGISTRATION, ENROLLMENT]
           : me.data?.screens === 'RECORDING'
-          ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(teaches ? [TEACH] : [])]
+          ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(shows ? [TEACH] : [])]
           : me.data?.screens === 'SENIOR_PASTOR'
             ? [
                 SENIOR_PASTOR_ITEMS.people,
@@ -363,10 +364,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                     REPORTS,
                     PEOPLE,
                     CELLS,
-                    teaches ? SUYNL_AS_GROWTH : SUYNL_WITH_CLASSES,
+                    shows ? SUYNL_AS_GROWTH : SUYNL_WITH_CLASSES,
                     CLASSES,
                   ]
-                : [RECORD, REPORTS, PEOPLE, CELLS, teaches ? SUYNL_AS_GROWTH : SUYNL]
+                : [RECORD, REPORTS, PEOPLE, CELLS, shows ? SUYNL_AS_GROWTH : SUYNL]
               : [RECORD, REPORTS, PEOPLE, CELLS, GROWTH]),
         ...conquest,
         // The Admin's Equipping, after Conquest (decision 0499); a Registrar has its steps above.

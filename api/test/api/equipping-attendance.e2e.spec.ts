@@ -984,6 +984,92 @@ describe('Class attendance (section 29, decisions 0501 and 0503)', () => {
     ]);
   });
 
+  it('shows a leader their own people in the school, under their 12, and nobody else (decision 0504)', async () => {
+    // Under Mario: Lino, one of his 12, and Tomas, reached through Kiko. Ben, Carlo and Dino are
+    // Ramon's, outside Mario's branch.
+    const kiko = await createPerson(db, { firstName: 'Kiko', network: 'MENS' });
+    await assignTo(db, kiko.id, mario.id);
+    const people: { name: string; leader: string }[] = [
+      { name: 'Lino', leader: mario.id },
+      { name: 'Tomas', leader: kiko.id },
+    ];
+    const ids: string[] = [];
+    for (const each of people) {
+      const person = await createPerson(db, {
+        firstName: each.name,
+        network: 'MENS',
+        birthDate: '1999-02-01',
+      });
+      await assignTo(db, person.id, each.leader);
+      const reg = await post(registrar, 'equipping/registrations', {
+        ...TERM,
+        person_id: person.id,
+        bible_confirmed: true,
+        manual_confirmed: true,
+        exception_reason: 'Their leader confirms they attend.',
+      }).expect(201);
+      ids.push((reg.body as { id: string }).id);
+    }
+    await post(admin, `equipping/classes/${classId}/enrollments`, { registration_ids: ids }).expect(
+      201,
+    );
+    const nameIds = await idsByName();
+    await post(teacher, `equipping/classes/${classId}/lessons/9`, {
+      held_on: today,
+      came: [nameIds.get('Lino')],
+    }).expect(200);
+
+    type Mine = {
+      data: {
+        person: { full_name: string };
+        level: string;
+        twelve: boolean;
+        through: { full_name: string } | null;
+        class: { name: string };
+        teacher: { full_name: string } | null;
+        marks: { lesson: number; came: boolean }[];
+      }[];
+    };
+    const mine = (await get(teacher, 'equipping/my-people').expect(200)).body as Mine;
+    expect(mine.data.map((p) => p.person.full_name.split(' ')[0])).toEqual(['Lino', 'Tomas']);
+    const [lino, tomas] = mine.data;
+    expect(lino).toMatchObject({
+      level: 'LIFE_CLASS',
+      twelve: true,
+      through: null,
+      class: { name: 'Life Class A' },
+      teacher: { full_name: expect.stringContaining('Mario') },
+    });
+    expect(lino.marks).toEqual([expect.objectContaining({ lesson: 9, came: true })]);
+    expect(tomas).toMatchObject({
+      twelve: false,
+      through: { full_name: expect.stringContaining('Kiko') },
+    });
+    expect(tomas.marks).toEqual([expect.objectContaining({ lesson: 9, came: false })]);
+
+    // Ramon's branch holds everyone; Mario, himself in the branch, is not one of the enrolled.
+    const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+    const ramons = (await get(ramonAccount, 'equipping/my-people').expect(200)).body as Mine;
+    expect(ramons.data.map((p) => p.person.full_name.split(' ')[0])).toEqual([
+      'Ben',
+      'Carlo',
+      'Dino',
+      'Lino',
+      'Tomas',
+    ]);
+    expect(ramons.data.find((p) => p.person.full_name.startsWith('Tomas'))).toMatchObject({
+      twelve: false,
+      through: { full_name: expect.stringContaining('Mario') },
+    });
+
+    // A leader with nobody enrolled reads an empty list, and a Registrar, who holds no People
+    // access, is refused.
+    expect(((await get(bystander, 'equipping/my-people').expect(200)).body as Mine).data).toEqual(
+      [],
+    );
+    await get(registrar, 'equipping/my-people').expect(403);
+  });
+
   it('shows a Guide their own students and nothing else, records nothing for them, and refuses others', async () => {
     await post(coordinator, `equipping/classes/${classId}/guides`, { person_id: pedro.id }).expect(
       201,

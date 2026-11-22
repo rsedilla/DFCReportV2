@@ -575,6 +575,10 @@
       "screen": "web/app/(app)/equipping/teach/page.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/my-people",
+      "screen": "web/app/(app)/equipping/teach/page.tsx"
+    },
+    {
       "route": "GET /api/v1/equipping/classes/:id/attendance",
       "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
     },

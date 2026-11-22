@@ -392,6 +392,26 @@ export async function listMyClasses(signal?: AbortSignal): Promise<{ data: MyCla
   return authenticatedRequest('/api/v1/equipping/my-classes', { signal });
 }
 
+/** One of the reader's people in the school, read only (decisions 0501 and 0504). */
+export interface MyPerson {
+  enrollment_id: string;
+  person: { id: string; full_name: string | null };
+  level: string;
+  /** One of the reader's twelve. */
+  twelve: boolean;
+  /** The one of the reader's twelve they are reached through; null for one of the twelve. */
+  through: { id: string; full_name: string | null } | null;
+  class: { id: string; name: string };
+  teacher: { id: string; full_name: string | null } | null;
+  guide: { id: string; full_name: string | null } | null;
+  joined_on: string;
+  marks: AttendanceStudent['marks'];
+}
+
+export async function listMyPeople(signal?: AbortSignal): Promise<{ data: MyPerson[] }> {
+  return authenticatedRequest('/api/v1/equipping/my-people', { signal });
+}
+
 /** Where a lesson stands (decision 0503). */
 export type LessonState = 'SAVED' | 'NOT_YET' | 'TODAY' | 'TO_RECORD' | 'LATE' | 'NOT_RECORDED';
 
