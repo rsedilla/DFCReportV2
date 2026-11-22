@@ -632,7 +632,7 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     await openAs(page, false);
 
     await expect(
-      page.getByText('Encounter and Life Class now come from the school', { exact: false }),
+      page.getByText('You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'),
     ).toBeVisible();
     const ernani = page.getByRole('row', { name: /Ernani Pascual/ });
     await expect(ernani.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
@@ -643,6 +643,8 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
     await expect(dalisay.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
     await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
+    // The key says once what each label means.
+    await expect(page.getByText('recorded by the Registrar or a posted Passed')).toBeVisible();
   });
 
   test('the Admin ticks the two for one who finished before the school, never the school’s', async ({
@@ -651,7 +653,9 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     await openAs(page, true);
 
     await expect(
-      page.getByText('You can tick all five for people who finished before the school.'),
+      page.getByText(
+        'You can tick the Encounter and Life Class only for someone who finished before the school.',
+      ),
     ).toBeVisible();
     const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
     await expect(

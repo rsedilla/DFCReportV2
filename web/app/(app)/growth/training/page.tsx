@@ -211,38 +211,40 @@ function TrainingTab() {
         <GrowthFailure list={list} />
 
         <GrowthRows list={list}>
-          <p className="text-muted mb-3 text-sm">
-            {schoolMayTick ? (
-              <>
-                <strong className="text-ink font-semibold">
-                  You can tick all five for people who finished before the school.
-                </strong>{' '}
-                Encounter and Life Class from the school are recorded by the Registrar and a posted
-                Passed.
-              </>
-            ) : (
-              <>
-                <strong className="text-ink font-semibold">
-                  Encounter and Life Class now come from the school
-                </strong>
-                : the Registrar records the Encounter, and a posted Passed records Life Class. Ticks
-                from before the school are kept.
-              </>
-            )}
+          {/* What the reader may tick, then a key to the two labels shown once, as a transcript's
+              key is, rather than explained in every cell (decision 0509). */}
+          <p className="text-ink text-sm font-semibold">
+            {schoolMayTick
+              ? 'You can tick the Encounter and Life Class only for someone who finished before the school.'
+              : 'You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'}
           </p>
+          <dl className="text-muted mt-2 mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <dt className="text-ink font-semibold">Key</dt>
+            <dd className="flex flex-wrap items-center gap-1.5">
+              <SourceLabel>From the school</SourceLabel>
+              recorded by the Registrar or a posted Passed
+            </dd>
+            <dd className="flex flex-wrap items-center gap-1.5">
+              <SourceLabel>Before the school</SourceLabel>
+              ticked by the Admin, finished before the school
+            </dd>
+          </dl>
           <Table
             caption="Training graduations for the people you oversee"
             className="hidden lg:block"
+            tableClassName="table-fixed"
           >
             <thead>
               <tr>
                 <HeaderCell>Person</HeaderCell>
+                {/* The five are alike, so one width each, wide enough for the longer label with
+                    room between columns, rather than each sized to its own content. */}
                 {TRAINING_PROGRAMS.map((program) => (
-                  <HeaderCell key={program} className="px-1 text-center">
+                  <HeaderCell key={program} className="w-32 px-1 text-center">
                     {PROGRAM_LABELS[program]}
                   </HeaderCell>
                 ))}
-                <HeaderCell className="text-right">Done</HeaderCell>
+                <HeaderCell className="w-20 text-right">Done</HeaderCell>
               </tr>
             </thead>
             <tbody>
@@ -341,7 +343,7 @@ function SchoolCell({
   const school = SCHOOL_PROGRAMS.has(program);
   const source =
     school && stored ? (stored.from_school ? 'From the school' : 'Before the school') : null;
-  const tag = source ? <span className="text-ink text-xs font-semibold">{source}</span> : null;
+  const tag = source ? <SourceLabel>{source}</SourceLabel> : null;
 
   // Read-only where the reader may not file for them, where only the Admin ticks it, or where
   // the school filed it, which is changed there.
@@ -387,6 +389,15 @@ function SchoolCell({
         </button>
       ) : null}
       {graduated ? tag : null}
+    </span>
+  );
+}
+
+/** Where a graduation came from, as a small outlined label in words, never a colour (decision 0509). */
+function SourceLabel({ children }: { children: string }) {
+  return (
+    <span className="border-edge text-ink mt-1 inline-block rounded-full border px-1.5 text-[11px] leading-4 font-medium whitespace-nowrap">
+      {children}
     </span>
   );
 }
