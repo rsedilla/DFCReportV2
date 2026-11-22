@@ -405,6 +405,8 @@ export interface MyPerson {
   teacher: { id: string; full_name: string | null } | null;
   guide: { id: string; full_name: string | null } | null;
   joined_on: string;
+  /** The ENC column (decision 0507): attended, enrolled and not yet recorded, or missed. */
+  encounter?: 'CAME' | 'ENROLLED' | 'MISSED' | null;
   marks: AttendanceStudent['marks'];
 }
 
@@ -432,6 +434,8 @@ export interface AttendanceStudent {
   guide: { id: string; full_name: string | null } | null;
   /** The day they joined this class (decision 0503). */
   joined_on: string;
+  /** The ENC column (decision 0507): attended, enrolled and not yet recorded, or missed. */
+  encounter?: 'CAME' | 'ENROLLED' | 'MISSED' | null;
   marks: {
     lesson: number;
     came: boolean;
@@ -490,6 +494,75 @@ export async function recordMakeUp(
   idempotencyKey: string,
 ): Promise<unknown> {
   return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/make-ups`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The Encounter (decision 0501, point 14; decision 0507)
+// ---------------------------------------------------------------------------
+
+export type EncounterNetwork = 'MENS' | 'WOMENS';
+export type EncounterStatus = 'CLEARED' | 'NEEDS_MAKE_UP' | 'CANT_GO';
+export type EncounterSign = 'CAME' | 'MADE_UP' | 'ABSENT' | 'BEFORE_JOINING' | 'NONE';
+
+/** One Network's weekend: who is cleared, who waits for a make-up, who can't go, and who is in. */
+export interface EncounterList {
+  network: EncounterNetwork;
+  seasons: { id: string; weekend_on: string }[];
+  season: { id: string; weekend_on: string } | null;
+  phase?: 'ENROLLING' | 'RECORDING';
+  students?: {
+    enrollment_id: string;
+    person: { id: string; full_name: string | null };
+    class: { id: string; name: string };
+    cell_leader: { id: string; full_name: string | null } | null;
+    status: EncounterStatus;
+    reasons: string[];
+    age_on_weekend: number | null;
+    lessons: EncounterSign[];
+    missed_weekend_on: string | null;
+    from_weekend_on: string | null;
+  }[];
+  waiting?: { class: { id: string; name: string }; lesson_4_on: string }[];
+  enrolled?: {
+    encounter_enrollment_id: string;
+    person: { id: string; full_name: string | null };
+    class: { id: string; name: string };
+    came: boolean | null;
+  }[];
+}
+
+export async function getEncounter(
+  network: EncounterNetwork,
+  seasonId: string | null,
+  signal?: AbortSignal,
+): Promise<EncounterList> {
+  const params = new URLSearchParams({ network });
+  if (seasonId !== null) {
+    params.set('season_id', seasonId);
+  }
+  return authenticatedRequest(`/api/v1/equipping/encounter?${params.toString()}`, { signal });
+}
+
+export async function enrollEncounter(
+  body: { season_id: string; network: EncounterNetwork; enrollment_ids: string[] },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest('/api/v1/equipping/encounter/enrollments', {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+export async function saveEncounterAttendance(
+  body: { season_id: string; network: EncounterNetwork; came: string[] },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest('/api/v1/equipping/encounter/attendance', {
     method: 'POST',
     body,
     idempotencyKey,

@@ -41,6 +41,7 @@ import {
   mockClassGuides,
   mockCoordinatedClasses,
   mockRegistrar,
+  mockEncounter,
   mockEquipping,
   mockRegistrationSearch,
   mockTeacher,
@@ -1565,6 +1566,32 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: /^Ready to enroll/ })).toBeVisible();
     },
   },
+  // The Encounter (decision 0507): before the weekend, and from its first day.
+  ...(
+    [
+      {
+        name: 'equipping encounter',
+        phase: 'ENROLLING',
+        heading: /^Cleared/,
+      },
+      {
+        name: 'equipping encounter, who came',
+        phase: 'RECORDING',
+        heading: /^Who came/,
+      },
+    ] as const
+  ).map((state) => ({
+    name: state.name,
+    route: '/equipping/encounter',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockEncounter(page, state.phase);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: state.heading })).toBeVisible();
+    },
+  })),
   {
     // The Coordinator's Classes (decision 0501): a table from `lg`, a card each below it.
     name: 'equipping classes',
@@ -2504,6 +2531,15 @@ const TARGET_SWEEP = [
     registrar: true,
   },
   {
+    // The Encounter before its weekend: Men's and Women's, the season, a tick for each of the
+    // four cleared and Enroll: **eight**.
+    name: 'equipping encounter',
+    route: '/equipping/encounter',
+    settle: 'Enroll 4 in the Men’s Encounter',
+    minimum: 8,
+    registrar: true,
+  },
+  {
     // In place of every screen until the notice is ticked (decision 0496): the box, the
     // Privacy Notice link, Continue and Sign out: **four**. Last, because its `/auth/me` stays.
     // Settled on Continue, not Sign out, which My Account has too.
@@ -2541,6 +2577,12 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'The measured "equipping teach, a class" read as a Guide: the same lesson buttons and no ' +
       'other control, the missed-twice line and the register being read only.',
+  },
+  {
+    name: 'equipping encounter, who came',
+    why:
+      'The measured "equipping encounter" from the weekend’s first day: the same switch and ' +
+      'season select, a tick box a student and one Button, each measured there.',
   },
   {
     name: 'equipping teach, recording a make-up',
@@ -2998,6 +3040,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     if ('registrar' in entry && entry.registrar) {
       await mockRegistrar(page);
       await mockEquipping(page);
+      await mockEncounter(page);
     }
     if ('privacyUnread' in entry && entry.privacyUnread) {
       await mockPrivacyNoticeUnread(page);

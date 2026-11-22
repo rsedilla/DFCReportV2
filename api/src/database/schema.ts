@@ -429,6 +429,8 @@ export type AuditAction =
   | 'equipping_make_up.recorded'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
+  | 'equipping_encounter_enrollment.created'
+  | 'equipping_encounter_attendance.recorded'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -1057,6 +1059,28 @@ export interface EquippingMakeUpsTable {
   superseded_by: string | null;
 }
 
+/** A student enrolled in one season's Encounter weekend (decision 0507). */
+export interface EquippingEncounterEnrollmentsTable {
+  id: Generated<string>;
+  enrollment_id: string;
+  person_id: string;
+  encounter_season_id: string;
+  network: 'MENS' | 'WOMENS';
+  enrolled_by: string;
+  enrolled_at: ServerTimestamp;
+}
+
+/** Whether an enrolled student came to the Encounter; a correction is a new row (decision 0507). */
+export interface EquippingEncounterAttendanceTable {
+  id: Generated<string>;
+  encounter_enrollment_id: string;
+  came: boolean;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+}
+
 /** A lesson's date changed, keeping the date it changed from (decision 0503). */
 export interface EquippingLessonDateChangesTable {
   id: Generated<string>;
@@ -1170,6 +1194,8 @@ export interface Database {
   equipping_lessons: EquippingLessonsTable;
   equipping_marks: EquippingMarksTable;
   equipping_make_ups: EquippingMakeUpsTable;
+  equipping_encounter_enrollments: EquippingEncounterEnrollmentsTable;
+  equipping_encounter_attendance: EquippingEncounterAttendanceTable;
   equipping_lesson_date_changes: EquippingLessonDateChangesTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;

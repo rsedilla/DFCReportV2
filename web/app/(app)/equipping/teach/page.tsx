@@ -167,8 +167,23 @@ function PersonCard({ person }: { person: MyPerson }) {
             <tr>
               {COLUMNS.map((n) => {
                 const mark = n === 5 ? null : markFor(n);
+                // ENC is the Registrar's record of the weekend (decision 0507).
                 const sign =
-                  mark === null ? '–' : mark.came ? '✓' : mark.made_up_on ? 'M' : mark.before_joining ? '○' : '✗';
+                  n === 5
+                    ? person.encounter === 'CAME'
+                      ? '✓'
+                      : person.encounter === 'MISSED'
+                        ? '✗'
+                        : '–'
+                    : mark === null
+                      ? '–'
+                      : mark.came
+                        ? '✓'
+                        : mark.made_up_on
+                          ? 'M'
+                          : mark.before_joining
+                            ? '○'
+                            : '✗';
                 return (
                   <td key={n} className={cn('px-1 py-1', sign === '✗' && 'text-field-invalid font-semibold')}>
                     <span aria-hidden="true">{sign}</span>

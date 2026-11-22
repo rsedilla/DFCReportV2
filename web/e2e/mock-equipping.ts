@@ -593,3 +593,95 @@ export async function mockTeacherCheck(
     route.fulfill(json({ clash: null, account })),
   );
 }
+
+/**
+ * One Men's Encounter weekend (decision 0507): before it, four cleared, two needing a make-up,
+ * two who can't go, a class waiting for lesson 4 and two enrolled; from its first day, who came.
+ * Every name is invented.
+ */
+export async function mockEncounter(
+  page: Page,
+  phase: 'ENROLLING' | 'RECORDING' = 'ENROLLING',
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const classA = { id: id(9001), name: 'Life Class A' };
+  const classC = { id: id(9003), name: 'Life Class C' };
+  const student = (
+    n: number,
+    name: string,
+    cls: { id: string; name: string },
+    status: string,
+    lessons: string[],
+    reasons: string[] = [],
+    extra: Record<string, unknown> = {},
+  ) => ({
+    enrollment_id: id(7000 + n),
+    person: { id: id(8000 + n), full_name: name },
+    class: cls,
+    cell_leader: { id: id(8500 + n), full_name: 'Gilbert Manalo' },
+    status,
+    reasons,
+    age_on_weekend: 23,
+    lessons,
+    missed_weekend_on: null,
+    from_weekend_on: null,
+    ...extra,
+  });
+  const body = {
+    network: 'MENS',
+    seasons: [
+      { id: id(6001), weekend_on: '2026-12-04' },
+      { id: id(6002), weekend_on: '2027-04-02' },
+    ],
+    season: { id: id(6001), weekend_on: '2026-12-04' },
+    phase,
+    students: [
+      student(1, 'Efren Quiambao', classA, 'CLEARED', ['CAME', 'CAME', 'MADE_UP', 'CAME']),
+      student(2, 'Nestor Villamor', classA, 'CLEARED', ['MADE_UP', 'CAME', 'CAME', 'MADE_UP']),
+      student(3, 'Ramil Soriano', classC, 'CLEARED', ['CAME', 'CAME', 'CAME', 'CAME']),
+      student(4, 'Tomas Aquino', classA, 'CLEARED', ['CAME', 'CAME', 'CAME', 'CAME'], [], {
+        missed_weekend_on: '2026-08-07',
+      }),
+      student(5, 'Carlito Manalo', classA, 'NEEDS_MAKE_UP', ['CAME', 'ABSENT', 'CAME', 'CAME'], [
+        'L2 not made up yet.',
+      ]),
+      student(6, 'Arnel Santos', classA, 'CANT_GO', ['ABSENT', 'ABSENT', 'CAME', 'ABSENT'], [
+        '3 absences in lessons 1 to 4. Repeats Life Class.',
+      ]),
+    ],
+    waiting: [{ class: { id: id(9002), name: 'Life Class B' }, lesson_4_on: '2026-11-24' }],
+    enrolled: [
+      {
+        encounter_enrollment_id: id(5001),
+        person: { id: id(8101), full_name: 'Jose Bautista' },
+        class: classC,
+        came: phase === 'RECORDING' ? true : null,
+      },
+      {
+        encounter_enrollment_id: id(5002),
+        person: { id: id(8102), full_name: 'Wilfredo Tan' },
+        class: classA,
+        came: null,
+      },
+    ],
+  };
+  await page.route('**/api/v1/equipping/encounter?*', (route) => route.fulfill(json(body)));
+  const record = (status: number) => (route: import('@playwright/test').Route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }, status));
+  };
+  await page.route('**/api/v1/equipping/encounter/enrollments', record(201));
+  await page.route('**/api/v1/equipping/encounter/attendance', record(200));
+  return { sent };
+}
+
+/** The ids `mockEncounter` uses, for cases that assert what was sent. */
+export const ENCOUNTER_IDS = {
+  season: '3f1b7c6e-0000-4000-8000-000000006001',
+  efren: '3f1b7c6e-0000-4000-8000-000000007001',
+  nestor: '3f1b7c6e-0000-4000-8000-000000007002',
+  ramil: '3f1b7c6e-0000-4000-8000-000000007003',
+  tomas: '3f1b7c6e-0000-4000-8000-000000007004',
+  jose: '3f1b7c6e-0000-4000-8000-000000005001',
+};

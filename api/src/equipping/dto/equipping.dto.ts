@@ -233,3 +233,50 @@ export class RecordMakeUpDto {
   @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
   made_up_on!: string;
 }
+
+/** The two Encounter weekends of a season: the Men's for men, the Women's for women. */
+export const ENCOUNTER_NETWORKS = ['MENS', 'WOMENS'] as const;
+
+/** A weekend enrols every cleared student at once, so more than a class's fifty. */
+export const ENCOUNTER_ENROLL_AT_ONCE = 300;
+
+/** `GET /equipping/encounter`: one weekend's list (decision 0507). No season: the current one. */
+export class EncounterQueryDto {
+  @IsIn(ENCOUNTER_NETWORKS)
+  network!: (typeof ENCOUNTER_NETWORKS)[number];
+
+  @IsOptional()
+  @IsUUID()
+  season_id?: string;
+}
+
+/** Enrolling cleared students in one weekend (decision 0501, point 14). */
+export class EnrollEncounterDto {
+  @IsUUID()
+  season_id!: string;
+
+  @IsIn(ENCOUNTER_NETWORKS)
+  network!: (typeof ENCOUNTER_NETWORKS)[number];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(ENCOUNTER_ENROLL_AT_ONCE)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  enrollment_ids!: string[];
+}
+
+/** Who came to one weekend: every enrolled student not named here is saved as not attended. */
+export class EncounterAttendanceDto {
+  @IsUUID()
+  season_id!: string;
+
+  @IsIn(ENCOUNTER_NETWORKS)
+  network!: (typeof ENCOUNTER_NETWORKS)[number];
+
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  came!: string[];
+}
