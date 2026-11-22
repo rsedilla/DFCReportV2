@@ -28,13 +28,28 @@ the grade itself still reading *Not yet* as posted. **Correcting them back to no
 offered**: passing ends their enrollment, which takes them off every weekend's list, as a posted
 *Passed* is taken off, so the save cannot reach them.
 
-**5. Older ticks read *Before the school*, and the school's *From the school*** (owner), under the
-date in the Encounter and Life Class columns. A note above the table says what the reader may do:
-the Admin's *You can tick all five for people who finished before the school*, a leader's
-*Encounter and Life Class now come from the school*. **"Joins a later class at lesson 6" stays
+**5. Older ticks read *Before the school*, and the school's *From the school*** (owner), as small
+outlined labels in words under the date in the Encounter and Life Class columns. Above the table one
+line says what the reader may tick, the Admin's *You can tick the Encounter and Life Class only for
+someone who finished before the school* and a leader's *You tick SOL 1 to 3. The Encounter and
+Life Class now come from the school.*, and a *Key* under it explains the two labels once (owner,
+choosing it over the first build after comparing how universities key the source of a credit on a
+transcript, and how Canvas is faulted for keeping its key off the gradebook). The five programme
+columns take one width each, with room between them. **"Joins a later class at lesson 6" stays
 deferred** (owner).
 
-What the owner ruled is points 1 to 5. These are this step's readings:
+**6. A graduation the school files names nobody as confirming** (owner, "yes"), as a Network
+root's does: `confirmed_by` is null, `recorded_by` is the Registrar's account, and `from_school`
+says it came from the school. Section 28's "null for a Network root and for nobody else" gains this
+case. It settles the Stop Condition decision 0501 left open on who files a graduation the school
+posts.
+
+**7. The Admin alone may correct or withdraw a *Before the school* tick, with a reason** (owner,
+"yes"); leaders may not. Otherwise a wrong old tick would count for good, letting somebody into
+SOL 1 without Life Class. This amends decision 0501 point 19's "no longer editable", and settles
+the question 0501 left open on whether such a tick can still be corrected.
+
+What the owner ruled is points 1 to 7. These are this step's readings:
 
 - **The Life Class date for a student who passes later is the weekend they attended**, not the day
   it was recorded, the Encounter being the step they were waiting on. **"A later Encounter"
@@ -49,16 +64,11 @@ What the owner ruled is points 1 to 5. These are this step's readings:
   a line made against an older page is told what changed, and a correction is refused while any
   record of the person, a merged one included, holds the school's row of that program.
 - **Nobody changes a graduation the school filed on the Training tab**, the Admin included,
-  refused `INVARIANT_VIOLATION`; it is changed where the school recorded it. **The Admin may still
-  correct or withdraw a tick from before the school**, with a reason as before. This replaces
-  Section 29's earlier sentence that such a tick is "no longer editable", which predates point 1.
+  refused `INVARIANT_VIOLATION`; it is changed where the school recorded it.
 - **"The Admin" is read as `training.confirm` at Whole Church**, which only the Admin holds by
   default (a Senior Pastor holds no Training capability, decision 0326, and a Network Admin holds
   it at `NETWORK`). An explicit Whole Church grant would count too, the open question of whether
   "Admin" is a role or a capability.
-- **A school row carries no confirming leader**: `confirmed_by` is null, as for a Network root,
-  and `recorded_by` is the Registrar's account. Section 28's "null for a Network root and for
-  nobody else" gains this case.
 - **The school files only for a current person** (decision 0279): an archived or merged record is
   given nothing. A graduation held on a record merged into the person counts as held (decision
   0408). A tick landing at the same moment as the school's filing keeps the one current row, and
