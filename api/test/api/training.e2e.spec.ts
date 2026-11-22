@@ -207,20 +207,20 @@ describe('Training (section 28)', () => {
   describe('filing', () => {
     it('records a graduation for a direct disciple, with a date or without one', async () => {
       const response = await submit(markAccount, [
-        graduate(timothy.id, 'ENCOUNTER', '2019-03-10'),
-        graduate(timothy.id, 'LIFE_CLASS'),
+        graduate(timothy.id, 'SOL_1', '2019-03-10'),
+        graduate(timothy.id, 'SOL_3'),
       ]);
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({ created: 2, corrected: 0, unchanged: 0 });
 
-      const encounter = await currentRow(timothy.id, 'ENCOUNTER');
+      const encounter = await currentRow(timothy.id, 'SOL_1');
       expect(encounter.graduated_on).toBe('2019-03-10');
       expect(encounter.confirmed_by).toBe(mark.id);
       expect(encounter.recorded_by).toBe(markAccount.id);
 
       // Section 28: a date where the leader knows it, and none where they do not.
-      expect((await currentRow(timothy.id, 'LIFE_CLASS')).graduated_on).toBeNull();
+      expect((await currentRow(timothy.id, 'SOL_3')).graduated_on).toBeNull();
 
       const entries = await auditOf('training_graduation.confirmed');
       expect(entries).toHaveLength(2);
@@ -251,7 +251,7 @@ describe('Training (section 28)', () => {
     it('accepts today as a graduation date and refuses tomorrow', async () => {
       const now = await today();
 
-      const onToday = await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', now)]);
+      const onToday = await submit(markAccount, [graduate(timothy.id, 'SOL_1', now)]);
       expect(onToday.status).toBe(201);
 
       const tomorrow = await submit(markAccount, [graduate(timothy.id, 'SOL_2', shift(now, 1))]);
@@ -262,7 +262,7 @@ describe('Training (section 28)', () => {
     });
 
     it('refuses a date that does not exist', async () => {
-      const response = await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-02-30')]);
+      const response = await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-02-30')]);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -277,8 +277,8 @@ describe('Training (section 28)', () => {
   describe('refusals', () => {
     it('refuses a person outside scope, and writes nothing from the batch', async () => {
       const response = await submit(markAccount, [
-        graduate(timothy.id, 'ENCOUNTER'),
-        graduate(nathan.id, 'ENCOUNTER'),
+        graduate(timothy.id, 'SOL_1'),
+        graduate(nathan.id, 'SOL_1'),
       ]);
 
       expect(response.status).toBe(403);
@@ -289,7 +289,7 @@ describe('Training (section 28)', () => {
 
     it('refuses anybody filing for themselves, whatever their grant (decision 0280)', async () => {
       for (const account of [markAccount, admin]) {
-        const response = await submit(account, [graduate(account.personId, 'ENCOUNTER')]);
+        const response = await submit(account, [graduate(account.personId, 'SOL_1')]);
 
         expect(response.status).toBe(403);
         expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -322,6 +322,81 @@ describe('Training (section 28)', () => {
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('CAPABILITY_DENIED');
       expect(await allRows()).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // The school's two (decision 0509)
+  // ---------------------------------------------------------------------------
+
+  describe('the Encounter and Life Class, which the school files (decision 0509)', () => {
+    const fromSchool = (personId: string, program: TrainingProgram) =>
+      db
+        .insertInto('training_graduations')
+        .values({
+          person_id: personId,
+          program,
+          graduated_on: '2026-11-07',
+          confirmed_by: null,
+          recorded_by: admin.id,
+          from_school: true,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+    it('refuses a leader either tick, and still admits their SOL tick', async () => {
+      for (const program of ['ENCOUNTER', 'LIFE_CLASS'] as const) {
+        const response = await submit(markAccount, [graduate(timothy.id, program)]);
+        expect(response.status).toBe(403);
+        expect(response.body.error.code).toBe('SCOPE_DENIED');
+      }
+      expect(await allRows()).toHaveLength(0);
+
+      expect((await submit(markAccount, [graduate(timothy.id, 'SOL_1')])).status).toBe(201);
+    });
+
+    it('lets the Admin tick both for somebody who finished before the school', async () => {
+      const response = await submit(admin, [
+        graduate(timothy.id, 'ENCOUNTER', '2019-03-10'),
+        graduate(timothy.id, 'LIFE_CLASS'),
+      ]);
+
+      expect(response.status).toBe(201);
+      expect((await currentRow(timothy.id, 'ENCOUNTER')).from_school).toBe(false);
+      expect((await currentRow(timothy.id, 'LIFE_CLASS')).from_school).toBe(false);
+    });
+
+    it('refuses even the Admin a change to a graduation the school filed', async () => {
+      const row = await fromSchool(timothy.id, 'ENCOUNTER');
+
+      const response = await submit(admin, [
+        {
+          person_id: timothy.id,
+          program: 'ENCOUNTER',
+          graduated: false,
+          seen_id: row.id,
+          reason: 'Wrong.',
+        },
+      ]);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(await currentCount(timothy.id, 'ENCOUNTER')).toBe(1);
+    });
+
+    it('says which rows are the school’s, and whether the reader may tick the two', async () => {
+      await fromSchool(timothy.id, 'ENCOUNTER');
+
+      const forLeader = await get(markAccount, 'people?limit=200');
+      expect(forLeader.body.school_may_tick).toBe(false);
+      const row = forLeader.body.data.find(
+        (each: { person_id: string }) => each.person_id === timothy.id,
+      );
+      expect(row.graduations).toEqual([
+        expect.objectContaining({ program: 'ENCOUNTER', from_school: true }),
+      ]);
+
+      expect((await get(admin, 'people?limit=200')).body.school_may_tick).toBe(true);
     });
   });
 
@@ -387,12 +462,12 @@ describe('Training (section 28)', () => {
     });
 
     it('changes a date by superseding the row and inserting a new one, audited once', async () => {
-      await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
-      const seen = await currentRow(timothy.id, 'ENCOUNTER');
+      await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-03-10')]);
+      const seen = await currentRow(timothy.id, 'SOL_1');
 
       const response = await submit(markAccount, [
         {
-          ...graduate(timothy.id, 'ENCOUNTER', '2019-03-17'),
+          ...graduate(timothy.id, 'SOL_1', '2019-03-17'),
           seen_id: seen.id,
           reason: 'Retreat was the following weekend.',
         },
@@ -411,7 +486,7 @@ describe('Training (section 28)', () => {
       expect(old.correction_reason).toBe('Retreat was the following weekend.');
       expect(old.graduated_on).toBe('2019-03-10');
 
-      const replacement = await currentRow(timothy.id, 'ENCOUNTER');
+      const replacement = await currentRow(timothy.id, 'SOL_1');
       expect(replacement.id).not.toBe(seen.id);
       expect(replacement.graduated_on).toBe('2019-03-17');
       expect(replacement.confirmed_by).toBe(mark.id);
@@ -428,11 +503,11 @@ describe('Training (section 28)', () => {
     });
 
     it('refuses a date change with no reason', async () => {
-      await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
-      const seen = await currentRow(timothy.id, 'ENCOUNTER');
+      await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-03-10')]);
+      const seen = await currentRow(timothy.id, 'SOL_1');
 
       const response = await submit(markAccount, [
-        { ...graduate(timothy.id, 'ENCOUNTER', '2019-03-17'), seen_id: seen.id },
+        { ...graduate(timothy.id, 'SOL_1', '2019-03-17'), seen_id: seen.id },
       ]);
 
       expect(response.status).toBe(422);
@@ -443,11 +518,11 @@ describe('Training (section 28)', () => {
 
     it('refuses a date change that names no row it was made against', async () => {
       // The client says it saw nothing, and something stands (decision 0282).
-      await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
-      const stored = await currentRow(timothy.id, 'ENCOUNTER');
+      await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-03-10')]);
+      const stored = await currentRow(timothy.id, 'SOL_1');
       const before = await allRows();
 
-      const response = await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-17')]);
+      const response = await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-03-17')]);
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('VERSION_CONFLICT');
@@ -458,7 +533,7 @@ describe('Training (section 28)', () => {
 
     it('refuses a first graduation carrying a reason', async () => {
       const response = await submit(markAccount, [
-        { ...graduate(timothy.id, 'ENCOUNTER'), reason: 'Nothing to correct.' },
+        { ...graduate(timothy.id, 'SOL_1'), reason: 'Nothing to correct.' },
       ]);
 
       expect(response.status).toBe(422);
@@ -490,20 +565,20 @@ describe('Training (section 28)', () => {
     });
 
     it('refuses a withdrawal naming a row that has since been replaced', async () => {
-      await submit(markAccount, [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')]);
-      const seen = await currentRow(timothy.id, 'ENCOUNTER');
+      await submit(markAccount, [graduate(timothy.id, 'SOL_1', '2019-03-10')]);
+      const seen = await currentRow(timothy.id, 'SOL_1');
 
       await submit(manuelAccount, [
-        { ...graduate(timothy.id, 'ENCOUNTER', '2019-03-17'), seen_id: seen.id, reason: 'Date.' },
+        { ...graduate(timothy.id, 'SOL_1', '2019-03-17'), seen_id: seen.id, reason: 'Date.' },
       ]);
-      const replacement = await currentRow(timothy.id, 'ENCOUNTER');
+      const replacement = await currentRow(timothy.id, 'SOL_1');
       const before = await allRows();
       const auditBefore = await allAudit();
 
       const response = await submit(markAccount, [
         {
           person_id: timothy.id,
-          program: 'ENCOUNTER',
+          program: 'SOL_1',
           graduated: false,
           seen_id: seen.id,
           reason: 'Written about the 10th.',
@@ -524,11 +599,9 @@ describe('Training (section 28)', () => {
     });
 
     it('answers a graduation somebody else already recorded, same date, as unchanged', async () => {
-      await submit(manuelAccount, [graduate(timothy.id, 'LIFE_CLASS', '2020-05-01')]);
+      await submit(manuelAccount, [graduate(timothy.id, 'SOL_3', '2020-05-01')]);
 
-      const response = await submit(markAccount, [
-        graduate(timothy.id, 'LIFE_CLASS', '2020-05-01'),
-      ]);
+      const response = await submit(markAccount, [graduate(timothy.id, 'SOL_3', '2020-05-01')]);
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({ created: 0, corrected: 0, unchanged: 1 });
@@ -550,11 +623,11 @@ describe('Training (section 28)', () => {
         await holder.query('BEGIN');
         await holder.query(
           `INSERT INTO training_graduations (person_id, program, confirmed_by, recorded_by)
-           VALUES ($1, 'ENCOUNTER', $2, $3)`,
+           VALUES ($1, 'SOL_1', $2, $3)`,
           [timothy.id, mark.id, manuelAccount.id],
         );
 
-        const attempt = submit(markAccount, [graduate(timothy.id, 'ENCOUNTER')]);
+        const attempt = submit(markAccount, [graduate(timothy.id, 'SOL_1')]);
         const inFlight = track(attempt);
 
         const waiters = await countWhileInFlight(
@@ -582,7 +655,7 @@ describe('Training (section 28)', () => {
         expect(response.status).toBe(503);
         expect(response.body.error.code).toBe('RESOURCE_BUSY');
       }
-      expect(await currentCount(timothy.id, 'ENCOUNTER')).toBe(1);
+      expect(await currentCount(timothy.id, 'SOL_1')).toBe(1);
     });
   });
 
@@ -807,7 +880,7 @@ describe('Training (section 28)', () => {
   describe('idempotency', () => {
     it('replays the stored response and writes nothing twice', async () => {
       const key = randomUUID();
-      const changes = [graduate(timothy.id, 'ENCOUNTER', '2019-03-10')];
+      const changes = [graduate(timothy.id, 'SOL_1', '2019-03-10')];
 
       const first = await submit(markAccount, changes, key);
       expect(first.status).toBe(201);

@@ -348,6 +348,134 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     expect(audit).toHaveLength(4);
   });
 
+  const lifeClassOf = (name: string) =>
+    db
+      .selectFrom('training_graduations')
+      .select(['graduated_on', 'from_school', 'superseded_at'])
+      .where('person_id', '=', personOf.get(name)!)
+      .where('program', '=', 'LIFE_CLASS')
+      .execute();
+
+  const manilaToday = async () =>
+    (
+      await sql<{ d: string }>`SELECT (now() AT TIME ZONE 'Asia/Manila')::date::text AS d`.execute(
+        db,
+      )
+    ).rows[0].d;
+
+  it('files Life Class from the school for a posted Passed, dated the posting day (decision 0509)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    expect(await lifeClassOf('Ben')).toEqual([
+      { graduated_on: await manilaToday(), from_school: true, superseded_at: null },
+    ]);
+    for (const name of ['Carlo', 'Dino', 'Eli']) {
+      expect(await lifeClassOf(name)).toEqual([]);
+    }
+  });
+
+  it('keeps a Life Class ticked before the school, adding nothing (decision 0509)', async () => {
+    await term();
+    await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: personOf.get('Ben')!,
+        program: 'LIFE_CLASS',
+        graduated_on: null,
+        confirmed_by: null,
+        recorded_by: admin.id,
+      })
+      .execute();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    expect(await lifeClassOf('Ben')).toEqual([
+      { graduated_on: null, from_school: false, superseded_at: null },
+    ]);
+  });
+
+  it('passes a posted Not yet at a later Encounter, and a later save leaves it so (decision 0509)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    const today = await manilaToday();
+    const later = (
+      await db
+        .insertInto('encounter_seasons')
+        .values({
+          mens_lc_party_on: plusDays(today, -35),
+          mens_encounter_on: today,
+          womens_lc_party_on: plusDays(today, -28),
+          womens_encounter_on: plusDays(today, 7),
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: enrollmentOf.get('Dino')!,
+          person_id: personOf.get('Dino')!,
+          encounter_season_id: later,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [ee],
+    }).expect(200);
+
+    expect(await lifeClassOf('Dino')).toEqual([
+      { graduated_on: today, from_school: true, superseded_at: null },
+    ]);
+    const grade = await db
+      .selectFrom('equipping_final_grades')
+      .select(['grade', 'passed_later_at', 'passed_later_by'])
+      .where('enrollment_id', '=', enrollmentOf.get('Dino')!)
+      .executeTakeFirstOrThrow();
+    expect(grade.grade).toBe('NOT_YET');
+    expect(grade.passed_later_at).not.toBeNull();
+    expect(grade.passed_later_by).toBe(registrar.id);
+    const enrollment = await db
+      .selectFrom('equipping_enrollments')
+      .select('end_reason')
+      .where('id', '=', enrollmentOf.get('Dino')!)
+      .executeTakeFirstOrThrow();
+    expect(enrollment.end_reason).toBe('COMPLETED');
+    const audit = await db
+      .selectFrom('audit_log')
+      .select('action')
+      .where('action', '=', 'equipping_final_grade.passed_later')
+      .execute();
+    expect(audit).toHaveLength(1);
+
+    // Passing took Dino off the weekend's list, so a save that leaves him out writes nothing.
+    const again = await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [],
+    }).expect(200);
+    expect(again.body).toMatchObject({ changed: 0 });
+    expect(await lifeClassOf('Dino')).toHaveLength(1);
+    await expect(
+      db
+        .updateTable('equipping_final_grades')
+        .set({ passed_later_at: null, passed_later_by: null })
+        .where('enrollment_id', '=', enrollmentOf.get('Dino')!)
+        .execute(),
+    ).rejects.toThrow(/kept as written/);
+  });
+
   it('waits for the Admin when a student is the Coordinator’s own disciple', async () => {
     await term();
     await db

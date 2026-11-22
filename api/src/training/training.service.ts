@@ -426,18 +426,21 @@ export class TrainingService {
     trx: Transaction<Database>,
     input: { personId: string; program: TrainingProgram; graduatedOn: string; accountId: string },
   ): Promise<boolean> {
-    const held = await trx
-      .selectFrom('training_graduations')
-      .select('id')
-      .where('person_id', '=', input.personId)
-      .where('program', '=', input.program)
-      .where('superseded_at', 'is', null)
-      .forUpdate()
-      .executeTakeFirst();
-    if (held !== undefined) {
+    // Growth records only current people (decision 0279).
+    const identity = (await this.people.forDecisionsWithin(trx, [input.personId])).get(
+      input.personId,
+    );
+    if (identity === undefined || identity.isArchived || identity.mergedIntoId !== null) {
       return false;
     }
-    await trx
+    // Held on this record or on one merged into it (decision 0408): kept as it is.
+    const { shown } = await this.storedOfKept(trx, [input.personId], { lock: true });
+    if (shown.has(keyOf(input.personId, input.program))) {
+      return false;
+    }
+    // A tick landing at the same moment holds the one current row; the school's then files
+    // nothing rather than failing the posting or the Encounter save.
+    const filed = await trx
       .insertInto('training_graduations')
       .values({
         person_id: input.personId,
@@ -447,7 +450,14 @@ export class TrainingService {
         recorded_by: input.accountId,
         from_school: true,
       })
-      .execute();
+      .onConflict((oc) =>
+        oc.columns(['person_id', 'program']).where('superseded_at', 'is', null).doNothing(),
+      )
+      .returning('id')
+      .executeTakeFirst();
+    if (filed === undefined) {
+      return false;
+    }
     await this.audit.writeWithin(trx, {
       actorId: input.accountId,
       action: 'training_graduation.confirmed',

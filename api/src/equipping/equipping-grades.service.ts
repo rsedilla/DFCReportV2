@@ -19,9 +19,11 @@ import {
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
+import { manilaDayOf } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
+import { TrainingService } from '../training/training.service';
 
 import { CLASS_LESSONS, EquippingAttendanceService } from './equipping-attendance.service';
 
@@ -80,6 +82,7 @@ export class EquippingGradesService {
     private readonly hierarchy: HierarchyService,
     private readonly authorization: AuthorizationService,
     private readonly attendance: EquippingAttendanceService,
+    private readonly training: TrainingService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -295,6 +298,17 @@ export class EquippingGradesService {
               grade: s.grade,
               reason: s.reason,
             },
+          });
+        }
+        // **A posted Passed files Life Class from the school** (decision 0509), dated the day it
+        // was posted. One who already holds Life Class keeps what they hold.
+        const postedOn = manilaDayOf(posting.posted_at);
+        for (const s of standing.students.filter((st) => st.grade === 'PASSED')) {
+          await this.training.fileFromSchoolWithin(trx, {
+            personId: s.person_id,
+            program: 'LIFE_CLASS',
+            graduatedOn: postedOn,
+            accountId: actor.accountId,
           });
         }
         const response = {

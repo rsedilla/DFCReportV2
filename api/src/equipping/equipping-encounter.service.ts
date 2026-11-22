@@ -13,6 +13,7 @@ import { databaseNow } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
 import { EncounterSeasonsService } from '../training/encounter-seasons.service';
+import { TrainingService } from '../training/training.service';
 
 import { EquippingAttendanceService, expectedOn } from './equipping-attendance.service';
 import { ENCOUNTER_MINIMUM_AGE, ageOn } from './equipping.service';
@@ -67,6 +68,7 @@ export class EquippingEncounterService {
     private readonly cells: CellsReadService,
     private readonly seasons: EncounterSeasonsService,
     private readonly attendance: EquippingAttendanceService,
+    private readonly training: TrainingService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -273,7 +275,7 @@ export class EquippingEncounterService {
       }
       const locked = await trx
         .selectFrom('equipping_encounter_enrollments')
-        .select(['id', 'person_id'])
+        .select(['id', 'person_id', 'enrollment_id'])
         .where('encounter_season_id', '=', weekend.season.id)
         .where('network', '=', body.network)
         .orderBy('id')
@@ -359,6 +361,23 @@ export class EquippingEncounterService {
           );
         }
       }
+      // **A posted Not yet passes at a later Encounter** (decision 0509): their class's posted
+      // grade, locked. One who has passed since is not here to correct: passing ended their
+      // enrollment, which takes them off every weekend's list, as a posted Passed is taken off.
+      const notYet = enrolled.length
+        ? await trx
+            .selectFrom('equipping_final_grades')
+            .select(['id', 'enrollment_id', 'passed_later_at'])
+            .where(
+              'enrollment_id',
+              'in',
+              enrolled.map((row) => row.enrollment_id),
+            )
+            .where('grade', '=', 'NOT_YET')
+            .forUpdate()
+            .execute()
+        : [];
+      const notYetOf = new Map(notYet.map((row) => [canonicalId(row.enrollment_id), row]));
       let changed = 0;
       for (const row of enrolled) {
         const wants = came.has(canonicalId(row.id));
@@ -386,6 +405,28 @@ export class EquippingEncounterService {
           after: { came: wants, season_id: weekend.season.id, weekend_on: weekend.on },
         });
         changed += 1;
+        // **The Encounter attended is filed from the school** (decision 0509), dated the weekend,
+        // and a correction to not attended withdraws it.
+        if (!wants) {
+          await this.training.withdrawFromSchoolWithin(trx, {
+            personId: row.person_id,
+            program: 'ENCOUNTER',
+            accountId: actor.accountId,
+            reason: `Corrected to not attended at the Encounter of ${weekend.on}.`,
+          });
+          continue;
+        }
+        await this.training.fileFromSchoolWithin(trx, {
+          personId: row.person_id,
+          program: 'ENCOUNTER',
+          graduatedOn: weekend.on,
+          accountId: actor.accountId,
+        });
+        const grade = notYetOf.get(canonicalId(row.enrollment_id));
+        if (grade === undefined || grade.passed_later_at !== null) {
+          continue;
+        }
+        await this.passLaterWithin(trx, actor, row, grade.id, weekend.on);
       }
       const response = {
         season_id: weekend.season.id,
@@ -402,6 +443,56 @@ export class EquippingEncounterService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * **A posted Not yet passes** (decision 0509): the posted grade records when and by whom,
+   * the enrollment ends completed, and Life Class is filed from the school, dated the weekend
+   * they attended.
+   */
+  private async passLaterWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    row: { person_id: string; enrollment_id: string },
+    gradeId: string,
+    weekendOn: string,
+  ): Promise<void> {
+    await trx
+      .updateTable('equipping_final_grades')
+      .set({ passed_later_at: sql`now()`, passed_later_by: actor.accountId })
+      .where('id', '=', gradeId)
+      .execute();
+    const ended = await trx
+      .updateTable('equipping_enrollments')
+      .set({ ended_at: sql`now()`, ended_by: actor.accountId, end_reason: 'COMPLETED' })
+      .where('id', '=', row.enrollment_id)
+      .where('ended_at', 'is', null)
+      .returning('class_id')
+      .executeTakeFirst();
+    if (ended !== undefined) {
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_enrollment.ended',
+        targetType: 'person',
+        targetId: row.person_id,
+        before: { enrollment_id: row.enrollment_id, class_id: ended.class_id },
+        after: { end_reason: 'COMPLETED', passed_at_encounter_on: weekendOn },
+      });
+    }
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'equipping_final_grade.passed_later',
+      targetType: 'person',
+      targetId: row.person_id,
+      before: { grade: 'NOT_YET' },
+      after: { passed_at_encounter_on: weekendOn },
+    });
+    await this.training.fileFromSchoolWithin(trx, {
+      personId: row.person_id,
+      program: 'LIFE_CLASS',
+      graduatedOn: weekendOn,
+      accountId: actor.accountId,
+    });
+  }
 
   /**
    * The season a weekend's list opens on: the earliest whose weekend is no more than two weeks

@@ -433,6 +433,7 @@ export type AuditAction =
   | 'equipping_encounter_attendance.recorded'
   | 'equipping_class.checked'
   | 'equipping_final_grade.posted'
+  | 'equipping_final_grade.passed_later'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather

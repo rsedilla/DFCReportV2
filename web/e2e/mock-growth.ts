@@ -95,8 +95,8 @@ export const TRAINING_TWO = {
   member_id: 'M-004101',
   full_name: 'Dalisay Soriano',
   graduations: [
-    { id: '7c000000-0000-4000-8000-000000000001', program: 'ENCOUNTER', graduated_on: '2026-03-08' },
-    { id: '7c000000-0000-4000-8000-000000000002', program: 'LIFE_CLASS', graduated_on: null },
+    { id: '7c000000-0000-4000-8000-000000000001', program: 'ENCOUNTER', graduated_on: '2026-03-08', from_school: false },
+    { id: '7c000000-0000-4000-8000-000000000002', program: 'LIFE_CLASS', graduated_on: null, from_school: false },
   ],
   may_file: true,
 };
@@ -117,6 +117,7 @@ export const TRAINING_ALL = {
     id: `7c000000-0000-4000-8000-00000000001${index}`,
     program,
     graduated_on: `2025-0${index + 1}-15`,
+    from_school: false,
   })),
   may_file: true,
 };
@@ -126,7 +127,7 @@ export const TRAINING_NOT_MINE = {
   member_id: 'M-004104',
   full_name: 'Bayani Castillo',
   graduations: [
-    { id: '7c000000-0000-4000-8000-000000000021', program: 'ENCOUNTER', graduated_on: '2026-02-01' },
+    { id: '7c000000-0000-4000-8000-000000000021', program: 'ENCOUNTER', graduated_on: '2026-02-01', from_school: false },
   ],
   may_file: false,
 };
@@ -199,6 +200,7 @@ async function mockTab(
   counts: unknown,
   rows: unknown[],
   outcome: 'accepted' | 'conflict',
+  page_extra: Record<string, unknown> = {},
 ): Promise<GrowthTraffic> {
   const traffic: GrowthTraffic = { lists: [], submitted: [] };
 
@@ -208,7 +210,7 @@ async function mockTab(
     const params = new URL(route.request().url()).searchParams;
     traffic.lists.push(params);
     const data = rows.filter((row) => inStep(tab, row, params.get('step')));
-    return route.fulfill(json({ data, next_cursor: null }));
+    return route.fulfill(json({ data, next_cursor: null, ...page_extra }));
   });
 
   await page.route(`**/api/v1/${tab}/submit`, async (route) => {
@@ -524,7 +526,8 @@ export async function mockSuynlReadiness(
 export function mockTraining(
   page: Page,
   outcome: 'accepted' | 'conflict' = 'accepted',
-  fixture: { counts?: unknown; rows?: unknown[] } = {},
+  // The Admin's by default, who alone ticks the Encounter and Life Class (decision 0509).
+  fixture: { counts?: unknown; rows?: unknown[]; schoolMayTick?: boolean } = {},
 ): Promise<GrowthTraffic> {
   return mockTab(
     page,
@@ -532,6 +535,7 @@ export function mockTraining(
     fixture.counts ?? TRAINING_COUNTS,
     fixture.rows ?? [TRAINING_TWO, TRAINING_NONE, TRAINING_ALL, TRAINING_NOT_MINE],
     outcome,
+    { school_may_tick: fixture.schoolMayTick ?? true },
   );
 }
 
