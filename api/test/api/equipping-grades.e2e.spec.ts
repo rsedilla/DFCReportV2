@@ -476,6 +476,96 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     ).rejects.toThrow(/kept as written/);
   });
 
+  it('passes a moved student posted Not yet through their open enrollment, not the weekend row’s (decision 0509)', async () => {
+    await term();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    // Enrolled for the weekend from a class they have since left, as a move leaves it.
+    const registration = (
+      await db
+        .selectFrom('equipping_enrollments')
+        .select('registration_id')
+        .where('id', '=', enrollmentOf.get('Dino')!)
+        .executeTakeFirstOrThrow()
+    ).registration_id;
+    const earlierClass = (
+      await db
+        .insertInto('equipping_classes')
+        .values({
+          ...TERM,
+          name: 'Life Class B',
+          day_of_week: 4,
+          time_of_day: '19:00',
+          first_lesson_on: firstLesson,
+          teacher_person_id: lito.id,
+          encounter_season_id: seasonId,
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const left = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({
+          registration_id: registration,
+          class_id: earlierClass,
+          started_by: registrar.id,
+          started_at: sql<Date>`now() - interval '80 days'`,
+          ended_at: sql<Date>`now() - interval '75 days'`,
+          ended_by: registrar.id,
+          end_reason: 'MOVED',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+    const today = await manilaToday();
+    const later = (
+      await db
+        .insertInto('encounter_seasons')
+        .values({
+          mens_lc_party_on: plusDays(today, -35),
+          mens_encounter_on: today,
+          womens_lc_party_on: plusDays(today, -28),
+          womens_encounter_on: plusDays(today, 7),
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: left,
+          person_id: personOf.get('Dino')!,
+          encounter_season_id: later,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [ee],
+    }).expect(200);
+
+    expect(await lifeClassOf('Dino')).toEqual([
+      { graduated_on: today, from_school: true, superseded_at: null },
+    ]);
+    const open = await db
+      .selectFrom('equipping_enrollments')
+      .select('end_reason')
+      .where('id', '=', enrollmentOf.get('Dino')!)
+      .executeTakeFirstOrThrow();
+    expect(open.end_reason).toBe('COMPLETED');
+  });
+
   it('waits for the Admin when a student is the Coordinator’s own disciple', async () => {
     await term();
     await db

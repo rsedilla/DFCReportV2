@@ -361,23 +361,33 @@ export class EquippingEncounterService {
           );
         }
       }
-      // **A posted Not yet passes at a later Encounter** (decision 0509): their class's posted
-      // grade, locked. One who has passed since is not here to correct: passing ended their
-      // enrollment, which takes them off every weekend's list, as a posted Passed is taken off.
+      // **A posted Not yet passes at a later Encounter** (decision 0509): the posted grade on the
+      // person's open Life Class enrollment, locked. That enrollment, not the one the weekend row
+      // was made from, which a move between classes has since ended. One who has passed since is
+      // not here to correct: passing ended their enrollment, which takes them off every
+      // weekend's list, as a posted Passed is taken off.
       const notYet = enrolled.length
         ? await trx
-            .selectFrom('equipping_final_grades')
-            .select(['id', 'enrollment_id', 'passed_later_at'])
+            .selectFrom('equipping_final_grades as g')
+            .innerJoin('equipping_enrollments as e', 'e.id', 'g.enrollment_id')
+            .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+            .select(['g.id', 'g.enrollment_id', 'g.passed_later_at', 'r.person_id'])
             .where(
-              'enrollment_id',
+              'r.person_id',
               'in',
-              enrolled.map((row) => row.enrollment_id),
+              enrolled.map((row) => row.person_id),
             )
-            .where('grade', '=', 'NOT_YET')
-            .forUpdate()
+            .where('r.level', '=', 'LIFE_CLASS')
+            .where('e.ended_at', 'is', null)
+            .where('g.grade', '=', 'NOT_YET')
+            .orderBy('g.id')
+            .forUpdate(['g'])
             .execute()
         : [];
-      const notYetOf = new Map(notYet.map((row) => [canonicalId(row.enrollment_id), row]));
+      const notYetOf = new Map(notYet.map((row) => [canonicalId(row.person_id), row]));
+      // Training's graduations are filed after the attendance, in person order, as a Training
+      // save locks them, so the two never wait on each other the other way round (section 24).
+      const toFile: { personId: string; came: boolean }[] = [];
       let changed = 0;
       for (const row of enrolled) {
         const wants = came.has(canonicalId(row.id));
@@ -405,28 +415,43 @@ export class EquippingEncounterService {
           after: { came: wants, season_id: weekend.season.id, weekend_on: weekend.on },
         });
         changed += 1;
-        // **The Encounter attended is filed from the school** (decision 0509), dated the weekend,
-        // and a correction to not attended withdraws it.
-        if (!wants) {
+        // A first record of not attended files and withdraws nothing: only a correction from came
+        // withdraws, and only what this weekend filed.
+        if (wants || was?.came === true) {
+          toFile.push({ personId: row.person_id, came: wants });
+        }
+      }
+      // **The Encounter attended is filed from the school** (decision 0509), dated the weekend,
+      // and a correction to not attended withdraws the one this weekend filed.
+      toFile.sort((a, b) => canonicalId(a.personId).localeCompare(canonicalId(b.personId)));
+      for (const each of toFile) {
+        if (!each.came) {
           await this.training.withdrawFromSchoolWithin(trx, {
-            personId: row.person_id,
+            personId: each.personId,
             program: 'ENCOUNTER',
+            graduatedOn: weekend.on,
             accountId: actor.accountId,
             reason: `Corrected to not attended at the Encounter of ${weekend.on}.`,
           });
           continue;
         }
         await this.training.fileFromSchoolWithin(trx, {
-          personId: row.person_id,
+          personId: each.personId,
           program: 'ENCOUNTER',
           graduatedOn: weekend.on,
           accountId: actor.accountId,
         });
-        const grade = notYetOf.get(canonicalId(row.enrollment_id));
+        const grade = notYetOf.get(canonicalId(each.personId));
         if (grade === undefined || grade.passed_later_at !== null) {
           continue;
         }
-        await this.passLaterWithin(trx, actor, row, grade.id, weekend.on);
+        await this.passLaterWithin(
+          trx,
+          actor,
+          { person_id: each.personId, enrollment_id: grade.enrollment_id },
+          grade.id,
+          weekend.on,
+        );
       }
       const response = {
         season_id: weekend.season.id,

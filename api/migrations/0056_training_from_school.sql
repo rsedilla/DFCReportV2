@@ -13,7 +13,27 @@
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE training_graduations
-  ADD COLUMN from_school boolean NOT NULL DEFAULT false;
+  ADD COLUMN from_school boolean NOT NULL DEFAULT false,
+  -- The school confirms as no leader (decision 0509): its row names nobody as confirming.
+  ADD CONSTRAINT training_graduations_school_confirms_nobody CHECK (
+    NOT from_school OR confirmed_by IS NULL
+  );
+
+-- Whether a graduation is the school's is fixed when it is filed: a tick never becomes the
+-- school's, nor the school's a tick, which would let the Training tab change it.
+CREATE FUNCTION refuse_from_school_change() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.from_school IS DISTINCT FROM OLD.from_school THEN
+    RAISE EXCEPTION 'Whether a graduation came from the school is kept as filed (decision 0509).'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER training_graduations_from_school_kept BEFORE UPDATE OF from_school
+  ON training_graduations FOR EACH ROW EXECUTE FUNCTION refuse_from_school_change();
 
 ALTER TABLE equipping_final_grades
   ADD COLUMN passed_later_at timestamptz,
@@ -66,4 +86,8 @@ BEGIN
   END IF;
 END;
 $$;
-ALTER TABLE training_graduations DROP COLUMN from_school;
+DROP TRIGGER training_graduations_from_school_kept ON training_graduations;
+DROP FUNCTION refuse_from_school_change();
+ALTER TABLE training_graduations
+  DROP CONSTRAINT training_graduations_school_confirms_nobody,
+  DROP COLUMN from_school;

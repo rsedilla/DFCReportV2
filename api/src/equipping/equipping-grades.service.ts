@@ -303,7 +303,11 @@ export class EquippingGradesService {
         // **A posted Passed files Life Class from the school** (decision 0509), dated the day it
         // was posted. One who already holds Life Class keeps what they hold.
         const postedOn = manilaDayOf(posting.posted_at);
-        for (const s of standing.students.filter((st) => st.grade === 'PASSED')) {
+        // In person order, as a Training save locks them (section 24).
+        const passed = standing.students
+          .filter((st) => st.grade === 'PASSED')
+          .sort((x, y) => canonicalId(x.person_id).localeCompare(canonicalId(y.person_id)));
+        for (const s of passed) {
           await this.training.fileFromSchoolWithin(trx, {
             personId: s.person_id,
             program: 'LIFE_CLASS',

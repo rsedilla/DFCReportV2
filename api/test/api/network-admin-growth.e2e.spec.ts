@@ -286,6 +286,16 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
         .where('superseded_at', 'is', null)
         .executeTakeFirst();
 
+    it('is refused the Encounter and Life Class, which only the Admin ticks (decision 0509)', async () => {
+      for (const program of ['ENCOUNTER', 'LIFE_CLASS']) {
+        expect(refused(await graduate(networkAdmin, winnie, { program }))).toEqual([
+          403,
+          'SCOPE_DENIED',
+        ]);
+      }
+      await graduate(admin, winnie, { program: 'ENCOUNTER' }).expect(201);
+    });
+
     it('files a graduation for a leader’s disciple, as on behalf', async () => {
       await graduate(networkAdmin, winnie).expect(201);
 

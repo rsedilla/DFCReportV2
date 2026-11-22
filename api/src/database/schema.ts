@@ -907,7 +907,8 @@ export type ConquestGoal = 'WIN_3' | 'OPEN_A_CELL' | 'COMPLETION_OF_12' | 'RAISE
  *
  * The three tables differ in what they are about and agree on everything else:
  * whose statement it is, which account filed it, and the correction that
- * superseded it. `confirmed_by` is null only for a Network root, who has no
+ * superseded it. `confirmed_by` is null only for a Network root, and for a
+ * graduation the school filed (decision 0509); a root has no
  * pastoral leader to confirm for them; the three correction columns are set
  * together or not at all, which the database enforces rather than this type.
  */

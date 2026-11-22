@@ -276,8 +276,13 @@ export class TrainingService {
         });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
 
+        const staleAt = outcomes.indexOf('STALE');
+        if (staleAt !== -1) {
+          throw await this.conflictFor(trx, actor, changes[staleAt], stored);
+        }
         // **The Encounter and Life Class are the school's** (decision 0509): only the Admin ticks
         // one, for somebody who finished before the school, and nobody changes the school's.
+        // After the stale check, so a line made against an older page gets 0282's conflict.
         for (const [index, change] of changes.entries()) {
           if (!SCHOOL_PROGRAMS.has(change.program) || outcomes[index] === 'UNCHANGED') {
             continue;
@@ -288,17 +293,17 @@ export class TrainingService {
               { person_id: change.person_id, program: change.program },
             );
           }
-          if (stored.get(keyOf(change.person_id, change.program))?.fromSchool) {
+          // On any record of the person (decision 0408): a correction withdraws them all.
+          if (
+            (everyRecord.get(keyOf(change.person_id, change.program)) ?? []).some(
+              (g) => g.fromSchool,
+            )
+          ) {
             throw new InvariantViolationError(
               `${LABELS[change.program]} was recorded by the school, and is changed there.`,
               { person_id: change.person_id, program: change.program },
             );
           }
-        }
-
-        const staleAt = outcomes.indexOf('STALE');
-        if (staleAt !== -1) {
-          throw await this.conflictFor(trx, actor, changes[staleAt], stored);
         }
 
         let created = 0;
@@ -475,13 +480,21 @@ export class TrainingService {
    */
   async withdrawFromSchoolWithin(
     trx: Transaction<Database>,
-    input: { personId: string; program: TrainingProgram; accountId: string; reason: string },
+    input: {
+      personId: string;
+      program: TrainingProgram;
+      /** Only the row this date filed: another weekend's is not this correction's. */
+      graduatedOn: string;
+      accountId: string;
+      reason: string;
+    },
   ): Promise<boolean> {
     const row = await trx
       .selectFrom('training_graduations')
       .select(['id', 'graduated_on'])
       .where('person_id', '=', input.personId)
       .where('program', '=', input.program)
+      .where('graduated_on', '=', input.graduatedOn)
       .where('superseded_at', 'is', null)
       .where('from_school', '=', true)
       .forUpdate()
@@ -688,7 +701,8 @@ export class TrainingService {
       ])
       .where('person_id', 'in', [...personIds])
       .where('superseded_at', 'is', null)
-      .$if(options.lock === true, (qb) => qb.forUpdate())
+      // Locked in person order, the order the school files in (section 24).
+      .$if(options.lock === true, (qb) => qb.orderBy('person_id').orderBy('id').forUpdate())
       .execute();
 
     return rows.map((row) => ({

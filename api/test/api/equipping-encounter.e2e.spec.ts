@@ -413,6 +413,49 @@ describe('The Encounter (section 29, decisions 0501 and 0507)', () => {
     expect(after[0].correction_reason).toMatch(/not attended/);
   });
 
+  it('leaves another weekend’s Encounter alone when this one first records not attended (decision 0509)', async () => {
+    await fourLessons();
+    await post(registrar, 'equipping/encounter/enrollments', {
+      season_id: seasonId,
+      network: 'MENS',
+      enrollment_ids: [enrollmentOf.get('Ben')],
+    }).expect(201);
+    await weekendOn(seasonId, today);
+    const id = (await list()).enrolled[0].encounter_enrollment_id;
+    const ben = (
+      await db
+        .selectFrom('equipping_encounter_enrollments')
+        .select('person_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+    ).person_id;
+    // Filed by another weekend, as the school files it.
+    await db
+      .insertInto('training_graduations')
+      .values({
+        person_id: ben,
+        program: 'ENCOUNTER',
+        graduated_on: '2025-12-06',
+        confirmed_by: null,
+        recorded_by: registrar.id,
+        from_school: true,
+      })
+      .execute();
+
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: seasonId,
+      network: 'MENS',
+      came: [],
+    }).expect(200);
+
+    const rows = await db
+      .selectFrom('training_graduations')
+      .select(['graduated_on', 'superseded_at'])
+      .where('person_id', '=', ben)
+      .execute();
+    expect(rows).toEqual([{ graduated_on: '2025-12-06', superseded_at: null }]);
+  });
+
   it('leaves a tick from before the school as it is (decision 0509)', async () => {
     await fourLessons();
     await post(registrar, 'equipping/encounter/enrollments', {
