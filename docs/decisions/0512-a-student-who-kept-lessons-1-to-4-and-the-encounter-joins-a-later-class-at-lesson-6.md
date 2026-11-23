@@ -37,7 +37,7 @@ included, and the Encounter from the person's attendance, a record merged into t
 *Joins at Lesson 6 · L1 to L4 and ENC kept from* that class and term, the kept lessons counted;
 the student is not on the tick list for lessons 1 to 4, and an unticked lesson writes nothing for
 them, as for a moved student (decision 0503). They owe no make-up for lessons 1 to 4, and none is
-recorded for one, here or in the earlier class, whose register is final once posted and are not
+recorded for one, here or in the earlier class that kept it. They are not
 listed for an Encounter weekend, having attended one. Their final grade counts the kept lessons.
 A move to another class of the term keeps it, the same Lesson 6 rule applying there.
 

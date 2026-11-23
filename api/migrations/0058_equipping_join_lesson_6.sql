@@ -95,18 +95,22 @@ CREATE TRIGGER equipping_enrollments_carry
   BEFORE INSERT OR UPDATE ON equipping_enrollments
   FOR EACH ROW EXECUTE FUNCTION assert_enrollment_carry();
 
--- Point 5: one joined at Lesson 6 keeps lessons 1 to 4, so their class records no mark or make-up
--- of those lessons for them; and nothing new is written into a posted class's register, the
--- earlier class they were kept in included ("nothing posted is rewritten", decision 0508).
+-- Point 5: one joined at Lesson 6 keeps lessons 1 to 4 as the earlier term recorded them, so no
+-- new mark or make-up of one is recorded for them: not in their class, and not under the earlier
+-- registration whose lessons they keep. Nothing else is refused here: a moved student's make-up
+-- of a lesson missed in a class since posted is not this rule's.
 CREATE FUNCTION assert_no_mark_on_kept_lessons() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.superseded_at IS NULL AND EXISTS (
        SELECT 1
-         FROM equipping_lessons l
-         JOIN equipping_class_postings p ON p.class_id = l.class_id
-        WHERE l.id = NEW.lesson_id) THEN
-    RAISE EXCEPTION 'a posted class''s register is final (SKILL.md section 29)'
+         FROM equipping_enrollments own
+         JOIN equipping_lessons l ON l.id = NEW.lesson_id
+         JOIN equipping_enrollments kept ON kept.registration_id = own.registration_id
+         JOIN equipping_enrollments carrier ON carrier.carried_from_enrollment_id = kept.id
+        WHERE own.id = NEW.enrollment_id
+          AND l.lesson <= 4) THEN
+    RAISE EXCEPTION 'lessons 1 to 4 kept for a later class are kept as recorded (SKILL.md section 29)'
       USING ERRCODE = 'check_violation';
   END IF;
   IF NEW.superseded_at IS NULL AND EXISTS (

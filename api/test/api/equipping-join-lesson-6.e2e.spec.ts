@@ -593,6 +593,36 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
           recorded_by: admin.id,
         })
         .execute(),
-    ).rejects.toThrow(/posted class's register is final/);
+    ).rejects.toThrow(/kept as recorded/);
+  });
+
+  it('still admits a make-up in a posted class for somebody nobody carries from', async () => {
+    // A moved student's make-up of a lesson missed in a class since posted is not 0512's rule.
+    const kept = await keptInB(pablo, false);
+    const lesson3 = (
+      await db
+        .selectFrom('equipping_lessons as l')
+        .innerJoin('equipping_enrollments as e', 'e.class_id', 'l.class_id')
+        .select('l.id')
+        .where('e.id', '=', kept)
+        .where('l.lesson', '=', 3)
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .updateTable('equipping_make_ups')
+      .set({ superseded_at: new Date(), superseded_by: admin.id })
+      .where('lesson_id', '=', lesson3)
+      .execute();
+    await expect(
+      db
+        .insertInto('equipping_make_ups')
+        .values({
+          lesson_id: lesson3,
+          enrollment_id: kept,
+          made_up_on: '2027-02-02',
+          recorded_by: admin.id,
+        })
+        .execute(),
+    ).resolves.toBeDefined();
   });
 });
