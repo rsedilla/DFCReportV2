@@ -115,14 +115,17 @@ export function PersonAccount({
     leaderAccountsOnly &&
     account.error instanceof ApiRequestError &&
     account.error.code === 'SCOPE_DENIED';
-  // A tick only the Admin gives is only the Admin's to remove (decision 0469).
+  // A tick only the Admin gives is only the Admin's to remove (decision 0469). **A Network
+  // Admin is not shown Life Class Coordinator** (decision 0506): it still holds Full view on,
+  // and the lock then says only that the Admin clears it.
   const otherTicks = current
     ? [
         current.approves_cells ? 'Approves Cells' : null,
         current.moves_people ? 'Moves people' : null,
-        current.coordinates_life_class ? 'Life Class Coordinator' : null,
+        current.coordinates_life_class && !leaderAccountsOnly ? 'Life Class Coordinator' : null,
       ].filter((tick): tick is string => tick !== null)
     : [];
+  const heldByTheAdmin = otherTicks.length > 0 || (leaderAccountsOnly && current?.coordinates_life_class === true);
 
   // Side by side only where the page itself widens (decision 0462).
   return (
@@ -296,8 +299,10 @@ export function PersonAccount({
                 value={current.full_view}
                 save={(next) => setFullView(current.id, next, crypto.randomUUID())}
                 locked={
-                  leaderAccountsOnly && current.full_view && otherTicks.length > 0
-                    ? `Only the Admin clears this while ${otherTicks.join(' and ')} is on.`
+                  leaderAccountsOnly && current.full_view && heldByTheAdmin
+                    ? otherTicks.length > 0
+                      ? `Only the Admin clears this while ${otherTicks.join(' and ')} is on.`
+                      : 'Only the Admin clears this.'
                     : undefined
                 }
                 describe={(shown) =>

@@ -8,11 +8,13 @@ import {
   CircleUserRound,
   ClipboardCheck,
   ClipboardList,
+  FileCheck2,
   GraduationCap,
   LayoutGrid,
   type LucideIcon,
   ShieldCheck,
   Sprout,
+  Tent,
   UserPlus,
   Trophy,
   Users,
@@ -164,7 +166,7 @@ const SENIOR_PASTOR_ITEMS: Record<ReportSection, NavEntry> = {
   services: { href: '/reports/dcc', label: 'Services', icon: Church, matches: ['/reports/dcc'] },
 };
 /**
- * **A Registrar's two items, the school's first two steps** (decision 0499, point 4), and the
+ * **A Registrar's items, the school's steps** (decision 0499, point 4; Encounter, decision 0507), and the
  * Admin's one `Equipping` item over both, whose tabs they are.
  */
 const REGISTRATION: NavEntry = {
@@ -178,6 +180,20 @@ const ENROLLMENT: NavEntry = {
   label: 'Enrollment',
   icon: UserPlus,
   matches: ['/equipping/enrollment'],
+};
+/** The Encounter weekend, the Registrar's third step (decision 0501, point 20; decision 0507). */
+const ENCOUNTER: NavEntry = {
+  href: '/equipping/encounter',
+  label: 'Encounter',
+  icon: Tent,
+  matches: ['/equipping/encounter'],
+};
+/** Final Grades, the Registrar's fourth step (decision 0501, point 20; decision 0508). */
+const FINAL_GRADES: NavEntry = {
+  href: '/equipping/final-grades',
+  label: 'Final Grades',
+  icon: FileCheck2,
+  matches: ['/equipping/final-grades'],
 };
 const EQUIPPING: NavEntry = {
   href: '/equipping/registration',
@@ -346,7 +362,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? []
     : [
         ...(me.data?.screens === 'EQUIPPING'
-          ? [REGISTRATION, ENROLLMENT]
+          ? [REGISTRATION, ENROLLMENT, ENCOUNTER, FINAL_GRADES]
           : me.data?.screens === 'RECORDING'
           ? [RECORD, PEOPLE, MY_CELL, SUYNL, ...(shows ? [TEACH] : [])]
           : me.data?.screens === 'SENIOR_PASTOR'

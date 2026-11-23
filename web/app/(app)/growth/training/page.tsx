@@ -22,6 +22,7 @@ import {
   listTrainingPeople,
   submitTraining,
   type TrainingChange,
+  type TrainingPage as TrainingListPage,
   type TrainingPerson,
   type TrainingProgram,
 } from '@/lib/growth';
@@ -79,6 +80,9 @@ function TrainingTab() {
     listPeople: listTrainingPeople,
   });
   const { me, counts, rows } = list;
+  // **Only the Admin ticks the Encounter and Life Class** (decision 0509): the school files them.
+  // The shared list types the page by its rows alone; this tab's page also carries the flag.
+  const schoolMayTick = (list.people.data as TrainingListPage | undefined)?.school_may_tick ?? false;
 
   const [draft, setDraft] = useState<Record<string, DraftEntry>>({});
   const [reason, setReason] = useState('');
@@ -165,6 +169,7 @@ function TrainingTab() {
         row={row}
         program={program}
         entry={draft[keyOf(row.person_id, program)]}
+        schoolMayTick={schoolMayTick}
         today={today}
         onToggle={(graduated) => update(row, program, { graduated })}
         onDate={(graduated_on) => update(row, program, { graduated: true, graduated_on })}
@@ -206,19 +211,40 @@ function TrainingTab() {
         <GrowthFailure list={list} />
 
         <GrowthRows list={list}>
+          {/* What the reader may tick, then a key to the two labels shown once, as a transcript's
+              key is, rather than explained in every cell (decision 0509). */}
+          <p className="text-ink text-sm font-semibold">
+            {schoolMayTick
+              ? 'You can tick the Encounter and Life Class only for someone who finished before the school.'
+              : 'You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'}
+          </p>
+          <dl className="text-muted mt-2 mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <dt className="text-ink font-semibold">Key</dt>
+            <dd className="flex flex-wrap items-center gap-1.5">
+              <SourceLabel>From the school</SourceLabel>
+              recorded by the school: the Encounter attended, or a posted Passed
+            </dd>
+            <dd className="flex flex-wrap items-center gap-1.5">
+              <SourceLabel>Before the school</SourceLabel>
+              ticked for someone who finished before the school
+            </dd>
+          </dl>
           <Table
             caption="Training graduations for the people you oversee"
             className="hidden lg:block"
+            tableClassName="table-fixed"
           >
             <thead>
               <tr>
                 <HeaderCell>Person</HeaderCell>
+                {/* The five are alike, so one width each, rather than each sized to its own
+                    content: a share of the table, so the name keeps its room on a narrow laptop. */}
                 {TRAINING_PROGRAMS.map((program) => (
-                  <HeaderCell key={program} className="px-1 text-center">
+                  <HeaderCell key={program} className="w-[14%] px-1 text-center">
                     {PROGRAM_LABELS[program]}
                   </HeaderCell>
                 ))}
-                <HeaderCell className="text-right">Done</HeaderCell>
+                <HeaderCell className="w-[8%] text-right">Done</HeaderCell>
               </tr>
             </thead>
             <tbody>
@@ -294,6 +320,7 @@ function SchoolCell({
   row,
   program,
   entry,
+  schoolMayTick,
   today,
   onToggle,
   onDate,
@@ -302,6 +329,7 @@ function SchoolCell({
   row: TrainingPerson;
   program: TrainingProgram;
   entry: DraftEntry | undefined;
+  schoolMayTick: boolean;
   today: string;
   onToggle: (graduated: boolean) => void;
   onDate: (graduatedOn: string | null) => void;
@@ -311,15 +339,23 @@ function SchoolCell({
   const graduated = entry?.graduated ?? stored !== null;
   const name = `${PROGRAM_LABELS[program]}, ${row.full_name}`;
   const storedDate = stored ? (stored.graduated_on ? longDay(stored.graduated_on) : 'no date') : '';
+  // The Encounter and Life Class say where a graduation came from (decision 0509).
+  const school = SCHOOL_PROGRAMS.has(program);
+  const source =
+    school && stored ? (stored.from_school ? 'From the school' : 'Before the school') : null;
+  const tag = source ? <SourceLabel>{source}</SourceLabel> : null;
 
-  if (!row.may_file) {
+  // Read-only where the reader may not file for them, where only the Admin ticks it, or where
+  // the school filed it on any record of the person, which is changed there.
+  if (!row.may_file || (school && (!schoolMayTick || stored?.school_held))) {
     return (
       <span className="inline-flex flex-col items-center text-sm">
         <span aria-hidden="true">{graduated ? '✓' : '–'}</span>
         <span className="sr-only">
-          {name}: {graduated ? `graduated, ${storedDate}` : 'not graduated'}
+          {name}: {graduated ? `graduated, ${storedDate}${source ? `, ${source}` : ''}` : 'not graduated'}
         </span>
         {graduated ? <span className="text-muted text-xs">{storedDate}</span> : null}
+        {tag}
       </span>
     );
   }
@@ -352,9 +388,22 @@ function SchoolCell({
           {storedDate}
         </button>
       ) : null}
+      {graduated ? tag : null}
     </span>
   );
 }
+
+/** Where a graduation came from, as a small outlined label in words, never a colour (decision 0509). */
+function SourceLabel({ children }: { children: string }) {
+  return (
+    <span className="border-edge text-ink mt-1 inline-block rounded-full border px-1.5 text-[11px] leading-4 font-medium whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
+
+/** The two the school files; only the Admin ticks either (decision 0509). */
+const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 function doneLabel(row: TrainingPerson, draft: Record<string, DraftEntry>): string {
   const done = TRAINING_PROGRAMS.filter(

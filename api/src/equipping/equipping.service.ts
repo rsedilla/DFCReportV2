@@ -8,11 +8,17 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { CellsReadService } from '../cells/cells.read.service';
 import { slotsClash } from '../cells/schedule-clash';
 import {
+  ApiError,
+  ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
   ValidationFailedError,
 } from '../common/errors/api-error';
-import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
+import {
+  isLostLockWait,
+  isUniqueViolation,
+  violatedConstraint,
+} from '../common/errors/postgres-errors';
 import { canonicalId, isUuid } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
@@ -40,7 +46,7 @@ const REGULAR_FROM = 5;
  */
 const SUYNL_LESSONS_NEEDED = [1, 2, 3, 4] as const;
 /** 14 by the first day of the Encounter weekend (point 11; owner 2026-11-19, replacing 15). */
-const ENCOUNTER_MINIMUM_AGE = 14;
+export const ENCOUNTER_MINIMUM_AGE = 14;
 /** Section 22: a collection's default page. */
 const DEFAULT_PAGE = 50;
 
@@ -1534,14 +1540,27 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.write(async (trx) => {
+      // **The classes first, in id order, then the enrollment** (section 24, decision 0508): a
+      // lesson save, a make-up and a posting lock the class before they touch an enrollment.
+      const placed = await trx
+        .selectFrom('equipping_enrollments')
+        .select('class_id')
+        .where('id', '=', enrollmentId)
+        .executeTakeFirst();
+      const ids = [...new Set([toClassId, ...(placed ? [placed.class_id] : [])])].sort();
+      const locked = new Map<string, Awaited<ReturnType<EquippingService['classWithin']>>>();
+      for (const id of ids) {
+        locked.set(id, await this.classWithin(trx, id));
+      }
       const enrollment = await this.openEnrollmentWithin(trx, enrollmentId);
       if (enrollment.class_id === toClassId) {
         throw new InvariantViolationError('They are already in that class.', {
           field: 'class_id',
         });
       }
-      const to = await this.classWithin(trx, toClassId);
-      const from = await this.classWithin(trx, enrollment.class_id);
+      const to = locked.get(toClassId)!;
+      const from =
+        locked.get(enrollment.class_id) ?? (await this.classWithin(trx, enrollment.class_id));
       if (
         to.level !== from.level ||
         to.term_year !== from.term_year ||
@@ -1601,8 +1620,18 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.write(async (trx) => {
+      // The class first, then the enrollment (section 24, decision 0508). A student a posting left
+      // enrolled, still to attend the Encounter, may be withdrawn from the posted class.
+      const placed = await trx
+        .selectFrom('equipping_enrollments')
+        .select('class_id')
+        .where('id', '=', enrollmentId)
+        .executeTakeFirst();
+      if (placed === undefined) {
+        throw new NotFoundError('No such enrollment.');
+      }
+      const cls = await this.classWithin(trx, placed.class_id, enrollmentId);
       const enrollment = await this.openEnrollmentWithin(trx, enrollmentId);
-      const cls = await this.classWithin(trx, enrollment.class_id);
       await trx
         .updateTable('equipping_enrollments')
         .set({
@@ -1728,6 +1757,7 @@ export class EquippingService {
   private async classWithin(
     trx: Transaction<Database>,
     classId: string,
+    notYetLeaving?: string,
   ): Promise<{
     id: string;
     name: string;
@@ -1736,13 +1766,38 @@ export class EquippingService {
     term_number: number;
     encounter_season_id: string;
   }> {
+    // Locked as a lesson save and a posting lock it, so a class is not posted under an
+    // enrollment changing (decision 0508).
     const cls = await trx
       .selectFrom('equipping_classes')
       .select(['id', 'name', 'level', 'term_year', 'term_number', 'encounter_season_id'])
       .where('id', '=', classId)
+      .forNoKeyUpdate()
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
+    }
+    const posted = await trx
+      .selectFrom('equipping_class_postings')
+      .select('id')
+      .where('class_id', '=', classId)
+      .executeTakeFirst();
+    if (posted !== undefined) {
+      const notYet =
+        notYetLeaving === undefined
+          ? undefined
+          : await trx
+              .selectFrom('equipping_final_grades')
+              .select('id')
+              .where('enrollment_id', '=', notYetLeaving)
+              .where('grade', '=', 'NOT_YET')
+              .executeTakeFirst();
+      if (notYet === undefined) {
+        throw new InvariantViolationError(
+          `${cls.name}'s grades have been posted; nobody joins or leaves it now.`,
+          { field: 'class_id' },
+        );
+      }
     }
     return cls;
   }
@@ -1819,6 +1874,13 @@ export class EquippingService {
     try {
       return await this.db.transaction().execute(work);
     } catch (error) {
+      if (isLostLockWait(error)) {
+        throw new ApiError(
+          ApiErrorCode.RESOURCE_BUSY,
+          'Somebody else is changing this class. Try again in a moment.',
+          {},
+        );
+      }
       if (isUniqueViolation(error)) {
         const constraint = violatedConstraint(error);
         if (constraint === 'equipping_registrations_one_per_term') {

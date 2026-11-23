@@ -21,7 +21,11 @@ import { PeopleService } from '../people/people.service';
 import { PersonViewsService } from '../people/person-views.service';
 
 import {
+  CheckGradesDto,
+  EncounterAttendanceDto,
+  EncounterQueryDto,
   EnrollDto,
+  EnrollEncounterDto,
   EquippingSearchDto,
   EquippingTermDto,
   ListRegistrationsDto,
@@ -37,6 +41,8 @@ import {
   TeacherClashDto,
 } from './dto/equipping.dto';
 import { EquippingAttendanceService } from './equipping-attendance.service';
+import { EquippingEncounterService } from './equipping-encounter.service';
+import { EquippingGradesService } from './equipping-grades.service';
 import { EquippingService } from './equipping.service';
 
 /**
@@ -56,6 +62,8 @@ export class EquippingController {
   constructor(
     private readonly equipping: EquippingService,
     private readonly attendance: EquippingAttendanceService,
+    private readonly encounter: EquippingEncounterService,
+    private readonly grades: EquippingGradesService,
     private readonly people: PeopleService,
     private readonly views: PersonViewsService,
     @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
@@ -225,6 +233,32 @@ export class EquippingController {
     return this.equipping.encounterSeasons();
   }
 
+  /**
+   * One class's final grades for its Coordinator to check (decision 0501, point 16; decision
+   * 0508), read only, each of the reader's own disciples marked as the Admin's to check.
+   */
+  @Get('coordinate/classes/:id/grades')
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async coordinatorGrades(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.classGrades(actor, id);
+  }
+
+  /** *Mark as checked*: the Coordinator's, or the Admin's for the Coordinator's own disciples. */
+  @Post('coordinate/classes/:id/check')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async checkClass(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: CheckGradesDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.check(actor, id, body.fingerprint, claim);
+  }
+
   /** Who is enrolled in one class, for the Coordinator's *Students*. */
   @Get('coordinate/classes/:id/students')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
@@ -376,6 +410,69 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.equipping.swapGuide(actor, id, body.guide_id, claim);
+  }
+
+  /**
+   * One Network's Encounter weekend (decision 0501, point 14; decision 0507): who is cleared,
+   * who needs a make-up and who can't go, after lesson 4, the classes still waiting for it, and
+   * who is enrolled. The Registrar's and the Admin's.
+   */
+  @Get('encounter')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async encounterList(@Query() query: EncounterQueryDto): Promise<Record<string, unknown>> {
+    return this.encounter.list(query.network, query.season_id);
+  }
+
+  /** Cleared students into one weekend, before it begins. */
+  @Post('encounter/enrollments')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async enrollEncounter(
+    @Body() body: EnrollEncounterDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.encounter.enroll(actor, body, claim);
+  }
+
+  /** Who came to one weekend, from its first day: the register's ENC column. */
+  @Post('encounter/attendance')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async encounterAttendance(
+    @Body() body: EncounterAttendanceDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.encounter.recordAttendance(actor, body, claim);
+  }
+
+  /** The Registrar's *Final Grades*: a term's classes, each with where it stands (decision 0508). */
+  @Get('final-grades')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async finalGradeClasses(@Query() query: EquippingTermDto): Promise<Record<string, unknown>> {
+    return this.grades.classes(query);
+  }
+
+  /** One class's final grades, for the Registrar. */
+  @Get('final-grades/classes/:id')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async finalGrades(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.classGrades(actor, id);
+  }
+
+  /** Posts a checked class: each grade recorded, the finished enrollments ended. */
+  @Post('final-grades/classes/:id/post')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async postGrades(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.post(actor, id, claim);
   }
 
   @Get('classes/:id')

@@ -698,8 +698,15 @@ function Register({ data }: { data: ClassAttendance }) {
                     </th>
                     {COLUMNS.map((n) => {
                       const mark = n === 5 ? null : markFor(s, n);
+                      // ENC is the Registrar's record of the weekend (decision 0507).
                       const sign =
-                        mark === null
+                        n === 5
+                          ? s.encounter === 'CAME'
+                            ? '✓'
+                            : s.encounter === 'MISSED'
+                              ? '✗'
+                              : '–'
+                          : mark === null
                           ? '–'
                           : mark.came
                             ? '✓'

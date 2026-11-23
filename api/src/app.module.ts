@@ -25,6 +25,7 @@ import { AdminAccountsBindingModule } from './auth/admin-accounts.binding.module
 import { PersonArchiveAccountsBindingModule } from './auth/person-archive.binding.module';
 import { PersonArchiveCellsBindingModule } from './cells/person-archive.binding.module';
 import { PersonArchiveEquippingBindingModule } from './equipping/person-archive.binding.module';
+import { SchoolEvidenceBindingModule } from './equipping/school-evidence.binding.module';
 import { AbsentPeopleBindingModule } from './attendance/absent-people.binding.module';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
@@ -89,6 +90,7 @@ import { EquippingModule } from './equipping/equipping.module';
     PersonArchiveCellsBindingModule,
     PersonArchiveAccountsBindingModule,
     PersonArchiveEquippingBindingModule,
+    SchoolEvidenceBindingModule,
     AbsentPeopleBindingModule,
     RecordedMeetingsBindingModule,
     MergedPersonsBindingModule,

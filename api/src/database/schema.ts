@@ -429,6 +429,11 @@ export type AuditAction =
   | 'equipping_make_up.recorded'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
+  | 'equipping_encounter_enrollment.created'
+  | 'equipping_encounter_attendance.recorded'
+  | 'equipping_class.checked'
+  | 'equipping_final_grade.posted'
+  | 'equipping_final_grade.passed_later'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -902,7 +907,8 @@ export type ConquestGoal = 'WIN_3' | 'OPEN_A_CELL' | 'COMPLETION_OF_12' | 'RAISE
  *
  * The three tables differ in what they are about and agree on everything else:
  * whose statement it is, which account filed it, and the correction that
- * superseded it. `confirmed_by` is null only for a Network root, who has no
+ * superseded it. `confirmed_by` is null only for a Network root, and for a
+ * graduation the school filed (decision 0509); a root has no
  * pastoral leader to confirm for them; the three correction columns are set
  * together or not at all, which the database enforces rather than this type.
  */
@@ -926,6 +932,8 @@ export interface TrainingGraduationsTable extends GrowthStatement {
   program: TrainingProgram;
   /** Null where the leader does not know it (section 28). */
   graduated_on: DateOnly | null;
+  /** Filed by the school, a posted pass or the Encounter attended (decision 0509). */
+  from_school: Generated<boolean>;
 }
 
 export interface ConquestConfirmationsTable extends GrowthStatement {
@@ -994,7 +1002,7 @@ export interface EquippingEnrollmentsTable {
   started_by: string;
   ended_at: Date | null;
   ended_by: string | null;
-  end_reason: 'MOVED' | 'WITHDRAWN' | 'ARCHIVED' | null;
+  end_reason: 'MOVED' | 'WITHDRAWN' | 'ARCHIVED' | 'COMPLETED' | null;
   withdraw_note: string | null;
 }
 
@@ -1051,6 +1059,61 @@ export interface EquippingMakeUpsTable {
   lesson_id: string;
   enrollment_id: string;
   made_up_on: DateOnly;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+}
+
+/** A class marked checked by its Coordinator, or by the Admin (decision 0508). */
+export interface EquippingClassChecksTable {
+  id: Generated<string>;
+  class_id: string;
+  checked_by: string;
+  checker_person_id: string | null;
+  by_admin: boolean;
+  fingerprint: string;
+  checked_at: ServerTimestamp;
+}
+
+/** A class posted by the Registrar, once (decision 0508). */
+export interface EquippingClassPostingsTable {
+  id: Generated<string>;
+  class_id: string;
+  check_id: string;
+  posted_by: string;
+  posted_at: ServerTimestamp;
+}
+
+/** Each student's grade as posted (decision 0508). */
+export interface EquippingFinalGradesTable {
+  id: Generated<string>;
+  posting_id: string;
+  enrollment_id: string;
+  grade: 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
+  reason: string;
+  lessons_kept: number;
+  lessons_made_up: number;
+  passed_later_at: Date | null;
+  passed_later_by: string | null;
+}
+
+/** A student enrolled in one season's Encounter weekend (decision 0507). */
+export interface EquippingEncounterEnrollmentsTable {
+  id: Generated<string>;
+  enrollment_id: string;
+  person_id: string;
+  encounter_season_id: string;
+  network: 'MENS' | 'WOMENS';
+  enrolled_by: string;
+  enrolled_at: ServerTimestamp;
+}
+
+/** Whether an enrolled student came to the Encounter; a correction is a new row (decision 0507). */
+export interface EquippingEncounterAttendanceTable {
+  id: Generated<string>;
+  encounter_enrollment_id: string;
+  came: boolean;
   recorded_by: string;
   recorded_at: ServerTimestamp;
   superseded_at: Date | null;
@@ -1170,6 +1233,11 @@ export interface Database {
   equipping_lessons: EquippingLessonsTable;
   equipping_marks: EquippingMarksTable;
   equipping_make_ups: EquippingMakeUpsTable;
+  equipping_encounter_enrollments: EquippingEncounterEnrollmentsTable;
+  equipping_encounter_attendance: EquippingEncounterAttendanceTable;
+  equipping_class_checks: EquippingClassChecksTable;
+  equipping_class_postings: EquippingClassPostingsTable;
+  equipping_final_grades: EquippingFinalGradesTable;
   equipping_lesson_date_changes: EquippingLessonDateChangesTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;

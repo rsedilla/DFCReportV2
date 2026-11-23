@@ -12,8 +12,11 @@ import { TrainingModule } from '../training/training.module';
 
 import { EquippingController } from './equipping.controller';
 import { EquippingAttendanceService } from './equipping-attendance.service';
+import { EquippingEncounterService } from './equipping-encounter.service';
+import { EquippingGradesService } from './equipping-grades.service';
 import { EquippingService } from './equipping.service';
 import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
+import { SchoolEvidenceAdapter } from './school-evidence.adapter';
 
 /**
  * `equipping` owns `equipping_classes`, `equipping_registrations` and
@@ -33,7 +36,14 @@ import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
     AuditModule,
   ],
   controllers: [EquippingController],
-  providers: [EquippingService, EquippingAttendanceService, PersonArchiveEquippingAdapter],
-  exports: [PersonArchiveEquippingAdapter],
+  providers: [
+    EquippingService,
+    EquippingAttendanceService,
+    EquippingEncounterService,
+    EquippingGradesService,
+    PersonArchiveEquippingAdapter,
+    SchoolEvidenceAdapter,
+  ],
+  exports: [PersonArchiveEquippingAdapter, SchoolEvidenceAdapter],
 })
 export class EquippingModule {}
