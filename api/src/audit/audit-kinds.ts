@@ -114,6 +114,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'equipping_encounter_attendance.recorded': 'GROWTH',
   'equipping_class.checked': 'GROWTH',
   'equipping_final_grade.posted': 'GROWTH',
+  'equipping_final_grade.passed_later': 'GROWTH',
 };
 
 /** The actions one chip finds. */

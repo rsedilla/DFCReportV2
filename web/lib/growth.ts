@@ -198,6 +198,10 @@ export interface TrainingGraduation {
   program: TrainingProgram;
   /** Null where the leader does not know it (section 28). */
   graduated_on: string | null;
+  /** Filed by the school, a posted Passed or the Encounter attended (decision 0509). */
+  from_school: boolean;
+  /** Whether any record of the person, a merged one included, holds the school's row. */
+  school_held: boolean;
 }
 
 export interface TrainingPerson {
@@ -211,6 +215,8 @@ export interface TrainingPerson {
 export interface TrainingPage {
   data: TrainingPerson[];
   next_cursor: string | null;
+  /** Whether the reader may tick the Encounter and Life Class: the Admin alone (decision 0509). */
+  school_may_tick: boolean;
 }
 
 /** One change. Withdrawing a graduation, or changing its date, names the row and a reason. */

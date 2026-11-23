@@ -16,6 +16,7 @@ import { EquippingEncounterService } from './equipping-encounter.service';
 import { EquippingGradesService } from './equipping-grades.service';
 import { EquippingService } from './equipping.service';
 import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
+import { SchoolEvidenceAdapter } from './school-evidence.adapter';
 
 /**
  * `equipping` owns `equipping_classes`, `equipping_registrations` and
@@ -41,7 +42,8 @@ import { PersonArchiveEquippingAdapter } from './person-archive.adapter';
     EquippingEncounterService,
     EquippingGradesService,
     PersonArchiveEquippingAdapter,
+    SchoolEvidenceAdapter,
   ],
-  exports: [PersonArchiveEquippingAdapter],
+  exports: [PersonArchiveEquippingAdapter, SchoolEvidenceAdapter],
 })
 export class EquippingModule {}

@@ -269,7 +269,7 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
         changes: [
           {
             person_id: person.id,
-            program: 'LIFE_CLASS',
+            program: 'SOL_1',
             graduated: true,
             graduated_on: '2019-03-10',
             ...extra,
@@ -282,9 +282,19 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
         .selectFrom('training_graduations')
         .selectAll()
         .where('person_id', '=', person.id)
-        .where('program', '=', 'LIFE_CLASS')
+        .where('program', '=', 'SOL_1')
         .where('superseded_at', 'is', null)
         .executeTakeFirst();
+
+    it('is refused the Encounter and Life Class, which only the Admin ticks (decision 0509)', async () => {
+      for (const program of ['ENCOUNTER', 'LIFE_CLASS']) {
+        expect(refused(await graduate(networkAdmin, winnie, { program }))).toEqual([
+          403,
+          'SCOPE_DENIED',
+        ]);
+      }
+      await graduate(admin, winnie, { program: 'ENCOUNTER' }).expect(201);
+    });
 
     it('files a graduation for a leader’s disciple, as on behalf', async () => {
       await graduate(networkAdmin, winnie).expect(201);
@@ -370,7 +380,7 @@ describe('the Network Admin files Growth records for a leader (decision 0469)', 
     }).expect(201);
     await post(networkAdmin, '/training/submit', {
       changes: [
-        { person_id: wynn.id, program: 'LIFE_CLASS', graduated: true, graduated_on: '2019-03-10' },
+        { person_id: wynn.id, program: 'SOL_1', graduated: true, graduated_on: '2019-03-10' },
       ],
     }).expect(201);
 

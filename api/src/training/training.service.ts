@@ -1,13 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
 import { AccountsRepository } from '../auth/accounts.repository';
-import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import {
+  AuthorizationService,
+  holdsWholeChurch,
+  type Actor,
+} from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import {
   ApiError,
   InvariantViolationError,
+  ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { GrowthConflictError, nameOfAccount, nameOfPerson } from '../common/growth/growth-conflict';
@@ -36,6 +41,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { composeName } from '../people/people.shared';
 
 import { TRAINING_PROGRAMS, type TrainingListDto, type TrainingStep } from './dto/training.dto';
+import { SCHOOL_EVIDENCE_PORT, type SchoolEvidencePort } from './school-evidence.port';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, TrainingProgram } from '../database/schema';
@@ -63,6 +69,8 @@ interface Graduation {
   recordedBy: string;
   /** Whose statement the row is, which a correction is attributed to (section 28). */
   confirmedBy: string | null;
+  /** Filed by the school rather than ticked (decision 0509). */
+  fromSchool: boolean;
 }
 
 type Outcome = 'UNCHANGED' | 'CREATE' | 'REPLACE' | 'RETRACT' | 'STALE';
@@ -71,6 +79,9 @@ const CAPABILITIES = {
   confirm: Capability.TrainingConfirm,
   onBehalf: Capability.TrainingConfirmOnBehalf,
 };
+
+/** The two the school files (decision 0509): only the Admin ticks either. */
+const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 const LABELS: Record<TrainingProgram, string> = {
   ENCOUNTER: 'the Encounter',
@@ -99,6 +110,10 @@ export class TrainingService {
     private readonly authorization: AuthorizationService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    /** Optional and refusing (ruling of 2026-09-01); bound in `SchoolEvidenceBindingModule`. */
+    @Optional()
+    @Inject(SCHOOL_EVIDENCE_PORT)
+    private readonly schoolEvidence?: SchoolEvidencePort,
   ) {}
 
   /** What the shared Growth helpers read through, each the module owning its table. */
@@ -205,9 +220,14 @@ export class TrainingService {
             id: graduation.id,
             program: graduation.program,
             graduated_on: graduation.graduatedOn,
+            from_school: graduation.fromSchool,
+            school_held: graduation.schoolHeld,
           })),
         may_file: mayFile.has(row.id),
       })),
+      // **Only the Admin ticks the Encounter and Life Class** (owner, 2026-11-22, decision 0509):
+      // the school files them, and a tick is for somebody who finished before it.
+      school_may_tick: holdsWholeChurch(authority, CAPABILITIES.confirm),
       next_cursor: nextCursor,
     };
   }
@@ -262,9 +282,42 @@ export class TrainingService {
         });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
 
+        // **Only the Admin ticks the Encounter and Life Class** (decision 0509), refused before the
+        // stale check: a line nobody else may make is never answered "reload and decide again".
+        if (!holdsWholeChurch(authority, CAPABILITIES.confirm)) {
+          const school = changes.find(
+            (change, index) =>
+              SCHOOL_PROGRAMS.has(change.program) && outcomes[index] !== 'UNCHANGED',
+          );
+          if (school !== undefined) {
+            throw new ScopeDeniedError(
+              `${LABELS[school.program]} is recorded by the school; only the Admin ticks it for somebody who finished before the school.`,
+              { person_id: school.person_id, program: school.program },
+            );
+          }
+        }
+
         const staleAt = outcomes.indexOf('STALE');
         if (staleAt !== -1) {
           throw await this.conflictFor(trx, actor, changes[staleAt], stored);
+        }
+        // **Nobody changes the school's** (decision 0509), the Admin included. After the stale
+        // check, so the Admin's line made against an older page gets 0282's conflict.
+        for (const [index, change] of changes.entries()) {
+          if (!SCHOOL_PROGRAMS.has(change.program) || outcomes[index] === 'UNCHANGED') {
+            continue;
+          }
+          // On any record of the person (decision 0408): a correction withdraws them all.
+          if (
+            (everyRecord.get(keyOf(change.person_id, change.program)) ?? []).some(
+              (g) => g.fromSchool,
+            )
+          ) {
+            throw new InvariantViolationError(
+              `${LABELS[change.program]} was recorded by the school, and is changed there.`,
+              { person_id: change.person_id, program: change.program },
+            );
+          }
         }
 
         let created = 0;
@@ -353,6 +406,13 @@ export class TrainingService {
             }
             corrected += 1;
           }
+
+          // **The school's takes the place of a tick the Admin withdraws** (decision 0509,
+          // point 8): one whose school records show them passed is filed from the school, from
+          // those records as they stand now.
+          if (outcome === 'RETRACT' && SCHOOL_PROGRAMS.has(change.program)) {
+            await this.fileWhatTheSchoolHoldsWithin(trx, change.person_id, change.program, actor);
+          }
         }
 
         const response = {
@@ -380,6 +440,184 @@ export class TrainingService {
           'with the same key.',
       );
     }
+  }
+
+  /**
+   * **Files a graduation from the school** (decision 0509): a posted *Passed* files Life Class,
+   * the Encounter attended files the Encounter. Inside the school's own transaction. A person
+   * who already holds a current graduation of the program keeps it, the school's being added
+   * only where there is none. Answers whether it filed.
+   */
+  async fileFromSchoolWithin(
+    trx: Transaction<Database>,
+    input: { personId: string; program: TrainingProgram; graduatedOn: string; accountId: string },
+  ): Promise<boolean> {
+    // Growth records only current people (decision 0279).
+    const identity = (await this.people.forDecisionsWithin(trx, [input.personId])).get(
+      input.personId,
+    );
+    if (identity === undefined || identity.isArchived || identity.mergedIntoId !== null) {
+      return false;
+    }
+    // Held on this record or on one merged into it (decision 0408): kept as it is.
+    const { shown } = await this.storedOfKept(trx, [input.personId], { lock: true });
+    if (shown.has(keyOf(input.personId, input.program))) {
+      return false;
+    }
+    // A tick landing at the same moment holds the one current row; the school's then files
+    // nothing rather than failing the posting or the Encounter save.
+    const filed = await trx
+      .insertInto('training_graduations')
+      .values({
+        person_id: input.personId,
+        program: input.program,
+        graduated_on: input.graduatedOn,
+        confirmed_by: null,
+        recorded_by: input.accountId,
+        from_school: true,
+      })
+      .onConflict((oc) =>
+        oc.columns(['person_id', 'program']).where('superseded_at', 'is', null).doNothing(),
+      )
+      .returning('id')
+      .executeTakeFirst();
+    if (filed === undefined) {
+      return false;
+    }
+    await this.audit.writeWithin(trx, {
+      actorId: input.accountId,
+      action: 'training_graduation.confirmed',
+      targetType: 'person',
+      targetId: input.personId,
+      after: { program: input.program, graduated_on: input.graduatedOn, from_school: true },
+    });
+    return true;
+  }
+
+  /**
+   * Files the graduation the school's own records support, where there is one (decision 0509,
+   * point 8): the earliest of what it holds for the person and every record merged into them,
+   * dated as the school dates it.
+   */
+  private async fileWhatTheSchoolHoldsWithin(
+    trx: Transaction<Database>,
+    personId: string,
+    program: TrainingProgram,
+    actor: Actor,
+  ): Promise<void> {
+    if (this.schoolEvidence === undefined) {
+      throw new InvariantViolationError(
+        'This deployment cannot withdraw a tick of the Encounter or Life Class: a port it needs is not bound.',
+        {},
+      );
+    }
+    const pairs = await this.people.mergedPairsWithin(trx);
+    const records = [
+      personId,
+      ...pairs.absorbed.filter(
+        (_, index) => canonicalId(pairs.kept[index]) === canonicalId(personId),
+      ),
+    ];
+    const evidence = await this.schoolEvidence.evidenceWithin(
+      trx,
+      records,
+      program as 'ENCOUNTER' | 'LIFE_CLASS',
+    );
+    const seasonIds = uniqueIds(
+      evidence.flatMap((each) => (each.kind === 'WEEKEND' ? [each.seasonId] : [])),
+    );
+    const seasons =
+      seasonIds.length === 0
+        ? []
+        : await trx
+            .selectFrom('encounter_seasons')
+            .select(['id', 'mens_encounter_on', 'womens_encounter_on'])
+            .where('id', 'in', seasonIds)
+            .execute();
+    const dates = evidence.map((each) => {
+      if (each.kind === 'POSTED') {
+        return manilaDayOf(each.postedAt);
+      }
+      const season = seasons.find((row) => canonicalId(row.id) === canonicalId(each.seasonId));
+      if (season === undefined) {
+        return null;
+      }
+      return String(
+        each.network === 'MENS' ? season.mens_encounter_on : season.womens_encounter_on,
+      );
+    });
+    const earliest = dates
+      .filter((date): date is string => date !== null)
+      .sort()
+      .at(0);
+    if (earliest === undefined) {
+      return;
+    }
+    await this.fileFromSchoolWithin(trx, {
+      personId,
+      program,
+      graduatedOn: earliest,
+      accountId: actor.accountId,
+    });
+  }
+
+  /**
+   * **Withdraws a graduation the school filed** (decision 0509), when what it rested on is
+   * corrected: the Encounter's when who came is corrected to not attended. A tick from before
+   * the school is left alone. Answers whether it withdrew one.
+   */
+  async withdrawFromSchoolWithin(
+    trx: Transaction<Database>,
+    input: {
+      personId: string;
+      program: TrainingProgram;
+      /** Only the row this date filed: another weekend's is not this correction's. */
+      graduatedOn: string;
+      accountId: string;
+      reason: string;
+    },
+  ): Promise<boolean> {
+    // **Every current row of the person first, every program, merged records included**, so a
+    // Training save withdrawing a tick from before the school (point 8), which holds that tick
+    // and may be about to file the school's in its place, finishes before this decides. The
+    // read below is then a new statement and sees what that save filed.
+    await this.storedOfKept(trx, [input.personId], { lock: true });
+    const row = await trx
+      .selectFrom('training_graduations')
+      .select(['id', 'graduated_on'])
+      .where('person_id', '=', input.personId)
+      .where('program', '=', input.program)
+      .where('graduated_on', '=', input.graduatedOn)
+      .where('superseded_at', 'is', null)
+      .where('from_school', '=', true)
+      .forUpdate()
+      .executeTakeFirst();
+    if (row === undefined) {
+      return false;
+    }
+    await trx
+      .updateTable('training_graduations')
+      .set({
+        superseded_at: sql<Date>`now()`,
+        corrected_by: input.accountId,
+        correction_reason: input.reason,
+      })
+      .where('id', '=', row.id)
+      .execute();
+    await this.audit.writeWithin(trx, {
+      actorId: input.accountId,
+      action: 'training_graduation.corrected',
+      targetType: 'person',
+      targetId: input.personId,
+      before: {
+        program: input.program,
+        graduated_on: row.graduated_on === null ? null : String(row.graduated_on),
+        from_school: true,
+      },
+      after: { program: input.program, withdrawn: true, from_school: true },
+      reason: input.reason,
+    });
+    return true;
   }
 
   /**
@@ -496,8 +734,16 @@ export class TrainingService {
    * (decision 0408): a program held on both is shown once, the earlier graduation date kept
    * (an unknown date counting as later), which is the row a save decides against.
    */
-  private async graduationsOfKept(ids: readonly string[]): Promise<Graduation[]> {
-    return [...(await this.storedOfKept(this.db, ids)).shown.values()];
+  private async graduationsOfKept(
+    ids: readonly string[],
+  ): Promise<(Graduation & { schoolHeld: boolean })[]> {
+    const { shown, all } = await this.storedOfKept(this.db, ids);
+    // A correction is refused while any record of the person holds the school's row (decision
+    // 0509), so the screen offers none where only a merged record holds it.
+    return [...shown.entries()].map(([key, graduation]) => ({
+      ...graduation,
+      schoolHeld: (all.get(key) ?? []).some((row) => row.fromSchool),
+    }));
   }
 
   /**
@@ -552,10 +798,11 @@ export class TrainingService {
         'confirmed_at',
         'recorded_by',
         'confirmed_by',
+        'from_school',
       ])
       .where('person_id', 'in', [...personIds])
       .where('superseded_at', 'is', null)
-      .$if(options.lock === true, (qb) => qb.forUpdate())
+      .$if(options.lock === true, (qb) => qb.orderBy('person_id').orderBy('id').forUpdate())
       .execute();
 
     return rows.map((row) => ({
@@ -567,6 +814,7 @@ export class TrainingService {
       confirmedAt: row.confirmed_at,
       recordedBy: row.recorded_by,
       confirmedBy: row.confirmed_by,
+      fromSchool: row.from_school,
     }));
   }
 

@@ -604,6 +604,95 @@ test.describe('the SUYNL list opens on those still to finish (decisions 0287 and
   });
 });
 
+test.describe('the Encounter and Life Class from the school (decision 0509)', () => {
+  const FROM_SCHOOL = {
+    ...TRAINING_NONE,
+    graduations: [
+      {
+        id: '7c000000-0000-4000-8000-000000000031',
+        program: 'ENCOUNTER',
+        graduated_on: '2026-12-04',
+        from_school: true,
+        school_held: true,
+      },
+    ],
+  };
+
+  async function openAs(page: Page, schoolMayTick: boolean) {
+    await mockSignedIn(page);
+    await mockWholeChurchReader(page);
+    await mockTraining(page, 'accepted', {
+      rows: [TRAINING_TWO, FROM_SCHOOL],
+      schoolMayTick,
+    });
+    await page.goto('/growth/training?all=1');
+    await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
+  }
+
+  test('a leader reads the two, and ticks only SOL 1 to 3', async ({ page }) => {
+    await openAs(page, false);
+
+    await expect(
+      page.getByText('You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'),
+    ).toBeVisible();
+    const ernani = page.getByRole('row', { name: /Ernani Pascual/ });
+    await expect(ernani.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
+    await expect(ernani.getByRole('checkbox', { name: /^Life Class,/ })).toHaveCount(0);
+    await expect(ernani.getByRole('checkbox', { name: 'SOL 1, Ernani Pascual' })).toBeVisible();
+    await expect(ernani.getByText('From the school', { exact: true })).toBeVisible();
+
+    const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
+    await expect(dalisay.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
+    await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
+    // The key says once what each label means.
+    await expect(page.getByText('recorded by the school: the Encounter attended, or a posted Passed')).toBeVisible();
+  });
+
+  test('the Admin ticks the two for one who finished before the school, never the school’s', async ({
+    page,
+  }) => {
+    await openAs(page, true);
+
+    await expect(
+      page.getByText(
+        'You can tick the Encounter and Life Class only for someone who finished before the school.',
+      ),
+    ).toBeVisible();
+    const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
+    await expect(
+      dalisay.getByRole('checkbox', { name: 'Encounter, Dalisay Soriano, 8 March 2026' }),
+    ).toBeChecked();
+    await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
+
+    const ernani = page.getByRole('row', { name: /Ernani Pascual/ });
+    await expect(ernani.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
+    await expect(ernani.getByText('From the school', { exact: true })).toBeVisible();
+    await expect(ernani.getByRole('checkbox', { name: 'Life Class, Ernani Pascual' })).toBeVisible();
+  });
+
+  test('the Admin is offered no tick where only a merged record holds the school’s', async ({
+    page,
+  }) => {
+    // Her own record keeps an earlier tick; a record merged into her holds the school's row,
+    // and a correction is refused while any record holds it (decisions 0408 and 0509).
+    const MERGED = {
+      ...TRAINING_TWO,
+      graduations: TRAINING_TWO.graduations.map((graduation) =>
+        graduation.program === 'ENCOUNTER' ? { ...graduation, school_held: true } : graduation,
+      ),
+    };
+    await mockSignedIn(page);
+    await mockWholeChurchReader(page);
+    await mockTraining(page, 'accepted', { rows: [MERGED], schoolMayTick: true });
+    await page.goto('/growth/training?all=1');
+
+    const dalisay = page.getByRole('row', { name: /Dalisay Soriano/ });
+    await expect(dalisay.getByRole('checkbox', { name: /^Life Class,/ })).toBeVisible();
+    await expect(dalisay.getByRole('checkbox', { name: /^Encounter,/ })).toHaveCount(0);
+    await expect(dalisay.getByText('Before the school', { exact: true })).toHaveCount(2);
+  });
+});
+
 test.describe('the Training list opens on those still to finish (decision 0287)', () => {
   const NOT_SHOWN = '1 who has finished all five is not shown.';
   const SHOWING = 'Showing everyone, the 1 who has finished all five included.';

@@ -433,6 +433,7 @@ export type AuditAction =
   | 'equipping_encounter_attendance.recorded'
   | 'equipping_class.checked'
   | 'equipping_final_grade.posted'
+  | 'equipping_final_grade.passed_later'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -906,7 +907,8 @@ export type ConquestGoal = 'WIN_3' | 'OPEN_A_CELL' | 'COMPLETION_OF_12' | 'RAISE
  *
  * The three tables differ in what they are about and agree on everything else:
  * whose statement it is, which account filed it, and the correction that
- * superseded it. `confirmed_by` is null only for a Network root, who has no
+ * superseded it. `confirmed_by` is null only for a Network root, and for a
+ * graduation the school filed (decision 0509); a root has no
  * pastoral leader to confirm for them; the three correction columns are set
  * together or not at all, which the database enforces rather than this type.
  */
@@ -930,6 +932,8 @@ export interface TrainingGraduationsTable extends GrowthStatement {
   program: TrainingProgram;
   /** Null where the leader does not know it (section 28). */
   graduated_on: DateOnly | null;
+  /** Filed by the school, a posted pass or the Encounter attended (decision 0509). */
+  from_school: Generated<boolean>;
 }
 
 export interface ConquestConfirmationsTable extends GrowthStatement {
@@ -1090,6 +1094,8 @@ export interface EquippingFinalGradesTable {
   reason: string;
   lessons_kept: number;
   lessons_made_up: number;
+  passed_later_at: Date | null;
+  passed_later_by: string | null;
 }
 
 /** A student enrolled in one season's Encounter weekend (decision 0507). */
