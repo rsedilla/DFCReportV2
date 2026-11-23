@@ -550,4 +550,49 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
       'CAME',
     );
   });
+
+  it('records no make-up of lessons 1 to 4 for them, here or in the posted class', async () => {
+    const kept = await keptInB(pablo);
+    const registration = await register(pablo, 2099, 3);
+    const first = new Date(Date.now() - 14 * 86_400_000 + 8 * 3_600_000).toISOString().slice(0, 10);
+    const classId = await classIn(2099, 3, 'Life Class G', first);
+    await post(registrar, `equipping/classes/${classId}/enrollments`, {
+      registration_ids: [registration],
+    }).expect(201);
+    const enrollment = (
+      await db
+        .selectFrom('equipping_enrollments')
+        .select('id')
+        .where('registration_id', '=', registration)
+        .executeTakeFirstOrThrow()
+    ).id;
+    // Lesson 3, made up in Life Class B: a Teacher's make-up here is refused.
+    const refused = await post(admin, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: enrollment,
+      lesson: 3,
+      made_up_on: new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10),
+    }).expect(409);
+    expect(code(refused)).toBe('INVARIANT_VIOLATION');
+    // And nothing is written into Life Class B's posted register at the database either.
+    const lesson3 = (
+      await db
+        .selectFrom('equipping_lessons as l')
+        .innerJoin('equipping_enrollments as e', 'e.class_id', 'l.class_id')
+        .select('l.id')
+        .where('e.id', '=', kept)
+        .where('l.lesson', '=', 3)
+        .executeTakeFirstOrThrow()
+    ).id;
+    await expect(
+      db
+        .insertInto('equipping_make_ups')
+        .values({
+          lesson_id: lesson3,
+          enrollment_id: kept,
+          made_up_on: '2027-02-01',
+          recorded_by: admin.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/posted class's register is final/);
+  });
 });

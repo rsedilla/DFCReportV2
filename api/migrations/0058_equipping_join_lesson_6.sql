@@ -7,8 +7,8 @@
 -- Additive: one column with a default on `equipping_final_grades`, and one nullable column on
 -- `equipping_enrollments`. No effective date is set. One thing is written to rows already there:
 -- a grade posted before this migration whose reason already says *Joins a later class at lesson
--- 6.* is given the flag its words carry (owner, 2026-11-23, decision 0512), the grade itself
--- unchanged.
+-- 6.*, and whose lessons 1 to 4 were all attended or made up, is given the flag (owner,
+-- 2026-11-23, decision 0512, points 1 and 9), the grade itself unchanged.
 -- ---------------------------------------------------------------------------
 
 -- Posted with the grade (point 1): *Not passed* for more than three absences, at most two of
@@ -20,13 +20,26 @@ ALTER TABLE equipping_final_grades
     NOT joins_at_lesson_6 OR grade = 'NOT_PASSED'
   );
 
--- The grades already posted that say so in words. The trigger keeping a posted grade as written
--- is set aside for this one statement and restored, the grade, reason and lessons untouched.
+-- The grades already posted that say so in words, and whose lessons 1 to 4 were each attended or
+-- made up in a class of that registration (a move in the term included). The trigger keeping a
+-- posted grade as written is set aside for this one statement and restored, the grade, reason
+-- and lessons untouched.
 ALTER TABLE equipping_final_grades DISABLE TRIGGER equipping_final_grades_kept;
-UPDATE equipping_final_grades
+UPDATE equipping_final_grades g
    SET joins_at_lesson_6 = true
- WHERE grade = 'NOT_PASSED'
-   AND reason LIKE '%Joins a later class at lesson 6.%';
+ WHERE g.grade = 'NOT_PASSED'
+   AND g.reason LIKE '%Joins a later class at lesson 6.%'
+   AND (SELECT count(DISTINCT l.lesson)
+          FROM equipping_enrollments graded
+          JOIN equipping_enrollments n ON n.registration_id = graded.registration_id
+          JOIN equipping_lessons l ON l.class_id = n.class_id AND l.lesson <= 4
+         WHERE graded.id = g.enrollment_id
+           AND (EXISTS (SELECT 1 FROM equipping_marks m
+                         WHERE m.lesson_id = l.id AND m.enrollment_id = n.id
+                           AND m.superseded_at IS NULL AND m.came)
+                OR EXISTS (SELECT 1 FROM equipping_make_ups u
+                            WHERE u.lesson_id = l.id AND u.enrollment_id = n.id
+                              AND u.superseded_at IS NULL))) = 4;
 ALTER TABLE equipping_final_grades ENABLE TRIGGER equipping_final_grades_kept;
 
 -- The enrollment whose lessons 1 to 4 an enrollment keeps (point 5): set when it joins at
@@ -83,10 +96,19 @@ CREATE TRIGGER equipping_enrollments_carry
   FOR EACH ROW EXECUTE FUNCTION assert_enrollment_carry();
 
 -- Point 5: one joined at Lesson 6 keeps lessons 1 to 4, so their class records no mark or make-up
--- of those lessons for them.
+-- of those lessons for them; and nothing new is written into a posted class's register, the
+-- earlier class they were kept in included ("nothing posted is rewritten", decision 0508).
 CREATE FUNCTION assert_no_mark_on_kept_lessons() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  IF NEW.superseded_at IS NULL AND EXISTS (
+       SELECT 1
+         FROM equipping_lessons l
+         JOIN equipping_class_postings p ON p.class_id = l.class_id
+        WHERE l.id = NEW.lesson_id) THEN
+    RAISE EXCEPTION 'a posted class''s register is final (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
   IF NEW.superseded_at IS NULL AND EXISTS (
        SELECT 1
          FROM equipping_enrollments e
@@ -111,12 +133,11 @@ CREATE TRIGGER equipping_make_ups_not_on_kept_lessons
 
 -- migrate:down
 
--- Refused while an enrollment carries or a grade joins: dropping either would turn a student
--- joined at Lesson 6 into one missing lessons 1 to 4.
+-- Refused while an enrollment carries: dropping it would turn a student joined at Lesson 6 into
+-- one missing lessons 1 to 4. A grade's flag alone is not refused: its reason still says it.
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM equipping_enrollments WHERE carried_from_enrollment_id IS NOT NULL)
-     OR EXISTS (SELECT 1 FROM equipping_final_grades WHERE joins_at_lesson_6) THEN
+  IF EXISTS (SELECT 1 FROM equipping_enrollments WHERE carried_from_enrollment_id IS NOT NULL) THEN
     RAISE EXCEPTION 'students joined at Lesson 6 exist; this migration is not reversed';
   END IF;
 END;

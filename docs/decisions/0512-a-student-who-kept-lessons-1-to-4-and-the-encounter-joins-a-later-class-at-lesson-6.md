@@ -36,7 +36,8 @@ included, and the Encounter from the person's attendance, a record merged into t
 (decision 0408). On the Teacher's register the student's row reads
 *Joins at Lesson 6 · L1 to L4 and ENC kept from* that class and term, the kept lessons counted;
 the student is not on the tick list for lessons 1 to 4, and an unticked lesson writes nothing for
-them, as for a moved student (decision 0503). They owe no make-up for lessons 1 to 4 and are not
+them, as for a moved student (decision 0503). They owe no make-up for lessons 1 to 4, and none is
+recorded for one, here or in the earlier class, whose register is final once posted and are not
 listed for an Encounter weekend, having attended one. Their final grade counts the kept lessons.
 A move to another class of the term keeps it, the same Lesson 6 rule applying there.
 
@@ -50,9 +51,11 @@ left.
 review raised): Section 29's *at most three absences in all* runs across both classes, so a
 student with two absences in lessons 1 to 4, made up, may miss one of lessons 6 to 9.
 
-**9. A grade posted before this was built carries too** (owner, 2026-11-23, on a Stop Condition the
-same review raised): a grade already posted whose reason reads *Joins a later class at lesson 6.*
-is given the flag its words carry, by the migration, the grade itself unchanged.
+**9. A grade posted before this was built carries too** (owner, 2026-11-23, on Stop Conditions the
+two reviews raised): a grade already posted whose reason reads *Joins a later class at lesson 6.*
+is given the flag by the migration, the grade itself unchanged, **only where its lessons 1 to 4
+were each attended or made up**, as point 1 asks of every grade; one posted under the earlier rule
+with such a lesson still owed repeats Life Class.
 
 Built in migration `0058_equipping_join_lesson_6.sql` (`equipping_final_grades.joins_at_lesson_6`;
 `equipping_enrollments.carried_from_enrollment_id`, naming the enrollment whose lessons 1 to 4 are

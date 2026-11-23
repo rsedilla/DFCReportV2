@@ -894,13 +894,27 @@ export class EquippingAttendanceService {
       const student = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'e.registration_id', 'e.started_at', 'r.person_id'])
+        .select([
+          'e.id',
+          'e.registration_id',
+          'e.started_at',
+          'e.carried_from_enrollment_id',
+          'r.person_id',
+        ])
         .where('e.id', '=', body.enrollment_id)
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
         .executeTakeFirst();
       if (!student) {
         throw new NotFoundError('No such student in this class.', { field: 'enrollment_id' });
+      }
+      // Joined at Lesson 6, they keep lessons 1 to 4 as the earlier class posted them (decision
+      // 0512): no make-up of one is recorded here, nor written into that class.
+      if (student.carried_from_enrollment_id !== null && body.lesson <= 4) {
+        throw new InvariantViolationError(
+          'They joined at Lesson 6 and keep lessons 1 to 4 as their earlier class posted them.',
+          { field: 'lesson' },
+        );
       }
       // The lesson as the student's register reads it: missed here, missed in a class they moved
       // from, or held here before they joined (decision 0503). The make-up is recorded against
@@ -1289,9 +1303,17 @@ export class EquippingAttendanceService {
     for (const row of rows) {
       const state = row.came === true ? 'CAME' : row.came === false ? 'MISSED' : 'ENROLLED';
       const id = canonicalId(resolve(row.person_id));
+      // Kept under the person, then answered under each id asked about below.
       const was = result.get(id);
       if (was === undefined || rank[state] > rank[was]) {
         result.set(id, state);
+      }
+    }
+    // Answered under every id asked about, a record merged away included, as `earlierTriesOf`.
+    for (const id of personIds) {
+      const state = result.get(canonicalId(resolve(id)));
+      if (state !== undefined) {
+        result.set(canonicalId(id), state);
       }
     }
     return result;
