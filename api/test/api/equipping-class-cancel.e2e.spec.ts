@@ -302,6 +302,7 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
             class_name: 'Life Class A',
             status: 'CANCELLED',
             reason: 'The Teacher moved to another Network',
+            guides_removed: [],
           },
         },
       ]);
@@ -315,7 +316,7 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
       ]);
       expect(coordinated.data[0].cancel_reason).toBe('The Teacher moved to another Network');
 
-      // The Registrar's Enrollment and Final Grades list it nowhere (point 6).
+      // The Registrar's Enrollment and Final Grades list it nowhere (point 7).
       const enrollment = (
         await get(
           registrar,
@@ -351,6 +352,37 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
       await post(coordinator, `equipping/classes/${id}/cancel`, { reason: 'Not needed' }).expect(
         200,
       );
+    });
+
+    it('closes the Guides still named on it, kept with who closed them (point 6)', async () => {
+      const id = await openClass();
+      await db
+        .insertInto('equipping_class_guides')
+        .values({ class_id: id, person_id: pablo.id, named_by: coordinator.id })
+        .execute();
+      // The database refuses a cancellation while a Guide is still named.
+      await expect(
+        sql`UPDATE equipping_classes SET cancelled_at = now(), cancelled_by = ${admin.id},
+              cancel_reason = 'x' WHERE id = ${id}`.execute(db),
+      ).rejects.toThrow(/once its Guides are closed/);
+
+      await post(coordinator, `equipping/classes/${id}/cancel`, { reason: 'Not needed' }).expect(
+        200,
+      );
+      const guides = await db
+        .selectFrom('equipping_class_guides')
+        .select(['person_id', 'removed_at', 'removed_by'])
+        .where('class_id', '=', id)
+        .execute();
+      expect(guides).toHaveLength(1);
+      expect(guides[0].removed_at).not.toBeNull();
+      expect(guides[0].removed_by).toBe(coordinator.id);
+      const audit = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('action', '=', 'equipping_class.cancelled')
+        .executeTakeFirstOrThrow();
+      expect(audit.after).toMatchObject({ guides_removed: [pablo.id] });
     });
 
     it('is refused once a lesson is saved', async () => {
@@ -434,7 +466,7 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
       ).rejects.toThrow(/cancelled class takes nobody/);
     });
 
-    it('frees its name for the class opened in its place (point 7)', async () => {
+    it('frees its name for the class opened in its place (point 8)', async () => {
       const id = await openClass();
       await post(coordinator, `equipping/classes/${id}/cancel`, { reason: 'Wrong day' }).expect(
         200,

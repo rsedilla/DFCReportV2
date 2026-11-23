@@ -38,24 +38,31 @@ and *Keep the class*, neither chosen first. The buttons keep the application's o
 have no destructive variant (the UI ruling of 2026-08-21, `web/components/ui/button.tsx`).
 
 **5. A cancelled class is never deleted, and is final.** It keeps its row with when, by whom and
-why, audited as `equipping_class.cancelled`. Nothing changes on it afterwards: no Teacher, Guide,
-student, lesson or correction, and no second cancellation, each refused by the database as well as
-the API. A class wanted after all is opened again as a new class.
+why, audited as `equipping_class.cancelled`. Nothing is added or changed on it afterwards: no
+Teacher, Guide, student, lesson or correction, and no second cancellation, each refused by the
+database as well as the API. A class wanted after all is opened again as a new class.
 
-**6. A cancelled class shows only under *Status: Cancelled*** (owner, accepting the screenshot):
+**6. Cancelling closes the Guides still named on it** (owner, 2026-11-23, "Close them", on a Stop
+Condition `architecture-guardian` raised: a class with no students may still have Guides named,
+and once cancelled nobody could remove them). They are removed at the cancellation's instant,
+recorded as removed by whoever cancelled, never deleted, and the audit entry names them; the
+database refuses a cancellation while one is still named. The Teacher stays named, as the class's
+history.
+
+**7. A cancelled class shows only under *Status: Cancelled*** (owner, accepting the screenshot):
 the date it was cancelled and the reason, dashes for Teacher, Guides and Attendance, and no
 action. *All* lists the classes not started and running, and nowhere else lists a cancelled one:
 not the Registrar's *Enrollment* or *Final Grades*, and not a Teacher's or Guide's classes.
 
-**7. Its name may be used again in its term.** A name is unique among a term's classes that are
+**8. Its name may be used again in its term.** A name is unique among a term's classes that are
 not cancelled, so the class opened in its place may carry the same name.
 
-**8. Who: `equipping.coordinate`**, the Coordinator and the Admin, as every other change to a
+**9. Who: `equipping.coordinate`**, the Coordinator and the Admin, as every other change to a
 class on *Classes* (Section 7).
 
 Built in migration `0057_equipping_class_cancel.sql` (`equipping_classes.cancelled_at`,
 `cancelled_by` and `cancel_reason`; `equipping_class_corrections`; one trigger on
-`equipping_classes` for points 1, 2, 3 and 5, and one on `equipping_enrollments`,
+`equipping_classes` for points 1, 2, 3, 5 and 6, and one on `equipping_enrollments`,
 `equipping_lessons` and `equipping_class_guides` refusing a cancelled class, each reading the class
 `FOR SHARE` so a cancellation and an insert wait for each other; and the name index made partial),
 `POST /api/v1/equipping/classes/{id}/correction` and `POST /api/v1/equipping/classes/{id}/cancel`,

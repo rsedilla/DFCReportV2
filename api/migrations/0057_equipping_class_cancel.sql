@@ -22,7 +22,7 @@ ALTER TABLE equipping_classes
         AND btrim(cancel_reason) <> '' AND char_length(cancel_reason) <= 500)
   );
 
--- A name is unique among a term's classes that are not cancelled (point 7).
+-- A name is unique among a term's classes that are not cancelled (point 8).
 DROP INDEX equipping_classes_one_name_per_term;
 CREATE UNIQUE INDEX equipping_classes_one_name_per_term
   ON equipping_classes (level, term_year, term_number, lower(btrim(name)))
@@ -63,7 +63,7 @@ CREATE TRIGGER equipping_class_corrections_kept
   BEFORE UPDATE OR DELETE ON equipping_class_corrections
   FOR EACH ROW EXECUTE FUNCTION refuse_class_correction_rewrite();
 
--- Points 1, 2, 3 and 5. A cancelled class changes no further; its day, time, place and first
+-- Points 1, 2, 3, 5 and 6. A cancelled class changes no further; its day, time, place and first
 -- lesson change only before a lesson is saved and with a record of what they were; and it is
 -- cancelled only while no enrollment of it is open and no lesson is saved. Each read is its own
 -- statement, so it sees what a transaction it waited behind committed.
@@ -108,6 +108,11 @@ BEGIN
     IF EXISTS (SELECT 1 FROM equipping_lessons l WHERE l.class_id = NEW.id) THEN
       RAISE EXCEPTION 'a class is cancelled only while no lesson is saved (SKILL.md section 29)'
         USING ERRCODE = 'check_violation', CONSTRAINT = 'equipping_class_lesson_saved';
+    END IF;
+    -- Point 6: its Guides are closed first, in the same transaction.
+    IF EXISTS (SELECT 1 FROM equipping_class_guides g WHERE g.class_id = NEW.id AND g.removed_at IS NULL) THEN
+      RAISE EXCEPTION 'a class is cancelled only once its Guides are closed (SKILL.md section 29)'
+        USING ERRCODE = 'check_violation';
     END IF;
   END IF;
   RETURN NEW;

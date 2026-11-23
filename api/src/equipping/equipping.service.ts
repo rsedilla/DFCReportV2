@@ -374,7 +374,7 @@ export class EquippingService {
 
   /**
    * A term's classes, each with how many are enrolled. Not paged: a handful a term. A cancelled
-   * class is left out (decision 0510, point 6): only the Coordinator's *Cancelled* lists one.
+   * class is left out (decision 0510, point 7): only the Coordinator's *Cancelled* lists one.
    */
   async classes(query: EquippingTermDto): Promise<Record<string, unknown>> {
     const rows = await this.classRows(query, false);
@@ -1088,8 +1088,9 @@ export class EquippingService {
   }
 
   /**
-   * `POST /equipping/classes/{id}/cancel` (decision 0510, points 3 to 5): a class is cancelled,
-   * never deleted, and only while nobody is enrolled and no lesson is saved. It is final.
+   * `POST /equipping/classes/{id}/cancel` (decision 0510, points 3 to 6): a class is cancelled,
+   * never deleted, and only while nobody is enrolled and no lesson is saved. It is final, and
+   * the Guides still named on it are closed with it.
    */
   async cancelClass(
     actor: Actor,
@@ -1129,6 +1130,16 @@ export class EquippingService {
       }
       await this.assertNoLessonWithin(trx, cls, 'so it can no longer be cancelled');
 
+      // The Guides still named are closed with it (point 6), never deleted; with no student
+      // enrolled none has an open pairing, which removing one requires (migration 0052).
+      const closed = await trx
+        .updateTable('equipping_class_guides')
+        .set({ removed_at: sql<Date>`now()`, removed_by: actor.accountId })
+        .where('class_id', '=', classId)
+        .where('removed_at', 'is', null)
+        .returning('person_id')
+        .execute();
+
       const row = await trx
         .updateTable('equipping_classes')
         .set({
@@ -1150,7 +1161,12 @@ export class EquippingService {
           status:
             String(cls.first_lesson_on) > (await this.manilaToday()) ? 'NOT_STARTED' : 'RUNNING',
         },
-        after: { class_name: cls.name, status: 'CANCELLED', reason: reason.trim() },
+        after: {
+          class_name: cls.name,
+          status: 'CANCELLED',
+          reason: reason.trim(),
+          guides_removed: closed.map((guide) => guide.person_id),
+        },
       });
 
       const response = {
