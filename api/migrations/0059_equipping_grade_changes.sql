@@ -10,9 +10,10 @@
 -- changed from and to, and the grade a person holds is the posted one or the latest change of it,
 -- which `equipping_current_grades` reads.
 --
--- **A posted register is final in the database too**: a mark or make-up under a registration that
--- holds a posted grade is written, or closed, only in a transaction that records a change of that
--- grade. Before this migration only the application refused it.
+-- **A posted class's register is final in the database too, for the students it graded**: a mark
+-- or make-up of a posted class's lesson under a graded enrollment is written, or closed, only in a
+-- transaction that records a change of that grade. Before this migration only the application
+-- refused it.
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE equipping_grade_changes (
@@ -128,21 +129,21 @@ CREATE TRIGGER equipping_grade_changes_kept
   BEFORE INSERT OR UPDATE OR DELETE ON equipping_grade_changes
   FOR EACH ROW EXECUTE FUNCTION assert_grade_change();
 
--- **A posted register changes only with a grade change** (decision 0513): a mark or a make-up
--- under any enrollment of a registration that holds a posted grade, written or closed, needs a
--- change of that grade recorded in the same transaction, which `now()` makes the same instant.
--- The registration rather than the lesson's class, because a moved student's register reads the
--- classes they were in before. A student who moved out of a class before it was posted, and whose
--- current class is not posted, holds no grade, and a make-up of a lesson they missed is still
--- recorded from the class they are in (decision 0512).
+-- **A posted class's register changes only with a grade change** (decision 0513): a mark or a
+-- make-up of a posted class's lesson for a student that posting graded, written or closed, needs
+-- a change of that student's grade recorded in the same transaction, which `now()` makes the same
+-- instant. A student who moved out before the posting has no grade there, and a make-up of a
+-- lesson they missed in it is still recorded from the class they are in (decision 0512). A
+-- make-up under a graded student's earlier enrollment, in another class, is refused by the
+-- application alone.
 CREATE FUNCTION assert_posted_register_kept() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF EXISTS (
-       SELECT 1 FROM equipping_enrollments own
-         JOIN equipping_enrollments graded ON graded.registration_id = own.registration_id
-         JOIN equipping_final_grades g ON g.enrollment_id = graded.id
-        WHERE own.id = NEW.enrollment_id)
+       SELECT 1 FROM equipping_lessons l
+         JOIN equipping_class_postings p ON p.class_id = l.class_id
+         JOIN equipping_final_grades g ON g.posting_id = p.id AND g.enrollment_id = NEW.enrollment_id
+        WHERE l.id = NEW.lesson_id)
      AND NOT EXISTS (
        SELECT 1
          FROM equipping_grade_changes c

@@ -426,6 +426,27 @@ export class EquippingGradesService {
     },
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    try {
+      return await this.changeWithin(actor, finalGradeId, body, claim);
+    } catch (error) {
+      // The database keeps the flag of a grade a later class carries from (a merged record's
+      // included, which the later-term refusal does not resolve); refused in words, not as a 500.
+      if (violatedConstraint(error) === 'equipping_grade_change_carried') {
+        throw new InvariantViolationError(
+          'They have joined a later class at Lesson 6 on this grade, which keeps it as it is.',
+          { field: 'to' },
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async changeWithin(
+    actor: Actor,
+    finalGradeId: string,
+    body: Parameters<EquippingGradesService['change']>[2],
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
       const classId = await this.classOfGrade(trx, finalGradeId);
       // The class's lock, as a lesson save and a posting take it, then the grade's own row, so
@@ -1163,7 +1184,7 @@ function wholeRefusalOf(student: StudentGrade & PostedFacts): string | null {
     now.reason !== student.reason ||
     now.lessons_kept !== student.lessons_kept
   ) {
-    return 'Their record no longer gives this grade (an Encounter corrected since posting, or a grade posted before lessons were counted as now), so no lesson is changed here until that is settled.';
+    return 'Their Encounter has been recorded or corrected since this grade was set, so no lesson is changed here until that is settled.';
   }
   return null;
 }

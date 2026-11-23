@@ -34,11 +34,10 @@ naming only those two; only the Admin changes.
 **5. The register changes with it, as any correction does.** The mark or make-up is written in
 the posted class under the graded enrollment, the earlier one closed and kept (decision 0503), a
 mark carrying the details as its reason as a closed week's does. **The database now holds a posted
-register final for every student it graded**: a mark or make-up under a registration that holds a
-posted grade, the classes a moved student was in before included, is written or closed only in a
-transaction recording a change of that grade. A student who left a class before it was posted, and
-whose class now is not posted, holds no grade, and a lesson they missed is still made up from their
-new class (decision 0512).
+class's register final for the students it graded**: a mark or make-up of a posted class's lesson
+under an enrollment that posting graded is written or closed only in a transaction recording a
+change of that student's grade. A student who left the class before it was posted has no grade
+there, and a lesson they missed in it is still made up from their new class (decision 0512).
 
 **6. Training follows the grade** (owner, 2026-11-23, as recommended). A grade that becomes
 *Passed* files Life Class from the school, dated the day of the change, one already holding Life
@@ -76,8 +75,8 @@ conservative arm, removable by a ruling without undoing anything written.
   that would take *Joins a later class at Lesson 6* away is refused once a later enrollment carries
   from it.
 - **A grade the register no longer gives is not changed.** The grade is worked out against the
-  Encounter as it stands now, and an Encounter corrected after posting would be folded into a
-  lesson change unseen; whether a change works from the Encounter at posting or now is for the
+  Encounter as it stands now, and an Encounter recorded or corrected after posting, at any weekend
+  or through a merged record, would be folded into a lesson change unseen; whether a change works from the Encounter at posting or now is for the
   owner, and until then any change of such a grade is refused, saying why.
 - **Nothing is changed once the person has registered for the level in a later term**: that term
   rests on this grade, as a try (decision 0511), a fresh start or a carry at Lesson 6, and a
