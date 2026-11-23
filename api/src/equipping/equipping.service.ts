@@ -21,6 +21,7 @@ import {
 } from '../common/errors/postgres-errors';
 import { canonicalId, isUuid } from '../common/identifiers';
 import { manilaDayOf } from '../common/time/manila';
+import { databaseNow } from '../common/time/submission-window';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -1158,8 +1159,11 @@ export class EquippingService {
         // The status *Classes* showed it under, as `coordinatorClasses` derives it.
         before: {
           class_name: cls.name,
+          // Read on the transaction's own connection and clock, not a second one from the pool.
           status:
-            String(cls.first_lesson_on) > (await this.manilaToday()) ? 'NOT_STARTED' : 'RUNNING',
+            String(cls.first_lesson_on) > manilaDayOf(await databaseNow(trx))
+              ? 'NOT_STARTED'
+              : 'RUNNING',
         },
         after: {
           class_name: cls.name,

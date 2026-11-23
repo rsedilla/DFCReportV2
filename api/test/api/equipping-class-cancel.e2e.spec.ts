@@ -447,6 +447,8 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
         const stale = await get(as, path).expect(409);
         expect(code(stale)).toBe('INVARIANT_VIOLATION');
       }
+      // Somebody who neither teaches nor guides it is refused for that, and told nothing more.
+      await get(plainLeader, `equipping/classes/${id}/attendance`).expect(403);
 
       await expect(
         sql`UPDATE equipping_classes SET name = 'Renamed' WHERE id = ${id}`.execute(db),

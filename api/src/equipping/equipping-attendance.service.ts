@@ -339,6 +339,11 @@ export class EquippingAttendanceService {
     if (!seesAll && standing.guideId === null) {
       throw new ScopeDeniedError('You do not teach or guide this class.');
     }
+    // A cancelled class has no register to open (decision 0510); an old link says so, and only
+    // to somebody the scope check above admits.
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
+    }
 
     let enrolled = await this.db
       .selectFrom('equipping_enrollments as e')
@@ -1180,7 +1185,10 @@ export class EquippingAttendanceService {
     return result;
   }
 
-  private async classOf(executor: Db | Transaction<Database>, classId: string): Promise<ClassRow> {
+  private async classOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+  ): Promise<ClassRow & { cancelled_at: Date | null }> {
     const cls = await executor
       .selectFrom('equipping_classes')
       .select([
@@ -1197,10 +1205,6 @@ export class EquippingAttendanceService {
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
-    }
-    // A cancelled class has no register to open (decision 0510); an old link says so.
-    if (cls.cancelled_at !== null) {
-      throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
     return {
       ...cls,

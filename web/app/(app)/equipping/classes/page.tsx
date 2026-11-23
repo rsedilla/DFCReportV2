@@ -701,6 +701,11 @@ function CancelClassDialog({ cls, onClose }: { cls: CoordinatedClass | null; onC
             No students are enrolled and no lesson is saved. The class leaves the list of classes and is kept under{' '}
             <strong>Status: Cancelled</strong>. It cannot be reopened; open a new class instead.
           </p>
+          {cls?.guides && cls.guides.named > 0 ? (
+            <p>
+              {cls.guides.named === 1 ? 'Its Guide is' : `Its ${cls.guides.named} Guides are`} removed from it.
+            </p>
+          ) : null}
         </div>
         <Field
           label="Reason"
