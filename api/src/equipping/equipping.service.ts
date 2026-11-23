@@ -20,6 +20,7 @@ import {
   violatedConstraint,
 } from '../common/errors/postgres-errors';
 import { canonicalId, isUuid } from '../common/identifiers';
+import { resolverOf } from '../common/merged-identity';
 import { manilaDayOf } from '../common/time/manila';
 import { databaseNow } from '../common/time/submission-window';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -135,6 +136,26 @@ export function lifeClassGuidesFor(students: number): number {
  * lessons from `suynl`, and the Encounter seasons from `training`. It writes only its own
  * three tables, and never deletes a row of them.
  */
+/** One earlier try at a level (decision 0511): a grade posted *Not passed*. */
+interface EarlierTry {
+  termYear: number;
+  termNumber: number;
+  className: string;
+  reason: string;
+}
+
+/** How many of a person's tries came in terms before the given one (decision 0511). */
+function triesBefore(
+  tries: EarlierTry[] | undefined,
+  term: { term_year: number; term_number: number },
+): number {
+  return (tries ?? []).filter(
+    (each) =>
+      each.termYear < term.term_year ||
+      (each.termYear === term.term_year && each.termNumber < term.term_number),
+  ).length;
+}
+
 @Injectable()
 export class EquippingService {
   constructor(
@@ -222,11 +243,12 @@ export class EquippingService {
       throw new NotFoundError('No such person.');
     }
     const id = canonicalId(person.id);
-    const [checks, cells, births, leaderNames] = await Promise.all([
+    const [checks, cells, births, leaderNames, tries] = await Promise.all([
       this.requirementsOf([id]),
       this.cells.currentCellsOfMany([id]),
       this.people.birthDatesOf([id]),
       this.people.directLeaderNamesOf([id]),
+      this.earlierTriesOf([id], 'LIFE_CLASS'),
     ]);
     const membership = cells.get(id)?.membership ?? null;
     const cellLeader =
@@ -243,6 +265,13 @@ export class EquippingService {
       cell_leader_name: cellLeader,
       birth_date: births.get(id) ?? null,
       requirements: checks.get(id) ?? [],
+      // *Took Life Class before* on the Register form (decision 0511), oldest first.
+      earlier_tries: (tries.get(id) ?? []).map((each) => ({
+        term_year: each.termYear,
+        term_number: each.termNumber,
+        class_name: each.className,
+        reason: each.reason,
+      })),
     };
   }
 
@@ -344,10 +373,11 @@ export class EquippingService {
 
     const page = rows.slice(0, limit);
     const ids = page.map((row) => row.person_id);
-    const [people, leaderNames, births] = await Promise.all([
+    const [people, leaderNames, births, tries] = await Promise.all([
       this.people.forDecisions(ids),
       this.people.directLeaderNamesOf(ids),
       this.people.birthDatesOf(ids),
+      this.earlierTriesOf(ids, query.level),
     ]);
 
     return {
@@ -368,6 +398,8 @@ export class EquippingService {
         enrollment_id: row.enrollment_id,
         registered_at: row.registered_at.toISOString(),
         cancel_reason: row.cancel_reason,
+        // Which try this registration is (decision 0511): 1 and the tries in earlier terms.
+        try_number: 1 + triesBefore(tries.get(canonicalId(row.person_id)), query),
       })),
       next_cursor: rows.length > limit ? encodeCursor(page[page.length - 1]) : null,
     };
@@ -653,7 +685,7 @@ export class EquippingService {
       .execute();
 
     const ids = [...enrolled.map((row) => row.person_id), ...ready.map((row) => row.person_id)];
-    const [people, leaderNames, eligibility] = await Promise.all([
+    const [people, leaderNames, eligibility, tries] = await Promise.all([
       this.people.forDecisions(
         cls.teacher_person_id === null ? ids : [...ids, cls.teacher_person_id],
       ),
@@ -661,6 +693,10 @@ export class EquippingService {
       this.eligibilityOf(
         ready.map((row) => row.person_id),
         cls.encounter_season_id,
+      ),
+      this.earlierTriesOf(
+        ready.map((row) => row.person_id),
+        cls.level,
       ),
     ]);
     const nameOf = (id: string) => people.get(id)?.fullName ?? null;
@@ -694,6 +730,7 @@ export class EquippingService {
           birthday_recorded: check.birthDate !== null,
           age_at_encounter: check.age,
           blocked: check.blocked,
+          try_number: 1 + triesBefore(tries.get(canonicalId(row.person_id)), cls),
         };
       }),
     };
@@ -1984,6 +2021,54 @@ export class EquippingService {
       return 'ENROLLED';
     }
     return row.unmet.length > 0 ? 'REGISTERED_WITH_EXCEPTION' : 'REGISTERED';
+  }
+
+  /**
+   * Each person's earlier tries at a level (decision 0511): the grades posted *Not passed* for
+   * them, oldest first, keyed by the record kept, a merged record's tries being the person's
+   * (decision 0408). *Not yet*, a withdrawal, a move and a cancelled registration are not tries.
+   */
+  private async earlierTriesOf(
+    personIds: readonly string[],
+    level: EquippingLevel,
+  ): Promise<Map<string, EarlierTry[]>> {
+    const result = new Map<string, EarlierTry[]>();
+    if (personIds.length === 0) {
+      return result;
+    }
+    const pairs = await this.people.mergedPairsWithin(this.db);
+    const resolve = resolverOf(pairs);
+    const wanted = new Set(personIds.map((id) => canonicalId(id)));
+    const records = [
+      ...wanted,
+      ...pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index]))),
+    ];
+    const rows = await this.db
+      .selectFrom('equipping_final_grades as g')
+      .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+      .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
+      .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
+      .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
+      .select(['r.person_id', 'r.term_year', 'r.term_number', 'c.name', 'g.reason'])
+      .where('g.grade', '=', 'NOT_PASSED')
+      .where('r.level', '=', level)
+      .where('r.person_id', 'in', records)
+      .orderBy('r.term_year')
+      .orderBy('r.term_number')
+      .orderBy('p.posted_at')
+      .execute();
+    for (const row of rows) {
+      const key = canonicalId(resolve(row.person_id));
+      const list = result.get(key) ?? [];
+      list.push({
+        termYear: row.term_year,
+        termNumber: row.term_number,
+        className: row.name,
+        reason: row.reason,
+      });
+      result.set(key, list);
+    }
+    return result;
   }
 
   private classShape(row: {
