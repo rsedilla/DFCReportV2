@@ -15,20 +15,26 @@ import {
   ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
+  ValidationFailedError,
 } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { manilaDayOf } from '../common/time/manila';
+import { databaseNow } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 import { TrainingService } from '../training/training.service';
 
-import { CLASS_LESSONS, EquippingAttendanceService } from './equipping-attendance.service';
+import {
+  CLASS_LESSONS,
+  EquippingAttendanceService,
+  type RegisterEntry,
+} from './equipping-attendance.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { Database } from '../database/schema';
+import type { Database, GradeChangeSign } from '../database/schema';
 import type { EquippingTermDto } from './dto/equipping.dto';
 
 /** The register's nine columns: lessons 1 to 4, the Encounter as 5, then 6 to 9. */
@@ -54,6 +60,16 @@ interface StudentGrade {
   joins_at_lesson_6: boolean;
   signs: Sign[];
 }
+
+/** What a posted class's grade carries beside the grade itself (decision 0513). */
+interface PostedFacts {
+  register: Map<number, RegisterEntry>;
+  encounter: 'CAME' | 'ENROLLED' | 'MISSED' | null;
+  posted: { final_grade_id: string; changes: number; passed_later: boolean } | null;
+}
+
+/** What a change sets a lesson to (decision 0513). */
+export type ChangeTo = 'CAME' | 'ABSENT' | 'MADE_UP';
 
 interface CheckRow {
   id: string;
@@ -135,11 +151,17 @@ export class EquippingGradesService {
       !admin &&
       actor.personId !== null &&
       canonicalId(leaders.get(personId) ?? '') === canonicalId(actor.personId);
+    const history = await this.historyOf(
+      standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
+    );
     return {
       class: standing.class,
       status: await this.statusOf(standing),
       may_check: standing.posting === null && standing.missing.length === 0,
       checks_as: admin ? 'ADMIN' : 'COORDINATOR',
+      // **Only the Admin changes a lesson after posting** (decision 0513), read as 0508 reads
+      // the Admin: `equipping.class` at Whole Church.
+      may_change: standing.posting !== null && admin,
       // What *Mark as checked* sends back, so a register changed since it was read is refused.
       fingerprint: standing.fingerprint,
       students: standing.students
@@ -152,6 +174,16 @@ export class EquippingGradesService {
           lessons_made_up: s.lessons_made_up,
           lessons: s.signs,
           your_disciple: mine(s.person_id),
+          ...(s.posted === null
+            ? {}
+            : {
+                final_grade_id: s.posted.final_grade_id,
+                changes_seen: s.posted.changes,
+                // The lessons a change may reach, each as the register reads it now.
+                changeable:
+                  standing.posting !== null && admin ? changeableOf(s) : { lessons: [], why: null },
+                history: history.get(s.posted.final_grade_id) ?? [],
+              }),
         }))
         .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
     };
@@ -341,9 +373,393 @@ export class EquippingGradesService {
     }
   }
 
+  /**
+   * `GET /equipping/final-grades/grades/{id}/change-preview`: what a change of one lesson would
+   * make the grade, before the Admin saves it (decision 0513). Writes nothing; refuses as the save
+   * would.
+   */
+  async previewChange(
+    finalGradeId: string,
+    input: { lesson: number; to: ChangeTo; made_up_on?: string },
+  ): Promise<Record<string, unknown>> {
+    const classId = await this.classOfGrade(this.db, finalGradeId);
+    const standing = await this.standingWithin(this.db, classId);
+    const student = studentOfGrade(standing.students, finalGradeId);
+    const today = manilaDayOf(await databaseNow(this.db));
+    const plan = await this.planChange(this.db, student, input, today);
+    return previewShape(input.lesson, plan);
+  }
+
+  /**
+   * `POST /equipping/final-grades/grades/{id}/changes`: **the Admin changes one lesson of a posted
+   * class, with a reason, and the grade is worked out again** (decisions 0501, 0508 and 0513). The
+   * posted grade is never rewritten: the change is a row of its own keeping the lesson and the
+   * grade before and after, and the mark or make-up it writes is written as any correction is,
+   * the earlier one closed and kept. Training follows the grade: a *Passed* files Life Class from
+   * the school, dated today, and a *Passed* changed away withdraws the one the school filed.
+   */
+  async change(
+    actor: Actor,
+    finalGradeId: string,
+    body: {
+      lesson: number;
+      to: ChangeTo;
+      made_up_on?: string;
+      why: 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
+      details: string;
+      changes_seen: number;
+    },
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      const classId = await this.classOfGrade(trx, finalGradeId);
+      // The class's lock, as a lesson save and a posting take it, then the grade's own row, so
+      // two changes of one grade are made one after the other.
+      await this.lockClassWithin(trx, classId);
+      await trx
+        .selectFrom('equipping_final_grades')
+        .select('id')
+        .where('id', '=', finalGradeId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const standing = await this.standingWithin(trx, classId);
+      const student = studentOfGrade(standing.students, finalGradeId);
+      if (student.posted!.changes !== body.changes_seen) {
+        throw new ApiError(
+          ApiErrorCode.VERSION_CONFLICT,
+          'This grade was changed since you opened it. Reload to see it as it is now.',
+          { field: 'changes_seen', current: student.posted!.changes },
+        );
+      }
+      const now = await databaseNow(trx);
+      const today = manilaDayOf(now);
+      const plan = await this.planChange(trx, student, body, today);
+      // The day the grade became Passed, if it is: posted so, or the latest change making it so.
+      // That is the day the school dated the Life Class it filed.
+      const current = await trx
+        .selectFrom('equipping_final_grades as g')
+        .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+        .select(
+          sql<Date>`COALESCE((SELECT max(c.changed_at) FROM equipping_grade_changes c
+                               WHERE c.final_grade_id = g.id
+                                 AND c.grade_after = 'PASSED' AND c.grade_before <> 'PASSED'),
+                             p.posted_at)`.as('passed_at'),
+        )
+        .where('g.id', '=', finalGradeId)
+        .executeTakeFirstOrThrow();
+
+      // The change first: the database admits a mark or make-up of a posted class only beside it.
+      const recorded = await trx
+        .insertInto('equipping_grade_changes')
+        .values({
+          final_grade_id: finalGradeId,
+          lesson: body.lesson,
+          sign_before: plan.signBefore,
+          made_up_on_before: plan.madeUpOnBefore,
+          sign_after: body.to,
+          made_up_on_after: body.to === 'MADE_UP' ? body.made_up_on! : null,
+          why: body.why,
+          details: body.details,
+          grade_before: student.grade,
+          reason_before: student.reason,
+          grade_after: plan.after.grade,
+          reason_after: plan.after.reason,
+          lessons_kept_after: plan.after.lessons_kept,
+          lessons_made_up_after: plan.after.lessons_made_up,
+          joins_at_lesson_6_after: plan.after.joins_at_lesson_6,
+          changed_by: actor.accountId,
+          changer_person_id: actor.personId,
+        })
+        .returning(['id', 'changed_at'])
+        .executeTakeFirstOrThrow();
+
+      await this.writeRegisterChangeWithin(trx, actor, student, plan.entry, body);
+
+      // **The register and the grade agree** (0501, point 15): worked out again from what was
+      // written, the grade is the one recorded on the change, or nothing is kept.
+      const registers = await this.attendance.registersOf(trx, classId, [
+        {
+          enrollment_id: student.enrollment_id,
+          registration_id: plan.registrationId,
+          started_at: plan.startedAt,
+        },
+      ]);
+      const worked = gradeOf(registers.get(student.enrollment_id)!, student.encounter);
+      if (
+        worked.grade !== plan.after.grade ||
+        worked.reason !== plan.after.reason ||
+        worked.lessons_kept !== plan.after.lessons_kept ||
+        worked.lessons_made_up !== plan.after.lessons_made_up ||
+        worked.joins_at_lesson_6 !== plan.after.joins_at_lesson_6
+      ) {
+        throw new Error(
+          'A grade change wrote a register whose grade differs from the one planned.',
+        );
+      }
+
+      // Training follows the grade (decision 0509): Life Class filed from the school, or withdrawn.
+      if (student.grade !== 'PASSED' && plan.after.grade === 'PASSED') {
+        await this.training.fileFromSchoolWithin(trx, {
+          personId: student.person_id,
+          program: 'LIFE_CLASS',
+          graduatedOn: today,
+          accountId: actor.accountId,
+        });
+      } else if (student.grade === 'PASSED' && plan.after.grade !== 'PASSED') {
+        await this.training.withdrawFromSchoolWithin(trx, {
+          personId: student.person_id,
+          program: 'LIFE_CLASS',
+          graduatedOn: manilaDayOf(current.passed_at),
+          accountId: actor.accountId,
+          reason: body.details,
+        });
+      }
+
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_final_grade.changed',
+        targetType: 'person',
+        targetId: student.person_id,
+        before: {
+          class_id: classId,
+          class_name: standing.class.name,
+          lesson: body.lesson,
+          sign: plan.signBefore,
+          made_up_on: plan.madeUpOnBefore,
+          grade: student.grade,
+          reason: student.reason,
+        },
+        after: {
+          class_id: classId,
+          class_name: standing.class.name,
+          lesson: body.lesson,
+          sign: body.to,
+          made_up_on: body.to === 'MADE_UP' ? body.made_up_on! : null,
+          grade: plan.after.grade,
+          reason: plan.after.reason,
+          why: body.why,
+        },
+        reason: body.details,
+      });
+
+      const response = {
+        final_grade_id: finalGradeId,
+        change_id: recorded.id,
+        grade: plan.after.grade,
+        reason: plan.after.reason,
+        changes_seen: student.posted!.changes + 1,
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+      return response;
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /** The posted class a final grade belongs to; `NOT_FOUND` for none. */
+  private async classOfGrade(
+    executor: Db | Transaction<Database>,
+    finalGradeId: string,
+  ): Promise<string> {
+    const row = await executor
+      .selectFrom('equipping_final_grades as g')
+      .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+      .select('p.class_id')
+      .where('g.id', '=', finalGradeId)
+      .executeTakeFirst();
+    if (row === undefined) {
+      throw new NotFoundError('No such grade.');
+    }
+    return row.class_id;
+  }
+
+  /**
+   * **What a change of one lesson does** (decision 0513), refused as it would be on saving. The
+   * lesson is one this class recorded for the graded enrollment, or one it held before they
+   * joined, which is only made up; the grade is worked out from the register with that one
+   * lesson changed.
+   */
+  private async planChange(
+    executor: Db | Transaction<Database>,
+    student: StudentGrade & PostedFacts,
+    input: { lesson: number; to: ChangeTo; made_up_on?: string },
+    today: string,
+  ) {
+    if (!(CLASS_LESSONS as readonly number[]).includes(input.lesson)) {
+      throw new ValidationFailedError(
+        'A change reaches lessons 1 to 4 and 6 to 9; the Encounter is changed on its own page.',
+        { field: 'lesson' },
+      );
+    }
+    if ((input.to === 'MADE_UP') !== (input.made_up_on !== undefined)) {
+      throw new ValidationFailedError(
+        input.to === 'MADE_UP' ? 'Say the day it was made up.' : 'Only a make-up carries a date.',
+        { field: 'made_up_on' },
+      );
+    }
+    const refusal = refusalOf(student, input.lesson);
+    if (refusal !== null) {
+      throw new InvariantViolationError(refusal, { field: 'lesson' });
+    }
+    const entry = student.register.get(input.lesson)!;
+    const signBefore = signOf(entry);
+    const madeUpOnBefore = signBefore === 'MADE_UP' ? entry.madeUpOn : null;
+    if (signBefore === 'BEFORE_JOINING' && input.to !== 'MADE_UP') {
+      throw new InvariantViolationError(
+        `They joined after L${input.lesson}, so it is made up, not marked.`,
+        { field: 'to' },
+      );
+    }
+    if (
+      input.to === signBefore &&
+      (input.to !== 'MADE_UP' || input.made_up_on === madeUpOnBefore)
+    ) {
+      throw new InvariantViolationError(`L${input.lesson} already reads that.`, { field: 'to' });
+    }
+    if (input.to === 'MADE_UP' && (input.made_up_on! < entry.heldOn || input.made_up_on! > today)) {
+      throw new ValidationFailedError('A make-up falls between the missed lesson and today.', {
+        field: 'made_up_on',
+      });
+    }
+    const changed = new Map(student.register);
+    changed.set(input.lesson, {
+      ...entry,
+      came: input.to === 'CAME',
+      madeUpOn: input.to === 'MADE_UP' ? input.made_up_on! : null,
+      beforeJoining: input.to === 'MADE_UP' ? entry.beforeJoining : false,
+    });
+    const after = gradeOf(changed, student.encounter);
+    // **A Not yet stays Not yet, and nobody becomes it** (decision 0513): a Not yet passes after
+    // a later Encounter, which this change does not record, and a finished enrollment is not
+    // reopened.
+    if ((student.grade === 'NOT_YET') !== (after.grade === 'NOT_YET')) {
+      throw new InvariantViolationError(
+        student.grade === 'NOT_YET'
+          ? `They were posted Not yet, and this would make them ${gradeWords(after.grade)}. Only a change that keeps them Not yet is made here; they pass after a later Encounter.`
+          : `This would make them Not yet, which a posted grade becomes only at posting. Their Encounter is recorded on its own page.`,
+        { field: 'to', grade_after: after.grade },
+      );
+    }
+    if (student.joins_at_lesson_6 && !after.joins_at_lesson_6) {
+      const carrier = await executor
+        .selectFrom('equipping_enrollments')
+        .select('id')
+        .where('carried_from_enrollment_id', '=', student.enrollment_id)
+        .executeTakeFirst();
+      if (carrier !== undefined) {
+        throw new InvariantViolationError(
+          'They have joined a later class at Lesson 6 on this grade, which keeps it as it is.',
+          { field: 'to' },
+        );
+      }
+    }
+    const enrollment = await executor
+      .selectFrom('equipping_enrollments')
+      .select(['registration_id', 'started_at'])
+      .where('id', '=', student.enrollment_id)
+      .executeTakeFirstOrThrow();
+    return {
+      entry,
+      signBefore,
+      madeUpOnBefore,
+      after,
+      before: { grade: student.grade, reason: student.reason },
+      registrationId: enrollment.registration_id,
+      startedAt: enrollment.started_at,
+    };
+  }
+
+  /**
+   * Writes the lesson as the change says, as any correction writes it: the current mark and
+   * make-up closed and kept, a new one opened (decision 0503), in the posted class, under the
+   * graded enrollment. A mark carries the Admin's details as its reason, as a closed week's does.
+   */
+  private async writeRegisterChangeWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    student: StudentGrade & PostedFacts,
+    entry: RegisterEntry,
+    body: { to: ChangeTo; made_up_on?: string; details: string },
+  ): Promise<void> {
+    const close = { superseded_at: sql<Date>`now()`, superseded_by: actor.accountId };
+    const where = { lesson_id: entry.lessonId, enrollment_id: student.enrollment_id };
+    // A make-up is closed first: a mark saying they came is refused while one stands.
+    await trx
+      .updateTable('equipping_make_ups')
+      .set(close)
+      .where('lesson_id', '=', where.lesson_id)
+      .where('enrollment_id', '=', where.enrollment_id)
+      .where('superseded_at', 'is', null)
+      .execute();
+    const markWanted =
+      body.to === 'CAME' ? true : body.to === 'ABSENT' ? false : entry.came ? false : null;
+    if (markWanted !== null) {
+      await trx
+        .updateTable('equipping_marks')
+        .set(close)
+        .where('lesson_id', '=', where.lesson_id)
+        .where('enrollment_id', '=', where.enrollment_id)
+        .where('superseded_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('equipping_marks')
+        .values({
+          ...where,
+          came: markWanted,
+          recorded_by: actor.accountId,
+          correction_reason: body.details,
+        })
+        .execute();
+    }
+    if (body.to === 'MADE_UP') {
+      await trx
+        .insertInto('equipping_make_ups')
+        .values({ ...where, made_up_on: body.made_up_on!, recorded_by: actor.accountId })
+        .execute();
+    }
+  }
+
+  /** Each grade's changes, oldest first, with who made them (decision 0513). */
+  private async historyOf(finalGradeIds: readonly string[]) {
+    const result = new Map<string, Record<string, unknown>[]>();
+    if (finalGradeIds.length === 0) {
+      return result;
+    }
+    const rows = await this.db
+      .selectFrom('equipping_grade_changes')
+      .selectAll()
+      .where('final_grade_id', 'in', [...finalGradeIds])
+      .orderBy('seq')
+      .execute();
+    const names = await this.people.forDecisions(
+      rows.flatMap((row) => (row.changer_person_id === null ? [] : [row.changer_person_id])),
+    );
+    for (const row of rows) {
+      const list = result.get(row.final_grade_id) ?? [];
+      list.push({
+        at: new Date(row.changed_at).toISOString(),
+        by:
+          row.changer_person_id === null
+            ? null
+            : (names.get(row.changer_person_id)?.fullName ?? null),
+        lesson: row.lesson,
+        sign_before: row.sign_before,
+        made_up_on_before: row.made_up_on_before === null ? null : String(row.made_up_on_before),
+        sign_after: row.sign_after,
+        made_up_on_after: row.made_up_on_after === null ? null : String(row.made_up_on_after),
+        why: row.why,
+        details: row.details,
+        grade_before: row.grade_before,
+        reason_before: row.reason_before,
+        grade_after: row.grade_after,
+        reason_after: row.reason_after,
+      });
+      result.set(row.final_grade_id, list);
+    }
+    return result;
+  }
 
   /** The class FOR NO KEY UPDATE, the mode a lesson save takes, so a save waits behind a post. */
   private async lockClassWithin(trx: Transaction<Database>, classId: string): Promise<void> {
@@ -386,21 +802,25 @@ export class EquippingGradesService {
     const savedSet = new Set(saved.map((row) => row.lesson));
     const notSaved = CLASS_LESSONS.filter((n) => !savedSet.has(n));
 
+    // A posted grade as it stands now, the latest change of it included (decision 0513).
     const rows = await executor
       .selectFrom('equipping_enrollments as e')
       .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-      .leftJoin('equipping_final_grades as g', 'g.enrollment_id', 'e.id')
+      .leftJoin('equipping_current_grades as g', 'g.enrollment_id', 'e.id')
       .select([
         'e.id as enrollment_id',
         'e.registration_id',
         'e.started_at',
         'r.person_id',
+        'g.final_grade_id',
         'g.grade',
         'g.reason',
         'g.lessons_kept',
         'g.lessons_made_up',
         'g.joins_at_lesson_6',
         'g.posting_id',
+        'g.passed_later_at',
+        'g.changes',
       ])
       .where('e.class_id', '=', classId)
       .where((eb) =>
@@ -412,7 +832,7 @@ export class EquippingGradesService {
       executor,
       rows.map((row) => row.person_id),
     );
-    const students: StudentGrade[] = rows.map((row) => {
+    const students: (StudentGrade & PostedFacts)[] = rows.map((row) => {
       const register = registers.get(row.enrollment_id)!;
       const encounter = encounters.get(canonicalId(row.person_id)) ?? null;
       const worked = gradeOf(register, encounter);
@@ -420,6 +840,16 @@ export class EquippingGradesService {
         enrollment_id: row.enrollment_id,
         person_id: row.person_id,
         ...worked,
+        register,
+        encounter,
+        posted:
+          row.final_grade_id === null
+            ? null
+            : {
+                final_grade_id: row.final_grade_id,
+                changes: row.changes ?? 0,
+                passed_later: row.passed_later_at !== null,
+              },
         ...(row.grade !== null
           ? {
               grade: row.grade,
@@ -624,6 +1054,106 @@ function gradeOf(
     };
   }
   return { ...base, grade: 'PASSED', reason: 'Every lesson done.' };
+}
+
+/** The student a final grade belongs to, within its posted class's standing. */
+function studentOfGrade<T extends StudentGrade & PostedFacts>(
+  students: readonly T[],
+  finalGradeId: string,
+): T {
+  const student = students.find(
+    (s) => s.posted !== null && canonicalId(s.posted.final_grade_id) === canonicalId(finalGradeId),
+  );
+  if (student === undefined) {
+    throw new NotFoundError('No such grade.');
+  }
+  return student;
+}
+
+/** A register entry as a change reads it. */
+function signOf(entry: RegisterEntry): GradeChangeSign {
+  if (entry.came) return 'CAME';
+  if (entry.madeUpOn !== null) return 'MADE_UP';
+  return entry.beforeJoining ? 'BEFORE_JOINING' : 'ABSENT';
+}
+
+/**
+ * Why a lesson of a posted grade is not changed here, or null (decision 0513): a student who passed
+ * at a later Encounter keeps the grade they passed on, and a lesson read from a class they were in
+ * before, or kept from an earlier term, stands as that class recorded it.
+ */
+function refusalOf(student: StudentGrade & PostedFacts, lesson: number): string | null {
+  if (student.posted?.passed_later) {
+    return 'They passed at a later Encounter, and keep the grade they passed on.';
+  }
+  const entry = student.register.get(lesson);
+  if (entry === undefined) {
+    return `L${lesson} was not recorded for them.`;
+  }
+  if (
+    entry.fromClass !== null ||
+    canonicalId(entry.enrollmentId) !== canonicalId(student.enrollment_id)
+  ) {
+    return `L${lesson} stands as ${entry.fromClass?.name ?? 'an earlier class'} recorded it, a class they were in before, and is not changed here.`;
+  }
+  return null;
+}
+
+/** The lessons a change may reach, for the dialog's list, and why there are none where so. */
+function changeableOf(student: StudentGrade & PostedFacts) {
+  if (student.posted?.passed_later) {
+    return { lessons: [], why: refusalOf(student, CLASS_LESSONS[0]) };
+  }
+  const lessons = CLASS_LESSONS.flatMap((lesson) => {
+    if (refusalOf(student, lesson) !== null) {
+      return [];
+    }
+    const entry = student.register.get(lesson)!;
+    return [
+      {
+        lesson,
+        sign: signOf(entry),
+        made_up_on: entry.madeUpOn,
+        held_on: entry.heldOn,
+      },
+    ];
+  });
+  return {
+    lessons,
+    why: lessons.length === 0 ? 'No lesson of theirs was recorded in this class.' : null,
+  };
+}
+
+function gradeWords(grade: Grade): string {
+  return grade === 'PASSED' ? 'Passed' : grade === 'NOT_PASSED' ? 'Not passed' : 'Not yet';
+}
+
+/** What a preview answers: the lesson and the grade, before and after, and what Training does. */
+function previewShape(
+  lesson: number,
+  plan: {
+    signBefore: GradeChangeSign;
+    madeUpOnBefore: string | null;
+    before: { grade: Grade; reason: string };
+    after: Omit<StudentGrade, 'enrollment_id' | 'person_id'>;
+  },
+): Record<string, unknown> {
+  return {
+    lesson,
+    sign_before: plan.signBefore,
+    made_up_on_before: plan.madeUpOnBefore,
+    grade_before: plan.before.grade,
+    reason_before: plan.before.reason,
+    grade_after: plan.after.grade,
+    reason_after: plan.after.reason,
+    joins_at_lesson_6_after: plan.after.joins_at_lesson_6,
+    training:
+      plan.before.grade !== 'PASSED' && plan.after.grade === 'PASSED'
+        ? 'FILES'
+        : plan.before.grade === 'PASSED' && plan.after.grade !== 'PASSED'
+          ? 'WITHDRAWS'
+          : null,
+  };
 }
 
 /** *L2*, *L1 and L3*, *L1, L2 and L4*. */

@@ -81,7 +81,9 @@
     "equipping_encounter_attendance": "equipping",
     "equipping_class_checks": "equipping",
     "equipping_class_postings": "equipping",
-    "equipping_final_grades": "equipping"
+    "equipping_final_grades": "equipping",
+    "equipping_grade_changes": "equipping",
+    "equipping_current_grades": "equipping"
   },
   "infrastructure": [
     "database"

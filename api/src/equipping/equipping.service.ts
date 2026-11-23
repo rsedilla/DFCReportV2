@@ -2168,8 +2168,9 @@ export class EquippingService {
       ...wanted,
       ...pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index]))),
     ];
+    // The grade as it stands now, a change after posting included (decision 0513).
     const rows = await executor
-      .selectFrom('equipping_final_grades as g')
+      .selectFrom('equipping_current_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
       .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
       .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
@@ -2251,8 +2252,9 @@ export class EquippingService {
       ...kept,
       ...pairs.absorbed.filter((_, index) => kept.has(canonicalId(pairs.kept[index]))),
     ];
+    // A try is a grade that stands *Not passed* now, a change after posting included (0513).
     const rows = await this.db
-      .selectFrom('equipping_final_grades as g')
+      .selectFrom('equipping_current_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
       .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
       .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')

@@ -43,12 +43,19 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
       }));
     }
 
+    // **A grade that stands Passed now**, dated the day it became Passed: posted so, or the
+    // latest change that made it so (decision 0513).
     const passed = await trx
-      .selectFrom('equipping_final_grades as g')
+      .selectFrom('equipping_current_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
       .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
       .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
-      .select('p.posted_at')
+      .select(
+        sql<Date>`COALESCE((SELECT max(c.changed_at) FROM equipping_grade_changes c
+                             WHERE c.final_grade_id = g.final_grade_id
+                               AND c.grade_after = 'PASSED' AND c.grade_before <> 'PASSED'),
+                           p.posted_at)`.as('posted_at'),
+      )
       .where('r.person_id', 'in', [...personIds])
       .where('g.grade', '=', 'PASSED')
       .execute();

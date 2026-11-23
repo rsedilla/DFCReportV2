@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 
+import { GRADE_WORDS, WHY_WORDS, signWords } from '@/components/grade-change-dialog';
+import { Button } from '@/components/ui/button';
 import { timeLabel } from '@/lib/cells';
 import {
   DAY_NAMES,
@@ -83,6 +85,53 @@ function lessonsLine(s: ClassGrades['students'][number]): string {
 }
 
 /**
+ * **A changed grade's history** (decision 0513): the grade as posted, then each change with who
+ * made it, when, the lesson and the grade before and after, and the reason. Never edited.
+ */
+function History({ s, postedAt }: { s: ClassGrades['students'][number]; postedAt: string | null }) {
+  const changes = s.history ?? [];
+  if (changes.length === 0) {
+    return null;
+  }
+  return (
+    <div className="text-sm">
+      <p className="font-semibold">History</p>
+      <ol className="mt-1 flex flex-col gap-1">
+        <li>
+          {postedAt ? `${shortDay(postedAt)} · ` : ''}Posted · {GRADE_WORDS[changes[0].grade_before]} ·{' '}
+          {changes[0].reason_before}
+        </li>
+        {changes.map((c, i) => (
+          <li key={i}>
+            {shortDay(c.at)} · Changed{c.by ? ` by ${c.by}` : ''} · L{c.lesson}{' '}
+            {signWords(c.sign_before, c.made_up_on_before)} → {signWords(c.sign_after, c.made_up_on_after)} ·
+            grade {GRADE_WORDS[c.grade_before]} → {GRADE_WORDS[c.grade_after]} ·{' '}
+            <span className="italic">
+              {WHY_WORDS[c.why]}: {c.details}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** *Changed after posting · history*, which shows or hides the history under the row. */
+function HistoryToggle({ open, onToggle, id }: { open: boolean; onToggle: () => void; id: string }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={id}
+      onClick={onToggle}
+      className="text-accent mt-1 block min-h-6 text-left text-xs font-semibold underline underline-offset-2"
+    >
+      Changed after posting · {open ? 'hide history' : 'history'}
+    </button>
+  );
+}
+
+/**
  * **A class's final grades** (decision 0508, the owner's version B): where the class stands in
  * three steps, filters by grade, and each student with their grade and its reason beside the
  * name, the register after it. A table on a laptop, the name held in place; a card each on a
@@ -92,12 +141,28 @@ export function GradesPanel({
   data,
   coordinatorView,
   action,
+  onChange,
 }: {
   data: ClassGrades;
   coordinatorView: boolean;
   action: ReactNode;
+  /** The Admin's *Change…* on a posted class (decision 0513). */
+  onChange?: (student: ClassGrades['students'][number]) => void;
 }) {
   const [filter, setFilter] = useState<FinalGrade | 'ALL'>('ALL');
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpened((was) => {
+      const next = new Set(was);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  const changes = data.may_change === true && onChange !== undefined;
+  const postedAt = data.status.posted?.at ?? null;
   const { status } = data;
   const rows = [...data.students]
     .filter((s) => filter === 'ALL' || s.grade === filter)
@@ -209,32 +274,78 @@ export function GradesPanel({
                   <th scope="col" className="px-3 py-2 text-left">
                     Lessons
                   </th>
+                  {changes ? (
+                    <th scope="col" className="px-3 py-2">
+                      <span className="sr-only">Change</span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((s) => (
-                  <tr key={s.enrollment_id} className="border-line border-t">
-                    <th scope="row" className="bg-surface sticky left-0 px-3 py-2 text-left font-semibold whitespace-nowrap">
-                      {s.person.full_name}
-                      {coordinatorView && s.your_disciple ? (
-                        <span className="text-muted block text-xs font-normal">Your disciple: the Admin checks</span>
+                {rows.map((s) => {
+                  const historyId = `grade-history-${s.enrollment_id}`;
+                  const changed = (s.history ?? []).length > 0;
+                  return (
+                    <Fragment key={s.enrollment_id}>
+                      <tr className="border-line border-t">
+                        <th
+                          scope="row"
+                          className="bg-surface sticky left-0 px-3 py-2 text-left font-semibold whitespace-nowrap"
+                        >
+                          {s.person.full_name}
+                          {coordinatorView && s.your_disciple ? (
+                            <span className="text-muted block text-xs font-normal">Your disciple: the Admin checks</span>
+                          ) : null}
+                        </th>
+                        <td className="px-3 py-2">
+                          <GradeTag grade={s.grade} />
+                        </td>
+                        <td className="px-3 py-2">
+                          {s.reason}
+                          {changed ? (
+                            <HistoryToggle
+                              id={historyId}
+                              open={opened.has(s.enrollment_id)}
+                              onToggle={() => toggle(s.enrollment_id)}
+                            />
+                          ) : null}
+                        </td>
+                        {s.lessons.map((sign, i) => (
+                          <td
+                            key={i}
+                            className={cn(
+                              'px-1.5 py-2 text-center',
+                              sign === 'ABSENT' && 'text-field-invalid font-semibold',
+                            )}
+                          >
+                            <Mark sign={sign} />
+                          </td>
+                        ))}
+                        <td className="text-muted px-3 py-2 whitespace-nowrap">{lessonsLine(s)}</td>
+                        {changes ? (
+                          <td className="px-3 py-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-auto py-1.5 whitespace-nowrap"
+                              aria-label={`Change ${s.person.full_name ?? 'this student'}’s lessons`}
+                              onClick={() => onChange(s)}
+                            >
+                              Change…
+                            </Button>
+                          </td>
+                        ) : null}
+                      </tr>
+                      {changed && opened.has(s.enrollment_id) ? (
+                        <tr id={historyId} className="bg-raised">
+                          <td colSpan={COLUMNS.length + 4 + (changes ? 1 : 0)} className="px-4 py-3">
+                            <History s={s} postedAt={postedAt} />
+                          </td>
+                        </tr>
                       ) : null}
-                    </th>
-                    <td className="px-3 py-2">
-                      <GradeTag grade={s.grade} />
-                    </td>
-                    <td className="px-3 py-2">{s.reason}</td>
-                    {s.lessons.map((sign, i) => (
-                      <td
-                        key={i}
-                        className={cn('px-1.5 py-2 text-center', sign === 'ABSENT' && 'text-field-invalid font-semibold')}
-                      >
-                        <Mark sign={sign} />
-                      </td>
-                    ))}
-                    <td className="text-muted px-3 py-2 whitespace-nowrap">{lessonsLine(s)}</td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -258,6 +369,25 @@ export function GradesPanel({
                   ))}
                 </p>
                 <p className="text-muted text-xs">Lessons {lessonsLine(s)}</p>
+                {(s.history ?? []).length > 0 ? (
+                  <>
+                    <HistoryToggle
+                      id={`grade-history-card-${s.enrollment_id}`}
+                      open={opened.has(s.enrollment_id)}
+                      onToggle={() => toggle(s.enrollment_id)}
+                    />
+                    {opened.has(s.enrollment_id) ? (
+                      <div id={`grade-history-card-${s.enrollment_id}`} className="mt-2">
+                        <History s={s} postedAt={postedAt} />
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                {changes ? (
+                  <Button type="button" variant="secondary" className="mt-2" onClick={() => onChange(s)}>
+                    Change lessons…
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>

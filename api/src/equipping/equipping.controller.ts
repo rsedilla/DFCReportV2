@@ -21,7 +21,9 @@ import { PeopleService } from '../people/people.service';
 import { PersonViewsService } from '../people/person-views.service';
 
 import {
+  ChangeGradeDto,
   CheckGradesDto,
+  GradeChangePreviewDto,
   CorrectClassDto,
   EncounterAttendanceDto,
   EncounterQueryDto,
@@ -500,6 +502,32 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.grades.post(actor, id, claim);
+  }
+
+  /**
+   * What changing one lesson of a posted grade would make it (decision 0513). **The Admin's**,
+   * read as decision 0508 reads the Admin: `equipping.class` at Whole Church, which the Registrar
+   * does not hold.
+   */
+  @Get('final-grades/grades/:id/change-preview')
+  @RequiresCapability(Capability.EquippingClass, { kind: 'church' })
+  async previewGradeChange(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Query() query: GradeChangePreviewDto,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.previewChange(id, query);
+  }
+
+  /** Changes one lesson of a posted grade, with a reason, and works the grade out again (0513). */
+  @Post('final-grades/grades/:id/changes')
+  @RequiresCapability(Capability.EquippingClass, { kind: 'church' })
+  async changeGrade(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: ChangeGradeDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.grades.change(actor, id, body, claim);
   }
 
   @Get('classes/:id')

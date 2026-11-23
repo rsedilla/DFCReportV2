@@ -873,6 +873,102 @@ export async function mockFinalGrades(
   return { sent };
 }
 
+/**
+ * A grade changed after posting (decision 0513): Life Class A posted, read as the Admin reads it,
+ * Imelda's lessons changeable and Efren's grade changed once already. Called after
+ * `mockFinalGrades(page, 'POSTED')`, whose class read it replaces. Every name is invented.
+ */
+export async function mockGradeChange(page: Page): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const C = 'CAME';
+  const lessonsOf = (signs: string[]) =>
+    [1, 2, 3, 4, 6, 7, 8, 9].map((lesson, i) => ({
+      lesson,
+      sign: signs[i],
+      made_up_on: signs[i] === 'MADE_UP' ? '2027-02-20' : null,
+      held_on: `2027-0${lesson < 6 ? 1 : 2}-${String(10 + lesson).padStart(2, '0')}`,
+    }));
+  const student = (n: number, name: string, grade: string, reason: string, signs: string[], extra = {}) => ({
+    enrollment_id: id(7100 + n),
+    person: { id: id(8100 + n), full_name: name },
+    grade,
+    reason,
+    lessons_kept: signs.filter((s) => s !== 'ABSENT').length + 1,
+    lessons_made_up: signs.filter((s) => s === 'MADE_UP').length,
+    lessons: [...signs.slice(0, 4), 'CAME', ...signs.slice(4)],
+    your_disciple: false,
+    final_grade_id: id(7200 + n),
+    changes_seen: 0,
+    changeable: { lessons: lessonsOf(signs), why: null },
+    history: [],
+    ...extra,
+  });
+  const grades = {
+    class: { id: CLASS_ID, name: 'Life Class A', day_of_week: 2, time_of_day: '19:00', place: 'Room 2' },
+    status: {
+      phase: 'POSTED',
+      missing_lessons: [],
+      counts: { passed: 2, not_passed: 1, not_yet: 0 },
+      coordinator_check: { by: 'Lito Ramos', at: '2027-03-20T02:00:00.000Z' },
+      admin_check: null,
+      disciples_for_admin: 0,
+      posted: { at: '2027-03-22T02:00:00.000Z' },
+    },
+    may_check: false,
+    checks_as: 'ADMIN',
+    may_change: true,
+    fingerprint: 'a'.repeat(64),
+    students: [
+      student(1, 'Efren Quiambao', 'PASSED', 'Every lesson done.', [C, C, 'MADE_UP', C, C, C, C, C], {
+        changes_seen: 1,
+        history: [
+          {
+            at: '2027-03-25T02:00:00.000Z',
+            by: 'Ada Reyes',
+            lesson: 3,
+            sign_before: 'ABSENT',
+            made_up_on_before: null,
+            sign_after: 'MADE_UP',
+            made_up_on_after: '2027-03-24',
+            why: 'MADE_UP_AFTER_POSTING',
+            details: 'Watched the L3 teaching with the Teacher.',
+            grade_before: 'NOT_PASSED',
+            reason_before: 'L3 not made up.',
+            grade_after: 'PASSED',
+            reason_after: 'Every lesson done.',
+          },
+        ],
+      }),
+      student(2, 'Imelda Tolentino', 'NOT_PASSED', 'L7 not made up.', [C, C, C, C, C, 'ABSENT', C, C]),
+      student(5, 'Tomas Aquino', 'PASSED', 'Every lesson done.', [C, C, C, C, C, C, C, C]),
+    ],
+  };
+  await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}`, (route) => route.fulfill(json(grades)));
+  await page.route('**/api/v1/equipping/final-grades/grades/*/change-preview?*', (route) => {
+    const url = new URL(route.request().url());
+    const passes = url.searchParams.get('lesson') === '7' && url.searchParams.get('to') !== 'ABSENT';
+    return route.fulfill(
+      json({
+        lesson: Number(url.searchParams.get('lesson')),
+        sign_before: 'ABSENT',
+        made_up_on_before: null,
+        grade_before: 'NOT_PASSED',
+        reason_before: 'L7 not made up.',
+        grade_after: passes ? 'PASSED' : 'NOT_PASSED',
+        reason_after: passes ? 'Every lesson done.' : 'L7 not made up.',
+        joins_at_lesson_6_after: false,
+        training: passes ? 'FILES' : null,
+      }),
+    );
+  });
+  await page.route('**/api/v1/equipping/final-grades/grades/*/changes', (route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ grade: 'PASSED' }, 201));
+  });
+  return { sent };
+}
+
 /** The Register form's person read for Wilfredo, with two earlier tries or none (decision 0511). */
 export async function mockCandidate(page: Page, tries: boolean, joins = false): Promise<void> {
   await page.route('**/api/v1/equipping/people/3f1b7c6e-0000-4000-8000-00000000f002', (route) =>

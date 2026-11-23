@@ -436,6 +436,7 @@ export type AuditAction =
   | 'equipping_class.checked'
   | 'equipping_final_grade.posted'
   | 'equipping_final_grade.passed_later'
+  | 'equipping_final_grade.changed'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
@@ -1108,6 +1109,51 @@ export interface EquippingFinalGradesTable {
   passed_later_by: string | null;
 }
 
+/** A register sign as a grade change reads it (decision 0513). */
+export type GradeChangeSign = 'CAME' | 'ABSENT' | 'MADE_UP' | 'BEFORE_JOINING';
+
+/**
+ * A lesson of a posted class changed by the Admin with a reason, and the grade worked out again
+ * (decision 0513). Kept as written; the posted grade is never rewritten.
+ */
+export interface EquippingGradeChangesTable {
+  id: Generated<string>;
+  seq: Generated<string>;
+  final_grade_id: string;
+  lesson: number;
+  sign_before: GradeChangeSign;
+  made_up_on_before: string | null;
+  sign_after: Exclude<GradeChangeSign, 'BEFORE_JOINING'>;
+  made_up_on_after: string | null;
+  why: 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
+  details: string;
+  grade_before: 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
+  reason_before: string;
+  grade_after: 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
+  reason_after: string;
+  lessons_kept_after: number;
+  lessons_made_up_after: number;
+  joins_at_lesson_6_after: boolean;
+  changed_by: string;
+  changer_person_id: string | null;
+  changed_at: ServerTimestamp;
+}
+
+/** A view: each posted grade as it stands now, the latest change of it included (decision 0513). */
+export interface EquippingCurrentGradesView {
+  final_grade_id: string;
+  posting_id: string;
+  enrollment_id: string;
+  grade: 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
+  reason: string;
+  lessons_kept: number;
+  lessons_made_up: number;
+  joins_at_lesson_6: boolean;
+  passed_later_at: Date | null;
+  changed_at: Date | null;
+  changes: number;
+}
+
 /** A student enrolled in one season's Encounter weekend (decision 0507). */
 export interface EquippingEncounterEnrollmentsTable {
   id: Generated<string>;
@@ -1264,6 +1310,8 @@ export interface Database {
   equipping_class_checks: EquippingClassChecksTable;
   equipping_class_postings: EquippingClassPostingsTable;
   equipping_final_grades: EquippingFinalGradesTable;
+  equipping_grade_changes: EquippingGradeChangesTable;
+  equipping_current_grades: EquippingCurrentGradesView;
   equipping_lesson_date_changes: EquippingLessonDateChangesTable;
   equipping_class_corrections: EquippingClassCorrectionsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
