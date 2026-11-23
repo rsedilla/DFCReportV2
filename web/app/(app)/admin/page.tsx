@@ -435,7 +435,7 @@ function stateOf(row: AccountListRow): string {
 }
 
 /** What is set on the account, in a few words. */
-function detailsOf(row: AccountListRow): string {
+function detailsOf(row: AccountListRow, wholeChurch: boolean): string {
   if (row.status === 'PENDING_ACTIVATION') {
     // When the account was given, not when its latest email went: a resend is not recorded here.
     return `Given ${new Intl.DateTimeFormat('en-GB', {
@@ -451,7 +451,8 @@ function detailsOf(row: AccountListRow): string {
     row.full_view ? 'Full view' : null,
     row.approves_cells ? 'Approves Cells' : null,
     row.moves_people ? 'Moves people' : null,
-    row.coordinates_life_class ? 'Life Class Coordinator' : null,
+    // Not shown to a Network Admin (decision 0506).
+    wholeChurch && row.coordinates_life_class ? 'Life Class Coordinator' : null,
   ].filter((tick): tick is string => tick !== null);
   return ticks.length > 0 ? ticks.join(', ') : 'Recording only';
 }
@@ -593,7 +594,7 @@ function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
                     </td>
                     <td className="px-3 py-3">{row.roles.map(roleLabel).join(', ')}</td>
                     <td className="px-3 py-3">{stateOf(row)}</td>
-                    <td className="text-muted px-3 py-3">{detailsOf(row)}</td>
+                    <td className="text-muted px-3 py-3">{detailsOf(row, wholeChurch)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -612,7 +613,7 @@ function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
                   <p className="mt-2 text-sm">
                     {row.roles.map(roleLabel).join(', ')} · {stateOf(row)}
                   </p>
-                  <p className="text-muted text-sm">{detailsOf(row)}</p>
+                  <p className="text-muted text-sm">{detailsOf(row, wholeChurch)}</p>
                 </li>
               ))}
             </ul>

@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-22, the trigger being decision 0505: of 504 files, 503 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0505 each moved the first two and
+2026-11-22, the trigger being decision 0506: of 505 files, 504 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0506 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-22 and triggered by 0505, and was left stale by 0506 the same day. The one before that was dated
 2026-11-22 and triggered by 0504, and was left stale by 0505 the same day. The one before that was dated
 2026-11-20 and triggered by 0503, and was left stale by 0504 two days later. The one before that was dated
 2026-11-20 and triggered by 0502, and was left stale by 0503 the same day. The one before that was dated
@@ -1056,6 +1057,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-20 — [A lesson is dated weekly from the first, and the Teacher may change the date](docs/decisions/0503-a-lesson-is-dated-weekly-from-the-first-and-the-teacher-may-change-the-date.md)
 - 2026-11-22 — [A leader reads their people in the school through their People access](docs/decisions/0504-a-leader-reads-their-people-in-the-school-through-their-people-access.md)
 - 2026-11-22 — [A Guide's line names who missed the last two lessons and has not made either up](docs/decisions/0505-a-guides-line-names-who-missed-the-last-two-lessons-and-has-not-made-either-up.md)
+- 2026-11-22 — [A Network Admin is not shown Life Class Coordinator](docs/decisions/0506-a-network-admin-is-not-shown-life-class-coordinator.md)
 
 ### Open — awaiting a ruling
 
