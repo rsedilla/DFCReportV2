@@ -57,32 +57,60 @@ the change covers every student, as the Admin's check does (decision 0508).
 **9. A change made since the dialog opened is refused** `VERSION_CONFLICT`, the dialog sending how
 many changes it saw; one that changes nothing is refused `INVARIANT_VIOLATION`.
 
-## This step's readings, put to the owner
+## Settled by the owner, 2026-11-24
 
-These are refused, not decided. **The routes take the church as their target** for the Admin,
-where every other `equipping.class` route takes the actor (Section 7). Each is recorded as open in `CLAUDE.md`, and the refusal is the
-conservative arm, removable by a ruling without undoing anything written.
+The first build refused six cases rather than deciding them, each recorded as an open Stop
+Condition in `CLAUDE.md`, four raised while building and two by `architecture-guardian`'s review.
+The owner ruled on each on 2026-11-24, from worked examples with the conservative arm and the
+alternatives side by side. **The routes take the church as their target** for the Admin, where
+every other `equipping.class` route takes the actor (Section 7).
 
-- **A student posted *Not yet* stays *Not yet*, and nobody becomes it.** The owner's point 4
-  answer was that a *Not yet* may be changed on lessons 1 to 4 and 6 to 9. What it did not say is
-  what happens when such a change would make them *Not passed* (their enrollment is still open,
-  and they are on a later Encounter's list), or when a change would make a finished student *Not
-  yet* (whose enrollment has ended, which is never reopened). Both are refused, saying why, and a
-  *Not yet* who passed at a later Encounter keeps the grade they passed on.
-- **A lesson recorded in a class the student was in before, or kept from an earlier term, is not
-  changed here.** It stands as that class recorded it.
-- **A student who has joined a later class at Lesson 6 keeps the grade that let them**: a change
-  that would take *Joins a later class at Lesson 6* away is refused once a later enrollment carries
-  from it.
-- **A grade the register no longer gives is not changed.** The grade is worked out against the
-  Encounter as it stands now, and an Encounter recorded or corrected after posting, at any weekend
-  or through a merged record, would be folded into a lesson change unseen; whether a change works from the Encounter at posting or now is for the
-  owner, and until then any change of such a grade is refused, saying why.
-- **Nothing is changed once the person has registered for the level in a later term**: that term
-  rests on this grade, as a try (decision 0511), a fresh start or a carry at Lesson 6, and a
-  *Not passed* made *Passed* would leave them passed and sitting a repeat.
+**10. A change moves a student into or out of *Not yet* as posting would have** (owner,
+2026-11-24, "A, A, A"). The grade is what posting would have given with the corrected lesson:
 
-The last two were raised by `architecture-guardian`'s review of this step.
+- a *Not yet* whose change makes them *Not passed* becomes so, their enrollment ending
+  `COMPLETED` as posting ends every other *Not passed*, and they leave every later Encounter's
+  list;
+- a finished student whose change makes them *Not yet* becomes so, **their ended enrollment
+  reopened**, listed for the next Encounter and passing there as any *Not yet* does (decision
+  0509), a posted *Not passed* changed so no longer being a try (decision 0511); this is the one
+  place an ended enrollment is reopened;
+- one posted *Not yet* who passed at a later Encounter may be changed like anyone else, a change
+  making them *Not passed* withdrawing the Life Class that Encounter filed, as point 6 withdraws a
+  *Passed* changed away.
+
+**11. A lesson recorded in a class the student left this term is changed from the posted class**
+(owner, 2026-11-24, "2a A"). The mark is written in the earlier class's register under the earlier
+enrollment, the earlier one closed and kept, since only this grade rests on it, whether or not that
+class has been posted.
+
+**12. A lesson kept from an earlier term is changed only where lessons 1 to 4 stay done** (owner,
+2026-11-24, "2b C"). It counts toward two posted grades, the earlier term's that let the student
+join at Lesson 6 and this one. *Came* and *Made up* may be exchanged, and a make-up's day
+corrected, the mark written in the earlier term's register, neither grade's outcome moving; a
+change leaving any of lessons 1 to 4 not done is refused, saying that a join at Lesson 6 is not
+undone once the later class has graded it.
+
+**13. A change never takes *Joins a later class at Lesson 6* from one a later enrollment carries**
+(owner, 2026-11-24, "2c A"). It is refused while such an enrollment exists, the Registrar
+withdrawing them there first, the database refusing it besides.
+
+**14. A change works from the Encounter as it stands now, and shows it** (owner, 2026-11-24, "A, as
+it stands now"). An Encounter recorded or corrected since posting, at any weekend or through a
+merged record, is part of the grade a change works out, as it is of a *Not yet* who passed later.
+The dialog, the summary and the history each say *Encounter changed since posting*, with what it
+read at posting and what it reads now, so nothing is folded into a lesson change unseen.
+
+**15. Nothing is changed once the person has registered for the level in a later term** (owner,
+2026-11-24, "A"), until that registration is cancelled, the refusal saying so. A registration on a
+record merged into theirs is theirs (decision 0408), as tries are (decision 0511), and a change and
+a later registration saved at the same moment are taken one after the other, whichever lands second
+being refused, saying why (owner, 2026-11-24, "A").
+
+**16. A registration graded *Passed* or *Not passed* is not enrolled again** (owner, 2026-11-24,
+"A"). It is finished with its grade, in its term or any other; a person trying again registers
+again. A *Not yet* stays enrolled, as posting leaves them, and one reopened by point 10 is enrolled
+under the registration it always had.
 
 **Who is the Admin** is read as decision 0508 reads it, `equipping.class` at Whole Church, which
 only the Admin holds by default and the Registrar does not; whether "Admin" is a role or a
