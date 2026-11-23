@@ -243,4 +243,48 @@ describe('A student taking Life Class again (section 29, decision 0511)', () => 
     const res = await get(registrar, `equipping/people/${pablo.id}`).expect(200);
     expect((res.body as { earlier_tries: unknown[] }).earlier_tries).toHaveLength(1);
   });
+
+  it('counts neither a Passed nor a Not yet that passed at a later Encounter', async () => {
+    await posted(pablo, 1, 'Life Class A', 'PASSED', 'Every lesson done.');
+    await posted(
+      pablo,
+      2,
+      'Life Class B',
+      'NOT_YET',
+      'Encounter not attended. Passes after a later one.',
+    );
+    await db
+      .updateTable('equipping_final_grades')
+      .set({ passed_later_at: new Date(), passed_later_by: registrar.id })
+      .where('grade', '=', 'NOT_YET')
+      .execute();
+    await register(pablo, 3);
+    expect((await listFor(3))[0].try_number).toBe(1);
+  });
+
+  it('counts nobody else’s merged record', async () => {
+    const quintin = await createPerson(db, { firstName: 'Quintin', network: 'MENS' });
+    const duplicate = await createPerson(db, { firstName: 'Quintino', network: 'MENS' });
+    await posted(duplicate, 1, 'Life Class A', 'NOT_PASSED', 'More than three absences');
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: quintin.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+      .where('id', '=', duplicate.id)
+      .execute();
+    await register(pablo, 3);
+    expect((await listFor(3)).find((row) => row.person.id === pablo.id)?.try_number).toBe(1);
+  });
+
+  it('counts a merged-away record’s own row as the person’s try', async () => {
+    // Pablo failed term 1; his duplicate failed term 2 and was merged into him.
+    await posted(pablo, 1, 'Life Class A', 'NOT_PASSED', 'More than three absences');
+    const duplicate = await createPerson(db, { firstName: 'Pablito', network: 'MENS' });
+    await posted(duplicate, 2, 'Life Class B', 'NOT_PASSED', 'Missed three of lessons 1 to 4');
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: pablo.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+      .where('id', '=', duplicate.id)
+      .execute();
+    expect((await listFor(2)).find((row) => row.person.id === duplicate.id)?.try_number).toBe(2);
+  });
 });

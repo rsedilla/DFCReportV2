@@ -2038,10 +2038,12 @@ export class EquippingService {
     }
     const pairs = await this.people.mergedPairsWithin(this.db);
     const resolve = resolverOf(pairs);
-    const wanted = new Set(personIds.map((id) => canonicalId(id)));
+    // Each id asked about stands for the person kept: a record merged away counts the kept
+    // record's tries and every other record merged into it, as the kept record does.
+    const kept = new Set(personIds.map((id) => canonicalId(resolve(id))));
     const records = [
-      ...wanted,
-      ...pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index]))),
+      ...kept,
+      ...pairs.absorbed.filter((_, index) => kept.has(canonicalId(pairs.kept[index]))),
     ];
     const rows = await this.db
       .selectFrom('equipping_final_grades as g')
@@ -2067,6 +2069,13 @@ export class EquippingService {
         reason: row.reason,
       });
       result.set(key, list);
+    }
+    // Answered under every id asked about, a record merged away included.
+    for (const id of personIds) {
+      const list = result.get(canonicalId(resolve(id)));
+      if (list !== undefined) {
+        result.set(canonicalId(id), list);
+      }
     }
     return result;
   }
