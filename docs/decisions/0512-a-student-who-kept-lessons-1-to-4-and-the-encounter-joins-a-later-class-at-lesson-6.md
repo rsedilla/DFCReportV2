@@ -1,6 +1,6 @@
-# 2026-11-24 — A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6
+# 2026-11-23 — A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6
 
-Owner rulings of 2026-11-24, made from screenshots of the *Register* form, *Enrollment* and the
+Owner rulings of 2026-11-23, made from screenshots of the *Register* form, *Enrollment* and the
 Teacher's register, today's and proposed side by side ("Yes, as recommended"), after a look at
 how universities treat work already done: advanced standing keeps it and does not have it taken
 again, and an incomplete is finished by doing only what is left. Section 29 already said that a

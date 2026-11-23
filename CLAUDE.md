@@ -248,10 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-24, the trigger being decision 0512: of 511 files, 510 carry `Previous:`, 181 carry
+2026-11-23, the trigger being decision 0512: of 511 files, 510 carry `Previous:`, 181 carry
 `Next:`, and 180 carry both on one line. 0213 through 0512 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
-2026-11-23 and triggered by 0511, and was left stale by 0512 the next day. The one before that was dated
+2026-11-23 and triggered by 0511, and was left stale by 0512 the same day. The one before that was dated
 2026-11-23 and triggered by 0510, and was left stale by 0511 the same day. The one before that was dated
 2026-11-22 and triggered by 0509, and was left stale by 0510 the next day. The one before that was dated
 2026-11-22 and triggered by 0508, and was left stale by 0509 the same day. The one before that was dated
@@ -1069,7 +1069,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-22 — [Training's graduations come from the school, and only the Admin ticks the Encounter and Life Class](docs/decisions/0509-training-graduations-come-from-the-school-and-only-the-admin-ticks-the-encounter-and-life-class.md)
 - 2026-11-23 — [A class is corrected until its first lesson is saved, and cancelled while it has no students](docs/decisions/0510-a-class-is-corrected-until-its-first-lesson-is-saved-and-cancelled-while-it-has-no-students.md)
 - 2026-11-23 — [A student taking Life Class again is shown as a 2nd try, with no limit](docs/decisions/0511-a-student-taking-life-class-again-is-shown-as-a-2nd-try-with-no-limit.md)
-- 2026-11-24 — [A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6](docs/decisions/0512-a-student-who-kept-lessons-1-to-4-and-the-encounter-joins-a-later-class-at-lesson-6.md)
+- 2026-11-23 — [A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6](docs/decisions/0512-a-student-who-kept-lessons-1-to-4-and-the-encounter-joins-a-later-class-at-lesson-6.md)
 
 ### Open — awaiting a ruling
 
