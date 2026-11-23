@@ -1191,11 +1191,16 @@ export class EquippingAttendanceService {
         'place',
         'first_lesson_on',
         'teacher_person_id',
+        'cancelled_at',
       ])
       .where('id', '=', classId)
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
+    }
+    // A cancelled class has no register to open (decision 0510); an old link says so.
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
     return {
       ...cls,

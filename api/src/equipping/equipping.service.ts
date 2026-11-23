@@ -619,6 +619,8 @@ export class EquippingService {
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
     }
+    // Reached only by an old link: Enrollment lists no cancelled class (decision 0510).
+    this.assertNotCancelled(cls);
 
     const enrolled = await this.db
       .selectFrom('equipping_enrollments as e')
@@ -1100,7 +1102,7 @@ export class EquippingService {
       // so each waits behind this or this behind it, and the reads below see what it committed.
       const cls = await trx
         .selectFrom('equipping_classes')
-        .select(['id', 'name', 'cancelled_at'])
+        .select(['id', 'name', 'first_lesson_on', 'cancelled_at'])
         .where('id', '=', classId)
         .forNoKeyUpdate()
         .executeTakeFirst();
@@ -1142,8 +1144,13 @@ export class EquippingService {
         action: 'equipping_class.cancelled',
         targetType: 'equipping_class',
         targetId: classId,
-        before: { status: 'OPEN' },
-        after: { status: 'CANCELLED', reason: reason.trim() },
+        // The status *Classes* showed it under, as `coordinatorClasses` derives it.
+        before: {
+          class_name: cls.name,
+          status:
+            String(cls.first_lesson_on) > (await this.manilaToday()) ? 'NOT_STARTED' : 'RUNNING',
+        },
+        after: { class_name: cls.name, status: 'CANCELLED', reason: reason.trim() },
       });
 
       const response = {

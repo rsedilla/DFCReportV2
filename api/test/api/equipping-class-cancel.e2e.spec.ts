@@ -290,13 +290,19 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
       expect(row.cancelled_at).not.toBeNull();
       const audit = await db
         .selectFrom('audit_log')
-        .select(['target_id', 'after'])
+        .select(['target_id', 'before', 'after'])
         .where('action', '=', 'equipping_class.cancelled')
         .execute();
+      // The status *Classes* showed it under before, and the class's name (section 21).
       expect(audit).toEqual([
         {
           target_id: id,
-          after: { status: 'CANCELLED', reason: 'The Teacher moved to another Network' },
+          before: { class_name: 'Life Class A', status: 'NOT_STARTED' },
+          after: {
+            class_name: 'Life Class A',
+            status: 'CANCELLED',
+            reason: 'The Teacher moved to another Network',
+          },
         },
       ]);
 
@@ -400,6 +406,15 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
         registration_ids: [registration.id],
       }).expect(409);
       expect(code(enrolling)).toBe('INVARIANT_VIOLATION');
+
+      // An old link to its Enrollment detail or its register says it was cancelled.
+      for (const [as, path] of [
+        [registrar, `equipping/classes/${id}`],
+        [admin, `equipping/classes/${id}/attendance`],
+      ] as const) {
+        const stale = await get(as, path).expect(409);
+        expect(code(stale)).toBe('INVARIANT_VIOLATION');
+      }
 
       await expect(
         sql`UPDATE equipping_classes SET name = 'Renamed' WHERE id = ${id}`.execute(db),
