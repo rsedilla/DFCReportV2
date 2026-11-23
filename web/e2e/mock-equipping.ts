@@ -685,3 +685,92 @@ export const ENCOUNTER_IDS = {
   tomas: '3f1b7c6e-0000-4000-8000-000000007004',
   jose: '3f1b7c6e-0000-4000-8000-000000005001',
 };
+
+/**
+ * Final grades (decision 0508): three classes of the term, and Life Class A's grades in `phase`,
+ * Ramil being the Coordinator's own disciple. Every name is invented.
+ */
+export async function mockFinalGrades(
+  page: Page,
+  phase: 'WAITING_COORDINATOR' | 'WAITING_ADMIN' | 'READY' | 'POSTED' = 'READY',
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const status = (p: string) => ({
+    phase: p,
+    missing_lessons: p === 'NOT_READY' ? [8, 9] : [],
+    counts: { passed: 2, not_passed: 2, not_yet: 1 },
+    coordinator_check:
+      p === 'READY' || p === 'POSTED' || p === 'WAITING_ADMIN'
+        ? { by: 'Lito Ramos', at: '2027-03-20T02:00:00.000Z' }
+        : null,
+    admin_check: p === 'READY' || p === 'POSTED' ? { by: 'Ada Reyes', at: '2027-03-21T02:00:00.000Z' } : null,
+    disciples_for_admin: 1,
+    posted: p === 'POSTED' ? { at: '2027-03-22T02:00:00.000Z' } : null,
+  });
+  const student = (
+    n: number,
+    name: string,
+    grade: string,
+    reason: string,
+    lessons: string[],
+    kept: number,
+    madeUp: number,
+    disciple = false,
+  ) => ({
+    enrollment_id: id(7100 + n),
+    person: { id: id(8100 + n), full_name: name },
+    grade,
+    reason,
+    lessons_kept: kept,
+    lessons_made_up: madeUp,
+    lessons,
+    your_disciple: disciple,
+  });
+  const C = 'CAME';
+  const grades = {
+    class: { id: CLASS_ID, name: 'Life Class A', day_of_week: 2, time_of_day: '19:00', place: 'Room 2' },
+    status: status(phase),
+    may_check: phase !== 'POSTED',
+    checks_as: 'COORDINATOR',
+    fingerprint: 'a'.repeat(64),
+    students: [
+      student(1, 'Efren Quiambao', 'PASSED', 'Every lesson done.', [C, C, 'MADE_UP', C, C, C, C, C, C], 9, 1),
+      student(2, 'Imelda Tolentino', 'NOT_PASSED', 'L7 not made up.', [C, C, C, C, C, C, 'ABSENT', C, C], 8, 0),
+      student(3, 'Nestor Villamor', 'NOT_YET', 'Encounter not attended. Passes after a later one.', [C, C, C, C, 'ABSENT', C, C, C, C], 8, 0),
+      student(
+        4,
+        'Ramil Soriano',
+        'NOT_PASSED',
+        '4 absences, over the 3 allowed. Joins a later class at lesson 6.',
+        [C, 'MADE_UP', C, C, C, 'MADE_UP', 'MADE_UP', 'MADE_UP', C],
+        9,
+        4,
+        true,
+      ),
+      student(5, 'Tomas Aquino', 'PASSED', 'Every lesson done.', [C, C, C, C, C, C, C, C, C], 9, 0),
+    ],
+  };
+  await page.route('**/api/v1/equipping/final-grades?*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          { id: CLASS_ID, name: 'Life Class A', day_of_week: 2, time_of_day: '19:00', status: status(phase) },
+          { id: id(9202), name: 'Life Class B', day_of_week: 4, time_of_day: '19:00', status: status('WAITING_COORDINATOR') },
+          { id: id(9203), name: 'Life Class C', day_of_week: 6, time_of_day: '15:00', status: status('POSTED') },
+        ],
+      }),
+    ),
+  );
+  await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}`, (route) => route.fulfill(json(grades)));
+  await page.route(`**/api/v1/equipping/coordinate/classes/${CLASS_ID}/grades`, (route) =>
+    route.fulfill(json(grades)),
+  );
+  const record = (route: import('@playwright/test').Route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }));
+  };
+  await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}/post`, record);
+  await page.route(`**/api/v1/equipping/coordinate/classes/${CLASS_ID}/check`, record);
+  return { sent };
+}
