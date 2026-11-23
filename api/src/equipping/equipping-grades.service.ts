@@ -160,6 +160,13 @@ export class EquippingGradesService {
           standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
         )
       : new Map<string, Record<string, unknown>[]>();
+    const changes = options.history && standing.posting !== null && admin;
+    const registeredLater = changes
+      ? await this.registeredLaterOf(
+          this.db,
+          standing.students.map((s) => s.enrollment_id),
+        )
+      : new Set<string>();
     return {
       class: standing.class,
       status: await this.statusOf(standing),
@@ -167,7 +174,7 @@ export class EquippingGradesService {
       checks_as: admin ? 'ADMIN' : 'COORDINATOR',
       // **Only the Admin changes a lesson after posting** (decision 0513), read as 0508 reads
       // the Admin: `equipping.class` at Whole Church.
-      may_change: options.history && standing.posting !== null && admin,
+      may_change: changes,
       // What *Mark as checked* sends back, so a register changed since it was read is refused.
       fingerprint: standing.fingerprint,
       students: standing.students
@@ -180,16 +187,16 @@ export class EquippingGradesService {
           lessons_made_up: s.lessons_made_up,
           lessons: s.signs,
           your_disciple: mine(s.person_id),
-          ...(s.posted === null
+          // The Coordinator's read carries none of it (decision 0513).
+          ...(s.posted === null || !options.history
             ? {}
             : {
                 final_grade_id: s.posted.final_grade_id,
                 changes_seen: s.posted.changes,
                 // The lessons a change may reach, each as the register reads it now.
-                changeable:
-                  options.history && standing.posting !== null && admin
-                    ? changeableOf(s)
-                    : { lessons: [], why: null },
+                changeable: changes
+                  ? changeableOf(s, registeredLater.has(canonicalId(s.enrollment_id)))
+                  : { lessons: [], why: null },
                 history: history.get(s.posted.final_grade_id) ?? [],
               }),
         }))
@@ -613,45 +620,8 @@ export class EquippingGradesService {
     if (refusal !== null) {
       throw new InvariantViolationError(refusal, { field: 'lesson' });
     }
-    // **The grade must still be the one its register gives** (open in `CLAUDE.md`): an Encounter
-    // corrected since posting would otherwise be folded into a lesson change unseen, so which
-    // Encounter a change works from is put to the owner, and nothing is changed meanwhile.
-    const now = gradeOf(student.register, student.encounter);
-    if (now.grade !== student.grade || now.reason !== student.reason) {
-      throw new InvariantViolationError(
-        'Their record has changed since this grade was set (their Encounter, most likely), so no lesson is changed here until that is settled.',
-        { field: 'lesson' },
-      );
-    }
-    // **Not once they have signed up for the level again** (open in `CLAUDE.md`): a later term's
-    // registration rests on this grade, as a try (decision 0511) or as a fresh start.
-    const graded = await executor
-      .selectFrom('equipping_enrollments as e')
-      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-      .select(['r.person_id', 'r.level', 'r.term_year', 'r.term_number'])
-      .where('e.id', '=', student.enrollment_id)
-      .executeTakeFirstOrThrow();
-    const later = await executor
-      .selectFrom('equipping_registrations')
-      .select('id')
-      .where('person_id', '=', graded.person_id)
-      .where('level', '=', graded.level)
-      .where('cancelled_at', 'is', null)
-      .where((eb) =>
-        eb.or([
-          eb('term_year', '>', graded.term_year),
-          eb.and([
-            eb('term_year', '=', graded.term_year),
-            eb('term_number', '>', graded.term_number),
-          ]),
-        ]),
-      )
-      .executeTakeFirst();
-    if (later !== undefined) {
-      throw new InvariantViolationError(
-        'They have registered for this level in a later term, which rests on this grade, so it is not changed here.',
-        { field: 'lesson' },
-      );
+    if ((await this.registeredLaterOf(executor, [student.enrollment_id])).size > 0) {
+      throw new InvariantViolationError(LATER_TERM, { field: 'lesson' });
     }
     const entry = student.register.get(input.lesson)!;
     const signBefore = signOf(entry);
@@ -692,19 +662,8 @@ export class EquippingGradesService {
         { field: 'to', grade_after: after.grade },
       );
     }
-    if (student.joins_at_lesson_6 && !after.joins_at_lesson_6) {
-      const carrier = await executor
-        .selectFrom('equipping_enrollments')
-        .select('id')
-        .where('carried_from_enrollment_id', '=', student.enrollment_id)
-        .executeTakeFirst();
-      if (carrier !== undefined) {
-        throw new InvariantViolationError(
-          'They have joined a later class at Lesson 6 on this grade, which keeps it as it is.',
-          { field: 'to' },
-        );
-      }
-    }
+    // One who has joined a later class at Lesson 6 has registered in a later term, refused above;
+    // the database keeps that grade's flag besides (`equipping_grade_change_carried`).
     const enrollment = await executor
       .selectFrom('equipping_enrollments')
       .select(['registration_id', 'started_at'])
@@ -769,6 +728,43 @@ export class EquippingGradesService {
         .values({ ...where, made_up_on: body.made_up_on!, recorded_by: actor.accountId })
         .execute();
     }
+  }
+
+  /**
+   * **Not once they have signed up for the level again** (open in `CLAUDE.md`): of these graded
+   * enrollments, those whose person holds a registration, not cancelled, at the same level in a
+   * later term, which rests on the grade as a try (decision 0511), a fresh start or a carry at
+   * Lesson 6 (decision 0512).
+   */
+  private async registeredLaterOf(
+    executor: Db | Transaction<Database>,
+    enrollmentIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (enrollmentIds.length === 0) {
+      return new Set();
+    }
+    const rows = await executor
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+      .innerJoin('equipping_registrations as later', (join) =>
+        join
+          .onRef('later.person_id', '=', 'r.person_id')
+          .onRef('later.level', '=', 'r.level')
+          .on('later.cancelled_at', 'is', null)
+          .on((eb) =>
+            eb.or([
+              eb('later.term_year', '>', eb.ref('r.term_year')),
+              eb.and([
+                eb('later.term_year', '=', eb.ref('r.term_year')),
+                eb('later.term_number', '>', eb.ref('r.term_number')),
+              ]),
+            ]),
+          ),
+      )
+      .select('e.id')
+      .where('e.id', 'in', [...enrollmentIds])
+      .execute();
+    return new Set(rows.map((row) => canonicalId(row.id)));
   }
 
   /** Each grade's changes, oldest first, with who made them (decision 0513). */
@@ -1106,6 +1102,9 @@ function gradeOf(
   return { ...base, grade: 'PASSED', reason: 'Every lesson done.' };
 }
 
+const LATER_TERM =
+  'They have registered for this level in a later term, which rests on this grade, so it is not changed here.';
+
 /** The student a final grade belongs to, within its posted class's standing. */
 function studentOfGrade<T extends StudentGrade & PostedFacts>(
   students: readonly T[],
@@ -1133,8 +1132,9 @@ function signOf(entry: RegisterEntry): GradeChangeSign {
  * before, or kept from an earlier term, stands as that class recorded it.
  */
 function refusalOf(student: StudentGrade & PostedFacts, lesson: number): string | null {
-  if (student.posted?.passed_later) {
-    return 'They passed at a later Encounter, and keep the grade they passed on.';
+  const whole = wholeRefusalOf(student);
+  if (whole !== null) {
+    return whole;
   }
   const entry = student.register.get(lesson);
   if (entry === undefined) {
@@ -1149,10 +1149,33 @@ function refusalOf(student: StudentGrade & PostedFacts, lesson: number): string 
   return null;
 }
 
-/** The lessons a change may reach, for the dialog's list, and why there are none where so. */
-function changeableOf(student: StudentGrade & PostedFacts) {
+/** Why no lesson of this grade is changed, whichever lesson, or null. */
+function wholeRefusalOf(student: StudentGrade & PostedFacts): string | null {
   if (student.posted?.passed_later) {
-    return { lessons: [], why: refusalOf(student, CLASS_LESSONS[0]) };
+    return 'They passed at a later Encounter, and keep the grade they passed on.';
+  }
+  // **The grade must still be the one its register gives** (open in `CLAUDE.md`): an Encounter
+  // corrected since posting would otherwise be folded into a lesson change unseen. The lessons
+  // kept count the Encounter, so a correction that leaves the grade's words alone still shows.
+  const now = gradeOf(student.register, student.encounter);
+  if (
+    now.grade !== student.grade ||
+    now.reason !== student.reason ||
+    now.lessons_kept !== student.lessons_kept
+  ) {
+    return 'Their record no longer gives this grade (an Encounter corrected since posting, or a grade posted before lessons were counted as now), so no lesson is changed here until that is settled.';
+  }
+  return null;
+}
+
+/** The lessons a change may reach, for the dialog's list, and why there are none where so. */
+function changeableOf(student: StudentGrade & PostedFacts, registeredLater: boolean) {
+  if (registeredLater) {
+    return { lessons: [], why: LATER_TERM };
+  }
+  const whole = wholeRefusalOf(student);
+  if (whole !== null) {
+    return { lessons: [], why: whole };
   }
   const lessons = CLASS_LESSONS.flatMap((lesson) => {
     if (refusalOf(student, lesson) !== null) {

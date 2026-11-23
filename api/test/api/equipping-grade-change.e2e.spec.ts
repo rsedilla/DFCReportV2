@@ -520,6 +520,56 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     ).expect(409);
     // Registered for the level in a later term, which rests on this grade: refused first.
     expect(refused.body.error.message).toContain('later term');
+    expect((await studentOf('Eli')).student.changeable.why).toContain('later term');
+    // The database keeps the flag of a grade a later class carries from, whatever the route.
+    const current = await db
+      .selectFrom('equipping_current_grades')
+      .select(['grade', 'reason'])
+      .where('final_grade_id', '=', eli.final_grade_id)
+      .executeTakeFirstOrThrow();
+    await expect(
+      db
+        .insertInto('equipping_grade_changes')
+        .values({
+          final_grade_id: eli.final_grade_id,
+          lesson: 7,
+          sign_before: 'MADE_UP',
+          made_up_on_before: firstLesson,
+          sign_after: 'CAME',
+          made_up_on_after: null,
+          why: 'RECORDED_WRONGLY',
+          details: 'He came to L7.',
+          grade_before: current.grade,
+          reason_before: current.reason,
+          grade_after: 'PASSED',
+          reason_after: 'Every lesson done.',
+          lessons_kept_after: 9,
+          lessons_made_up_after: 3,
+          joins_at_lesson_6_after: false,
+          changed_by: admin.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/joined a later class at Lesson 6/);
+  });
+
+  it('refuses a change once the person has registered for the level in a later term', async () => {
+    await posted();
+    await db
+      .insertInto('equipping_registrations')
+      .values({
+        level: 'LIFE_CLASS',
+        term_year: 2027,
+        term_number: 1,
+        person_id: personOf.get('Carlo')!,
+        bible_confirmed: true,
+        manual_confirmed: true,
+        registered_by: registrar.id,
+      })
+      .execute();
+    const { student: carlo } = await studentOf('Carlo');
+    expect(carlo.changeable.lessons).toEqual([]);
+    const refused = await change(admin, carlo, { lesson: 7, to: 'CAME' }).expect(409);
+    expect(refused.body.error.message).toContain('later term');
   });
 
   it('gives the history to the Registrar and the Admin, not the Coordinator', async () => {
@@ -531,7 +581,9 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       await get(coordinator, `equipping/coordinate/classes/${classId}/grades`).expect(200)
     ).body as { may_change: boolean; students: Student[] };
     expect(coordinatorRead.may_change).toBe(false);
-    expect(coordinatorRead.students.find(first('Carlo'))!.history).toEqual([]);
+    const coordinatorCarlo = coordinatorRead.students.find(first('Carlo'))!;
+    expect(coordinatorCarlo.history).toBeUndefined();
+    expect(coordinatorCarlo.changes_seen).toBeUndefined();
   });
 
   it('changes nothing for one whose Encounter was corrected after posting', async () => {
@@ -562,6 +614,42 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
         .execute();
     });
     const refused = await change(admin, ben, { lesson: 3, to: 'ABSENT' }).expect(409);
+    expect(refused.body.error.message).toContain('Encounter');
+  });
+
+  it('changes nothing for one whose Encounter correction left the grade’s words alone', async () => {
+    await posted();
+    // Carlo is posted Not passed, L7 not made up, his Encounter attended. Corrected to not
+    // attended, the register still says L7 not made up; only the lessons kept move.
+    const row = await db
+      .selectFrom('equipping_encounter_attendance as a')
+      .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
+      .select(['a.id', 'a.encounter_enrollment_id'])
+      .where('e.person_id', '=', personOf.get('Carlo')!)
+      .where('a.superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('equipping_encounter_attendance')
+        .set({ superseded_at: new Date(), superseded_by: registrar.id })
+        .where('id', '=', row.id)
+        .execute();
+      await trx
+        .insertInto('equipping_encounter_attendance')
+        .values({
+          encounter_enrollment_id: row.encounter_enrollment_id,
+          came: false,
+          recorded_by: registrar.id,
+        })
+        .execute();
+    });
+    const { student: carlo } = await studentOf('Carlo');
+    expect(carlo.changeable.lessons).toEqual([]);
+    const refused = await change(admin, carlo, {
+      lesson: 7,
+      to: 'MADE_UP',
+      made_up_on: await manilaToday(),
+    }).expect(409);
     expect(refused.body.error.message).toContain('Encounter');
   });
 

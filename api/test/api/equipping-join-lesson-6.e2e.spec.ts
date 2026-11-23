@@ -597,7 +597,6 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
   });
 
   it('still admits a make-up in a posted class for somebody nobody carries from', async () => {
-    // A moved student's make-up of a lesson missed in a class since posted is not 0512's rule.
     const kept = await keptInB(pablo, false);
     const lesson3 = (
       await db
