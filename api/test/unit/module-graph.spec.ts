@@ -16,6 +16,7 @@ import { PersonViewsService } from '../../src/people/person-views.service';
 import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { NetworksService } from '../../src/networks/networks.service';
+import { TrainingService } from '../../src/training/training.service';
 
 /**
  * The application's dependency graph resolves (SKILL.md section 2).
@@ -127,6 +128,8 @@ describe('the application module graph (section 2)', () => {
         'accounts',
       ],
       ['ABSENT_PEOPLE_PORT', moduleRef.get(PeopleController, { strict: false }), 'absent'],
+      // Decision 0509's: the school's graduation takes the place of a tick the Admin withdraws.
+      ['SCHOOL_EVIDENCE_PORT', moduleRef.get(TrainingService, { strict: false }), 'schoolEvidence'],
       // Decision 0408's: a record merged away resolves its scope through the record kept.
       [
         'MERGED_PERSONS_PORT',

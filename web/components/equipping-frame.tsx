@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 const STEPS = [
   { href: '/equipping/registration', label: 'Registration' },
   { href: '/equipping/enrollment', label: 'Enrollment' },
+  { href: '/equipping/encounter', label: 'Encounter' },
+  { href: '/equipping/final-grades', label: 'Final Grades' },
   { href: '/equipping/classes', label: 'Classes' },
 ] as const;
 

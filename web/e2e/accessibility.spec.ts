@@ -41,6 +41,8 @@ import {
   mockClassGuides,
   mockCoordinatedClasses,
   mockRegistrar,
+  mockEncounter,
+  mockFinalGrades,
   mockEquipping,
   mockRegistrationSearch,
   mockTeacher,
@@ -1565,6 +1567,73 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: /^Ready to enroll/ })).toBeVisible();
     },
   },
+  // Final grades (decision 0508): the Registrar's page, its posting dialog, and a class's grades
+  // as its Coordinator checks them.
+  {
+    name: 'equipping final grades',
+    route: '/equipping/final-grades',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockFinalGrades(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      // A table from `lg` and a card each below it, so the button is what every width shows.
+      await expect(page.getByRole('button', { name: 'Post Life Class A…' })).toBeVisible();
+    },
+  },
+  {
+    name: 'equipping final grades, posting',
+    route: '/equipping/final-grades',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockFinalGrades(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Post Life Class A…' }).click();
+      await expect(page.getByRole('dialog', { name: 'Post Life Class A?' })).toBeVisible();
+    },
+  },
+  {
+    name: "equipping classes, a class's grades",
+    route: `/equipping/classes/${ATTENDANCE_IDS.classId}/grades`,
+    pattern: '/equipping/classes/[id]/grades',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCoordinator(page);
+      await mockFinalGrades(page, 'WAITING_COORDINATOR');
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Mark as checked' })).toBeVisible();
+    },
+  },
+  // The Encounter (decision 0507): before the weekend, and from its first day.
+  ...(
+    [
+      {
+        name: 'equipping encounter',
+        phase: 'ENROLLING',
+        heading: /^Cleared/,
+      },
+      {
+        name: 'equipping encounter, who came',
+        phase: 'RECORDING',
+        heading: /^Who came/,
+      },
+    ] as const
+  ).map((state) => ({
+    name: state.name,
+    route: '/equipping/encounter',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRegistrar(page);
+      await mockEncounter(page, state.phase);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: state.heading })).toBeVisible();
+    },
+  })),
   {
     // The Coordinator's Classes (decision 0501): a table from `lg`, a card each below it.
     name: 'equipping classes',
@@ -2504,6 +2573,23 @@ const TARGET_SWEEP = [
     registrar: true,
   },
   {
+    // Final Grades: the term, a button each for three classes, four filters and Post: **nine**.
+    name: 'equipping final grades',
+    route: '/equipping/final-grades',
+    settle: 'Post Life Class A…',
+    minimum: 9,
+    registrar: true,
+  },
+  {
+    // The Encounter before its weekend: Men's and Women's, the season, a tick for each of the
+    // four cleared and Enroll: **eight**.
+    name: 'equipping encounter',
+    route: '/equipping/encounter',
+    settle: 'Enroll 4 in the Men’s Encounter',
+    minimum: 8,
+    registrar: true,
+  },
+  {
     // In place of every screen until the notice is ticked (decision 0496): the box, the
     // Privacy Notice link, Continue and Sign out: **four**. Last, because its `/auth/me` stays.
     // Settled on Continue, not Sign out, which My Account has too.
@@ -2541,6 +2627,24 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
     why:
       'The measured "equipping teach, a class" read as a Guide: the same lesson buttons and no ' +
       'other control, the missed-twice line and the register being read only.',
+  },
+  {
+    name: 'equipping final grades, posting',
+    why:
+      'Opens the posting dialog over the measured "equipping final grades". Its controls are two ' +
+      'Buttons in DialogActions, the primitives measured on every screen.',
+  },
+  {
+    name: "equipping classes, a class's grades",
+    why:
+      'The grades panel of the measured "equipping final grades" for a Coordinator: the same ' +
+      'filters, a text link and one Button, each measured there or on every screen.',
+  },
+  {
+    name: 'equipping encounter, who came',
+    why:
+      'The measured "equipping encounter" from the weekend’s first day: the same switch and ' +
+      'season select, a tick box a student and one Button, each measured there.',
   },
   {
     name: 'equipping teach, recording a make-up',
@@ -2998,6 +3102,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     if ('registrar' in entry && entry.registrar) {
       await mockRegistrar(page);
       await mockEquipping(page);
+      await mockEncounter(page);
+      await mockFinalGrades(page);
     }
     if ('privacyUnread' in entry && entry.privacyUnread) {
       await mockPrivacyNoticeUnread(page);

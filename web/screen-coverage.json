@@ -619,6 +619,38 @@
       "screen": "web/app/(app)/equipping/enrollment/page.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/encounter",
+      "screen": "web/app/(app)/equipping/encounter/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/encounter/enrollments",
+      "screen": "web/app/(app)/equipping/encounter/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/encounter/attendance",
+      "screen": "web/app/(app)/equipping/encounter/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/final-grades",
+      "screen": "web/app/(app)/equipping/final-grades/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/final-grades/classes/:id",
+      "screen": "web/app/(app)/equipping/final-grades/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/final-grades/classes/:id/post",
+      "screen": "web/app/(app)/equipping/final-grades/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/classes/:id/grades",
+      "screen": "web/app/(app)/equipping/classes/[id]/grades/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/coordinate/classes/:id/check",
+      "screen": "web/app/(app)/equipping/classes/[id]/grades/page.tsx"
+    },
+    {
       "route": "GET /api/v1/conquest/counts",
       "reason": "Conquest’s four count cards (section 27, decision 0407).",
       "screen": "web/app/(app)/conquest/page.tsx"
