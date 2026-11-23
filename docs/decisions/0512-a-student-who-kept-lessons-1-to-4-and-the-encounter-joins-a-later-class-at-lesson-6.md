@@ -8,8 +8,11 @@ student over three absences after the Encounter keeps lessons 1 to 4 and the Enc
 later class at Lesson 6 (decision 0508), and named it not built. This settles how.
 
 **1. DREAMS works out who joins at Lesson 6.** A posted grade of *Not passed* for more than three
-absences, with at most two of lessons 1 to 4 missed and the Encounter attended, is the grade that
-already reads *Joins a later class at lesson 6* (decision 0508). It is now also recorded on the
+absences, with at most two of lessons 1 to 4 missed, **every one of lessons 1 to 4 attended or made
+up** (owner, 2026-11-23, on a Stop Condition `architecture-guardian` raised), and the Encounter
+attended, is the grade that reads *Joins a later class at lesson 6* (decision 0508); one with a
+lesson of 1 to 4 neither attended nor made up repeats Life Class, so nothing is owed from the
+earlier class. It is now also recorded on the
 grade as `joins_at_lesson_6`, so nothing reads it from the words. A person whose latest posted
 grade at the level carries it joins at Lesson 6 when next enrolled. Nobody ticks it.
 
@@ -27,9 +30,10 @@ take the class as anybody does.
 **4. No time limit.** The kept lessons count in any later term, as tries have no limit (decision
 0511).
 
-**5. What carries, and how it reads.** Lessons 1 to 4 are read from the class where they were
-kept, marks and make-ups as that class recorded them, and the Encounter from the person's
-attendance, which is already the person's. On the Teacher's register the student's row reads
+**5. What carries, and how it reads.** Lessons 1 to 4 are read from the term where they were
+kept, marks and make-ups as its classes recorded them, a class they left in that term by a move
+included, and the Encounter from the person's attendance, a record merged into theirs included
+(decision 0408). On the Teacher's register the student's row reads
 *Joins at Lesson 6 · L1 to L4 and ENC kept from* that class and term, the kept lessons counted;
 the student is not on the tick list for lessons 1 to 4, and an unticked lesson writes nothing for
 them, as for a moved student (decision 0503). They owe no make-up for lessons 1 to 4 and are not
@@ -42,11 +46,21 @@ left.
 
 **7. Who**: the Registrar and the Admin, under `equipping.manage`, as every enrollment.
 
+**8. Kept absences count toward the three** (owner, 2026-11-23, on a Stop Condition the same
+review raised): Section 29's *at most three absences in all* runs across both classes, so a
+student with two absences in lessons 1 to 4, made up, may miss one of lessons 6 to 9.
+
+**9. A grade posted before this was built carries too** (owner, 2026-11-23, on a Stop Condition the
+same review raised): a grade already posted whose reason reads *Joins a later class at lesson 6.*
+is given the flag its words carry, by the migration, the grade itself unchanged.
+
 Built in migration `0058_equipping_join_lesson_6.sql` (`equipping_final_grades.joins_at_lesson_6`;
 `equipping_enrollments.carried_from_enrollment_id`, naming the enrollment whose lessons 1 to 4 are
 kept, with a trigger holding point 2's saved-lesson half and that the kept enrollment is the
 same person's, at the same level, in an earlier term, posted as joining at Lesson 6, and that it
-never changes), the enrollment and move routes, the class and person reads, the register, and
+never changes; a trigger on `equipping_marks` and `equipping_make_ups` refusing one of lessons 1
+to 4 for such an enrollment; and point 9's flag set on grades already posted), the enrollment and
+move routes, the class and person reads, the register, and
 the three screens. `SKILL.md` Section 29 carries it.
 
 Previous: [2026-11-23 — A student taking Life Class again is shown as a 2nd try, with no limit](0511-a-student-taking-life-class-again-is-shown-as-a-2nd-try-with-no-limit.md)

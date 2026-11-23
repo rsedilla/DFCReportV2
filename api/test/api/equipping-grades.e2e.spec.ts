@@ -317,6 +317,23 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     });
   });
 
+  it('joins at Lesson 6 only with lessons 1 to 4 all done (decision 0512)', async () => {
+    // Eli as in the term above, but lesson 1 never made up: he repeats Life Class.
+    await lesson(1, ['Eli']);
+    await lesson(2, ['Eli'], ['Eli']);
+    await lesson(3);
+    await lesson(4);
+    await lesson(6, ['Eli'], ['Eli']);
+    await lesson(7, ['Eli'], ['Eli']);
+    await lesson(8);
+    await lesson(9);
+    await attended('Eli');
+    expect((await read()).students.find(first('Eli'))).toMatchObject({
+      grade: 'NOT_PASSED',
+      reason: '4 absences, over the 3 allowed. Repeats Life Class.',
+    });
+  });
+
   it('posts a checked class once, ending the finished enrollments and keeping a Not yet', async () => {
     await term();
     await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(409);
@@ -335,6 +352,14 @@ describe('Final grades (section 29, decisions 0501 and 0508)', () => {
     expect(reasonOf.get(enrollmentOf.get('Ben')!)).toBe('COMPLETED');
     expect(reasonOf.get(enrollmentOf.get('Carlo')!)).toBe('COMPLETED');
     expect(reasonOf.get(enrollmentOf.get('Dino')!)).toBeNull();
+    // Eli's grade records that he joins a later class at Lesson 6 (decision 0512); nobody else's.
+    const flags = await db
+      .selectFrom('equipping_final_grades')
+      .select(['enrollment_id', 'joins_at_lesson_6'])
+      .execute();
+    expect(flags.filter((row) => row.joins_at_lesson_6).map((row) => row.enrollment_id)).toEqual([
+      enrollmentOf.get('Eli'),
+    ]);
 
     const after = await read();
     expect(after.status.phase).toBe('POSTED');

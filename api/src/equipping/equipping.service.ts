@@ -1875,6 +1875,9 @@ export class EquippingService {
             class_id: classId,
             class_name: cls.name,
             joins_at_lesson_6: carriedOf.has(reg.id),
+            carried_from_enrollment_id: carriedOf.get(reg.id) ?? null,
+            started_from_lesson_1:
+              sources.has(canonicalId(reg.person_id)) && startOver.has(canonicalId(reg.id)),
           },
         });
       }
@@ -1979,7 +1982,12 @@ export class EquippingService {
         targetType: 'person',
         targetId: enrollment.person_id,
         before: { enrollment_id: enrollmentId, class_name: from.name },
-        after: { end_reason: 'MOVED', enrollment_id: row.id, class_name: to.name },
+        after: {
+          end_reason: 'MOVED',
+          enrollment_id: row.id,
+          class_name: to.name,
+          carried_from_enrollment_id: carried,
+        },
       });
 
       const response = { enrollment_id: row.id, class_id: toClassId, moved_from: enrollmentId };

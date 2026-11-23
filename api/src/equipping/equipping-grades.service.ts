@@ -590,7 +590,13 @@ function gradeOf(
     }).length + (encounter === 'CAME' ? 1 : 0);
   const base = { lessons_kept: kept, lessons_made_up: madeUp, signs, joins_at_lesson_6: false };
   if (absences > ABSENCES_ALLOWED) {
-    const later = early <= EARLY_ABSENCES_ALLOWED && encounter === 'CAME';
+    // Only with every one of lessons 1 to 4 attended or made up (owner, 2026-11-23, decision
+    // 0512): nothing is then owed from this class.
+    const firstFourDone = [1, 2, 3, 4].every((n) => {
+      const entry = register.get(n);
+      return entry !== undefined && (entry.came || entry.madeUpOn !== null);
+    });
+    const later = early <= EARLY_ABSENCES_ALLOWED && encounter === 'CAME' && firstFourDone;
     return {
       ...base,
       joins_at_lesson_6: later,

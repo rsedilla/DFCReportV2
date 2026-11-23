@@ -25,6 +25,7 @@ import { databaseNow, recordClosesAt, recordDueAt } from '../common/time/submiss
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
+import { resolverOf } from '../common/merged-identity';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -1071,8 +1072,16 @@ export class EquippingAttendanceService {
               'e.carried_from_enrollment_id',
               'c.name',
             ])
-            .where('e.id', 'in', [...new Set(carriedFrom.values())])
+            // Every enrollment of the registration that kept them, so lessons recorded before a
+            // move in that term are read as the class that graded them read them (decision 0512).
+            .where('e.registration_id', 'in', (eb) =>
+              eb
+                .selectFrom('equipping_enrollments as k')
+                .select('k.registration_id')
+                .where('k.id', 'in', [...new Set(carriedFrom.values())]),
+            )
             .execute();
+    const keptRegistrationOf = new Map(kept.map((row) => [row.id, row.registration_id]));
     const all = [...own, ...kept.filter((row) => !own.some((each) => each.id === row.id))];
     const classIds = [...new Set(all.map((row) => row.class_id))];
     const enrollmentIds = all.map((row) => row.id);
@@ -1130,10 +1139,16 @@ export class EquippingAttendanceService {
         return { id: enrollment.class_id, name: enrollment.name };
       };
       // Lessons 1 to 4 of the enrollment this one carries from (decision 0512), and only those.
-      const keptFrom = carriedFrom.get(row.enrollment_id) ?? null;
-      const ours = (enrollmentId: string, lessonNumber: number) =>
-        enrollmentById.get(enrollmentId)!.registration_id === row.registration_id ||
-        (enrollmentId === keptFrom && lessonNumber <= 4);
+      const keptFrom = carriedFrom.get(row.enrollment_id);
+      const keptRegistration =
+        keptFrom === undefined ? null : (keptRegistrationOf.get(keptFrom) ?? null);
+      const ours = (enrollmentId: string, lessonNumber: number) => {
+        const registrationId = enrollmentById.get(enrollmentId)!.registration_id;
+        return (
+          registrationId === row.registration_id ||
+          (registrationId === keptRegistration && lessonNumber <= 4)
+        );
+      };
       for (const mark of marks) {
         const lesson = lessonById.get(mark.lesson_id)!;
         if (!ours(mark.enrollment_id, lesson.lesson)) {
@@ -1253,18 +1268,27 @@ export class EquippingAttendanceService {
     if (personIds.length === 0) {
       return result;
     }
+    // A record merged into a person brings its Encounter (decision 0408), as one joined at
+    // Lesson 6 from it needs (decision 0512).
+    const pairs = await this.people.mergedPairsWithin(executor);
+    const resolve = resolverOf(pairs);
+    const asked = new Set(personIds.map((id) => canonicalId(id)));
+    const records = [
+      ...asked,
+      ...pairs.absorbed.filter((_, index) => asked.has(canonicalId(pairs.kept[index]))),
+    ];
     const rows = await executor
       .selectFrom('equipping_encounter_enrollments as ee')
       .leftJoin('equipping_encounter_attendance as a', (join) =>
         join.onRef('a.encounter_enrollment_id', '=', 'ee.id').on('a.superseded_at', 'is', null),
       )
       .select(['ee.person_id', 'a.came'])
-      .where('ee.person_id', 'in', [...personIds])
+      .where('ee.person_id', 'in', records)
       .execute();
     const rank = { CAME: 3, ENROLLED: 2, MISSED: 1 } as const;
     for (const row of rows) {
       const state = row.came === true ? 'CAME' : row.came === false ? 'MISSED' : 'ENROLLED';
-      const id = canonicalId(row.person_id);
+      const id = canonicalId(resolve(row.person_id));
       const was = result.get(id);
       if (was === undefined || rank[state] > rank[was]) {
         result.set(id, state);

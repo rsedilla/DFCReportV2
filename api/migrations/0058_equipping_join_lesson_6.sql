@@ -4,9 +4,11 @@
 -- A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6
 -- (SKILL.md section 29, decisions 0508 and 0512).
 --
--- Additive: one column with a default on `equipping_final_grades`, so every grade already posted
--- reads as not joining at Lesson 6, and one nullable column on `equipping_enrollments`. Nothing
--- is rewritten and no effective date is set.
+-- Additive: one column with a default on `equipping_final_grades`, and one nullable column on
+-- `equipping_enrollments`. No effective date is set. One thing is written to rows already there:
+-- a grade posted before this migration whose reason already says *Joins a later class at lesson
+-- 6.* is given the flag its words carry (owner, 2026-11-23, decision 0512), the grade itself
+-- unchanged.
 -- ---------------------------------------------------------------------------
 
 -- Posted with the grade (point 1): *Not passed* for more than three absences, at most two of
@@ -17,6 +19,15 @@ ALTER TABLE equipping_final_grades
   ADD CONSTRAINT equipping_final_grades_joins_not_passed CHECK (
     NOT joins_at_lesson_6 OR grade = 'NOT_PASSED'
   );
+
+-- The grades already posted that say so in words. The trigger keeping a posted grade as written
+-- is set aside for this one statement and restored, the grade, reason and lessons untouched.
+ALTER TABLE equipping_final_grades DISABLE TRIGGER equipping_final_grades_kept;
+UPDATE equipping_final_grades
+   SET joins_at_lesson_6 = true
+ WHERE grade = 'NOT_PASSED'
+   AND reason LIKE '%Joins a later class at lesson 6.%';
+ALTER TABLE equipping_final_grades ENABLE TRIGGER equipping_final_grades_kept;
 
 -- The enrollment whose lessons 1 to 4 an enrollment keeps (point 5): set when it joins at
 -- Lesson 6, never otherwise. Always the enrollment where they were kept, never one that kept them
@@ -71,6 +82,33 @@ CREATE TRIGGER equipping_enrollments_carry
   BEFORE INSERT OR UPDATE ON equipping_enrollments
   FOR EACH ROW EXECUTE FUNCTION assert_enrollment_carry();
 
+-- Point 5: one joined at Lesson 6 keeps lessons 1 to 4, so their class records no mark or make-up
+-- of those lessons for them.
+CREATE FUNCTION assert_no_mark_on_kept_lessons() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.superseded_at IS NULL AND EXISTS (
+       SELECT 1
+         FROM equipping_enrollments e
+         JOIN equipping_lessons l ON l.id = NEW.lesson_id
+        WHERE e.id = NEW.enrollment_id
+          AND e.carried_from_enrollment_id IS NOT NULL
+          AND l.lesson <= 4) THEN
+    RAISE EXCEPTION 'one joined at Lesson 6 keeps lessons 1 to 4, which their class does not record (SKILL.md section 29)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER equipping_marks_not_on_kept_lessons
+  BEFORE INSERT ON equipping_marks
+  FOR EACH ROW EXECUTE FUNCTION assert_no_mark_on_kept_lessons();
+
+CREATE TRIGGER equipping_make_ups_not_on_kept_lessons
+  BEFORE INSERT ON equipping_make_ups
+  FOR EACH ROW EXECUTE FUNCTION assert_no_mark_on_kept_lessons();
+
 -- migrate:down
 
 -- Refused while an enrollment carries or a grade joins: dropping either would turn a student
@@ -84,6 +122,9 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER equipping_make_ups_not_on_kept_lessons ON equipping_make_ups;
+DROP TRIGGER equipping_marks_not_on_kept_lessons ON equipping_marks;
+DROP FUNCTION assert_no_mark_on_kept_lessons();
 DROP TRIGGER equipping_enrollments_carry ON equipping_enrollments;
 DROP FUNCTION assert_enrollment_carry();
 ALTER TABLE equipping_enrollments

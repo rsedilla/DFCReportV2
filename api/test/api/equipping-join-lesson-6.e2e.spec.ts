@@ -387,4 +387,167 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
       .execute();
     expect(marks).toHaveLength(0);
   });
+
+  it('refuses at the database a mark of lessons 1 to 4 for one joined at Lesson 6', async () => {
+    await keptInB(pablo);
+    const registration = await register(pablo, 2099, 3);
+    const classId = await laterClass();
+    await post(registrar, `equipping/classes/${classId}/enrollments`, {
+      registration_ids: [registration],
+    }).expect(201);
+    const enrollment = (
+      await db
+        .selectFrom('equipping_enrollments')
+        .select('id')
+        .where('registration_id', '=', registration)
+        .executeTakeFirstOrThrow()
+    ).id;
+    const lessonId = (
+      await db
+        .insertInto('equipping_lessons')
+        .values({ class_id: classId, lesson: 2, held_on: '2099-08-11', recorded_by: admin.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await expect(
+      db
+        .insertInto('equipping_marks')
+        .values({
+          lesson_id: lessonId,
+          enrollment_id: enrollment,
+          came: false,
+          recorded_by: admin.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/keeps lessons 1 to 4/);
+  });
+
+  it('reads lessons kept before a move in the earlier term', async () => {
+    // Pablo began Life Class B1, moved to B2 after lesson 2, and was graded there.
+    const b1 = await classIn(2027, 1, 'Life Class B1', '2027-01-05');
+    const b2 = await classIn(2027, 1, 'Life Class B2', '2027-01-05');
+    const registration = await register(pablo, 2027, 1);
+    const first = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({ registration_id: registration, class_id: b1, started_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const saveMark = async (classId: string, enrollmentId: string, lesson: number) => {
+      const lessonId = (
+        await db
+          .insertInto('equipping_lessons')
+          .values({
+            class_id: classId,
+            lesson,
+            held_on: `2027-01-${String(lesson * 7 - 2).padStart(2, '0')}`,
+            recorded_by: admin.id,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+      await db
+        .insertInto('equipping_marks')
+        .values({
+          lesson_id: lessonId,
+          enrollment_id: enrollmentId,
+          came: true,
+          recorded_by: admin.id,
+        })
+        .execute();
+    };
+    await saveMark(b1, first, 1);
+    await saveMark(b1, first, 2);
+    await db
+      .updateTable('equipping_enrollments')
+      .set({ ended_at: new Date(), ended_by: registrar.id, end_reason: 'MOVED' })
+      .where('id', '=', first)
+      .execute();
+    const second = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({ registration_id: registration, class_id: b2, started_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await saveMark(b2, second, 3);
+    await saveMark(b2, second, 4);
+    const check = (
+      await db
+        .insertInto('equipping_class_checks')
+        .values({ class_id: b2, checked_by: admin.id, by_admin: true, fingerprint: 'a'.repeat(64) })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const posting = (
+      await db
+        .insertInto('equipping_class_postings')
+        .values({ class_id: b2, check_id: check, posted_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('equipping_final_grades')
+      .values({
+        posting_id: posting,
+        enrollment_id: second,
+        grade: 'NOT_PASSED',
+        reason: 'x',
+        lessons_kept: 5,
+        lessons_made_up: 0,
+        joins_at_lesson_6: true,
+      })
+      .execute();
+
+    const later = await register(pablo, 2099, 3);
+    const classId = await laterClass();
+    await post(registrar, `equipping/classes/${classId}/enrollments`, {
+      registration_ids: [later],
+    }).expect(201);
+    const res = await get(admin, `equipping/classes/${classId}/attendance`).expect(200);
+    const marks = (res.body as { students: { marks: { lesson: number }[] }[] }).students[0].marks;
+    expect(marks.map((m) => m.lesson)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('reads the Encounter of a record merged into the person (decision 0408)', async () => {
+    const duplicate = await createPerson(db, { firstName: 'Pablito', network: 'MENS' });
+    const kept = await keptInB(duplicate);
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: kept,
+          person_id: duplicate.id,
+          encounter_season_id: seasonId,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('equipping_encounter_attendance')
+      .values({ encounter_enrollment_id: ee, came: true, recorded_by: registrar.id })
+      .execute();
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: pablo.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+      .where('id', '=', duplicate.id)
+      .execute();
+
+    const registration = await register(pablo, 2099, 3);
+    const classId = await laterClass();
+    const enrolled = await post(registrar, `equipping/classes/${classId}/enrollments`, {
+      registration_ids: [registration],
+    }).expect(201);
+    expect(
+      (enrolled.body as { enrolled: { joins_at_lesson_6: boolean }[] }).enrolled[0]
+        .joins_at_lesson_6,
+    ).toBe(true);
+    const res = await get(admin, `equipping/classes/${classId}/attendance`).expect(200);
+    expect((res.body as { students: { encounter: string | null }[] }).students[0].encounter).toBe(
+      'CAME',
+    );
+  });
 });
