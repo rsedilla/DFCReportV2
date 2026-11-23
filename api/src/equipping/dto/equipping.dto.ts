@@ -197,6 +197,17 @@ export class EnrollDto {
   @ArrayUnique()
   @IsUUID('all', { each: true })
   registration_ids!: string[];
+
+  /**
+   * Of those, the ones started from Lesson 1 although they could join at Lesson 6 (decision
+   * 0512, point 3). Anybody else who can join at Lesson 6 does.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(ENROLL_AT_ONCE)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  start_from_lesson_1?: string[];
 }
 
 /** Moving an enrollment to another class of its level and term (point 11). */

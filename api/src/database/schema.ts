@@ -1010,6 +1010,8 @@ export interface EquippingEnrollmentsTable {
   ended_by: string | null;
   end_reason: 'MOVED' | 'WITHDRAWN' | 'ARCHIVED' | 'COMPLETED' | null;
   withdraw_note: string | null;
+  /** The enrollment whose lessons 1 to 4 this one keeps, joining at Lesson 6 (decision 0512). */
+  carried_from_enrollment_id: string | null;
 }
 
 /** A Person named a Guide of one class (section 29, decision 0501). */
@@ -1100,6 +1102,8 @@ export interface EquippingFinalGradesTable {
   reason: string;
   lessons_kept: number;
   lessons_made_up: number;
+  /** Posted *Not passed* as joining a later class at Lesson 6 (decisions 0508 and 0512). */
+  joins_at_lesson_6: Generated<boolean>;
   passed_later_at: Date | null;
   passed_later_by: string | null;
 }

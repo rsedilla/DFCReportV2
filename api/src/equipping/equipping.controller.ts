@@ -518,7 +518,13 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return this.equipping.enroll(actor, id, body.registration_ids, claim);
+    return this.equipping.enroll(
+      actor,
+      id,
+      body.registration_ids,
+      claim,
+      body.start_from_lesson_1 ?? [],
+    );
   }
 
   @Post('enrollments/:id/move')

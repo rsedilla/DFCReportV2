@@ -31,6 +31,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { SuynlService } from '../suynl/suynl.service';
 import { EncounterSeasonsService } from '../training/encounter-seasons.service';
 import { TrainingService } from '../training/training.service';
+import { expectedOn } from './equipping-attendance.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel, EquippingRequirement } from '../database/schema';
@@ -250,6 +251,7 @@ export class EquippingService {
       this.people.directLeaderNamesOf([id]),
       this.earlierTriesOf([id], 'LIFE_CLASS'),
     ]);
+    const joins = (await this.lesson6SourcesOf(this.db, [id], 'LIFE_CLASS', null)).get(id) ?? null;
     const membership = cells.get(id)?.membership ?? null;
     const cellLeader =
       membership?.leaderId != null
@@ -272,6 +274,15 @@ export class EquippingService {
         class_name: each.className,
         reason: each.reason,
       })),
+      // Joins a later class at Lesson 6, keeping lessons 1 to 4 from there (decision 0512).
+      joins_at_lesson_6:
+        joins === null
+          ? null
+          : {
+              class_name: joins.className,
+              term_year: joins.termYear,
+              term_number: joins.termNumber,
+            },
     };
   }
 
@@ -699,6 +710,15 @@ export class EquippingService {
         cls.level,
       ),
     ]);
+    const [joining, lesson6] = await Promise.all([
+      this.lesson6SourcesOf(
+        this.db,
+        ready.map((row) => row.person_id),
+        cls.level,
+        cls,
+      ),
+      this.lesson6Within(this.db, classId),
+    ]);
     const nameOf = (id: string) => people.get(id)?.fullName ?? null;
 
     return {
@@ -712,6 +732,8 @@ export class EquippingService {
             ? null
             : { id: cls.teacher_person_id, full_name: nameOf(cls.teacher_person_id) },
         encounter_weekends: eligibility.weekends,
+        // Whether it takes a student at Lesson 6, and on which day that lesson is expected.
+        lesson_6: lesson6,
       },
       enrolled: enrolled
         .map((row) => ({
@@ -731,6 +753,14 @@ export class EquippingService {
           age_at_encounter: check.age,
           blocked: check.blocked,
           try_number: 1 + triesBefore(tries.get(canonicalId(row.person_id)), cls),
+          joins_at_lesson_6: ((source) =>
+            source === undefined
+              ? null
+              : {
+                  class_name: source.className,
+                  term_year: source.termYear,
+                  term_number: source.termNumber,
+                })(joining.get(canonicalId(row.person_id))),
         };
       }),
     };
@@ -1730,6 +1760,7 @@ export class EquippingService {
     classId: string,
     registrationIds: readonly string[],
     claim: CurrentClaim,
+    startFromLesson1: readonly string[] = [],
   ): Promise<Record<string, unknown>> {
     return this.write(async (trx) => {
       const cls = await this.classWithin(trx, classId);
@@ -1777,6 +1808,33 @@ export class EquippingService {
         }
       }
 
+      // **Who joins at Lesson 6** (decision 0512): anybody whose latest posted grade at the level
+      // says so, unless the Registrar starts them from Lesson 1, and only in a class whose
+      // Lesson 6 has not been reached.
+      const startOver = new Set(startFromLesson1.map((id) => canonicalId(id)));
+      const sources = await this.lesson6SourcesOf(
+        trx,
+        regs.map((reg) => reg.person_id),
+        cls.level,
+        cls,
+      );
+      const carriedOf = new Map<string, string>();
+      const lesson6 = await this.lesson6Within(trx, classId);
+      for (const reg of regs) {
+        const source = sources.get(canonicalId(reg.person_id));
+        if (source === undefined || startOver.has(canonicalId(reg.id))) {
+          continue;
+        }
+        if (!lesson6.open) {
+          refusals.push({
+            registration_id: reg.id,
+            reason: `joins at Lesson 6, which ${cls.name} has passed; choose another class or start them from Lesson 1`,
+          });
+        } else {
+          carriedOf.set(reg.id, source.enrollmentId);
+        }
+      }
+
       if (refusals.length > 0) {
         throw new InvariantViolationError(
           'Some of them cannot be enrolled in this class. Nobody was enrolled.',
@@ -1791,9 +1849,10 @@ export class EquippingService {
             registration_id: reg.id,
             class_id: classId,
             started_by: actor.accountId,
+            carried_from_enrollment_id: carriedOf.get(reg.id) ?? null,
           })),
         )
-        .returning(['id', 'registration_id'])
+        .returning(['id', 'registration_id', 'carried_from_enrollment_id'])
         .execute();
 
       // A student enrolled after the class's Guides were named joins the Guide of their sex who
@@ -1807,7 +1866,12 @@ export class EquippingService {
           targetType: 'person',
           targetId: reg.person_id,
           before: null,
-          after: { registration_id: reg.id, class_id: classId, class_name: cls.name },
+          after: {
+            registration_id: reg.id,
+            class_id: classId,
+            class_name: cls.name,
+            joins_at_lesson_6: carriedOf.has(reg.id),
+          },
         });
       }
 
@@ -1816,6 +1880,7 @@ export class EquippingService {
         enrolled: inserted.map((row) => ({
           enrollment_id: row.id,
           registration_id: row.registration_id,
+          joins_at_lesson_6: row.carried_from_enrollment_id !== null,
         })),
       };
       await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
@@ -1871,6 +1936,21 @@ export class EquippingService {
         });
       }
 
+      // A student joined at Lesson 6 keeps it with a move, under the same rule (decision 0512).
+      const carried = (
+        await trx
+          .selectFrom('equipping_enrollments')
+          .select('carried_from_enrollment_id')
+          .where('id', '=', enrollmentId)
+          .executeTakeFirstOrThrow()
+      ).carried_from_enrollment_id;
+      if (carried !== null && !(await this.lesson6Within(trx, toClassId)).open) {
+        throw new InvariantViolationError(
+          `They joined at Lesson 6, which ${to.name} has passed; choose another class.`,
+          { field: 'class_id' },
+        );
+      }
+
       await trx
         .updateTable('equipping_enrollments')
         .set({ ended_at: sql<Date>`now()`, ended_by: actor.accountId, end_reason: 'MOVED' })
@@ -1882,6 +1962,7 @@ export class EquippingService {
           registration_id: enrollment.registration_id,
           class_id: toClassId,
           started_by: actor.accountId,
+          carried_from_enrollment_id: carried,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -2021,6 +2102,119 @@ export class EquippingService {
       return 'ENROLLED';
     }
     return row.unmet.length > 0 ? 'REGISTERED_WITH_EXCEPTION' : 'REGISTERED';
+  }
+
+  /**
+   * **Whom a class takes at Lesson 6** (decision 0512, point 2): its Lesson 6, expected five
+   * weeks after its first lesson, is today or later, and it has saved no lesson from 6 on.
+   */
+  private async lesson6Within(
+    executor: Db | Transaction<Database>,
+    classId: string,
+  ): Promise<{ on: string; open: boolean }> {
+    const cls = await executor
+      .selectFrom('equipping_classes')
+      .select('first_lesson_on')
+      .where('id', '=', classId)
+      .executeTakeFirstOrThrow();
+    const on = expectedOn(String(cls.first_lesson_on), 6);
+    const later = await executor
+      .selectFrom('equipping_lessons')
+      .select('id')
+      .where('class_id', '=', classId)
+      .where('lesson', '>=', 6)
+      .executeTakeFirst();
+    const today = manilaDayOf(await databaseNow(executor));
+    return { on, open: later === undefined && on >= today };
+  }
+
+  /**
+   * **Who joins at Lesson 6, and from where** (decision 0512, point 1): each person whose latest
+   * posted grade at the level, in a term before `before`, says so, a merged record's grades
+   * being the person's (decision 0408). The enrollment named is where lessons 1 to 4 were kept:
+   * the graded one, or the one it carried from when it had joined at Lesson 6 itself.
+   */
+  private async lesson6SourcesOf(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+    level: EquippingLevel,
+    before: { term_year: number; term_number: number } | null,
+  ): Promise<
+    Map<string, { enrollmentId: string; className: string; termYear: number; termNumber: number }>
+  > {
+    const result = new Map<
+      string,
+      { enrollmentId: string; className: string; termYear: number; termNumber: number }
+    >();
+    if (personIds.length === 0) {
+      return result;
+    }
+    const pairs = await this.people.mergedPairsWithin(executor);
+    const resolve = resolverOf(pairs);
+    const wanted = new Set(personIds.map((id) => canonicalId(id)));
+    const records = [
+      ...wanted,
+      ...pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index]))),
+    ];
+    const rows = await executor
+      .selectFrom('equipping_final_grades as g')
+      .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+      .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
+      .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
+      .select([
+        'r.person_id',
+        'r.term_year',
+        'r.term_number',
+        'g.joins_at_lesson_6',
+        'n.id as enrollment_id',
+        'n.carried_from_enrollment_id',
+      ])
+      .where('r.level', '=', level)
+      .where('r.person_id', 'in', records)
+      .$if(before !== null, (qb) =>
+        qb.where((eb) =>
+          eb.or([
+            eb('r.term_year', '<', before!.term_year),
+            eb.and([
+              eb('r.term_year', '=', before!.term_year),
+              eb('r.term_number', '<', before!.term_number),
+            ]),
+          ]),
+        ),
+      )
+      .orderBy('r.term_year', 'desc')
+      .orderBy('r.term_number', 'desc')
+      .orderBy('p.posted_at', 'desc')
+      .execute();
+    const latest = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      const key = canonicalId(resolve(row.person_id));
+      if (!latest.has(key)) {
+        latest.set(key, row);
+      }
+    }
+    const joining = [...latest.entries()].filter(([, row]) => row.joins_at_lesson_6);
+    if (joining.length === 0) {
+      return result;
+    }
+    const keptIds = joining.map(([, row]) => row.carried_from_enrollment_id ?? row.enrollment_id);
+    const kept = await executor
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+      .select(['e.id', 'c.name', 'c.term_year', 'c.term_number'])
+      .where('e.id', 'in', keptIds)
+      .execute();
+    const keptById = new Map(kept.map((row) => [row.id, row]));
+    for (const [key, row] of joining) {
+      const where = keptById.get(row.carried_from_enrollment_id ?? row.enrollment_id)!;
+      result.set(key, {
+        enrollmentId: where.id,
+        className: where.name,
+        termYear: where.term_year,
+        termNumber: where.term_number,
+      });
+    }
+    return result;
   }
 
   /**

@@ -24,6 +24,7 @@ import {
   ordinal,
   tryLabel,
   type Candidate,
+  type KeptFrom,
   type FoundPerson,
   type Registration,
   type Term,
@@ -349,7 +350,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
           </div>
 
           {candidate.data?.earlier_tries && candidate.data.earlier_tries.length > 0 ? (
-            <EarlierTries tries={candidate.data.earlier_tries} />
+            <EarlierTries tries={candidate.data.earlier_tries} joins={candidate.data.joins_at_lesson_6 ?? null} />
           ) : null}
 
           <section aria-labelledby="requirements-heading">
@@ -460,7 +461,13 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
  * passed*, worked out from the posted grades, and which try this one would be. There is no limit
  * on tries, so it informs and never stops a registration.
  */
-function EarlierTries({ tries }: { tries: NonNullable<Candidate['earlier_tries']> }) {
+function EarlierTries({
+  tries,
+  joins,
+}: {
+  tries: NonNullable<Candidate['earlier_tries']>;
+  joins: KeptFrom | null;
+}) {
   return (
     <section aria-labelledby="earlier-tries-heading" className="border-line rounded-lg border p-3 text-sm">
       <h3 id="earlier-tries-heading" className="font-semibold">
@@ -473,6 +480,15 @@ function EarlierTries({ tries }: { tries: NonNullable<Candidate['earlier_tries']
           </li>
         ))}
       </ul>
+      {/* Joining at Lesson 6 (decision 0512): what is kept, and what is left. */}
+      {joins ? (
+        <>
+          <p className="mt-2 font-semibold">Joins a later class at Lesson 6</p>
+          <p>
+            Keeps lessons 1 to 4 and the Encounter from {termLabel(joins)}, so only lessons 6 to 9 are left.
+          </p>
+        </>
+      ) : null}
       <p className="text-muted mt-1">
         This will be their {ordinal(tries.length + 1)} try. Every try is kept; there is no limit.
       </p>
