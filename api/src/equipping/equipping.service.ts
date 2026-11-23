@@ -144,16 +144,20 @@ interface EarlierTry {
   reason: string;
 }
 
-/** How many of a person's tries came in terms before the given one (decision 0511). */
+/** How many tries came in terms before the given one: a term is one try (decision 0511). */
 function triesBefore(
   tries: EarlierTry[] | undefined,
   term: { term_year: number; term_number: number },
 ): number {
-  return (tries ?? []).filter(
-    (each) =>
-      each.termYear < term.term_year ||
-      (each.termYear === term.term_year && each.termNumber < term.term_number),
-  ).length;
+  return new Set(
+    (tries ?? [])
+      .filter(
+        (each) =>
+          each.termYear < term.term_year ||
+          (each.termYear === term.term_year && each.termNumber < term.term_number),
+      )
+      .map((each) => `${each.termYear}-${each.termNumber}`),
+  ).size;
 }
 
 @Injectable()
@@ -2024,9 +2028,9 @@ export class EquippingService {
   }
 
   /**
-   * Each person's earlier tries at a level (decision 0511): the grades posted *Not passed* for
-   * them, oldest first, keyed by the record kept, a merged record's tries being the person's
-   * (decision 0408). *Not yet*, a withdrawal, a move and a cancelled registration are not tries.
+   * Each person's earlier tries at a level, oldest first (decision 0511, points 1, 5 and 8): the
+   * grades posted *Not passed*, answered under each id asked about, a record merged away
+   * included. Counting them by term is `triesBefore`'s and the form's.
    */
   private async earlierTriesOf(
     personIds: readonly string[],

@@ -262,7 +262,7 @@ describe('A student taking Life Class again (section 29, decision 0511)', () => 
     expect((await listFor(3))[0].try_number).toBe(1);
   });
 
-  it('counts nobody else’s merged record', async () => {
+  it('counts nobody else’s merged record, and does count theirs for them', async () => {
     const quintin = await createPerson(db, { firstName: 'Quintin', network: 'MENS' });
     const duplicate = await createPerson(db, { firstName: 'Quintino', network: 'MENS' });
     await posted(duplicate, 1, 'Life Class A', 'NOT_PASSED', 'More than three absences');
@@ -272,7 +272,40 @@ describe('A student taking Life Class again (section 29, decision 0511)', () => 
       .where('id', '=', duplicate.id)
       .execute();
     await register(pablo, 3);
-    expect((await listFor(3)).find((row) => row.person.id === pablo.id)?.try_number).toBe(1);
+    await register(quintin, 3);
+    const list = await listFor(3);
+    expect(list.find((row) => row.person.id === pablo.id)?.try_number).toBe(1);
+    expect(list.find((row) => row.person.id === quintin.id)?.try_number).toBe(2);
+  });
+
+  it('keeps a posted Not passed as a try when its registration is later cancelled', async () => {
+    await posted(pablo, 1, 'Life Class A', 'NOT_PASSED', 'More than three absences');
+    // Posting ends the enrollment as COMPLETED (decision 0508); then the registration is cancelled.
+    await db
+      .updateTable('equipping_enrollments')
+      .set({ ended_at: new Date(), ended_by: registrar.id, end_reason: 'COMPLETED' })
+      .execute();
+    await db
+      .updateTable('equipping_registrations')
+      .set({ cancelled_at: new Date(), cancelled_by: registrar.id, cancel_reason: 'Archived' })
+      .where('person_id', '=', pablo.id)
+      .execute();
+    await register(pablo, 3);
+    expect((await listFor(3))[0].try_number).toBe(2);
+  });
+
+  it('counts two Not passed in one term as one try (point 8)', async () => {
+    // Recorded twice, enrolled once under each record in term 1, then merged.
+    const duplicate = await createPerson(db, { firstName: 'Pablito', network: 'MENS' });
+    await posted(pablo, 1, 'Life Class A', 'NOT_PASSED', 'More than three absences');
+    await posted(duplicate, 1, 'Life Class B', 'NOT_PASSED', 'More than three absences');
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: pablo.id, merged_at: new Date(), merge_reason: 'Recorded twice' })
+      .where('id', '=', duplicate.id)
+      .execute();
+    await register(pablo, 3);
+    expect((await listFor(3)).find((row) => row.person.id === pablo.id)?.try_number).toBe(2);
   });
 
   it('counts a merged-away record’s own row as the person’s try', async () => {

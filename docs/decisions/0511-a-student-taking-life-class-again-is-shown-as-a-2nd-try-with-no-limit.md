@@ -32,7 +32,7 @@ bring people through.
 
 **5. A merged record's tries are the person's** (decision 0408): the record kept carries the
 tries of every record merged into it, and a registration row of the record merged away counts
-them as the person's too. **The Registrar is shown them** (owner, 2026-11-24, on a Stop Condition
+them as the person's too. **The Registrar is shown them** (owner, 2026-11-23, on a Stop Condition
 `architecture-guardian` raised): listing a merged record's try under the person tells a reader
 holding only `equipping.manage` that the two records were one person, which Sections 3 and 7
 otherwise show only to a reader who may open the record kept. The owner accepted that.
@@ -41,9 +41,17 @@ otherwise show only to a reader who may open the record kept. The owner accepted
 already theirs (Section 7). Beyond point 5's merge, it discloses nothing they could not read from
 *Final Grades*, which lists every posted grade church-wide.
 
-**7. Joining at Lesson 6 is a try** (owner, 2026-11-24, on a Stop Condition the same review
+**7. Joining at Lesson 6 is a try** (owner, 2026-11-23, on a Stop Condition the same review
 raised): a student posted *Not passed* who joins a later class at Lesson 6 (decision 0508) is on
-their next try there, a *2nd try* after one *Not passed*, as any posted *Not passed* counts.
+their next try there, a *2nd try* after one *Not passed*, as any posted *Not passed* counts. That
+class is always in a later term (decision 0512), so the count reaches it.
+
+**8. A term is one try** (owner, 2026-11-23, on a Stop Condition the second review raised): two
+grades posted *Not passed* for one person in one term, as when somebody recorded twice was
+enrolled once under each record and the records were later merged, are one try. Tries are
+counted by term. The *Register* form still lists each grade, and counts the terms, the
+registration's own included; the lists count only earlier terms, so the two differ only for a
+registration cancelled after posting and made again in the same term.
 
 Built without a migration: the registrations list, the *Register* form's person read and a
 class's *Ready to enroll* gain the count or the list, read from `equipping_final_grades`,
