@@ -350,7 +350,11 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
           </div>
 
           {candidate.data?.earlier_tries && candidate.data.earlier_tries.length > 0 ? (
-            <EarlierTries tries={candidate.data.earlier_tries} joins={candidate.data.joins_at_lesson_6 ?? null} />
+            <EarlierTries
+              tries={candidate.data.earlier_tries}
+              term={term}
+              joins={candidate.data.joins_at_lesson_6 ?? null}
+            />
           ) : null}
 
           <section aria-labelledby="requirements-heading">
@@ -463,11 +467,22 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
  */
 function EarlierTries({
   tries,
+  term,
   joins,
 }: {
   tries: NonNullable<Candidate['earlier_tries']>;
+  term: Term;
   joins: KeptFrom | null;
 }) {
+  // Counted as the lists count it: the terms before this registration's, a term one try (0511).
+  const earlierTerms = new Set(
+    tries
+      .filter(
+        (each) =>
+          each.term_year < term.term_year || (each.term_year === term.term_year && each.term_number < term.term_number),
+      )
+      .map((each) => termLabel(each)),
+  ).size;
   return (
     <section aria-labelledby="earlier-tries-heading" className="border-line rounded-lg border p-3 text-sm">
       <h3 id="earlier-tries-heading" className="font-semibold">
@@ -490,9 +505,7 @@ function EarlierTries({
         </>
       ) : null}
       <p className="text-muted mt-1">
-        {/* A term is one try (decision 0511, point 8). */}
-        This will be their {ordinal(new Set(tries.map((each) => termLabel(each))).size + 1)} try. Every try is
-        kept; there is no limit.
+        This will be their {ordinal(earlierTerms + 1)} try. Every try is kept; there is no limit.
       </p>
     </section>
   );
