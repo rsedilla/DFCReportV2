@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-23, the trigger being decision 0510: of 509 files, 508 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0510 each moved the first two and
+2026-11-23, the trigger being decision 0511: of 510 files, 509 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0511 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-23 and triggered by 0510, and was left stale by 0511 the same day. The one before that was dated
 2026-11-22 and triggered by 0509, and was left stale by 0510 the next day. The one before that was dated
 2026-11-22 and triggered by 0508, and was left stale by 0509 the same day. The one before that was dated
 2026-11-22 and triggered by 0507, and was left stale by 0508 the same day. The one before that was dated
@@ -1066,6 +1067,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-22 — [Final grades are checked by the Coordinator and posted by the Registrar](docs/decisions/0508-final-grades-are-checked-by-the-coordinator-and-posted-by-the-registrar.md)
 - 2026-11-22 — [Training's graduations come from the school, and only the Admin ticks the Encounter and Life Class](docs/decisions/0509-training-graduations-come-from-the-school-and-only-the-admin-ticks-the-encounter-and-life-class.md)
 - 2026-11-23 — [A class is corrected until its first lesson is saved, and cancelled while it has no students](docs/decisions/0510-a-class-is-corrected-until-its-first-lesson-is-saved-and-cancelled-while-it-has-no-students.md)
+- 2026-11-23 — [A student taking Life Class again is shown as a 2nd try, with no limit](docs/decisions/0511-a-student-taking-life-class-again-is-shown-as-a-2nd-try-with-no-limit.md)
 
 ### Open — awaiting a ruling
 
