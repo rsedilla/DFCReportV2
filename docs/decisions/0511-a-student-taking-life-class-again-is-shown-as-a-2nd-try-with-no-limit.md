@@ -43,15 +43,13 @@ already theirs (Section 7). Beyond point 5's merge, it discloses nothing they co
 
 **7. Joining at Lesson 6 is a try** (owner, 2026-11-23, on a Stop Condition the same review
 raised): a student posted *Not passed* who joins a later class at Lesson 6 (decision 0508) is on
-their next try there, a *2nd try* after one *Not passed*, as any posted *Not passed* counts. That
-class is always in a later term (decision 0512), so the count reaches it.
+their next try there, a *2nd try* after one *Not passed*, as any posted *Not passed* counts.
 
 **8. A term is one try** (owner, 2026-11-23, on a Stop Condition the second review raised): two
 grades posted *Not passed* for one person in one term, as when somebody recorded twice was
 enrolled once under each record and the records were later merged, are one try. Tries are
-counted by term. The *Register* form still lists each grade, and counts the terms, the
-registration's own included; the lists count only earlier terms, so the two differ only for a
-registration cancelled after posting and made again in the same term.
+counted by term, and every surface counts the terms before the registration's own: the
+*Register* form, which still lists each grade, counts as the lists do.
 
 Built without a migration: the registrations list, the *Register* form's person read and a
 class's *Ready to enroll* gain the count or the list, read from `equipping_final_grades`,

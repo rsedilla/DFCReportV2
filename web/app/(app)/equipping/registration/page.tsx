@@ -349,7 +349,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
           </div>
 
           {candidate.data?.earlier_tries && candidate.data.earlier_tries.length > 0 ? (
-            <EarlierTries tries={candidate.data.earlier_tries} />
+            <EarlierTries tries={candidate.data.earlier_tries} term={term} />
           ) : null}
 
           <section aria-labelledby="requirements-heading">
@@ -460,7 +460,16 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
  * passed*, worked out from the posted grades, and which try this one would be. There is no limit
  * on tries, so it informs and never stops a registration.
  */
-function EarlierTries({ tries }: { tries: NonNullable<Candidate['earlier_tries']> }) {
+function EarlierTries({ tries, term }: { tries: NonNullable<Candidate['earlier_tries']>; term: Term }) {
+  // Counted as the lists count it: the terms before this registration's, a term one try (0511).
+  const earlierTerms = new Set(
+    tries
+      .filter(
+        (each) =>
+          each.term_year < term.term_year || (each.term_year === term.term_year && each.term_number < term.term_number),
+      )
+      .map((each) => termLabel(each)),
+  ).size;
   return (
     <section aria-labelledby="earlier-tries-heading" className="border-line rounded-lg border p-3 text-sm">
       <h3 id="earlier-tries-heading" className="font-semibold">
@@ -474,9 +483,7 @@ function EarlierTries({ tries }: { tries: NonNullable<Candidate['earlier_tries']
         ))}
       </ul>
       <p className="text-muted mt-1">
-        {/* A term is one try (decision 0511, point 8). */}
-        This will be their {ordinal(new Set(tries.map((each) => termLabel(each))).size + 1)} try. Every try is
-        kept; there is no limit.
+        This will be their {ordinal(earlierTerms + 1)} try. Every try is kept; there is no limit.
       </p>
     </section>
   );
