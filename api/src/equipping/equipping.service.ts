@@ -696,6 +696,19 @@ export class EquippingService {
           ),
         ),
       )
+      // Graded Passed or Not passed, the registration is finished (decision 0513, point 16).
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('equipping_enrollments as e')
+              .innerJoin('equipping_current_grades as g', 'g.enrollment_id', 'e.id')
+              .select('e.id')
+              .whereRef('e.registration_id', '=', 'r.id')
+              .where('g.grade', 'in', ['PASSED', 'NOT_PASSED']),
+          ),
+        ),
+      )
       .orderBy('r.registered_at')
       .execute();
 
@@ -1800,6 +1813,22 @@ export class EquippingService {
       for (const row of open) {
         refusals.push({ registration_id: row.registration_id, reason: 'already in a class' });
       }
+      // **A graded registration is finished** (decision 0513, point 16): one graded Passed or Not
+      // passed is not enrolled again; trying again is a new registration.
+      const graded = await trx
+        .selectFrom('equipping_enrollments as e')
+        .innerJoin('equipping_current_grades as g', 'g.enrollment_id', 'e.id')
+        .select('e.registration_id')
+        .distinct()
+        .where('e.registration_id', 'in', [...registrationIds])
+        .where('g.grade', 'in', ['PASSED', 'NOT_PASSED'])
+        .execute();
+      for (const row of graded) {
+        refusals.push({
+          registration_id: row.registration_id,
+          reason: 'already graded this term; to take it again they register for a later term',
+        });
+      }
 
       const eligibility = await this.eligibilityOf(
         regs.map((reg) => reg.person_id),
@@ -2474,6 +2503,13 @@ export class EquippingService {
       }
       // The database's own refusals of decision 0510, reached only past the checks above.
       const refused = violatedConstraint(error);
+      // Decision 0513, point 16, reached only where a posting landed past the check above.
+      if (refused === 'equipping_enrollment_graded_registration') {
+        throw new InvariantViolationError(
+          'Somebody in the list was graded on that registration; nobody was enrolled.',
+          { field: 'registration_ids' },
+        );
+      }
       if (refused === 'equipping_class_cancelled') {
         throw new InvariantViolationError('That class was cancelled; nothing on it changes.', {
           field: 'class_id',

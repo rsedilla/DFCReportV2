@@ -2,7 +2,13 @@
 
 import { Fragment, useState, type ReactNode } from 'react';
 
-import { GRADE_WORDS, WHY_WORDS, signWords } from '@/components/grade-change-dialog';
+import {
+  GRADE_WORDS,
+  WHY_WORDS,
+  encounterWords,
+  enrollmentWords,
+  signWords,
+} from '@/components/grade-change-dialog';
 import { Button } from '@/components/ui/button';
 import { timeLabel } from '@/lib/cells';
 import {
@@ -109,6 +115,13 @@ function History({ s, postedAt }: { s: ClassGrades['students'][number]; postedAt
             <span className="italic">
               {WHY_WORDS[c.why]}: {c.details}
             </span>
+            {c.encounter_change ? (
+              <span className="block">
+                Encounter, changed after posting: {encounterWords(c.encounter_change).before} →{' '}
+                {encounterWords(c.encounter_change).now}
+              </span>
+            ) : null}
+            {c.enrollment ? <span className="block">{enrollmentWords(c.enrollment)}</span> : null}
           </li>
         ))}
       </ol>

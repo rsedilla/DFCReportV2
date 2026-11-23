@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Info } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import {
   changeGrade,
   previewGradeChange,
   type ClassGrades,
+  type EncounterChange,
+  type EnrollmentEffect,
   type FinalGrade,
   type GradeChangeSign,
   type GradeChangeTo,
@@ -47,6 +50,28 @@ export function signWords(sign: GradeChangeSign, madeUpOn: string | null): strin
     case 'BEFORE_JOINING':
       return '○ Before they joined, not made up';
   }
+}
+
+/** The Encounter before and now, in words: *✓ Came*, *✗ Did not attend* (decision 0513). */
+export function encounterWords(change: EncounterChange): { before: string; now: string } {
+  return {
+    before: change.before === 'CAME' ? '✓ Came' : 'not attended',
+    now:
+      change.now === 'CAME'
+        ? '✓ Came'
+        : change.now === 'MISSED'
+          ? '✗ Did not attend'
+          : change.now === 'ENROLLED'
+            ? 'enrolled, not recorded yet'
+            : 'not attended',
+  };
+}
+
+/** What a change does to the enrollment, in a sentence (decision 0513, point 10). */
+export function enrollmentWords(effect: EnrollmentEffect): string {
+  return effect === 'REOPENS'
+    ? 'Their Life Class enrollment is opened again, and they are listed for the next Encounter.'
+    : 'Their Life Class enrollment ends, and they leave the next Encounter’s list.';
 }
 
 /** *Tue 2 Mar*, for a date-only value. */
@@ -155,10 +180,17 @@ export function GradeChangeDialog({
   }
 
   const ready = preview.isSuccess && why !== '' && details.trim() !== '' && !save.isPending;
+  // A lesson kept from an earlier term keeps the join at Lesson 6 it gave (point 12), so it is
+  // never made Absent.
   const toOptions: { value: GradeChangeTo; label: string }[] =
     chosen?.sign === 'BEFORE_JOINING'
       ? [{ value: 'MADE_UP', label: 'Made up' }]
-      : [
+      : chosen?.kept
+        ? [
+            { value: 'CAME', label: 'Came' },
+            { value: 'MADE_UP', label: 'Made up' },
+          ]
+        : [
           { value: 'CAME', label: 'Came' },
           { value: 'ABSENT', label: 'Absent' },
           { value: 'MADE_UP', label: 'Made up' },
@@ -179,9 +211,16 @@ export function GradeChangeDialog({
               {signWords(input!.to, input!.to === 'MADE_UP' ? madeUpOn : null)}
             </span>
           </p>
+          {p.encounter_change ? (
+            <p>
+              Encounter, changed after posting: {encounterWords(p.encounter_change).before} →{' '}
+              {encounterWords(p.encounter_change).now}
+            </p>
+          ) : null}
           <p>
             Grade: {GRADE_WORDS[p.grade_before]} → <span className="font-semibold">{GRADE_WORDS[p.grade_after]}</span>
           </p>
+          {p.enrollment ? <p className="mt-2">{enrollmentWords(p.enrollment)}</p> : null}
           <p className="text-muted mt-2">
             {WHY_WORDS[why as GradeChangeWhy]} · {details.trim()}
           </p>
@@ -235,7 +274,9 @@ export function GradeChangeDialog({
               <option value="">Choose a lesson</option>
               {lessons.map((each) => (
                 <option key={each.lesson} value={each.lesson}>
-                  L{each.lesson} · {dayLabel(each.held_on)} · now {signWords(each.sign, each.made_up_on)}
+                  L{each.lesson} · {dayLabel(each.held_on)}
+                  {each.recorded_in ? ` · in ${each.recorded_in}` : ''} · now{' '}
+                  {signWords(each.sign, each.made_up_on)}
                 </option>
               ))}
             </SelectField>
@@ -296,6 +337,18 @@ export function GradeChangeDialog({
             </div>
 
             <div aria-live="polite">
+              {preview.data?.encounter_change ? (
+                // Before the grade, as its cause: an Encounter recorded or corrected since posting is
+                // worked from as it stands (point 14), and never folded into the change unseen.
+                <p className="border-line text-ink mb-3 flex items-start gap-2 rounded-lg border px-3 py-3 text-sm leading-relaxed">
+                  <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <span className="font-semibold">Their Encounter changed after posting.</span> It read{' '}
+                    {encounterWords(preview.data.encounter_change).before}; it now reads{' '}
+                    {encounterWords(preview.data.encounter_change).now}. The new grade uses what it reads now.
+                  </span>
+                </p>
+              ) : null}
               {preview.data ? (
                 <div className="border-line bg-raised rounded-lg border px-3 py-3 text-sm">
                   <p className="font-semibold">
@@ -309,6 +362,9 @@ export function GradeChangeDialog({
                       : preview.data.training === 'WITHDRAWS'
                         ? ' The Life Class the school filed for them is withdrawn from their Training.'
                         : ''}
+                    {preview.data.enrollment ? (
+                      <span className="block">{enrollmentWords(preview.data.enrollment)}</span>
+                    ) : null}
                   </p>
                 </div>
               ) : null}

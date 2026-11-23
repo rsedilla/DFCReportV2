@@ -922,6 +922,13 @@ export async function mockGradeChange(page: Page): Promise<{ sent: { url: string
     students: [
       student(1, 'Efren Quiambao', 'PASSED', 'Every lesson done.', [C, C, 'MADE_UP', C, C, C, C, C], {
         changes_seen: 1,
+        // Joined at Lesson 6: lessons 1 to 4 kept from last term's class (decision 0513, point 12).
+        changeable: {
+          lessons: lessonsOf([C, C, 'MADE_UP', C, C, C, C, C]).map((l) =>
+            l.lesson <= 4 ? { ...l, kept: true, recorded_in: 'Life Class B' } : l,
+          ),
+          why: null,
+        },
         history: [
           {
             at: '2027-03-25T02:00:00.000Z',

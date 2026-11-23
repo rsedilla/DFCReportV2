@@ -87,9 +87,12 @@ class has been posted.
 **12. A lesson kept from an earlier term is changed only where lessons 1 to 4 stay done** (owner,
 2026-11-24, "2b C"). It counts toward two posted grades, the earlier term's that let the student
 join at Lesson 6 and this one. *Came* and *Made up* may be exchanged, and a make-up's day
-corrected, the mark written in the earlier term's register, neither grade's outcome moving; a
-change leaving any of lessons 1 to 4 not done is refused, saying that a join at Lesson 6 is not
-undone once the later class has graded it.
+corrected, the mark written in the earlier term's register; a change leaving any of lessons 1 to 4
+not done is refused, saying that a join at Lesson 6 is not undone once the later class has graded
+it. **Building it showed the example put to the owner was wrong**: a made-up lesson still counts
+as missed, and joining at Lesson 6 allows two missed of lessons 1 to 4 (decision 0508), so a
+*Came* made *Made up* can undo the join as surely as *Absent* does, and can move this grade too.
+Such a change is refused as well, the conservative arm, and is open in `CLAUDE.md` for the owner.
 
 **13. A change never takes *Joins a later class at Lesson 6* from one a later enrollment carries**
 (owner, 2026-11-24, "2c A"). It is refused while such an enrollment exists, the Registrar
@@ -106,6 +109,11 @@ read at posting and what it reads now, so nothing is folded into a lesson change
 record merged into theirs is theirs (decision 0408), as tries are (decision 0511), and a change and
 a later registration saved at the same moment are taken one after the other, whichever lands second
 being refused, saying why (owner, 2026-11-24, "A").
+
+**Two refusals the build makes that no point settles**, each open in `CLAUDE.md`: a student made
+*Not yet* whose registration has since been cancelled, or who is enrolled again on it, is not
+reopened; and a grade whose register no longer gives it under either reading of the Encounter,
+which only a lesson written after posting outside a change could cause, is not changed.
 
 **16. A registration graded *Passed* or *Not passed* is not enrolled again** (owner, 2026-11-24,
 "A"). It is finished with its grade, in its term or any other; a person trying again registers
@@ -125,5 +133,16 @@ and `POST /equipping/final-grades/grades/{id}/changes`, the class read's history
 each student's change may reach, the readers of tries, Lesson 6 and Training's evidence moved to
 the grade as it stands, the audit entry `equipping_final_grade.changed`, and the dialog and history
 on *Final Grades*. `SKILL.md` Section 29 carries it.
+
+Points 10 to 16 added to it: the change row's `encounter_before`, `encounter_after` and
+`enrollment_effect`; the graded enrollment ended or reopened beside the change, the database
+admitting a reopening only so; a kept or left-behind lesson written where it was recorded, the
+database admitting a kept one only beside a change of the grade carrying it; passing at a later
+Encounter read from the grade as it stands, in the Encounter page and in the database, which
+replaces the check 0056 wrote on the posted grade; the later-term check resolving merged records,
+behind the person's lock registering takes; enrolling refusing a graded registration, which
+*Ready to enroll* no longer lists, the database refusing it too; the audit entry
+`equipping_enrollment.reopened`; and the dialog's Encounter note, reopening or ending sentence,
+and summary lines, as the owner approved them from screenshots on 2026-11-24.
 
 Previous: [2026-11-23 — A student who kept lessons 1 to 4 and the Encounter joins a later class at Lesson 6](0512-a-student-who-kept-lessons-1-to-4-and-the-encounter-joins-a-later-class-at-lesson-6.md)

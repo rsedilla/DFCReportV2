@@ -431,6 +431,7 @@ export type AuditAction =
   | 'equipping_make_up.recorded'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
+  | 'equipping_enrollment.reopened'
   | 'equipping_encounter_enrollment.created'
   | 'equipping_encounter_attendance.recorded'
   | 'equipping_class.checked'
@@ -1134,6 +1135,11 @@ export interface EquippingGradeChangesTable {
   lessons_kept_after: number;
   lessons_made_up_after: number;
   joins_at_lesson_6_after: boolean;
+  /** What the grade before read the Encounter as, and what the change worked from (point 14). */
+  encounter_before: 'CAME' | 'NOT_CAME';
+  encounter_after: 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE';
+  /** What the change did to the graded enrollment (point 10). */
+  enrollment_effect: 'ENDS' | 'REOPENS' | null;
   changed_by: string;
   changer_person_id: string | null;
   changed_at: ServerTimestamp;

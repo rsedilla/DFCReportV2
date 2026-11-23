@@ -290,7 +290,10 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     lessons: string[];
     final_grade_id: string;
     changes_seen: number;
-    changeable: { lessons: { lesson: number; sign: string }[]; why: string | null };
+    changeable: {
+      lessons: { lesson: number; sign: string; recorded_in?: string | null; kept?: boolean }[];
+      why: string | null;
+    };
     history: {
       lesson: number;
       sign_before: string;
@@ -328,6 +331,158 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       ...body,
       ...extra,
     });
+
+  /** The Encounter corrected after posting, as the Registrar corrects it. */
+  const correctEncounter = async (name: string, came: boolean) => {
+    const row = await db
+      .selectFrom('equipping_encounter_attendance as a')
+      .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
+      .select(['a.id', 'a.encounter_enrollment_id'])
+      .where('e.person_id', '=', personOf.get(name)!)
+      .where('a.superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('equipping_encounter_attendance')
+        .set({ superseded_at: new Date(), superseded_by: registrar.id })
+        .where('id', '=', row.id)
+        .execute();
+      await trx
+        .insertInto('equipping_encounter_attendance')
+        .values({
+          encounter_enrollment_id: row.encounter_enrollment_id,
+          came,
+          recorded_by: registrar.id,
+        })
+        .execute();
+    });
+  };
+
+  /** A later weekend, today, at which the Registrar records `name` as having come (decision 0509). */
+  const passAtLaterEncounter = async (name: string) => {
+    const today = await manilaToday();
+    const later = (
+      await db
+        .insertInto('encounter_seasons')
+        .values({
+          mens_lc_party_on: plusDays(today, -35),
+          mens_encounter_on: today,
+          womens_lc_party_on: plusDays(today, -28),
+          womens_encounter_on: plusDays(today, 7),
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const ee = (
+      await db
+        .insertInto('equipping_encounter_enrollments')
+        .values({
+          enrollment_id: enrollmentOf.get(name)!,
+          person_id: personOf.get(name)!,
+          encounter_season_id: later,
+          network: 'MENS',
+          enrolled_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await post(registrar, 'equipping/encounter/attendance', {
+      season_id: later,
+      network: 'MENS',
+      came: [ee],
+    }).expect(200);
+    return today;
+  };
+
+  /** A registration for the level, at the term given, for one person. */
+  const register = async (personId: string, term: { term_year: number; term_number: number }) =>
+    (
+      await db
+        .insertInto('equipping_registrations')
+        .values({
+          level: 'LIFE_CLASS',
+          ...term,
+          person_id: personId,
+          bible_confirmed: true,
+          manual_confirmed: true,
+          registered_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+  /** Moves an enrollment's start to before a given day, as a class's students start (0503). */
+  const startBefore = async (enrollmentId: string, day: string) => {
+    await db.transaction().execute(async (trx) => {
+      await sql`ALTER TABLE equipping_enrollments DISABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+      await sql`
+        UPDATE equipping_enrollments
+           SET started_at = (${day}::date - 1)::timestamp AT TIME ZONE 'Asia/Manila'
+         WHERE id = ${enrollmentId}`.execute(trx);
+      await sql`ALTER TABLE equipping_enrollments ENABLE TRIGGER equipping_enrollments_history_kept`.execute(
+        trx,
+      );
+    });
+  };
+
+  /** A second class of the level, its first lesson on the day given. */
+  const otherClass = async (
+    name: string,
+    term: { term_year: number; term_number: number },
+    firstOn: string,
+  ) =>
+    (
+      await db
+        .insertInto('equipping_classes')
+        .values({
+          level: 'LIFE_CLASS',
+          ...term,
+          name,
+          day_of_week: 4,
+          time_of_day: '19:00',
+          first_lesson_on: firstOn,
+          teacher_person_id: teacher.personId,
+          encounter_season_id: seasonId,
+          created_by: admin.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+
+  /** One lesson of another class, saved with the given students marked as having come. */
+  const lessonOf = async (cls: string, firstOn: string, n: number, came: string[]) => {
+    const id = (
+      await db
+        .insertInto('equipping_lessons')
+        .values({
+          class_id: cls,
+          lesson: n,
+          held_on: expectedOn(firstOn, n),
+          recorded_by: teacher.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    for (const enrollmentId of came) {
+      await db
+        .insertInto('equipping_marks')
+        .values({ lesson_id: id, enrollment_id: enrollmentId, came: true, recorded_by: teacher.id })
+        .execute();
+    }
+    return id;
+  };
+
+  const currentMarkOf = (lessonId: string, enrollmentId: string) =>
+    db
+      .selectFrom('equipping_marks')
+      .select('came')
+      .where('lesson_id', '=', lessonId)
+      .where('enrollment_id', '=', enrollmentId)
+      .where('superseded_at', 'is', null)
+      .executeTakeFirst();
 
   it('changes a lesson, works the grade out again, files Life Class and keeps the posted grade', async () => {
     await posted();
@@ -432,17 +587,136 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     await change(teacher, carlo, { lesson: 7, to: 'CAME' }).expect(403);
   });
 
-  it('keeps a Not yet Not yet, and makes nobody Not yet', async () => {
+  it('ends a Not yet made Not passed, as posting ends any other (point 10)', async () => {
     await posted();
     const { student: dino } = await studentOf('Dino');
-    const refused = await change(admin, dino, { lesson: 3, to: 'ABSENT' }).expect(409);
-    expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
-    expect(refused.body.error.message).toContain('Not yet');
-    // Recorded wrongly, and still Not yet: admitted.
-    await change(admin, dino, { lesson: 3, to: 'MADE_UP', made_up_on: await manilaToday() }).expect(
-      201,
-    );
-    expect((await studentOf('Dino')).student).toMatchObject({ grade: 'NOT_YET', changes_seen: 1 });
+    const preview = await get(
+      admin,
+      `equipping/final-grades/grades/${dino.final_grade_id}/change-preview?lesson=3&to=ABSENT`,
+    ).expect(200);
+    expect(preview.body).toMatchObject({
+      grade_before: 'NOT_YET',
+      grade_after: 'NOT_PASSED',
+      enrollment: 'ENDS',
+      encounter_change: null,
+    });
+    await change(
+      admin,
+      dino,
+      { lesson: 3, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'He was away that week.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student).toMatchObject({
+      grade: 'NOT_PASSED',
+      reason: 'L3 not made up.',
+    });
+    const enrollment = await db
+      .selectFrom('equipping_enrollments')
+      .select(['ended_at', 'end_reason'])
+      .where('id', '=', enrollmentOf.get('Dino')!)
+      .executeTakeFirstOrThrow();
+    expect(enrollment.end_reason).toBe('COMPLETED');
+    const row = await db
+      .selectFrom('equipping_grade_changes')
+      .select(['enrollment_effect', 'grade_before', 'grade_after'])
+      .executeTakeFirstOrThrow();
+    expect(row).toEqual({
+      enrollment_effect: 'ENDS',
+      grade_before: 'NOT_YET',
+      grade_after: 'NOT_PASSED',
+    });
+    const audit = await db
+      .selectFrom('audit_log')
+      .select('target_id')
+      .where('action', '=', 'equipping_enrollment.ended')
+      .where('target_id', '=', personOf.get('Dino')!)
+      .execute();
+    expect(audit).toHaveLength(1);
+  });
+
+  it('reopens a finished student made Not yet, who then passes at a later Encounter (points 10 and 14)', async () => {
+    await posted();
+    // Carlo is posted Not passed, L7 not made up, his Encounter attended; corrected since to not
+    // attended. Making L7 up makes him Not yet, worked from the Encounter as it stands.
+    await correctEncounter('Carlo', false);
+    const { student: carlo } = await studentOf('Carlo');
+    expect((carlo as unknown as { encounter_change: unknown }).encounter_change).toEqual({
+      before: 'CAME',
+      now: 'MISSED',
+    });
+    const today = await manilaToday();
+    const preview = await get(
+      admin,
+      `equipping/final-grades/grades/${carlo.final_grade_id}/change-preview?lesson=7&to=MADE_UP&made_up_on=${today}`,
+    ).expect(200);
+    expect(preview.body).toMatchObject({
+      grade_before: 'NOT_PASSED',
+      grade_after: 'NOT_YET',
+      enrollment: 'REOPENS',
+      encounter_change: { before: 'CAME', now: 'MISSED' },
+      training: null,
+    });
+    await change(admin, carlo, { lesson: 7, to: 'MADE_UP', made_up_on: today }).expect(201);
+    const enrollment = await db
+      .selectFrom('equipping_enrollments')
+      .select(['ended_at', 'end_reason'])
+      .where('id', '=', enrollmentOf.get('Carlo')!)
+      .executeTakeFirstOrThrow();
+    expect(enrollment).toEqual({ ended_at: null, end_reason: null });
+    const after = (await studentOf('Carlo')).student as unknown as Student & {
+      history: { encounter_change: unknown; enrollment: unknown }[];
+    };
+    expect(after.grade).toBe('NOT_YET');
+    expect(after.history[0]).toMatchObject({
+      encounter_change: { before: 'CAME', now: 'MISSED' },
+      enrollment: 'REOPENS',
+    });
+    expect(
+      await db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('action', '=', 'equipping_enrollment.reopened')
+        .execute(),
+    ).toHaveLength(1);
+    // Reopened, he passes at a later weekend as any Not yet does (decision 0509).
+    const weekend = await passAtLaterEncounter('Carlo');
+    expect(await lifeClassOf('Carlo')).toEqual([
+      { graduated_on: weekend, from_school: true, superseded_at: null },
+    ]);
+    const passed = await db
+      .selectFrom('equipping_final_grades')
+      .select('passed_later_at')
+      .where('id', '=', carlo.final_grade_id)
+      .executeTakeFirstOrThrow();
+    expect(passed.passed_later_at).not.toBeNull();
+  });
+
+  it('changes one who passed at a later Encounter, withdrawing the Life Class it filed (point 10)', async () => {
+    await posted();
+    const weekend = await passAtLaterEncounter('Dino');
+    const { student: dino } = await studentOf('Dino');
+    const preview = await get(
+      admin,
+      `equipping/final-grades/grades/${dino.final_grade_id}/change-preview?lesson=8&to=ABSENT`,
+    ).expect(200);
+    expect(preview.body).toMatchObject({
+      grade_before: 'NOT_YET',
+      grade_after: 'NOT_PASSED',
+      training: 'WITHDRAWS',
+      enrollment: null,
+      encounter_change: { before: 'NOT_CAME', now: 'CAME' },
+    });
+    await change(
+      admin,
+      dino,
+      { lesson: 8, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'He was away at L8.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student.grade).toBe('NOT_PASSED');
+    const rows = await lifeClassOf('Dino');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ graduated_on: weekend, from_school: true });
+    expect(rows[0].superseded_at).not.toBeNull();
   });
 
   it('refuses a change made since the dialog opened, and one that changes nothing', async () => {
@@ -546,6 +820,8 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
           lessons_kept_after: 9,
           lessons_made_up_after: 3,
           joins_at_lesson_6_after: false,
+          encounter_before: 'CAME',
+          encounter_after: 'CAME',
           changed_by: admin.id,
         })
         .execute(),
@@ -570,6 +846,36 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     expect(carlo.changeable.lessons).toEqual([]);
     const refused = await change(admin, carlo, { lesson: 7, to: 'CAME' }).expect(409);
     expect(refused.body.error.message).toContain('later term');
+    expect(refused.body.error.message).toContain('Cancel that registration first');
+  });
+
+  it('counts a merged record’s later registration, and changes once it is cancelled (point 15)', async () => {
+    await posted();
+    // Carlo was also recorded as Carlito, who registered for next term; the two are merged.
+    const carlito = await createPerson(db, { firstName: 'Carlito', network: 'MENS' });
+    const later = await register(carlito.id, { term_year: 2027, term_number: 1 });
+    await db
+      .updateTable('persons')
+      .set({
+        merged_into_id: personOf.get('Carlo')!,
+        merged_at: new Date(),
+        merge_reason: 'Recorded twice',
+      })
+      .where('id', '=', carlito.id)
+      .execute();
+    const { student: carlo } = await studentOf('Carlo');
+    expect(carlo.changeable.why).toContain('later term');
+    await change(admin, carlo, { lesson: 7, to: 'CAME' }).expect(409);
+    await db
+      .updateTable('equipping_registrations')
+      .set({
+        cancelled_at: new Date(),
+        cancelled_by: registrar.id,
+        cancel_reason: 'Passed after all',
+      })
+      .where('id', '=', later)
+      .execute();
+    await change(admin, carlo, { lesson: 7, to: 'CAME' }).expect(201);
   });
 
   it('gives the history to the Registrar and the Admin, not the Coordinator', async () => {
@@ -586,71 +892,24 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     expect(coordinatorCarlo.changes_seen).toBeUndefined();
   });
 
-  it('changes nothing for one whose Encounter was corrected after posting', async () => {
+  it('works from an Encounter corrected after posting, and says so (point 14)', async () => {
     await posted();
     const { student: ben } = await studentOf('Ben');
-    // Ben's Encounter corrected to not attended after posting: his grade stands Passed, and the
-    // register would now say Not yet.
-    const row = await db
-      .selectFrom('equipping_encounter_attendance as a')
-      .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
-      .select(['a.id', 'a.encounter_enrollment_id'])
-      .where('e.person_id', '=', personOf.get('Ben')!)
-      .where('a.superseded_at', 'is', null)
-      .executeTakeFirstOrThrow();
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable('equipping_encounter_attendance')
-        .set({ superseded_at: new Date(), superseded_by: registrar.id })
-        .where('id', '=', row.id)
-        .execute();
-      await trx
-        .insertInto('equipping_encounter_attendance')
-        .values({
-          encounter_enrollment_id: row.encounter_enrollment_id,
-          came: false,
-          recorded_by: registrar.id,
-        })
-        .execute();
-    });
-    const refused = await change(admin, ben, { lesson: 3, to: 'ABSENT' }).expect(409);
-    expect(refused.body.error.message).toContain('Encounter');
-  });
-
-  it('changes nothing for one whose Encounter correction left the grade’s words alone', async () => {
-    await posted();
-    // Carlo is posted Not passed, L7 not made up, his Encounter attended. Corrected to not
-    // attended, the register still says L7 not made up; only the lessons kept move.
-    const row = await db
-      .selectFrom('equipping_encounter_attendance as a')
-      .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
-      .select(['a.id', 'a.encounter_enrollment_id'])
-      .where('e.person_id', '=', personOf.get('Carlo')!)
-      .where('a.superseded_at', 'is', null)
-      .executeTakeFirstOrThrow();
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable('equipping_encounter_attendance')
-        .set({ superseded_at: new Date(), superseded_by: registrar.id })
-        .where('id', '=', row.id)
-        .execute();
-      await trx
-        .insertInto('equipping_encounter_attendance')
-        .values({
-          encounter_enrollment_id: row.encounter_enrollment_id,
-          came: false,
-          recorded_by: registrar.id,
-        })
-        .execute();
-    });
-    const { student: carlo } = await studentOf('Carlo');
-    expect(carlo.changeable.lessons).toEqual([]);
-    const refused = await change(admin, carlo, {
-      lesson: 7,
-      to: 'MADE_UP',
-      made_up_on: await manilaToday(),
-    }).expect(409);
-    expect(refused.body.error.message).toContain('Encounter');
+    // Ben's Encounter corrected to not attended after posting: his grade stands Passed.
+    await correctEncounter('Ben', false);
+    await change(
+      admin,
+      ben,
+      { lesson: 3, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'Ticked by mistake.' },
+    ).expect(201);
+    const after = (await studentOf('Ben')).student as unknown as Student & {
+      history: { encounter_change: unknown }[];
+    };
+    expect(after.grade).toBe('NOT_PASSED');
+    expect(after.history[0].encounter_change).toEqual({ before: 'CAME', now: 'MISSED' });
+    const rows = await lifeClassOf('Ben');
+    expect(rows[0].superseded_at).not.toBeNull();
   });
 
   it('admits a register write in a posted class for a student its posting did not grade', async () => {
@@ -727,6 +986,176 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
         })
         .execute();
     });
+  });
+
+  it('changes a lesson recorded in a class the student left this term, in that class (point 11)', async () => {
+    // Fidel starts in Life Class A, is moved to Life Class B after L4, and B is posted.
+    const fidel = await createPerson(db, {
+      firstName: 'Fidel',
+      network: 'MENS',
+      birthDate: '1990-02-01',
+    });
+    await assignTo(db, fidel.id, ramon.id);
+    personOf.set('Fidel', fidel.id);
+    const reg = await register(fidel.id, TERM);
+    const inA = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({ registration_id: reg, class_id: classId, started_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await startBefore(inA, firstLesson);
+    enrollmentOf.set('Fidel', inA);
+    await lesson(1);
+    const lessonTwoOfA = (await lesson(2)).id;
+    await lesson(3);
+    await lesson(4);
+    enrollmentOf.delete('Fidel');
+    await db
+      .updateTable('equipping_enrollments')
+      .set({ ended_at: new Date(), ended_by: registrar.id, end_reason: 'MOVED' })
+      .where('id', '=', inA)
+      .execute();
+    const classB = await otherClass('Life Class B', TERM, firstLesson);
+    const inB = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({ registration_id: reg, class_id: classB, started_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await startBefore(inB, expectedOn(firstLesson, 6));
+    for (const n of [1, 2, 3, 4]) {
+      await lessonOf(classB, firstLesson, n, []);
+    }
+    for (const n of [6, 7, 8, 9]) {
+      await lessonOf(classB, firstLesson, n, [inB]);
+    }
+    enrollmentOf.set('Fidel', inB);
+    await attended('Fidel');
+    classId = classB;
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classB}/post`).expect(200);
+
+    const { student } = await studentOf('Fidel');
+    expect(student.grade).toBe('PASSED');
+    const two = student.changeable.lessons.find((l) => l.lesson === 2)!;
+    expect(two).toMatchObject({ recorded_in: 'Life Class A', kept: false });
+    await change(
+      admin,
+      student,
+      { lesson: 2, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'Away at L2 in Life Class A.' },
+    ).expect(201);
+    expect((await studentOf('Fidel')).student).toMatchObject({
+      grade: 'NOT_PASSED',
+      reason: 'L2 not made up.',
+    });
+    // Written in Life Class A's register, under the enrollment there.
+    expect(await currentMarkOf(lessonTwoOfA, inA)).toEqual({ came: false });
+  });
+
+  it('changes a lesson kept from an earlier term only where lessons 1 to 4 stay done (point 12)', async () => {
+    await posted();
+    // Eli is posted Not passed, joining a later class at Lesson 6 with lessons 1 to 4 kept, L1
+    // and L2 made up. He joins Life Class B next term, which is posted Passed.
+    const reg = await register(personOf.get('Eli')!, { term_year: 2027, term_number: 1 });
+    const later = { term_year: 2027, term_number: 1 };
+    const classB = await otherClass('Life Class B', later, firstLesson);
+    const inB = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({
+          registration_id: reg,
+          class_id: classB,
+          started_by: registrar.id,
+          carried_from_enrollment_id: enrollmentOf.get('Eli')!,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await startBefore(inB, firstLesson);
+    for (const n of [1, 2, 3, 4]) {
+      await lessonOf(classB, firstLesson, n, []);
+    }
+    for (const n of [6, 7, 8, 9]) {
+      await lessonOf(classB, firstLesson, n, [inB]);
+    }
+    const inA = enrollmentOf.get('Eli')!;
+    const classA = classId;
+    classId = classB;
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classB}/post`).expect(200);
+
+    const { student: eli } = await studentOf('Eli');
+    expect(eli.grade).toBe('PASSED');
+    const three = eli.changeable.lessons.find((l) => l.lesson === 3)!;
+    expect(three.kept).toBe(true);
+    // Absent would undo what let him join at Lesson 6: refused.
+    const absent = await change(
+      admin,
+      eli,
+      { lesson: 4, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'Away at L4.' },
+    ).expect(409);
+    expect(absent.body.error.message).toContain('undo that join');
+    // So would a third of lessons 1 to 4 missed, made up or not: L1 and L2 already are.
+    const today = await manilaToday();
+    const third = await change(
+      admin,
+      eli,
+      { lesson: 3, to: 'MADE_UP', made_up_on: today },
+      { why: 'RECORDED_WRONGLY', details: 'Watched L3 later, not in the room.' },
+    ).expect(409);
+    expect(third.body.error.message).toContain('undo that join');
+    // Came rather than made up keeps it: written in Life Class A's register, still Passed.
+    const lessonOneOfA = await db
+      .selectFrom('equipping_lessons')
+      .select('id')
+      .where('class_id', '=', classA)
+      .where('lesson', '=', 1)
+      .executeTakeFirstOrThrow();
+    await change(
+      admin,
+      eli,
+      { lesson: 1, to: 'CAME' },
+      { why: 'RECORDED_WRONGLY', details: 'He was there for L1.' },
+    ).expect(201);
+    expect((await studentOf('Eli')).student.grade).toBe('PASSED');
+    expect(await currentMarkOf(lessonOneOfA.id, inA)).toEqual({ came: true });
+    const madeUp = await db
+      .selectFrom('equipping_make_ups')
+      .select('id')
+      .where('lesson_id', '=', lessonOneOfA.id)
+      .where('enrollment_id', '=', inA)
+      .where('superseded_at', 'is', null)
+      .execute();
+    expect(madeUp).toEqual([]);
+  });
+
+  it('does not enroll a registration graded Passed or Not passed again (point 16)', async () => {
+    await posted();
+    const benReg = await db
+      .selectFrom('equipping_enrollments')
+      .select('registration_id')
+      .where('id', '=', enrollmentOf.get('Ben')!)
+      .executeTakeFirstOrThrow();
+    const classC = await otherClass('Life Class C', TERM, plusDays(await manilaToday(), 7));
+    const refused = await post(admin, `equipping/classes/${classC}/enrollments`, {
+      registration_ids: [benReg.registration_id],
+    }).expect(409);
+    expect(JSON.stringify(refused.body)).toContain('already graded');
+    await expect(
+      db
+        .insertInto('equipping_enrollments')
+        .values({
+          registration_id: benReg.registration_id,
+          class_id: classC,
+          started_by: registrar.id,
+        })
+        .execute(),
+    ).rejects.toThrow(/not enrolled again/);
   });
 
   it('holds in the database that a posted register changes only beside a grade change', async () => {
