@@ -490,7 +490,9 @@ function EarlierTries({
         </>
       ) : null}
       <p className="text-muted mt-1">
-        This will be their {ordinal(tries.length + 1)} try. Every try is kept; there is no limit.
+        {/* A term is one try (decision 0511, point 8). */}
+        This will be their {ordinal(new Set(tries.map((each) => termLabel(each))).size + 1)} try. Every try is
+        kept; there is no limit.
       </p>
     </section>
   );
