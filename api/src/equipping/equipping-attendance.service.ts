@@ -275,6 +275,10 @@ export class EquippingAttendanceService {
         memberId: identity?.memberId ?? '',
       };
     };
+    const encounters = await this.encounterOf(
+      this.db,
+      enrolled.map((row) => row.person_id),
+    );
     return {
       data: [...placed]
         .sort((a, b) => {
@@ -301,6 +305,7 @@ export class EquippingAttendanceService {
             teacher: person(row.teacher_person_id),
             guide: person(row.guide_person_id),
             joined_on: manilaDayOf(row.started_at),
+            encounter: encounters.get(canonicalId(row.person_id)) ?? null,
             marks: CLASS_LESSONS.flatMap((n) => {
               const entry = register.get(n);
               return entry
@@ -374,6 +379,7 @@ export class EquippingAttendanceService {
     const nameOf = (id: string | null) => (id === null ? null : (names.get(id)?.fullName ?? null));
 
     const now = await databaseNow(this.db);
+    const encounters = await this.encounterOf(this.db, personIds);
     const byNumber = new Map(lessons.map((row) => [row.lesson, row]));
     const lessonRow = CLASS_LESSONS.map((n) => {
       const saved = byNumber.get(n);
@@ -402,6 +408,7 @@ export class EquippingAttendanceService {
             ? { id: row.guide_person_id, full_name: nameOf(row.guide_person_id) }
             : null,
           joined_on: manilaDayOf(row.started_at),
+          encounter: encounters.get(canonicalId(row.person_id)) ?? null,
           marks: CLASS_LESSONS.flatMap((n) => {
             const entry = register.get(n);
             return entry
@@ -986,7 +993,7 @@ export class EquippingAttendanceService {
    * this class held before the student joined, with no mark for it anywhere, is *before
    * joining*: owed as a make-up and not an absence. Keyed by enrollment, then lesson number.
    */
-  private async registersOf(
+  async registersOf(
     executor: Db | Transaction<Database>,
     classId: string,
     rows: readonly { enrollment_id: string; registration_id: string; started_at: Date }[],
@@ -1131,6 +1138,40 @@ export class EquippingAttendanceService {
         }
       }
       result.set(row.enrollment_id, register);
+    }
+    return result;
+  }
+
+  /**
+   * **The register's ENC column** (decision 0501, point 14; decision 0507), for each person:
+   * `CAME` once they attended an Encounter, else `ENROLLED` while a weekend they are enrolled
+   * in has no attendance recorded, else `MISSED` when they were enrolled and did not come. A
+   * person never enrolled in one has no entry.
+   */
+  async encounterOf(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+  ): Promise<Map<string, 'CAME' | 'ENROLLED' | 'MISSED'>> {
+    const result = new Map<string, 'CAME' | 'ENROLLED' | 'MISSED'>();
+    if (personIds.length === 0) {
+      return result;
+    }
+    const rows = await executor
+      .selectFrom('equipping_encounter_enrollments as ee')
+      .leftJoin('equipping_encounter_attendance as a', (join) =>
+        join.onRef('a.encounter_enrollment_id', '=', 'ee.id').on('a.superseded_at', 'is', null),
+      )
+      .select(['ee.person_id', 'a.came'])
+      .where('ee.person_id', 'in', [...personIds])
+      .execute();
+    const rank = { CAME: 3, ENROLLED: 2, MISSED: 1 } as const;
+    for (const row of rows) {
+      const state = row.came === true ? 'CAME' : row.came === false ? 'MISSED' : 'ENROLLED';
+      const id = canonicalId(row.person_id);
+      const was = result.get(id);
+      if (was === undefined || rank[state] > rank[was]) {
+        result.set(id, state);
+      }
     }
     return result;
   }

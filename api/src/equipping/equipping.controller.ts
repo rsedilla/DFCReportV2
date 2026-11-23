@@ -21,7 +21,10 @@ import { PeopleService } from '../people/people.service';
 import { PersonViewsService } from '../people/person-views.service';
 
 import {
+  EncounterAttendanceDto,
+  EncounterQueryDto,
   EnrollDto,
+  EnrollEncounterDto,
   EquippingSearchDto,
   EquippingTermDto,
   ListRegistrationsDto,
@@ -37,6 +40,7 @@ import {
   TeacherClashDto,
 } from './dto/equipping.dto';
 import { EquippingAttendanceService } from './equipping-attendance.service';
+import { EquippingEncounterService } from './equipping-encounter.service';
 import { EquippingService } from './equipping.service';
 
 /**
@@ -56,6 +60,7 @@ export class EquippingController {
   constructor(
     private readonly equipping: EquippingService,
     private readonly attendance: EquippingAttendanceService,
+    private readonly encounter: EquippingEncounterService,
     private readonly people: PeopleService,
     private readonly views: PersonViewsService,
     @Inject(ThrottlerStorage) private readonly throttle: ThrottlerStorage,
@@ -376,6 +381,40 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.equipping.swapGuide(actor, id, body.guide_id, claim);
+  }
+
+  /**
+   * One Network's Encounter weekend (decision 0501, point 14; decision 0507): who is cleared,
+   * who needs a make-up and who can't go, after lesson 4, the classes still waiting for it, and
+   * who is enrolled. The Registrar's and the Admin's.
+   */
+  @Get('encounter')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async encounterList(@Query() query: EncounterQueryDto): Promise<Record<string, unknown>> {
+    return this.encounter.list(query.network, query.season_id);
+  }
+
+  /** Cleared students into one weekend, before it begins. */
+  @Post('encounter/enrollments')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async enrollEncounter(
+    @Body() body: EnrollEncounterDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.encounter.enroll(actor, body, claim);
+  }
+
+  /** Who came to one weekend, from its first day: the register's ENC column. */
+  @Post('encounter/attendance')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async encounterAttendance(
+    @Body() body: EncounterAttendanceDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.encounter.recordAttendance(actor, body, claim);
   }
 
   @Get('classes/:id')

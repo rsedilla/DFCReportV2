@@ -40,7 +40,7 @@ const REGULAR_FROM = 5;
  */
 const SUYNL_LESSONS_NEEDED = [1, 2, 3, 4] as const;
 /** 14 by the first day of the Encounter weekend (point 11; owner 2026-11-19, replacing 15). */
-const ENCOUNTER_MINIMUM_AGE = 14;
+export const ENCOUNTER_MINIMUM_AGE = 14;
 /** Section 22: a collection's default page. */
 const DEFAULT_PAGE = 50;
 
