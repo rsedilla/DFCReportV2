@@ -21,6 +21,9 @@ import {
   register,
   searchPeople,
   termLabel,
+  ordinal,
+  tryLabel,
+  type Candidate,
   type FoundPerson,
   type Registration,
   type Term,
@@ -108,6 +111,7 @@ function RegistrationList({ term }: { term: Term }) {
             <tr key={row.id} className={rowClasses}>
               <td className="px-3 py-3 align-top">
                 {row.person.full_name}
+                {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
                 <span className="text-muted block text-sm sm:hidden">
                   {row.leader_name ?? 'No leader yet'} ·{' '}
                   {row.birthday_recorded ? 'birthday recorded' : 'birthday missing'}
@@ -344,6 +348,10 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             </Button>
           </div>
 
+          {candidate.data?.earlier_tries && candidate.data.earlier_tries.length > 0 ? (
+            <EarlierTries tries={candidate.data.earlier_tries} />
+          ) : null}
+
           <section aria-labelledby="requirements-heading">
             <h3 id="requirements-heading" className="font-semibold">
               Requirements
@@ -444,5 +452,30 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
         </form>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * *Took Life Class before* on the Register form (decision 0511): each earlier try graded *Not
+ * passed*, worked out from the posted grades, and which try this one would be. There is no limit
+ * on tries, so it informs and never stops a registration.
+ */
+function EarlierTries({ tries }: { tries: NonNullable<Candidate['earlier_tries']> }) {
+  return (
+    <section aria-labelledby="earlier-tries-heading" className="border-line rounded-lg border p-3 text-sm">
+      <h3 id="earlier-tries-heading" className="font-semibold">
+        Took Life Class before
+      </h3>
+      <ul className="mt-1">
+        {tries.map((each) => (
+          <li key={`${each.term_year}-${each.term_number}-${each.class_name}`}>
+            {termLabel(each)} · {each.class_name} · <strong>Not passed</strong> · {each.reason}
+          </li>
+        ))}
+      </ul>
+      <p className="text-muted mt-1">
+        This will be their {ordinal(tries.length + 1)} try. Every try is kept; there is no limit.
+      </p>
+    </section>
   );
 }

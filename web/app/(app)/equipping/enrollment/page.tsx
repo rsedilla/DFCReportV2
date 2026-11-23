@@ -19,6 +19,7 @@ import {
   listClasses,
   moveEnrollment,
   termLabel,
+  tryLabel,
   withdrawEnrollment,
   type ClassDetail,
   type EquippingClass,
@@ -457,6 +458,7 @@ function ReadyRows({
               </td>
               <td className="px-3 py-3 align-top">
                 {row.person.full_name}
+                {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
                 {row.blocked ? (
                   <span className="text-field-invalid block text-sm">{blockedText(row.blocked)}</span>
                 ) : null}
@@ -482,6 +484,7 @@ function ReadyRows({
               </>
             )}
             <p className="text-muted pb-1 text-sm">
+              {tryLabel(row.try_number) ? `${tryLabel(row.try_number)} · ` : ''}
               {row.leader_name ?? 'No leader yet'}
               {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
               {' · '}
