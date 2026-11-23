@@ -449,6 +449,17 @@ describe('Correcting and cancelling a class (section 29, decision 0510)', () => 
       }
       // Somebody who neither teaches nor guides it is refused for that, and told nothing more.
       await get(plainLeader, `equipping/classes/${id}/attendance`).expect(403);
+      // So too on saving a lesson or a make-up; the Admin, who may record, is told it was cancelled.
+      const lesson = { held_on: '2027-01-12', came: [] };
+      const makeUp = { enrollment_id: randomUUID(), lesson: 1, made_up_on: '2027-01-13' };
+      await post(plainLeader, `equipping/classes/${id}/lessons/1`, lesson).expect(403);
+      await post(plainLeader, `equipping/classes/${id}/make-ups`, makeUp).expect(403);
+      expect(code(await post(admin, `equipping/classes/${id}/lessons/1`, lesson).expect(409))).toBe(
+        'INVARIANT_VIOLATION',
+      );
+      expect(code(await post(admin, `equipping/classes/${id}/make-ups`, makeUp).expect(409))).toBe(
+        'INVARIANT_VIOLATION',
+      );
 
       await expect(
         sql`UPDATE equipping_classes SET name = 'Renamed' WHERE id = ${id}`.execute(db),
