@@ -11,7 +11,8 @@ import type { SchoolEvidence, SchoolEvidencePort } from '../training/school-evid
  * the ruling's words being that the school has passed them):
  *
  * - **the Encounter**: a current record of having come, dated that weekend;
- * - **Life Class**: a posted *Passed*, dated the posting day, or a posted *Not yet* that passed
+ * - **Life Class**: a grade standing *Passed* now, dated the day it became so, the posting or a
+ *   change after posting (decision 0513), or a posted *Not yet* that passed
  *   later, dated the weekend it passed at. That weekend is the record of having come written in
  *   the same transaction as `passed_later_at`, which `now()` makes the same instant; it is kept,
  *   since correcting it to not attended is refused (point 4).

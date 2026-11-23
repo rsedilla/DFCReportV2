@@ -518,7 +518,127 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       { lesson: 7, to: 'CAME' },
       { why: 'RECORDED_WRONGLY', details: 'He came to L7.' },
     ).expect(409);
-    expect(refused.body.error.message).toContain('Lesson 6');
+    // Registered for the level in a later term, which rests on this grade: refused first.
+    expect(refused.body.error.message).toContain('later term');
+  });
+
+  it('gives the history to the Registrar and the Admin, not the Coordinator', async () => {
+    await posted();
+    const { student: carlo } = await studentOf('Carlo');
+    await change(admin, carlo, { lesson: 7, to: 'CAME' }).expect(201);
+    expect((await studentOf('Carlo', registrar)).student.history).toHaveLength(1);
+    const coordinatorRead = (
+      await get(coordinator, `equipping/coordinate/classes/${classId}/grades`).expect(200)
+    ).body as { may_change: boolean; students: Student[] };
+    expect(coordinatorRead.may_change).toBe(false);
+    expect(coordinatorRead.students.find(first('Carlo'))!.history).toEqual([]);
+  });
+
+  it('changes nothing for one whose Encounter was corrected after posting', async () => {
+    await posted();
+    const { student: ben } = await studentOf('Ben');
+    // Ben's Encounter corrected to not attended after posting: his grade stands Passed, and the
+    // register would now say Not yet.
+    const row = await db
+      .selectFrom('equipping_encounter_attendance as a')
+      .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
+      .select(['a.id', 'a.encounter_enrollment_id'])
+      .where('e.person_id', '=', personOf.get('Ben')!)
+      .where('a.superseded_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('equipping_encounter_attendance')
+        .set({ superseded_at: new Date(), superseded_by: registrar.id })
+        .where('id', '=', row.id)
+        .execute();
+      await trx
+        .insertInto('equipping_encounter_attendance')
+        .values({
+          encounter_enrollment_id: row.encounter_enrollment_id,
+          came: false,
+          recorded_by: registrar.id,
+        })
+        .execute();
+    });
+    const refused = await change(admin, ben, { lesson: 3, to: 'ABSENT' }).expect(409);
+    expect(refused.body.error.message).toContain('Encounter');
+  });
+
+  it('admits a register write in a posted class for a student its posting did not grade', async () => {
+    // Fidel was in the class and left it before posting, as a moved student does: the posting
+    // graded nobody under his enrollment, so a make-up of a lesson he missed there is recorded
+    // from his new class without any grade change (decision 0512).
+    const fidel = await createPerson(db, {
+      firstName: 'Fidel',
+      network: 'MENS',
+      birthDate: '1990-02-01',
+    });
+    await assignTo(db, fidel.id, ramon.id);
+    const reg = (
+      await db
+        .insertInto('equipping_registrations')
+        .values({
+          ...TERM,
+          person_id: fidel.id,
+          bible_confirmed: true,
+          manual_confirmed: true,
+          registered_by: registrar.id,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const fidelEnrollment = (
+      await db
+        .insertInto('equipping_enrollments')
+        .values({ registration_id: reg, class_id: classId, started_by: registrar.id })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    enrollmentOf.set('Fidel', fidelEnrollment);
+    await term();
+    enrollmentOf.delete('Fidel');
+    await db
+      .updateTable('equipping_enrollments')
+      .set({ ended_at: new Date(), ended_by: registrar.id, end_reason: 'MOVED' })
+      .where('id', '=', fidelEnrollment)
+      .execute();
+    await check(coordinator);
+    await post(registrar, `equipping/final-grades/classes/${classId}/post`).expect(200);
+
+    const lessonSeven = await db
+      .selectFrom('equipping_lessons')
+      .select('id')
+      .where('class_id', '=', classId)
+      .where('lesson', '=', 7)
+      .executeTakeFirstOrThrow();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('equipping_marks')
+        .set({ superseded_at: new Date(), superseded_by: admin.id })
+        .where('lesson_id', '=', lessonSeven.id)
+        .where('enrollment_id', '=', fidelEnrollment)
+        .where('superseded_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('equipping_marks')
+        .values({
+          lesson_id: lessonSeven.id,
+          enrollment_id: fidelEnrollment,
+          came: false,
+          recorded_by: admin.id,
+        })
+        .execute();
+      await trx
+        .insertInto('equipping_make_ups')
+        .values({
+          lesson_id: lessonSeven.id,
+          enrollment_id: fidelEnrollment,
+          made_up_on: await manilaToday(),
+          recorded_by: admin.id,
+        })
+        .execute();
+    });
   });
 
   it('holds in the database that a posted register changes only beside a grade change', async () => {

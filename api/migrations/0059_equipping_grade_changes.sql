@@ -129,14 +129,17 @@ CREATE TRIGGER equipping_grade_changes_kept
   FOR EACH ROW EXECUTE FUNCTION assert_grade_change();
 
 -- **A posted class's register changes only with a grade change** (decision 0513): a mark or a
--- make-up of a posted class's lesson, written or closed, needs a change of that student's grade
--- recorded in the same transaction, which `now()` makes the same instant.
+-- make-up of a posted class's lesson for a student that posting graded, written or closed, needs
+-- a change of that student's grade recorded in the same transaction, which `now()` makes the same
+-- instant. A student who moved out before the posting has no grade there, and a make-up of a
+-- lesson they missed in it is still recorded from the class they are in (decision 0512).
 CREATE FUNCTION assert_posted_register_kept() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF EXISTS (
        SELECT 1 FROM equipping_lessons l
          JOIN equipping_class_postings p ON p.class_id = l.class_id
+         JOIN equipping_final_grades g ON g.posting_id = p.id AND g.enrollment_id = NEW.enrollment_id
         WHERE l.id = NEW.lesson_id)
      AND NOT EXISTS (
        SELECT 1

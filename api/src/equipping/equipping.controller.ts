@@ -246,7 +246,8 @@ export class EquippingController {
     @Param('id', new UuidParamPipe('id')) id: string,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    return this.grades.classGrades(actor, id);
+    // A posted grade's changes are the Registrar's and the Admin's to read (decision 0513).
+    return this.grades.classGrades(actor, id, { history: false });
   }
 
   /** *Mark as checked*: the Coordinator's, or the Admin's for the Coordinator's own disciples. */

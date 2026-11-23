@@ -28,13 +28,16 @@ they are, the reason, who and when; the grade a student holds is the posted one 
 change (`equipping_current_grades`). Nothing is rewritten or deleted, the database refusing
 either. The row reads *Changed after posting · history*, opening the grade as posted and each
 change with who made it, when, the lesson, the grade before and after, and the reason. The
-Registrar reads it; only the Admin changes.
+Registrar and the Admin read it, the Coordinator's read of the class carrying none, the ruling
+naming only those two; only the Admin changes.
 
 **5. The register changes with it, as any correction does.** The mark or make-up is written in
 the posted class under the graded enrollment, the earlier one closed and kept (decision 0503), a
 mark carrying the details as its reason as a closed week's does. **The database now holds a posted
-class's register final**: a mark or make-up of a posted class's lesson is written or closed only in
-a transaction recording a change of that student's grade.
+class's register final for the students it graded**: a mark or make-up of a posted class's lesson
+under an enrollment that posting graded is written or closed only in a transaction recording a
+change of that student's grade. A student who left the class before it was posted has no grade
+there, and a lesson they missed in it is still made up from their new class (decision 0512).
 
 **6. Training follows the grade** (owner, 2026-11-23, as recommended). A grade that becomes
 *Passed* files Life Class from the school, dated the day of the change, one already holding Life
@@ -56,7 +59,8 @@ many changes it saw; one that changes nothing is refused `INVARIANT_VIOLATION`.
 
 ## This step's readings, put to the owner
 
-These are refused, not decided. Each is recorded as open in `CLAUDE.md`, and the refusal is the
+These are refused, not decided. **The routes take the church as their target** for the Admin,
+where every other `equipping.class` route takes the actor (Section 7). Each is recorded as open in `CLAUDE.md`, and the refusal is the
 conservative arm, removable by a ruling without undoing anything written.
 
 - **A student posted *Not yet* stays *Not yet*, and nobody becomes it.** The owner's point 4
@@ -70,6 +74,15 @@ conservative arm, removable by a ruling without undoing anything written.
 - **A student who has joined a later class at Lesson 6 keeps the grade that let them**: a change
   that would take *Joins a later class at Lesson 6* away is refused once a later enrollment carries
   from it.
+- **A grade the register no longer gives is not changed.** The grade is worked out against the
+  Encounter as it stands now, and an Encounter corrected after posting would be folded into a
+  lesson change unseen; whether a change works from the Encounter at posting or now is for the
+  owner, and until then any change of such a grade is refused, saying why.
+- **Nothing is changed once the person has registered for the level in a later term**: that term
+  rests on this grade, as a try (decision 0511), a fresh start or a carry at Lesson 6, and a
+  *Not passed* made *Passed* would leave them passed and sitting a repeat.
+
+The last two were raised by `architecture-guardian`'s review of this step.
 
 **Who is the Admin** is read as decision 0508 reads it, `equipping.class` at Whole Church, which
 only the Admin holds by default and the Registrar does not; whether "Admin" is a role or a

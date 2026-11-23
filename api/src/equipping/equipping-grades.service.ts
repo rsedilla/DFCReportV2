@@ -139,7 +139,11 @@ export class EquippingGradesService {
    * One class's grades, for the Registrar or the Coordinator. `actor` marks which students are
    * the reader's own disciples, whom the Admin checks instead (0501, point 16).
    */
-  async classGrades(actor: Actor, classId: string): Promise<Record<string, unknown>> {
+  async classGrades(
+    actor: Actor,
+    classId: string,
+    options: { history: boolean } = { history: true },
+  ): Promise<Record<string, unknown>> {
     const standing = await this.standingWithin(this.db, classId);
     const leaders = await this.hierarchy.directLeaderIdsOf(
       standing.students.map((s) => s.person_id),
@@ -151,9 +155,11 @@ export class EquippingGradesService {
       !admin &&
       actor.personId !== null &&
       canonicalId(leaders.get(personId) ?? '') === canonicalId(actor.personId);
-    const history = await this.historyOf(
-      standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
-    );
+    const history = options.history
+      ? await this.historyOf(
+          standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
+        )
+      : new Map<string, Record<string, unknown>[]>();
     return {
       class: standing.class,
       status: await this.statusOf(standing),
@@ -161,7 +167,7 @@ export class EquippingGradesService {
       checks_as: admin ? 'ADMIN' : 'COORDINATOR',
       // **Only the Admin changes a lesson after posting** (decision 0513), read as 0508 reads
       // the Admin: `equipping.class` at Whole Church.
-      may_change: standing.posting !== null && admin,
+      may_change: options.history && standing.posting !== null && admin,
       // What *Mark as checked* sends back, so a register changed since it was read is refused.
       fingerprint: standing.fingerprint,
       students: standing.students
@@ -181,7 +187,9 @@ export class EquippingGradesService {
                 changes_seen: s.posted.changes,
                 // The lessons a change may reach, each as the register reads it now.
                 changeable:
-                  standing.posting !== null && admin ? changeableOf(s) : { lessons: [], why: null },
+                  options.history && standing.posting !== null && admin
+                    ? changeableOf(s)
+                    : { lessons: [], why: null },
                 history: history.get(s.posted.final_grade_id) ?? [],
               }),
         }))
@@ -502,7 +510,9 @@ export class EquippingGradesService {
         await this.training.fileFromSchoolWithin(trx, {
           personId: student.person_id,
           program: 'LIFE_CLASS',
-          graduatedOn: today,
+          // Dated by the change's own instant, which a later withdrawal and the school's
+          // evidence read back, as posting dates its filing by `posted_at`.
+          graduatedOn: manilaDayOf(recorded.changed_at),
           accountId: actor.accountId,
         });
       } else if (student.grade === 'PASSED' && plan.after.grade !== 'PASSED') {
@@ -602,6 +612,46 @@ export class EquippingGradesService {
     const refusal = refusalOf(student, input.lesson);
     if (refusal !== null) {
       throw new InvariantViolationError(refusal, { field: 'lesson' });
+    }
+    // **The grade must still be the one its register gives** (open in `CLAUDE.md`): an Encounter
+    // corrected since posting would otherwise be folded into a lesson change unseen, so which
+    // Encounter a change works from is put to the owner, and nothing is changed meanwhile.
+    const now = gradeOf(student.register, student.encounter);
+    if (now.grade !== student.grade || now.reason !== student.reason) {
+      throw new InvariantViolationError(
+        'Their record has changed since this grade was set (their Encounter, most likely), so no lesson is changed here until that is settled.',
+        { field: 'lesson' },
+      );
+    }
+    // **Not once they have signed up for the level again** (open in `CLAUDE.md`): a later term's
+    // registration rests on this grade, as a try (decision 0511) or as a fresh start.
+    const graded = await executor
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+      .select(['r.person_id', 'r.level', 'r.term_year', 'r.term_number'])
+      .where('e.id', '=', student.enrollment_id)
+      .executeTakeFirstOrThrow();
+    const later = await executor
+      .selectFrom('equipping_registrations')
+      .select('id')
+      .where('person_id', '=', graded.person_id)
+      .where('level', '=', graded.level)
+      .where('cancelled_at', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('term_year', '>', graded.term_year),
+          eb.and([
+            eb('term_year', '=', graded.term_year),
+            eb('term_number', '>', graded.term_number),
+          ]),
+        ]),
+      )
+      .executeTakeFirst();
+    if (later !== undefined) {
+      throw new InvariantViolationError(
+        'They have registered for this level in a later term, which rests on this grade, so it is not changed here.',
+        { field: 'lesson' },
+      );
     }
     const entry = student.register.get(input.lesson)!;
     const signBefore = signOf(entry);

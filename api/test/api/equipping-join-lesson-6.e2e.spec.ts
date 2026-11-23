@@ -608,8 +608,10 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
         .where('l.lesson', '=', 3)
         .executeTakeFirstOrThrow()
     ).id;
-    // Only 0512's rule is under test: the posted-register rule of decision 0513, which admits
-    // this write only beside a grade change, is set aside for this one transaction.
+    // Only 0512's rule is under test here. The student was graded by B's posting, so decision
+    // 0513 admits this write only beside a grade change; that rule is set aside for this one
+    // transaction. A student the posting did not grade is admitted without it, which
+    // `equipping-grade-change.e2e.spec.ts` pins.
     await expect(
       db.transaction().execute(async (trx) => {
         await sql`ALTER TABLE equipping_make_ups DISABLE TRIGGER equipping_make_ups_posted_kept`.execute(
