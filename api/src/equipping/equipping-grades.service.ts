@@ -99,6 +99,8 @@ export class EquippingGradesService {
       .where('level', '=', query.level)
       .where('term_year', '=', query.term_year)
       .where('term_number', '=', query.term_number)
+      // A cancelled class never had a lesson, so has nothing to post (decision 0510).
+      .where('cancelled_at', 'is', null)
       .orderBy('name')
       .execute();
     const data = [];

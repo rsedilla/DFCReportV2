@@ -145,7 +145,10 @@ export async function mockEquipping(page: Page): Promise<void> {
 }
 
 /** The Coordinator's *Classes* (decision 0501): one class with a Teacher, one not named yet. */
-export async function mockCoordinatedClasses(page: Page): Promise<void> {
+export async function mockCoordinatedClasses(
+  page: Page,
+  options: { lessonSaved?: boolean; cancelled?: boolean } = {},
+): Promise<void> {
   const base = {
     place: 'Room 2',
     encounter_season_id: '3f1b7c6e-0000-4000-8000-00000000e301',
@@ -178,11 +181,66 @@ export async function mockCoordinatedClasses(page: Page): Promise<void> {
             enrolled: 0,
             status: 'NOT_STARTED',
             guides: { named: 0, short_men: 0, short_women: 0 },
+            lesson_saved: options.lessonSaved ?? false,
           },
+          // Cancelled on 23 Nov 2026 (decision 0510): listed only under *Cancelled*.
+          ...(options.cancelled
+            ? [
+                {
+                  ...base,
+                  id: '3f1b7c6e-0000-4000-8000-00000000e003',
+                  name: 'Life Class D',
+                  day_of_week: 4,
+                  time_of_day: '18:00',
+                  first_lesson_on: '2026-12-03',
+                  teacher: null,
+                  enrolled: 0,
+                  status: 'CANCELLED',
+                  lesson_saved: false,
+                  cancelled_on: '2026-11-23',
+                  cancel_reason: 'The Teacher moved to another Network',
+                },
+              ]
+            : []),
         ],
       }),
     ),
   );
+}
+
+/**
+ * Life Class C's empty roster, and the correction and cancellation routes (decision 0510), each
+ * request recorded; a correction answers with a clash when `clash` is set.
+ */
+export async function mockClassChanges(
+  page: Page,
+  options: { clash?: boolean } = {},
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const classC = '3f1b7c6e-0000-4000-8000-00000000e002';
+  await page.route(`**/api/v1/equipping/coordinate/classes/${classC}/students`, (route) =>
+    route.fulfill(json({ class: { id: classC, name: 'Life Class C' }, guides: [], data: [] })),
+  );
+  await page.route('**/api/v1/equipping/classes/*/correction', (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    sent.push({ url: route.request().url(), body });
+    return route.fulfill(
+      json({
+        id: classC,
+        ...body,
+        corrected: true,
+        clash: options.clash ? { day_of_week: 2, time_of_day: '19:30' } : null,
+      }),
+    );
+  });
+  await page.route('**/api/v1/equipping/classes/*/cancel', (route) => {
+    const body = route.request().postDataJSON() as { reason: string };
+    sent.push({ url: route.request().url(), body });
+    return route.fulfill(
+      json({ id: classC, status: 'CANCELLED', cancelled_on: '2026-11-23', cancel_reason: body.reason }),
+    );
+  });
+  return { sent };
 }
 
 /** The Register dialog's person search (decision 0499): two invented people, each with a leader. */

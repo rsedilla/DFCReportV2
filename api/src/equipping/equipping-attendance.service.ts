@@ -160,6 +160,8 @@ export class EquippingAttendanceService {
       .where((eb) =>
         eb.or([eb('c.teacher_person_id', '=', actor.personId), eb('g.id', 'is not', null)]),
       )
+      // A cancelled class is listed only on the Coordinator's *Cancelled* (decision 0510).
+      .where('c.cancelled_at', 'is', null)
       .orderBy('c.first_lesson_on', 'desc')
       .orderBy('c.name')
       .execute();
@@ -336,6 +338,11 @@ export class EquippingAttendanceService {
     const seesAll = standing.teaches || standing.wide || standing.coordinates;
     if (!seesAll && standing.guideId === null) {
       throw new ScopeDeniedError('You do not teach or guide this class.');
+    }
+    // A cancelled class has no register to open (decision 0510); an old link says so, and only
+    // to somebody the scope check above admits.
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
 
     let enrolled = await this.db
@@ -526,13 +533,15 @@ export class EquippingAttendanceService {
     }
     return this.db.transaction().execute(async (trx) => {
       const cls = await this.lockClassWithin(trx, classId);
-      await this.refusePostedWithin(trx, cls);
       const standing = await this.standingOf(trx, actor, cls);
       if (!standing.teaches && !standing.wide) {
         throw new ScopeDeniedError(
           'Only the class’s Teacher records its attendance (SKILL.md section 29).',
         );
       }
+      // What the class's state refuses is told only to somebody the check above admits.
+      this.refuseCancelled(cls);
+      await this.refusePostedWithin(trx, cls);
       const now = await databaseNow(trx);
       const today = manilaDayOf(now);
       if (body.held_on > today) {
@@ -856,13 +865,14 @@ export class EquippingAttendanceService {
   ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
       const cls = await this.lockClassWithin(trx, classId);
-      await this.refusePostedWithin(trx, cls);
       const standing = await this.standingOf(trx, actor, cls);
       if (!standing.teaches && !standing.wide) {
         throw new ScopeDeniedError(
           'Only the class’s Teacher records a make-up (SKILL.md section 29).',
         );
       }
+      this.refuseCancelled(cls);
+      await this.refusePostedWithin(trx, cls);
       const student = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
@@ -1178,7 +1188,10 @@ export class EquippingAttendanceService {
     return result;
   }
 
-  private async classOf(executor: Db | Transaction<Database>, classId: string): Promise<ClassRow> {
+  private async classOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+  ): Promise<ClassRow & { cancelled_at: Date | null }> {
     const cls = await executor
       .selectFrom('equipping_classes')
       .select([
@@ -1189,6 +1202,7 @@ export class EquippingAttendanceService {
         'place',
         'first_lesson_on',
         'teacher_person_id',
+        'cancelled_at',
       ])
       .where('id', '=', classId)
       .executeTakeFirst();
@@ -1206,7 +1220,19 @@ export class EquippingAttendanceService {
    * The class, locked FOR NO KEY UPDATE, the mode the Guides take (decision 0502), so a save
    * waits behind a Teacher change or a share-out rather than beside it.
    */
-  private async lockClassWithin(trx: Transaction<Database>, classId: string): Promise<ClassRow> {
+  /** A cancelled class records nothing (decision 0510, point 5); it never had a lesson. */
+  private refuseCancelled(cls: { name: string; cancelled_at: Date | null }): void {
+    if (cls.cancelled_at !== null) {
+      throw new InvariantViolationError(`${cls.name} was cancelled; nothing on it changes.`, {
+        field: 'class_id',
+      });
+    }
+  }
+
+  private async lockClassWithin(
+    trx: Transaction<Database>,
+    classId: string,
+  ): Promise<ClassRow & { cancelled_at: Date | null }> {
     const cls = await trx
       .selectFrom('equipping_classes')
       .select([
@@ -1217,6 +1243,7 @@ export class EquippingAttendanceService {
         'place',
         'first_lesson_on',
         'teacher_person_id',
+        'cancelled_at',
       ])
       .where('id', '=', classId)
       .forNoKeyUpdate()

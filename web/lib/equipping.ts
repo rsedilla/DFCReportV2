@@ -95,7 +95,13 @@ export interface EquippingClass {
 
 /** A class as the Coordinator's *Classes* lists it (decision 0501, point 22). */
 export interface CoordinatedClass extends EquippingClass {
-  status: 'NOT_STARTED' | 'RUNNING';
+  /** A cancelled class is listed only under *Cancelled* (decision 0510). */
+  status: 'NOT_STARTED' | 'RUNNING' | 'CANCELLED';
+  /** Whether a lesson is saved: *When and where* and *Cancel class* stop then (decision 0510). */
+  lesson_saved?: boolean;
+  /** The day it was cancelled, in Manila, and why (decision 0510). */
+  cancelled_on?: string;
+  cancel_reason?: string | null;
   /** How many Guides are named, and how many more the students of each sex need (decision 0501). */
   guides?: { named: number; short_men: number; short_women: number };
   /**
@@ -318,6 +324,31 @@ export async function setTeacher(
   return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/teacher`, {
     method: 'POST',
     body: { teacher_person_id: teacherPersonId },
+    idempotencyKey,
+  });
+}
+
+/** Corrects a class's day, time, place and first lesson (decision 0510). */
+export async function correctClass(
+  classId: string,
+  body: { day_of_week: number; time_of_day: string; place: string | null; first_lesson_on: string },
+  idempotencyKey: string,
+): Promise<{ id: string; corrected: boolean; clash: CellClash | null }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/classes/${encodeURIComponent(classId)}/correction`,
+    { method: 'POST', body, idempotencyKey },
+  );
+}
+
+/** Cancels a class with no students and no lesson saved; never a delete (decision 0510). */
+export async function cancelClass(
+  classId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<{ id: string; status: 'CANCELLED'; cancelled_on: string; cancel_reason: string }> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/cancel`, {
+    method: 'POST',
+    body: { reason },
     idempotencyKey,
   });
 }

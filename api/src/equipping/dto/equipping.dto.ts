@@ -141,6 +141,30 @@ export class OpenClassDto extends EquippingTermDto {
   encounter_season_id!: string;
 }
 
+/**
+ * Correcting a class's day, time, place and first lesson (decision 0510, point 1). Every field is
+ * sent; a place left out or blank clears it.
+ */
+export class CorrectClassDto {
+  /** ISO 8601: 1 is Monday, 7 is Sunday. */
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  day_of_week!: number;
+
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'time_of_day must be HH:MM, 24-hour' })
+  time_of_day!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsStorableText()
+  @MaxLength(80)
+  place?: string | null;
+
+  @IsManilaCalendarDate({ message: 'first_lesson_on must be a real calendar date, YYYY-MM-DD' })
+  first_lesson_on!: string;
+}
+
 /** Naming or changing a class's Teacher (decision 0501, point 2). */
 export class SetTeacherDto {
   @IsUUID()
