@@ -112,10 +112,12 @@ record merged into theirs is theirs (decision 0408), as tries are (decision 0511
 a later registration saved at the same moment are taken one after the other, whichever lands second
 being refused, saying why (owner, 2026-11-24, "A").
 
-**Two refusals the build makes that no point settles**, each open in `CLAUDE.md`: a student made
-*Not yet* whose registration has since been cancelled, or who is enrolled again on it, is not
-reopened; and a grade whose register no longer gives it under either reading of the Encounter,
-which only a lesson written after posting outside a change could cause, is not changed.
+**Three refusals the build made, kept** (owner, 2026-11-24, "Keep all three", from screenshots of
+each): a change making a student *Not yet* is refused where their registration has since been
+cancelled, rather than un-cancelling it, and where they are enrolled again on it, rather than
+ending that enrollment, the Registrar acting first in either case; and no lesson is changed of a
+grade whose register no longer gives it under either reading of the Encounter, which only a lesson
+written after posting outside a change could cause.
 
 **16. A registration graded *Passed* or *Not passed* is not enrolled again** (owner, 2026-11-24,
 "A"). It is finished with its grade, in its term or any other; a person trying again registers
