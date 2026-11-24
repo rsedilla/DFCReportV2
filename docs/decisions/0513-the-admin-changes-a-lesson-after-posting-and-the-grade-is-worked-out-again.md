@@ -92,7 +92,9 @@ not done is refused, saying that a join at Lesson 6 is not undone once the later
 it. **Building it showed the example put to the owner was wrong**: a made-up lesson still counts
 as missed, and joining at Lesson 6 allows two missed of lessons 1 to 4 (decision 0508), so a
 *Came* made *Made up* can undo the join as surely as *Absent* does, and can move this grade too.
-Such a change is refused as well, the conservative arm, and is open in `CLAUDE.md` for the owner.
+Such a change is refused as well (owner, 2026-11-24, "A", chosen against admitting it and
+working both grades out again, or recording it with both outcomes kept): a join a later class has
+graded is not undone, as point 13 holds for the same reason.
 
 **13. A change never takes *Joins a later class at Lesson 6* from one a later enrollment carries**
 (owner, 2026-11-24, "2c A"). It is refused while such an enrollment exists, the Registrar
