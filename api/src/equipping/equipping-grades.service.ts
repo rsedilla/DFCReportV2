@@ -758,8 +758,6 @@ export class EquippingGradesService {
     // **Into or out of Not yet as posting would have** (decision 0513, point 10): a *Not yet*
     // made anything else has their enrollment ended, and a finished student made *Not yet* has
     // theirs reopened, which only stands while nothing else holds their place.
-    // Reopened only where a finished student is made *Not yet*: a *Not yet* withdrawn or archived
-    // since posting stays as the Registrar left them, whatever is changed.
     const enrollment = await executor
       .selectFrom('equipping_enrollments')
       .select([
