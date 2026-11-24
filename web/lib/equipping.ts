@@ -64,6 +64,15 @@ export interface Candidate {
   requirements: { code: RequirementCode; met: boolean; detail: string }[];
   /** Each earlier Life Class graded *Not passed*, oldest first (decision 0511). */
   earlier_tries?: { term_year: number; term_number: number; class_name: string; reason: string }[];
+  /** Joins a later class at Lesson 6, keeping lessons 1 to 4 from there (decision 0512). */
+  joins_at_lesson_6?: KeptFrom | null;
+}
+
+/** Where a student joining at Lesson 6 kept lessons 1 to 4 and the Encounter (decision 0512). */
+export interface KeptFrom {
+  class_name: string;
+  term_year: number;
+  term_number: number;
 }
 
 export interface Registration {
@@ -141,6 +150,8 @@ export interface CellClash {
 export interface ClassDetail {
   class: Omit<EquippingClass, 'enrolled'> & {
     encounter_weekends: { mens: string | null; womens: string | null };
+    /** Its Lesson 6's day, and whether it still takes a student at Lesson 6 (decision 0512). */
+    lesson_6?: { on: string; open: boolean };
   };
   enrolled: {
     enrollment_id: string;
@@ -156,6 +167,7 @@ export interface ClassDetail {
     age_at_encounter: number | null;
     blocked: string | null;
     try_number?: number;
+    joins_at_lesson_6?: KeptFrom | null;
   }[];
 }
 
@@ -362,10 +374,15 @@ export async function enroll(
   classId: string,
   registrationIds: string[],
   idempotencyKey: string,
+  startFromLesson1: string[] = [],
 ): Promise<unknown> {
   return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/enrollments`, {
     method: 'POST',
-    body: { registration_ids: registrationIds },
+    body: {
+      registration_ids: registrationIds,
+      // Those who could join at Lesson 6 and are started from Lesson 1 instead (decision 0512).
+      ...(startFromLesson1.length > 0 ? { start_from_lesson_1: startFromLesson1 } : {}),
+    },
     idempotencyKey,
   });
 }
@@ -482,6 +499,8 @@ export interface AttendanceStudent {
   guide: { id: string; full_name: string | null } | null;
   /** The day they joined this class (decision 0503). */
   joined_on: string;
+  /** Joined at Lesson 6, keeping lessons 1 to 4 and the Encounter from there (decision 0512). */
+  carried?: KeptFrom | null;
   /** The ENC column (decision 0507): attended, enrolled and not yet recorded, or missed. */
   encounter?: 'CAME' | 'ENROLLED' | 'MISSED' | null;
   marks: {

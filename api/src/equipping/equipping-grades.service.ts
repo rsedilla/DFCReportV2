@@ -50,6 +50,8 @@ interface StudentGrade {
   reason: string;
   lessons_kept: number;
   lessons_made_up: number;
+  /** Joins a later class at Lesson 6 (decision 0512), recorded with the grade. */
+  joins_at_lesson_6: boolean;
   signs: Sign[];
 }
 
@@ -253,6 +255,7 @@ export class EquippingGradesService {
                 reason: s.reason,
                 lessons_kept: s.lessons_kept,
                 lessons_made_up: s.lessons_made_up,
+                joins_at_lesson_6: s.joins_at_lesson_6,
               })),
             )
             .execute();
@@ -396,6 +399,7 @@ export class EquippingGradesService {
         'g.reason',
         'g.lessons_kept',
         'g.lessons_made_up',
+        'g.joins_at_lesson_6',
         'g.posting_id',
       ])
       .where('e.class_id', '=', classId)
@@ -422,6 +426,7 @@ export class EquippingGradesService {
               reason: row.reason!,
               lessons_kept: row.lessons_kept!,
               lessons_made_up: row.lessons_made_up!,
+              joins_at_lesson_6: row.joins_at_lesson_6!,
             }
           : {}),
       };
@@ -583,11 +588,18 @@ function gradeOf(
       const entry = register.get(n);
       return entry !== undefined && (entry.came || entry.madeUpOn !== null);
     }).length + (encounter === 'CAME' ? 1 : 0);
-  const base = { lessons_kept: kept, lessons_made_up: madeUp, signs };
+  const base = { lessons_kept: kept, lessons_made_up: madeUp, signs, joins_at_lesson_6: false };
   if (absences > ABSENCES_ALLOWED) {
-    const later = early <= EARLY_ABSENCES_ALLOWED && encounter === 'CAME';
+    // Only with every one of lessons 1 to 4 attended or made up (owner, 2026-11-23, decision
+    // 0512): nothing is then owed from this class.
+    const firstFourDone = [1, 2, 3, 4].every((n) => {
+      const entry = register.get(n);
+      return entry !== undefined && (entry.came || entry.madeUpOn !== null);
+    });
+    const later = early <= EARLY_ABSENCES_ALLOWED && encounter === 'CAME' && firstFourDone;
     return {
       ...base,
+      joins_at_lesson_6: later,
       grade: 'NOT_PASSED',
       reason: `${absences} absences, over the ${ABSENCES_ALLOWED} allowed. ${
         later ? 'Joins a later class at lesson 6.' : 'Repeats Life Class.'

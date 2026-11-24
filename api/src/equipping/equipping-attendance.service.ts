@@ -25,6 +25,7 @@ import { databaseNow, recordClosesAt, recordDueAt } from '../common/time/submiss
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
+import { resolverOf } from '../common/merged-identity';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -373,6 +374,10 @@ export class EquippingAttendanceService {
       .where('class_id', '=', classId)
       .execute();
     const registers = await this.registersOf(this.db, classId, enrolled);
+    const carries = await this.carriesOf(
+      this.db,
+      enrolled.map((row) => row.enrollment_id),
+    );
 
     const personIds = enrolled.map((row) => row.person_id);
     const cellsOf = await this.cells.currentCellsOfMany(personIds);
@@ -415,6 +420,8 @@ export class EquippingAttendanceService {
             ? { id: row.guide_person_id, full_name: nameOf(row.guide_person_id) }
             : null,
           joined_on: manilaDayOf(row.started_at),
+          // Joined at Lesson 6, keeping lessons 1 to 4 and the Encounter (decision 0512).
+          carried: carries.get(row.enrollment_id) ?? null,
           encounter: encounters.get(canonicalId(row.person_id)) ?? null,
           marks: CLASS_LESSONS.flatMap((n) => {
             const entry = register.get(n);
@@ -598,7 +605,13 @@ export class EquippingAttendanceService {
       const enrolled = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'e.registration_id', 'r.person_id', 'e.started_at'])
+        .select([
+          'e.id',
+          'e.registration_id',
+          'r.person_id',
+          'e.started_at',
+          'e.carried_from_enrollment_id',
+        ])
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
         // One order, so a body refused for two reasons is always refused for the same one.
@@ -713,12 +726,17 @@ export class EquippingAttendanceService {
           unmarked.push({ person_id: row.person_id, came: was.came });
           continue;
         }
-        if (joinedAfter(row) || elsewhere) {
+        // **Joined at Lesson 6, they keep lessons 1 to 4** (decision 0512): never ticked for one
+        // here, and nothing is written for them.
+        const keeps = row.carried_from_enrollment_id !== null && lesson <= 4;
+        if (joinedAfter(row) || elsewhere || keeps) {
           if (want) {
             throw new ValidationFailedError(
-              elsewhere
-                ? 'Somebody ticked already came to this lesson in a class they were in before.'
-                : 'Somebody ticked joined the class after this lesson; they make it up instead.',
+              keeps
+                ? 'Somebody ticked joined at Lesson 6 and keeps lessons 1 to 4 from an earlier class.'
+                : elsewhere
+                  ? 'Somebody ticked already came to this lesson in a class they were in before.'
+                  : 'Somebody ticked joined the class after this lesson; they make it up instead.',
               { field: 'came' },
             );
           }
@@ -876,13 +894,27 @@ export class EquippingAttendanceService {
       const student = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-        .select(['e.id', 'e.registration_id', 'e.started_at', 'r.person_id'])
+        .select([
+          'e.id',
+          'e.registration_id',
+          'e.started_at',
+          'e.carried_from_enrollment_id',
+          'r.person_id',
+        ])
         .where('e.id', '=', body.enrollment_id)
         .where('e.class_id', '=', classId)
         .where('e.ended_at', 'is', null)
         .executeTakeFirst();
       if (!student) {
         throw new NotFoundError('No such student in this class.', { field: 'enrollment_id' });
+      }
+      // Joined at Lesson 6, they keep lessons 1 to 4 as the earlier class posted them (decision
+      // 0512): no make-up of one is recorded here, nor written into that class.
+      if (student.carried_from_enrollment_id !== null && body.lesson <= 4) {
+        throw new InvariantViolationError(
+          'They joined at Lesson 6 and keep lessons 1 to 4 as their earlier class posted them.',
+          { field: 'lesson' },
+        );
       }
       // The lesson as the student's register reads it: missed here, missed in a class they moved
       // from, or held here before they joined (decision 0503). The make-up is recorded against
@@ -1004,6 +1036,10 @@ export class EquippingAttendanceService {
    * joined an earlier class carried with them as well (owner, 2026-11-21). A lesson
    * this class held before the student joined, with no mark for it anywhere, is *before
    * joining*: owed as a make-up and not an absence. Keyed by enrollment, then lesson number.
+   *
+   * **A student joined at Lesson 6 keeps lessons 1 to 4** (decision 0512): read from the
+   * enrollment their enrollment carries from, marks and make-ups as that class recorded them,
+   * placed as an earlier class's are, so this class's own mark for a lesson still comes first.
    */
   async registersOf(
     executor: Db | Transaction<Database>,
@@ -1014,16 +1050,53 @@ export class EquippingAttendanceService {
     if (rows.length === 0) {
       return result;
     }
-    const all = await executor
+    const own = await executor
       .selectFrom('equipping_enrollments as e')
       .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
-      .select(['e.id', 'e.registration_id', 'e.class_id', 'e.started_at', 'c.name'])
+      .select([
+        'e.id',
+        'e.registration_id',
+        'e.class_id',
+        'e.started_at',
+        'e.carried_from_enrollment_id',
+        'c.name',
+      ])
       .where(
         'e.registration_id',
         'in',
         rows.map((row) => row.registration_id),
       )
       .execute();
+    const carriedFrom = new Map(
+      own
+        .filter((row) => row.carried_from_enrollment_id !== null)
+        .map((row) => [row.id, row.carried_from_enrollment_id as string]),
+    );
+    const kept =
+      carriedFrom.size === 0
+        ? []
+        : await executor
+            .selectFrom('equipping_enrollments as e')
+            .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+            .select([
+              'e.id',
+              'e.registration_id',
+              'e.class_id',
+              'e.started_at',
+              'e.carried_from_enrollment_id',
+              'c.name',
+            ])
+            // Every enrollment of the registration that kept them, so lessons recorded before a
+            // move in that term are read as the class that graded them read them (decision 0512).
+            .where('e.registration_id', 'in', (eb) =>
+              eb
+                .selectFrom('equipping_enrollments as k')
+                .select('k.registration_id')
+                .where('k.id', 'in', [...new Set(carriedFrom.values())]),
+            )
+            .execute();
+    const keptRegistrationOf = new Map(kept.map((row) => [row.id, row.registration_id]));
+    const all = [...own, ...kept.filter((row) => !own.some((each) => each.id === row.id))];
     const classIds = [...new Set(all.map((row) => row.class_id))];
     const enrollmentIds = all.map((row) => row.id);
     const [lessons, marks, makeUps] = await Promise.all([
@@ -1079,12 +1152,22 @@ export class EquippingAttendanceService {
         const enrollment = enrollmentById.get(enrollmentId)!;
         return { id: enrollment.class_id, name: enrollment.name };
       };
+      // Lessons 1 to 4 of the enrollment this one carries from (decision 0512), and only those.
+      const keptFrom = carriedFrom.get(row.enrollment_id);
+      const keptRegistration =
+        keptFrom === undefined ? null : (keptRegistrationOf.get(keptFrom) ?? null);
+      const ours = (enrollmentId: string, lessonNumber: number) => {
+        const registrationId = enrollmentById.get(enrollmentId)!.registration_id;
+        return (
+          registrationId === row.registration_id ||
+          (registrationId === keptRegistration && lessonNumber <= 4)
+        );
+      };
       for (const mark of marks) {
-        const enrollment = enrollmentById.get(mark.enrollment_id)!;
-        if (enrollment.registration_id !== row.registration_id) {
+        const lesson = lessonById.get(mark.lesson_id)!;
+        if (!ours(mark.enrollment_id, lesson.lesson)) {
           continue;
         }
-        const lesson = lessonById.get(mark.lesson_id)!;
         place(mark.enrollment_id, {
           lesson: lesson.lesson,
           lessonId: lesson.id,
@@ -1101,15 +1184,14 @@ export class EquippingAttendanceService {
       // 2026-11-21): recorded in an earlier class with no mark behind it, it reads in the new
       // class as made up, and is not owed again.
       for (const makeUp of makeUps) {
-        const enrollment = enrollmentById.get(makeUp.enrollment_id)!;
+        const lesson = lessonById.get(makeUp.lesson_id)!;
         if (
-          enrollment.registration_id !== row.registration_id ||
+          !ours(makeUp.enrollment_id, lesson.lesson) ||
           makeUp.enrollment_id === row.enrollment_id ||
           markKeys.has(`${makeUp.lesson_id}:${makeUp.enrollment_id}`)
         ) {
           continue;
         }
-        const lesson = lessonById.get(makeUp.lesson_id)!;
         place(makeUp.enrollment_id, {
           lesson: lesson.lesson,
           lessonId: lesson.id,
@@ -1155,6 +1237,38 @@ export class EquippingAttendanceService {
   }
 
   /**
+   * The class and term each enrollment keeps lessons 1 to 4 from, for one joined at Lesson 6
+   * (decision 0512); an enrollment that carries nothing has no entry.
+   */
+  async carriesOf(
+    executor: Db | Transaction<Database>,
+    enrollmentIds: readonly string[],
+  ): Promise<Map<string, { class_name: string; term_year: number; term_number: number }>> {
+    const result = new Map<
+      string,
+      { class_name: string; term_year: number; term_number: number }
+    >();
+    if (enrollmentIds.length === 0) {
+      return result;
+    }
+    const rows = await executor
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_enrollments as k', 'k.id', 'e.carried_from_enrollment_id')
+      .innerJoin('equipping_classes as c', 'c.id', 'k.class_id')
+      .select(['e.id', 'c.name', 'c.term_year', 'c.term_number'])
+      .where('e.id', 'in', [...enrollmentIds])
+      .execute();
+    for (const row of rows) {
+      result.set(row.id, {
+        class_name: row.name,
+        term_year: row.term_year,
+        term_number: row.term_number,
+      });
+    }
+    return result;
+  }
+
+  /**
    * **The register's ENC column** (decision 0501, point 14; decision 0507), for each person:
    * `CAME` once they attended an Encounter, else `ENROLLED` while a weekend they are enrolled
    * in has no attendance recorded, else `MISSED` when they were enrolled and did not come. A
@@ -1168,21 +1282,38 @@ export class EquippingAttendanceService {
     if (personIds.length === 0) {
       return result;
     }
+    // A record merged into a person brings its Encounter (decision 0408), as one joined at
+    // Lesson 6 from it needs (decision 0512).
+    const pairs = await this.people.mergedPairsWithin(executor);
+    const resolve = resolverOf(pairs);
+    const asked = new Set(personIds.map((id) => canonicalId(id)));
+    const records = [
+      ...asked,
+      ...pairs.absorbed.filter((_, index) => asked.has(canonicalId(pairs.kept[index]))),
+    ];
     const rows = await executor
       .selectFrom('equipping_encounter_enrollments as ee')
       .leftJoin('equipping_encounter_attendance as a', (join) =>
         join.onRef('a.encounter_enrollment_id', '=', 'ee.id').on('a.superseded_at', 'is', null),
       )
       .select(['ee.person_id', 'a.came'])
-      .where('ee.person_id', 'in', [...personIds])
+      .where('ee.person_id', 'in', records)
       .execute();
     const rank = { CAME: 3, ENROLLED: 2, MISSED: 1 } as const;
     for (const row of rows) {
       const state = row.came === true ? 'CAME' : row.came === false ? 'MISSED' : 'ENROLLED';
-      const id = canonicalId(row.person_id);
+      const id = canonicalId(resolve(row.person_id));
+      // Kept under the person, then answered under each id asked about below.
       const was = result.get(id);
       if (was === undefined || rank[state] > rank[was]) {
         result.set(id, state);
+      }
+    }
+    // Answered under every id asked about, a record merged away included, as `earlierTriesOf`.
+    for (const id of personIds) {
+      const state = result.get(canonicalId(resolve(id)));
+      if (state !== undefined) {
+        result.set(canonicalId(id), state);
       }
     }
     return result;
