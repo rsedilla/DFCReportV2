@@ -59,8 +59,8 @@ many changes it saw; one that changes nothing is refused `INVARIANT_VIOLATION`.
 
 ## Settled by the owner, 2026-11-24
 
-The first build refused six cases rather than deciding them, each recorded as an open Stop
-Condition in `CLAUDE.md`, four raised while building and two by `architecture-guardian`'s review.
+The first build refused six cases rather than deciding them, recorded as four open Stop Conditions
+in `CLAUDE.md`, two raised while building and two by `architecture-guardian`'s review.
 The owner ruled on each on 2026-11-24, from worked examples with the conservative arm and the
 alternatives side by side. **The routes take the church as their target** for the Admin, where
 every other `equipping.class` route takes the actor (Section 7).
@@ -72,7 +72,8 @@ every other `equipping.class` route takes the actor (Section 7).
   `COMPLETED` as posting ends every other *Not passed*, and they leave every later Encounter's
   list;
 - a finished student whose change makes them *Not yet* becomes so, **their ended enrollment
-  reopened**, listed for the next Encounter and passing there as any *Not yet* does (decision
+  reopened** (an enrollment ended `COMPLETED`; a *Not yet* withdrawn or archived since posting
+  stays as the Registrar left them, whatever is changed), listed for the next Encounter and passing there as any *Not yet* does (decision
   0509), a posted *Not passed* changed so no longer being a try (decision 0511); this is the one
   place an ended enrollment is reopened;
 - one posted *Not yet* who passed at a later Encounter may be changed like anyone else, a change
@@ -94,7 +95,10 @@ as missed, and joining at Lesson 6 allows two missed of lessons 1 to 4 (decision
 *Came* made *Made up* can undo the join as surely as *Absent* does, and can move this grade too.
 Such a change is refused as well (owner, 2026-11-24, "A", chosen against admitting it and
 working both grades out again, or recording it with both outcomes kept): a join a later class has
-graded is not undone, as point 13 holds for the same reason.
+graded is not undone, as point 13 holds for the same reason. **The same holds the other way**
+(owner, 2026-11-24, "Yes"): a *Made up* made *Came* that would leave the earlier term passing,
+its absences falling to three, is refused too. A kept change stands only where the earlier term's
+grade, worked out again with the lesson changed, still joins a later class at Lesson 6.
 
 **13. A change never takes *Joins a later class at Lesson 6* from one a later enrollment carries**
 (owner, 2026-11-24, "2c A"). It is refused while such an enrollment exists, the Registrar
@@ -103,14 +107,16 @@ withdrawing them there first, the database refusing it besides.
 **14. A change works from the Encounter as it stands now, and shows it** (owner, 2026-11-24, "A, as
 it stands now"). An Encounter recorded or corrected since posting, at any weekend or through a
 merged record, is part of the grade a change works out, as it is of a *Not yet* who passed later.
-The dialog, the summary and the history each say *Encounter changed since posting*, with what it
-read at posting and what it reads now, so nothing is folded into a lesson change unseen.
+The dialog, the summary and the history each say the Encounter changed after posting, with what it
+read then and what it reads now, in the words the owner approved from screenshots, so nothing is folded into a lesson change unseen.
 
 **15. Nothing is changed once the person has registered for the level in a later term** (owner,
 2026-11-24, "A"), until that registration is cancelled, the refusal saying so. A registration on a
-record merged into theirs is theirs (decision 0408), as tries are (decision 0511), and a change and
-a later registration saved at the same moment are taken one after the other, whichever lands second
-being refused, saying why (owner, 2026-11-24, "A").
+record merged into theirs is theirs (decision 0408), as tries are (decision 0511). A change and a
+later registration saved at the same moment are taken one after the other: a change landing second
+sees the registration and is refused, saying why, and a registration landing second goes through,
+the grade it rests on already changed (owner, 2026-11-24, "A", its words corrected by the owner the
+same day: they first said "whichever lands second being refused", which a registration never is).
 
 **Three refusals the build made, kept** (owner, 2026-11-24, "Keep all three", from screenshots of
 each): a change making a student *Not yet* is refused where their registration has since been
@@ -138,8 +144,10 @@ each student's change may reach, the readers of tries, Lesson 6 and Training's e
 the grade as it stands, the audit entry `equipping_final_grade.changed`, and the dialog and history
 on *Final Grades*. `SKILL.md` Section 29 carries it.
 
-Points 10 to 16 added to it: the change row's `encounter_before`, `encounter_after` and
-`enrollment_effect`; the graded enrollment ended or reopened beside the change, the database
+Points 10 to 16 added to it: the change row's `encounter_before`, `encounter_after`,
+`enrollment_effect`, and what the school's Life Class stands filed under (`life_class_filed_at`,
+`life_class_weekend`), read in one place by the change and by Training's evidence
+(`life-class-from-school.ts`); the graded enrollment ended or reopened beside the change, the database
 admitting a reopening only so; a kept or left-behind lesson written where it was recorded, the
 database admitting a kept one only beside a change of the grade carrying it; passing at a later
 Encounter read from the grade as it stands, in the Encounter page and in the database, which

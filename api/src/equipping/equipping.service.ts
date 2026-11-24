@@ -2380,9 +2380,11 @@ export class EquippingService {
       const notYet =
         notYetLeaving === undefined
           ? undefined
-          : await trx
-              .selectFrom('equipping_final_grades')
-              .select('id')
+          : // The grade as it stands (decision 0513): a posted Not passed made Not yet leaves as
+            // any Not yet may, and a posted Not yet made something else does not.
+            await trx
+              .selectFrom('equipping_current_grades')
+              .select('final_grade_id')
               .where('enrollment_id', '=', notYetLeaving)
               .where('grade', '=', 'NOT_YET')
               .executeTakeFirst();

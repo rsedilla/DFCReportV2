@@ -1140,6 +1140,9 @@ export interface EquippingGradeChangesTable {
   encounter_after: 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE';
   /** What the change did to the graded enrollment (point 10). */
   enrollment_effect: 'ENDS' | 'REOPENS' | null;
+  /** What the school's Life Class stands filed under after the change (decisions 0509, 0513). */
+  life_class_filed_at: Date | null;
+  life_class_weekend: Generated<boolean>;
   changed_by: string;
   changer_person_id: string | null;
   changed_at: ServerTimestamp;
@@ -1157,6 +1160,8 @@ export interface EquippingCurrentGradesView {
   joins_at_lesson_6: boolean;
   passed_later_at: Date | null;
   changed_at: Date | null;
+  life_class_filed_at: Date | null;
+  life_class_weekend: boolean | null;
   changes: number;
 }
 

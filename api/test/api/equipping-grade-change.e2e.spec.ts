@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import request from 'supertest';
 
 import { expectedOn } from '../../src/equipping/equipping-attendance.service';
+import { SchoolEvidenceAdapter } from '../../src/equipping/school-evidence.adapter';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -691,6 +692,27 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     expect(passed.passed_later_at).not.toBeNull();
   });
 
+  it('lets the Registrar withdraw one reopened as Not yet, as any Not yet', async () => {
+    await posted();
+    await correctEncounter('Carlo', false);
+    const { student: carlo } = await studentOf('Carlo');
+    await change(admin, carlo, {
+      lesson: 7,
+      to: 'MADE_UP',
+      made_up_on: await manilaToday(),
+    }).expect(201);
+    // Recorded before the reopening: the end it cleared is kept in the audit entry.
+    const reopened = await db
+      .selectFrom('audit_log')
+      .select('before')
+      .where('action', '=', 'equipping_enrollment.reopened')
+      .executeTakeFirstOrThrow();
+    expect(reopened.before).toMatchObject({ end_reason: 'COMPLETED' });
+    await post(registrar, `equipping/enrollments/${enrollmentOf.get('Carlo')!}/withdraw`, {
+      reason: 'Moved to another church.',
+    }).expect(200);
+  });
+
   it('changes one who passed at a later Encounter, withdrawing the Life Class it filed (point 10)', async () => {
     await posted();
     const weekend = await passAtLaterEncounter('Dino');
@@ -717,6 +739,62 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ graduated_on: weekend, from_school: true });
     expect(rows[0].superseded_at).not.toBeNull();
+    // Training's evidence names nothing for a pass changed away, so a withdrawn tick is not
+    // replaced by it (decision 0509, point 8).
+    const evidence = await db
+      .transaction()
+      .execute((trx) =>
+        app.get(SchoolEvidenceAdapter).evidenceWithin(trx, [personOf.get('Dino')!], 'LIFE_CLASS'),
+      );
+    expect(evidence).toEqual([]);
+  });
+
+  it('withdraws the weekend’s Life Class after a pass kept by one change and lost by the next', async () => {
+    await posted();
+    const weekend = await passAtLaterEncounter('Dino');
+    // A make-up's day noted for one who passed later keeps him passing, now as Passed.
+    const first = (await studentOf('Dino')).student;
+    await change(
+      admin,
+      first,
+      { lesson: 3, to: 'MADE_UP', made_up_on: await manilaToday() },
+      { why: 'RECORDED_WRONGLY', details: 'Watched L3 later.' },
+    ).expect(201);
+    const second = (await studentOf('Dino')).student;
+    expect(second.grade).toBe('PASSED');
+    expect(await lifeClassOf('Dino')).toEqual([
+      { graduated_on: weekend, from_school: true, superseded_at: null },
+    ]);
+    await change(
+      admin,
+      second,
+      { lesson: 8, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'Away at L8.' },
+    ).expect(201);
+    const rows = await lifeClassOf('Dino');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].superseded_at).not.toBeNull();
+  });
+
+  it('leaves a Not yet withdrawn since posting withdrawn, whatever is changed (point 10)', async () => {
+    await posted();
+    await post(registrar, `equipping/enrollments/${enrollmentOf.get('Dino')!}/withdraw`, {
+      reason: 'Moving abroad.',
+    }).expect(200);
+    const { student: dino } = await studentOf('Dino');
+    await change(
+      admin,
+      dino,
+      { lesson: 3, to: 'MADE_UP', made_up_on: await manilaToday() },
+      { why: 'RECORDED_WRONGLY', details: 'Watched L3 later.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student.grade).toBe('NOT_YET');
+    const enrollment = await db
+      .selectFrom('equipping_enrollments')
+      .select(['end_reason', 'withdraw_note'])
+      .where('id', '=', enrollmentOf.get('Dino')!)
+      .executeTakeFirstOrThrow();
+    expect(enrollment).toEqual({ end_reason: 'WITHDRAWN', withdraw_note: 'Moving abroad.' });
   });
 
   it('refuses a change made since the dialog opened, and one that changes nothing', async () => {
@@ -1109,7 +1187,15 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       { why: 'RECORDED_WRONGLY', details: 'Watched L3 later, not in the room.' },
     ).expect(409);
     expect(third.body.error.message).toContain('undo that join');
-    // Came rather than made up keeps it: written in Life Class A's register, still Passed.
+    // Came rather than made up would leave last term with three absences, passing: refused too.
+    const passing = await change(
+      admin,
+      eli,
+      { lesson: 1, to: 'CAME' },
+      { why: 'RECORDED_WRONGLY', details: 'He was there for L1.' },
+    ).expect(409);
+    expect(passing.body.error.message).toContain('undo that join');
+    // A make-up's day corrected keeps it: written in Life Class A's register, still Passed.
     const lessonOneOfA = await db
       .selectFrom('equipping_lessons')
       .select('id')
@@ -1119,19 +1205,18 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
     await change(
       admin,
       eli,
-      { lesson: 1, to: 'CAME' },
-      { why: 'RECORDED_WRONGLY', details: 'He was there for L1.' },
+      { lesson: 1, to: 'MADE_UP', made_up_on: today },
+      { why: 'RECORDED_WRONGLY', details: 'Made up later than recorded.' },
     ).expect(201);
     expect((await studentOf('Eli')).student.grade).toBe('PASSED');
-    expect(await currentMarkOf(lessonOneOfA.id, inA)).toEqual({ came: true });
     const madeUp = await db
       .selectFrom('equipping_make_ups')
-      .select('id')
+      .select('made_up_on')
       .where('lesson_id', '=', lessonOneOfA.id)
       .where('enrollment_id', '=', inA)
       .where('superseded_at', 'is', null)
-      .execute();
-    expect(madeUp).toEqual([]);
+      .executeTakeFirstOrThrow();
+    expect(String(madeUp.made_up_on)).toBe(today);
   });
 
   it('does not enroll a registration graded Passed or Not passed again (point 16)', async () => {

@@ -6,10 +6,10 @@
 --
 -- Additive: one new table and one view, both owned by `equipping`, four triggers, and three
 -- functions widened. No effective date is set and nothing is deleted. **One row is rewritten, by
--- owner ruling** (decision 0513, point 10): an enrollment a change makes *Not yet* again is
--- reopened, its end cleared. The end it had is posting's own, recoverable from
--- `equipping_class_postings` (`posted_at`, `posted_by`), and the change row records the reopening
--- (`enrollment_effect`). **The posted grade is never
+-- owner ruling** (decision 0513, point 10): a finished enrollment a change makes *Not yet* again
+-- is reopened, its end cleared. Only an end `COMPLETED` is reopened, which posting writes or an
+-- earlier change ending a *Not yet* (`enrollment_effect`); the change row records the reopening,
+-- and its audit entry the end it cleared. **The posted grade is never
 -- rewritten** (principle 12): a change is a row of its own, keeping the lesson and the grade it
 -- changed from and to, and the grade a person holds is the posted one or the latest change of it,
 -- which `equipping_current_grades` reads.
@@ -61,6 +61,12 @@ CREATE TABLE equipping_grade_changes (
   -- or reopened it, a finished student made *Not yet*.
   enrollment_effect text CONSTRAINT equipping_grade_changes_enrollment_effect
     CHECK (enrollment_effect IN ('ENDS', 'REOPENS')),
+  -- What the school's Life Class stands filed under once this change is made (decisions 0509,
+  -- 0513): the instant whose Manila day dated it (a posting, or the change that made the grade
+  -- Passed), or the weekend a posted Not yet passed at; neither where the grade holds none. Kept
+  -- so a later change withdraws exactly what was filed, and the school's evidence names it.
+  life_class_filed_at timestamptz,
+  life_class_weekend boolean NOT NULL DEFAULT false,
   changed_by uuid NOT NULL REFERENCES accounts (id),
   changer_person_id uuid REFERENCES persons (id),
   changed_at timestamptz NOT NULL DEFAULT now(),
@@ -79,6 +85,13 @@ CREATE TABLE equipping_grade_changes (
   ),
   -- An enrollment is reopened only for a grade made *Not yet*, and ended only for one made
   -- something else (decision 0513, point 10).
+  CONSTRAINT equipping_grade_changes_life_class_one CHECK (
+    NOT (life_class_weekend AND life_class_filed_at IS NOT NULL)
+  ),
+  -- Only a grade standing Passed holds Life Class from the school.
+  CONSTRAINT equipping_grade_changes_life_class_passed CHECK (
+    (life_class_weekend OR life_class_filed_at IS NOT NULL) = (grade_after = 'PASSED')
+  ),
   CONSTRAINT equipping_grade_changes_effect_follows CHECK (
     enrollment_effect IS NULL
     OR (enrollment_effect = 'REOPENS' AND grade_after = 'NOT_YET')
@@ -103,6 +116,8 @@ SELECT g.id AS final_grade_id,
        COALESCE(c.joins_at_lesson_6_after, g.joins_at_lesson_6) AS joins_at_lesson_6,
        g.passed_later_at,
        c.changed_at,
+       c.life_class_filed_at,
+       c.life_class_weekend,
        (SELECT count(*) FROM equipping_grade_changes n WHERE n.final_grade_id = g.id)::integer AS changes
   FROM equipping_final_grades g
   LEFT JOIN LATERAL (
@@ -218,8 +233,9 @@ BEGIN
 END;
 $$;
 
--- **An ended enrollment stays ended, save one a change makes *Not yet* again** (decision 0513,
--- point 10): reopened whole, beside a change recorded in the same transaction saying so.
+-- **An ended enrollment stays ended, save a finished one a change makes *Not yet* again**
+-- (decision 0513, point 10): ended `COMPLETED`, reopened whole, beside a change recorded in the
+-- same transaction saying so. A withdrawal or an archive is never reopened this way.
 CREATE OR REPLACE FUNCTION assert_enrollment_history_kept() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -229,7 +245,8 @@ BEGIN
       RAISE EXCEPTION 'an enrollment keeps its registration and class (SKILL.md section 29)'
         USING ERRCODE = 'check_violation';
     END IF;
-    IF OLD.ended_at IS NOT NULL AND NEW.ended_at IS NULL AND NEW.ended_by IS NULL
+    IF OLD.ended_at IS NOT NULL AND OLD.end_reason = 'COMPLETED' AND OLD.withdraw_note IS NULL
+       AND NEW.ended_at IS NULL AND NEW.ended_by IS NULL
        AND NEW.end_reason IS NULL AND NEW.withdraw_note IS NULL AND EXISTS (
          SELECT 1 FROM equipping_grade_changes c
            JOIN equipping_final_grades g ON g.id = c.final_grade_id

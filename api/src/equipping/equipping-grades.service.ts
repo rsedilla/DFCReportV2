@@ -34,6 +34,7 @@ import {
   EquippingAttendanceService,
   type RegisterEntry,
 } from './equipping-attendance.service';
+import { lifeClassFiledOf, type LifeClassFiled } from './life-class-from-school';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, GradeChangeSign } from '../database/schema';
@@ -494,20 +495,6 @@ export class EquippingGradesService {
       const now = await databaseNow(trx);
       const today = manilaDayOf(now);
       const plan = await this.planChange(trx, student, body, today);
-      // The day the grade became Passed, if it is: posted so, or the latest change making it so.
-      // That is the day the school dated the Life Class it filed.
-      const current = await trx
-        .selectFrom('equipping_final_grades as g')
-        .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
-        .select(
-          sql<Date>`COALESCE((SELECT max(c.changed_at) FROM equipping_grade_changes c
-                               WHERE c.final_grade_id = g.id
-                                 AND c.grade_after = 'PASSED' AND c.grade_before <> 'PASSED'),
-                             p.posted_at)`.as('passed_at'),
-        )
-        .where('g.id', '=', finalGradeId)
-        .executeTakeFirstOrThrow();
-
       // The change first: the database admits a mark or make-up of a posted class only beside it.
       const recorded = await trx
         .insertInto('equipping_grade_changes')
@@ -530,6 +517,17 @@ export class EquippingGradesService {
           encounter_before: plan.encounterBefore,
           encounter_after: plan.encounterNow,
           enrollment_effect: plan.effect,
+          // What the school's Life Class stands filed under after it: kept as it was while the
+          // grade stays Passed, the change's own instant where it becomes so, none otherwise.
+          life_class_filed_at:
+            plan.after.grade !== 'PASSED'
+              ? null
+              : plan.filed === null
+                ? sql<Date>`now()`
+                : plan.filed.kind === 'INSTANT'
+                  ? plan.filed.at
+                  : null,
+          life_class_weekend: plan.after.grade === 'PASSED' && plan.filed?.kind === 'WEEKEND',
           changed_by: actor.accountId,
           changer_person_id: actor.personId,
         })
@@ -576,13 +574,19 @@ export class EquippingGradesService {
           .executeTakeFirstOrThrow();
       }
       if (plan.effect !== null) {
+        // The end a reopening clears is kept here, the one record of it (section 21).
         await this.audit.writeWithin(trx, {
           actorId: actor.accountId,
           action:
             plan.effect === 'ENDS' ? 'equipping_enrollment.ended' : 'equipping_enrollment.reopened',
           targetType: 'person',
           targetId: student.person_id,
-          before: { enrollment_id: student.enrollment_id, class_id: classId, open: student.open },
+          before: {
+            enrollment_id: student.enrollment_id,
+            class_id: classId,
+            open: student.open,
+            ...plan.endBefore,
+          },
           after: {
             enrollment_id: student.enrollment_id,
             class_id: classId,
@@ -594,7 +598,7 @@ export class EquippingGradesService {
       }
 
       // Training follows the grade (decision 0509): Life Class filed from the school, or withdrawn.
-      if (!plan.holds && plan.after.grade === 'PASSED') {
+      if (plan.filed === null && plan.after.grade === 'PASSED') {
         await this.training.fileFromSchoolWithin(trx, {
           personId: student.person_id,
           program: 'LIFE_CLASS',
@@ -603,13 +607,9 @@ export class EquippingGradesService {
           graduatedOn: manilaDayOf(recorded.changed_at),
           accountId: actor.accountId,
         });
-      } else if (plan.holds && plan.after.grade !== 'PASSED') {
-        // Posted or changed *Passed*: dated the day it became so. Passed at a later Encounter
-        // (decision 0509): dated that weekend (decision 0513, point 10).
-        const graduatedOn =
-          student.grade === 'PASSED'
-            ? manilaDayOf(current.passed_at)
-            : await this.passedLaterWeekendOf(trx, student.person_id, standing.posting!.posted_at);
+      } else if (plan.filed !== null && plan.after.grade !== 'PASSED') {
+        // Exactly what was filed: the day it became Passed, or the weekend it passed at.
+        const graduatedOn = await this.filedOnOf(trx, plan.filed);
         await this.training.withdrawFromSchoolWithin(trx, {
           personId: student.person_id,
           program: 'LIFE_CLASS',
@@ -742,8 +742,13 @@ export class EquippingGradesService {
     // **A kept lesson keeps the join it gave** (decision 0513, point 12): lessons 1 to 4 let them
     // join a later class at Lesson 6, each attended or made up and at most two missed (decisions
     // 0508 and 0512), a join that class has graded. A change that would undo either is refused:
-    // *Absent*, and a *Came* made *Made up* past the two.
-    if (isKept(student, entry) && !keepsJoin(changed)) {
+    // *Absent*, a *Came* made *Made up* past the two, and a *Made up* made *Came* that leaves
+    // the earlier term passing (owner, 2026-11-24): that term's grade, worked out again with the
+    // lesson changed, must still join a later class at Lesson 6.
+    if (
+      isKept(student, entry) &&
+      !(await this.earlierTermStillJoins(executor, student, entry, changed))
+    ) {
       throw new InvariantViolationError(
         `L${input.lesson} was kept from ${entry.fromClass?.name ?? 'an earlier class'} and let them join a later class at Lesson 6, which that class has graded. This would undo that join, so it is not changed.`,
         { field: 'to' },
@@ -753,10 +758,12 @@ export class EquippingGradesService {
     // **Into or out of Not yet as posting would have** (decision 0513, point 10): a *Not yet*
     // made anything else has their enrollment ended, and a finished student made *Not yet* has
     // theirs reopened, which only stands while nothing else holds their place.
+    // Reopened only where a finished student is made *Not yet*: a *Not yet* withdrawn or archived
+    // since posting stays as the Registrar left them, whatever is changed.
     const effect: 'ENDS' | 'REOPENS' | null =
       student.open && after.grade !== 'NOT_YET'
         ? 'ENDS'
-        : !student.open && after.grade === 'NOT_YET'
+        : !student.open && student.grade !== 'NOT_YET' && after.grade === 'NOT_YET'
           ? 'REOPENS'
           : null;
     if (effect === 'REOPENS') {
@@ -769,9 +776,19 @@ export class EquippingGradesService {
     // the database keeps that grade's flag besides (`equipping_grade_change_carried`).
     const enrollment = await executor
       .selectFrom('equipping_enrollments')
-      .select(['registration_id', 'started_at'])
+      .select([
+        'registration_id',
+        'started_at',
+        'ended_at',
+        'ended_by',
+        'end_reason',
+        'withdraw_note',
+      ])
       .where('id', '=', student.enrollment_id)
       .executeTakeFirstOrThrow();
+    const filed =
+      (await lifeClassFiledOf(executor, { finalGradeIds: [student.posted!.final_grade_id] }))[0]
+        ?.filed ?? null;
     return {
       entry,
       signBefore,
@@ -780,7 +797,14 @@ export class EquippingGradesService {
       before: { grade: student.grade, reason: student.reason },
       registrationId: enrollment.registration_id,
       startedAt: enrollment.started_at,
-      holds: holdsLifeClass(student),
+      filed,
+      holds: filed !== null,
+      endBefore: {
+        ended_at: enrollment.ended_at === null ? null : new Date(enrollment.ended_at).toISOString(),
+        ended_by: enrollment.ended_by,
+        end_reason: enrollment.end_reason,
+        withdraw_note: enrollment.withdraw_note,
+      },
       encounterBefore: encounterBeforeOf(student)!,
       encounterNow: encounterNowOf(student),
       encounterChange: encounterChangeOf(student),
@@ -796,10 +820,12 @@ export class EquippingGradesService {
     executor: Db | Transaction<Database>,
     student: StudentGrade & PostedFacts,
   ): Promise<string | null> {
+    // Locked as cancelling locks it, so a cancel cannot land beside the reopening unseen.
     const registration = await executor
       .selectFrom('equipping_registrations')
       .select('cancelled_at')
       .where('id', '=', student.registration_id)
+      .forNoKeyUpdate()
       .executeTakeFirstOrThrow();
     if (registration.cancelled_at !== null) {
       return 'This would make them Not yet, but their registration was cancelled, so their enrollment cannot be opened again.';
@@ -939,53 +965,57 @@ export class EquippingGradesService {
     return [row.person_id, ...(person?.mergedIntoId ? [person.mergedIntoId] : [])];
   }
 
-  /**
-   * The weekend a posted *Not yet* passed at (decision 0509), which dated the Life Class it
-   * filed: the earliest Encounter on or after posting recorded as attended, on their record or
-   * one merged into it.
-   */
-  private async passedLaterWeekendOf(
+  /** The Manila day the school's Life Class was dated by, for withdrawing exactly it. */
+  private async filedOnOf(
     trx: Transaction<Database>,
-    personId: string,
-    postedAt: Date,
+    filed: Exclude<LifeClassFiled, null>,
   ): Promise<string> {
-    const pairs = await this.people.mergedPairsWithin(trx);
-    const records = [
-      canonicalId(personId),
-      ...pairs.absorbed.filter((_, index) => pairs.kept[index] === canonicalId(personId)),
-    ];
-    const rows = await trx
-      .selectFrom('equipping_encounter_enrollments as ee')
-      .innerJoin('equipping_encounter_attendance as a', (join) =>
-        join
-          .onRef('a.encounter_enrollment_id', '=', 'ee.id')
-          .on('a.superseded_at', 'is', null)
-          .on('a.came', '=', true),
-      )
-      .select(['ee.encounter_season_id', 'ee.network'])
-      .where('ee.person_id', 'in', records)
-      .execute();
-    const seasons = new Map(
-      (await this.seasons.allSeasons(trx)).map((season) => [canonicalId(season.id), season]),
-    );
-    const posted = manilaDayOf(postedAt);
-    const weekends = rows
-      .map((row) => {
-        const season = seasons.get(canonicalId(row.encounter_season_id));
-        return season === undefined
-          ? null
-          : row.network === 'MENS'
-            ? season.mens_encounter_on
-            : season.womens_encounter_on;
-      })
-      .filter((on): on is string => on !== null && on >= posted)
-      .sort();
-    if (weekends.length === 0) {
-      throw new Error(
-        'A grade passed at a later Encounter has no Encounter attended since posting.',
-      );
+    if (filed.kind === 'INSTANT') {
+      return manilaDayOf(filed.at);
     }
-    return weekends[0];
+    const season = (await this.seasons.allSeasons(trx)).find(
+      (each) => canonicalId(each.id) === canonicalId(filed.seasonId),
+    );
+    if (season === undefined) {
+      throw new Error('A Life Class filed at a weekend names a season that does not exist.');
+    }
+    return filed.network === 'MENS' ? season.mens_encounter_on : season.womens_encounter_on;
+  }
+
+  /**
+   * **Whether the earlier term still joins at Lesson 6 with a kept lesson changed** (decision
+   * 0513, point 12): its register as recorded, the one lesson changed, worked out again.
+   */
+  private async earlierTermStillJoins(
+    executor: Db | Transaction<Database>,
+    student: StudentGrade & PostedFacts,
+    entry: RegisterEntry,
+    changed: Map<number, RegisterEntry>,
+  ): Promise<boolean> {
+    const graded = await executor
+      .selectFrom('equipping_enrollments')
+      .select('carried_from_enrollment_id')
+      .where('id', '=', student.enrollment_id)
+      .executeTakeFirstOrThrow();
+    if (graded.carried_from_enrollment_id === null) {
+      return false;
+    }
+    const earlier = await executor
+      .selectFrom('equipping_enrollments')
+      .select(['id', 'class_id', 'registration_id', 'started_at'])
+      .where('id', '=', graded.carried_from_enrollment_id)
+      .executeTakeFirstOrThrow();
+    const registers = await this.attendance.registersOf(executor, earlier.class_id, [
+      {
+        enrollment_id: earlier.id,
+        registration_id: earlier.registration_id,
+        started_at: earlier.started_at,
+      },
+    ]);
+    const register = new Map(registers.get(earlier.id) ?? []);
+    register.set(entry.lesson, changed.get(entry.lesson)!);
+    const worked = gradeOf(register, student.encounter);
+    return worked.joins_at_lesson_6;
   }
 
   /** Each grade's changes, oldest first, with who made them (decision 0513). */
@@ -1384,15 +1414,6 @@ function isKept(student: StudentGrade & PostedFacts, entry: RegisterEntry): bool
   return registration !== undefined && registration !== student.registration_id;
 }
 
-/** Lessons 1 to 4 each attended or made up, at most two of them missed (decisions 0508, 0512). */
-function keepsJoin(register: Map<number, RegisterEntry>): boolean {
-  const early = [1, 2, 3, 4].map((n) => register.get(n));
-  return (
-    early.every((entry) => entry !== undefined && (entry.came || entry.madeUpOn !== null)) &&
-    early.filter((entry) => !entry!.came && !entry!.beforeJoining).length <= EARLY_ABSENCES_ALLOWED
-  );
-}
-
 /**
  * What the grade as it stands read the Encounter as (decision 0513, point 14). The grade reads
  * it as attended or not, and the lessons kept count it, so the grade worked out from the register
@@ -1482,16 +1503,6 @@ function changeableOf(student: StudentGrade & PostedFacts, registeredLater: bool
     lessons,
     why: lessons.length === 0 ? 'No lesson of theirs was recorded in this class.' : null,
   };
-}
-
-/**
- * Whether the grade as it stands holds Life Class from the school: posted or changed *Passed*,
- * or posted *Not yet* and passed at a later Encounter, not changed away since (decision 0513).
- */
-function holdsLifeClass(student: StudentGrade & PostedFacts): boolean {
-  return (
-    student.grade === 'PASSED' || (student.grade === 'NOT_YET' && !!student.posted?.passed_later)
-  );
 }
 
 /** What a preview answers: the lesson and the grade, before and after, and what follows. */
