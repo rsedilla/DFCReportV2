@@ -760,20 +760,6 @@ export class EquippingGradesService {
     // theirs reopened, which only stands while nothing else holds their place.
     // Reopened only where a finished student is made *Not yet*: a *Not yet* withdrawn or archived
     // since posting stays as the Registrar left them, whatever is changed.
-    const effect: 'ENDS' | 'REOPENS' | null =
-      student.open && after.grade !== 'NOT_YET'
-        ? 'ENDS'
-        : !student.open && student.grade !== 'NOT_YET' && after.grade === 'NOT_YET'
-          ? 'REOPENS'
-          : null;
-    if (effect === 'REOPENS') {
-      const blocked = await this.reopenRefusalOf(executor, student);
-      if (blocked !== null) {
-        throw new InvariantViolationError(blocked, { field: 'to', grade_after: after.grade });
-      }
-    }
-    // One who has joined a later class at Lesson 6 has registered in a later term, refused above;
-    // the database keeps that grade's flag besides (`equipping_grade_change_carried`).
     const enrollment = await executor
       .selectFrom('equipping_enrollments')
       .select([
@@ -786,6 +772,25 @@ export class EquippingGradesService {
       ])
       .where('id', '=', student.enrollment_id)
       .executeTakeFirstOrThrow();
+    // Decided from how the enrollment ended, not from the grade: only an end `COMPLETED`, by
+    // posting or by a change ending a *Not yet*, is reopened. A withdrawal or an archive is left
+    // as the Registrar left it, whatever the grade is changed to and however often.
+    const finished =
+      !student.open && enrollment.end_reason === 'COMPLETED' && enrollment.withdraw_note === null;
+    const effect: 'ENDS' | 'REOPENS' | null =
+      student.open && after.grade !== 'NOT_YET'
+        ? 'ENDS'
+        : finished && student.grade !== 'NOT_YET' && after.grade === 'NOT_YET'
+          ? 'REOPENS'
+          : null;
+    if (effect === 'REOPENS') {
+      const blocked = await this.reopenRefusalOf(executor, student);
+      if (blocked !== null) {
+        throw new InvariantViolationError(blocked, { field: 'to', grade_after: after.grade });
+      }
+    }
+    // One who has joined a later class at Lesson 6 has registered in a later term, refused above;
+    // the database keeps that grade's flag besides (`equipping_grade_change_carried`).
     const filed =
       (await lifeClassFiledOf(executor, { finalGradeIds: [student.posted!.final_grade_id] }))[0]
         ?.filed ?? null;

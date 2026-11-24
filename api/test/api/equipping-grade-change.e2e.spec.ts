@@ -789,12 +789,58 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       { why: 'RECORDED_WRONGLY', details: 'Watched L3 later.' },
     ).expect(201);
     expect((await studentOf('Dino')).student.grade).toBe('NOT_YET');
+    // Made Not passed and then Not yet again, still withdrawn: never reopened.
+    await change(
+      admin,
+      (await studentOf('Dino')).student,
+      { lesson: 7, to: 'ABSENT' },
+      { why: 'RECORDED_WRONGLY', details: 'Away at L7.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student.grade).toBe('NOT_PASSED');
+    await change(
+      admin,
+      (await studentOf('Dino')).student,
+      { lesson: 7, to: 'CAME' },
+      { why: 'RECORDED_WRONGLY', details: 'He was there after all.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student.grade).toBe('NOT_YET');
     const enrollment = await db
       .selectFrom('equipping_enrollments')
       .select(['end_reason', 'withdraw_note'])
       .where('id', '=', enrollmentOf.get('Dino')!)
       .executeTakeFirstOrThrow();
     expect(enrollment).toEqual({ end_reason: 'WITHDRAWN', withdraw_note: 'Moving abroad.' });
+  });
+
+  it('keeps the weekend a pass rests on, after a change kept it as Passed (decision 0509, point 4)', async () => {
+    await posted();
+    const weekend = await passAtLaterEncounter('Dino');
+    await change(
+      admin,
+      (await studentOf('Dino')).student,
+      { lesson: 3, to: 'MADE_UP', made_up_on: weekend },
+      { why: 'RECORDED_WRONGLY', details: 'Watched L3 later.' },
+    ).expect(201);
+    expect((await studentOf('Dino')).student.grade).toBe('PASSED');
+    const season = await db
+      .selectFrom('encounter_seasons')
+      .select('id')
+      .where('mens_encounter_on', '=', weekend)
+      .executeTakeFirstOrThrow();
+    // Passing took him off the weekend's list, so a save leaving him out writes nothing.
+    const saved = await post(registrar, 'equipping/encounter/attendance', {
+      season_id: season.id,
+      network: 'MENS',
+      came: [],
+    }).expect(200);
+    expect(saved.body).toMatchObject({ changed: 0 });
+    // And Training's evidence still names that weekend.
+    const evidence = await db
+      .transaction()
+      .execute((trx) =>
+        app.get(SchoolEvidenceAdapter).evidenceWithin(trx, [personOf.get('Dino')!], 'LIFE_CLASS'),
+      );
+    expect(evidence).toEqual([{ kind: 'WEEKEND', seasonId: season.id, network: 'MENS' }]);
   });
 
   it('refuses a change made since the dialog opened, and one that changes nothing', async () => {

@@ -17,6 +17,7 @@ import { TrainingService } from '../training/training.service';
 
 import { EquippingAttendanceService, expectedOn } from './equipping-attendance.service';
 import { ENCOUNTER_MINIMUM_AGE, ageOn } from './equipping.service';
+import { lifeClassFiledOf } from './life-class-from-school';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, NetworkName } from '../database/schema';
@@ -394,13 +395,23 @@ export class EquippingEncounterService {
         notYet.map((row) => [canonicalId(row.encounter_enrollment_id), row]),
       );
       // One who passed at this weekend is not recorded as not attended: the Life Class it filed
-      // rests on it (owner, 2026-11-22).
-      const undone = enrolled.filter(
+      // rests on it (owner, 2026-11-22). Read from what the school's Life Class stands filed under
+      // (decision 0513), so a pass kept since by a change to Passed is still held to it.
+      const unmarking = enrolled.filter(
         (row) =>
-          !came.has(canonicalId(row.id)) &&
-          currentOf.get(canonicalId(row.id))?.came === true &&
-          notYetOf.get(canonicalId(row.id))?.passed_later_at != null,
+          !came.has(canonicalId(row.id)) && currentOf.get(canonicalId(row.id))?.came === true,
       );
+      const restsHere = new Set(
+        (await lifeClassFiledOf(trx, { personIds: unmarking.map((row) => row.person_id) }))
+          .filter(
+            ({ filed }) =>
+              filed?.kind === 'WEEKEND' &&
+              canonicalId(filed.seasonId) === canonicalId(weekend.season.id) &&
+              filed.network === body.network,
+          )
+          .map(({ personId }) => canonicalId(personId)),
+      );
+      const undone = unmarking.filter((row) => restsHere.has(canonicalId(row.person_id)));
       if (undone.length > 0) {
         const names = await this.people.forDecisions(undone.map((row) => row.person_id));
         throw new InvariantViolationError(

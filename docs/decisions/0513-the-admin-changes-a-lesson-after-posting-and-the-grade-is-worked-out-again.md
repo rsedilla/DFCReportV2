@@ -96,7 +96,8 @@ as missed, and joining at Lesson 6 allows two missed of lessons 1 to 4 (decision
 Such a change is refused as well (owner, 2026-11-24, "A", chosen against admitting it and
 working both grades out again, or recording it with both outcomes kept): a join a later class has
 graded is not undone, as point 13 holds for the same reason. **The same holds the other way**
-(owner, 2026-11-24, "Yes"): a *Made up* made *Came* that would leave the earlier term passing,
+(owner, 2026-11-24, "Yes to both", asked whether a kept change that undoes the join "either way"
+is refused): a *Made up* made *Came* that would leave the earlier term passing,
 its absences falling to three, is refused too. A kept change stands only where the earlier term's
 grade, worked out again with the lesson changed, still joins a later class at Lesson 6.
 

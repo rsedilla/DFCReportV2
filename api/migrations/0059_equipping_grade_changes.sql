@@ -83,15 +83,17 @@ CREATE TABLE equipping_grade_changes (
   CONSTRAINT equipping_grade_changes_before_joining CHECK (
     sign_before <> 'BEFORE_JOINING' OR sign_after = 'MADE_UP'
   ),
-  -- An enrollment is reopened only for a grade made *Not yet*, and ended only for one made
-  -- something else (decision 0513, point 10).
   CONSTRAINT equipping_grade_changes_life_class_one CHECK (
     NOT (life_class_weekend AND life_class_filed_at IS NOT NULL)
   ),
-  -- Only a grade standing Passed holds Life Class from the school.
+  -- A change records Life Class from the school only for a grade it leaves Passed. A posted
+  -- *Not yet* passed at a later Encounter holds it too, by `passed_later_at` rather than by a
+  -- change row, read before any change row is (`life-class-from-school.ts`).
   CONSTRAINT equipping_grade_changes_life_class_passed CHECK (
     (life_class_weekend OR life_class_filed_at IS NOT NULL) = (grade_after = 'PASSED')
   ),
+  -- An enrollment is reopened only for a grade made *Not yet*, and ended only for one made
+  -- something else (decision 0513, point 10).
   CONSTRAINT equipping_grade_changes_effect_follows CHECK (
     enrollment_effect IS NULL
     OR (enrollment_effect = 'REOPENS' AND grade_after = 'NOT_YET')
