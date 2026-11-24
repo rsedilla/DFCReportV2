@@ -1,4 +1,4 @@
-import { sql, type Transaction } from 'kysely';
+import { type Transaction } from 'kysely';
 
 import type { Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -36,20 +36,6 @@ export async function lifeClassFiledOf(
     .innerJoin('equipping_class_postings as p', 'p.id', 'c.posting_id')
     .innerJoin('equipping_enrollments as n', 'n.id', 'c.enrollment_id')
     .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
-    .leftJoin(
-      (eb) =>
-        eb
-          .selectFrom('equipping_encounter_attendance as a')
-          .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
-          .select(['a.recorded_at', 'e.person_id', 'e.encounter_season_id', 'e.network'])
-          .where('a.came', '=', true)
-          .where('a.superseded_at', 'is', null)
-          .as('w'),
-      (join) =>
-        join
-          .onRef('w.person_id', '=', 'r.person_id')
-          .on(sql<boolean>`w.recorded_at = g.passed_later_at`),
-    )
     .select([
       'c.final_grade_id',
       'r.person_id',
@@ -60,16 +46,40 @@ export async function lifeClassFiledOf(
       'c.changed_at',
       'c.life_class_filed_at',
       'c.life_class_weekend',
-      'w.encounter_season_id',
-      'w.network',
     ])
     .where('finalGradeIds' in where ? 'c.final_grade_id' : 'r.person_id', 'in', [...ids])
     .execute();
+  // The weekend a posted Not yet passed at: the record of having come written in the same
+  // transaction as `passed_later_at`, which `now()` makes the same instant.
+  const passedLater = rows.filter((row) => row.passed_later_at !== null);
+  const attended =
+    passedLater.length === 0
+      ? []
+      : await executor
+          .selectFrom('equipping_encounter_attendance as a')
+          .innerJoin('equipping_encounter_enrollments as e', 'e.id', 'a.encounter_enrollment_id')
+          .select(['a.recorded_at', 'e.person_id', 'e.encounter_season_id', 'e.network'])
+          .where('a.came', '=', true)
+          .where('a.superseded_at', 'is', null)
+          .where(
+            'e.person_id',
+            'in',
+            passedLater.map((row) => row.person_id),
+          )
+          .execute();
+  const weekendOf = (row: (typeof rows)[number]): LifeClassFiled => {
+    const hit = attended.find(
+      (each) =>
+        each.person_id === row.person_id &&
+        row.passed_later_at !== null &&
+        new Date(each.recorded_at).getTime() === new Date(row.passed_later_at).getTime(),
+    );
+    return hit === undefined
+      ? null
+      : { kind: 'WEEKEND', seasonId: hit.encounter_season_id, network: hit.network };
+  };
   return rows.map((row) => {
-    const weekend: LifeClassFiled =
-      row.encounter_season_id !== null && row.network !== null
-        ? { kind: 'WEEKEND', seasonId: row.encounter_season_id, network: row.network }
-        : null;
+    const weekend = weekendOf(row);
     let filed: LifeClassFiled = null;
     if (
       row.passed_later_at !== null &&
