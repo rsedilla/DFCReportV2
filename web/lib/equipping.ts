@@ -62,6 +62,8 @@ export interface Candidate {
   cell_leader_name: string | null;
   birth_date: string | null;
   requirements: { code: RequirementCode; met: boolean; detail: string }[];
+  /** Each earlier Life Class graded *Not passed*, oldest first (decision 0511). */
+  earlier_tries?: { term_year: number; term_number: number; class_name: string; reason: string }[];
 }
 
 export interface Registration {
@@ -77,6 +79,8 @@ export interface Registration {
   enrollment_id: string | null;
   registered_at: string;
   cancel_reason: string | null;
+  /** Which try this is: 1 and the tries in earlier terms (decision 0511). */
+  try_number?: number;
 }
 
 export interface EquippingClass {
@@ -151,6 +155,7 @@ export interface ClassDetail {
     birthday_recorded: boolean;
     age_at_encounter: number | null;
     blocked: string | null;
+    try_number?: number;
   }[];
 }
 
@@ -407,6 +412,18 @@ export function currentTerm(today: Date = new Date()): Term {
 
 export function termLabel(term: Pick<Term, 'term_year' | 'term_number'>): string {
   return `Term ${term.term_number}, ${term.term_year}`;
+}
+
+/** *2nd*, *3rd*, *11th*, *22nd*. */
+export function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
+/** *2nd try* and on, or nothing for a first try (decision 0511). */
+export function tryLabel(tryNumber: number | undefined): string | null {
+  return tryNumber !== undefined && tryNumber > 1 ? `${ordinal(tryNumber)} try` : null;
 }
 
 /** A class the reader teaches or guides (decision 0501, point 21). */

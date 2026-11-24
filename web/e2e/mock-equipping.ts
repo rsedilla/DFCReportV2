@@ -39,7 +39,9 @@ export async function mockRegistrar(page: Page): Promise<void> {
 }
 
 /** One term: two registrations, one class with one person ready and one enrolled. */
-export async function mockEquipping(page: Page): Promise<void> {
+export async function mockEquipping(page: Page, options: { tries?: boolean } = {}): Promise<void> {
+  // A student taking Life Class again (decision 0511): Carlito and Ernesto on a 2nd try.
+  const second = options.tries ? { try_number: 2 } : {};
   await page.route('**/api/v1/equipping/registrations?*', (route) =>
     route.fulfill(
       json({
@@ -57,6 +59,7 @@ export async function mockEquipping(page: Page): Promise<void> {
             enrollment_id: null,
             registered_at: '2026-11-10T02:00:00.000Z',
             cancel_reason: null,
+            ...second,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-00000000e102',
@@ -128,6 +131,7 @@ export async function mockEquipping(page: Page): Promise<void> {
             birthday_recorded: true,
             age_at_encounter: 22,
             blocked: null,
+            ...second,
           },
           {
             registration_id: '3f1b7c6e-0000-4000-8000-00000000e101',
@@ -831,4 +835,32 @@ export async function mockFinalGrades(
   await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}/post`, record);
   await page.route(`**/api/v1/equipping/coordinate/classes/${CLASS_ID}/check`, record);
   return { sent };
+}
+
+/** The Register form's person read for Wilfredo, with two earlier tries or none (decision 0511). */
+export async function mockCandidate(page: Page, tries: boolean): Promise<void> {
+  await page.route('**/api/v1/equipping/people/3f1b7c6e-0000-4000-8000-00000000f002', (route) =>
+    route.fulfill(
+      json({
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000f002', member_id: 'M-000519', full_name: 'Wilfredo Sanchez' },
+        archived: false,
+        leader_name: 'Marites D. Ramos',
+        in_a_cell: true,
+        cell_leader_name: 'Marites D. Ramos',
+        birth_date: '1994-03-02',
+        requirements: [
+          { code: 'HAS_LEADER', met: true, detail: 'Marites D. Ramos' },
+          { code: 'CELL_REGULAR', met: true, detail: 'Came 3 of the last 4 Cell meetings' },
+          { code: 'DCC_REGULAR', met: true, detail: 'Came 4 of the last 4 Sundays' },
+          { code: 'SUYNL_LESSONS_1_TO_4', met: true, detail: 'Lessons 1 to 4 done' },
+        ],
+        earlier_tries: tries
+          ? [
+              { term_year: 2026, term_number: 1, class_name: 'Life Class B', reason: 'More than three absences' },
+              { term_year: 2026, term_number: 2, class_name: 'Life Class A', reason: 'Missed three of lessons 1 to 4' },
+            ]
+          : [],
+      }),
+    ),
+  );
 }
