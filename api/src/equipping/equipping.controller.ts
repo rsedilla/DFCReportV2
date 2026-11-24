@@ -22,6 +22,7 @@ import { PersonViewsService } from '../people/person-views.service';
 
 import {
   CheckGradesDto,
+  CorrectClassDto,
   EncounterAttendanceDto,
   EncounterQueryDto,
   EnrollDto,
@@ -309,6 +310,32 @@ export class EquippingController {
     return this.equipping.setTeacher(actor, id, body.teacher_person_id, claim);
   }
 
+  /** Corrects a class's day, time, place and first lesson until a lesson is saved (decision 0510). */
+  @Post('classes/:id/correction')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async correctClass(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: CorrectClassDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.correctClass(actor, id, body, claim);
+  }
+
+  /** Cancels a class with no students and no lesson saved; never a delete (decision 0510). */
+  @Post('classes/:id/cancel')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async cancelClass(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: ReasonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.equipping.cancelClass(actor, id, body.reason, claim);
+  }
+
   /** Names a Guide of the class, and shares out the students with no Guide (decision 0501). */
   @Post('classes/:id/guides')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
@@ -491,7 +518,13 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    return this.equipping.enroll(actor, id, body.registration_ids, claim);
+    return this.equipping.enroll(
+      actor,
+      id,
+      body.registration_ids,
+      claim,
+      body.start_from_lesson_1 ?? [],
+    );
   }
 
   @Post('enrollments/:id/move')

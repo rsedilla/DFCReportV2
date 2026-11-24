@@ -611,6 +611,9 @@ export class EquippingEncounterService {
       ])
       .where('e.ended_at', 'is', null)
       .where('r.level', '=', 'LIFE_CLASS')
+      // Joined at Lesson 6, they attended an Encounter in the term that kept lessons 1 to 4
+      // (decision 0512), whichever record it is recorded under.
+      .where('e.carried_from_enrollment_id', 'is', null)
       .execute();
     // Their class's weekend on or before this one.
     const inReach = open.filter(

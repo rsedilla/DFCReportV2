@@ -17,6 +17,7 @@ import {
   getClassAttendance,
   recordMakeUp,
   saveLesson,
+  termLabel,
   type AttendanceStudent,
   type ClassAttendance,
   type ClassLesson,
@@ -262,9 +263,13 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
     },
   });
   // Those who had joined by the lesson's day are ticked; anyone who joined later makes it up.
-  const later = data.students.filter((s) => joinedAfter(s, heldOn));
-  const elsewhere = data.students.filter((s) => !joinedAfter(s, heldOn) && markedElsewhere(s, lesson.lesson) !== null);
-  const ticking = data.students.filter((s) => !later.includes(s) && !elsewhere.includes(s));
+  // Joined at Lesson 6, keeping lessons 1 to 4 from an earlier class: not ticked for one (0512).
+  const keeping = lesson.lesson <= 4 ? data.students.filter((s) => s.carried) : [];
+  const later = data.students.filter((s) => !keeping.includes(s) && joinedAfter(s, heldOn));
+  const elsewhere = data.students.filter(
+    (s) => !keeping.includes(s) && !joinedAfter(s, heldOn) && markedElsewhere(s, lesson.lesson) !== null,
+  );
+  const ticking = data.students.filter((s) => !keeping.includes(s) && !later.includes(s) && !elsewhere.includes(s));
   const absent = ticking.filter((s) => !came.has(s.enrollment_id));
   const cameCount = ticking.length - absent.length;
   const toggle = (enrollmentId: string, on: boolean) =>
@@ -401,6 +406,12 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             <p className="text-muted mt-3 text-sm">
               Joined after this lesson, so not marked and making it up instead:{' '}
               {later.map((s) => s.person.full_name ?? 'Somebody').join(', ')}.
+            </p>
+          ) : null}
+          {keeping.length > 0 ? (
+            <p className="text-muted mt-3 text-sm">
+              Joined at Lesson 6, keeping lessons 1 to 4 from an earlier class:{' '}
+              {keeping.map((s) => s.person.full_name ?? 'Somebody').join(', ')}.
             </p>
           ) : null}
           {elsewhere.length > 0 ? (
@@ -680,7 +691,8 @@ function Register({ data }: { data: ClassAttendance }) {
                 // A lesson held before they joined and not yet made up is not counted against
                 // them (decision 0503).
                 const counted = s.marks.filter((m) => !(m.before_joining && m.made_up_on === null)).length;
-                const moved = s.marks.filter((m) => m.from_class !== null);
+                // Lessons 1 to 4 kept by one joined at Lesson 6 are named as that, not as a move.
+                const moved = s.marks.filter((m) => m.from_class !== null && !(s.carried && m.lesson <= 4));
                 const joinedLater = s.marks.some((m) => m.before_joining);
                 return (
                   <tr key={s.enrollment_id} className="border-line border-t">
@@ -694,6 +706,11 @@ function Register({ data }: { data: ClassAttendance }) {
                       ) : null}
                       {joinedLater ? (
                         <span className="text-muted block text-xs font-normal">Joined {longDay(s.joined_on)}</span>
+                      ) : null}
+                      {s.carried ? (
+                        <span className="text-muted block text-xs font-normal">
+                          Joins at Lesson 6 · L1 to L4 and ENC kept from {s.carried.class_name}, {termLabel(s.carried)}
+                        </span>
                       ) : null}
                     </th>
                     {COLUMNS.map((n) => {

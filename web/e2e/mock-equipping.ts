@@ -39,7 +39,16 @@ export async function mockRegistrar(page: Page): Promise<void> {
 }
 
 /** One term: two registrations, one class with one person ready and one enrolled. */
-export async function mockEquipping(page: Page): Promise<void> {
+export async function mockEquipping(
+  page: Page,
+  options: { tries?: boolean; joins?: boolean; lesson6Passed?: boolean } = {},
+): Promise<void> {
+  // Ernesto kept lessons 1 to 4 and the Encounter in Term 2, 2026 (decision 0512).
+  const joins = options.joins
+    ? { joins_at_lesson_6: { class_name: 'Life Class B', term_year: 2026, term_number: 2 } }
+    : {};
+  // A student taking Life Class again (decision 0511): Carlito and Ernesto on a 2nd try.
+  const second = options.tries ? { try_number: 2 } : {};
   await page.route('**/api/v1/equipping/registrations?*', (route) =>
     route.fulfill(
       json({
@@ -57,6 +66,7 @@ export async function mockEquipping(page: Page): Promise<void> {
             enrollment_id: null,
             registered_at: '2026-11-10T02:00:00.000Z',
             cancel_reason: null,
+            ...second,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-00000000e102',
@@ -111,6 +121,7 @@ export async function mockEquipping(page: Page): Promise<void> {
           run_by: 'CHURCH',
           teacher: { id: '3f1b7c6e-0000-4000-8000-00000000e203', full_name: 'Graciela Uy' },
           encounter_weekends: { mens: '2026-12-04', womens: '2026-12-11' },
+          lesson_6: { on: '2027-01-05', open: !options.lesson6Passed },
         },
         enrolled: [
           {
@@ -128,6 +139,8 @@ export async function mockEquipping(page: Page): Promise<void> {
             birthday_recorded: true,
             age_at_encounter: 22,
             blocked: null,
+            ...second,
+            ...joins,
           },
           {
             registration_id: '3f1b7c6e-0000-4000-8000-00000000e101',
@@ -145,7 +158,10 @@ export async function mockEquipping(page: Page): Promise<void> {
 }
 
 /** The Coordinator's *Classes* (decision 0501): one class with a Teacher, one not named yet. */
-export async function mockCoordinatedClasses(page: Page): Promise<void> {
+export async function mockCoordinatedClasses(
+  page: Page,
+  options: { lessonSaved?: boolean; cancelled?: boolean } = {},
+): Promise<void> {
   const base = {
     place: 'Room 2',
     encounter_season_id: '3f1b7c6e-0000-4000-8000-00000000e301',
@@ -178,11 +194,66 @@ export async function mockCoordinatedClasses(page: Page): Promise<void> {
             enrolled: 0,
             status: 'NOT_STARTED',
             guides: { named: 0, short_men: 0, short_women: 0 },
+            lesson_saved: options.lessonSaved ?? false,
           },
+          // Cancelled on 23 Nov 2026 (decision 0510): listed only under *Cancelled*.
+          ...(options.cancelled
+            ? [
+                {
+                  ...base,
+                  id: '3f1b7c6e-0000-4000-8000-00000000e003',
+                  name: 'Life Class D',
+                  day_of_week: 4,
+                  time_of_day: '18:00',
+                  first_lesson_on: '2026-12-03',
+                  teacher: null,
+                  enrolled: 0,
+                  status: 'CANCELLED',
+                  lesson_saved: false,
+                  cancelled_on: '2026-11-23',
+                  cancel_reason: 'The Teacher moved to another Network',
+                },
+              ]
+            : []),
         ],
       }),
     ),
   );
+}
+
+/**
+ * Life Class C's empty roster, and the correction and cancellation routes (decision 0510), each
+ * request recorded; a correction answers with a clash when `clash` is set.
+ */
+export async function mockClassChanges(
+  page: Page,
+  options: { clash?: boolean } = {},
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const classC = '3f1b7c6e-0000-4000-8000-00000000e002';
+  await page.route(`**/api/v1/equipping/coordinate/classes/${classC}/students`, (route) =>
+    route.fulfill(json({ class: { id: classC, name: 'Life Class C' }, guides: [], data: [] })),
+  );
+  await page.route('**/api/v1/equipping/classes/*/correction', (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    sent.push({ url: route.request().url(), body });
+    return route.fulfill(
+      json({
+        id: classC,
+        ...body,
+        corrected: true,
+        clash: options.clash ? { day_of_week: 2, time_of_day: '19:30' } : null,
+      }),
+    );
+  });
+  await page.route('**/api/v1/equipping/classes/*/cancel', (route) => {
+    const body = route.request().postDataJSON() as { reason: string };
+    sent.push({ url: route.request().url(), body });
+    return route.fulfill(
+      json({ id: classC, status: 'CANCELLED', cancelled_on: '2026-11-23', cancel_reason: body.reason }),
+    );
+  });
+  return { sent };
 }
 
 /** The Register dialog's person search (decision 0499): two invented people, each with a leader. */
@@ -411,7 +482,14 @@ export async function mockClassAttendance(
     closedThree = false,
     joiners = false,
     missedTwice = false,
-  }: { role?: AttendanceRole; closedThree?: boolean; joiners?: boolean; missedTwice?: boolean } = {},
+    carried = false,
+  }: {
+    role?: AttendanceRole;
+    closedThree?: boolean;
+    joiners?: boolean;
+    missedTwice?: boolean;
+    carried?: boolean;
+  } = {},
 ): Promise<{ sent: { url: string; body: unknown }[] }> {
   const sent: { url: string; body: unknown }[] = [];
   const mark = (
@@ -524,6 +602,26 @@ export async function mockClassAttendance(
         marks: [mark(1, true, null), mark(2, false, '2026-11-12'), ...(missedTwice ? [mark(3, false, null)] : [])],
       },
       ...(joiners ? [rosa, tomas, paz] : []),
+      // Joined at Lesson 6, keeping lessons 1 to 4 and the Encounter from Life Class B (0512).
+      ...(carried
+        ? [
+            {
+              enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b306',
+              person: { id: '3f1b7c6e-0000-4000-8000-00000000b406', full_name: 'Ramil Cruz' },
+              cell_leader: null,
+              guide: null,
+              joined_on: '2026-11-01',
+              carried: { class_name: 'Life Class B', term_year: 2026, term_number: 2 },
+              encounter: 'CAME',
+              marks: [
+                mark(1, true, null, { from_class: classB }),
+                mark(2, true, null, { from_class: classB }),
+                mark(3, false, '2026-11-20', { from_class: classB }),
+                mark(4, true, null, { from_class: classB }),
+              ],
+            },
+          ]
+        : []),
     ],
     owed: [
       {
@@ -773,4 +871,33 @@ export async function mockFinalGrades(
   await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}/post`, record);
   await page.route(`**/api/v1/equipping/coordinate/classes/${CLASS_ID}/check`, record);
   return { sent };
+}
+
+/** The Register form's person read for Wilfredo, with two earlier tries or none (decision 0511). */
+export async function mockCandidate(page: Page, tries: boolean, joins = false): Promise<void> {
+  await page.route('**/api/v1/equipping/people/3f1b7c6e-0000-4000-8000-00000000f002', (route) =>
+    route.fulfill(
+      json({
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000f002', member_id: 'M-000519', full_name: 'Wilfredo Sanchez' },
+        archived: false,
+        leader_name: 'Marites D. Ramos',
+        in_a_cell: true,
+        cell_leader_name: 'Marites D. Ramos',
+        birth_date: '1994-03-02',
+        requirements: [
+          { code: 'HAS_LEADER', met: true, detail: 'Marites D. Ramos' },
+          { code: 'CELL_REGULAR', met: true, detail: 'Came 3 of the last 4 Cell meetings' },
+          { code: 'DCC_REGULAR', met: true, detail: 'Came 4 of the last 4 Sundays' },
+          { code: 'SUYNL_LESSONS_1_TO_4', met: true, detail: 'Lessons 1 to 4 done' },
+        ],
+        earlier_tries: tries
+          ? [
+              { term_year: 2026, term_number: 1, class_name: 'Life Class B', reason: 'More than three absences' },
+              { term_year: 2026, term_number: 2, class_name: 'Life Class A', reason: 'Missed three of lessons 1 to 4' },
+            ]
+          : [],
+        joins_at_lesson_6: joins ? { class_name: 'Life Class A', term_year: 2026, term_number: 2 } : null,
+      }),
+    ),
+  );
 }

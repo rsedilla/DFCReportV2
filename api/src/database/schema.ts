@@ -421,6 +421,8 @@ export type AuditAction =
   | 'equipping_registration.cancelled'
   | 'equipping_class.created'
   | 'equipping_class.teacher_named'
+  | 'equipping_class.corrected'
+  | 'equipping_class.cancelled'
   | 'equipping_class.guide_named'
   | 'equipping_class.guide_removed'
   | 'equipping_enrollment.guide_changed'
@@ -972,6 +974,10 @@ export interface EquippingClassesTable {
   run_by: Generated<'CHURCH'>;
   created_by: string;
   created_at: ServerTimestamp;
+  /** Cancelled while it had no students and no lesson saved (decision 0510); final. */
+  cancelled_at: Date | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
 }
 
 /** A person signed up for a level in a term (section 29, migration 0050). Never deleted. */
@@ -1004,6 +1010,8 @@ export interface EquippingEnrollmentsTable {
   ended_by: string | null;
   end_reason: 'MOVED' | 'WITHDRAWN' | 'ARCHIVED' | 'COMPLETED' | null;
   withdraw_note: string | null;
+  /** The enrollment whose lessons 1 to 4 this one keeps, joining at Lesson 6 (decision 0512). */
+  carried_from_enrollment_id: string | null;
 }
 
 /** A Person named a Guide of one class (section 29, decision 0501). */
@@ -1094,6 +1102,8 @@ export interface EquippingFinalGradesTable {
   reason: string;
   lessons_kept: number;
   lessons_made_up: number;
+  /** Posted *Not passed* as joining a later class at Lesson 6 (decisions 0508 and 0512). */
+  joins_at_lesson_6: Generated<boolean>;
   passed_later_at: Date | null;
   passed_later_by: string | null;
 }
@@ -1129,6 +1139,22 @@ export interface EquippingLessonDateChangesTable {
   changed_by: string;
   changed_at: ServerTimestamp;
   reason: string | null;
+}
+
+/** A class's day, time, place and first lesson corrected (decision 0510), kept as written. */
+export interface EquippingClassCorrectionsTable {
+  id: Generated<string>;
+  class_id: string;
+  day_of_week_before: number;
+  day_of_week_after: number;
+  time_of_day_before: string;
+  time_of_day_after: string;
+  place_before: string | null;
+  place_after: string | null;
+  first_lesson_on_before: DateOnly;
+  first_lesson_on_after: DateOnly;
+  corrected_by: string;
+  corrected_at: ServerTimestamp;
 }
 
 export interface EncounterSeasonsTable {
@@ -1239,6 +1265,7 @@ export interface Database {
   equipping_class_postings: EquippingClassPostingsTable;
   equipping_final_grades: EquippingFinalGradesTable;
   equipping_lesson_date_changes: EquippingLessonDateChangesTable;
+  equipping_class_corrections: EquippingClassCorrectionsTable;
   hierarchy_tree_version: HierarchyTreeVersionTable;
   report_month_versions: ReportMonthVersionsTable;
   report_snapshots: ReportSnapshotsTable;

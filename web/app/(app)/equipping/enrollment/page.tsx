@@ -19,6 +19,7 @@ import {
   listClasses,
   moveEnrollment,
   termLabel,
+  tryLabel,
   withdrawEnrollment,
   type ClassDetail,
   type EquippingClass,
@@ -26,6 +27,7 @@ import {
 } from '@/lib/equipping';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { shortDate } from '@/lib/lifecycle';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { cn } from '@/lib/utils';
 
@@ -105,6 +107,8 @@ function ClassView({
     queryFn: ({ signal }) => getClass(classId, signal),
   });
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  // Who could join at Lesson 6 and is started from Lesson 1 instead (decision 0512, point 3).
+  const [startOver, setStartOver] = useState<Set<string>>(new Set());
   const [writeKey, renewWriteKey] = useWriteKey();
   const [moving, setMoving] = useState<ClassDetail['enrolled'][number] | null>(null);
   const [withdrawing, setWithdrawing] = useState<ClassDetail['enrolled'][number] | null>(null);
@@ -114,11 +118,15 @@ function ClassView({
   const save = useMutation({
     mutationFn: (names: string[]) => {
       const ids = [...ticked].sort();
-      return enroll(classId, ids, idempotencyKeyFor('equipping-enroll', writeKey, classId, ids)).then(() => names);
+      const over = ids.filter((id) => startOver.has(id));
+      return enroll(classId, ids, idempotencyKeyFor('equipping-enroll', writeKey, classId, ids, over), over).then(
+        () => names,
+      );
     },
     onSuccess: async (names) => {
       setJustEnrolled(names);
       setTicked(new Set());
+      setStartOver(new Set());
       renewWriteKey();
       await queryClient.invalidateQueries({ queryKey: ['equipping'] });
     },
@@ -152,6 +160,7 @@ function ClassView({
           {DAY_NAMES[cls.day_of_week - 1]}s, {timeLabel(cls.time_of_day)}
           {cls.place ? ` · ${cls.place}` : ''} · Teacher: {cls.teacher?.full_name ?? 'not named yet'} · Starts {cls.first_lesson_on}
           {' · '}Encounter weekend: men {cls.encounter_weekends.mens}, women {cls.encounter_weekends.womens}
+          {cls.lesson_6 ? ` · Lesson 6 on ${shortDate(cls.lesson_6.on)}` : ''}
         </p>
         <p className="text-muted mt-1 text-sm">Run by: the church (Equipping)</p>
       </div>
@@ -185,7 +194,20 @@ function ClassView({
                   Tick all who can be enrolled ({enrollable.length})
                 </Button>
               ) : null}
-              <ReadyRows rows={enrollable} caption={`Ready to enroll in ${cls.name}`} ticked={ticked} onTick={tick} />
+              <ReadyRows
+                rows={enrollable}
+                caption={`Ready to enroll in ${cls.name}`}
+                ticked={ticked}
+                onTick={tick}
+                lesson6={cls.lesson_6}
+                startOver={startOver}
+                onStartOver={(id, on) => {
+                  const next = new Set(startOver);
+                  if (on) next.add(id);
+                  else next.delete(id);
+                  setStartOver(next);
+                }}
+              />
               <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Button
@@ -422,11 +444,17 @@ function ReadyRows({
   caption,
   ticked,
   onTick,
+  lesson6,
+  startOver,
+  onStartOver,
 }: {
   rows: ReadyRow[];
   caption: string;
   ticked: ReadonlySet<string>;
   onTick: (registrationId: string, checked: boolean) => void;
+  lesson6?: { on: string; open: boolean };
+  startOver?: ReadonlySet<string>;
+  onStartOver?: (registrationId: string, on: boolean) => void;
 }) {
   return (
     <>
@@ -457,6 +485,8 @@ function ReadyRows({
               </td>
               <td className="px-3 py-3 align-top">
                 {row.person.full_name}
+                {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
+                <JoinsAtLesson6 row={row} lesson6={lesson6} startOver={startOver} onStartOver={onStartOver} />
                 {row.blocked ? (
                   <span className="text-field-invalid block text-sm">{blockedText(row.blocked)}</span>
                 ) : null}
@@ -481,7 +511,9 @@ function ReadyRows({
                 <p className="text-field-invalid text-sm">{blockedText(row.blocked)}</p>
               </>
             )}
+            <JoinsAtLesson6 row={row} lesson6={lesson6} startOver={startOver} onStartOver={onStartOver} />
             <p className="text-muted pb-1 text-sm">
+              {tryLabel(row.try_number) ? `${tryLabel(row.try_number)} · ` : ''}
               {row.leader_name ?? 'No leader yet'}
               {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
               {' · '}
@@ -491,5 +523,51 @@ function ReadyRows({
         ))}
       </ul>
     </>
+  );
+}
+
+/**
+ * **Joins at Lesson 6** on a ready row (decision 0512): the class's Lesson 6 day and where lessons
+ * 1 to 4 and the Encounter were kept, or that this class has passed its Lesson 6, with *Start from
+ * Lesson 1 instead* for the Registrar to take the class from the beginning.
+ */
+function JoinsAtLesson6({
+  row,
+  lesson6,
+  startOver,
+  onStartOver,
+}: {
+  row: ReadyRow;
+  lesson6?: { on: string; open: boolean };
+  startOver?: ReadonlySet<string>;
+  onStartOver?: (registrationId: string, on: boolean) => void;
+}) {
+  const kept = row.joins_at_lesson_6;
+  if (!kept || !lesson6) {
+    return null;
+  }
+  const over = startOver?.has(row.registration_id) ?? false;
+  return (
+    <span className="block text-sm">
+      {over ? (
+        <span className="block">Starts from Lesson 1</span>
+      ) : (
+        <>
+          <span className="block font-semibold">
+            {lesson6.open
+              ? `Joins at Lesson 6 · ${shortDate(lesson6.on)}`
+              : `Joins at Lesson 6, which this class has passed: choose another class, or start from Lesson 1`}
+          </span>
+          <span className="text-muted block">
+            Keeps L1 to L4 and the Encounter from {termLabel(kept)}, {kept.class_name}
+          </span>
+        </>
+      )}
+      {onStartOver ? (
+        <Tick checked={over} onChange={(checked) => onStartOver(row.registration_id, checked)}>
+          Start from Lesson 1 instead
+        </Tick>
+      ) : null}
+    </span>
   );
 }

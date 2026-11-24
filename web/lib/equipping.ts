@@ -62,6 +62,17 @@ export interface Candidate {
   cell_leader_name: string | null;
   birth_date: string | null;
   requirements: { code: RequirementCode; met: boolean; detail: string }[];
+  /** Each earlier Life Class graded *Not passed*, oldest first (decision 0511). */
+  earlier_tries?: { term_year: number; term_number: number; class_name: string; reason: string }[];
+  /** Joins a later class at Lesson 6, keeping lessons 1 to 4 from there (decision 0512). */
+  joins_at_lesson_6?: KeptFrom | null;
+}
+
+/** Where a student joining at Lesson 6 kept lessons 1 to 4 and the Encounter (decision 0512). */
+export interface KeptFrom {
+  class_name: string;
+  term_year: number;
+  term_number: number;
 }
 
 export interface Registration {
@@ -77,6 +88,8 @@ export interface Registration {
   enrollment_id: string | null;
   registered_at: string;
   cancel_reason: string | null;
+  /** Which try this is: 1 and the tries in earlier terms (decision 0511). */
+  try_number?: number;
 }
 
 export interface EquippingClass {
@@ -95,7 +108,13 @@ export interface EquippingClass {
 
 /** A class as the Coordinator's *Classes* lists it (decision 0501, point 22). */
 export interface CoordinatedClass extends EquippingClass {
-  status: 'NOT_STARTED' | 'RUNNING';
+  /** A cancelled class is listed only under *Cancelled* (decision 0510). */
+  status: 'NOT_STARTED' | 'RUNNING' | 'CANCELLED';
+  /** Whether a lesson is saved: *When and where* and *Cancel class* stop then (decision 0510). */
+  lesson_saved?: boolean;
+  /** The day it was cancelled, in Manila, and why (decision 0510). */
+  cancelled_on?: string;
+  cancel_reason?: string | null;
   /** How many Guides are named, and how many more the students of each sex need (decision 0501). */
   guides?: { named: number; short_men: number; short_women: number };
   /**
@@ -131,6 +150,8 @@ export interface CellClash {
 export interface ClassDetail {
   class: Omit<EquippingClass, 'enrolled'> & {
     encounter_weekends: { mens: string | null; womens: string | null };
+    /** Its Lesson 6's day, and whether it still takes a student at Lesson 6 (decision 0512). */
+    lesson_6?: { on: string; open: boolean };
   };
   enrolled: {
     enrollment_id: string;
@@ -145,6 +166,8 @@ export interface ClassDetail {
     birthday_recorded: boolean;
     age_at_encounter: number | null;
     blocked: string | null;
+    try_number?: number;
+    joins_at_lesson_6?: KeptFrom | null;
   }[];
 }
 
@@ -322,14 +345,44 @@ export async function setTeacher(
   });
 }
 
+/** Corrects a class's day, time, place and first lesson (decision 0510). */
+export async function correctClass(
+  classId: string,
+  body: { day_of_week: number; time_of_day: string; place: string | null; first_lesson_on: string },
+  idempotencyKey: string,
+): Promise<{ id: string; corrected: boolean; clash: CellClash | null }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/classes/${encodeURIComponent(classId)}/correction`,
+    { method: 'POST', body, idempotencyKey },
+  );
+}
+
+/** Cancels a class with no students and no lesson saved; never a delete (decision 0510). */
+export async function cancelClass(
+  classId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<{ id: string; status: 'CANCELLED'; cancelled_on: string; cancel_reason: string }> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/cancel`, {
+    method: 'POST',
+    body: { reason },
+    idempotencyKey,
+  });
+}
+
 export async function enroll(
   classId: string,
   registrationIds: string[],
   idempotencyKey: string,
+  startFromLesson1: string[] = [],
 ): Promise<unknown> {
   return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/enrollments`, {
     method: 'POST',
-    body: { registration_ids: registrationIds },
+    body: {
+      registration_ids: registrationIds,
+      // Those who could join at Lesson 6 and are started from Lesson 1 instead (decision 0512).
+      ...(startFromLesson1.length > 0 ? { start_from_lesson_1: startFromLesson1 } : {}),
+    },
     idempotencyKey,
   });
 }
@@ -376,6 +429,18 @@ export function currentTerm(today: Date = new Date()): Term {
 
 export function termLabel(term: Pick<Term, 'term_year' | 'term_number'>): string {
   return `Term ${term.term_number}, ${term.term_year}`;
+}
+
+/** *2nd*, *3rd*, *11th*, *22nd*. */
+export function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
+/** *2nd try* and on, or nothing for a first try (decision 0511). */
+export function tryLabel(tryNumber: number | undefined): string | null {
+  return tryNumber !== undefined && tryNumber > 1 ? `${ordinal(tryNumber)} try` : null;
 }
 
 /** A class the reader teaches or guides (decision 0501, point 21). */
@@ -434,6 +499,8 @@ export interface AttendanceStudent {
   guide: { id: string; full_name: string | null } | null;
   /** The day they joined this class (decision 0503). */
   joined_on: string;
+  /** Joined at Lesson 6, keeping lessons 1 to 4 and the Encounter from there (decision 0512). */
+  carried?: KeptFrom | null;
   /** The ENC column (decision 0507): attended, enrolled and not yet recorded, or missed. */
   encounter?: 'CAME' | 'ENROLLED' | 'MISSED' | null;
   marks: {
