@@ -26,12 +26,16 @@ updates:
     # Kysely 0.29 and @nestjs/jwt 12 ship only as ES modules and this API is built as
     # CommonJS, and NestJS 12 has to move as a whole, so each is a planned change rather than
     # a routine update. These are exceptions to the note above, and they hold back any fix
-    # that only those versions carry: remove them with that change.
+    # that only those versions carry: remove them with that change. TypeScript 7 is held back
+    # for the reason the web's is, and more: it ships no compiler API, which ts-jest (peer
+    # `<7`), ts-node and the Nest CLI load. Remove it when they support it.
     ignore:
       - dependency-name: kysely
         versions: ['>=0.29.0']
       - dependency-name: '@nestjs/*'
         versions: ['>=12.0.0']
+      - dependency-name: typescript
+        versions: ['>=7.0.0']
 
   - package-ecosystem: npm
     directory: /web
