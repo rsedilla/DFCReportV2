@@ -310,8 +310,8 @@ const GUIDE_DANILO = '3f1b7c6e-0000-4000-8000-00000000a102';
 export async function mockClassGuides(page: Page): Promise<{ sent: { url: string; body: unknown }[] }> {
   const sent: { url: string; body: unknown }[] = [];
   const guides = [
-    { id: GUIDE_BENJIE, person: { id: '3f1b7c6e-0000-4000-8000-00000000a201', full_name: 'Benjie Lacson' }, sex: 'MALE' },
-    { id: GUIDE_DANILO, person: { id: '3f1b7c6e-0000-4000-8000-00000000a202', full_name: 'Danilo Pineda' }, sex: 'MALE' },
+    { id: GUIDE_BENJIE, person: { id: '3f1b7c6e-0000-4000-8000-00000000a201', full_name: 'Benjie Lacson', list_name: 'Lacson, Benjie' }, sex: 'MALE' },
+    { id: GUIDE_DANILO, person: { id: '3f1b7c6e-0000-4000-8000-00000000a202', full_name: 'Danilo Pineda', list_name: 'Pineda, Danilo' }, sex: 'MALE' },
     // Archived since being named: keeps any students, takes no new ones (decision 0502).
     {
       id: '3f1b7c6e-0000-4000-8000-00000000a103',

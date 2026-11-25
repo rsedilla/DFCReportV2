@@ -939,7 +939,7 @@ function GuidesSection({ level, classId }: { level: EquippingLevel; classId: str
         {guides.map((g) => (
           <li key={g.id} className="border-line flex min-h-11 items-center justify-between gap-3 border-b text-sm">
             <span>
-              {g.person.full_name} <span className="text-muted">· {g.sex === 'FEMALE' ? 'women' : 'men'}</span>
+              {listName(g.person)} <span className="text-muted">· {g.sex === 'FEMALE' ? 'women' : 'men'}</span>
               {g.archived ? <span className="text-muted"> · archived, takes no new students</span> : null}
             </span>
             <Button type="button" variant="secondary" disabled={remove.isPending} onClick={() => remove.mutate(g.id)}>
@@ -1048,7 +1048,7 @@ function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[]
             <option value="">Keep {each.guide?.full_name ?? 'no Guide'}</option>
             {others.map((g) => (
               <option key={g.id} value={g.id}>
-                {g.person.full_name}
+                {listName(g.person)}
               </option>
             ))}
           </SelectField>

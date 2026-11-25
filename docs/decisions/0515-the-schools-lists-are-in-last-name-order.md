@@ -16,15 +16,17 @@ gives way, and it gives way on both halves together: the order and the name show
 1. **Every list of people in `Equipping` is ordered by last name, then first name, then Member
    ID**, and any list the school adds later is too (owner, 2026-11-25). It covers the
    Registrar's *Registration* list, *Enrollment*'s students in a class and *Ready to enroll*,
-   the students of a class on the Coordinator's *Classes*, the Teacher's register with its
+   the students and the Guides of a class on the Coordinator's *Classes*, the Teacher's register with its
    *Attendance so far* and *Make-ups still owed*, the *Encounter* lists, and *Final Grades*.
 
 2. **The name in a list's name column is shown last name first**: *Aquino, Tomas R.*, the
    middle name as its initial (decision 0375), and a title, where somebody has one, before the
    given name, *Reyes, Ptr. Ana*, where decision 0271 puts it, and never compared. Elsewhere on
    the same page, in a sentence, a dialog's title, a Cell leader's or a Guide's column, a name
-   reads as it does everywhere else. The ordering key and the shown name come from one helper
-   in `people`, which owns a name's shape (Section 3), so the two cannot disagree.
+   reads as it does everywhere else. The shown name is composed in `people`, which owns a
+   name's shape (Section 3); the order reads the same last name, first name and Member ID, in
+   one comparator every school list uses and, for *Registration*, in SQL. The title is in the
+   name and never in the key.
 
 3. **Final Grades goes straight from A to Z** (owner, 2026-11-25). The grade no longer groups
    the table, *Not passed* first; the *Not passed*, *Not yet* and *Passed* pills above it still

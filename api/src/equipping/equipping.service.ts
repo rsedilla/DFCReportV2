@@ -95,9 +95,8 @@ function encodeCursor(row: {
   ).toString('base64url');
 }
 
-/** A name part as a cursor carries it, bounded as a name is (section 3). */
-const isNamePart = (value: unknown): value is string =>
-  typeof value === 'string' && value.length <= 200;
+/** A name part as a cursor carries it; `CURSOR_MAX_LENGTH` bounds the cursor as a whole. */
+const isNamePart = (value: unknown): value is string => typeof value === 'string';
 
 /** A cursor that cannot be resolved is refused (decision 0159). */
 function decodeCursor(cursor: string | undefined): RegistrationCursor | null {
@@ -814,7 +813,7 @@ export class EquippingService {
       guides: guides
         .map((g) => ({
           id: g.id,
-          person: { id: g.person_id, full_name: nameOf(g.person_id) },
+          person: schoolPerson(g.person_id, people),
           sex: g.sex,
           // Archived since being named: keeps their students, takes no new ones (decision 0502).
           archived: g.archived,
